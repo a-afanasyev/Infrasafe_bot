@@ -2,6 +2,7 @@
 Telegram клиент для работы с каналами
 """
 
+import asyncio
 import logging
 from typing import Optional, Union, Tuple
 import httpx
@@ -154,15 +155,36 @@ class TelegramClientService:
         from app.services.preview_cache import download_semaphore
 
         async with download_semaphore():
-            file_info = await self.get_file(file_id)
-            url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
+            # AUD6-P2-03: ретрай с backoff — сетевые сбои Telegram транзиентны,
+            # а ретраев внутри media раньше не было вовсе (они жили только на
+            # стороне потребителя, и не на всех путях). Клиентские 4xx (файл
+            # удалён/недоступен) не ретраятся — повтор их не лечит.
+            last_exc: Optional[Exception] = None
+            for attempt, delay in enumerate((0.0, 0.5, 1.5), start=1):
+                if delay:
+                    await asyncio.sleep(delay)
+                try:
+                    file_info = await self.get_file(file_id)
+                    url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
 
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
+                    async with httpx.AsyncClient(timeout=60) as client:
+                        resp = await client.get(url)
+                        resp.raise_for_status()
 
-            content_type = resp.headers.get("content-type", "application/octet-stream")
-            return resp.content, content_type
+                    content_type = resp.headers.get("content-type", "application/octet-stream")
+                    return resp.content, content_type
+                except httpx.HTTPStatusError as e:
+                    if e.response is not None and 400 <= e.response.status_code < 500:
+                        raise
+                    last_exc = e
+                    logger.warning("download_file %s: попытка %d не удалась: %s",
+                                   file_id, attempt, e)
+                except (httpx.HTTPError, TelegramAPIError) as e:
+                    last_exc = e
+                    logger.warning("download_file %s: попытка %d не удалась: %s",
+                                   file_id, attempt, e)
+            assert last_exc is not None
+            raise last_exc
 
     async def delete_message(
         self,

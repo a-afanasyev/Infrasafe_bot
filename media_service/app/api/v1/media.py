@@ -2,6 +2,7 @@
 API эндпоинты для работы с медиа-файлами
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -390,31 +391,40 @@ async def warm_previews(
     ВАЖНО: зарегистрирован ДО bare-маршрута GET /{media_id} — по той же
     причине, что /publication-locks и /maintenance/*.
     """
-    warmed = skipped = failed = 0
-    for media_id in body.media_ids:
-        meta = _load_servable_media(media_id)
+    async def _warm_one(media_id: int) -> str:
+        meta = await asyncio.to_thread(_load_servable_media, media_id)
         if meta is None:
-            failed += 1
-            continue
-        if preview_cache.get(media_id, meta["request_number"]) is not None:
-            skipped += 1
-            continue
+            return "failed"
+        cached = await asyncio.to_thread(
+            preview_cache.get, media_id, meta["request_number"]
+        )
+        if cached is not None:
+            return "skipped"
         try:
             original, _ = await storage_service.telegram.download_file(
                 meta["telegram_file_id"]
             )
         except Exception as e:
             logger.warning("Прогрев превью: не скачался media %s: %s", media_id, e)
-            failed += 1
-            continue
-        preview = preview_cache.make_preview(original)
+            return "failed"
+        preview = await asyncio.to_thread(preview_cache.make_preview, original)
         if preview is None:
             # Не изображение — превью не бывает, но это не ошибка прогрева.
-            skipped += 1
-            continue
+            return "skipped"
         await preview_cache.put(media_id, meta["request_number"], preview)
-        warmed += 1
-    return {"warmed": warmed, "already_cached": skipped, "failed": failed}
+        return "warmed"
+
+    # AUD6-P2-03: пачка прогревается ПАРАЛЛЕЛЬНО, а не последовательным for —
+    # конкуренцию к Telegram и так ограничивает семафор внутри download_file
+    # (до этого при последовательном цикле он был бесполезен), а Pillow-decode,
+    # чтение кэша и короткая БД-сессия ушли в worker-потоки: прогрев 200 id
+    # больше не блокирует остальные запросы сервиса.
+    results = await asyncio.gather(*(_warm_one(mid) for mid in body.media_ids))
+    return {
+        "warmed": results.count("warmed"),
+        "already_cached": results.count("skipped"),
+        "failed": results.count("failed"),
+    }
 
 
 @router.get("/maintenance/preview-cache")
@@ -524,11 +534,13 @@ async def get_media_preview(
     адресному клику (`/{media_id}/file`). Промах кэша стоит одного скачивания,
     попадание — не трогает Telegram вообще.
     """
-    meta = _load_servable_media(media_id)
+    # AUD6-P2-03: короткая sync-сессия, чтение кэша с диска и Pillow-decode —
+    # в worker-потоках, не на event loop'е.
+    meta = await asyncio.to_thread(_load_servable_media, media_id)
     if meta is None:
         raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
-    cached = preview_cache.get(media_id, meta["request_number"])
+    cached = await asyncio.to_thread(preview_cache.get, media_id, meta["request_number"])
     if cached is not None:
         return _image_response(cached, meta, "image/jpeg")
 
@@ -540,7 +552,7 @@ async def get_media_preview(
         logger.error(f"Failed to download media {media_id} for preview: {e}")
         raise HTTPException(status_code=502, detail="Источник файла недоступен")
 
-    preview = preview_cache.make_preview(original)
+    preview = await asyncio.to_thread(preview_cache.make_preview, original)
     if preview is None:
         # Не изображение (видео, документ) либо битые данные — отдаём как есть,
         # но в кэш не кладём: уменьшать нечего.
@@ -561,7 +573,7 @@ async def get_media_file_stream(
     Превью — отдельный маршрут `/{media_id}/preview`; сюда ходят только за
     оригиналом (адресный клик по фото, скачивание).
     """
-    meta = _load_servable_media(media_id)
+    meta = await asyncio.to_thread(_load_servable_media, media_id)
     if meta is None:
         raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
