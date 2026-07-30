@@ -290,3 +290,50 @@ def test_csv_roles_format_still_recognized_as_executor(db):
     result = select_executor(db, SPECIALIZATION, NOW)
     assert result is not None
     assert result.id == ex.id
+
+
+def test_select_executor_with_snapshot_does_zero_queries(db):
+    """AUD6-P2-14: со срезом дежурства выбор исполнителя не ходит в БД вовсе —
+    оркестратор строит снапшот один раз на тик и переиспользует на все заявки."""
+    from sqlalchemy import event
+
+    from uk_management_bot.services.auto_manager.rule_engine import build_duty_snapshot
+
+    ex = _executor(db, 1, 1001)
+    _shift(db, 1, ex.id)
+
+    snapshot = build_duty_snapshot(db, NOW)
+
+    counter = {"n": 0}
+
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        counter["n"] += 1
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        result = select_executor(db, SPECIALIZATION, NOW, snapshot=snapshot)
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+
+    assert result is not None and result.id == ex.id
+    assert counter["n"] == 0, f"select_executor со снапшотом сделал {counter['n']} запросов"
+
+
+def test_snapshot_load_bump_spreads_burst_within_tick(db):
+    """Пачка однотипных заявок одного тика не должна уходить одному исполнителю:
+    оркестратор инкрементирует load_by_user после каждого назначения."""
+    from uk_management_bot.services.auto_manager.rule_engine import build_duty_snapshot
+
+    first = _executor(db, 1, 1001)
+    second = _executor(db, 2, 1002)
+    _shift(db, 1, first.id)
+    _shift(db, 2, second.id)
+
+    snapshot = build_duty_snapshot(db, NOW)
+
+    pick1 = select_executor(db, SPECIALIZATION, NOW, snapshot=snapshot)
+    snapshot.load_by_user[pick1.id] = snapshot.load_by_user.get(pick1.id, 0) + 1
+    pick2 = select_executor(db, SPECIALIZATION, NOW, snapshot=snapshot)
+
+    assert {pick1.id, pick2.id} == {first.id, second.id}

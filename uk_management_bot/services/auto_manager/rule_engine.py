@@ -12,10 +12,11 @@
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.request import Request
@@ -46,20 +47,62 @@ OPEN_LOAD_STATUSES = frozenset(
 )
 
 
-def _current_load(db: Session, executor_id: int) -> int:
-    """Количество открытых (см. OPEN_LOAD_STATUSES) заявок исполнителя."""
-    return (
-        db.query(Request)
-        .filter(
-            Request.executor_id == executor_id,
-            Request.status.in_(OPEN_LOAD_STATUSES),
+@dataclass
+class DutySnapshot:
+    """Срез дежурства на момент тика (AUD6-P2-14).
+
+    Всё, что нужно для выбора исполнителя, собирается ТРЕМЯ запросами один раз
+    на тик, а не парой запросов (смены + COUNT нагрузки) на каждого кандидата
+    каждой заявки: при max_requests_per_run=50 старая схема давала тысячи
+    запросов за тик.
+
+    `load_by_user` НАМЕРЕННО мутабелен: срез снят в начале тика, и оркестратор
+    инкрементирует нагрузку после каждого успешного назначения — иначе пачка
+    однотипных заявок в одном тике ушла бы одному «наименее загруженному».
+    """
+
+    approved_users: list[User] = field(default_factory=list)
+    shifts_by_user: dict[int, list[Shift]] = field(default_factory=dict)
+    load_by_user: dict[int, int] = field(default_factory=dict)
+
+
+def build_duty_snapshot(db: Session, now: datetime) -> DutySnapshot:
+    """Три запроса: approved-пользователи, активные смены, нагрузка GROUP BY."""
+    svc = AdminHandlerService(db)
+    approved_users = svc.list_approved_users()
+    executor_ids = [
+        u.id for u in approved_users if ROLE_EXECUTOR in get_user_roles(u)
+    ]
+    shifts_by_user: dict[int, list[Shift]] = {}
+    load_by_user: dict[int, int] = {}
+    if executor_ids:
+        shift_rows = (
+            db.query(Shift)
+            .filter(
+                Shift.user_id.in_(executor_ids),
+                Shift.status == "active",
+                Shift.start_time <= now,
+                or_(Shift.end_time.is_(None), Shift.end_time >= now),
+            )
+            .all()
         )
-        .count()
-    )
+        for shift in shift_rows:
+            shifts_by_user.setdefault(shift.user_id, []).append(shift)
+        load_rows = (
+            db.query(Request.executor_id, func.count())
+            .filter(
+                Request.executor_id.in_(executor_ids),
+                Request.status.in_(OPEN_LOAD_STATUSES),
+            )
+            .group_by(Request.executor_id)
+            .all()
+        )
+        load_by_user = {executor_id: count for executor_id, count in load_rows}
+    return DutySnapshot(approved_users, shifts_by_user, load_by_user)
 
 
-def _has_matching_active_shift(db: Session, executor_id: int, specialization: str,
-                               now: datetime) -> bool:
+def _has_matching_active_shift(snapshot: DutySnapshot, executor_id: int,
+                               specialization: str) -> bool:
     """Есть ли у исполнителя активная СЕЙЧАС смена, покрывающая `specialization`.
 
     НЕ переиспользует `AdminHandlerService.get_active_shift_for` — тот берёт
@@ -70,20 +113,14 @@ def _has_matching_active_shift(db: Session, executor_id: int, specialization: st
     подходящая смена на самом деле есть. Здесь проверяются ВСЕ активные смены —
     подходит любая одна.
     """
-    shifts = (
-        db.query(Shift)
-        .filter(
-            Shift.user_id == executor_id,
-            Shift.status == "active",
-            Shift.start_time <= now,
-            or_(Shift.end_time.is_(None), Shift.end_time >= now),
-        )
-        .all()
+    return any(
+        shift.can_handle_specialization(specialization)
+        for shift in snapshot.shifts_by_user.get(executor_id, [])
     )
-    return any(shift.can_handle_specialization(specialization) for shift in shifts)
 
 
-def select_executor(db: Session, specialization: str, now: datetime) -> Optional[User]:
+def select_executor(db: Session, specialization: str, now: datetime,
+                    snapshot: Optional[DutySnapshot] = None) -> Optional[User]:
     """Выбрать наименее загруженного дежурного исполнителя под `specialization`.
 
     Args:
@@ -121,23 +158,25 @@ def select_executor(db: Session, specialization: str, now: datetime) -> Optional
         User с наименьшей нагрузкой среди дежурных кандидатов, либо None,
         если ни один кандидат не прошёл фильтрацию.
     """
-    svc = AdminHandlerService(db)
+    # AUD6-P2-14: srez можно передать готовым (оркестратор строит его один раз
+    # на тик); без него собирается на месте — семантика одиночного вызова
+    # сохранена 1:1 для остальных колл-сайтов.
+    snap = snapshot if snapshot is not None else build_duty_snapshot(db, now)
 
-    approved_users = svc.list_approved_users()
     candidates = [
         user
-        for user in approved_users
+        for user in snap.approved_users
         if ROLE_EXECUTOR in get_user_roles(user)
         and specialization in parse_specializations(user)
     ]
 
     on_duty = [
         candidate for candidate in candidates
-        if _has_matching_active_shift(db, candidate.id, specialization, now)
+        if _has_matching_active_shift(snap, candidate.id, specialization)
     ]
 
     if not on_duty:
         return None
 
-    ranked = sorted(on_duty, key=lambda user: (_current_load(db, user.id), user.id))
+    ranked = sorted(on_duty, key=lambda user: (snap.load_by_user.get(user.id, 0), user.id))
     return ranked[0]

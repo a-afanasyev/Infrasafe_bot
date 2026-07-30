@@ -53,7 +53,14 @@ class FakeBot:
 
 @pytest.fixture()
 def env(monkeypatch):
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    # StaticPool + check_same_thread=False обязательны (AUD6-P2-01): db-фаза
+    # тика теперь исполняется в worker-потоке (asyncio.to_thread), а дефолтный
+    # per-thread пул in-memory sqlite отдал бы туда ПУСТУЮ базу.
+    from sqlalchemy.pool import StaticPool
+    engine = create_engine(
+        "sqlite://", echo=False,
+        poolclass=StaticPool, connect_args={"check_same_thread": False},
+    )
     Base.metadata.create_all(bind=engine)
     TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
