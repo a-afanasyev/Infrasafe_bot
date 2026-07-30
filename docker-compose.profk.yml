@@ -49,6 +49,11 @@ services:
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
       # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
       - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
+      # AUD6-P2-37: error-tracking был молча выключен на обоих продах — код init
+      # готов (settings.py читает SENTRY_DSN, init условный), но переменную не
+      # прокидывал ни один compose. Без :? — переменная ОПЦИОНАЛЬНАЯ (пустая =
+      # Sentry выключен осознанно), поэтому в SSOT-гейт секретов не входит.
+      - SENTRY_DSN=${SENTRY_DSN:-}
       # Медиа-клиент бота — опционален по коду, fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
@@ -109,6 +114,11 @@ services:
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
       # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
       - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
+      # AUD6-P2-37: error-tracking был молча выключен на обоих продах — код init
+      # готов (settings.py читает SENTRY_DSN, init условный), но переменную не
+      # прокидывал ни один compose. Без :? — переменная ОПЦИОНАЛЬНАЯ (пустая =
+      # Sentry выключен осознанно), поэтому в SSOT-гейт секретов не входит.
+      - SENTRY_DSN=${SENTRY_DSN:-}
       # Опциональные (settings.py default ""), функционально нужны только api:
       - HEALTH_METRICS_TOKEN=${HEALTH_METRICS_TOKEN:-}
       - INFRASAFE_INVENTORY_TOKEN=${INFRASAFE_INVENTORY_TOKEN:-}
