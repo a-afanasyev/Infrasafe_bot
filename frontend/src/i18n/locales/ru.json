@@ -753,24 +753,11 @@
     "system_admin": "Системный администратор",
     "security_operator": "Оператор охраны"
   },
-  "approvalStatus": {
-    "approved": "Одобрен",
-    "pending": "Ожидает одобрения"
-  },
   "verificationStatus": {
     "verified": "Подтверждён",
     "pending": "Ожидает",
     "blocked": "Заблокирован",
     "rejected": "Отклонён"
-  },
-  "analyticsStatus": {
-    "new": "Новые",
-    "pending": "В ожидании",
-    "in_progress": "В работе",
-    "assigned": "Назначены",
-    "completed": "Завершены",
-    "cancelled": "Отменены",
-    "rejected": "Отклонены"
   },
   "analyticsEvent": {
     "created": "Создана",

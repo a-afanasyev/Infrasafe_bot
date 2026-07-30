@@ -1,18 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TFunction } from 'i18next'
 
-import {
-  tAnalyticsEvent,
-  tAnalyticsStatus,
-  tApprovalStatus,
-  tCategory,
-  tPriority,
-  tRole,
-  tShiftType,
-  tSpecialization,
-  tStatus,
-  tUrgency,
-} from './apiMaps'
+import { tCategory, tSpecialization, tStatus, tUrgency } from './apiMaps'
 
 // Identity-ish t: echoes the resolved i18n key so we can assert the mapping.
 const t = ((key: string) => `T:${key}`) as unknown as TFunction
@@ -27,13 +16,6 @@ describe('apiMaps known values → i18n keys', () => {
     expect(tCategory('Электрика', t)).toBe('T:category.electrical')
     expect(tCategory('plumbing', t)).toBe('T:category.plumbing') // EN key from bot
     expect(tSpecialization('electrician', t)).toBe('T:specialization.electrician')
-    expect(tShiftType('emergency', t)).toBe('T:shiftType.emergency')
-    expect(tAnalyticsStatus('in_progress', t)).toBe('T:analyticsStatus.in_progress')
-    expect(tAnalyticsEvent('completed', t)).toBe('T:analyticsEvent.completed')
-    expect(tRole('manager', t)).toBe('T:role.manager')
-    expect(tPriority(3, t)).toBe('T:priority.3')
-    expect(tPriority('5', t)).toBe('T:priority.5')
-    expect(tApprovalStatus('approved', t)).toBe('T:approvalStatus.approved')
   })
 
   it('tUrgency dual-read: canonical keys AND legacy russian map to same i18n key (TASK 17)', () => {
@@ -55,12 +37,6 @@ describe('apiMaps unknown values → raw + console.warn', () => {
     expect(tUrgency('???', t)).toBe('???')
     expect(tCategory('???', t)).toBe('???')
     expect(tSpecialization('???', t)).toBe('???')
-    expect(tShiftType('???', t)).toBe('???')
-    expect(tAnalyticsStatus('???', t)).toBe('???')
-    expect(tAnalyticsEvent('???', t)).toBe('???')
-    expect(tRole('???', t)).toBe('???')
-    expect(tPriority(99, t)).toBe('99')
-    expect(tApprovalStatus('???', t)).toBe('???')
-    expect(warn).toHaveBeenCalledTimes(10)
+    expect(warn).toHaveBeenCalledTimes(4)
   })
 })
