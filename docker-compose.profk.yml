@@ -1,337 +1,93 @@
-# docker-compose.profk.yml — деплой UK-стека на хост profk.uz (отдельный прод-инстанс).
+# docker-compose.profk.yml — ТОНКИЙ override поверх базового docker-compose.yml
+# для хоста profk.uz (отдельный прод-инстанс). AUD6-P2-38: раньше это был
+# standalone-файл (~560 строк, ~80% копипаста базового) — теперь здесь ТОЛЬКО
+# profk-дельты, всё общее живёт в docker-compose.yml.
 #
-# Запуск:  docker compose -f docker-compose.profk.yml up -d
+# Запуск (⚠️ ОБА файла, порядок важен):
+#   doppler run ... -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d
+#
 # Отличия от боевого docker-compose.yml (infrasafe.uz / 105) — ТОЛЬКО инфраструктура:
 #   1. uk-network = external (её создаёт InfraSafe вне compose; мы подключаемся).
 #   2. Приватная сеть uk-internal — алиасы postgres/redis живут только в ней, чтобы
 #      не коллизиться с infrasafe-postgres-1 в общей uk-network
 #      (контракт InfraSafe: «alias postgres держите внутри своей сети»).
 #   3. api/access-api — в ОБЕИХ сетях (edge→них по uk-network, они→БД по uk-internal);
-#      postgres/redis/bot — только uk-internal; frontend — только uk-network.
-#   4. DATABASE_URL/REDIS_URL ссылаются на uk-postgres/uk-redis (уникальные
-#      container_name) — детерминированный DNS, без риска попасть в чужую БД.
-#   5. frontend собирается с VITE_BOT_USERNAME=profkbot (Telegram login-widget).
-#   6. init_postgres.sh НЕ монтируется — расширения ставит init_postgres.sql.
-#      (PR-7/F-01, раскатан 2026-07-15: profk_bot БОЛЬШЕ НЕ владелец БД — owner
-#      теперь uk_migration_owner, profk_bot и CREATEROLE лишился ещё раньше.
-#      Этот пункт исторически объяснял избыточность через "profk_bot — суперюзер-
-#      владелец", что с 2026-07-15 неверно; сам вывод — не монтировать .sh —
-#      остаётся в силе по другой причине: весь role-wiring теперь идёт через
-#      provision-roles/acl_reconcile, не через init-скрипт.)
+#      postgres/redis/bot/tools-джобы — только uk-internal; frontend — только uk-network.
+#   4. REDIS_URL ссылается на uk-redis (уникальный container_name) — детерминированный
+#      DNS, без риска попасть в чужой redis; DATABASE_URL приходит из PR-7 role-файлов.
+#   5. frontend собирается с VITE_BRAND=profk + VITE_BOT_USERNAME=profkbot.
+#   6. postgres/redis НЕ публикуют host-порты (на shared-хосте profk они не нужны,
+#      localhost:5432/6379 может занимать чужой стек).
+#   7. media-service/media-migrate определены ЗДЕСЬ целиком (на 105 их даёт
+#      docker-compose.media.yml; profk-вариант отличается сетью uk-internal,
+#      REDIS_URL и отсутствием media_uploads-тома).
+#
+# YAML-теги compose-спеки: `!override` ЗАМЕНЯЕТ значение из базового файла
+# (без него списки/маппинги СЛИВАЮТСЯ: networks доклеился бы, а не заменился),
+# `!reset` УДАЛЯЕТ ключ базового файла (ports у postgres/redis).
+#
 # Контракт имён/портов InfraSafe соблюдён: uk-management-api:8080, uk-access-api:8080,
 # uk-frontend:80, uk-postgres.
 
 services:
   app:
-    build: .
-    container_name: uk-management-bot
-    restart: unless-stopped
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-      - net.ipv6.conf.default.disable_ipv6=1
-    command: python -m uk_management_bot.main
-    env_file:
-      - .env
-      - ./.secrets/roles/.env.bot
     environment:
-      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
-      # ./.secrets/roles/.env.bot (env_file выше), под ролью uk_bot_runtime —
-      # не дублировать здесь: environment: имеет приоритет над env_file и
-      # молча перезаписал бы role-специфичный URL.
+      # ARCH-106: REDIS_URL строится из REDIS_PASSWORD; хост — uk-redis (п.4 выше).
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
-      - LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-      # ARCH-106 (Doppler cutover, Phase 1): секреты из Doppler через `doppler run --`,
-      # см. .claude/skills/uk-deploy/SKILL.md — :? делает отсутствие явной ошибкой деплоя.
-      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
-      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
-      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
-      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
-      # AUD6-P2-37: error-tracking был молча выключен на обоих продах — код init
-      # готов (settings.py читает SENTRY_DSN, init условный), но переменную не
-      # прокидывал ни один compose. Без :? — переменная ОПЦИОНАЛЬНАЯ (пустая =
-      # Sentry выключен осознанно), поэтому в SSOT-гейт секретов не входит.
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      # Медиа-клиент бота — опционален по коду, fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
-      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
-      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-internal
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    container_name: uk-management-api
-    restart: unless-stopped
-    # [F-03] См. docker-compose.yml: prod .env задаёт FORWARDED_ALLOW_IPS (CIDR
-    # uk-network, здесь 172.19.0.0/16) + API_ROOT_PATH=/uk. $$ = shell из env_file.
-    command:
-      - sh
-      - -c
-      - >-
-        exec uvicorn uk_management_bot.api.main:app --host 0.0.0.0 --port 8080 --workers 2
-        --proxy-headers --forwarded-allow-ips "$${FORWARDED_ALLOW_IPS:-127.0.0.1}"
-        $${API_ROOT_PATH:+--root-path "$$API_ROOT_PATH"}
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-      - net.ipv6.conf.default.disable_ipv6=1
-    env_file:
-      - .env
-      - ./.secrets/roles/.env.api
     environment:
-      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
-      # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime.
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
-      - LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
       - FRONTEND_URL=https://profk.uz/uk
-      - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
-      - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
-      - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
-      # DARK-гейт визуального модуля «Отчёты о работах»: гейтит manager+public API
-      # (/api/v2/work-reports/, /api/v2/public/work-reports) и модуль board_config
-      # `workreports`. Зеркалит фронтовый VITE_WORK_REPORTS_ENABLED — синхронизация
-      # ручная (автосвязи нет), для рабочей фичи должны быть выставлены оба.
-      - WORK_REPORTS_ENABLED=${WORK_REPORTS_ENABLED:-false}
-      # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
-      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
-      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
-      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
-      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
-      # AUD6-P2-37: error-tracking был молча выключен на обоих продах — код init
-      # готов (settings.py читает SENTRY_DSN, init условный), но переменную не
-      # прокидывал ни один compose. Без :? — переменная ОПЦИОНАЛЬНАЯ (пустая =
-      # Sentry выключен осознанно), поэтому в SSOT-гейт секретов не входит.
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      # Опциональные (settings.py default ""), функционально нужны только api:
-      - HEALTH_METRICS_TOKEN=${HEALTH_METRICS_TOKEN:-}
-      - INFRASAFE_INVENTORY_TOKEN=${INFRASAFE_INVENTORY_TOKEN:-}
-      - UK_WEBHOOK_SECRET=${UK_WEBHOOK_SECRET:-}
-      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:-}
-      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
-      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
-      # ARCH-106 Phase 2: dual-secret ротация webhook-секретов (settings.py §4.4/R-18).
-      # Подписант (process_outbox) и inbound-верификатор живут оба в api — другим сервисам
-      # эти переменные не нужны. NEXT-значения появляются в Doppler только на ротационное
-      # окно; USE_NEXT — флаг, не секрет. Процедура → .claude/skills/uk-deploy/SKILL.md.
-      - INFRASAFE_WEBHOOK_SECRET_NEXT=${INFRASAFE_WEBHOOK_SECRET_NEXT:-}
-      - INFRASAFE_USE_NEXT_SECRET=${INFRASAFE_USE_NEXT_SECRET:-false}
-      - UK_WEBHOOK_SECRET_NEXT=${UK_WEBHOOK_SECRET_NEXT:-}
-    ports:
-      - "127.0.0.1:8085:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-network
       - uk-internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
 
   access-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.access
-    container_name: uk-access-api
-    restart: unless-stopped
-    # [F-03] Тот же edge-rewrite для /uk/api/v1/access/ — те же redirect-флаги.
-    command:
-      - sh
-      - -c
-      - >-
-        exec uvicorn access_control.app.main:create_app --factory --host 0.0.0.0 --port 8080 --workers 1
-        --proxy-headers --forwarded-allow-ips "$${FORWARDED_ALLOW_IPS:-127.0.0.1}"
-        $${API_ROOT_PATH:+--root-path "$$API_ROOT_PATH"}
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=1
-      - net.ipv6.conf.default.disable_ipv6=1
-    env_file:
-      - .env
-      - ./.secrets/roles/.env.access
     environment:
-      # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
-      # ./.secrets/roles/.env.access (env_file выше), под ролью uk_access_runtime.
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
-      - LOG_LEVEL=INFO
-      - PYTHONUNBUFFERED=1
-      - ACCESS_NONCE_BACKEND=redis
-      - ACCESS_EVENT_BROKER=redis
-      # Обязательные секреты домена (код падает RuntimeError при их отсутствии) — ARCH-106
-      # (Doppler cutover, Phase 1): значение приходит из Doppler через `doppler run --`,
-      # :? делает отсутствие явной ошибкой при деплое, а не рантайм-RuntimeError позже.
-      # Ранее сознательно не дублировались интерполяцией здесь (риск пустой-shell-var
-      # landmine) — теперь :? закрывает именно эту landmine, см. ARCH-106 план.
-      - ACCESS_SNAPSHOT_SIGNING_SEED=${ACCESS_SNAPSHOT_SIGNING_SEED:?ACCESS_SNAPSHOT_SIGNING_SEED is required — set it in Doppler (project uk-management)}
-      - ACCESS_DEVICE_HMAC_SEED=${ACCESS_DEVICE_HMAC_SEED:?ACCESS_DEVICE_HMAC_SEED is required — set it in Doppler (project uk-management)}
-      - ACCESS_PHOTO_URL_SECRET=${ACCESS_PHOTO_URL_SECRET:?ACCESS_PHOTO_URL_SECRET is required — set it in Doppler (project uk-management)}
-      - ACCESS_CODE_SECRET=${ACCESS_CODE_SECRET:?ACCESS_CODE_SECRET is required — set it in Doppler (project uk-management)}
-      # Общие обязательные секреты (settings.py) — access-api их транзитивно импортирует
-      # через _docs_enabled() (ARCH-106 план, «Ключевая находка»):
-      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
-      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
-      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
-      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
-      - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
-      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
-    ports:
-      - "127.0.0.1:${ACCESS_API_HOST_PORT:-8087}:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-network
       - uk-internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
 
   postgres:
-    image: postgres:15-alpine
-    container_name: uk-postgres
-    restart: unless-stopped
-    # PR-7 (F-01): admin/superuser credentials — отдельный файл, НЕ общий .env
-    # (см. комментарий в docker-compose.yml — тот же паттерн здесь).
-    env_file:
-      - .env.postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/01-init_postgres.sql:ro
-    networks:
+    networks: !override
       - uk-internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    # Host-порт не публикуем (п.6 выше) — !reset удаляет ports базового файла.
+    ports: !reset []
 
-  # PR-7 (F-01): см. docker-compose.yml для полного описания. Единственное
-  # отличие здесь — RUNTIME_DB_HOST=uk-postgres (не postgres, см. верхний
-  # комментарий файла про уникальные container_name на profk) и сеть
-  # uk-internal (там же живёт сам сервис postgres на этом хосте).
   provision-roles:
-    image: postgres:15-alpine
-    profiles: ["tools"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - uk-internal
-    env_file:
-      - .env.postgres
     environment:
+      # Уникальный container_name вместо alias postgres (см. верхний комментарий).
       RUNTIME_DB_HOST: uk-postgres
-      DEPLOY_UID: ${DEPLOY_UID:?DEPLOY_UID is required — export DEPLOY_UID=$(id -u) before running provision-roles}
-      DEPLOY_GID: ${DEPLOY_GID:?DEPLOY_GID is required — export DEPLOY_GID=$(id -g) before running provision-roles}
-    user: "${DEPLOY_UID:?DEPLOY_UID is required}:${DEPLOY_GID:?DEPLOY_GID is required}"
-    volumes:
-      - ./scripts/provision_roles.sh:/provision_roles.sh:ro
-      - ./scripts/provision_roles.sql:/provision_roles.sql:ro
-      - ./.secrets/roles:/output
-    entrypoint: ["/bin/sh", "/provision_roles.sh"]
+    networks: !override
+      - uk-internal
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    profiles: ["tools"]
-    entrypoint: ["/app/entrypoint-migrate.sh"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-internal
-    env_file:
-      - .env
-      - ./.secrets/roles/.env.migrate
-    environment:
-      - REQUIRE_MIGRATION_OWNER=1
-      # ARCH-106 (Doppler cutover, Phase 1): migrate транзитивно импортирует
-      # uk_management_bot.config.settings через alembic/env.py → database/session.py —
-      # эта эагерная production-валидация требует те же 4 переменные, что app/api/access-api
-      # (см. ARCH-106 план, «Ключевая находка» — полная развязка вне охвата Phase 1):
-      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
-      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
-      # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
-      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
 
   redis:
-    image: redis:7-alpine
-    container_name: uk-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
-    volumes:
-      - redis_data:/data
-    networks:
+    networks: !override
       - uk-internal
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+    ports: !reset []
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
       args:
+        # Telegram login-widget профсоюзного бота + зелёный бренд PROFK
+        # (frontend/CLAUDE.md). Остальные args наследуются из базового файла.
         VITE_BOT_USERNAME: profkbot
         VITE_BRAND: profk
-        # DARK-гейт раздела «Учёт ресурсов»: пусто = OFF, прод .env ставит true.
-        VITE_RESOURCES_ENABLED: "${VITE_RESOURCES_ENABLED:-}"
-        # DARK-гейт модуля «Отчёты о работах»: пусто = OFF, прод .env ставит true.
-        VITE_WORK_REPORTS_ENABLED: "${VITE_WORK_REPORTS_ENABLED:-}"
-    container_name: uk-frontend
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3002:80"
-    depends_on:
-      - api
-    networks:
-      - uk-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   # Медиа-сервис: хранит фото/видео заявок в приватных Telegram-каналах через
-  # ВЫДЕЛЕННЫЙ бот (media_service/.env: TELEGRAM_BOT_TOKEN + CHANNEL_* — числовые
-  # id). Основной api проксирует /uk/api/v2/media/* сюда (MEDIA_SERVICE_URL=
-  # http://uk-media-service:8000). Только uk-internal — наружу его не публикуем,
-  # edge ходит через основной api. БД uk_media на общем uk-postgres.
+  # ВЫДЕЛЕННЫЙ бот (media_service/.env: CHANNEL_* — числовые id). Основной api
+  # проксирует /uk/api/v2/media/* сюда (MEDIA_SERVICE_URL=http://uk-media-service:8000).
+  # Только uk-internal — наружу его не публикуем, edge ходит через основной api.
+  # БД uk_media на общем uk-postgres. В базовом файле сервиса НЕТ (на 105 —
+  # docker-compose.media.yml), поэтому секция здесь целиком.
   media-service:
     build:
       context: ./media_service
@@ -382,7 +138,7 @@ services:
   # НЕ покрывает (create_all создаёт только отсутствующие таблицы, существующие
   # не меняет). Та же форма, что у бот-side `migrate`-сервиса: profiles: ["tools"]
   # держит его вне `up -d`, инвокация явная:
-  #   docker compose -f docker-compose.profk.yml run --rm media-migrate
+  #   docker compose -f docker-compose.yml -f docker-compose.profk.yml run --rm media-migrate
   media-migrate:
     build:
       context: ./media_service
@@ -410,151 +166,40 @@ services:
     networks:
       - uk-internal
 
-  # Сервис «Учёт ресурсов» (resource-api) — внесён в монорепо UK (был отдельный
-  # стек ~/uk-resource). Своя БД resource-postgres (postgres:16, свой том). Нативный
-  # раздел дашборда ходит same-origin через edge → resource-api:8100 (на uk-network);
-  # s2s-минтинг uk-management-api → resource-api.internal:8100 (алиас удовлетворяет
-  # SSRF-гарду). postgres — только uk-internal (без коллизии alias на uk-network).
   resource-postgres:
-    image: postgres:16-alpine
-    container_name: uk-resource-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=${RESOURCE_POSTGRES_USER:-resource}
-      - POSTGRES_PASSWORD=${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}
-      - POSTGRES_DB=${RESOURCE_POSTGRES_DB:-resource_accounting}
-    volumes:
-      - resource_pg_data:/var/lib/postgresql/data
-    networks:
+    networks: !override
       - uk-internal
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
-  # AUD6-P1-2: one-shot провижининг least-privilege роли resource_app —
-  # аналог provision-roles основной БД (PR-7). Идемпотентен (повтор = ротация
-  # пароля). Запуск: docker compose -f docker-compose.profk.yml run --rm resource-provision-roles
   resource-provision-roles:
-    image: postgres:16-alpine
-    profiles: ["tools"]
-    depends_on:
-      resource-postgres:
-        condition: service_healthy
-    environment:
-      - PGPASSWORD=${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}
-      - RESOURCE_APP_PASSWORD=${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}
-      - RESOURCE_POSTGRES_USER=${RESOURCE_POSTGRES_USER:-resource}
-      - RESOURCE_POSTGRES_DB=${RESOURCE_POSTGRES_DB:-resource_accounting}
-    volumes:
-      - ./resource-accounting/backend/scripts/provision_resource_roles.sql:/provision_resource_roles.sql:ro
-    entrypoint: ["/bin/sh", "-c",
-      "psql -h resource-postgres -U \"$$RESOURCE_POSTGRES_USER\" -d \"$$RESOURCE_POSTGRES_DB\" -v ON_ERROR_STOP=1 -v app_password=\"$$RESOURCE_APP_PASSWORD\" -f /provision_resource_roles.sql"]
-    networks:
+    networks: !override
       - uk-internal
 
-  # AUD6-P1-2: one-shot alembic+seed под ролью-ВЛАДЕЛЬЦЕМ — аналог migrate
-  # основной БД (PR-7). Из entrypoint-api.sh миграции убраны: runtime-роль
-  # resource_app DDL не имеет. Запуск: docker compose -f docker-compose.profk.yml run --rm resource-migrate
   resource-migrate:
-    build: ./resource-accounting/backend
-    profiles: ["tools"]
-    entrypoint: ["/bin/sh", "-c", "alembic upgrade head && python -m app.seed"]
-    environment:
-      - RESOURCE_DATABASE_URL=postgresql+psycopg2://${RESOURCE_POSTGRES_USER:-resource}:${RESOURCE_POSTGRES_PASSWORD:?RESOURCE_POSTGRES_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
-    depends_on:
-      resource-postgres:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-internal
 
   resource-api:
-    build: ./resource-accounting/backend
-    container_name: uk-resource-api
-    restart: unless-stopped
     environment:
-      # AUD6-P1-2: runtime ходит под least-privilege ролью resource_app (DML без
-      # DDL), а НЕ под владельцем/мигратором resource. Роль создаёт one-shot
-      # resource-provision-roles; схему двигает one-shot resource-migrate.
-      - RESOURCE_DATABASE_URL=postgresql+psycopg2://resource_app:${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
-      - RESOURCE_ENVIRONMENT=production
-      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?RESOURCE_SESSION_SECRET is required — set it in Doppler (project uk-management)}
-      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?RESOURCE_SERVICE_TOKEN is required (shared with UK backend) — set it in Doppler (project uk-management)}
-      - RESOURCE_COOKIE_SECURE=true
-      - RESOURCE_DEV_AUTH_ENABLED=false
-      - RESOURCE_RATE_LIMIT_ENABLED=true
       - RESOURCE_CORS_ORIGINS=${RESOURCE_CORS_ORIGINS:-https://profk.uz}
       - RESOURCE_FRAME_ANCESTOR=${RESOURCE_FRAME_ANCESTOR:-https://profk.uz}
-    ports:
-      - "127.0.0.1:${RESOURCE_API_HOST_PORT:-8100}:8100"
-    depends_on:
-      resource-postgres:
-        condition: service_healthy
+    # Маппинг-форма СЛИВАЕТСЯ с базовой: uk-network с алиасами resource-api/
+    # resource-api.internal наследуется, uk-internal добавляется.
     networks:
-      uk-network:
-        aliases:
-          - resource-api
-          - resource-api.internal
       uk-internal: {}
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8100/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
 
   resource-worker:
-    build: ./resource-accounting/backend
-    container_name: uk-resource-worker
-    restart: unless-stopped
-    command: ["python", "-m", "app.worker"]
-    entrypoint: []
-    environment:
-      # AUD6-P1-2: runtime ходит под least-privilege ролью resource_app (DML без
-      # DDL), а НЕ под владельцем/мигратором resource. Роль создаёт one-shot
-      # resource-provision-roles; схему двигает one-shot resource-migrate.
-      - RESOURCE_DATABASE_URL=postgresql+psycopg2://resource_app:${RESOURCE_APP_PASSWORD:?RESOURCE_APP_PASSWORD is required — set it in Doppler (project uk-management)}@resource-postgres:5432/${RESOURCE_POSTGRES_DB:-resource_accounting}
-      - RESOURCE_ENVIRONMENT=production
-      # ARCH-106: resource-worker раньше не имел :?-гарда на эти два — тихая пустая
-      # подстановка вместо явной ошибки при отсутствующем секрете (см. план, категория A).
-      - RESOURCE_SESSION_SECRET=${RESOURCE_SESSION_SECRET:?RESOURCE_SESSION_SECRET is required — set it in Doppler (project uk-management)}
-      - RESOURCE_SERVICE_TOKEN=${RESOURCE_SERVICE_TOKEN:?RESOURCE_SERVICE_TOKEN is required (shared with UK backend) — set it in Doppler (project uk-management)}
-      - RESOURCE_COOKIE_SECURE=true
-      - RESOURCE_DEV_AUTH_ENABLED=false
-    depends_on:
-      resource-postgres:
-        condition: service_healthy
-      resource-api:
-        condition: service_healthy
-    networks:
+    networks: !override
       - uk-internal
-    healthcheck:
-      # У воркера нет HTTP: итерация цикла (раз в 300с) касается heartbeat-файла
-      # ТОЛЬКО при успехе (app/worker.py) — несвежий файл (>16 мин ≈ 3 интервала,
-      # одна упавшая итерация прощается) = unhealthy.
-      test: ["CMD-SHELL", "find /tmp/resource-worker-heartbeat -mmin -16 | grep -q ."]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
 
 volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  media_uploads:
-    driver: local
   media_preview_cache:
     driver: local
-  # Переиспользуем существующий том (данные!). На profk .env:
-  # RESOURCE_PG_VOLUME=resource-profk_resource_pg_data
-  resource_pg_data:
-    name: ${RESOURCE_PG_VOLUME:-uk_resource_pg_data}
 
 networks:
-  # Создаёт InfraSafe — мы только подключаемся.
-  uk-network:
+  # Создаёт InfraSafe — мы только подключаемся. !override: без него сюда
+  # доклеился бы driver: bridge из базового файла, а external-сеть с driver —
+  # ошибка валидации compose.
+  uk-network: !override
     external: true
     name: uk-network
   # Наша приватная сеть: postgres/redis/bot + внутренний доступ api/access-api.

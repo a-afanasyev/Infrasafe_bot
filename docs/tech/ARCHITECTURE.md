@@ -46,7 +46,9 @@ PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`) и несекретн�
 
 Прод собирается двумя compose-файлами:
 `docker compose -f docker-compose.yml -f docker-compose.media.yml ...`
-(для profk есть самодостаточный `docker-compose.profk.yml` с media внутри);
+(для profk — `docker compose -f docker-compose.yml -f docker-compose.profk.yml ...`:
+с 2026-07-31 / AUD6-P2-38 `docker-compose.profk.yml` — тонкий override с profk-дельтами
+и media внутри, standalone он больше не работает);
 все прод-команды — через `doppler run --` (ARCH-106, см. §1);
 **никогда** не использовать `--remove-orphans` (в стеке есть orphan-контейнеры
 edge/InfraSafe). Все host-порты биндятся на `127.0.0.1` — наружу система

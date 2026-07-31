@@ -5,7 +5,8 @@
 > 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`
 > и устарели.** Реальный прод-стек infrasafe (хост `~/uk`) — **`docker compose -f
 > docker-compose.yml -f docker-compose.media.yml`** (оба `-f` в каждой команде: media
-> подключается overlay-файлом); profk — `-f docker-compose.profk.yml`. Каноничная выкатка
+> подключается overlay-файлом); profk — `-f docker-compose.yml -f docker-compose.profk.yml`
+> (⚠️ с 2026-07-31 / AUD6-P2-38 profk-файл — тонкий override, одиночный `-f` больше не работает). Каноничная выкатка
 > (ARCH-106: секреты приходят из Doppler, `.env` от них очищен → без `doppler run --`
 > команда упадёт на `:?`; PR-7: `migrate`-шаг обязателен перед каждым `up`):
 > ```bash
