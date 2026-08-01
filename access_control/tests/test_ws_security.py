@@ -356,6 +356,109 @@ def test_stream_closes_with_token_expired_code(monkeypatch) -> None:
     assert exc.value.code == ws_mod.WS_TOKEN_EXPIRED
 
 
+# ───────────── A6-P2-18: вахты стрима (уход клиента, отзыв доступа) ───────────
+
+
+def test_role_revoked_mid_stream_closes_4003(monkeypatch) -> None:
+    """Отзыв роли/блокировка в БД во время стрима → close 4003, не «до exp».
+
+    Ровно бывший accepted-risk L3: раньше поток жил до истечения токена
+    (≤60 мин) после снятия роли. Проверка БД мокается на границе
+    ``_ws_identity_ok_sync`` — сама вахта и код закрытия настоящие.
+    """
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(ws_mod, "_WS_IDENTITY_RECHECK_INTERVAL", 0.05)
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", lambda user_id: False)
+    monkeypatch.setattr(
+        ws_mod,
+        "verify_access_token",
+        lambda tok: {"sub": "1", "roles": ["security_operator"], "exp": time.time() + 30},
+    )
+    client = _client_with_cookie("revoked-later")
+    with client.websocket_connect(WS_URL) as ws:
+        assert ws.receive_json()["type"] == "ready"
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()  # ждём закрытия вахтой личности
+    assert ws_mod.WS_ACCESS_REVOKED == 4003
+    assert exc.value.code == ws_mod.WS_ACCESS_REVOKED
+
+
+def test_identity_check_failure_keeps_stream(monkeypatch) -> None:
+    """Недоступность БД в вахте — не повод рвать живую сессию (fail-open,
+    ограниченный exp): события продолжают доставляться."""
+    from access_control.api import ws_security as ws_mod
+
+    def _boom(user_id: int) -> bool:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(ws_mod, "_WS_IDENTITY_RECHECK_INTERVAL", 0.05)
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", _boom)
+    client = _client_with_cookie(_token("security_operator"))
+    with client.websocket_connect(WS_URL) as ws:
+        assert ws.receive_json()["type"] == "ready"
+        time.sleep(0.2)  # несколько тиков вахты с ошибкой БД
+        get_broker().publish(
+            AccessEventMessage(decision="deny", status="denied", reason="vehicle_not_found")
+        )
+        msg = ws.receive_json()
+    assert msg["decision"] == "deny"
+
+
+class _DepartingWS:
+    """Стаб для _stream_events: клиент уходит вскоре после ready."""
+
+    def __init__(self) -> None:
+        from starlette.websockets import WebSocketState
+
+        self.client_state = WebSocketState.CONNECTED
+        self.closed = False
+
+    async def send_json(self, payload) -> None:
+        pass
+
+    async def receive_text(self) -> str:
+        await asyncio.sleep(0.02)
+        raise WebSocketDisconnect(code=1001)
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed = True
+
+
+class _IdleSubscription:
+    """Подписка, в которой событий нет; фиксирует close()."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def get(self):
+        await asyncio.Event().wait()  # никогда
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_client_disconnect_releases_subscription(monkeypatch) -> None:
+    """Уход клиента замечается чтением сокета: стрим завершается сразу, а не
+    висит на пустой подписке до exp, и подписка на брокер снимается."""
+    from access_control.api import ws_security as ws_mod
+
+    sub = _IdleSubscription()
+
+    class _Broker:
+        def subscribe(self):
+            return sub
+
+    monkeypatch.setattr(ws_mod, "get_broker", lambda: _Broker())
+    wsk = _DepartingWS()
+    started = time.monotonic()
+    await ws_mod._stream_events(wsk, exp=time.time() + 30, user_id=1)
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.0, f"стрим жил {elapsed:.2f}s после ухода клиента"
+    assert sub.closed is True
+
+
 # ───────────────────── Ф6: router подключён ───────────────────────────────────
 
 
