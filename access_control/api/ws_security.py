@@ -16,9 +16,11 @@ JWT в query string ЗАПРЕЩЁН (§9.6): если токен пришёл �
 После успешной аутентификации клиент подписывается на брокер и получает
 PD-safe события доступа в реальном времени (§11: без полного номера/фото).
 
-Known-limitation (пилот): аутентификация доверяет ролям из подписанного
-непросроченного JWT без живой ре-проверки блокировки/отзыва роли в БД (read-only
-поток для одной пилотной точки). Полная ре-проверка — после пилота.
+A6-P2-18 (закрыт бывший accepted-risk L3): во время стрима, как и на WS
+дашборда UK, работают три конкурирующих вахты — чтение сокета (уход клиента
+замечается сразу, подписка не сиротеет), периодическая ре-проверка личности в
+БД (блокировка/отзыв роли → close 4003, а не «поток живёт до exp») и потолок
+exp токена (close 4001). Handshake по-прежнему проверяет роли из claim.
 """
 from __future__ import annotations
 
@@ -49,6 +51,16 @@ WS_POLICY_VIOLATION = 1008
 # (как и 1008/таймаут — access_control не импортирует из api-роутеров UK).
 WS_TOKEN_EXPIRED = 4001
 
+# A6-P2-18: app-код «доступ отозван» (блокировка/снятие роли в БД) — клиенту
+# возвращаться незачем. Зеркало WS_ACCESS_REVOKED из uk_management_bot/api/ws/router.py.
+WS_ACCESS_REVOKED = 4003
+
+# Как часто перепроверять личность в БД во время стрима — тот же компромисс,
+# что у _WS_IDENTITY_RECHECK_INTERVAL WS-дашборда: окно, в которое
+# заблокированный оператор ещё видит события, против одного короткого SELECT
+# на соединение в минуту.
+_WS_IDENTITY_RECHECK_INTERVAL = 60.0
+
 # F-05: сколько ждать первый auth-message cookieless-клиента. Без лимита
 # неаутентифицированные idle-соединения копятся до исчерпания worker'а.
 _WS_AUTH_MESSAGE_TIMEOUT = 10
@@ -76,6 +88,37 @@ def _authorized_roles(payload: dict | None) -> bool:
 def _has_query_token(websocket: WebSocket) -> bool:
     """JWT в query string (§9.6: запрещён)."""
     return any(key in websocket.query_params for key in _FORBIDDEN_QUERY_TOKEN_KEYS)
+
+
+def _payload_user_id(payload: dict | None) -> int | None:
+    """Claim ``sub`` как int или None — без него личность в БД не найти."""
+    try:
+        return int((payload or {}).get("sub"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _ws_identity_ok_sync(user_id: int) -> bool:
+    """Пользователь существует СЕЙЧАС, не заблокирован и всё ещё в WS-роли.
+
+    Источник правды — БД, а не claim ``roles``: токен — слепок на момент выдачи,
+    и до его истечения снятие роли/блокировка иначе не замечались (бывший
+    accepted-risk L3). Парсинг ролей — тем же ``_parse_user_roles``, что и у
+    HTTP/WS дверей UK: одна дверь не должна быть мягче другой.
+
+    Сессия короткая, по одной на проверку, sync ``SessionLocal`` — как у
+    retention-воркеров этого пакета; вызывать через ``asyncio.to_thread``.
+    Импорты внутри вызова: модуль должен оставаться импортируемым без БД.
+    """
+    from uk_management_bot.api.dependencies import _parse_user_roles
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.database.session import SessionLocal
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        if user is None or user.status == "blocked":
+            return False
+        return any(role in WS_ROLES for role in _parse_user_roles(user))
 
 
 def _token_exp(payload: dict | None) -> float | None:
@@ -137,9 +180,6 @@ async def ws_security(websocket: WebSocket) -> None:
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
         await websocket.accept()
-    # TODO(accepted-risk L3, post-pilot): роли проверяются один раз при коннекте; при
-    # отзыве роли в течение WS-сессии поток живёт до exp токена (≤60 мин, F-04).
-    # После пилота — периодическая ре-проверка роли (короткий TTL/heartbeat).
     else:
         # Cookieless: принимаем, ждём JWT в первом сообщении, затем проверяем роли.
         await websocket.accept()
@@ -158,27 +198,97 @@ async def ws_security(websocket: WebSocket) -> None:
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
 
-    await _stream_events(websocket, exp)
+    await _stream_events(websocket, exp, _payload_user_id(payload))
 
 
-async def _stream_events(websocket: WebSocket, exp: float) -> None:
+async def _pump_events(websocket: WebSocket, subscription) -> None:
+    while True:
+        message = await subscription.get()
+        await websocket.send_json(message.to_payload())
+
+
+async def _watch_client(websocket: WebSocket) -> None:
+    """Дождаться ухода клиента (зеркало AUD5-APIFE-2 с WS дашборда).
+
+    Раньше сокет после аутентификации не читался вовсе — закрытие клиентом
+    никто не замечал, и подписка на брокер жила до exp токена (≤60 мин) по
+    одной сироте на каждый ушедший экран охраны. Входящие сообщения после
+    auth не осмысленны — просто сливаем их: важен сам факт разрыва.
+    """
+    while True:
+        await websocket.receive_text()
+
+
+async def _watch_identity(user_id: int | None) -> None:
+    """Периодически сверяться с БД; вернуться, когда доступ отозван (A6-P2-18).
+
+    Вернуться = закрыть стрим 4003. Токен без валидного ``sub`` ре-проверить
+    нечем — такой стрим тоже завершается на первом же тике (fail-closed).
+    Недоступность БД — не повод рвать живую сессию: handshake уже состоялся,
+    а верхнюю границу держит exp; здесь fail-open осознан и ограничен по времени.
+    """
+    while True:
+        await asyncio.sleep(_WS_IDENTITY_RECHECK_INTERVAL)
+        if user_id is None:
+            return
+        try:
+            if not await asyncio.to_thread(_ws_identity_ok_sync, user_id):
+                return
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "ws security identity re-check failed for user %s (keeping stream)",
+                user_id, exc_info=True,
+            )
+
+
+async def _stream_events(websocket: WebSocket, exp: float, user_id: int | None) -> None:
     """Подписаться на брокер и слать клиенту PD-safe события (§11) до отключения.
 
     Подписка создаётся ДО ready-фрейма: к моменту, когда клиент видит ``ready``,
-    он уже подключён к брокеру и не пропустит последующие события. Стрим живёт
-    не дольше exp токена (F-04): по истечению — close 4001, клиент обновляет
-    сессию и переподключается.
+    он уже подключён к брокеру и не пропустит последующие события.
+
+    Дальше конкурируют четыре условия; побеждает наступившее первым (структура —
+    зеркало ``_relay`` WS-дашборда UK):
+      * истёк ``exp`` → close 4001 (клиент обновит сессию и вернётся);
+      * доступ отозван в БД → close 4003 (возвращаться незачем);
+      * клиент ушёл → тихий выход, finally снимет подписку;
+      * ошибка стрима → лог, поток не роняет воркер.
     """
     subscription = get_broker().subscribe()
     try:
         await websocket.send_json({"type": "ready"})
-        async with asyncio.timeout(max(0.0, exp - time.time())):
-            while True:
-                message = await subscription.get()
-                await websocket.send_json(message.to_payload())
-    except TimeoutError:
-        # F-04: истечение JWT — штатное закрытие, НЕ ошибка (не logger.exception).
-        await _safe_close(websocket, code=WS_TOKEN_EXPIRED)
+
+        pump = asyncio.create_task(_pump_events(websocket, subscription))
+        client = asyncio.create_task(_watch_client(websocket))
+        identity = asyncio.create_task(_watch_identity(user_id))
+        tasks = {pump, client, identity}
+        try:
+            done, _pending = await asyncio.wait(
+                tasks, timeout=max(0.0, exp - time.time()),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            for t in tasks:
+                t.cancel()
+            # Осознанное отличие от `_relay` UK-дашборда: НЕ await'им реап
+            # отменённых задач. `cancel()` гарантирует, что pump больше ничего
+            # не отправит (его текущий await прерывается до следующего send), а
+            # лишний await после ухода клиента проигрывает гонку teardown'а
+            # ASGI-хоста (TestClient/anyio отменяет хендлер между disconnect и
+            # реапом — CancelledError из cleanup маскирует штатное закрытие).
+
+        if not done:
+            # F-04: истечение JWT — штатное закрытие, НЕ ошибка.
+            await _safe_close(websocket, code=WS_TOKEN_EXPIRED)
+        elif identity in done and not identity.cancelled():
+            await _safe_close(websocket, code=WS_ACCESS_REVOKED)
+        else:
+            # client/pump: уход клиента (WebSocketDisconnect) — тихий выход;
+            # всё прочее — неожиданная ошибка стрима.
+            for t in done:
+                exc = t.exception()
+                if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                    logger.error("ws security stream error", exc_info=exc)
     except WebSocketDisconnect:
         pass
     except Exception:  # noqa: BLE001 — поток не должен ронять воркер
