@@ -24,14 +24,8 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import logging
-import os
-import threading
 
-from access_control.services.event_broadcaster import (
-    EventBroker,
-    InProcessBroker,
-    RedisBroker,
-)
+from access_control.services.event_broadcaster import BrokerHandle, EventBroker
 
 logger = logging.getLogger(__name__)
 
@@ -98,43 +92,25 @@ class ResidentNotification:
 
 
 # ───────────────────────── singleton/фабрика брокера ──────────────────────────
+# A6-P2-50: lifecycle был посимвольной копией event_broadcaster — делегируем
+# общему BrokerHandle, отличие только в канале и подписи лога.
 
-_broker: EventBroker | None = None
-_broker_lock = threading.Lock()
+_handle = BrokerHandle("resident notify", channel=ACCESS_RESIDENT_NOTIFY_CHANNEL)
 
 
 def get_resident_broker() -> EventBroker:
     """Процессный singleton брокера резидентских уведомлений (создаётся по конфигу)."""
-    global _broker
-    if _broker is None:
-        with _broker_lock:
-            if _broker is None:
-                _broker = _build_broker()
-    return _broker
-
-
-def _build_broker() -> EventBroker:
-    kind = os.getenv("ACCESS_EVENT_BROKER", "memory").strip().lower()
-    if kind == "redis":
-        from uk_management_bot.config.settings import settings
-
-        url = settings.REDIS_PUBSUB_URL_RESOLVED
-        logger.info("resident notify broker: redis (%s)", url)
-        return RedisBroker(url, channel=ACCESS_RESIDENT_NOTIFY_CHANNEL)
-    logger.info("resident notify broker: in-process (single-worker pilot)")
-    return InProcessBroker()
+    return _handle.get()
 
 
 def set_resident_broker(broker: EventBroker | None) -> None:
     """Подменить singleton брокера (для тестов/DI)."""
-    global _broker
-    with _broker_lock:
-        _broker = broker
+    _handle.set(broker)
 
 
 def reset_resident_broker() -> None:
     """Сбросить singleton: чистый in-process брокер без подписчиков (тесты)."""
-    set_resident_broker(InProcessBroker())
+    _handle.reset()
 
 
 # ───────────────────────── публичная публикация ──────────────────────────────
