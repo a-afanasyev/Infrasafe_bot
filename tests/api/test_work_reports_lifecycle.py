@@ -19,6 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import uk_management_bot.api.work_reports.router as work_reports_router
+from uk_management_bot.api.work_reports import coordination
+from uk_management_bot.services.redis_pubsub import get_pubsub_redis
 from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.api.main import app
@@ -48,8 +50,30 @@ def _patch_media_client(monkeypatch, fake_client) -> None:
     monkeypatch.setattr(work_reports_router, "get_media_client", lambda: fake_client)
 
 
-def _reset_reconcile_throttle(monkeypatch) -> None:
+async def _reset_reconcile_throttle(monkeypatch) -> None:
+    """Сбросить ОБА троттла: процессный и межворкерный (AUD6-P2-05).
+
+    Сброса одной модульной переменной мало с тех пор, как окно сверки живёт в
+    Redis: ключ переживает тест (TTL 5 минут), и следующий тест получал уже
+    занятое окно. Ключ берётся из `coordination`, а не дублируется строкой —
+    вторая копия имени и была бы следующим таким же дефектом.
+    """
     monkeypatch.setattr(work_reports_router, "_last_reconcile_at", None)
+    try:
+        redis = await get_pubsub_redis()
+        await redis.delete(coordination._RECONCILE_SLOT_KEY)
+    except Exception:
+        pass  # Redis недоступен — работает процессный троттл, его уже сбросили
+
+
+async def _redis_is_live() -> bool:
+    """Есть ли живой Redis: без него межворкерный слот деградирует в процессный."""
+    try:
+        redis = await get_pubsub_redis()
+        await redis.ping()
+        return True
+    except Exception:
+        return False
 
 
 @contextmanager
@@ -412,7 +436,7 @@ async def test_create_structured_address_override_attempt_422(
 @pytest.mark.asyncio
 async def test_sync_returns_summary_shape(client: AsyncClient, monkeypatch):
     _enable(monkeypatch)
-    _reset_reconcile_throttle(monkeypatch)
+    await _reset_reconcile_throttle(monkeypatch)
     _patch_media_client(monkeypatch, None)  # media service unconfigured — reconcile skipped
 
     resp = await client.post(f"{BASE}/sync")
@@ -427,9 +451,43 @@ async def test_sync_returns_summary_shape(client: AsyncClient, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sync_without_media_client_does_not_burn_reconcile_window(
+    client: AsyncClient, monkeypatch
+):
+    """Окно сверки занимается только тем вызовом, который сверку реально делает.
+
+    Слот брался ДО проверки media-клиента, поэтому /sync без клиента (media не
+    сконфигурирован, либо клиент ещё не поднялся) съедал пятиминутное окно,
+    ничего не сверив. При `--workers 2` это ещё и отбирало окно у воркера,
+    который сверку выполнить мог, — то есть частично возвращало гонку
+    AUD6-P2-04, ради закрытия которой межворкерный слот и вводился.
+
+    Тест про РЕДИС-путь: без живого Redis слот деградирует в процессный троттл,
+    который этой асимметрии не имеет, и проверять было бы нечего.
+    """
+    if not await _redis_is_live():
+        pytest.skip("нужен живой Redis: без него межворкерного слота нет")
+
+    _enable(monkeypatch)
+    await _reset_reconcile_throttle(monkeypatch)
+
+    _patch_media_client(monkeypatch, None)
+    first = await client.post(f"{BASE}/sync")
+    assert first.status_code == 200
+    assert first.json()["reconcile"] is None  # сверять нечем — клиента нет
+
+    _patch_media_client(monkeypatch, FakeMediaClient())
+    second = await client.post(f"{BASE}/sync")
+    assert second.status_code == 200
+    assert second.json()["reconcile"] is not None, (
+        "окно съедено вызовом, который сверку выполнить не мог"
+    )
+
+
+@pytest.mark.asyncio
 async def test_sync_reconcile_throttled_on_second_rapid_call(client: AsyncClient, monkeypatch):
     _enable(monkeypatch)
-    _reset_reconcile_throttle(monkeypatch)
+    await _reset_reconcile_throttle(monkeypatch)
     fake = FakeMediaClient()
     _patch_media_client(monkeypatch, fake)
 
@@ -465,7 +523,7 @@ async def test_sync_survives_failing_lock_reconciliation(
     открывается, пока лежит media-service».
     """
     _enable(monkeypatch)
-    _reset_reconcile_throttle(monkeypatch)
+    await _reset_reconcile_throttle(monkeypatch)
     _patch_media_client(monkeypatch, _LocksInventoryDown())
     await _seed_autopost(db_session, since=datetime.now(timezone.utc) - timedelta(days=1))
     yard = await _mk_yard(db_session, "Двор")
@@ -493,7 +551,7 @@ async def test_sync_throttles_reconcile_even_after_failure(client: AsyncClient, 
     упирался бы в недоступный media-service — на проде это таймаут на таймауте.
     """
     _enable(monkeypatch)
-    _reset_reconcile_throttle(monkeypatch)
+    await _reset_reconcile_throttle(monkeypatch)
     _patch_media_client(monkeypatch, _LocksInventoryDown())
 
     first = await client.post(f"{BASE}/sync")
