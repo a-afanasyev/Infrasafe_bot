@@ -4,12 +4,11 @@
 
 from datetime import date, timedelta
 from typing import List, Optional, Dict, Any
-from sqlalchemy import and_, func
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift import Shift
-from uk_management_bot.utils.constants import SPECIALIZATIONS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -400,47 +399,6 @@ class TemplateManager:
             logger.error(f"Ошибка создания предустановленного шаблона {template_key}: {e}")
             return None
     
-    def install_all_predefined_templates(self) -> Dict[str, Any]:
-        """
-        Устанавливает все предустановленные шаблоны
-        
-        Returns:
-            Результаты установки
-        """
-        try:
-            predefined = self.get_predefined_templates()
-            results = {
-                'installed': [],
-                'skipped': [],
-                'errors': []
-            }
-            
-            for template_key in predefined.keys():
-                try:
-                    template = self.create_predefined_template(template_key)
-                    if template:
-                        results['installed'].append({
-                            'key': template_key,
-                            'name': template.name,
-                            'id': template.id
-                        })
-                    else:
-                        results['skipped'].append(template_key)
-                except Exception as e:
-                    results['errors'].append({
-                        'key': template_key,
-                        'error': str(e)
-                    })
-            
-            logger.info(f"Установка шаблонов завершена: {len(results['installed'])} установлено, "
-                       f"{len(results['skipped'])} пропущено, {len(results['errors'])} ошибок")
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Ошибка установки предустановленных шаблонов: {e}")
-            return {'installed': [], 'skipped': [], 'errors': [{'error': str(e)}]}
-    
     # ========== ПОИСК И ФИЛЬТРАЦИЯ ==========
     
     def get_templates(
@@ -485,163 +443,7 @@ class TemplateManager:
             logger.error(f"Ошибка получения шаблонов: {e}")
             return []
     
-    def find_templates_for_time(
-        self,
-        start_hour: int,
-        end_hour: int
-    ) -> List[ShiftTemplate]:
-        """
-        Находит шаблоны, покрывающие указанное время
-        
-        Args:
-            start_hour: Начальный час
-            end_hour: Конечный час
-        
-        Returns:
-            Список подходящих шаблонов
-        """
-        try:
-            templates = self.get_templates(active_only=True)
-            matching_templates = []
-            
-            for template in templates:
-                template_start = template.start_hour
-                template_end = template.end_hour
-                
-                # Проверяем пересечение временных интервалов
-                if self._time_intervals_overlap(
-                    template_start, template_end,
-                    start_hour, end_hour
-                ):
-                    matching_templates.append(template)
-            
-            return matching_templates
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска шаблонов для времени {start_hour}-{end_hour}: {e}")
-            return []
-    
-    def get_template_statistics(self, template_id: int) -> Dict[str, Any]:
-        """
-        Получает статистику использования шаблона
-        
-        Args:
-            template_id: ID шаблона
-        
-        Returns:
-            Словарь со статистикой
-        """
-        try:
-            template = self.db.query(ShiftTemplate).filter(
-                ShiftTemplate.id == template_id
-            ).first()
-            
-            if not template:
-                return {'error': 'Шаблон не найден'}
-            
-            # Статистика смен, созданных по шаблону
-            shifts_query = self.db.query(Shift).filter(Shift.shift_template_id == template_id)
-            total_shifts = shifts_query.count()
-            
-            # Статистика по статусам
-            status_stats = {}
-            for status in ['planned', 'active', 'completed', 'cancelled']:
-                count = shifts_query.filter(Shift.status == status).count()
-                status_stats[status] = count
-            
-            # Средние показатели эффективности
-            avg_efficiency = shifts_query.filter(
-                Shift.efficiency_score.isnot(None)
-            ).with_entities(func.avg(Shift.efficiency_score)).scalar() or 0
-            
-            avg_completion_time = shifts_query.filter(
-                Shift.average_completion_time.isnot(None)
-            ).with_entities(func.avg(Shift.average_completion_time)).scalar() or 0
-            
-            # Количество завершенных заявок
-            total_requests = shifts_query.with_entities(
-                func.sum(Shift.completed_requests)
-            ).scalar() or 0
-            
-            return {
-                'template_name': template.name,
-                'total_shifts_created': total_shifts,
-                'status_distribution': status_stats,
-                'average_efficiency_score': round(avg_efficiency, 2),
-                'average_completion_time_minutes': round(avg_completion_time, 1),
-                'total_requests_handled': total_requests,
-                'template_utilization': self._calculate_template_utilization(template),
-                'last_usage': self._get_last_template_usage(template_id)
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики шаблона {template_id}: {e}")
-            return {'error': str(e)}
-    
     # ========== ВАЛИДАЦИЯ И ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-    
-    def validate_template(self, template_id: int) -> Dict[str, Any]:
-        """
-        Валидирует конфигурацию шаблона
-        
-        Args:
-            template_id: ID шаблона
-        
-        Returns:
-            Результаты валидации
-        """
-        try:
-            template = self.db.query(ShiftTemplate).filter(
-                ShiftTemplate.id == template_id
-            ).first()
-            
-            if not template:
-                return {'valid': False, 'errors': ['Шаблон не найден']}
-            
-            errors = []
-            warnings = []
-            
-            # Проверка временных параметров
-            if not (0 <= template.start_hour <= 23):
-                errors.append('Некорректный час начала смены')
-            
-            if not (1 <= template.duration_hours <= 24):
-                errors.append('Некорректная продолжительность смены')
-            
-            # Проверка параметров исполнителей
-            if template.min_executors > template.max_executors:
-                errors.append('Минимальное количество исполнителей больше максимального')
-            
-            if template.min_executors < 1:
-                errors.append('Минимальное количество исполнителей должно быть больше 0')
-            
-            # Проверка повторения
-            if template.auto_create:
-                if getattr(template, 'recurrence_mode', 'weekday') == 'cycle':
-                    if not template.cycle_days_on or not template.cycle_anchor_date:
-                        warnings.append('Автосоздание включено в режиме цикла, но не заданы рабочие дни цикла или дата-якорь')
-                elif not template.days_of_week:
-                    warnings.append('Автосоздание включено, но дни недели не указаны')
-            
-            # Проверка специализаций
-            if template.required_specializations:
-                available_specializations = set(SPECIALIZATIONS.keys())
-                required_set = set(template.required_specializations)
-                invalid_specs = required_set - available_specializations
-                
-                if invalid_specs:
-                    warnings.append(f'Неизвестные специализации: {list(invalid_specs)}')
-            
-            return {
-                'valid': len(errors) == 0,
-                'errors': errors,
-                'warnings': warnings,
-                'template_name': template.name
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка валидации шаблона {template_id}: {e}")
-            return {'valid': False, 'errors': [str(e)]}
     
     def _validate_template_params(
         self,

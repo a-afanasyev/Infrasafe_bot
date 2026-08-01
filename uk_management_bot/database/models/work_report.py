@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Chec
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
+from uk_management_bot.constants.work_reports import WORK_REPORT_STATUSES
 from uk_management_bot.database.session import Base
 
 
@@ -27,8 +28,9 @@ class WorkReport(Base):
 
     __tablename__ = "work_reports"
     __table_args__ = (
+        # AUD6-P2-57: список собирается из канона, а не дублируется строкой.
         CheckConstraint(
-            "status IN ('pending','needs_media','publishing','published','needs_review','rejected')",
+            "status IN ({})".format(",".join(f"'{s}'" for s in WORK_REPORT_STATUSES)),
             name="ck_work_reports_status"),
         CheckConstraint("source IN ('auto','manual')", name="ck_work_reports_source"),
         Index("ix_work_reports_status_published_at", "status", "published_at"),

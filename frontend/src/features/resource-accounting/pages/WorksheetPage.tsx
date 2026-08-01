@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type {
@@ -8,7 +9,6 @@ import type {
   ValidationSummary,
   Worksheet,
 } from '../api/types';
-import { RESOURCE_TYPE_LABELS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { PeriodStatusBadge, ReadingStatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
@@ -32,6 +32,7 @@ function defaultMonth(): string {
 }
 
 export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {}) {
+  const { t } = useTranslation();
   const { role } = useResourceAuth();
   const queryClient = useQueryClient();
 
@@ -166,18 +167,20 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
   return (
     <div>
       <div className="page-header">
-        <h1>Ввод показаний</h1>
+        <h1>{t('resourceAccounting.worksheet.title')}</h1>
       </div>
 
       <div className="toolbar">
         {entryMode ? (
           <span className="field-inline">
-            <span>Период</span>
-            <strong>{month ? formatMonth(month) : '— нет открытого периода —'}</strong>
+            <span>{t('resourceAccounting.worksheet.period')}</span>
+            <strong>
+              {month ? formatMonth(month) : t('resourceAccounting.worksheet.noOpenPeriod')}
+            </strong>
           </span>
         ) : (
           <label className="field-inline">
-            <span>Период</span>
+            <span>{t('resourceAccounting.worksheet.period')}</span>
             <select
               value={month ?? ''}
               onChange={(e) => {
@@ -196,25 +199,25 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
         )}
         {!entryMode && canEnterReadings(role) && (
           <button className="btn" onClick={() => setCreatePeriodOpen(true)}>
-            Создать период
+            {t('resourceAccounting.worksheet.createPeriod')}
           </button>
         )}
         <label className="field-inline">
-          <span>Ресурс</span>
+          <span>{t('resourceAccounting.worksheet.resource')}</span>
           <select
             value={resourceType}
             onChange={(e) => setResourceType(e.target.value as '' | ResourceType)}
           >
-            <option value="">Все</option>
-            <option value="electricity">Электроэнергия</option>
-            <option value="cold_water">Холодная вода</option>
+            <option value="">{t('resourceAccounting.worksheet.all')}</option>
+            <option value="electricity">{t('resourceAccounting.resourceTypes.electricity')}</option>
+            <option value="cold_water">{t('resourceAccounting.resourceTypes.cold_water')}</option>
           </select>
         </label>
         {!entryMode && (
           <label className="field-inline">
-            <span>Объект</span>
+            <span>{t('resourceAccounting.worksheet.object')}</span>
             <select value={objectId} onChange={(e) => setObjectId(e.target.value)}>
-              <option value="">Все</option>
+              <option value="">{t('resourceAccounting.worksheet.all')}</option>
               {(objectsQuery.data ?? []).map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -225,7 +228,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
         )}
         <input
           className="search-input"
-          placeholder="Поиск по номеру…"
+          placeholder={t('resourceAccounting.worksheet.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -235,7 +238,9 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
             disabled={changedItems.length === 0 || bulkSave.isPending}
             onClick={() => bulkSave.mutate(changedItems)}
           >
-            {bulkSave.isPending ? 'Сохранение…' : `Сохранить всё (${changedItems.length})`}
+            {bulkSave.isPending
+              ? t('resourceAccounting.worksheet.saving')
+              : t('resourceAccounting.worksheet.saveAll', { n: changedItems.length })}
           </button>
         )}
       </div>
@@ -252,14 +257,28 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
       {period && !entryMode && (
         <div className="period-panel">
           <div className="period-panel-status">
-            Статус периода: <PeriodStatusBadge status={period.status} />
+            {t('resourceAccounting.worksheet.periodStatus')}{' '}
+            <PeriodStatusBadge status={period.status} />
             {v && (
               <span className="period-panel-validation">
-                введено {v.entered} из {v.active_meters}, не введено {v.not_entered},{' '}
-                <span className="text-warning">предупр. {v.by_status?.warning ?? 0}</span>,{' '}
-                <span className="text-error">ошибок {v.errors}</span>
+                {t('resourceAccounting.worksheet.validationSummary', {
+                  entered: v.entered,
+                  active: v.active_meters,
+                  notEntered: v.not_entered,
+                })}{' '}
+                <span className="text-warning">
+                  {t('resourceAccounting.worksheet.validationWarnings', {
+                    n: v.by_status?.warning ?? 0,
+                  })}
+                </span>
+                ,{' '}
+                <span className="text-error">
+                  {t('resourceAccounting.worksheet.validationErrors', { n: v.errors })}
+                </span>
                 {v.warnings_without_comment > 0 &&
-                  `, без комментария ${v.warnings_without_comment}`}
+                  t('resourceAccounting.worksheet.validationNoComment', {
+                    n: v.warnings_without_comment,
+                  })}
               </span>
             )}
           </div>
@@ -270,7 +289,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                 disabled={transition.isPending}
                 onClick={() => transition.mutate('move-to-review')}
               >
-                На проверку
+                {t('resourceAccounting.worksheet.toReview')}
               </button>
             )}
             {period.status === 'review' && canReview(role) && (
@@ -280,15 +299,17 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                   disabled={transition.isPending}
                   onClick={() => transition.mutate('reopen')}
                 >
-                  Вернуть в работу
+                  {t('resourceAccounting.worksheet.returnToWork')}
                 </button>
                 <button
                   className="btn btn-sm btn-primary"
                   disabled={transition.isPending || (v ? !v.can_submit : false)}
                   onClick={() => transition.mutate('submit')}
-                  title={v && !v.can_submit ? 'Есть ошибки или незаполненные показания' : ''}
+                  title={
+                    v && !v.can_submit ? t('resourceAccounting.worksheet.submitBlocked') : ''
+                  }
                 >
-                  Передать
+                  {t('resourceAccounting.worksheet.submit')}
                 </button>
               </>
             )}
@@ -298,7 +319,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                 disabled={transition.isPending}
                 onClick={() => transition.mutate('close')}
               >
-                Закрыть период
+                {t('resourceAccounting.worksheet.closePeriod')}
               </button>
             )}
           </div>
@@ -306,27 +327,39 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
       )}
 
       {!month ? (
-        <Empty text={entryMode ? 'Нет открытого периода. Обратитесь к менеджеру.' : 'Периоды ещё не созданы'} />
+        <Empty
+          text={
+            entryMode
+              ? t('resourceAccounting.worksheet.emptyNoOpenPeriod')
+              : t('resourceAccounting.worksheet.emptyNoPeriods')
+          }
+        />
       ) : worksheetQuery.isLoading ? (
         <Loading />
       ) : worksheetQuery.isError ? (
         <ErrorState error={worksheetQuery.error} onRetry={() => worksheetQuery.refetch()} />
       ) : filteredRows.length === 0 ? (
-        <Empty text={debouncedSearch ? 'Ничего не найдено' : 'В ведомости нет счётчиков'} />
+        <Empty
+          text={
+            debouncedSearch
+              ? t('resourceAccounting.worksheet.emptyNotFound')
+              : t('resourceAccounting.worksheet.emptyNoMeters')
+          }
+        />
       ) : (
         <div className="table-wrap">
           <table className="table table-worksheet">
             <thead>
               <tr>
-                <th>Номер</th>
-                <th>Счётчик</th>
-                <th>Объект</th>
-                <th>Потребители</th>
-                <th className="num">Предыдущее</th>
-                <th className="num">Текущее</th>
-                <th className="num">Расход</th>
-                <th>Статус</th>
-                <th>Комментарий</th>
+                <th>{t('resourceAccounting.worksheet.colNumber')}</th>
+                <th>{t('resourceAccounting.worksheet.colMeter')}</th>
+                <th>{t('resourceAccounting.worksheet.colObject')}</th>
+                <th>{t('resourceAccounting.worksheet.colConsumers')}</th>
+                <th className="num">{t('resourceAccounting.worksheet.colPrevious')}</th>
+                <th className="num">{t('resourceAccounting.worksheet.colCurrent')}</th>
+                <th className="num">{t('resourceAccounting.worksheet.colConsumption')}</th>
+                <th>{t('resourceAccounting.worksheet.colStatus')}</th>
+                <th>{t('resourceAccounting.worksheet.colComment')}</th>
               </tr>
             </thead>
             <tbody>
@@ -346,7 +379,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                     <td>
                       <div>{row.meter_name}</div>
                       <div className="muted small">
-                        {RESOURCE_TYPE_LABELS[row.resource_type]}, {row.unit}
+                        {t(`resourceAccounting.resourceTypes.${row.resource_type}`)}, {row.unit}
                       </div>
                     </td>
                     <td>{row.primary_object_name}</td>
@@ -357,7 +390,9 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                         <input
                           className="input-reading"
                           inputMode="decimal"
-                          aria-label={`Показание ${row.meter_number}`}
+                          aria-label={t('resourceAccounting.worksheet.readingAria', {
+                            number: row.meter_number,
+                          })}
                           value={inputValue}
                           onChange={(e) => setDraft(row.meter_id, { value: e.target.value }, row)}
                         />
@@ -376,7 +411,9 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                       {editable ? (
                         <input
                           className="input-comment"
-                          aria-label={`Комментарий ${row.meter_number}`}
+                          aria-label={t('resourceAccounting.worksheet.commentAria', {
+                            number: row.meter_number,
+                          })}
                           value={commentValue}
                           onChange={(e) => setDraft(row.meter_id, { comment: e.target.value }, row)}
                         />
@@ -393,9 +430,12 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
       )}
 
       {createPeriodOpen && (
-        <Modal title="Создать период" onClose={() => setCreatePeriodOpen(false)}>
+        <Modal
+          title={t('resourceAccounting.worksheet.createPeriod')}
+          onClose={() => setCreatePeriodOpen(false)}
+        >
           <label className="field">
-            <span>Месяц</span>
+            <span>{t('resourceAccounting.worksheet.month')}</span>
             <input
               type="month"
               value={newMonth}
@@ -404,14 +444,14 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
           </label>
           <div className="modal-actions">
             <button className="btn" onClick={() => setCreatePeriodOpen(false)}>
-              Отмена
+              {t('resourceAccounting.worksheet.cancel')}
             </button>
             <button
               className="btn btn-primary"
               disabled={!/^\d{4}-\d{2}$/.test(newMonth) || createPeriod.isPending}
               onClick={() => createPeriod.mutate(newMonth)}
             >
-              Создать
+              {t('resourceAccounting.worksheet.create')}
             </button>
           </div>
         </Modal>

@@ -5,7 +5,8 @@
 > 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`
 > и устарели.** Реальный прод-стек infrasafe (хост `~/uk`) — **`docker compose -f
 > docker-compose.yml -f docker-compose.media.yml`** (оба `-f` в каждой команде: media
-> подключается overlay-файлом); profk — `-f docker-compose.profk.yml`. Каноничная выкатка
+> подключается overlay-файлом); profk — `-f docker-compose.yml -f docker-compose.profk.yml`
+> (⚠️ с 2026-07-31 / AUD6-P2-38 profk-файл — тонкий override, одиночный `-f` больше не работает). Каноничная выкатка
 > (ARCH-106: секреты приходят из Doppler, `.env` от них очищен → без `doppler run --`
 > команда упадёт на `:?`; PR-7: `migrate`-шаг обязателен перед каждым `up`):
 > ```bash
@@ -33,7 +34,7 @@
 - [ ] All tests pass: `docker exec uk-management-bot pytest`
 - [ ] Frontend build clean: `cd frontend && npm run build`
 - [ ] No secrets in code: `git grep -i "password\|token\|secret" -- "*.py" "*.ts" "*.yml" | grep -v template | grep -v test`
-- [ ] `.env` on server has all vars from `.env.production.template`
+- [ ] Секреты приложения — в Doppler (`doppler run --project uk-management --config <profk|infrasafe>`), не в `.env`; полнота гарантируется `:?`-гвардами compose и SSOT-гейтом (`tests/services/test_compose_secret_env_ssot.py`). Шаблон `.env.production.template` удалён (AUD6-P2-42) — канон: `.env.example` + `.claude/skills/uk-deploy/SKILL.md`
 - [ ] `DEBUG=false` in `.env`
 - [ ] `JWT_SECRET` != `INVITE_SECRET`
 - [ ] `ADMIN_PASSWORD` >= 12 chars

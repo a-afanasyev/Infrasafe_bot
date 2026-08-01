@@ -12,13 +12,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from access_control.domain.events import CameraEvent
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 if TYPE_CHECKING:  # избегаем циклического импорта с services.ingestion
     from access_control.services.ingestion import AnprIngestInput
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def find_event_id(db: Session, *, controller_id: int, event_id: str) -> int | None:

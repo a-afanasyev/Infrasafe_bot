@@ -20,7 +20,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
@@ -44,18 +44,17 @@ VEHICLES_REQUESTS_ROLES = ("manager", "system_admin")
 # TODO(§11): сузить до явного photo-view права (а не «кто видит события»).
 PHOTO_VIEW_ROLES = ("security_operator", "manager", "system_admin")
 
-# Пагинация (общая для всех списков).
-DEFAULT_LIMIT = 50
-MAX_LIMIT = 200
+# A6-P2-50: пагинация/DTO-база — общие, см. api/pagination.py
+from access_control.api.pagination import (  # noqa: E402
+    DEFAULT_LIMIT,
+    Frozen as _Frozen,
+    limit_query as _limit,
+)
 # Сколько последних событий по номеру отдаём в детали авто.
 VEHICLE_RECENT_EVENTS = 20
 
 
 # ------------------------------ DTO (frozen) ------------------------------
-
-
-class _Frozen(BaseModel):
-    model_config = ConfigDict(frozen=True)
 
 
 class EventRow(_Frozen):
@@ -331,10 +330,6 @@ VehicleDetail.model_rebuild()
 
 
 # ------------------------------ хелперы ------------------------------
-
-
-def _limit(value: int) -> int:
-    return Query(value, ge=1, le=MAX_LIMIT, description="размер страницы (max 200)")
 
 
 def _plate_pat(plate: str) -> str:

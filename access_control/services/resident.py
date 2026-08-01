@@ -43,6 +43,9 @@ from access_control.services.management import write_audit
 from access_control.services.parking_occupancy import apartment_spot_occupancy
 from access_control.services.normalization import normalize_plate
 from access_control.services.one_time_codes import generate_code, hash_code
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 # TTL одноразового гостевого кода (§9.3): не более 30 минут.
 GUEST_CODE_MAX_TTL = dt.timedelta(minutes=30)
@@ -127,8 +130,6 @@ class SpotLimitToggleOutcome:
     replayed: bool
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def _cap_guest_ttl(valid_until: dt.datetime | None) -> dt.datetime:

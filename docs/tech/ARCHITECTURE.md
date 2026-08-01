@@ -1,6 +1,6 @@
 # UK Management — техническая архитектура
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-07-31_
 
 > Техническое описание системы: компоненты монорепо, развёртывание, потоки
 > данных, аутентификация и локализация. Продуктовый обзор — в
@@ -17,14 +17,27 @@
 | REST + WS API | `uk_management_bot/api/` | FastAPI, SQLAlchemy async | Бэкенд дашборда и Mini App; собирается в `Dockerfile.api` |
 | Frontend SPA | `frontend/` | Vite + TS, React, shadcn/ui, TanStack Query, Zustand, i18next | Дашборд `/dashboard`, табло `/resident-board`, Mini App `/twa`, регистрация `/register`; base-path `/uk/` |
 | Контроль доступа | `access_control/` | FastAPI, отдельный образ `Dockerfile.access` | ANPR/пропуска/проезды; собственный API, общая БД/Redis |
-| Медиа-сервис | `media_service/` | FastAPI | Хранение и раздача фото/видео; своя логическая БД `uk_media` |
-| Миграции | `alembic/` | Alembic | Схема PostgreSQL; выполняются **только** в api-контейнере |
+| Медиа-сервис | `media_service/` | FastAPI | Хранение и раздача фото/видео; своя логическая БД `uk_media`; дисковый preview-cache (§3.2) |
+| Учёт ресурсов | `resource-accounting/backend/` | FastAPI + worker | Отдельный сервис в монорепо: показания счётчиков; своя БД `resource-postgres`; s2s launch-tickets из основного API (§3.5) |
+| Миграции | `alembic/` | Alembic | Схема PostgreSQL; применяет one-shot сервис `migrate` под ролью-владельцем схемы (PR-7, `docker-compose.yml:362`); api/access-api на старте делают только read-only preflight |
 | Документация | `docs/` | Markdown | Доки, аудит, планы |
 
 Единая БД PostgreSQL и Redis общие для бота, основного API и access-API
-(access-API миграции **не** гоняет — их применяет `uk-management-api`,
-`docker-compose.yml:126-128`). Медиа-сервис использует отдельную логическую БД
-`uk_media` в том же PostgreSQL (`docker-compose.media.yml:6`).
+(миграции ни api, ни access-api не гоняют — их применяет one-shot `migrate`,
+см. `README.md` «Быстрый старт»). Медиа-сервис использует отдельную логическую
+БД `uk_media` в том же PostgreSQL (`docker-compose.media.yml`), под выделенной
+ролью `uk_media_owner`. Учёт ресурсов — отдельный PostgreSQL 16
+(`resource-postgres`, `docker-compose.yml:453`) с ролями `resource`
+(владелец/миграции) и `resource_app` (runtime DML).
+
+**Секреты (ARCH-106):** все секреты приложения (`app`/`api`/`access-api`/
+`migrate`/`media-service`/`resource-api`/`resource-worker`) приходят из Doppler
+— прод-команды compose запускаются через
+`doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`,
+`.env` на проде очищен от секретов; compose падает с `:?`-гардом при их
+отсутствии (например, `docker-compose.yml:515`). Carve-out вне Doppler —
+PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`) и несекретная
+конфигурация. Детали — `.claude/skills/uk-deploy/SKILL.md`.
 
 Бот рассчитан на **один воркер** (in-memory throttling в
 `middlewares/throttling.py`; см. `docs/development/known-constraints.md`).
@@ -32,11 +45,21 @@
 ## 2. Диаграмма развёртывания
 
 Прод собирается двумя compose-файлами:
-`docker compose -f docker-compose.yml -f docker-compose.media.yml ...`;
+`docker compose -f docker-compose.yml -f docker-compose.media.yml ...`
+(для profk — `docker compose -f docker-compose.yml -f docker-compose.profk.yml ...`:
+с 2026-07-31 / AUD6-P2-38 `docker-compose.profk.yml` — тонкий override с profk-дельтами
+и media внутри, standalone он больше не работает);
+все прод-команды — через `doppler run --` (ARCH-106, см. §1);
 **никогда** не использовать `--remove-orphans` (в стеке есть orphan-контейнеры
 edge/InfraSafe). Все host-порты биндятся на `127.0.0.1` — наружу система
 доступна только через edge InfraSafe (`infrasafe.uz`) по prefix-allowlist
 (SEC-22).
+
+Долгоживущие сервисы compose: `app`, `api`, `access-api`, `frontend`,
+`postgres`, `redis`, `media-service`, `resource-postgres`, `resource-api`,
+`resource-worker`. One-shot'ы (профиль `tools` / `run --rm`): `provision-roles`
+→ `migrate` (основная схема), `media-migrate` (схема `uk_media`),
+`resource-provision-roles` → `resource-migrate` (схема учёта ресурсов).
 
 ```mermaid
 flowchart TB
@@ -49,12 +72,15 @@ flowchart TB
 
     subgraph host[Прод-хост • сеть docker uk-network]
         bot["uk-management-bot (app)\naiogram 3, 1 воркер"]
-        api["uk-management-api (api)\nFastAPI REST+WS\n127.0.0.1:8085→8080\nальбемик upgrade head при старте"]
+        api["uk-management-api (api)\nFastAPI REST+WS\n127.0.0.1:8085→8080\nread-only preflight схемы при старте"]
         access["uk-access-api\nFastAPI, контроль доступа\n127.0.0.1:8087→8080"]
         front["uk-frontend\nnginx + React build\n127.0.0.1:3002→80"]
-        media["uk-media-service\nFastAPI\n127.0.0.1:8009→8000"]
+        media["uk-media-service\nFastAPI + preview-cache\n127.0.0.1:8009→8000"]
         pg[("uk-postgres\nPostgreSQL 15\nБД uk_management + uk_media")]
         redis[("uk-redis\nRedis 7\nrate-limit, pub/sub, кэш")]
+        rapi["uk-resource-api\nFastAPI учёт ресурсов\n127.0.0.1:8100→8100"]
+        rworker["uk-resource-worker\nфоновый worker"]
+        rpg[("uk-resource-postgres\nPostgreSQL 16\nБД resource_accounting")]
     end
 
     user -->|HTTPS| edge
@@ -73,6 +99,10 @@ flowchart TB
     access --> pg
     access --> redis
     access -->|фото проездов| media
+    api -->|s2s launch-ticket\nresource-api.internal:8100| rapi
+    edge -->|/uk/api/resource/*| rapi
+    rapi --> rpg
+    rworker --> rpg
     front -.->|build-time base /uk/| edge
 ```
 
@@ -80,19 +110,21 @@ flowchart TB
 
 | Контейнер | Host-порт → контейнер | Файл:строка |
 |---|---|---|
-| `uk-management-bot` (`app`) | — (health на :8000 внутри) | `docker-compose.yml:8,60` |
-| `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | `docker-compose.yml:94-95` |
-| `uk-access-api` | `127.0.0.1:8087 → 8080` (порт 8086 занят influxdb на shared-деплое) | `docker-compose.yml:156-157` |
-| `uk-postgres` | `127.0.0.1:5432` | `docker-compose.yml:216-217` |
-| `uk-redis` | `127.0.0.1:6379` | `docker-compose.yml:250-251` |
-| `uk-frontend` | `127.0.0.1:3002 → 80` | `docker-compose.yml:260-261` |
-| `uk-media-service` | `127.0.0.1:8009 → 8000` | `docker-compose.media.yml:28-29` |
+| `uk-management-bot` (`app`) | — (health на :8000 внутри) | `docker-compose.yml:8` |
+| `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | `docker-compose.yml:166-167` |
+| `uk-access-api` | `127.0.0.1:8087 → 8080` (порт 8086 занят influxdb на shared-деплое) | `docker-compose.yml:253-254` |
+| `uk-postgres` | `127.0.0.1:5432` | `docker-compose.yml:315-316` |
+| `uk-redis` | `127.0.0.1:6379` | `docker-compose.yml:422-423` |
+| `uk-frontend` | `127.0.0.1:3002 → 80` | `docker-compose.yml:437-438` |
+| `uk-resource-api` | `127.0.0.1:8100 → 8100` | `docker-compose.yml:524-525` |
+| `uk-resource-postgres` | — (только uk-network) | `docker-compose.yml:453` |
+| `uk-media-service` | `127.0.0.1:8009 → 8000` | `docker-compose.media.yml:39-40` |
 
 Сеть — фиксированное имя `uk-network` без префикса compose-проекта
-(`docker-compose.yml:283`, реконсиляция прод-дрейфа). Egress — только IPv4:
+(`docker-compose.yml:596`, реконсиляция прод-дрейфа). Egress — только IPv4:
 IPv6 отключён на интерфейсах бота/API/access (в Узбекистане нет рабочего
 IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.telegram.org`,
-`docker-compose.yml:22-24,75-77,120-122`).
+`docker-compose.yml:22-24,112-114,201-203`).
 
 ## 3. Потоки данных
 
@@ -102,10 +134,11 @@ IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.tele
   через SQLAlchemy (`uk_management_bot/main.py`, `database/session.py`), шлёт
   уведомления пользователям.
 - **API** (`uk_management_bot/api/main.py`) обслуживает дашборд и Mini App:
-  роутеры под `/api/v2/*` (auth, requests, shifts, addresses, feedback,
-  materials, profile, callcenter, public, board-config, webhooks, registration)
+  роутеры под `/api/v2/*` (auth, requests, shifts, addresses, residents,
+  feedback, materials, profile, callcenter, public, board-config, auto-manager,
+  webhooks, registration, work-reports, resource-accounting)
   и WebSocket `/ws/v2/*` для live-обновлений
-  (`api/main.py:120-138`). Пишет ту же БД `uk_management`.
+  (`api/main.py:134-157`). Пишет ту же БД `uk_management`.
 - **Дашборд** (`uk-frontend`) — статическая сборка React, ходит в API через
   edge по `/uk/api/*`; live-события получает по WebSocket. Роуты и гарды —
   `frontend/src/App.tsx`.
@@ -118,8 +151,15 @@ IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.tele
 `uk_media`, `docker-compose.media.yml`). Клиенты (бот, API, access-API) ходят в
 него по внутреннему URL `http://media-service:8000` с `X-API-Key`. API отдаёт
 медиа фронтенду через прокси-роут (`api/routes/media_proxy.py`, подписанные
-signed-URL). Медиа-канал вынесен из «горячего» пути решений access-домена
-(`docker-compose.yml:147-152`).
+signed-URL). Медиа-канал вынесен из «горячего» пути решений access-домена.
+
+**Preview-cache** (`media_service/app/services/preview_cache.py`): media-service
+скачивает оригиналы из Telegram по требованию, и публичная витрина «до/после»
+(30 карточек × 2 фото) выедала пул за одну загрузку страницы (инцидент
+2026-07-25). Решение: витрина получает превью ≈480px JPEG; превью кэшируются на
+диске (том `media_preview_cache`, `docker-compose.media.yml:31,83`) — повторный
+просмотр не трогает Telegram; параллельные скачивания ограничены семафором.
+Вытеснение из кэша — целыми каталогами-заявками (LRU по заявке, не по файлу).
 
 ### 3.3 Контроль доступа как отдельный сервис
 
@@ -132,9 +172,52 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 (`ACCESS_NONCE_BACKEND=redis`) и брокер live-событий
 (`ACCESS_EVENT_BROKER=redis`, `docker-compose.yml:136-137`). Домен требует
 секретов Ed25519/HMAC (offline-snapshot, device-auth, signed-URL фото, гостевые
-коды) — код падает `RuntimeError` при их отсутствии
-(`docker-compose.yml:138-145`). Фронт-мост в основном API —
+коды) — код падает `RuntimeError` при их отсутствии. Фронт-мост в основном API —
 `services/access_notify_subscriber.py`, `handlers/access_control.py`.
+
+### 3.4 Визуальные отчёты «до/после» (work-reports)
+
+Публичная витрина выполненных работ. Код: пакет
+`uk_management_bot/api/work_reports/` (менеджерский `router.py` +
+неаутентифицированный `public_router.py`) поверх функционального сервиса
+`uk_management_bot/services/work_report_service.py`. Весь модуль за
+фиче-флагом `WORK_REPORTS_ENABLED` (`config/settings.py:276`; менеджерский
+роутер при выключенном флаге отдаёт единый 404).
+
+- **Синхронизация**: черновики отчётов автосоздаются из завершённых заявок
+  (`sync_pending_drafts`), медиа автозаполняется из media-service
+  (`autofill_media`).
+- **Модерация**: менеджер (`require_approved_roles("manager")`) правит
+  черновик, публикует/снимает/отклоняет (`publish/unpublish/reject/reopen`).
+- **Сага публикации**: состояние согласуется между БД бота (`work_reports`) и
+  отдельной БД media-service (`media_files`) **без** two-phase commit —
+  строго упорядоченные шаги с компенсацией + идемпотентная фоновая сверка
+  `reconcile_publication_locks` как self-healing после крэша посреди саги.
+- **Публичная витрина**: `GET /api/v2/public/work-reports*` — без
+  аутентификации; отдаёт минимум полей (без номера заявки, текста и user id),
+  медиа — превью через preview-cache media-service (§3.2).
+- `WorkReport.request_number` — не FK: отчёт — бессрочный снапшот и обязан
+  пережить жёсткое удаление заявки.
+
+### 3.5 Учёт ресурсов (resource-accounting)
+
+Отдельный сервис в монорепо (`resource-accounting/backend/`): показания
+счётчиков, своя БД `resource-postgres` и свои миграции/роли (one-shot'ы
+`resource-provision-roles`/`resource-migrate`; runtime — под least-privilege
+ролью `resource_app`). Интеграция с основным стеком:
+
+- **s2s launch-tickets**: дашборд/TWA не логинятся в ресурс-сервис заново —
+  основной API минтит одноразовый opaque-ticket server-to-server
+  (`uk_management_bot/api/resource_accounting/router.py`, POST к
+  `RESOURCE_SERVICE_URL` c `X-Service-Token`; на проде это
+  `http://resource-api.internal:8100/v1` — алиас на `uk-network`,
+  `docker-compose.yml:531-533`). Сервисный токен живёт только на бэкенде.
+- **Фронт-модуль**: нативный раздел дашборда за build-флагом
+  `VITE_RESOURCES_ENABLED` (`frontend/Dockerfile:23`,
+  `frontend/src/pages/ResourceAccountingSection.tsx`).
+- **Роль контролёра** `resource_meter_entry`: ввод показаний из Mini App по
+  Telegram `initData` (`/api/v2/resource-accounting/twa-ticket`).
+- **Edge**: наружу — префикс `/uk/api/resource/` на edge → `resource-api:8100`.
 
 ## 4. Модель аутентификации
 
@@ -195,6 +278,8 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 | Смены | `services/shift_*`, `handlers/shift_management/`, `api/shifts/` | `docs/РАЗДЕЛ_3_СИСТЕМА_СМЕН_СВОДКА.md` |
 | Контроль доступа | `access_control/` (api/domain/services/repositories), `handlers/access_control.py`, `frontend/src/pages/access/` | `access_control/` (in-code), **проверить** сводный док |
 | Склад материалов | `database/models/material.py`, `services/material_service.py`, `api/materials/`, `handlers/*/materials.py`, `frontend/src/pages/materials/` | [../MATERIALS_MODULE.md](../MATERIALS_MODULE.md) |
+| Визуальные отчёты (work-reports) | `api/work_reports/`, `services/work_report_service.py`, `database/models/work_report.py` | §3.4 этого документа |
+| Учёт ресурсов | `resource-accounting/backend/`, `api/resource_accounting/`, `frontend/src/pages/ResourceAccountingSection.tsx` | §3.5 этого документа |
 | Верификация пользователей | `services/user_verification_service.py`, `handlers/user_verification.py` | `docs/РАЗДЕЛ_6_МНОГОРОЛЕВОЙ_РЕЖИМ.md` (**проверить**) |
 | Аналитика | `services/shift_analytics.py`, `services/metrics_manager.py`, `frontend/src/pages/AnalyticsPage.tsx` | — (**проверить**) |
 | Обратная связь | `services/feedback_service.py`, `api/feedback/`, `frontend/src/pages/FeedbackPage.tsx` | — |

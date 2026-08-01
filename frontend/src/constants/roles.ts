@@ -20,16 +20,6 @@ export type UserRole =
   | 'system_admin'
   | 'security_operator'
 
-/** Полный список канонических ролей. */
-export const USER_ROLES: readonly UserRole[] = [
-  'applicant',
-  'executor',
-  'manager',
-  'inspector',
-  'system_admin',
-  'security_operator',
-] as const
-
 /**
  * Роли, которым разрешён доступ к модулю контроля доступа (web-панель).
  * Намеренно НЕ включает `executor`, `inspector` — у них нет автоматического

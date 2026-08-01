@@ -230,7 +230,7 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/services/request_service.py', 'cmp:Request', 'status'),
     # DED-01: `cmp:request`-чтение удалено вместе с мёртвым
     # is_role_allowed_for_transition (авторизацию решает канон workflow).
-    ('uk_management_bot/services/shift_analytics.py', 'cmp:r', 'status'),
+    # AUD6: `cmp:r`-чтение удалено вместе с мёртвым calculate_system_kpis.
     ('uk_management_bot/services/shift_analytics.py', 'cmp:request', 'status'),
     ('uk_management_bot/services/shift_assignment_service.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/shift_assignment_service.py', 'in_:Request', 'status'),

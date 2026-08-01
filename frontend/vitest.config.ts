@@ -23,9 +23,9 @@ export default mergeConfig(
         reporter: ['text', 'text-summary', 'html', 'lcov'],
         include: ['src/**/*.{ts,tsx}'],
         exclude: [
-          'src/twa/**',
-          'src/pages/twa/**',
-          'src/hooks/useTWAAuth.ts',
+          // AUD6-P2-28: 'src/twa/**' и 'src/pages/twa/**' СНЯТЫ из исключений —
+          // TWA прод-поверхность (экран контролёра раскатан с 2026-07-14) и
+          // обязана быть в знаменателе; floor'ы перекалиброваны по факту ниже.
           'src/components/ui/**',
           'src/types/**',
           'src/main.tsx',
@@ -50,11 +50,14 @@ export default mergeConfig(
         // 2026-07-25: floor'ы подтянуты к фактическому замеру (lines 41.55,
         // statements 39.56, functions 30.72, branches 32.1) — отставали на
         // ~15 пунктов и уже не ловили регрессию.
+        // AUD6-P2-28 (2026-07-31): twa включён в знаменатель; замер с ним —
+        // lines 42.28 / statements 40.38 / functions 32.89 / branches 33.57.
+        // Floor'ы на ~1 пункт ниже факта: регрессия ловится, flake — нет.
         thresholds: {
-          lines: 40,
-          statements: 38,
-          functions: 29,
-          branches: 30,
+          lines: 41,
+          statements: 39,
+          functions: 31,
+          branches: 32,
         },
       },
     },

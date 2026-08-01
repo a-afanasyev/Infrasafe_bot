@@ -41,6 +41,7 @@ from uk_management_bot.api.work_reports.schemas import (
     WorkReportUnpublishIn,
 )
 from uk_management_bot.config.settings import settings
+from uk_management_bot.constants.work_reports import MEDIA_EDITABLE_STATUSES
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 # Alias — `Request` (fastapi) нужен для slowapi rate-limit сигнатуры ниже
@@ -74,12 +75,12 @@ router = APIRouter(dependencies=[Depends(_require_work_reports_enabled)])
 # совпадает с модулем материалов (`api/materials/router.py:53`).
 _manager_only = require_approved_roles("manager")
 
-# Статусы отчёта — единый источник для валидации query-параметра и
-# зеркало CheckConstraint'а в модели (`database/models/work_report.py`).
+# Статусы отчёта: канон — constants/work_reports.py (AUD6-P2-57). Literal
+# обязан остаться литеральным (статическая типизация не собирается из
+# кортежа) — его равенство канону держит гейт
+# tests/api/test_work_report_status_ssot.py.
 ReportStatus = Literal["pending", "needs_media", "publishing", "published", "needs_review", "rejected"]
-# Статусы, в которых менять состав медиа осмысленно: отчёт ещё не в саге
-# публикации и не опубликован.
-_MEDIA_EDITABLE_STATUSES = ("pending", "needs_media")
+_MEDIA_EDITABLE_STATUSES = MEDIA_EDITABLE_STATUSES
 
 # Троттлинг автоматического reconcile внутри /sync — per-worker in-memory,
 # намеренно неточно между воркерами (см. план); ручной POST /reconcile этот

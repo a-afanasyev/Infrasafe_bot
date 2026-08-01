@@ -10,6 +10,15 @@
     `:-` (опциональный) — голая подстановка означала бы тихое пустое значение;
   * имя, встроенное ВНУТРЬ составной строки (URI), намеренно идёт без модификатора —
     см. _URI_EMBEDDED ниже, для них проверяется только присутствие.
+
+AUD6-P2-38: docker-compose.profk.yml — больше НЕ standalone, а тонкий override поверх
+docker-compose.yml (`-f docker-compose.yml -f docker-compose.profk.yml`). Значит profk-блок
+сервиса сам по себе env-маппинги секретов не несёт — эффективное окружение сервиса на
+profk = base-блок + override-блок (compose сливает `environment:` по-переменно, override
+приоритетнее). Гейт проверяет profk именно по этой ОБЪЕДИНЁННОЙ картине: строки
+override-блока идут ПЕРВЫМИ (зеркалит приоритет мержа), base-блок — фолбэк. Так гейт
+остаётся содержательным: секрет, пропавший из base и не добавленный в override, ловится;
+плохой (без :?/:-) override-маппинг поверх хорошего base-маппинга — тоже.
 """
 import re
 from pathlib import Path
@@ -110,36 +119,64 @@ def _mapping_for(lines: list[str], var: str) -> str | None:
     return None
 
 
-def _check(path: Path, service: str, variables: tuple[str, ...]) -> list[str]:
-    blocks = _service_blocks(path)
-    assert service in blocks, f"{path.name}: сервис {service} не найден"
+def _check_blocks(
+    blocks: dict[str, list[str]], label: str, service: str, variables: tuple[str, ...]
+) -> list[str]:
+    assert service in blocks, f"{label}: сервис {service} не найден"
     problems = []
     for var in variables:
         mapping = _mapping_for(blocks[service], var)
         if mapping is None:
-            problems.append(f"{path.name}:{service}: нет environment-маппинга для {var}")
+            problems.append(f"{label}:{service}: нет environment-маппинга для {var}")
             continue
         if var in _URI_EMBEDDED:
             continue
         if not re.search(r"\$\{" + re.escape(var) + r"(:\?|:-)", mapping):
             problems.append(
-                f"{path.name}:{service}: {var} без :?/:- — тихая пустая подстановка ({mapping})"
+                f"{label}:{service}: {var} без :?/:- — тихая пустая подстановка ({mapping})"
             )
     return problems
 
 
+def _check(path: Path, service: str, variables: tuple[str, ...]) -> list[str]:
+    return _check_blocks(_service_blocks(path), path.name, service, variables)
+
+
+def _profk_effective_blocks() -> dict[str, list[str]]:
+    """Эффективная картина profk-деплоя: base-блок + override-блок (AUD6-P2-38).
+
+    Строки override-блока идут ПЕРВЫМИ: `_mapping_for` возвращает первое совпадение,
+    что зеркалит per-key приоритет `environment:`-мержа compose — override-маппинг
+    переменной побеждает base-маппинг, поэтому и валидироваться должен именно он.
+    Сервисы, объявленные только в override (media-service/media-migrate), приходят
+    целиком из profk-файла.
+    """
+    base = _service_blocks(BASE)
+    profk = _service_blocks(PROFK)
+    combined = dict(base)
+    for name, lines in profk.items():
+        combined[name] = lines + base.get(name, [])
+    return combined
+
+
 def test_core_secrets_mapped_in_both_compose_files():
     problems = []
-    for path in (BASE, PROFK):
-        for service, variables in EXPECTED.items():
-            problems += _check(path, service, variables)
+    for service, variables in EXPECTED.items():
+        problems += _check(BASE, service, variables)
+        # profk — тонкий override: проверяем объединение base+override, а не файл сам по себе.
+        problems += _check_blocks(
+            _profk_effective_blocks(), "base+profk", service, variables
+        )
     assert not problems, "ARCH-106 SSOT: " + "; ".join(problems)
 
 
 def test_media_secrets_mapped_in_both_declarations():
-    problems = []
-    for path in (PROFK, MEDIA):
-        problems += _check(path, "media-service", MEDIA_EXPECTED)
+    # media-service объявлен целиком в profk-override (на 105 — в media-overlay);
+    # объединённая картина для него совпадает с profk-блоком, base его не содержит.
+    problems = _check_blocks(
+        _profk_effective_blocks(), "base+profk", "media-service", MEDIA_EXPECTED
+    )
+    problems += _check(MEDIA, "media-service", MEDIA_EXPECTED)
     assert not problems, "ARCH-106 Phase 2 SSOT: " + "; ".join(problems)
 
 

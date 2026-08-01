@@ -81,7 +81,85 @@
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
-    "openViaBot": "Avtorizatsiya uchun bu ekranni bot orqali oching."
+    "openViaBot": "Avtorizatsiya uchun bu ekranni bot orqali oching.",
+    "nav": {
+      "summary": "Umumiy",
+      "entry": "Ko'rsatkichlarni kiritish",
+      "worksheet": "Qaydnoma",
+      "meters": "Hisoblagichlar",
+      "objects": "Obyektlar",
+      "exports": "Solishtirish dalolatnomalari",
+      "providers": "Yetkazib beruvchilar",
+      "audit": "Jurnal"
+    },
+    "resourceTypes": {
+      "electricity": "Elektr energiyasi",
+      "cold_water": "Sovuq suv"
+    },
+    "status": {
+      "reading": {
+        "ok": "OK",
+        "warning": "Ogohlantirish",
+        "error": "Xato",
+        "missing": "Ma'lumot yo'q",
+        "notEntered": "Kiritilmagan"
+      },
+      "period": {
+        "open": "Ochiq",
+        "review": "Tekshiruvda",
+        "submitted": "Topshirilgan",
+        "closed": "Yopilgan"
+      },
+      "active": "Faol",
+      "archived": "Arxiv"
+    },
+    "state": {
+      "loading": "Yuklanmoqda…",
+      "error": "Xato: {{message}}",
+      "unknownError": "Noma'lum xato",
+      "retry": "Qayta urinish",
+      "empty": "Ma'lumot yo'q"
+    },
+    "worksheet": {
+      "title": "Ko'rsatkichlarni kiritish",
+      "period": "Davr",
+      "noOpenPeriod": "— ochiq davr yo'q —",
+      "createPeriod": "Davr yaratish",
+      "resource": "Resurs",
+      "object": "Obyekt",
+      "all": "Barchasi",
+      "searchPlaceholder": "Raqam bo'yicha qidirish…",
+      "saveAll": "Hammasini saqlash ({{n}})",
+      "saving": "Saqlanmoqda…",
+      "periodStatus": "Davr holati:",
+      "validationSummary": "kiritildi {{entered}} / {{active}}, kiritilmagan {{notEntered}},",
+      "validationWarnings": "ogohl. {{n}}",
+      "validationErrors": "xatolar {{n}}",
+      "validationNoComment": ", izohsiz {{n}}",
+      "toReview": "Tekshiruvga",
+      "returnToWork": "Ishga qaytarish",
+      "submit": "Topshirish",
+      "submitBlocked": "Xatolar yoki kiritilmagan ko'rsatkichlar bor",
+      "closePeriod": "Davrni yopish",
+      "emptyNoOpenPeriod": "Ochiq davr yo'q. Menejerga murojaat qiling.",
+      "emptyNoPeriods": "Davrlar hali yaratilmagan",
+      "emptyNotFound": "Hech narsa topilmadi",
+      "emptyNoMeters": "Qaydnomada hisoblagichlar yo'q",
+      "colNumber": "Raqam",
+      "colMeter": "Hisoblagich",
+      "colObject": "Obyekt",
+      "colConsumers": "Iste'molchilar",
+      "colPrevious": "Oldingi",
+      "colCurrent": "Joriy",
+      "colConsumption": "Sarf",
+      "colStatus": "Holat",
+      "colComment": "Izoh",
+      "readingAria": "Ko'rsatkich {{number}}",
+      "commentAria": "Izoh {{number}}",
+      "month": "Oy",
+      "cancel": "Bekor qilish",
+      "create": "Yaratish"
+    }
   },
   "accessControl": {
     "title": "Kirish nazorati",
@@ -753,23 +831,10 @@
     "system_admin": "Tizim administratori",
     "security_operator": "Xavfsizlik operatori"
   },
-  "approvalStatus": {
-    "approved": "Tasdiqlangan",
-    "pending": "Tasdiqlash kutilmoqda"
-  },
   "verificationStatus": {
     "verified": "Tasdiqlangan",
     "pending": "Kutilmoqda",
     "blocked": "Bloklangan",
-    "rejected": "Rad etilgan"
-  },
-  "analyticsStatus": {
-    "new": "Yangilar",
-    "pending": "Kutilmoqda",
-    "in_progress": "Jarayonda",
-    "assigned": "Tayinlangan",
-    "completed": "Yakunlangan",
-    "cancelled": "Bekor qilingan",
     "rejected": "Rad etilgan"
   },
   "analyticsEvent": {

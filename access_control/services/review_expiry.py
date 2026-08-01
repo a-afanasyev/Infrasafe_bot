@@ -19,10 +19,11 @@ from access_control.domain.events import AccessDecision
 from access_control.services.hashchain import next_hash
 from access_control.services.lifecycle import _write_audit
 from access_control.services.locks import advisory_xact_lock
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def _write_expired_transition(

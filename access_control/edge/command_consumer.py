@@ -24,12 +24,13 @@ from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from access_control.integrations.relay import RelayAdapter, RelayCommand, RelayResult
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 _BASE = "/api/v1/access/edge"
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 class ProcessedStore(Protocol):

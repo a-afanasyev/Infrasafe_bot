@@ -87,22 +87,6 @@ export function useToggleMeterEntry(employeeId: number | null) {
   })
 }
 
-export function useRejectEmployee() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) =>
-      apiClient.patch(`/api/v2/shifts/employees/${id}/reject`).then(r => r.data),
-    onSuccess: () => {
-      toast.success(i18n.t('toast.employeeRejected'))
-      queryClient.invalidateQueries({ queryKey: ['employees'] })
-    },
-    onError: (error: unknown) => {
-      console.error('Reject employee failed:', error)
-      toast.error(i18n.t('toast.employeeRejectFailed'), { description: safeErrorMessage(error, 'An error occurred') })
-    },
-  })
-}
-
 export function useBlockEmployee() {
   const queryClient = useQueryClient()
   return useMutation({

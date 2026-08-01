@@ -20,7 +20,7 @@ import datetime as dt
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from access_control.services import equipment_admin as svc
@@ -33,8 +33,12 @@ router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-equipment"
 ZONE_GATE_ROLES = ("manager", "system_admin")
 ADMIN_ONLY_ROLES = ("system_admin",)
 
-DEFAULT_LIMIT = 50
-MAX_LIMIT = 200
+# A6-P2-50: пагинация/DTO-база/404 — общие, см. api/pagination.py
+from access_control.api.pagination import (  # noqa: E402
+    Frozen as _Frozen,
+    limit_query as _limit_q,
+    raise_404 as _raise_404,
+)
 
 _CODE_MAX = 64
 _NAME_MAX = 255
@@ -50,15 +54,7 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def _limit_q() -> int:
-    return Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT, description="размер страницы (max 200)")
-
-
 # ------------------------------ response DTO ------------------------------
-
-
-class _Frozen(BaseModel):
-    model_config = ConfigDict(frozen=True)
 
 
 class ZoneRow(_Frozen):
@@ -239,10 +235,6 @@ def _raise_422_ref(exc) -> None:
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail={"error": "invalid_reference", "message": str(exc)},
     )
-
-
-def _raise_404(exc) -> None:
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 # =============================== ЗОНЫ ===============================
@@ -634,19 +626,6 @@ def list_controllers(
     return ControllersPage(
         items=[_controller_row(r) for r in rows], total=total, limit=limit, offset=offset
     )
-
-
-@router.get("/controllers/{controller_id}", response_model=ControllerRow)
-def get_controller(
-    controller_id: int = Path(...),
-    db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
-):
-    try:
-        controller = svc.get_controller(db, controller_id)
-    except svc.NotFound as exc:
-        _raise_404(exc)
-    return _controller_row(controller)
 
 
 @router.post(

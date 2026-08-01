@@ -17,6 +17,9 @@ from sqlalchemy.orm import Session
 
 from access_control.domain.enums import PresenceStatus
 from access_control.repositories import audit_repo, presence_repo
+# AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
+# репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
+from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 
 
 class PresenceSessionNotFound(Exception):
@@ -33,8 +36,6 @@ class PresenceCloseResult:
     replayed: bool
 
 
-def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
 
 
 def close_presence_session(

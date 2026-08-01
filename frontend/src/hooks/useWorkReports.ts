@@ -90,23 +90,13 @@ export function useCreateWorkReport() {
 }
 
 // Фоновая/техническая операция — без success-тоста, только инвалидация +
-// error-тост (как и useAutofillPendingWorkReports ниже).
+// error-тост.
 export function useAutofillWorkReport() {
   const { t } = useTranslation()
   const invalidate = useWorkReportsInvalidator()
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.post(`${BASE}/${id}/autofill`).then((r) => r.data as WorkReport),
-    onSuccess: () => invalidate(),
-    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
-  })
-}
-
-export function useAutofillPendingWorkReports() {
-  const { t } = useTranslation()
-  const invalidate = useWorkReportsInvalidator()
-  return useMutation({
-    mutationFn: () => apiClient.post(`${BASE}/autofill-pending`).then((r) => r.data),
     onSuccess: () => invalidate(),
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })
@@ -200,16 +190,6 @@ export function useUpdateWorkReportsSettings() {
       queryClient.invalidateQueries({ queryKey: ['board-config'] })
       toast.success(t('workReports.toast.settingsUpdated'))
     },
-    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
-  })
-}
-
-// Операторская диагностика — без success-тоста и без инвалидации (не меняет
-// ничего, что уже отображает какой-либо существующий query в значимом виде).
-export function useReconcileWorkReports() {
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: () => apiClient.post(`${BASE}/reconcile`).then((r) => r.data),
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })
 }

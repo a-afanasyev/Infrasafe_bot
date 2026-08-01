@@ -67,9 +67,11 @@ router = APIRouter(prefix="/api/v1/access", tags=["access-resident"])
 # RBAC (§6.4): личный кабинет жителя — только applicant. Прочие роли → 403.
 RESIDENT_ROLES = ("applicant",)
 
-# Пагинация (общая для всех списков жителя).
-DEFAULT_LIMIT = 50
-MAX_LIMIT = 200
+# A6-P2-50: пагинация — общая, см. api/pagination.py
+from access_control.api.pagination import (  # noqa: E402
+    DEFAULT_LIMIT,
+    limit_query as _limit,
+)
 
 # Лимиты длины пользовательских строк (защита от чрезмерного ввода).
 _PLATE_MAX_LEN = 32
@@ -82,10 +84,6 @@ ResidentPassType = "taxi", "guest", "delivery"
 def _client_ip(request: Request) -> str | None:
     """IP источника для audit (§6.4). Для пилота достаточно client.host."""
     return request.client.host if request.client else None
-
-
-def _limit(value: int) -> int:
-    return Query(value, ge=1, le=MAX_LIMIT, description="размер страницы (max 200)")
 
 
 # ------------------------------ тела запросов ------------------------------

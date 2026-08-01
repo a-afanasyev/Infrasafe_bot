@@ -68,16 +68,22 @@ const configureApi = () =>
  */
 function ResourceSubNav() {
   const { role } = useResourceAuth()
+  const { t } = useTranslation()
   if (isMeterEntry(role)) return null
 
   const items = [
-    { to: '', label: 'Сводка', end: true },
-    { to: '/worksheet', label: canEnterReadings(role) ? 'Ввод показаний' : 'Ведомость' },
-    { to: '/meters', label: 'Счётчики' },
-    { to: '/objects', label: 'Объекты' },
-    { to: '/exports', label: 'Акты сверки' },
-    { to: '/providers', label: 'Поставщики' },
-    ...(isAdmin(role) ? [{ to: '/audit', label: 'Журнал' }] : []),
+    { to: '', label: t('resourceAccounting.nav.summary'), end: true },
+    {
+      to: '/worksheet',
+      label: canEnterReadings(role)
+        ? t('resourceAccounting.nav.entry')
+        : t('resourceAccounting.nav.worksheet'),
+    },
+    { to: '/meters', label: t('resourceAccounting.nav.meters') },
+    { to: '/objects', label: t('resourceAccounting.nav.objects') },
+    { to: '/exports', label: t('resourceAccounting.nav.exports') },
+    { to: '/providers', label: t('resourceAccounting.nav.providers') },
+    ...(isAdmin(role) ? [{ to: '/audit', label: t('resourceAccounting.nav.audit') }] : []),
   ]
 
   return (

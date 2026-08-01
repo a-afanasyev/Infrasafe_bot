@@ -12,7 +12,6 @@ from .audit import AuditLog
 from .notification import Notification
 from .refresh_token import RefreshToken
 from .user_verification import UserDocument, UserVerification, AccessRights, DocumentType, VerificationStatus, AccessLevel
-from .quarterly_plan import QuarterlyPlan, QuarterlyShiftSchedule, PlanningConflict
 
 # Модели справочника адресов
 from .yard import Yard
@@ -46,13 +45,9 @@ from .material import Material, MaterialReceipt, MaterialIssue, MaterialIssueAll
 # Визуальные отчёты о выполненных работах (публичная лента «до/после»)
 from .work_report import WorkReport
 
-# Импорт моделей, которые могут существовать или не существовать
-try:
-    from .request_comment import RequestComment
-    from .request_assignment import RequestAssignment
-    _request_models_available = True
-except ImportError:
-    _request_models_available = False
+# Комментарии и назначения заявок
+from .request_comment import RequestComment
+from .request_assignment import RequestAssignment
 
 __all__ = [
     'User',
@@ -72,9 +67,6 @@ __all__ = [
     'DocumentType',
     'VerificationStatus',
     'AccessLevel',
-    'QuarterlyPlan',
-    'QuarterlyShiftSchedule',
-    'PlanningConflict',
     'Yard',
     'Building',
     'Apartment',
@@ -92,9 +84,6 @@ __all__ = [
     'MaterialIssue',
     'MaterialIssueAllocation',
     'WorkReport',
+    'RequestComment',
+    'RequestAssignment',
 ]
-
-# Добавляем модели заявок, если они доступны (импортированы в try-блоке выше).
-# __all__ += (не .extend) — ruff распознаёт это как пометку L41-42 экспортируемыми.
-if _request_models_available:
-    __all__ += ['RequestComment', 'RequestAssignment']
