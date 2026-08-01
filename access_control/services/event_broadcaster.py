@@ -246,45 +246,67 @@ class RedisBroker:
 
 # ───────────────────────── singleton/фабрика ─────────────────────────────────
 
-_broker: EventBroker | None = None
-_broker_lock = threading.Lock()
+
+class BrokerHandle:
+    """Ленивый процессный singleton брокера (double-checked locking).
+
+    A6-P2-50: lifecycle get/set/reset + сборка по ``ACCESS_EVENT_BROKER`` был
+    посимвольно скопирован между каналами ``access:events`` (WS-панель) и
+    ``access:resident_notify`` — каналы отличаются только именем в Redis и
+    подписью в логе, поэтому обёртки обоих модулей делегируют сюда.
+    """
+
+    def __init__(self, label: str, channel: str = ACCESS_EVENT_CHANNEL) -> None:
+        self._label = label
+        self._channel = channel
+        self._broker: EventBroker | None = None
+        self._lock = threading.Lock()
+
+    def get(self) -> EventBroker:
+        """Singleton, создаваемый по конфигурации при первом вызове.
+
+        ``ACCESS_EVENT_BROKER=redis`` → ``RedisBroker`` (требует REDIS_URL);
+        иначе in-process (дефолт пилота).
+        """
+        if self._broker is None:
+            with self._lock:
+                if self._broker is None:
+                    self._broker = self._build()
+        return self._broker
+
+    def _build(self) -> EventBroker:
+        import os
+
+        kind = os.getenv("ACCESS_EVENT_BROKER", "memory").strip().lower()
+        if kind == "redis":
+            from uk_management_bot.config.settings import settings
+
+            url = settings.REDIS_PUBSUB_URL_RESOLVED
+            logger.info("%s broker: redis (%s)", self._label, url)
+            return RedisBroker(url, channel=self._channel)
+        logger.info("%s broker: in-process (single-worker pilot)", self._label)
+        return InProcessBroker()
+
+    def set(self, broker: EventBroker | None) -> None:
+        """Подменить singleton брокера (для тестов/DI)."""
+        with self._lock:
+            self._broker = broker
+
+    def reset(self) -> None:
+        """Сбросить singleton: чистый in-process брокер без подписчиков (тесты)."""
+        self.set(InProcessBroker())
+
+
+_handle = BrokerHandle("access event")
 
 
 def get_broker() -> EventBroker:
-    """Вернуть процессный singleton брокера, создав по конфигурации при первом вызове.
-
-    ``ACCESS_EVENT_BROKER=redis`` → ``RedisBroker`` (требует REDIS_URL); иначе
-    in-process (дефолт пилота).
-    """
-    global _broker
-    if _broker is None:
-        with _broker_lock:
-            if _broker is None:
-                _broker = _build_broker()
-    return _broker
-
-
-def _build_broker() -> EventBroker:
-    import os
-
-    kind = os.getenv("ACCESS_EVENT_BROKER", "memory").strip().lower()
-    if kind == "redis":
-        from uk_management_bot.config.settings import settings
-
-        url = settings.REDIS_PUBSUB_URL_RESOLVED
-        logger.info("access event broker: redis (%s)", url)
-        return RedisBroker(url)
-    logger.info("access event broker: in-process (single-worker pilot)")
-    return InProcessBroker()
+    return _handle.get()
 
 
 def set_broker(broker: EventBroker | None) -> None:
-    """Подменить singleton брокера (для тестов/DI)."""
-    global _broker
-    with _broker_lock:
-        _broker = broker
+    _handle.set(broker)
 
 
 def reset_broker() -> None:
-    """Сбросить singleton: чистый in-process брокер без подписчиков (тесты)."""
-    set_broker(InProcessBroker())
+    _handle.reset()
