@@ -36,6 +36,8 @@ from uk_management_bot.utils.specializations import has_required_specs
 # AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
 # репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
 from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import fmt_datetime, fmt_day_month_time
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +470,7 @@ class ShiftTransferService:
     def _shift_label(self, shift: Shift) -> str:
         if shift.start_time is not None:
             try:
-                return f"#{shift.id} ({shift.start_time.strftime('%d.%m %H:%M')})"
+                return f"#{shift.id} ({fmt_day_month_time(shift.start_time)})"
             except Exception:
                 pass
         return f"#{shift.id}"
@@ -542,7 +544,7 @@ class ShiftTransferService:
                     transfer.completed_at = now
                     transfer.comment = (
                         (transfer.comment or "")
-                        + f"\n[{now.strftime('%Y-%m-%d %H:%M')}] Истекло автоматически (>{hours_threshold}ч без ответа)"
+                        + f"\n[{fmt_datetime(now)}] Истекло автоматически (>{hours_threshold}ч без ответа)"
                     ).strip()
                     processed_count += 1
                     jobs.append((

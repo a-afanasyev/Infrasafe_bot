@@ -26,6 +26,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.business_time import business_day_window
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +85,20 @@ class ShiftManagementService:
     # ── Расписание (чтение) ──────────────────────────────────────────────────
 
     def get_shifts_for_date(self, target_date: date) -> List[Shift]:
+        """Смены выбранного БИЗНЕС-дня (ARCH-116).
+
+        Раньше бакет считался `func.date(planned_start_time)`, то есть по
+        UTC-дате инстанта: смена, начинающаяся для Ташкента 02:00, лежала в
+        предыдущем дне, и менеджер на нужной дате её не видел. Окно
+        полуоткрытое — не зависит от `TimeZone`-GUC базы и не мешает индексу.
+        """
+        start, end = business_day_window(target_date)
         return (
             self.db.query(Shift)
-            .filter(func.date(Shift.planned_start_time) == target_date)
+            .filter(
+                Shift.planned_start_time >= start,
+                Shift.planned_start_time < end,
+            )
             .order_by(Shift.planned_start_time)
             .all()
         )
@@ -96,11 +108,15 @@ class ShiftManagementService:
             month_end = month_start.replace(month=month_start.month + 1)
         else:
             month_end = month_start.replace(year=month_start.year + 1, month=1)
+        # ARCH-116: границы месяца — тоже бизнес-дни (`month_end` уже
+        # исключающая, поэтому берём начало её дня).
+        start = business_day_window(month_start)[0]
+        end = business_day_window(month_end)[0]
         return (
             self.db.query(Shift)
             .filter(
-                func.date(Shift.planned_start_time) >= month_start,
-                func.date(Shift.planned_start_time) < month_end,
+                Shift.planned_start_time >= start,
+                Shift.planned_start_time < end,
             )
             .all()
         )

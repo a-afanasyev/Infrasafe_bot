@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import F
 from aiogram.types import CallbackQuery
@@ -20,6 +20,8 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, _get_confirm_keyboard
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date, fmt_time_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +112,7 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
             lang = get_user_language(callback.from_user.id, db)
 
             date_offset = int(callback.data.split(':')[1])
-            target_date = date.today() + timedelta(days=date_offset)
+            target_date = business_today() + timedelta(days=date_offset)
 
             data = await state.get_data()
             template_id = data.get('template_id')
@@ -130,7 +132,7 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
             if created_shifts:
                 await callback.message.edit_text(
                     get_text("shift_management.shifts_created_success", language=lang,
-                            date=target_date.strftime('%d.%m.%Y'),
+                            date=fmt_date(target_date),
                             count=len(created_shifts)),
                     reply_markup=get_planning_menu(lang),
                     parse_mode="HTML"
@@ -138,7 +140,7 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
             else:
                 await callback.message.edit_text(
                     get_text("shift_management.shifts_not_created", language=lang,
-                            date=target_date.strftime('%d.%m.%Y')),
+                            date=fmt_date(target_date)),
                     reply_markup=get_planning_menu(lang),
                     parse_mode="HTML"
                 )
@@ -160,11 +162,11 @@ async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
 
-            start_date = date.today() + timedelta(days=1)
+            start_date = business_today() + timedelta(days=1)
             days_until_monday = start_date.weekday()
             week_start = start_date - timedelta(days=days_until_monday)
             week_end = week_start + timedelta(days=6)
-            period = f"{week_start.strftime('%d.%m.%Y')} — {week_end.strftime('%d.%m.%Y')}"
+            period = f"{fmt_date(week_start)} — {fmt_date(week_end)}"
 
             prompt = get_text(
                 "shift_planning.confirm_prompt",
@@ -219,13 +221,13 @@ async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMCont
             lang = get_user_language(callback.from_user.id, db)
 
             # Планируем смены на следующую неделю
-            start_date = date.today() + timedelta(days=1)
+            start_date = business_today() + timedelta(days=1)
             results = planning_service.plan_weekly_schedule(start_date)
         
             stats = results['statistics']
 
             # Добавляем временную метку для обеспечения уникальности сообщения
-            timestamp = utc_now().strftime('%H:%M:%S')
+            timestamp = fmt_time_seconds(utc_now())
 
             shifts_label = get_text("shift_management.shifts_label", language=lang)
 
@@ -256,8 +258,8 @@ async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMCont
 
             week_info = get_text("shift_management.weekly_planning_complete", language=lang,
                                 timestamp=timestamp,
-                                week_start=results['week_start'].strftime('%d.%m.%Y'),
-                                week_end=(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y'),
+                                week_start=fmt_date(results['week_start']),
+                                week_end=fmt_date(results['week_start'] + timedelta(days=6)),
                                 total_shifts=stats['total_shifts'],
                                 all_planned=all_planned,
                                 by_day=by_day,

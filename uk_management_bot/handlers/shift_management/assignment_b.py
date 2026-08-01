@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta, timezone
+from datetime import timedelta
 
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -19,6 +19,14 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import (
+    business_date_of,
+    business_day_window,
+    business_today,
+    fmt_date,
+    fmt_time,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -353,8 +361,8 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
                 available_executors = filtered_executors
 
-            end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
-            shift_time = f"{shift.start_time.strftime('%d.%m.%Y')} {shift.start_time.strftime('%H:%M')}-{end_time_str}"
+            end_time_str = fmt_time(shift.end_time) if shift.end_time else "—"
+            shift_time = f"{fmt_date(shift.start_time)} {fmt_time(shift.start_time)}-{end_time_str}"
 
             # Переводим специализации
             spec_text = translate_specializations(shift.specialization_focus, lang)
@@ -370,13 +378,13 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
             else:
                 keyboard = []
                 for executor in available_executors[:10]:  # Показываем первых 10
-                    # Проверяем загруженность исполнителя в этот день
-                    from datetime import datetime
-                    shift_date = shift.start_time.date()
-                    # AUD5-CODE-3: naive combine() уходил в запрос по Shift.start_time
-                    # (timestamptz) через count_shifts_for_user_on_day — aware UTC.
-                    day_start = datetime.combine(shift_date, datetime.min.time(), tzinfo=timezone.utc)
-                    day_end = day_start + timedelta(days=1)
+                    # Проверяем загруженность исполнителя в этот день.
+                    # ARCH-116: «этот день» — бизнес-день смены, а не UTC-сутки.
+                    # Прежнее `combine(start_time.date(), min.time(), tz=utc)` было
+                    # tz-aware (AUD5-CODE-3), но границы брало по UTC: у смены,
+                    # начинающейся после местной полуночи, индикатор считал чужие
+                    # сутки — соседнюю смену показывал как «в этот же день» и наоборот.
+                    day_start, day_end = business_day_window(business_date_of(shift.start_time))
 
                     day_shifts = service.count_shifts_for_user_on_day(executor.id, day_start, day_end)
 
@@ -518,7 +526,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                         break
 
             if has_real_conflict:
-                shift_date_str = shift.start_time.strftime('%d.%m.%Y')
+                shift_date_str = fmt_date(shift.start_time)
                 await callback.message.edit_text(
                     get_text("shift_management.spec_conflict", language=lang,
                             executor_name=f"{executor.first_name} {executor.last_name}",
@@ -549,9 +557,9 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             # Переводим специализацию
             spec_text = translate_specializations(shift.specialization_focus, lang)
 
-            shift_date_str = shift.start_time.strftime('%d.%m.%Y')
-            start_time_str = shift.start_time.strftime('%H:%M')
-            end_time_str = shift.end_time.strftime('%H:%M') if shift.end_time else "—"
+            shift_date_str = fmt_date(shift.start_time)
+            start_time_str = fmt_time(shift.start_time)
+            end_time_str = fmt_time(shift.end_time) if shift.end_time else "—"
 
             await callback.message.edit_text(
                 get_text("shift_management.executor_assigned_success", language=lang,
@@ -640,12 +648,12 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             service.force_assign_executor(
                 shift,
                 executor_id,
-                f"\n[КОНФЛИКТ РАСПИСАНИЯ] Назначено принудительно {date.today().strftime('%d.%m.%Y')}",
+                f"\n[КОНФЛИКТ РАСПИСАНИЯ] Назначено принудительно {fmt_date(business_today())}",
             )
 
-            shift_date = shift.start_time.date().strftime('%d.%m.%Y')
-            start_time = shift.start_time.strftime('%H:%M')
-            end_time = shift.end_time.strftime('%H:%M')
+            shift_date = fmt_date(shift.start_time)
+            start_time = fmt_time(shift.start_time)
+            end_time = fmt_time(shift.end_time)
 
             await callback.message.edit_text(
                 get_text("shift_management.force_assigned_success", language=lang,

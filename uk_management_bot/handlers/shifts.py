@@ -22,6 +22,8 @@ from uk_management_bot.keyboards.base import get_executor_suggestion_inline
 from uk_management_bot.database.session import session_scope
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.datetime_utils import utc_now
+# ARCH-116: время смен показываем в бизнес-зоне (БД остаётся UTC).
+from uk_management_bot.utils.business_time import fmt_datetime, fmt_time
 from uk_management_bot.utils.button_texts import (
     get_accept_shift_texts,
     get_end_shift_texts,
@@ -164,7 +166,7 @@ async def end_shift_confirm(message: Message, db=None):
                 spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
 
                 text += f"{idx}. 🔵 <b>{get_text('shifts.shift', language=lang)} #{shift.id}</b>\n"
-                text += f"   📅 {get_text('shifts.start_time', language=lang)}: {shift.start_time.strftime('%d.%m.%Y %H:%M')}\n"
+                text += f"   📅 {get_text('shifts.start_time', language=lang)}: {fmt_datetime(shift.start_time)}\n"
                 text += f"   ⏱️ {get_text('shifts.duration', language=lang).replace('{duration}', '')}: {hours}{get_text('shifts.hours', language=lang) or 'ч'} {minutes}{get_text('shifts.minutes', language=lang) or 'м'}\n"
                 text += f"   🔧 {get_text('shifts.specialization', language=lang) or 'Специализация'}: {spec_text}\n\n"
 
@@ -239,7 +241,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 
         # Формируем текст
         text = f"⚠️ <b>{get_text('shifts.handlers.end_shift_confirmation', language=lang)}</b>\n\n"
-        text += f"📅 <b>{get_text('shifts.handlers.shift_label', language=lang)}:</b> {shift.start_time.strftime('%d.%m.%Y %H:%M')} - {get_text('shifts.handlers.current_time', language=lang)}\n"
+        text += f"📅 <b>{get_text('shifts.handlers.shift_label', language=lang)}:</b> {fmt_datetime(shift.start_time)} - {get_text('shifts.handlers.current_time', language=lang)}\n"
         text += f"⏱️ <b>{get_text('shifts.handlers.duration_label', language=lang)}:</b> {hours}{get_text('shifts.handlers.hours_short', language=lang)} {minutes}{get_text('shifts.handlers.minutes_short', language=lang)}\n"
         text += f"🔧 <b>{get_text('shifts.handlers.specialization_label', language=lang)}:</b> {spec_text}\n\n"
 
@@ -394,7 +396,7 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
                     shift_id=shift.id,
                     hours=f"{((shift.end_time - shift.start_time).total_seconds() // 3600):.0f}",
                     minutes=f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}",
-                    end_time=shift.end_time.strftime('%d.%m.%Y %H:%M')
+                    end_time=fmt_datetime(shift.end_time)
                 ),
                 parse_mode="HTML"
             )
@@ -478,7 +480,7 @@ async def my_shift(message: Message, db=None):
             await message.answer(get_text("shifts.no_active", language=lang), reply_markup=get_shifts_main_keyboard(language=lang))
             return
         await message.answer(
-            get_text("shifts.active_shift_since", language=lang).format(start_time=active.start_time.strftime('%H:%M')),
+            get_text("shifts.active_shift_since", language=lang).format(start_time=fmt_time(active.start_time)),
             reply_markup=get_shifts_main_keyboard(language=lang),
         )
 
@@ -516,8 +518,8 @@ async def shifts_history(message: Message, state: FSMContext, db=None, from_user
         else:
             lines = [get_text("shifts.shift_history", language=lang) + ":"]
             for s in page_items:
-                end_time = s.end_time.strftime('%d.%m.%Y %H:%M') if s.end_time else "—"
-                lines.append(f"- {s.start_time.strftime('%d.%m.%Y %H:%M')} → {end_time} [{s.status}]")
+                end_time = fmt_datetime(s.end_time) if s.end_time else "—"
+                lines.append(f"- {fmt_datetime(s.start_time)} → {end_time} [{s.status}]")
             text = "\n".join(lines)
 
         filters_kb = get_shifts_filters_inline(period=period, status=status)
@@ -585,7 +587,7 @@ async def manager_active_shifts(message: Message, state: FSMContext, language: s
         lang = language
         lines = [safe_get_text("shifts.active_shifts_list", language=lang, default="Активные смены:")]
         for s in shifts[:10]:
-            lines.append(f"- user_id={s.user_id} с {s.start_time.strftime('%d.%m.%Y %H:%M')}")
+            lines.append(f"- user_id={s.user_id} с {fmt_datetime(s.start_time)}")
         await message.answer("\n".join(lines))
 
 

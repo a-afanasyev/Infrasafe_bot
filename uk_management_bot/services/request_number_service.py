@@ -9,26 +9,25 @@ COUNT(*)+1 в API/callcenter/inbound_alert — переиспользовал н
 
 Timezone дневного префикса зафиксирована ЯВНО: Asia/Tashkent (бизнес-дата,
 номер видят жители). Раньше date.today() зависел от tz сервера.
+
+ARCH-116: зона больше не объявляется здесь — канон один, `utils/business_time`.
+Имена `BUSINESS_TZ`/`business_today` остаются доступны из этого модуля (на них
+ссылаются существующие тесты и вызовы), но это ре-экспорт, а не вторая копия.
 """
 import re
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Optional, Dict, Any, List
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.utils.business_time import BUSINESS_TZ, business_today
+
 logger = logging.getLogger(__name__)
 
-# Бизнес-tz дневного префикса YYMMDD (явно; не зависит от tz сервера/контейнера)
-BUSINESS_TZ = ZoneInfo("Asia/Tashkent")
-
-
-def business_today() -> date:
-    """Текущая бизнес-дата (Asia/Tashkent) для префикса номера заявки."""
-    return datetime.now(BUSINESS_TZ).date()
+__all__ = ["BUSINESS_TZ", "business_today", "RequestNumberService"]
 
 
 # Атомарный счётчик дня. Self-seed: при отсутствии строки дня стартуем с

@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import F
 from aiogram.types import CallbackQuery
@@ -20,6 +20,8 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date, fmt_datetime, fmt_day_month
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
             shift_list = ""
             for shift in unassigned_shifts:
-                start_time = shift.start_time.strftime('%d.%m.%Y %H:%M')
+                start_time = fmt_datetime(shift.start_time)
                 # Переводим специализации на язык пользователя
                 specialization_text = translate_specializations(shift.specialization_focus, lang)
                 shift_list += f"🔹 <b>{start_time}</b> - {specialization_text}\n"
@@ -110,7 +112,7 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
             lang = get_user_language(callback.from_user.id, db)
         
             # Анализируем последние 7 дней
-            end_date = date.today()
+            end_date = business_today()
             start_date = end_date - timedelta(days=6)
         
             # Получаем комплексную аналитику
@@ -161,8 +163,8 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
                                               recommendations=rec_list)
 
             report = get_text("shift_management.weekly_analytics_report", language=lang,
-                             start_date=start_date.strftime('%d.%m.%Y'),
-                             end_date=end_date.strftime('%d.%m.%Y'),
+                             start_date=fmt_date(start_date),
+                             end_date=fmt_date(end_date),
                              total_days=analytics['period']['total_days'],
                              shift_stats=shift_stats,
                              planning_stats=planning_stats,
@@ -192,7 +194,7 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
             lang = get_user_language(callback.from_user.id, db)
         
             # Прогноз на следующие 5 дней
-            target_date = date.today() + timedelta(days=1)
+            target_date = business_today() + timedelta(days=1)
             prediction = await planning_service.predict_workload(
                 target_date=target_date,
                 days_ahead=5
@@ -216,7 +218,7 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
             requests_label = get_text("shift_management.requests_label", language=lang)
             confidence_label = get_text("shift_management.confidence_label", language=lang)
             for daily_pred in prediction['daily_predictions'][:5]:
-                date_str = daily_pred['date'].strftime('%d.%m')
+                date_str = fmt_day_month(daily_pred['date'])
                 requests = daily_pred['predicted_requests']
                 load_level = daily_pred['load_level']
                 confidence = daily_pred['confidence']
@@ -241,17 +243,17 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
             # Build peak/low load days
             peak_days_text = ""
             if summary.get('peak_load_days'):
-                peak_dates = [d.strftime('%d.%m') for d in summary['peak_load_days'][:3]]
+                peak_dates = [fmt_day_month(d) for d in summary['peak_load_days'][:3]]
                 peak_days_text = f"\n{get_text('shift_management.peak_load_days', language=lang, dates=', '.join(peak_dates))}\n"
 
             low_days_text = ""
             if summary.get('low_load_days'):
-                low_dates = [d.strftime('%d.%m') for d in summary['low_load_days'][:3]]
+                low_dates = [fmt_day_month(d) for d in summary['low_load_days'][:3]]
                 low_days_text = f"{get_text('shift_management.low_load_days', language=lang, dates=', '.join(low_dates))}\n"
 
             report = get_text("shift_management.workload_forecast_report", language=lang,
-                             start_date=forecast_period['start_date'].strftime('%d.%m.%Y'),
-                             end_date=forecast_period['end_date'].strftime('%d.%m.%Y'),
+                             start_date=fmt_date(forecast_period['start_date']),
+                             end_date=fmt_date(forecast_period['end_date']),
                              avg_requests=summary['avg_predicted_requests'],
                              daily_list=daily_list,
                              resources=resources_text,
@@ -283,7 +285,7 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         
             # Получаем рекомендации на сегодня
             recommendations = await planning_service.get_optimization_recommendations(
-                target_date=date.today()
+                target_date=business_today()
             )
         
             if 'error' in recommendations:
@@ -297,7 +299,7 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         
             # Формируем отчет рекомендаций
             current_state = recommendations['current_state']
-            target_date_str = recommendations['date'].strftime('%d.%m.%Y')
+            target_date_str = fmt_date(recommendations['date'])
 
             # Build priority actions list
             priority_list = ""
