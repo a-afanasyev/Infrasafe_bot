@@ -16,6 +16,8 @@ from uk_management_bot.utils.telegram_client import (
     build_bot,
 )
 from datetime import datetime
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import fmt_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,7 @@ def _format_duration_hm(start_time: datetime, end_time: datetime | None) -> tupl
 
 
 def build_shift_started_message(user: User, shift: Shift, for_channel: bool = False) -> str:
-    started = shift.start_time.strftime('%d.%m.%Y %H:%M') if shift.start_time else ''
+    started = fmt_datetime(shift.start_time) if shift.start_time else ''
     if for_channel:
         return f"🔔 Смена начата: user_id={user.telegram_id} в {started}"
     return f"✅ Ваша смена начата в {started}"
@@ -70,7 +72,7 @@ def build_shift_started_message(user: User, shift: Shift, for_channel: bool = Fa
 def build_shift_ended_message(user: User, shift: Shift, for_channel: bool = False) -> str:
     hours, minutes = _format_duration_hm(shift.start_time, shift.end_time)
     duration = f"{hours} ч {minutes} мин"
-    ended = shift.end_time.strftime('%d.%m.%Y %H:%M') if shift.end_time else ''
+    ended = fmt_datetime(shift.end_time) if shift.end_time else ''
     if for_channel:
         return f"📤 Смена завершена: user_id={user.telegram_id} в {ended} (длительность {duration})"
     return f"✅ Смена завершена в {ended}. Длительность: {duration}"
@@ -635,7 +637,7 @@ class NotificationService:
             return
 
         lang = self._get_user_lang(user)
-        started = shift.start_time.strftime('%d.%m.%Y %H:%M') if getattr(shift, "start_time", None) else ""
+        started = fmt_datetime(shift.start_time) if getattr(shift, "start_time", None) else ""
         title = get_text('notifications.shift_reminder_title', language=lang)
         body = get_text(
             'notifications.shift_reminder_body',

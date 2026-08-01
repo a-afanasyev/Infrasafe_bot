@@ -6,7 +6,7 @@ Related: shifts.py handles the operational menu ("🔄 Смена")
 """
 
 from contextlib import contextmanager
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -30,7 +30,16 @@ from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.datetime_utils import utc_now
-from sqlalchemy import and_, func, or_
+# ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
+from uk_management_bot.utils.business_time import (
+    business_date_of,
+    business_days_window,
+    business_today,
+    fmt_date,
+    fmt_day_month,
+    fmt_time,
+)
+from sqlalchemy import and_, or_
 # Single Source of Truth for button texts - TASK 17
 from uk_management_bot.utils.button_texts import get_my_shifts_texts
 import logging
@@ -107,8 +116,8 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
                 await callback.answer(get_text("my_shifts.handlers.error_occurred", language=lang), show_alert=True)
                 return
 
-            # Получаем смены на сегодня и завтра
-            today = date.today()
+            # Получаем смены на сегодня и завтра (ARCH-116: бизнес-дата, не UTC-дата)
+            today = business_today()
             tomorrow = today + timedelta(days=1)
 
             # FS-06: ad-hoc смены живут на start_time (planned_start_time=NULL) —
@@ -116,10 +125,14 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
             # их не видят (расхождение с «ℹ️ Моя смена»).
             from uk_management_bot.utils.shifts import effective_shift_time
             _eff = effective_shift_time()
+            # ARCH-116: окно диапазоном вместо func.date(_eff) — бакет дня считается
+            # в бизнес-зоне, а не в зоне сессии БД, и индекс по колонке остаётся живым.
+            window_start, window_end = business_days_window(today, tomorrow)
             current_shifts = db.query(Shift).filter(
                 and_(
                     Shift.user_id == user.id,
-                    func.date(_eff).in_([today, tomorrow]),
+                    _eff >= window_start,
+                    _eff < window_end,
                     Shift.status.in_(['planned', 'active'])
                 )
             ).order_by(_eff).all()
@@ -140,12 +153,12 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
                 # FS-06: ad-hoc смена не имеет planned_*; берём эффективное время.
                 eff_start = shift.planned_start_time or shift.start_time
                 eff_end = shift.planned_end_time or shift.end_time
-                shift_date = eff_start.date()
+                shift_date = business_date_of(eff_start)
                 is_today = shift_date == today
                 date_prefix = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}"
 
-                start_time = eff_start.strftime("%H:%M")
-                end_time = eff_end.strftime("%H:%M") if eff_end else "?"
+                start_time = fmt_time(eff_start)
+                end_time = fmt_time(eff_end) if eff_end else "?"
 
                 status_emoji = {
                     'planned': '⏱️',
@@ -217,14 +230,15 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
 
             is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
 
-            # Получаем смены на текущую неделю
-            today = date.today()
+            # Получаем смены на текущую неделю (ARCH-116: неделя по бизнес-дате)
+            today = business_today()
             start_of_week = today - timedelta(days=today.weekday())  # Понедельник
             end_of_week = start_of_week + timedelta(days=6)  # Воскресенье
 
+            week_start_utc, week_end_utc = business_days_window(start_of_week, end_of_week)
             filters = [
-                func.date(Shift.planned_start_time) >= start_of_week,
-                func.date(Shift.planned_start_time) <= end_of_week,
+                Shift.planned_start_time >= week_start_utc,
+                Shift.planned_start_time < week_end_utc,
                 Shift.status.in_(['planned', 'active', 'completed']),
             ]
             # Executor видит только свои смены; manager/admin — все.
@@ -246,13 +260,15 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
             week_schedule = {day: [] for day in days_of_week}
 
             for shift in week_shifts:
-                day_name = days_of_week[shift.planned_start_time.weekday()]
+                # ARCH-116: день недели — по бизнес-дате, иначе смена после местной
+                # полуночи попадала в предыдущий день.
+                day_name = days_of_week[business_date_of(shift.planned_start_time).weekday()]
                 week_schedule[day_name].append(shift)
 
             # Формируем текст расписания
             schedule_text = (
                 f"📆 <b>{get_text('my_shifts.handlers.week_schedule', language=lang)}</b>\n"
-                f"<b>{get_text('my_shifts.handlers.period', language=lang)}:</b> {start_of_week.strftime('%d.%m')} - {end_of_week.strftime('%d.%m.%Y')}\n\n"
+                f"<b>{get_text('my_shifts.handlers.period', language=lang)}:</b> {fmt_day_month(start_of_week)} - {fmt_date(end_of_week)}\n\n"
             )
 
             total_shifts = len(week_shifts)
@@ -264,11 +280,11 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
                 day_prefix = "🔥" if is_today else "📅"
 
                 if day_shifts:
-                    schedule_text += f"{day_prefix} <b>{day_name}</b> ({day_date.strftime('%d.%m')})\n"
+                    schedule_text += f"{day_prefix} <b>{day_name}</b> ({fmt_day_month(day_date)})\n"
 
                     for shift in day_shifts:
-                        start_time = shift.planned_start_time.strftime("%H:%M")
-                        end_time = shift.planned_end_time.strftime("%H:%M") if shift.planned_end_time else "?"
+                        start_time = fmt_time(shift.planned_start_time)
+                        end_time = fmt_time(shift.planned_end_time) if shift.planned_end_time else "?"
 
                         status_emoji = {
                             'planned': '⏱️',
@@ -286,7 +302,7 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
 
                     schedule_text += "\n"
                 else:
-                    schedule_text += f"📅 <b>{day_name}</b> ({day_date.strftime('%d.%m')}): {get_text('my_shifts.handlers.day_off', language=lang)}\n\n"
+                    schedule_text += f"📅 <b>{day_name}</b> ({fmt_day_month(day_date)}): {get_text('my_shifts.handlers.day_off', language=lang)}\n\n"
 
             # Итоговая статистика
             schedule_text += (
@@ -345,14 +361,15 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
             # shift_details) → эффективное время, иначе planned_start_time.date() крах.
             eff_start = shift.planned_start_time or shift.start_time
             eff_end = shift.planned_end_time or shift.end_time
-            shift_date = eff_start.date()
-            is_today = shift_date == date.today()
-            is_tomorrow = shift_date == date.today() + timedelta(days=1)
+            shift_date = business_date_of(eff_start)
+            today = business_today()
+            is_today = shift_date == today
+            is_tomorrow = shift_date == today + timedelta(days=1)
 
-            date_text = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}" if is_tomorrow else shift_date.strftime('%d.%m.%Y')
+            date_text = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}" if is_tomorrow else fmt_date(shift_date)
 
-            start_time = eff_start.strftime("%H:%M")
-            end_time = eff_end.strftime("%H:%M") if eff_end else "?"
+            start_time = fmt_time(eff_start)
+            end_time = fmt_time(eff_end) if eff_end else "?"
 
             status_text = {
                 'planned': f"⏱️ {get_text('my_shifts.handlers.status_planned', language=lang)}",
@@ -473,7 +490,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
 
             await callback.message.edit_text(
                 get_text("my_shifts.handlers.shift_started", language=lang).format(
-                    start_time=shift.start_time.strftime('%H:%M')
+                    start_time=fmt_time(shift.start_time)
                 ),
                 reply_markup=get_shift_actions_keyboard(shift, lang),
                 parse_mode="HTML"
@@ -536,7 +553,7 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
 
             # Формируем итоги смены
             summary_text = get_text("my_shifts.handlers.shift_ended_summary", language=lang).format(
-                end_time=end_time.strftime('%H:%M'),
+                end_time=fmt_time(end_time),
                 actual_duration=f"{actual_duration:.1f}",
                 request_count=shift.current_request_count or 0
             )
@@ -577,8 +594,8 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
 
             is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
 
-            # Получаем историю смен за последние 30 дней
-            end_date = date.today()
+            # Получаем историю смен за последние 30 дней (по бизнес-дате)
+            end_date = business_today()
             start_date = end_date - timedelta(days=30)
 
             # FS-07: история через «эффективное время» (ad-hoc на start_time,
@@ -586,9 +603,10 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
             # «История» расходится с «🔄 Смена → 📜 История» (та на start_time).
             from uk_management_bot.utils.shifts import effective_shift_time
             _eff = effective_shift_time()
+            history_start_utc, history_end_utc = business_days_window(start_date, end_date)
             filters = [
-                func.date(_eff) >= start_date,
-                func.date(_eff) <= end_date,
+                _eff >= history_start_utc,
+                _eff < history_end_utc,
                 Shift.status.in_(['completed', 'cancelled']),
             ]
             if not is_privileged:
@@ -631,8 +649,8 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
             for shift in history_shifts[:10]:  # Показываем последние 10
                 # FS-07: ad-hoc смена без planned_* → эффективное время.
                 eff_start = shift.planned_start_time or shift.start_time
-                shift_date = eff_start.strftime('%d.%m')
-                start_time = eff_start.strftime('%H:%M')
+                shift_date = fmt_day_month(eff_start)
+                start_time = fmt_time(eff_start)
 
                 status_emoji = {
                     'completed': '✅',

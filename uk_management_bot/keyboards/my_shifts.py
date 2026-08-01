@@ -2,12 +2,14 @@
 Клавиатуры для исполнителей - интерфейс "Мои смены"
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import List
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.utils.helpers import get_text
+# ARCH-116: подпись кнопки — тот же показ, что и в тексте хендлера.
+from uk_management_bot.utils.business_time import business_date_of, business_today, fmt_time
 
 
 def get_my_shifts_menu(language: str = "ru") -> InlineKeyboardMarkup:
@@ -36,8 +38,8 @@ def get_shift_list_keyboard(shifts: List[Shift], language: str = "ru") -> Inline
         # иначе planned_start_time.date() падает на NoneType для ad-hoc.
         eff_start = shift.planned_start_time or shift.start_time
         eff_end = shift.planned_end_time or shift.end_time
-        shift_date = eff_start.date()
-        today = date.today()
+        shift_date = business_date_of(eff_start)
+        today = business_today()
         tomorrow = today + timedelta(days=1)
 
         if shift_date == today:
@@ -47,8 +49,8 @@ def get_shift_list_keyboard(shifts: List[Shift], language: str = "ru") -> Inline
         else:
             date_prefix = "📆"
 
-        start_time = eff_start.strftime("%H:%M")
-        end_time = eff_end.strftime("%H:%M") if eff_end else "?"
+        start_time = fmt_time(eff_start)
+        end_time = fmt_time(eff_end) if eff_end else "?"
 
         status_emoji = {
             'planned': '⏱️',

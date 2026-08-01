@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.auto_manager_config import AutoManagerConfig
+from uk_management_bot.utils.business_time import BUSINESS_TZ
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,10 @@ DEFAULT_CONFIG: dict = {
     "mode": "rule",
     "window_start": "20:00",
     "window_end": "08:00",
-    "timezone": "Asia/Tashkent",
+    # ARCH-116: дефолт берём из канона бизнес-зоны — значение остаётся
+    # настраиваемым (окно авто-менеджера может жить в другой зоне), но вторая
+    # захардкоженная копия названия зоны в репо не появляется.
+    "timezone": str(BUSINESS_TZ),
     "max_requests_per_run": 10,
 }
 

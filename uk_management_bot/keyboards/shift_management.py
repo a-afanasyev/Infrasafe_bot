@@ -8,6 +8,8 @@ from typing import List
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.utils.helpers import get_text
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date
 
 
 def get_main_shift_menu(language: str = "ru") -> InlineKeyboardMarkup:
@@ -68,7 +70,7 @@ def get_template_selection_keyboard(templates: List[ShiftTemplate], language: st
 def get_date_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура выбора даты"""
     keyboard = []
-    today = date.today()
+    today = business_today()
 
     # Предлагаем выбрать дату от сегодня до следующих 14 дней
     for i in range(15):
@@ -81,7 +83,7 @@ def get_date_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         else:
             date_text = target_date.strftime("%d.%m (%A)")
 
-        full_date_text = get_text("shift_management.keyboards.date_entry", language=language).format(date_text=date_text, date_formatted=target_date.strftime("%d.%m.%Y"))
+        full_date_text = get_text("shift_management.keyboards.date_entry", language=language).format(date_text=date_text, date_formatted=fmt_date(target_date))
 
         keyboard.append([
             InlineKeyboardButton(
@@ -193,7 +195,7 @@ def get_schedule_view_keyboard(current_date: date, language: str = "ru") -> Inli
     ])
 
     # Быстрые переходы
-    today = date.today()
+    today = business_today()
     tomorrow = today + timedelta(days=1)
 
     keyboard.append([

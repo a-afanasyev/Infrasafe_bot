@@ -212,8 +212,14 @@ ASSIGNMENT: dict[str, dict] = {
     # ── Решения владельца (кодовой работы до решения нет)
     "AUD5-DEAD-3": A(pkg="—", status="decision", method="verified-2026-07-27",
                     note="ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком»"),
-    "ARCH-116": A(pkg="—", status="actionable", method="verified-2026-07-27",
-                  note="решение: вводить бизнес-TZ на слое показа, БД остаётся UTC"),
+    # `ARCH-116` закрыт 2026-07-30 (бот: показ + дневные бакеты через канон
+    # `utils/business_time`, AST-гейт). Строка удалена — `--check` держит
+    # равенство ASSIGNMENT ↔ открытые пункты в обе стороны. Найденное сверх
+    # пункта заведено ниже как `ARCH-135` и `BUG-136`.
+    "ARCH-135": A(pkg="—", status="actionable", method="verified-2026-08-01",
+                  note="26 func.date вне показа: 5 в API (график дашборда бакетит по UTC при ташкентской подписи оси) + 22 в движках, где бакет меняет РЕШЕНИЯ алгоритма"),
+    "BUG-136": A(pkg="—", status="actionable", method="verified-2026-07-30",
+                 note="%A в клавиатуре выбора даты → английское имя дня у RU/UZ; локализованные имена в репо есть"),
     "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
                   note="решение: делать; форма — как у webhook *_NEXT"),
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",

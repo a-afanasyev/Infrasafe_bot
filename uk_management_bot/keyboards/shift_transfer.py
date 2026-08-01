@@ -9,6 +9,8 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import fmt_day_month, fmt_time
 
 
 def shift_selection_keyboard(shifts: List[Shift], language: str = "ru") -> InlineKeyboardMarkup:
@@ -25,8 +27,8 @@ def shift_selection_keyboard(shifts: List[Shift], language: str = "ru") -> Inlin
     builder = InlineKeyboardBuilder()
 
     for shift in shifts:
-        shift_date = shift.start_time.strftime("%d.%m")
-        shift_time = shift.start_time.strftime("%H:%M")
+        shift_date = fmt_day_month(shift.start_time)
+        shift_time = fmt_time(shift.start_time)
 
         # Маппинг статусов
         status = get_text(
@@ -266,7 +268,7 @@ def transfers_list_keyboard(
 
     for transfer in transfers:
         # Формируем текст кнопки
-        date_str = transfer.created_at.strftime("%d.%m")
+        date_str = fmt_day_month(transfer.created_at)
         status_text = get_text(
             f"shift_transfer.keyboards.transfer_status_{transfer.status}",
             language=language

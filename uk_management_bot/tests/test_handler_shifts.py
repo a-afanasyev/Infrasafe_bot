@@ -417,7 +417,8 @@ class TestMyShift:
         msg = _make_message()
         db = _make_db()
         shift = _make_shift()
-        shift.start_time = datetime(2025, 3, 10, 8, 30, 0)
+        # ARCH-116: значение в БД — инстант UTC, на экран идёт бизнес-зона (+5).
+        shift.start_time = datetime(2025, 3, 10, 8, 30, 0, tzinfo=timezone.utc)
 
         with patch(
             "uk_management_bot.handlers.shifts.get_user_language", return_value="ru"
@@ -433,7 +434,8 @@ class TestMyShift:
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
-        assert "08:30" in sent_text
+        assert "13:30" in sent_text  # 08:30Z = 13:30 Asia/Tashkent
+        assert "08:30" not in sent_text
 
 
 # ─── handle_end_shift_cancel ─────────────────────────────────────────────────

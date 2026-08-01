@@ -39,6 +39,8 @@ from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import fmt_datetime, fmt_day_month_time
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -228,7 +230,7 @@ async def show_transfer_confirmation(message: Message, state: FSMContext, user_l
                 comment_val = get_text("shift_transfer.handlers.not_specified", language=user_lang)
 
             confirmation_text = get_text("shift_transfer.handlers.transfer_confirmation", language=user_lang).format(
-                shift_date=shift.start_time.strftime('%d.%m.%Y %H:%M'),
+                shift_date=fmt_datetime(shift.start_time),
                 reason=reason_text,
                 urgency=urgency_text,
                 comment=comment_val
@@ -332,7 +334,7 @@ async def cmd_pending_transfers(message: Message, state: FSMContext = None,
 
             for transfer in pending_transfers:
                 executor_name = transfer.from_executor.first_name or get_text("shift_transfer.handlers.unknown", language=user_lang)
-                shift_date = transfer.shift.start_time.strftime('%d.%m %H:%M') if transfer.shift and transfer.shift.start_time else "—"
+                shift_date = fmt_day_month_time(transfer.shift.start_time) if transfer.shift and transfer.shift.start_time else "—"
                 reason_text = get_text(f"shift_transfer.handlers.reason_{transfer.reason}", language=user_lang)
                 transfers_text += f"• {executor_name} - {shift_date}\n  " + get_text("shift_transfer.handlers.reason_label", language=user_lang) + f": {reason_text}\n  /assign_{transfer.id}\n\n"
 
@@ -444,7 +446,7 @@ async def handle_transfer_response(callback: CallbackQuery, state: FSMContext = 
                 if not transfer:
                     await callback.answer(_err_text("transfer_not_found", user_lang), show_alert=True)
                     return
-                shift_date = transfer.shift.start_time.strftime('%d.%m %H:%M') if transfer.shift and transfer.shift.start_time else "—"
+                shift_date = fmt_day_month_time(transfer.shift.start_time) if transfer.shift and transfer.shift.start_time else "—"
                 reason_text = get_text(f"shift_transfer.handlers.reason_{transfer.reason}", language=user_lang)
                 await callback.answer(
                     get_text("shift_transfer.handlers.transfer_details", language=user_lang).format(
@@ -500,7 +502,7 @@ async def handle_view_transfer(callback: CallbackQuery, state: FSMContext = None
                 await callback.answer(_err_text("not_your_transfer", user_lang), show_alert=True)
                 return
 
-            shift_date = transfer.shift.start_time.strftime('%d.%m %H:%M') if transfer.shift and transfer.shift.start_time else "—"
+            shift_date = fmt_day_month_time(transfer.shift.start_time) if transfer.shift and transfer.shift.start_time else "—"
             reason_text = get_text(f"shift_transfer.handlers.reason_{transfer.reason}", language=user_lang)
             status_text = get_text(f"shift_transfer.keyboards.transfer_status_{transfer.status}", language=user_lang)
             await callback.answer(

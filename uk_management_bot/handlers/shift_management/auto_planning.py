@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import F
 from aiogram.types import Message, CallbackQuery
@@ -19,6 +19,8 @@ from uk_management_bot.utils.helpers import get_user_language, get_text
 
 from ._router import router
 from .shared import _db_scope, _get_confirm_keyboard
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +119,11 @@ async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=N
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
 
-            today = date.today()
+            today = business_today()
             days_until_monday = today.weekday()
             monday = today - timedelta(days=days_until_monday)
             sunday = monday + timedelta(days=6)
-            period = f"{monday.strftime('%d.%m.%Y')} — {sunday.strftime('%d.%m.%Y')}"
+            period = f"{fmt_date(monday)} — {fmt_date(sunday)}"
 
             prompt = get_text(
                 "shift_planning.confirm_prompt",
@@ -176,7 +178,7 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
             planning_service = ShiftPlanningService(db)
 
             # Начинаем планирование с понедельника текущей недели
-            today = date.today()
+            today = business_today()
             days_until_monday = today.weekday()
             monday = today - timedelta(days=days_until_monday)
 
@@ -186,7 +188,7 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
 
             # Формируем отчет
             stats = results['statistics']
-            period = f"{results['week_start'].strftime('%d.%m.%Y')} - {(results['week_start'] + timedelta(days=6)).strftime('%d.%m.%Y')}"
+            period = f"{fmt_date(results['week_start'])} - {fmt_date(results['week_start'] + timedelta(days=6))}"
             response = get_text("shift_management.auto_plan_week_complete", language=lang,
                                period=period, total_shifts=stats['total_shifts'])
 
@@ -229,9 +231,9 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
 
-            today = date.today()
+            today = business_today()
             month_end = today + timedelta(weeks=4) - timedelta(days=1)
-            period = f"{today.strftime('%d.%m.%Y')} — {month_end.strftime('%d.%m.%Y')}"
+            period = f"{fmt_date(today)} — {fmt_date(month_end)}"
 
             prompt = get_text(
                 "shift_planning.confirm_prompt",
@@ -288,7 +290,7 @@ async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMCont
             await callback.answer(get_text("shift_management.planning_month_progress", language=lang))
 
             # Планируем по неделям на весь месяц
-            today = date.today()
+            today = business_today()
             total_shifts = 0
             weeks_planned = 0
             errors = []
@@ -340,8 +342,8 @@ async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, 
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
 
-            tomorrow = date.today() + timedelta(days=1)
-            period = tomorrow.strftime('%d.%m.%Y')
+            tomorrow = business_today() + timedelta(days=1)
+            period = fmt_date(tomorrow)
 
             prompt = get_text(
                 "shift_planning.confirm_prompt",
@@ -395,7 +397,7 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
             lang = get_user_language(callback.from_user.id, db)
             planning_service = ShiftPlanningService(db)
 
-            tomorrow = date.today() + timedelta(days=1)
+            tomorrow = business_today() + timedelta(days=1)
 
             await callback.answer(get_text("shift_management.planning_tomorrow_progress", language=lang))
 
@@ -417,7 +419,7 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
                         errors.append(f"{template.name}: {str(e)}")
 
             response = get_text("shift_management.auto_plan_tomorrow_complete", language=lang,
-                              date=tomorrow.strftime('%d.%m.%Y'), total_shifts=total_shifts)
+                              date=fmt_date(tomorrow), total_shifts=total_shifts)
 
             if created_by_template:
                 response += get_text("shift_management.shifts_by_template_header", language=lang)

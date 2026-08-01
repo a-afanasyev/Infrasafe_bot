@@ -13,6 +13,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from uk_management_bot.database.session import session_scope
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.business_time import business_date_of, fmt_time
 
 
 @contextmanager
@@ -35,14 +36,17 @@ def _format_end_label(start_dt: Optional[datetime], end_dt: Optional[datetime]) 
     """Время конца смены 'ЧЧ:ММ'; добавляет '+N', если смена переходит на
     следующий день(и) (например суточная 08:00→08:00 показывается как '08:00 +1').
 
-    start_dt и end_dt должны быть в одной таймзоне (берутся из одной смены —
-    start_time/end_time или planned_*), поэтому сравнение .date() согласовано.
+    ARCH-116: и время, и переход через полночь считаются в бизнес-зоне. По UTC-дате
+    смена 01:00→09:00 по Ташкенту получала ложный '+1' (её UTC-даты разные), то
+    есть подпись сообщала о переходе, которого пользователь не видит.
     """
     if not end_dt:
         return "—"
-    label = end_dt.strftime('%H:%M')
-    if start_dt and end_dt.date() > start_dt.date():
-        label += f" +{(end_dt.date() - start_dt.date()).days}"
+    label = fmt_time(end_dt)
+    if start_dt:
+        days = (business_date_of(end_dt) - business_date_of(start_dt)).days
+        if days > 0:
+            label += f" +{days}"
     return label
 
 

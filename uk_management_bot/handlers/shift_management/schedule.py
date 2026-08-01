@@ -16,6 +16,8 @@ from uk_management_bot.utils.helpers import get_user_language, get_text
 
 from ._router import router
 from .shared import _db_scope, _format_end_label
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date, fmt_day_month, fmt_time
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +38,11 @@ async def handle_view_schedule(callback: CallbackQuery, state: FSMContext, db=No
             lang = get_user_language(callback.from_user.id, db)
         
             # Показываем расписание на сегодня
-            today = date.today()
+            today = business_today()
 
             await callback.message.edit_text(
                 get_text("shift_management.schedule_view_title", language=lang,
-                        date=today.strftime('%d.%m.%Y')),
+                        date=fmt_date(today)),
                 reply_markup=get_schedule_view_keyboard(today, lang),
                 parse_mode="HTML"
             )
@@ -71,7 +73,7 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
         
             # Формируем сообщение
             response = get_text("shift_management.schedule_date_title", language=lang,
-                              date=selected_date.strftime('%d.%m.%Y'))
+                              date=fmt_date(selected_date))
 
             # REG-02: кнопки прямого менеджерского переназначения смен.
             reassign_rows = []
@@ -92,7 +94,7 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
                         if template:
                             template_name = template.name
 
-                    start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
+                    start_time = fmt_time(shift.planned_start_time) if shift.planned_start_time else "??:??"
                     end_time = _format_end_label(shift.planned_start_time, shift.planned_end_time) if shift.planned_end_time else "??:??"
 
                     status_emoji = "🟢" if shift.status == "active" else "🟡" if shift.status == "planned" else "🔴"
@@ -166,7 +168,7 @@ async def handle_reassign_shift_pick(callback: CallbackQuery, state: FSMContext,
                 await callback.answer(get_text("shift_management.reassign_no_executors", language=lang), show_alert=True)
                 return
 
-            start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
+            start_time = fmt_time(shift.planned_start_time) if shift.planned_start_time else "??:??"
             await callback.message.edit_text(
                 get_text("shift_management.reassign_pick_title", language=lang, time=start_time),
                 reply_markup=executor_selection_keyboard(
@@ -222,10 +224,10 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
             service = ShiftManagementService(db)
 
             # Определяем начало текущей недели (понедельник)
-            today = date.today()
+            today = business_today()
             monday = today - timedelta(days=today.weekday())
 
-            period = f"{monday.strftime('%d.%m')} - {(monday + timedelta(days=6)).strftime('%d.%m.%Y')}"
+            period = f"{fmt_day_month(monday)} - {fmt_date(monday + timedelta(days=6))}"
             response = get_text("shift_management.week_schedule_title", language=lang, period=period)
 
             # Проходим по каждому дню недели
@@ -238,11 +240,11 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
                 # Получаем смены на этот день
                 shifts = service.get_shifts_for_date(current_day)
             
-                response += f"<b>{day_name} {current_day.strftime('%d.%m')}</b>\n"
+                response += f"<b>{day_name} {fmt_day_month(current_day)}</b>\n"
             
                 if shifts:
                     for shift in shifts:
-                        start_time = shift.planned_start_time.strftime('%H:%M') if shift.planned_start_time else "??:??"
+                        start_time = fmt_time(shift.planned_start_time) if shift.planned_start_time else "??:??"
                         end_time = _format_end_label(shift.planned_start_time, shift.planned_end_time) if shift.planned_end_time else "?"
 
                         # Цвет зависит от наличия исполнителя, а не от статуса
@@ -294,7 +296,7 @@ async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext,
             lang = get_user_language(callback.from_user.id, db)
         
             # Определяем текущий месяц
-            today = date.today()
+            today = business_today()
             month_start = today.replace(day=1)
         
             # Получаем смены за месяц
@@ -319,7 +321,7 @@ async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext,
                 sorted_dates = sorted(shifts_by_date.items(), key=lambda x: x[1], reverse=True)[:10]
                 response += get_text("shift_management.busiest_days_header", language=lang)
                 for shift_date, count in sorted_dates:
-                    response += f"• {shift_date.strftime('%d.%m')}: {count} смен\n"
+                    response += f"• {fmt_day_month(shift_date)}: {count} смен\n"
             else:
                 response += get_text("shift_management.no_shifts_month", language=lang)
 

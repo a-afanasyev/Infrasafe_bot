@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -17,6 +17,8 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 from ._router import router
 from .shared import _db_scope, _format_end_label, translate_specializations
+# ARCH-116: показ времени смен — только через канон бизнес-зоны.
+from uk_management_bot.utils.business_time import business_today, fmt_date, fmt_day_month_time, fmt_time
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +53,8 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
                 specialization_text = translate_specializations(shift.specialization_focus, lang)
 
                 # Форматируем время
-                start_date = shift.start_time.strftime('%d.%m.%Y')
-                start_time = shift.start_time.strftime('%H:%M')
+                start_date = fmt_date(shift.start_time)
+                start_time = fmt_time(shift.start_time)
                 end_time = _format_end_label(shift.start_time, shift.end_time)
                 zone = shift.geographic_zone or get_text("shift_management.zone_not_specified", language=lang)
 
@@ -73,7 +75,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
                 else:
                     spec_text = get_text("shift_management.any_spec", language=lang)
 
-                button_text = f"{shift.start_time.strftime('%d.%m %H:%M')} - {spec_text}"
+                button_text = f"{fmt_day_month_time(shift.start_time)} - {spec_text}"
                 keyboard.append([InlineKeyboardButton(
                     text=button_text,
                     callback_data=f"select_shift_for_assignment:{shift.id}"
@@ -229,7 +231,7 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
             lang = get_user_language(callback.from_user.id, db)
 
             # Анализируем загруженность на ближайшие 7 дней
-            end_date = date.today() + timedelta(days=7)
+            end_date = business_today() + timedelta(days=7)
 
             service = ShiftManagementService(db)
             # Получаем статистику по исполнителям
@@ -270,8 +272,8 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
                     recommendation = f"\n{get_text('shift_management.workload_imbalance_warning', language=lang)}"
 
             text = get_text("shift_management.workload_analysis_result", language=lang,
-                           period_start=date.today().strftime('%d.%m.%Y'),
-                           period_end=end_date.strftime('%d.%m.%Y'),
+                           period_start=fmt_date(business_today()),
+                           period_end=fmt_date(end_date),
                            workload_list=workload_list,
                            free_count=len(unassigned_executors),
                            free_list=free_list,
@@ -307,7 +309,7 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
             # balance_executor_workload(). Прежний await на несуществующий метод
             # → AttributeError → кнопка падала. target_date по умолчанию = завтра
             # (балансируем planned-смены на следующий день, как задумано сервисом;
-            # date.today() давал почти всегда пустой план → no-op).
+            # business_today() давал почти всегда пустой план → no-op).
             result = assignment_service.balance_executor_workload()
 
             if result.get('error'):
@@ -375,7 +377,7 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
             lang = get_user_language(callback.from_user.id, db)
 
             # Ищем конфликты в расписании на ближайшие 7 дней
-            end_date = date.today() + timedelta(days=7)
+            end_date = business_today() + timedelta(days=7)
 
             # Находим пересекающиеся смены у одного исполнителя
             conflicts = []
@@ -427,7 +429,7 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                 conflicts_list = get_text("shift_management.conflicts_found_header", language=lang) + "\n\n"
 
                 def _hm(dt):
-                    return dt.strftime('%H:%M') if dt else "—"
+                    return fmt_time(dt) if dt else "—"
 
                 for i, conflict in enumerate(conflicts[:5], 1):  # Показываем первые 5
                     executor = conflict['executor']
@@ -437,7 +439,7 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
 
                     name = f"{executor.first_name} {executor.last_name}" if executor else "—"
                     conflicts_list += f"<b>{i}. {name}</b>\n"
-                    conflicts_list += f"📅 {shift1.start_time.strftime('%d.%m.%Y')}\n"
+                    conflicts_list += f"📅 {fmt_date(shift1.start_time)}\n"
 
                     if conflict_type == 'time_overlap':
                         conflicts_list += f"❌ {get_text('shift_management.time_overlap_label', language=lang)}:\n"
@@ -458,8 +460,8 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                 conflicts_list += get_text("shift_management.redistribute_recommendation", language=lang)
 
             text = get_text("shift_management.conflicts_analysis_result", language=lang,
-                           period_start=date.today().strftime('%d.%m.%Y'),
-                           period_end=end_date.strftime('%d.%m.%Y'),
+                           period_start=fmt_date(business_today()),
+                           period_end=fmt_date(end_date),
                            conflicts_count=len(conflicts),
                            conflicts_list=conflicts_list,
                            no_conflicts=no_conflicts_msg)

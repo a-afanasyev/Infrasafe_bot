@@ -1,6 +1,6 @@
 """Unit tests for notification_service — pure formatting functions and async helpers."""
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from uk_management_bot.services.notification_service import (
@@ -101,9 +101,10 @@ class TestFormatDurationHm:
 class TestBuildShiftStartedMessage:
     def test_user_message_contains_start_time(self):
         user = _make_user()
-        shift = _make_shift(start_time=datetime(2026, 4, 2, 9, 15, 0))
+        # ARCH-116: в БД инстант UTC, на экране бизнес-зона: 09:15Z = 14:15 Ташкента.
+        shift = _make_shift(start_time=datetime(2026, 4, 2, 9, 15, 0, tzinfo=timezone.utc))
         msg = build_shift_started_message(user, shift, for_channel=False)
-        assert "09:15" in msg
+        assert "14:15" in msg
         assert "02.04.2026" in msg
 
     def test_channel_message_contains_user_id(self):
@@ -125,12 +126,13 @@ class TestBuildShiftStartedMessage:
 
 class TestBuildShiftEndedMessage:
     def test_contains_duration(self):
-        start = datetime(2026, 4, 2, 9, 0, 0)
-        end = datetime(2026, 4, 2, 10, 30, 0)
+        start = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 4, 2, 10, 30, 0, tzinfo=timezone.utc)
         user = _make_user()
         shift = _make_shift(start_time=start, end_time=end)
         msg = build_shift_ended_message(user, shift, for_channel=False)
-        assert msg == "✅ Смена завершена в 02.04.2026 10:30. Длительность: 1 ч 30 мин"
+        # ARCH-116: 10:30Z = 15:30 Ташкента; длительность от зоны не зависит.
+        assert msg == "✅ Смена завершена в 02.04.2026 15:30. Длительность: 1 ч 30 мин"
 
     def test_channel_message_contains_user_id(self):
         start = datetime(2026, 4, 2, 9, 0, 0)
@@ -141,12 +143,13 @@ class TestBuildShiftEndedMessage:
         assert "999" in msg
 
     def test_user_message_contains_end_time(self):
-        start = datetime(2026, 4, 2, 9, 0, 0)
-        end = datetime(2026, 4, 2, 17, 45, 0)
+        start = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 4, 2, 17, 45, 0, tzinfo=timezone.utc)
         user = _make_user()
         shift = _make_shift(start_time=start, end_time=end)
         msg = build_shift_ended_message(user, shift, for_channel=False)
-        assert "17:45" in msg
+        assert "22:45" in msg  # 17:45Z = 22:45 Asia/Tashkent
+        assert "17:45" not in msg
 
 
 # ---------------------------------------------------------------------------
