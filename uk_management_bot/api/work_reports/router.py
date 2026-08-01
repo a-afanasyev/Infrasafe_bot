@@ -229,13 +229,21 @@ async def sync_work_reports(
     # AUD6-P2-05: троттл межворкерный (Redis SET NX EX) — при --workers 2
     # процессный давал ДВА reconcile за окно, расширяя гонку AUD6-P2-04.
     # Redis недоступен (None) → прежний процессный троттл как деградация.
-    slot = await coordination.try_acquire_reconcile_slot(
-        int(_RECONCILE_THROTTLE.total_seconds())
-    )
-    should_reconcile = slot if slot is not None else (
-        _last_reconcile_at is None or now - _last_reconcile_at >= _RECONCILE_THROTTLE
-    )
-    if media_client is not None and should_reconcile:
+    #
+    # Порядок важен: слот берётся ТОЛЬКО когда сверка вообще возможна. Пока он
+    # брался раньше проверки media-клиента, /sync без клиента (media не
+    # сконфигурирован либо клиент ещё не поднялся) съедал пятиминутное окно, не
+    # сверив ничего, — и при --workers 2 отбирал его у воркера, который сверку
+    # сделать мог, то есть частично возвращал ту самую гонку AUD6-P2-04.
+    should_reconcile = False
+    if media_client is not None:
+        slot = await coordination.try_acquire_reconcile_slot(
+            int(_RECONCILE_THROTTLE.total_seconds())
+        )
+        should_reconcile = slot if slot is not None else (
+            _last_reconcile_at is None or now - _last_reconcile_at >= _RECONCILE_THROTTLE
+        )
+    if should_reconcile:
         # Сверка — фоновая maintenance-операция, ехавшая прицепом к /sync, и она
         # НЕ должна ронять ответ: синк, автопубликация и отзыв выше уже
         # закоммичены, а `list_publication_locks` намеренно бросает при ошибке
