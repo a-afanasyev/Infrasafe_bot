@@ -124,15 +124,19 @@ async def _render_status(callback: CallbackQuery, db, lang: str) -> None:
 @require_role(['admin', 'manager'])
 async def handle_auto_manager_menu(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Экран статуса автоменеджера — точка входа с главного меню смен."""
+    # A6-P3-21: `as db` затенял параметр — except-ветка дёргала БД по сессии,
+    # уже закрытой выходом из _db_scope (чекаут соединения возвращался в пул
+    # только GC-финализатором). Имя не затеняем, а язык фиксируем ДО ошибки:
+    # except не трогает БД вовсе (после исключения сессия может быть aborted).
+    lang = "ru"
     try:
-        with _db_scope(db) as db:
-            lang = get_user_language(callback.from_user.id, db)
+        with _db_scope(db) as scoped:
+            lang = get_user_language(callback.from_user.id, scoped)
             await state.clear()
-            await _render_status(callback, db, lang)
+            await _render_status(callback, scoped, lang)
             await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка экрана автоменеджера: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
 
 
@@ -140,13 +144,14 @@ async def handle_auto_manager_menu(callback: CallbackQuery, state: FSMContext, d
 @require_role(['admin', 'manager'])
 async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Немедленное вкл/выкл — без подтверждения (простой флип-и-перерисовка)."""
+    lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
     try:
-        with _db_scope(db) as db:
-            lang = get_user_language(callback.from_user.id, db)
+        with _db_scope(db) as scoped:
+            lang = get_user_language(callback.from_user.id, scoped)
 
-            cfg = load_config_sync(db)
+            cfg = load_config_sync(scoped)
             updated = {**cfg, "enabled": not cfg["enabled"]}
-            saved = save_config_sync(db, updated, updated_by=user.id if user else None)
+            saved = save_config_sync(scoped, updated, updated_by=user.id if user else None)
 
             toast_key = (
                 "auto_manager.toggle_enabled_toast" if saved["enabled"]
@@ -161,7 +166,6 @@ async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext,
             await callback.answer(get_text(toast_key, language=lang))
     except Exception as e:
         logger.error(f"Ошибка переключения автоменеджера: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
 
 
@@ -185,9 +189,10 @@ async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext
 @require_role(['admin', 'manager'])
 async def handle_auto_manager_change_window(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Вход в FSM-ввод нового окна работы HH:MM-HH:MM."""
+    lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
     try:
-        with _db_scope(db) as db:
-            lang = get_user_language(callback.from_user.id, db)
+        with _db_scope(db) as scoped:
+            lang = get_user_language(callback.from_user.id, scoped)
             await callback.message.edit_text(
                 get_text("auto_manager.window_input.prompt", language=lang),
                 reply_markup=_window_cancel_keyboard(lang),
@@ -197,7 +202,6 @@ async def handle_auto_manager_change_window(callback: CallbackQuery, state: FSMC
             await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка запроса нового окна автоменеджера: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
 
 
@@ -209,9 +213,10 @@ async def handle_auto_manager_window_input(message: Message, state: FSMContext, 
     не падает и не портит конфиг — остаёмся в ``entering_window`` и просим
     повторить.
     """
+    lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
     try:
-        with _db_scope(db) as db:
-            lang = get_user_language(message.from_user.id, db)
+        with _db_scope(db) as scoped:
+            lang = get_user_language(message.from_user.id, scoped)
 
             raw = (message.text or "").strip()
             parts = raw.split("-")
@@ -224,7 +229,7 @@ async def handle_auto_manager_window_input(message: Message, state: FSMContext, 
 
             window_start, window_end = parts[0].strip(), parts[1].strip()
 
-            current = load_config_sync(db)
+            current = load_config_sync(scoped)
             candidate = {**current, "window_start": window_start, "window_end": window_end}
 
             try:
@@ -235,7 +240,7 @@ async def handle_auto_manager_window_input(message: Message, state: FSMContext, 
                 )
                 return
 
-            saved = save_config_sync(db, candidate, updated_by=user.id if user else None)
+            saved = save_config_sync(scoped, candidate, updated_by=user.id if user else None)
 
             await message.answer(
                 get_text(
@@ -255,6 +260,5 @@ async def handle_auto_manager_window_input(message: Message, state: FSMContext, 
             )
     except Exception as e:
         logger.error(f"Ошибка ввода окна автоменеджера: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(get_text("auto_manager.menu_load_error", language=lang))
 
