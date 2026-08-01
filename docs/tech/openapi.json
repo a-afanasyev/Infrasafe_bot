@@ -1322,58 +1322,6 @@
         "title": "ContactsCfgIn",
         "type": "object"
       },
-      "CreateEmployeeRequest": {
-        "properties": {
-          "first_name": {
-            "minLength": 1,
-            "title": "First Name",
-            "type": "string"
-          },
-          "last_name": {
-            "minLength": 1,
-            "title": "Last Name",
-            "type": "string"
-          },
-          "phone": {
-            "minLength": 10,
-            "title": "Phone",
-            "type": "string"
-          },
-          "role": {
-            "enum": [
-              "executor",
-              "manager"
-            ],
-            "title": "Role",
-            "type": "string"
-          },
-          "specializations": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Specializations",
-            "type": "array"
-          },
-          "status": {
-            "default": "approved",
-            "enum": [
-              "approved",
-              "pending"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "first_name",
-          "last_name",
-          "phone",
-          "role"
-        ],
-        "title": "CreateEmployeeRequest",
-        "type": "object"
-      },
       "CreateFromTemplateBody": {
         "properties": {
           "date": {
@@ -8177,58 +8125,6 @@
         ]
       }
     },
-    "/api/v2/addresses/apartments/search": {
-      "get": {
-        "operationId": "search_apartments_api_v2_addresses_apartments_search_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "title": "Q",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/uk_management_bot__api__addresses__schemas__ApartmentOut"
-                  },
-                  "title": "Response Search Apartments Api V2 Addresses Apartments Search Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Search Apartments",
-        "tags": [
-          "addresses"
-        ]
-      }
-    },
     "/api/v2/addresses/apartments/{apartment_id}": {
       "delete": {
         "operationId": "delete_apartment_api_v2_addresses_apartments__apartment_id__delete",
@@ -10397,52 +10293,6 @@
           }
         ],
         "summary": "Update Feedback",
-        "tags": [
-          "feedback"
-        ]
-      }
-    },
-    "/api/v2/feedback/{fid}/media": {
-      "get": {
-        "description": "Метаданные вложений по сохранённым media_id (источник истины — fb.media_files).",
-        "operationId": "feedback_media_list_api_v2_feedback__fid__media_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "fid",
-            "required": true,
-            "schema": {
-              "title": "Fid",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Feedback Media List",
         "tags": [
           "feedback"
         ]
@@ -13865,51 +13715,6 @@
           }
         ],
         "summary": "List Employees",
-        "tags": [
-          "shifts"
-        ]
-      },
-      "post": {
-        "description": "Create an employee directly from the web dashboard.",
-        "operationId": "create_employee_api_v2_shifts_employees_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateEmployeeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmployeeBrief"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Employee",
         "tags": [
           "shifts"
         ]
