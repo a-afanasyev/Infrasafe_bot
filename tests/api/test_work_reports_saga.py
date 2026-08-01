@@ -702,7 +702,11 @@ async def test_reconcile_all_three_directions(db_session):
 
     assert result == {
         "unstuck_publishing": 1,
-        "orphaned_locks_released": 1,
+        # AUD6-P2-04: `fresh` ещё в publishing — снятие орфана 99 ОТЛОЖЕНО:
+        # «осиротевший» id может оказаться свежевзятым локом саги, чей
+        # locked_media_ids ещё не закоммичен (TOCTOU между двумя БД).
+        "orphaned_locks_released": 0,
+        "orphan_release_deferred": 1,
         "missing_locks_relocked": 1,
         # Четвёртое направление делегировано media-service (см. docstring
         # reconcile_publication_locks) — здесь проверяем только, что оно вызвано
@@ -723,8 +727,29 @@ async def test_reconcile_all_three_directions(db_session):
     assert published_reloaded.status == "published"
     assert published_reloaded.locked_media_ids == [42]
 
-    assert sorted(client.release_calls) == [5, 6, 99]
+    # 99 НЕ отпущен (отложен), 5/6 — отпущены пунктом 1 (unstuck stale).
+    assert sorted(client.release_calls) == [5, 6]
     assert client.acquire_calls == [42]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_releases_orphans_only_without_publishing_in_flight(db_session):
+    """AUD6-P2-04, тихий прогон: ни одного отчёта в publishing — настоящий
+    орфан снимается, как и раньше."""
+    now = datetime.now(timezone.utc)
+    published = _mk_report(
+        "260725-352", status="published", locked_media_ids=[42],
+        state_changed_at=now,
+    )
+    db_session.add(published)
+    await db_session.commit()
+
+    client = FakeMediaClient(list_locks_items=[{"id": 42}, {"id": 99}])
+    result = await reconcile_publication_locks(db_session, client)
+
+    assert result["orphaned_locks_released"] == 1
+    assert result["orphan_release_deferred"] == 0
+    assert client.release_calls == [99]
 
 
 @pytest.mark.asyncio

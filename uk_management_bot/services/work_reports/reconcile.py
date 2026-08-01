@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.work_report import WorkReport
@@ -99,6 +99,27 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
         covered_ids.update(ids or [])
 
     orphaned = inventory_ids - covered_ids
+    orphan_release_deferred = 0
+    if orphaned:
+        # AUD6-P2-04: TOCTOU между двумя БД. Сага publish уже получила lock в
+        # media-service (шаг 6), но locked_media_ids ещё не закоммичен — в этом
+        # окне id выглядит осиротевшим, и снятие оставило бы публикацию с
+        # незалоченным медиа (файл может быть заархивирован из-под неё). Пока
+        # есть отчёты в `publishing` — снятие орфанов пропускаем целиком:
+        # настоящий орфан никому не мешает до следующего тихого прогона, а
+        # ДОЛГО зависшие publishing уже возвращены в pending пунктом 1 выше
+        # (порядок пунктов — часть корректности этого пропуска).
+        in_flight = (await db.execute(
+            select(func.count()).select_from(WorkReport)
+            .where(WorkReport.status == "publishing")
+        )).scalar_one()
+        if in_flight:
+            logger.info(
+                "reconcile: снятие %d орфан-локов отложено — %d отчётов в publishing",
+                len(orphaned), in_flight,
+            )
+            orphan_release_deferred = len(orphaned)
+            orphaned = set()
     for media_id in orphaned:
         await media_client.release_publication_lock(media_id)
 
@@ -127,6 +148,7 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
     return {
         "unstuck_publishing": unstuck,
         "orphaned_locks_released": len(orphaned),
+        "orphan_release_deferred": orphan_release_deferred,
         "missing_locks_relocked": relocked,
         "stale_transitions": stale_transitions,
     }

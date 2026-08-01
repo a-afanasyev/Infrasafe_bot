@@ -852,7 +852,8 @@ async def test_reconcile_happy_path_summary_shape(client: AsyncClient, monkeypat
     assert resp.status_code == 200
     body = resp.json()
     assert set(body.keys()) == {
-        "unstuck_publishing", "orphaned_locks_released", "missing_locks_relocked",
+        "unstuck_publishing", "orphaned_locks_released", "orphan_release_deferred",
+        "missing_locks_relocked",
         # Четвёртое направление: восстановление зависших archiving/deleting на
         # стороне media-service (он один знает семантику своих переходов).
         "stale_transitions",
