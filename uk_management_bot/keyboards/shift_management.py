@@ -11,6 +11,10 @@ from uk_management_bot.utils.helpers import get_text
 # ARCH-116: показ времени смен — только через канон бизнес-зоны.
 from uk_management_bot.utils.business_time import business_today, fmt_date
 
+# BUG-136: индекс weekday() → локализованный ключ. strftime("%A") брал имя дня
+# из C-локали процесса — RU/UZ-пользователь видел "Thursday".
+_WEEKDAY_KEYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
 
 def get_main_shift_menu(language: str = "ru") -> InlineKeyboardMarkup:
     """Главное меню управления сменами"""
@@ -81,7 +85,11 @@ def get_date_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         elif i == 1:
             date_text = get_text("shift_management.keyboards.tomorrow", language=language)
         else:
-            date_text = target_date.strftime("%d.%m (%A)")
+            day_name = get_text(
+                f"shift_management.{_WEEKDAY_KEYS[target_date.weekday()]}",
+                language=language,
+            )
+            date_text = f"{target_date.strftime('%d.%m')} ({day_name})"
 
         full_date_text = get_text("shift_management.keyboards.date_entry", language=language).format(date_text=date_text, date_formatted=fmt_date(target_date))
 
