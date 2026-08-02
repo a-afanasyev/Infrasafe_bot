@@ -115,6 +115,7 @@ async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=No
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение автопланирования на неделю (без создания смен)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -145,7 +146,6 @@ async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=N
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения автопланирования недели: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -171,6 +171,7 @@ async def handle_auto_plan_week_cancel(callback: CallbackQuery, state: FSMContex
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автопланирование на неделю (выполнение после подтверждения)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
 
@@ -215,7 +216,6 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка автопланирования недели: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
             get_text("shift_management.auto_plan_week_error", language=lang, error=str(e)[:200]),
             reply_markup=get_auto_planning_keyboard(lang),
@@ -227,6 +227,7 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение автопланирования на месяц (без создания смен)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -255,7 +256,6 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения автопланирования месяца: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -281,6 +281,7 @@ async def handle_auto_plan_month_cancel(callback: CallbackQuery, state: FSMConte
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автопланирование на месяц (выполнение после подтверждения)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
 
@@ -326,7 +327,6 @@ async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMCont
 
     except Exception as e:
         logger.error(f"Ошибка автопланирования месяца: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
             get_text("shift_management.auto_plan_month_error", language=lang, error=str(e)[:200]),
             reply_markup=get_auto_planning_keyboard(lang),
@@ -338,6 +338,7 @@ async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMCont
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение создания смен на завтра (без создания смен)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -365,7 +366,6 @@ async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения создания смен на завтра: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -391,6 +391,7 @@ async def handle_auto_plan_tomorrow_cancel(callback: CallbackQuery, state: FSMCo
 @require_role(['admin', 'manager'])
 async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смен на завтра (выполнение после подтверждения)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
 
@@ -445,7 +446,6 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
 
     except Exception as e:
         logger.error(f"Ошибка создания смен на завтра: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.message.edit_text(
             get_text("shift_management.auto_plan_tomorrow_error", language=lang, error=str(e)[:200]),
             reply_markup=get_auto_planning_keyboard(lang),

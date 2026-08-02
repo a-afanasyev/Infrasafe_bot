@@ -59,6 +59,7 @@ async def handle_view_schedule(callback: CallbackQuery, state: FSMContext, db=No
 @require_role(['admin', 'manager'])
 async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка выбора даты в расписании"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -128,7 +129,6 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
 
     except Exception as e:
         logger.error(f"Ошибка выбора даты расписания: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.schedule_load_error", language=lang), show_alert=True)
 
 
@@ -218,6 +218,7 @@ async def handle_reassign_executor(callback: CallbackQuery, state: FSMContext, d
 @require_role(['admin', 'manager'])
 async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Недельное расписание"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -283,7 +284,6 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка недельного расписания: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -291,6 +291,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
 @require_role(['admin', 'manager'])
 async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Месячный обзор расписания"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -335,13 +336,13 @@ async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext,
 
     except Exception as e:
         logger.error(f"Ошибка месячного обзора: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_shifts")
 async def handle_back_to_shifts(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Возврат к главному меню смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -357,5 +358,4 @@ async def handle_back_to_shifts(callback: CallbackQuery, state: FSMContext, db=N
 
     except Exception as e:
         logger.error(f"Ошибка возврата к меню смен: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)

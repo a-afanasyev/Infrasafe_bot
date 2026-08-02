@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def handle_create_shift_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смены из шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             template_manager = TemplateManager(db)
@@ -58,7 +59,6 @@ async def handle_create_shift_template(callback: CallbackQuery, state: FSMContex
 
     except Exception as e:
         logger.error(f"Ошибка выбора шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -66,6 +66,7 @@ async def handle_create_shift_template(callback: CallbackQuery, state: FSMContex
 @require_role(['admin', 'manager'])
 async def handle_template_selection(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Выбор шаблона и даты"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         template_id = int(callback.data.split(':')[1])
         with _db_scope(db) as db:
@@ -99,7 +100,6 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка выбора шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -107,6 +107,7 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
 @require_role(['admin', 'manager'])
 async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смены на выбранную дату"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -150,7 +151,6 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
 
     except Exception as e:
         logger.error(f"Ошибка создания смены: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -158,6 +158,7 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
 @require_role(['admin', 'manager'])
 async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение недельного планирования (без создания смен)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -188,7 +189,6 @@ async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=
 
     except Exception as e:
         logger.error(f"Ошибка подтверждения недельного планирования: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -215,6 +215,7 @@ async def handle_weekly_planning_cancel(callback: CallbackQuery, state: FSMConte
 @require_role(['admin', 'manager'])
 async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Планирование недельного расписания (выполнение после подтверждения)."""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             planning_service = ShiftPlanningService(db)
@@ -276,5 +277,4 @@ async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMCont
 
     except Exception as e:
         logger.error(f"Ошибка недельного планирования: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)

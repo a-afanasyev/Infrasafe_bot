@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=None):
     """Меню аналитики смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -45,7 +46,6 @@ async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=
 
     except Exception as e:
         logger.error(f"Ошибка аналитики: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -53,6 +53,7 @@ async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=
 @require_role(['admin', 'manager'])
 async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителей для смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -98,7 +99,6 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
     except Exception as e:
         logger.error(f"Ошибка назначения исполнителей: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.executor_assignment_error", language=lang), show_alert=True)
 
 
@@ -106,6 +106,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 @require_role(['admin', 'manager'])
 async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Аналитика за неделю"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             planning_service = ShiftPlanningService(db)
@@ -180,7 +181,6 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
         
     except Exception as e:
         logger.error(f"Ошибка недельной аналитики: {e}", exc_info=True)
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.weekly_analytics_error", language=lang), show_alert=True)
 
 
@@ -188,6 +188,7 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
 @require_role(['admin', 'manager'])
 async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Прогноз рабочей нагрузки"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             planning_service = ShiftPlanningService(db)
@@ -270,7 +271,6 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
         
     except Exception as e:
         logger.error(f"Ошибка прогноза нагрузки: {e}", exc_info=True)
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.workload_forecast_error", language=lang), show_alert=True)
 
 
@@ -278,6 +278,7 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
 @require_role(['admin', 'manager'])
 async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Рекомендации по оптимизации"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             planning_service = ShiftPlanningService(db)
@@ -359,7 +360,6 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
         
     except Exception as e:
         logger.error(f"Ошибка рекомендаций по оптимизации: {e}", exc_info=True)
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.optimization_recommendations_error", language=lang), show_alert=True)
 
 
@@ -371,6 +371,7 @@ async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, d
     Без этого handler-а кнопка `monthly_analytics` возвращала silent callback
     (no answer, no edit). См. BUG-BOT-003.
     """
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -384,7 +385,6 @@ async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка месячного отчёта: {e}", exc_info=True)
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -396,6 +396,7 @@ async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext,
     Без этого handler-а кнопка `efficiency_analysis` возвращала silent callback
     (no answer, no edit). См. BUG-BOT-003.
     """
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -409,13 +410,13 @@ async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext,
 
     except Exception as e:
         logger.error(f"Ошибка анализа эффективности: {e}", exc_info=True)
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_planning")
 async def handle_back_to_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Возврат к меню планирования"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -431,13 +432,13 @@ async def handle_back_to_planning(callback: CallbackQuery, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка возврата к планированию: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.back_to_planning_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "back_to_analytics")
 async def handle_back_to_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Возврат к меню аналитики"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -453,5 +454,4 @@ async def handle_back_to_analytics(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка возврата к аналитике: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.back_to_analytics_error", language=lang), show_alert=True)

@@ -112,6 +112,7 @@ async def start_shift(message: Message, db=None, roles: list[str] = None, active
 async def end_shift_confirm(message: Message, db=None):
     """Показать список активных смен для выбора"""
     with _db_scope(db) as db:
+        lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
         try:
             lang = get_user_language(message.from_user.id, db)
 
@@ -189,7 +190,6 @@ async def end_shift_confirm(message: Message, db=None):
 
         except Exception as e:
             logger.error(f"Ошибка показа списка смен: {e}")
-            lang = get_user_language(message.from_user.id, db) if db else "ru"
             await message.answer(get_text("shifts.error_showing_list", language=lang))
 
 
@@ -319,6 +319,7 @@ async def show_shift_end_details(message: Message, shift_id: int, db, lang: str 
 async def handle_shift_selection(callback: CallbackQuery, db=None, language: str = "ru"):
     """Обработка выбора конкретной смены для завершения"""
     with _db_scope(db) as db:
+        lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
         try:
             shift_id = int(callback.data.split(":")[1])
             lang = get_user_language(callback.from_user.id, db)
@@ -326,7 +327,6 @@ async def handle_shift_selection(callback: CallbackQuery, db=None, language: str
             await callback.answer()
         except Exception as e:
             logger.error(f"Ошибка выбора смены: {e}")
-            lang = get_user_language(callback.from_user.id, db) if db else "ru"
             await callback.answer(get_text("shifts.error_selecting_shift", language=lang), show_alert=True)
 
 

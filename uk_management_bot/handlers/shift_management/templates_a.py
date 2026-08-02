@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def handle_template_management(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Управление шаблонами смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -39,7 +40,6 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
 
     except Exception as e:
         logger.error(f"Ошибка управления шаблонами: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
 
 
@@ -47,6 +47,7 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
 @require_role(['admin', 'manager'])
 async def handle_create_new_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание нового шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -65,7 +66,6 @@ async def handle_create_new_template(callback: CallbackQuery, state: FSMContext,
 
     except Exception as e:
         logger.error(f"Ошибка создания шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
 
 
@@ -73,6 +73,7 @@ async def handle_create_new_template(callback: CallbackQuery, state: FSMContext,
 @require_role(['admin', 'manager'])
 async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Просмотр всех шаблонов"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -123,13 +124,13 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
         
     except Exception as e:
         logger.error(f"Ошибка просмотра шаблонов: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_error", language=lang), show_alert=True)
 
 
 @router.message(StateFilter(ShiftManagementStates.template_name_input))
 async def handle_template_name_input(message: Message, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка ввода названия шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(message.from_user.id, db)
@@ -174,13 +175,13 @@ async def handle_template_name_input(message: Message, state: FSMContext, db=Non
         
     except Exception as e:
         logger.error(f"Ошибка ввода названия шаблона: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(get_text("shift_management.template_name_error", language=lang))
 
 
 @router.message(StateFilter(ShiftManagementStates.template_time_input))
 async def handle_template_time_input(message: Message, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка ввода времени начала шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(message.from_user.id, db)
@@ -226,13 +227,13 @@ async def handle_template_time_input(message: Message, state: FSMContext, db=Non
         
     except Exception as e:
         logger.error(f"Ошибка ввода времени шаблона: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(get_text("shift_management.template_time_error", language=lang))
 
 
 @router.message(StateFilter(ShiftManagementStates.template_duration_input))
 async def handle_template_duration_input(message: Message, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка ввода продолжительности шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(message.from_user.id, db)
@@ -281,7 +282,6 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
         
     except Exception as e:
         logger.error(f"Ошибка создания шаблона: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(
             get_text("shift_management.template_creation_error", language=lang),
             reply_markup=get_template_management_keyboard(lang)
@@ -292,6 +292,7 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
 @require_role(['admin', 'manager'])
 async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Редактирование шаблонов смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -349,7 +350,6 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
         
     except Exception as e:
         logger.error(f"Ошибка редактирования шаблонов: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_templates_error", language=lang), show_alert=True)
 
 
@@ -357,6 +357,7 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
 @require_role(['admin', 'manager'])
 async def handle_edit_template_details(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Редактирование конкретного шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -424,7 +425,6 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
         
     except Exception as e:
         logger.error(f"Ошибка редактирования шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_templates_error", language=lang), show_alert=True)
 
 
@@ -432,6 +432,7 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
 @require_role(['admin', 'manager'])
 async def handle_toggle_template_active(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Переключение активности шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -462,7 +463,6 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка переключения активности шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_toggle_error", language=lang), show_alert=True)
 
 
@@ -470,6 +470,7 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
 @require_role(['admin', 'manager'])
 async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение названия шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -495,7 +496,6 @@ async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка изменения названия шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_name_error", language=lang), show_alert=True)
 
 
@@ -503,6 +503,7 @@ async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, 
 @require_role(['admin', 'manager'])
 async def handle_edit_template_description(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение описания шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -529,7 +530,6 @@ async def handle_edit_template_description(callback: CallbackQuery, state: FSMCo
 
     except Exception as e:
         logger.error(f"Ошибка изменения описания шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_description_error", language=lang), show_alert=True)
 
 
@@ -537,6 +537,7 @@ async def handle_edit_template_description(callback: CallbackQuery, state: FSMCo
 @require_role(['admin', 'manager'])
 async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение времени начала шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -562,7 +563,6 @@ async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка изменения времени шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_time_error", language=lang), show_alert=True)
 
 
@@ -570,6 +570,7 @@ async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, 
 @require_role(['admin', 'manager'])
 async def handle_edit_template_duration(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение продолжительности шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -595,5 +596,4 @@ async def handle_edit_template_duration(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка изменения продолжительности шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.edit_duration_error", language=lang), show_alert=True)
