@@ -130,9 +130,6 @@ ASSIGNMENT: dict[str, dict] = {
                   note="артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером"),
     # П2c (`PENT-F10`) закрыт 2026-07-27: оба хоста 600/700. `.105` доступен с
     # `ssh -o IdentitiesOnly=no` — вывод «хост заблокирован» от 26.07 был неверным.
-    "SEC-131": A(pkg="П10", status="actionable", method="verified-2026-07-27",
-                 services="media-service (.105)",
-                 note="MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает"),
     # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +
     # честный первый запуск в README), `AUD5-PRAC-7` (23 стухших дока в архив),
     # `AUD5-PRAC-8` (снапшот OpenAPI + CI-гейт).
@@ -173,18 +170,11 @@ ASSIGNMENT: dict[str, dict] = {
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
                      note="локальные venv/db/png — только пофайлово с подтверждения"),
-    "AUD5-PRAC-10": A(pkg="П7", status="no-pr", method="plan-2026-07-26"),
     # П8 закрыт целиком 2026-07-27: `AUD5-CODE-12` (язык каждого админа),
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
     # ── П9
     # ── П10: security-программа
-    "PENT-F11": A(pkg="П10", status="decision", method="verified-2026-07-27",
-                  services="edge/.env обоих продов",
-                  note="код с CIDR готов (П10); RATE_LIMIT_TRUSTED_PROXIES не выставлен ни на одном проде — правка .env"),
-    "AUD3-35": A(pkg="П10", status="decision", method="verified-2026-07-27",
-                 services="edge/.env обоих продов",
-                 note="тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен"),
     "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="doc-2026-07-21"),
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
@@ -192,8 +182,6 @@ ASSIGNMENT: dict[str, dict] = {
     "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-02",
                   note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
     "AUD3-25": A(pkg="П11", status="actionable", method="doc-2026-07-14"),
-    "AUD3-26": A(pkg="П11", status="actionable", method="doc-2026-07-01"),
-    "AUD5-DEP-2": A(pkg="П11", status="actionable", method="doc-2026-07-21"),
     # ── Программа A: архитектура
     "AUD5-ARCH-2": A(pkg="A1", status="actionable", method="doc-2026-07-21"),
     "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
@@ -210,6 +198,12 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-15": A(pkg="A6", status="actionable", method="doc-2026-07-01"),
     "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
                      note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
+    # Закрыто 2026-08-02 (волна 1 разбора бэклога): `AUD3-35`+`PENT-F11`
+    # (RATE_LIMIT_TRUSTED_PROXIES выставлен на обоих продах, CIDR),
+    # `SEC-131` (MEDIA_BOT_TOKEN снят из .env .105, Doppler-only),
+    # `BUG-136` (PR #343), `AUD5-PRAC-10` (маски уже были в .gitignore);
+    # `AUD3-26` опровергнут (запиненный клок, не хрупкость); `AUD5-DEP-2`
+    # отклонён (свап вешает jsdom-тесты dropdown — монолит осознанно).
     # ── Решения владельца (кодовой работы до решения нет)
     # `AUD5-DEAD-3` закрыт 2026-08-02: решение владельца 2026-07-31 (аудит #6)
     # — pull-модель ОСТАВИТЬ целиком, ничего не удалять.
@@ -219,8 +213,6 @@ ASSIGNMENT: dict[str, dict] = {
     # пункта заведено ниже как `ARCH-135` и `BUG-136`.
     "ARCH-135": A(pkg="—", status="actionable", method="verified-2026-08-01",
                   note="26 func.date вне показа: 5 в API (график дашборда бакетит по UTC при ташкентской подписи оси) + 22 в движках, где бакет меняет РЕШЕНИЯ алгоритма"),
-    "BUG-136": A(pkg="—", status="actionable", method="verified-2026-07-30",
-                 note="%A в клавиатуре выбора даты → английское имя дня у RU/UZ; локализованные имена в репо есть"),
     "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
                   note="решение: делать; форма — как у webhook *_NEXT"),
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",

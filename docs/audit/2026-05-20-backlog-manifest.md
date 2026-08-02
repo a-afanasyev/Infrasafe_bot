@@ -19,15 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **406**
-- закрыто маркером: **369**
-- открыто маркером: **37**
+- закрыто маркером: **376**
+- открыто маркером: **30**
 
-  - `actionable` — **29**
-  - `decision` — **2**
+  - `actionable` — **25**
   - `calendar` — **1**
-  - `no-pr` — **2**
+  - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=12, P3=17.
+Из них actionable по приоритету: P2=12, P3=13.
 
 Значения `status`:
 
@@ -61,23 +60,16 @@
 | `AUD5-ARCH-4` | P2 | actionable | verified-2026-07-27 | A7 | — | — | — | решение: contract-слой + AST-гейт (S); полная развязка отклонена |
 | `AUD3-37` | P3 | actionable | verified-2026-07-27 | B | — | — | — | решение: вариант (б) — sync unit-of-work в to_thread |
 | `AUD5-CODE-6` | P2 | actionable | verified-2026-07-27 | B | — | — | — | закрывается вместе с AUD3-37 вариантом (б) |
-| `AUD3-35` | P3 | decision | verified-2026-07-27 | П10 | — | edge/.env обоих продов | — | тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
-| `PENT-F11` | P3 | decision | verified-2026-07-27 | П10 | — | edge/.env обоих продов | — | код с CIDR готов (П10); RATE_LIMIT_TRUSTED_PROXIES не выставлен ни на одном проде — правка .env |
-| `SEC-131` | P3 | actionable | verified-2026-07-27 | П10 | — | media-service (.105) | — | MEDIA_BOT_TOKEN в .env на .105 — второй источник истины, :?-гард не срабатывает |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
-| `AUD3-26` | P3 | actionable | doc-2026-07-01 | П11 | — | — | — |  |
-| `AUD5-DEP-2` | P3 | actionable | doc-2026-07-21 | П11 | — | — | — |  |
 | `TEST-068` | P2 | actionable | verified-2026-08-02 | П11 | — | — | — | floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80% |
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
 | `AUD5-CODE-8` | P2 | actionable | doc-2026-07-21 | П5a | — | — | — | сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4 |
 | `AUD5-JUNK-5` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения |
-| `AUD5-PRAC-10` | P3 | no-pr | plan-2026-07-26 | П7 | — | — | — |  |
 | `ARCH-06` | P2 | deferred | verified-2026-07-27 | — | — | — | — | возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `ARCH-107` | P2 | actionable | verified-2026-07-27 | — | — | — | — | решение: делать; форма — как у webhook *_NEXT |
 | `ARCH-135` | P3 | actionable | verified-2026-08-01 | — | — | — | — | 26 func.date вне показа: 5 в API (график дашборда бакетит по UTC при ташкентской подписи оси) + 22 в движках, где бакет меняет РЕШЕНИЯ алгоритма |
-| `BUG-136` | P3 | actionable | verified-2026-07-30 | — | — | — | — | %A в клавиатуре выбора даты → английское имя дня у RU/UZ; локализованные имена в репо есть |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
 | `PENT-F04` | P2 | calendar | verified-2026-08-02 | — | — | — | — | остаток — снятие ?token= после 2026-09-01; зеркало панели охраны закрыто #335 |
 | `PENT-F12` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
