@@ -187,9 +187,10 @@ ASSIGNMENT: dict[str, dict] = {
                  note="тот же остаток, что у PENT-F11: код готов, RATE_LIMIT_TRUSTED_PROXIES не выставлен"),
     "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="doc-2026-07-21"),
     # ── П11: тесты и покрытие
-    "AUD5-PRAC-6": A(pkg="П11", status="actionable", method="plan-2026-07-26",
-                     note="floors 40/38/29/30; TWA-тесты есть, floor'а нет"),
-    "TEST-068": A(pkg="П11", status="actionable", method="plan-2026-07-26"),
+    # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
+    # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
+    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-02",
+                  note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
     "AUD3-25": A(pkg="П11", status="actionable", method="doc-2026-07-14"),
     "AUD3-26": A(pkg="П11", status="actionable", method="doc-2026-07-01"),
     "AUD5-DEP-2": A(pkg="П11", status="actionable", method="doc-2026-07-21"),
@@ -210,8 +211,8 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
                      note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
     # ── Решения владельца (кодовой работы до решения нет)
-    "AUD5-DEAD-3": A(pkg="—", status="decision", method="verified-2026-07-27",
-                    note="ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком»"),
+    # `AUD5-DEAD-3` закрыт 2026-08-02: решение владельца 2026-07-31 (аудит #6)
+    # — pull-модель ОСТАВИТЬ целиком, ничего не удалять.
     # `ARCH-116` закрыт 2026-07-30 (бот: показ + дневные бакеты через канон
     # `utils/business_time`, AST-гейт). Строка удалена — `--check` держит
     # равенство ASSIGNMENT ↔ открытые пункты в обе стороны. Найденное сверх
@@ -242,8 +243,8 @@ ASSIGNMENT: dict[str, dict] = {
     "SEC-115": A(pkg="—", status="deferred", method="verified-2026-07-27",
                  note="фикс на стороне InfraSafe; в повестку следующего разговора"),
     # ── Календарь
-    "PENT-F04": A(pkg="—", status="calendar", method="plan-2026-07-26",
-                  note="остаток — снятие ?token= после 2026-09-01"),
+    "PENT-F04": A(pkg="—", status="calendar", method="verified-2026-08-02",
+                  note="остаток — снятие ?token= после 2026-09-01; зеркало панели охраны закрыто #335"),
     # ── Закрыто кодом, открыто документом
     # `REG-03` жил здесь до 2026-07-26: последний непокрытый периметр
     # (`media_service/requirements.txt`) закрыт PR #261, подтверждено чтением
