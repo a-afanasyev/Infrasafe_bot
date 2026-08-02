@@ -1103,18 +1103,61 @@ jobs:
   images-build:
     name: images-build (docker)
     runs-on: ubuntu-latest
+    # packages: write нужен шагу login ниже, чтобы опубликовать собранные образы
+    # в GHCR. contents: read — обычный минимум для checkout.
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/a-afanasyev
+      # Публикуем ТОЛЬКО с main и только на push. Pull request'ы по-прежнему
+      # собирают все шесть образов как гейт, но ничего не выкладывают: иначе
+      # любая ветка могла бы подменить тег, с которого раскатывается прод.
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
+
+      # Джоба до сих пор только ПРОВЕРЯЛА, что Dockerfile'ы собираются (push:
+      # false, load: false). Сборка живых образов при этом происходила на
+      # прод-хосте: деплой = git pull + docker compose build прямо на .105.
+      # У этого две цены, обе наблюдались.
+      #
+      # Первая — диск. .105 живёт на 20 GB, сборка шести образов накапливает
+      # build cache гигабайтами: 31.07.2026 он дорос до 3.9 GB, свободного
+      # оставалось 3.0 GB, и одна раскатка съедала ~0.9 GB за двадцать минут.
+      # На profk тот же механизм накопил 6.2 GB. Место тратится на работу,
+      # которую CI уже сделал на своём раннере — и выбросил.
+      #
+      # Вторая — недоказуемость. Образ на проде собран из рабочей копии хоста,
+      # а не из проверенного коммита; «что сейчас в проде» существует только как
+      # HEAD рабочей копии (см. scripts/tag-deploy.sh — тот же класс проблемы).
+      #
+      # Здесь закрывается только ПЕРВАЯ половина: образы начинают публиковаться
+      # с тегами sha-<full> и main. Прод продолжает собирать локально и ничего
+      # не замечает — переключение compose на image: и раскатка pull'ом делаются
+      # отдельным шагом, ПОСЛЕ того как здесь появятся первые артефакты. Схема
+      # повторяет R2-15 в репозитории Infrasafe, где переход уже сделан и на
+      # .105 уже лежат ghcr.io/a-afanasyev/infrasafe-app:sha-*.
+      - name: Login to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build bot image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-bot:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-bot:main
           cache-from: type=gha
           cache-to: "type=gha,mode=max"
 
@@ -1123,8 +1166,11 @@ jobs:
         with:
           context: .
           file: Dockerfile.api
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-api:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-api:main
           cache-from: type=gha
           cache-to: "type=gha,mode=max"
 
@@ -1136,8 +1182,11 @@ jobs:
         with:
           context: .
           file: Dockerfile.access
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-access-api:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-access-api:main
           cache-from: type=gha,scope=access
           cache-to: "type=gha,mode=max,scope=access"
 
@@ -1149,20 +1198,31 @@ jobs:
         with:
           context: media_service
           file: media_service/Dockerfile
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-media-service:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-media-service:main
           cache-from: type=gha,scope=media
           cache-to: "type=gha,mode=max,scope=media"
 
       # AUD6-P1-1: resource-api — четвёртый живой прод-сервис со своим образом
       # (build: ./resource-accounting/backend в обоих compose).
+      #
+      # ОДИН образ на ТРИ сервиса: resource-api, resource-worker и
+      # resource-migrate собираются из одного каталога. Когда compose будет
+      # переключён на image:, все три обязаны получить ОДИН И ТОТ ЖЕ тег —
+      # иначе миграции поедут из другой сборки, чем воркер.
       - name: Build resource image
         uses: docker/build-push-action@v7
         with:
           context: resource-accounting/backend
           file: resource-accounting/backend/Dockerfile
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-resource-api:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-resource-api:main
           cache-from: type=gha,scope=resource
           cache-to: "type=gha,mode=max,scope=resource"
 
@@ -1174,8 +1234,11 @@ jobs:
         with:
           context: frontend
           file: frontend/Dockerfile
-          push: false
+          push: ${{ env.PUBLISH == 'true' }}
           load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-frontend:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-frontend:main
           cache-from: type=gha,scope=frontend
           cache-to: "type=gha,mode=max,scope=frontend"
 
