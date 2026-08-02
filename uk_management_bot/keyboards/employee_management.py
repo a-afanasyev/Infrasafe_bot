@@ -12,6 +12,7 @@ from typing import Dict
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 
 
 def get_employee_management_main_keyboard(stats: Dict[str, int], language: str = 'ru') -> InlineKeyboardMarkup:
@@ -398,15 +399,8 @@ def get_confirmation_keyboard(action: str, employee_id: int, language: str = 'ru
 # ═══ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ═══
 
 def _format_employee_name(employee) -> str:
-    """Форматирует имя сотрудника для отображения"""
-    if employee.first_name and employee.last_name:
-        return f"{employee.first_name} {employee.last_name}"
-    elif employee.first_name:
-        return employee.first_name
-    elif employee.username:
-        return f"@{employee.username}"
-    else:
-        return f"ID: {employee.telegram_id}"
+    """Подпись сотрудника — общий канон имён (REFACTOR-133), сведено в AUD5-CODE-8."""
+    return display_name(employee)
 
 
 def _get_status_emoji(status: str) -> str:

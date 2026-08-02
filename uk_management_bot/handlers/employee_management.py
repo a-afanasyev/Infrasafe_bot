@@ -29,20 +29,15 @@ from uk_management_bot.keyboards.employee_management import (
 )
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import has_admin_access, sync_legacy_role, parse_roles_safe
+from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.database.models.user import User
 import json
 from datetime import datetime
 
 def _format_employee_name(employee) -> str:
-    """Форматирует имя сотрудника для отображения"""
-    if employee.first_name and employee.last_name:
-        return f"{employee.first_name} {employee.last_name}"
-    elif employee.first_name:
-        return employee.first_name
-    elif employee.username:
-        return f"@{employee.username}"
-    else:
-        return f"ID: {employee.telegram_id}"
+    """Подпись сотрудника — общий канон имён (REFACTOR-133), сведено в AUD5-CODE-8."""
+    return display_name(employee)
 
 
 async def _return_to_employee_info(callback: CallbackQuery, db: Session, employee_id: int, language: str = "ru") -> bool:
@@ -69,15 +64,8 @@ async def _return_to_employee_info(callback: CallbackQuery, db: Session, employe
 
     employee_info = f"👤 {get_text('employee_management.employee_info', language=lang)}\n\n"
 
-    # Формируем имя из доступных полей
-    if employee.first_name and employee.last_name:
-        full_name = f"{employee.first_name} {employee.last_name}"
-    elif employee.first_name:
-        full_name = employee.first_name
-    elif employee.username:
-        full_name = f"@{employee.username}"
-    else:
-        full_name = f"ID: {employee.telegram_id}"
+    # AUD5-CODE-8: имя через канон вместо инлайн-копии той же логики
+    full_name = _format_employee_name(employee)
 
     not_specified = get_text('employee_mgmt.handlers.not_specified', language=lang)
     employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
@@ -285,65 +273,20 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
         # Получаем ID сотрудника
         employee_id = int(callback.data.split('_')[3])
         logger.debug(f" Запрошен сотрудник с ID: {employee_id}")
-        
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        logger.debug(f" Сотрудник найден: {employee}")
-        
-        if not employee:
+
+        # AUD5-CODE-8: карточка рендерится единственным хелпером
+        # _return_to_employee_info — раньше здесь была вторая копия того же
+        # текста. Вместе с копией ушёл fallback на deprecated employee.role:
+        # роли живут в employee.roles (см. CLAUDE.md, «Роли в БД»).
+        rendered = await _return_to_employee_info(callback, db, employee_id, lang)
+        if rendered:
+            await callback.answer()
+        else:
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
-            return
-        
-        # Формируем информацию о сотруднике
-        employee_info = f"👤 {get_text('employee_management.employee_info', language=lang)}\n\n"
-        
-        # Формируем имя из доступных полей
-        if employee.first_name and employee.last_name:
-            full_name = f"{employee.first_name} {employee.last_name}"
-        elif employee.first_name:
-            full_name = employee.first_name
-        elif employee.username:
-            full_name = f"@{employee.username}"
-        else:
-            full_name = f"ID: {employee.telegram_id}"
-            
-        employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
-        employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or get_text('employee_mgmt.handlers.not_specified', language=lang)}\n"
 
-        # BUG-BOT-023: локализованные значения вместо сырых DB-строк
-        from uk_management_bot.utils.employee_display import (
-            format_user_status,
-            format_roles,
-            format_specializations,
-        )
-        roles_source = employee.roles if employee.roles else getattr(employee, "role", None)
-        employee_info += (
-            f"🎯 {get_text('employee_management.role', language=lang)}: "
-            f"{format_roles(roles_source, lang)}\n"
-        )
-        employee_info += (
-            f"📊 {get_text('employee_management.status', language=lang)}: "
-            f"{format_user_status(employee.status, lang)}\n"
-        )
-
-        if employee.specialization:
-            employee_info += (
-                f"🛠️ {get_text('employee_management.specialization', language=lang)}: "
-                f"{format_specializations(employee.specialization, lang)}\n"
-            )
-        
-        employee_info += f"📅 {get_text('employee_management.created_at', language=lang)}: {employee.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-        
-        await callback.message.edit_text(
-            employee_info,
-            reply_markup=get_employee_actions_keyboard(employee_id, employee.status, lang)
-        )
-        
-        await callback.answer()
-        
     except Exception as e:
         logger.error(f"Ошибка отображения действий с сотрудником: {e}")
         await callback.answer(
@@ -978,17 +921,11 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
             )
             return
         
-        # Получаем текущие специализации
-        user_specializations = []
-        if employee.specialization:
-            try:
-                user_specializations = json.loads(employee.specialization)
-            except Exception:
-                # Если не JSON, пробуем как строку с запятыми
-                if isinstance(employee.specialization, str):
-                    user_specializations = [s.strip() for s in employee.specialization.split(',') if s.strip()]
-                else:
-                    user_specializations = []
+        # AUD5-CODE-8: единый парсер вместо локальной копии — та делала
+        # json.loads без гейта startswith('['), поэтому JSON-скаляр ('123')
+        # превращался в int и ронял хендлер на .copy(), а элементы
+        # JSON-списка не чистились от пробелов/пустых значений.
+        user_specializations = sorted(parse_specializations(employee))
         
         # Сохраняем данные в FSM
         await state.update_data({
@@ -1181,17 +1118,8 @@ async def show_employee_specializations_management(callback: CallbackQuery, db: 
                 # Добавляем список сотрудников
                 if employees:
                     for employee in employees:
-                        # Формируем имя сотрудника
-                        if employee.first_name and employee.last_name:
-                            employee_name = f"{employee.first_name} {employee.last_name}"
-                        elif employee.first_name:
-                            employee_name = employee.first_name
-                        elif employee.username:
-                            employee_name = f"@{employee.username}"
-                        else:
-                            employee_name = f"ID: {employee.telegram_id}"
-                        
-                        message_text += f"  - {employee_name}\n"
+                        # AUD5-CODE-8: имя через канон вместо инлайн-копии
+                        message_text += f"  - {_format_employee_name(employee)}\n"
                 else:
                     message_text += f"  - {get_text('employee_mgmt.handlers.no_employees', language=lang)}\n"
                 
@@ -1506,14 +1434,11 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
         # Сохраняем специализации напрямую в базу (обходя проверки сервиса)
         user = db.query(User).filter(User.id == target_employee_id).first()
         if user:
-            old_specializations = []
-            if user.specialization:
-                try:
-                    old_specializations = json.loads(user.specialization)
-                except Exception:
-                    if isinstance(user.specialization, str):
-                        old_specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
-            
+            # AUD5-CODE-8: единый парсер вместо копии (json.loads без гейта —
+            # JSON-скаляр попадал в аудит числом, элементы не стрипались)
+            old_specializations = sorted(parse_specializations(user))
+
+
             # Сохраняем специализации как JSON строку
             user.specialization = json.dumps(current_specializations)
             

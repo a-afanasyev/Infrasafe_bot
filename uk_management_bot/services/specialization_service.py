@@ -17,6 +17,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.specializations import parse_specializations
 
 logger = logging.getLogger(__name__)
 
@@ -270,24 +271,16 @@ class SpecializationService:
                     'employees': []
                 }
             
-            # Распределяем сотрудников по специализациям
+            # Распределяем сотрудников по специализациям.
+            # AUD5-CODE-8: единый парсер вместо локальной копии — та не чистила
+            # пробелы в элементах JSON-списка ('["plumber "]' выпадал из
+            # статистики) и при кривом JSON выкидывала сотрудника целиком
+            # вместо CSV-фолбэка. Канон не бросает исключений.
             for executor in executors:
-                if executor.specialization:
-                    try:
-                        # Парсим JSON или разделяем по запятой
-                        if executor.specialization.startswith('['):
-                            user_specs = json.loads(executor.specialization)
-                        else:
-                            user_specs = [s.strip() for s in executor.specialization.split(',') if s.strip()]
-                        
-                        # Добавляем сотрудника ко всем его специализациям
-                        for spec in user_specs:
-                            if spec in self.AVAILABLE_SPECIALIZATIONS:
-                                detailed_stats[spec]['count'] += 1
-                                detailed_stats[spec]['employees'].append(executor)
-                    except Exception as e:
-                        logger.error(f"Ошибка парсинга специализаций для пользователя {executor.id}: {e}")
-                        continue
+                for spec in parse_specializations(executor):
+                    if spec in self.AVAILABLE_SPECIALIZATIONS:
+                        detailed_stats[spec]['count'] += 1
+                        detailed_stats[spec]['employees'].append(executor)
             
             logger.info("Детальная статистика специализаций получена")
             return detailed_stats
