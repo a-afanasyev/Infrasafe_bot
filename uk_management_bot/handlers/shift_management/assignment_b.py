@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Автоматическое назначение всех смен"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -95,7 +96,6 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.bulk_auto_assign_error", language=lang), show_alert=True)
 
 
@@ -103,6 +103,7 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 @require_role(['admin', 'manager'])
 async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение по специализациям"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -171,7 +172,6 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка назначения по специализациям: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.bulk_by_spec_error", language=lang), show_alert=True)
 
 
@@ -179,6 +179,7 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
 @require_role(['admin', 'manager'])
 async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение на период"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -239,7 +240,6 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
 
     except Exception as e:
         logger.error(f"Ошибка назначения на период: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.bulk_by_period_error", language=lang), show_alert=True)
 
 
@@ -247,6 +247,7 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
 @require_role(['admin', 'manager'])
 async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение по приоритету"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -303,7 +304,6 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
 
     except Exception as e:
         logger.error(f"Ошибка назначения по приоритету: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.bulk_by_priority_error", language=lang), show_alert=True)
 
 
@@ -311,6 +311,7 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
 @require_role(['admin', 'manager'])
 async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Выбор конкретной смены для назначения исполнителя"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         shift_id = int(callback.data.split(":")[1])
         with _db_scope(db) as db:
@@ -415,7 +416,6 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
     except Exception as e:
         logger.error(f"Ошибка выбора смены для назначения: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.select_shift_error", language=lang), show_alert=True)
 
 
@@ -423,6 +423,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 @require_role(['admin', 'manager'])
 async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителя на смену"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         parts = callback.data.split(":")
         shift_id = int(parts[1])
@@ -576,7 +577,6 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
 
     except Exception as e:
         logger.error(f"Ошибка назначения исполнителя: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.assignment_error", language=lang), show_alert=True)
         if db:
             ShiftManagementService(db).rollback()
@@ -586,6 +586,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
 @require_role(['admin', 'manager'])
 async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Принудительное назначение с конфликтом расписания"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         parts = callback.data.split(":")
         shift_id = int(parts[1])
@@ -669,7 +670,6 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
 
     except Exception as e:
         logger.error(f"Ошибка принудительного назначения: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.force_assign_error", language=lang), show_alert=True)
         if db:
             ShiftManagementService(db).rollback()
@@ -679,6 +679,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
 @require_role(['admin', 'manager'])
 async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Возврат к меню назначения исполнителей"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -693,5 +694,4 @@ async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMCon
 
     except Exception as e:
         logger.error(f"Ошибка возврата к назначению исполнителей: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.executor_assignment_back_error", language=lang), show_alert=True)

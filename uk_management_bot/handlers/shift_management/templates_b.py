@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @router.callback_query(F.data.startswith("template_create_spec_"))
 async def handle_template_create_specialization_toggle(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Переключение специализации при создании шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -71,13 +72,13 @@ async def handle_template_create_specialization_toggle(callback: CallbackQuery, 
 
     except Exception as e:
         logger.error(f"Ошибка переключения специализации при создании: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.spec_toggle_error", language=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "template_create_finish")
 async def handle_template_create_finish(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Завершение создания шаблона с выбранными специализациями"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
         
@@ -139,7 +140,6 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
 
     except Exception as e:
         logger.error(f"Ошибка завершения создания шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_finish_error", language=lang), show_alert=True)
 
 
@@ -153,6 +153,7 @@ async def handle_template_create_no_specs(callback: CallbackQuery, state: FSMCon
 @require_role(['admin', 'manager'])
 async def handle_edit_template_specializations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение специализаций шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -197,7 +198,6 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
 
     except Exception as e:
         logger.error(f"Ошибка редактирования специализаций шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -205,6 +205,7 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
 @require_role(['admin', 'manager'])
 async def handle_toggle_template_specialization(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Переключение специализации шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -266,7 +267,6 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
 
     except Exception as e:
         logger.error(f"Ошибка переключения специализации: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -274,6 +274,7 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
 @require_role(['admin', 'manager'])
 async def handle_save_template_specializations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Сохранение специализаций шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -297,7 +298,6 @@ async def handle_save_template_specializations(callback: CallbackQuery, state: F
 
     except Exception as e:
         logger.error(f"Ошибка сохранения специализаций: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -305,6 +305,7 @@ async def handle_save_template_specializations(callback: CallbackQuery, state: F
 @require_role(['admin', 'manager'])
 async def handle_delete_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Удаление шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -334,7 +335,6 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, db=
         
     except Exception as e:
         logger.error(f"Ошибка удаления шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_delete_error", language=lang), show_alert=True)
 
 
@@ -342,6 +342,7 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, db=
 @require_role(['admin', 'manager'])
 async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение удаления шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -378,7 +379,6 @@ async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMCont
         
     except Exception as e:
         logger.error(f"Ошибка подтверждения удаления шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.template_delete_error", language=lang), show_alert=True)
 
 
@@ -386,6 +386,7 @@ async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMCont
 @require_role(['admin', 'manager'])
 async def handle_force_delete_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Принудительное удаление шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -412,13 +413,13 @@ async def handle_force_delete_template(callback: CallbackQuery, state: FSMContex
 
     except Exception as e:
         logger.error(f"Ошибка принудительного удаления шаблона: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
 @router.message(StateFilter(TemplateManagementStates.editing_field))
 async def handle_template_field_input(message: Message, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка ввода нового значения поля шаблона"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(message.from_user.id, db)
@@ -499,5 +500,4 @@ async def handle_template_field_input(message: Message, state: FSMContext, db=No
 
     except Exception as e:
         logger.error(f"Ошибка обновления поля шаблона: {e}")
-        lang = get_user_language(message.from_user.id, db) if db else "ru"
         await message.answer(get_text("shift_management.save_error", language=lang))

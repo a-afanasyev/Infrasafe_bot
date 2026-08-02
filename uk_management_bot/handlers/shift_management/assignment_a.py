@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 @require_role(['admin', 'manager'])
 async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначить исполнителя на конкретную смену"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -93,7 +94,6 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
 
     except Exception as e:
         logger.error(f"Ошибка назначения на смену: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.assign_to_shift_error", language=lang), show_alert=True)
 
 
@@ -101,6 +101,7 @@ async def handle_assign_to_shift(callback: CallbackQuery, state: FSMContext, db:
 @require_role(['admin', 'manager'])
 async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """ИИ-назначение исполнителей"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -172,7 +173,6 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
 
     except Exception as e:
         logger.error(f"Ошибка ИИ-назначения: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.ai_assignment_error", language=lang), show_alert=True)
 
 
@@ -180,6 +180,7 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
 @require_role(['admin', 'manager'])
 async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение исполнителей"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -218,7 +219,6 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db:
 
     except Exception as e:
         logger.error(f"Ошибка массового назначения: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.bulk_assignment_error", language=lang), show_alert=True)
 
 
@@ -226,6 +226,7 @@ async def handle_bulk_assignment(callback: CallbackQuery, state: FSMContext, db:
 @require_role(['admin', 'manager'])
 async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Анализ загруженности исполнителей"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -289,7 +290,6 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка анализа загруженности: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.workload_analysis_error", language=lang), show_alert=True)
 
 
@@ -297,6 +297,7 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
 @require_role(['admin', 'manager'])
 async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Перераспределение нагрузки между исполнителями"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -364,7 +365,6 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
 
     except Exception as e:
         logger.error(f"Ошибка перераспределения нагрузки: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
 
 
@@ -372,6 +372,7 @@ async def handle_redistribute_load(callback: CallbackQuery, state: FSMContext, d
 @require_role(['admin', 'manager'])
 async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Анализ конфликтов расписания"""
+    lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
     try:
         with _db_scope(db) as db:
             lang = get_user_language(callback.from_user.id, db)
@@ -476,5 +477,4 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
 
     except Exception as e:
         logger.error(f"Ошибка анализа конфликтов: {e}")
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
         await callback.answer(get_text("shift_management.error_generic", language=lang), show_alert=True)
