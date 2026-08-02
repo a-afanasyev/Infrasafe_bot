@@ -359,9 +359,12 @@ async def download_user_document(callback: CallbackQuery, db: Session, roles: li
 async def select_info_type(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, language: str = "ru"):
     """Выбрать тип запрашиваемой информации"""
     lang = language
+    # AUD3-15: info_type сам содержит "_" (property_deed, rental_agreement,
+    # utility_bill) — parts[3] обрезал его до первого сегмента. Префикс
+    # request_info_{user_id}_ фиксирован, поэтому хвост склеиваем целиком.
     parts = callback.data.split("_")
     user_id = int(parts[2])
-    info_type = parts[3]
+    info_type = "_".join(parts[3:])
     
     # Проверяем права доступа
     if not roles or not any(role in ['admin', 'manager'] for role in roles):

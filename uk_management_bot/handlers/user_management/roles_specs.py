@@ -94,10 +94,12 @@ async def add_role_to_user(callback: CallbackQuery, state: FSMContext, language:
     lang = language
     
     try:
-        role = callback.data.split('_')[-1]
+        # AUD3-15: роль может содержать "_" (resource_meter_entry) —
+        # split('_')[-1] возвращал "entry". Префикс фиксирован, срезаем его.
+        role = callback.data.removeprefix("role_add_")
         data = await state.get_data()
         current_roles = data.get('current_roles', [])
-        
+
         if role not in current_roles:
             current_roles.append(role)
             await state.update_data(current_roles=current_roles)
@@ -123,10 +125,12 @@ async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, lang
     lang = language
     
     try:
-        role = callback.data.split('_')[-1]
+        # AUD3-15: роль может содержать "_" (resource_meter_entry) —
+        # split('_')[-1] возвращал "entry". Префикс фиксирован, срезаем его.
+        role = callback.data.removeprefix("role_remove_")
         data = await state.get_data()
         current_roles = data.get('current_roles', [])
-        
+
         # Проверяем, что не удаляем последнюю роль
         if len(current_roles) <= 1:
             await callback.answer(
