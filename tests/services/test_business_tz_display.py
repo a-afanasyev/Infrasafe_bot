@@ -53,6 +53,10 @@ SWEPT_FILES: tuple[str, ...] = (
     "services/notification_service.py",
     "services/shift_transfer_service.py",
     "services/shift_management_service.py",
+    # ARCH-135 фаза 1: дневные бакеты статистики дашборда переведены на
+    # бизнес-дату (Python-бакет через business_date_of; func.date снят).
+    "api/requests/stats_service.py",
+    "api/requests/stats_router.py",
 )
 
 
