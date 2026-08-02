@@ -480,9 +480,11 @@ async def handle_check_document(callback: CallbackQuery, state: FSMContext, db: 
     
     try:
         # Парсим данные: check_document_{user_id}_{document_type}
+        # AUD3-15: document_type сам содержит "_" (property_deed, rental_agreement,
+        # utility_bill) — parts[3] обрезал его. Хвост склеиваем целиком.
         parts = callback.data.split('_')
         target_user_id = int(parts[2])
-        document_type = parts[3]
+        document_type = '_'.join(parts[3:])
         
         # Получаем текущий список выбранных документов
         data = await state.get_data()
@@ -525,9 +527,11 @@ async def handle_uncheck_document(callback: CallbackQuery, state: FSMContext, db
     
     try:
         # Парсим данные: uncheck_document_{user_id}_{document_type}
+        # AUD3-15: см. check_document — тип с "_" нельзя брать как parts[3],
+        # иначе снятая галочка не находилась в selected_documents.
         parts = callback.data.split('_')
         target_user_id = int(parts[2])
-        document_type = parts[3]
+        document_type = '_'.join(parts[3:])
         
         # Получаем текущий список выбранных документов
         data = await state.get_data()
@@ -570,9 +574,11 @@ async def handle_request_selected_documents(callback: CallbackQuery, state: FSMC
     
     try:
         # Парсим данные: req_docs_{user_id}_{doc1,doc2,doc3+2}
+        # AUD3-15: имена документов содержат "_" (property_deed и др.) —
+        # parts[3] обрезал перечень на первом "_". Хвост склеиваем целиком.
         parts = callback.data.split('_')
         target_user_id = int(parts[2])
-        docs_str = parts[3] if len(parts) > 3 else ""
+        docs_str = '_'.join(parts[3:])
         
         # Обрабатываем формат с количеством дополнительных документов
         if '+' in docs_str:
