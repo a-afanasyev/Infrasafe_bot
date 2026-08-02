@@ -195,7 +195,8 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-27": A(pkg="A4", status="actionable", method="plan-2026-07-26",
                  note="политика, а не точечный баг: ещё и shift_planning_service.py"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
-    "AUD3-15": A(pkg="A6", status="actionable", method="doc-2026-07-01"),
+    # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
+    # починены точечно без смены формата callback_data (пакет A6 исчерпан).
     "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
                      note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
     # Закрыто 2026-08-02 (волна 1 разбора бэклога): `AUD3-35`+`PENT-F11`
