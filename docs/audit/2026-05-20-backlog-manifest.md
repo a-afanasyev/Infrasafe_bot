@@ -19,15 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **406**
-- закрыто маркером: **374**
-- открыто маркером: **32**
+- закрыто маркером: **376**
+- открыто маркером: **30**
 
-  - `actionable` — **26**
-  - `decision` — **1**
+  - `actionable` — **25**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=12, P3=14.
+Из них actionable по приоритету: P2=12, P3=13.
 
 Значения `status`:
 
@@ -63,8 +62,7 @@
 | `AUD5-CODE-6` | P2 | actionable | verified-2026-07-27 | B | — | — | — | закрывается вместе с AUD3-37 вариантом (б) |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
-| `AUD5-PRAC-6` | P3 | actionable | plan-2026-07-26 | П11 | — | — | — | floors 40/38/29/30; TWA-тесты есть, floor'а нет |
-| `TEST-068` | P2 | actionable | plan-2026-07-26 | П11 | — | — | — |  |
+| `TEST-068` | P2 | actionable | verified-2026-08-02 | П11 | — | — | — | floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80% |
 | `PENT-F17` | P3 | actionable | plan-2026-07-26 | П2a | — | — | — | /uk/health отдаёт SPA index.html — мониторинг ложно зелёный |
 | `PENT-F14` | P3 | actionable | verified-2026-07-26 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером |
 | `AUD5-CODE-8` | P2 | actionable | doc-2026-07-21 | П5a | — | — | — | сужен П5a: остались 3 копии парсинга + карточка ×3 + _format_*_name ×4 |
@@ -72,9 +70,8 @@
 | `ARCH-06` | P2 | deferred | verified-2026-07-27 | — | — | — | — | возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `ARCH-107` | P2 | actionable | verified-2026-07-27 | — | — | — | — | решение: делать; форма — как у webhook *_NEXT |
 | `ARCH-135` | P3 | actionable | verified-2026-08-01 | — | — | — | — | 26 func.date вне показа: 5 в API (график дашборда бакетит по UTC при ташкентской подписи оси) + 22 в движках, где бакет меняет РЕШЕНИЯ алгоритма |
-| `AUD5-DEAD-3` | P2 | decision | verified-2026-07-27 | — | — | — | — | ФОРМУЛИРОВКА ОПРОВЕРГНУТА: edge/ — device-сторона ЖИВЫХ роутеров; вопрос стал «ретайрить ли pull-модель целиком» |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
-| `PENT-F04` | P2 | calendar | plan-2026-07-26 | — | — | — | — | остаток — снятие ?token= после 2026-09-01 |
+| `PENT-F04` | P2 | calendar | verified-2026-08-02 | — | — | — | — | остаток — снятие ?token= после 2026-09-01; зеркало панели охраны закрыто #335 |
 | `PENT-F12` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
 | `PENT-F13` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
 | `PENT-F15` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |

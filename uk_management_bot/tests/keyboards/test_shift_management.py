@@ -481,3 +481,45 @@ class TestGetConfirmationKeyboard:
             from uk_management_bot.keyboards.shift_management import get_confirmation_keyboard
             result = get_confirmation_keyboard("action", "1", language=language)
         assert isinstance(result, InlineKeyboardMarkup)
+
+
+# ---------------------------------------------------------------------------
+# get_date_selection_keyboard — BUG-136: локализованное имя дня недели
+# ---------------------------------------------------------------------------
+
+class TestDateSelectionWeekday:
+    """BUG-136: strftime("%A") брал имя дня из C-локали процесса — RU/UZ
+    видели "Thursday". Теперь имя идёт через get_text(shift_management.<key>)."""
+
+    _EN_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                "Saturday", "Sunday")
+
+    @staticmethod
+    def _get_text(key: str, language: str = "ru", **kwargs) -> str:
+        # date_entry форматируется .format() ПОСЛЕ get_text — вернём шаблон,
+        # чтобы имя дня попало в текст кнопки, а не проглотилось моком.
+        if key == "shift_management.keyboards.date_entry":
+            return "{date_text} — {date_formatted}"
+        return _mock_get_text(key, language, **kwargs)
+
+    @pytest.mark.parametrize("language", ["ru", "uz"])
+    def test_day_names_go_through_get_text(self, language):
+        with patch(GET_TEXT_PATH, side_effect=self._get_text):
+            from uk_management_bot.keyboards.shift_management import (
+                get_date_selection_keyboard,
+            )
+            result = get_date_selection_keyboard(language=language)
+        texts = [btn.text for btn in _all_buttons(result)]
+        # кнопки i>=2 обязаны содержать ключ дня недели (мок get_text отдаёт ключ)
+        day_buttons = [t for t in texts if "shift_management." in t and "(" in t]
+        assert day_buttons, "не найдено кнопок с днём недели"
+        assert all(
+            any(f"shift_management.{k}" in t for k in
+                ("monday", "tuesday", "wednesday", "thursday", "friday",
+                 "saturday", "sunday"))
+            for t in day_buttons
+        )
+        # и ни одна кнопка не содержит английского имени из C-локали
+        for t in texts:
+            for en in self._EN_DAYS:
+                assert en not in t, f"английское имя дня {en!r} в кнопке {t!r}"
