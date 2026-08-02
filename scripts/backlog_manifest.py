@@ -211,8 +211,8 @@ ASSIGNMENT: dict[str, dict] = {
     # `utils/business_time`, AST-гейт). Строка удалена — `--check` держит
     # равенство ASSIGNMENT ↔ открытые пункты в обе стороны. Найденное сверх
     # пункта заведено ниже как `ARCH-135` и `BUG-136`.
-    "ARCH-135": A(pkg="—", status="actionable", method="verified-2026-08-01",
-                  note="26 func.date вне показа: 5 в API (график дашборда бакетит по UTC при ташкентской подписи оси) + 22 в движках, где бакет меняет РЕШЕНИЯ алгоритма"),
+    "ARCH-135": A(pkg="—", status="actionable", method="verified-2026-08-02",
+                  note="группа (а)/API закрыта 2026-08-02 (бизнес-бакеты статистики + SWEPT-гейт); остаток — 22 сайта в движках, где бакет меняет РЕШЕНИЯ алгоритма"),
     "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
                   note="решение: делать; форма — как у webhook *_NEXT"),
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",

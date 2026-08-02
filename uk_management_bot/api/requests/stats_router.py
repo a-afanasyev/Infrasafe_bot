@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.business_time import business_date_of
 
 router = APIRouter()
 
@@ -77,10 +78,13 @@ async def get_request_stats(
         str(row[0]): row[1] for row in await stats_service.closed_by_day(db, period_start=period_start)
     }
 
-    # Build full day list (one entry per day, including today)
+    # Build full day list (one entry per day, including today).
+    # ARCH-135: ось — БИЗНЕС-даты (как и бакеты created/closed_by_day):
+    # `.date()` от UTC-инстанта давал UTC-сутки при ташкентской подписи оси.
+    start_day = business_date_of(period_start)
     by_day: list[DayStats] = []
     for i in range(days + 1):
-        day = (period_start + timedelta(days=i)).date()
+        day = start_day + timedelta(days=i)
         day_str = str(day)
         by_day.append(DayStats(
             date=day_str,

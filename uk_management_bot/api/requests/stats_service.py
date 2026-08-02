@@ -15,6 +15,7 @@ AST-гейт `tests/api/test_stats_router_inventory.py` фиксирует от�
 """
 
 import logging
+from collections import Counter
 from typing import Optional, Sequence
 
 from sqlalchemy import select, func
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.business_time import business_date_of
 
 logger = logging.getLogger(__name__)
 
@@ -32,27 +34,36 @@ logger = logging.getLogger(__name__)
 CLOSED_STATUSES = ["Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
 
 
+def _bucket_by_business_day(timestamps) -> list[tuple]:
+    """(business-date, count) по инстантам — бакет дня в бизнес-зоне.
+
+    ARCH-135: `func.date(col)` резал сутки по зоне сессии БД (UTC) при
+    ташкентской подписи оси графика — вечерние (19:00+ по Ташкенту) заявки
+    падали в соседний день. Бакетируем в Python через канон ARCH-116
+    (`business_date_of`): SQL-вариант (`func.timezone`) непереносим на sqlite
+    сьюта, который эмулирует date питоном и прятал бы дефект, а объёмы
+    дашборда — пилотные (счёт по одному периоду, не по всей таблице).
+    """
+    return sorted(Counter(business_date_of(ts) for (ts,) in timestamps).items())
+
+
 async def created_by_day(db: AsyncSession, *, period_start) -> Sequence:
-    """Строки (date, count) созданных заявок по дням за период."""
+    """Строки (business-date, count) созданных заявок по дням за период."""
     result = await db.execute(
-        select(func.date(Request.created_at), func.count())
-        .where(Request.created_at >= period_start)
-        .group_by(func.date(Request.created_at))
+        select(Request.created_at).where(Request.created_at >= period_start)
     )
-    return result.all()
+    return _bucket_by_business_day(result)
 
 
 async def closed_by_day(db: AsyncSession, *, period_start) -> Sequence:
-    """Строки (date, count) закрытых заявок по дням за период."""
+    """Строки (business-date, count) закрытых заявок по дням за период."""
     result = await db.execute(
-        select(func.date(Request.completed_at), func.count())
-        .where(
+        select(Request.completed_at).where(
             Request.completed_at.isnot(None),
             Request.completed_at >= period_start,
         )
-        .group_by(func.date(Request.completed_at))
     )
-    return result.all()
+    return _bucket_by_business_day(result)
 
 
 async def count_by_category(db: AsyncSession, *, period_start) -> Sequence:
