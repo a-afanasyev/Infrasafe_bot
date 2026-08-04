@@ -617,7 +617,7 @@
         "type": "object"
       },
       "BoardConfigResponse": {
-        "description": "`response_model` для GET /public/board-config и PUT /board-config.\n\nБез нормализации: layout принимается/отдаётся ровно таким, каким его\nпостроил сервис-слой (к этому моменту уже отфильтрованным по фиче-флагу).",
+        "description": "`response_model` для GET /public/board-config и PUT /board-config.\n\nБез нормализации: layout принимается/отдаётся ровно таким, каким его\nпостроил сервис-слой (к этому моменту уже отфильтрованным по фиче-флагу).\n\n`display_tz` (ARCH-137 B5) — зона показа развёртывания. Поле живёт ТОЛЬКО\nв ответе и заполняется в `to_public_response` (модель обслуживает и GET, и\nPUT — заполнение в хендлере уронило бы половину путей). В `BoardConfigUpdateIn`\nего НЕТ намеренно: вход строгий (`_StrictIn`), echo поля в PUT = 422 —\nфронт обязан отделять редактируемый конфиг от ответа.",
         "properties": {
           "announcements": {
             "items": {
@@ -631,6 +631,10 @@
           },
           "contacts": {
             "$ref": "#/components/schemas/ContactsCfg"
+          },
+          "display_tz": {
+            "title": "Display Tz",
+            "type": "string"
           },
           "layout": {
             "items": {
@@ -659,7 +663,8 @@
           "bot",
           "announcements",
           "working_hours",
-          "layout"
+          "layout",
+          "display_tz"
         ],
         "title": "BoardConfigResponse",
         "type": "object"

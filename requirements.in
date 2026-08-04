@@ -37,8 +37,8 @@ starlette>=1.3.1
 
 # JWT + Auth
 python-jose[cryptography]>=3.3.0
-# REG-03: cryptography>=48.0.1 закрывает CVE (прямой пин — приходит транзитивно)
-cryptography>=48.0.1
+# REG-03/GHSA-g6cj-pr64-35w5: прямой security-пин транзитивной cryptography
+cryptography>=50.0.0
 # SEC-125: pyasn1>=0.6.4 закрывает GHSA-8ppf-4f7h-5ppj + GHSA-hm4w-wwcw-mr6r
 # (прямой пин — приходит транзитивно via python-jose / rsa)
 pyasn1>=0.6.4
