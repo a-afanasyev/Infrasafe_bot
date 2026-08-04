@@ -37,3 +37,16 @@ def test_garbage_zone_falls_back_not_raises(monkeypatch):
     monkeypatch.setenv("DISPLAY_TZ", "Not/AZone")
     s = display_now_str()  # не должно бросить
     datetime.strptime(s, FMT)  # и формат подписи сохранён
+
+
+def test_stored_instant_converted_naive_as_utc(monkeypatch):
+    """Архивная подпись «Оригинал»: naive-инстант из БД = UTC → зона показа."""
+    from datetime import timezone as _tz
+
+    from app.utils.display_tz import display_instant_str
+
+    monkeypatch.setenv("DISPLAY_TZ", "Asia/Tashkent")
+    naive_utc = datetime(2026, 8, 4, 20, 30)  # 20:30Z → 01:30 следующего дня (+5)
+    assert display_instant_str(naive_utc) == "05.08.2026 01:30"
+    aware = datetime(2026, 8, 4, 20, 30, tzinfo=_tz.utc)
+    assert display_instant_str(aware) == "05.08.2026 01:30"

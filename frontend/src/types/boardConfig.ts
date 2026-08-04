@@ -94,8 +94,9 @@ export interface BoardConfigResponse extends BoardConfigData {
 // Ответ → редактируемый конфиг: снимает display_tz (и глубоко копирует).
 // Единственный легальный путь посева draft'а редактора из ответа сервера.
 export function toEditableBoardConfig(c: BoardConfigResponse | BoardConfigData): BoardConfigData {
-  const { display_tz: _displayTz, ...editable } = c as BoardConfigResponse
-  return JSON.parse(JSON.stringify(editable))
+  const editable = JSON.parse(JSON.stringify(c)) as BoardConfigData & { display_tz?: string }
+  delete editable.display_tz
+  return editable
 }
 
 // Fallback, если конфиг ещё не загрузился — страница не должна белеть.
