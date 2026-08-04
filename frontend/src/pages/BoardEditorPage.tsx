@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig, useUpdateBoardConfig } from '../hooks/useBoardConfig'
-import { defaultBoardConfig } from '../types/boardConfig'
+import { defaultBoardConfig, toEditableBoardConfig } from '../types/boardConfig'
 import type {
   AnnouncementCfg,
   BoardConfigData,
@@ -155,7 +155,7 @@ export default function BoardEditorPage() {
   const [seededFrom, setSeededFrom] = useState<BoardConfigData | null>(null)
   if (serverConfig && serverConfig !== seededFrom) {
     setSeededFrom(serverConfig)
-    setDraft(clone(serverConfig))
+    setDraft(toEditableBoardConfig(serverConfig))
   }
 
   const sensors = useSensors(
@@ -221,7 +221,7 @@ export default function BoardEditorPage() {
   // WR-09: re-seeding is driven by the serverConfig-reference check above; the
   // mutation's invalidate → refetch yields a fresh reference that re-syncs `draft`.
   const onSave = () => updateConfig.mutate(draft)
-  const onReset = () => setDraft(serverConfig ? clone(serverConfig) : clone(defaultBoardConfig))
+  const onReset = () => setDraft(serverConfig ? toEditableBoardConfig(serverConfig) : clone(defaultBoardConfig))
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">

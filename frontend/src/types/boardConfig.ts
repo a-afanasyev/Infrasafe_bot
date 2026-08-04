@@ -84,6 +84,20 @@ export interface BoardConfigData {
   work_reports: WorkReportsCfg
 }
 
+// ARCH-137 B5: ответ публичного board-config несёт display_tz — зону показа
+// развёртывания. Поле принадлежит ТОЛЬКО ответу: PUT-схема бэка строгая
+// (extra="forbid"), echo поля при сохранении витрины = 422.
+export interface BoardConfigResponse extends BoardConfigData {
+  display_tz: string
+}
+
+// Ответ → редактируемый конфиг: снимает display_tz (и глубоко копирует).
+// Единственный легальный путь посева draft'а редактора из ответа сервера.
+export function toEditableBoardConfig(c: BoardConfigResponse | BoardConfigData): BoardConfigData {
+  const { display_tz: _displayTz, ...editable } = c as BoardConfigResponse
+  return JSON.parse(JSON.stringify(editable))
+}
+
 // Fallback, если конфиг ещё не загрузился — страница не должна белеть.
 export const defaultBoardConfig: BoardConfigData = {
   org: {

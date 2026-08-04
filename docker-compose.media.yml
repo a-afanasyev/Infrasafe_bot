@@ -25,6 +25,8 @@ services:
       - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
       # Полный URI целиком (не собирается из компонента-пароля).
       - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
+      # ARCH-137 B4: зона показа для подписей к медиа (C1-bis); несекретное, дефолт = прежнее поведение
+      - DISPLAY_TZ=${DISPLAY_TZ:-Asia/Tashkent}
     volumes:
       - media_uploads:/app/data/uploads
       # Кэш превью публичной витрины — томом, чтобы рестарт его не сбрасывал.

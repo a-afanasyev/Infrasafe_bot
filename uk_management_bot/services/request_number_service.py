@@ -10,9 +10,14 @@ COUNT(*)+1 в API/callcenter/inbound_alert — переиспользовал н
 Timezone дневного префикса зафиксирована ЯВНО: Asia/Tashkent (бизнес-дата,
 номер видят жители). Раньше date.today() зависел от tz сервера.
 
-ARCH-116: зона больше не объявляется здесь — канон один, `utils/business_time`.
-Имена `BUSINESS_TZ`/`business_today` остаются доступны из этого модуля (на них
-ссылаются существующие тесты и вызовы), но это ре-экспорт, а не вторая копия.
+ARCH-137 (B3): номер заявки — ИДЕНТИФИКАТОР, и его дневной префикс обязан
+считаться в одной и той же зоне всю жизнь системы. С появлением настраиваемой
+DISPLAY_TZ канон показа (`utils/business_time.BUSINESS_TZ`) стал переменным —
+следовать за ним префиксу нельзя: сдвиг границ дня сделал бы нумерацию
+неинтерпретируемой задним числом, а в request_number_counters уже лежат
+счётчики по прежним префиксам. Поэтому здесь СВОЯ прибитая REQUEST_NUMBER_TZ
+(менять после запуска нельзя). Имена `BUSINESS_TZ`/`business_today` остаются
+ре-экспортом для внешних потребителей, но генератор ими больше не пользуется.
 """
 import re
 import logging
@@ -23,11 +28,23 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from zoneinfo import ZoneInfo
+
 from uk_management_bot.utils.business_time import BUSINESS_TZ, business_today
+from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["BUSINESS_TZ", "business_today", "RequestNumberService"]
+__all__ = ["BUSINESS_TZ", "business_today", "RequestNumberService", "REQUEST_NUMBER_TZ"]
+
+# Часть идентификатора заявки (префикс YYMMDD). НЕ менять после запуска и НЕ
+# заменять на BUSINESS_TZ/DISPLAY_TZ — см. модульный докстринг (ARCH-137 B3).
+REQUEST_NUMBER_TZ = ZoneInfo("Asia/Tashkent")
+
+
+def request_number_today() -> date:
+    """Календарная дата «сегодня» в зоне идентификатора заявки."""
+    return utc_now().astimezone(REQUEST_NUMBER_TZ).date()
 
 
 # Атомарный счётчик дня. Self-seed: при отсутствии строки дня стартуем с
@@ -72,7 +89,7 @@ class RequestNumberService:
 
     @staticmethod
     def _params(creation_date: Optional[date]) -> tuple[str, dict]:
-        prefix = (creation_date or business_today()).strftime("%y%m%d")
+        prefix = (creation_date or request_number_today()).strftime("%y%m%d")
         return prefix, {"prefix": prefix, "pattern": f"{prefix}-%"}
 
     @staticmethod
