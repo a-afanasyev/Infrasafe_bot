@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from aiogram.types import BufferedInputFile, Message
 
 from app.models.media import MediaFile, MediaChannel, MediaTag
-from app.utils.display_tz import display_now_str
+from app.utils.display_tz import display_instant_str, display_now_str
 from app.services.telegram_client import TelegramClientService
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
 from app.db.database import get_db_context
@@ -774,7 +774,7 @@ class MediaStorageService:
             # Генерируем подпись для архива
             archive_caption = "🗄️ АРХИВ\n"
             archive_caption += f"📋 #{media_file.request_number}\n"
-            archive_caption += f"📅 Оригинал: {media_file.uploaded_at.strftime('%d.%m.%Y %H:%M')}\n"
+            archive_caption += f"📅 Оригинал: {display_instant_str(media_file.uploaded_at)}\n"
             if archive_reason:
                 archive_caption += f"💬 {archive_reason}\n"
 
