@@ -47,12 +47,14 @@ def _read_expected_head() -> str:
 
 def _read_actual_head_and_tz(database_url: str) -> tuple[str, str]:
     engine = create_engine(database_url, pool_pre_ping=False)
+    stmt = "alembic_version"  # для диагностики: какой из двух запросов упал
     try:
         with engine.connect() as conn:
             row = conn.execute(text("SELECT version_num FROM alembic_version")).first()
+            stmt = "SHOW TimeZone"
             tz_row = conn.execute(text("SHOW TimeZone")).first()
     except Exception as exc:  # noqa: BLE001 — любая ошибка здесь = fail-closed preflight
-        print(f"db_preflight: failed to read alembic_version: {exc}", file=sys.stderr)
+        print(f"db_preflight: failed to read {stmt}: {exc}", file=sys.stderr)
         sys.exit(1)
     finally:
         engine.dispose()
