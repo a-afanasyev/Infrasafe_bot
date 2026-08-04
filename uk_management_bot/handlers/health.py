@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.business_time import fmt_date, fmt_time_seconds
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -174,7 +175,7 @@ async def health_check_command(message: Message, db: Session):
 └ {debug_mode_text}: {enabled_text if system_info['debug_mode'] else disabled_text}
 └ {log_level_text}: {system_info['log_level']}
 
-🕐 {checked_at_text}: {utc_now().strftime('%H:%M:%S %d.%m.%Y')}
+🕐 {checked_at_text}: {fmt_time_seconds(utc_now())} {fmt_date(utc_now())}
         """.strip()
 
         await message.answer(message_text)
@@ -247,7 +248,7 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
 └ {redis_enabled_text}: {'✅' if config_info['redis_enabled'] else '⚠️'}
 └ {admin_count_text}: {config_info['admin_users_count']}
 
-🕐 {checked_at_text}: {utc_now().strftime('%H:%M:%S %d.%m.%Y')}
+🕐 {checked_at_text}: {fmt_time_seconds(utc_now())} {fmt_date(utc_now())}
         """.strip()
 
         await message.answer(message_text)

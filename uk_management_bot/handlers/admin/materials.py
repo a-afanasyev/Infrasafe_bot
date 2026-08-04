@@ -17,6 +17,8 @@ import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.business_time import fmt_datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from datetime import datetime, timezone
 
 from ._router import router
@@ -108,7 +110,7 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
         final_materials = None
         history_entry = None
         if request.requested_materials:
-            current_date = datetime.now().strftime('%d.%m.%Y %H:%M')
+            current_date = fmt_datetime(utc_now())
             procurement_separator = f"--закуплено {current_date}--"
             final_materials = request.requested_materials + f"\n{procurement_separator}\n"
 
@@ -267,7 +269,7 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
         purchase_history_entry = (
             get_text("admin.handlers.purchase_history_entry_materials", language=lang).format(materials=requested_materials) + "\n"
             + get_text("admin.handlers.purchase_history_entry_comment", language=lang).format(comment=new_comment) + "\n"
-            + get_text("admin.handlers.purchase_history_entry_updated", language=lang).format(date=datetime.now().strftime('%d.%m.%Y %H:%M'))
+            + get_text("admin.handlers.purchase_history_entry_updated", language=lang).format(date=fmt_datetime(utc_now()))
         )
 
         svc.update_materials_comment(

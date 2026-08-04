@@ -62,7 +62,6 @@ from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 import sys
 import os
-from datetime import datetime
 
 # Добавляем путь к проекту в sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -76,6 +75,8 @@ from uk_management_bot.utils.shift_scheduler import start_scheduler, stop_schedu
 
 # Интеграции
 from uk_management_bot.integrations import get_media_client, close_media_client
+from uk_management_bot.utils.business_time import fmt_date, fmt_time_seconds
+from uk_management_bot.utils.datetime_utils import utc_now
 
 # Инициализация логирования
 setup_structured_logging()
@@ -131,7 +132,7 @@ async def send_startup_notification(bot: Bot):
 
         startup_message = (
             "<b>UK Management Bot запущен!</b>\n\n"
-            f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+            f"Дата: {fmt_date(utc_now())} {fmt_time_seconds(utc_now())}\n"
             "Статус: Активен\n"
             "Версия: 1.0.0\n"
             "База данных: Подключена\n"

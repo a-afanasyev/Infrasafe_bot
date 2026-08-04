@@ -20,6 +20,8 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.business_time import fmt_datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from datetime import datetime, timezone
 
 from ._router import router
@@ -462,7 +464,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
             manager_name = get_text("admin.handlers.manager_by_id", language=lang).format(telegram_id=user.telegram_id)
 
         # Формируем форматированное примечание уточнения
-        timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
+        timestamp = fmt_datetime(utc_now())
         new_note = get_text("admin.handlers.clarification_note_header", language=lang).format(timestamp=timestamp) + "\n"
         new_note += f"👨‍💼 {manager_name}:\n"
         new_note += f"{clarification_text}"
@@ -611,7 +613,7 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         # (Op.APPEND) внутри run_command.
         cancel_note = get_text("admin.handlers.cancel_note_text", language=lang).format(
             manager_name=manager_name,
-            cancel_date=datetime.now().strftime('%d.%m.%Y %H:%M'),
+            cancel_date=fmt_datetime(utc_now()),
             cancel_reason=cancel_reason
         )
         from uk_management_bot.database.session import SessionLocal

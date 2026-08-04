@@ -5,6 +5,7 @@ import logging
 import json
 import re
 import sys
+import time
 from datetime import datetime
 from typing import Optional
 from uk_management_bot.config.settings import settings
@@ -152,11 +153,14 @@ def setup_structured_logging():
     
     # Создаем handler
     if settings.DEBUG:
-        # В режиме разработки - читаемый формат
+        # В режиме разработки — читаемый формат. ARCH-137 C4: как и прод-JSON
+        # (isoformat()+"Z"), dev-строка пишется в UTC с явным маркером — иначе
+        # %(asctime)s молча берёт зону процесса и время не сопоставить с продом.
         handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            '%(asctime)sZ - %(name)s - %(levelname)s - %(message)s'
         )
+        formatter.converter = time.gmtime
     else:
         # В production - структурированный JSON
         handler = logging.StreamHandler(sys.stdout)
