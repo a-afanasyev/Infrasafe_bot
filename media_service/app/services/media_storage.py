@@ -11,11 +11,14 @@ from sqlalchemy.orm import Session
 from aiogram.types import BufferedInputFile, Message
 
 from app.models.media import MediaFile, MediaChannel, MediaTag
+from app.utils.display_tz import display_now_str
 from app.services.telegram_client import TelegramClientService
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
 from app.db.database import get_db_context
 
 logger = logging.getLogger(__name__)
+
+
 
 
 class ChannelNotConfiguredError(RuntimeError):
@@ -508,7 +511,7 @@ class MediaStorageService:
             caption_parts.append(" ".join(hashtags))
 
         # Системная информация
-        caption_parts.append(f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        caption_parts.append(f"⏰ {display_now_str()}")
 
         return "\n".join(caption_parts)
 
@@ -545,7 +548,7 @@ class MediaStorageService:
                 for t in tags
             ]
             caption_parts.append(" ".join(hashtags))
-        caption_parts.append(f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        caption_parts.append(f"⏰ {display_now_str()}")
         return "\n".join(caption_parts)
 
     async def _get_or_create_domain_channel(

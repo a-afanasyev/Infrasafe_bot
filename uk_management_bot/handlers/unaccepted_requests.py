@@ -25,6 +25,8 @@ from uk_management_bot.utils.helpers import get_text
 # 2a-final fix D: используем канонический has_admin_access (читает user.roles
 # JSON), вместо локального shadow на устаревшем user.role.
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.business_time import fmt_datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 
 import logging
 
@@ -66,10 +68,8 @@ async def handle_remind_applicant(callback: CallbackQuery, db: Session, roles: l
         # Формируем уведомление заявителю
         completed_at = request.completed_at if request.completed_at else request.updated_at
         if completed_at:
-            if completed_at.tzinfo is None:
-                from datetime import timezone as dt_tz
-                completed_at = completed_at.replace(tzinfo=dt_tz.utc)
-            completed_str = completed_at.strftime('%d.%m.%Y %H:%M')
+            # fmt_datetime сам нормализует naive→UTC и конвертирует в зону показа
+            completed_str = fmt_datetime(completed_at)
         else:
             completed_str = get_text("unaccepted.handlers.unknown_time", language=lang)
 
@@ -201,7 +201,7 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         # комментарий менеджера дописывается в manager_confirmation_notes
         # внутри run_command (Op.APPEND).
         manager_comment = (
-            f"\n\n--- ПРИНЯТО МЕНЕДЖЕРОМ {datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')} ---\n"
+            f"\n\n--- ПРИНЯТО МЕНЕДЖЕРОМ {fmt_datetime(utc_now())} ---\n"
             f"👨‍💼 Менеджер: {user.first_name or 'Unknown'} {user.last_name or ''}\n"
             f"💬 Комментарий: {comment}\n"
             f"⚠️ Заявка принята без оценки заявителя"
