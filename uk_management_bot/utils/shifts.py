@@ -5,13 +5,16 @@ UI/пул — `status==active И start_time<=now И (end_time IS NULL OR end_tim
 Из-за расхождения claim мог пройти там, где пул исполнителю не виден. Единое
 условие живёт здесь (`_on_shift_filter`), две тонкие обёртки sync/async.
 
-`now` по умолчанию — наивный `datetime.now()` (как в UI-запросе видимости пула),
-чтобы семантика окна смены совпадала со существующим прод-поведением.
+`now` по умолчанию — `utc_now()` (ARCH-137 фаза A, owner-decision принят):
+наивный default был корректен лишь пока рантайм-зона процесса — UTC, и ровно
+здесь смена `TZ` раскалывала бы sync (psycopg2 читает session TimeZone) и
+async (asyncpg трактует naive как UTC) на величину смещения.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Optional
 
 from sqlalchemy import func, or_, select
@@ -56,13 +59,13 @@ def _on_shift_filter(user_id: int, now: datetime):
 
 def is_on_shift_now_sync(db: Session, user_id: int,
                          now: Optional[datetime] = None) -> bool:
-    now = now or datetime.now()
+    now = now or utc_now()
     return db.query(Shift.id).filter(
         _on_shift_filter(user_id, now)).first() is not None
 
 
 async def is_on_shift_now_async(db: AsyncSession, user_id: int,
                                 now: Optional[datetime] = None) -> bool:
-    now = now or datetime.now()
+    now = now or utc_now()
     res = await db.execute(select(Shift.id).where(_on_shift_filter(user_id, now)))
     return res.first() is not None

@@ -3,7 +3,7 @@ Health Check handlers для мониторинга состояния прил�
 """
 import logging
 import time
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Dict, Any
 
 from aiogram import Router
@@ -41,14 +41,14 @@ async def check_database_health(db: Session) -> Dict[str, Any]:
         return {
             "status": "healthy",
             "response_time_ms": round(response_time, 2),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
 
 
@@ -86,14 +86,14 @@ async def check_redis_health() -> Dict[str, Any]:
         return {
             "status": "healthy",
             "response_time_ms": round(response_time, 2),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
         return {
             "status": "unhealthy",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }
     finally:
         pass  # Don't close global Redis singleton — it's managed by startup/shutdown lifecycle
@@ -114,7 +114,7 @@ async def get_system_info() -> Dict[str, Any]:
         "debug_mode": settings.DEBUG,
         "log_level": settings.LOG_LEVEL,
         "supported_languages": settings.SUPPORTED_LANGUAGES,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": utc_now().isoformat()
     }
 
 
@@ -174,7 +174,7 @@ async def health_check_command(message: Message, db: Session):
 └ {debug_mode_text}: {enabled_text if system_info['debug_mode'] else disabled_text}
 └ {log_level_text}: {system_info['log_level']}
 
-🕐 {checked_at_text}: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}
+🕐 {checked_at_text}: {utc_now().strftime('%H:%M:%S %d.%m.%Y')}
         """.strip()
 
         await message.answer(message_text)
@@ -247,7 +247,7 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
 └ {redis_enabled_text}: {'✅' if config_info['redis_enabled'] else '⚠️'}
 └ {admin_count_text}: {config_info['admin_users_count']}
 
-🕐 {checked_at_text}: {datetime.now().strftime('%H:%M:%S %d.%m.%Y')}
+🕐 {checked_at_text}: {utc_now().strftime('%H:%M:%S %d.%m.%Y')}
         """.strip()
 
         await message.answer(message_text)
@@ -305,7 +305,7 @@ async def get_health_status(db: Session) -> Dict[str, Any]:
         
         return {
             "status": overall_status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "components": {
                 "database": db_health,
                 "redis": redis_health,
@@ -323,5 +323,5 @@ async def get_health_status(db: Session) -> Dict[str, Any]:
         return {
             "status": "unhealthy",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now().isoformat()
         }

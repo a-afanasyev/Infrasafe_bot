@@ -3,7 +3,8 @@
 Анализирует данные и предоставляет actionable рекомендации
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Dict, List, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -101,7 +102,7 @@ class RecommendationEngine:
             )
             
             return {
-                "generated_at": datetime.now().isoformat(),
+                "generated_at": utc_now().isoformat(),
                 "period_analyzed_days": period_days,
                 "total_recommendations": len(sorted_recommendations),
                 "recommendations": [self._recommendation_to_dict(r) for r in sorted_recommendations],
@@ -130,7 +131,7 @@ class RecommendationEngine:
         """Анализ оптимизации смен"""
         recommendations = []
         
-        end_date = datetime.now()
+        end_date = utc_now()
         start_date = end_date - timedelta(days=period_days)
         
         # Найдем неэффективные смены
@@ -168,7 +169,7 @@ class RecommendationEngine:
         recommendations = []
         
         # Найдем дисбаланс между исполнителями
-        end_date = datetime.now()
+        end_date = utc_now()
         start_date = end_date - timedelta(days=period_days)
         
         executor_loads = {}
@@ -217,7 +218,7 @@ class RecommendationEngine:
         recommendations = []
         
         # Поиск исполнителей с низкой производительностью
-        end_date = datetime.now()
+        end_date = utc_now()
         start_date = end_date - timedelta(days=period_days)
         
         shifts = self.db.query(Shift).filter(
@@ -296,7 +297,7 @@ class RecommendationEngine:
         """Анализ улучшения качества"""
         recommendations = []
         
-        end_date = datetime.now()
+        end_date = utc_now()
         start_date = end_date - timedelta(days=period_days)
         
         # Анализ рейтингов качества
@@ -338,7 +339,7 @@ class RecommendationEngine:
         recommendations = []
         
         # Анализ времени отклика
-        end_date = datetime.now()
+        end_date = utc_now()
         start_date = end_date - timedelta(days=period_days)
         
         slow_shifts = self.db.query(Shift).filter(
@@ -412,7 +413,7 @@ class RecommendationEngine:
     
     async def _get_daily_load_trend(self, period_days: int) -> List[int]:
         """Получить тренд дневной нагрузки"""
-        end_date = datetime.now().date()
+        end_date = utc_now().date()
         daily_loads = []
         
         for i in range(period_days):

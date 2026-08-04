@@ -3,7 +3,8 @@
 Предоставляет детальную аналитику производительности исполнителей и смен
 """
 import logging
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Dict, List, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -118,7 +119,7 @@ class ShiftAnalytics:
             Детальные метрики производительности исполнителя
         """
         try:
-            end_date = datetime.now()
+            end_date = utc_now()
             start_date = end_date - timedelta(days=period_days)
             
             # Получаем смены исполнителя за период
@@ -230,8 +231,8 @@ class ShiftAnalytics:
             # Получаем заявки за период
             requests = self.db.query(Request).filter(
                 and_(
-                    Request.created_at >= datetime.combine(date_from, datetime.min.time()),
-                    Request.created_at <= datetime.combine(date_to, datetime.max.time())
+                    Request.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc),
+                    Request.created_at <= datetime.combine(date_to, datetime.max.time(), tzinfo=timezone.utc)
                 )
             ).all()
             

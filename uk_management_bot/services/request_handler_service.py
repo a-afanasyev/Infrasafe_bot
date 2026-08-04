@@ -19,7 +19,7 @@ update_status_by_actor, метрики). Resident/executor-view-запросы �
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import List, Optional, Tuple
 
 from sqlalchemy import case, false, or_
@@ -403,7 +403,7 @@ class RequestHandlerService:
         """
         from uk_management_bot.utils.shifts import on_shift_window
 
-        now = now or datetime.now()
+        now = now or utc_now()
         return (
             self.db.query(User)
             .join(Shift, Shift.user_id == User.id)

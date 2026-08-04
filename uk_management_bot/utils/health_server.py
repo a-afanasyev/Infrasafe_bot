@@ -3,7 +3,7 @@ HTTP Health Check Server для Docker health checks
 """
 import json
 import logging
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from typing import Dict, Any
@@ -43,7 +43,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
             health_data = {
                 'status': 'healthy',
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': utc_now().isoformat(),
                 'components': {
                     'database': {
                         'status': 'healthy',
@@ -58,7 +58,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self._send_json_response({
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': utc_now().isoformat()
             }, 503)
         finally:
             if db is not None:
@@ -72,7 +72,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self._send_json_response({
             'status': 'ok',
             'message': 'pong',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }, 200)
     
     def _send_json_response(self, data: Dict[str, Any], status_code: int = 200):
@@ -94,7 +94,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         response = {
             'error': 'Not Found',
             'message': 'Available endpoints: /health, /ping',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': utc_now().isoformat()
         }
         self.wfile.write(json.dumps(response).encode('utf-8'))
 
