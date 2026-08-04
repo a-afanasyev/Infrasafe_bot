@@ -8,6 +8,7 @@ import base64
 import time
 import secrets
 from datetime import datetime, timedelta
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -57,7 +58,7 @@ class InviteService:
         # Создаем payload
         payload = {
             "role": role,
-            "expires_at": int((datetime.utcnow() + timedelta(hours=hours)).timestamp()),
+            "expires_at": int((utc_now() + timedelta(hours=hours)).timestamp()),
             "nonce": self._generate_nonce(),
             "created_by": created_by
         }

@@ -19,9 +19,11 @@ RED-механизм для query/сравнения-сайтов НАМЕРЕН
 как строки и не различает naive/aware — поведенческий тест не упадёт честно
 там, где падает/съезжает только PostgreSQL (timestamptz).
 
-`utils/shifts.py` (`is_on_shift_now_sync/async`) НАМЕРЕННО не в SWEPT_FILES —
-naive-default там осознанное решение (см. модульный docstring), claim-
-семантика — отдельный owner-decision, не часть этой волны.
+С ARCH-137 фазы A гейт покрывает и не-shift файлы: смысл фазы — сделать зону
+рантайма ни на что не влияющей, поэтому под запретом naive-значения в SQL,
+в записи, в `.timestamp()` (TTL) и в машинных ISO. `utils/shifts.py` включён:
+прежний naive-default был отдельным owner-decision, решение принято — default
+теперь `utc_now()` (см. модульный docstring про раскол psycopg2/asyncpg).
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from datetime import timezone, timedelta
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "uk_management_bot"
 
-# Растёт по таскам плана (Task 1 → 2 → 3 → 4); финал = 8 файлов.
+# Рос по таскам AUD5-CODE-3/2 (8 файлов), расширен ARCH-137 фазой A.
 SWEPT_FILES: tuple[str, ...] = (
     "services/shift_service.py",
     "handlers/my_shifts.py",
@@ -44,6 +46,20 @@ SWEPT_FILES: tuple[str, ...] = (
     "handlers/shift_management/assignment_b.py",
     "handlers/shift_management/analytics.py",
     "handlers/shift_management/manual_planning.py",
+    # ARCH-137 фаза A: рантайм-зона не должна ни на что влиять — файлы с naive
+    # `now()`/`utcnow()`/`combine` в SQL-значениях, записи, TTL и машинных ISO.
+    "utils/shifts.py",
+    "services/shift_analytics.py",
+    "services/recommendation_engine.py",
+    "services/request_handler_service.py",
+    "services/smart_dispatcher.py",
+    "services/notification_service.py",
+    "services/invite_service.py",
+    "services/user_verification_service.py",
+    "handlers/clarification_replies.py",
+    "handlers/health.py",
+    "handlers/employee_management.py",
+    "utils/health_server.py",
 )
 
 

@@ -33,7 +33,7 @@ from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.database.models.user import User
 import json
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 
 def _format_employee_name(employee) -> str:
     """Подпись сотрудника — общий канон имён (REFACTOR-133), сведено в AUD5-CODE-8."""
@@ -1292,7 +1292,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
                         "old_roles": old_roles,
                         "new_roles": current_roles,
                         "comment": comment,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": utc_now().isoformat()
                     })
                 )
                 db.add(audit)
@@ -1454,7 +1454,7 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
                         "old_specializations": old_specializations,
                         "new_specializations": current_specializations,
                         "comment": comment,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": utc_now().isoformat()
                     })
                 )
                 db.add(audit)

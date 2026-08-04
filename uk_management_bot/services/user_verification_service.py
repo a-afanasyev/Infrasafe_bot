@@ -11,6 +11,7 @@
 import logging
 from typing import List, Dict, Any
 from datetime import datetime, timezone
+from uk_management_bot.utils.datetime_utils import utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
@@ -461,7 +462,7 @@ class UserVerificationService:
             requested_info = {
                 'type': 'additional_documents',
                 'request_text': request_text,
-                'requested_at': datetime.now().isoformat()
+                'requested_at': utc_now().isoformat()
             }
             
             self.create_verification_request(user_id, admin_id, requested_info)
@@ -499,7 +500,7 @@ class UserVerificationService:
                 'type': 'specific_document',
                 'document_type': document_type,
                 'request_text': request_text,
-                'requested_at': datetime.now().isoformat()
+                'requested_at': utc_now().isoformat()
             }
             
             self.create_verification_request(user_id, admin_id, requested_info)
@@ -537,7 +538,7 @@ class UserVerificationService:
                 'type': 'multiple_documents',
                 'document_types': document_types,
                 'request_text': request_text,
-                'requested_at': datetime.now().isoformat()
+                'requested_at': utc_now().isoformat()
             }
             
             self.create_verification_request(user_id, admin_id, requested_info)

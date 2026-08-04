@@ -9,6 +9,7 @@ from uk_management_bot.utils.constants import (
     NOTIFICATION_TYPE_CLARIFICATION,
 )
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.datetime_utils import as_utc, utc_now
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.telegram_client import (
     SEND_TIMEOUT,
@@ -55,8 +56,11 @@ def notify_shift_ended(db: Session, user: User, shift: Shift) -> None:
 
 # ====== Async helpers for full notifications (3.3) ======
 def _format_duration_hm(start_time: datetime, end_time: datetime | None) -> tuple[int, int]:
-    end = end_time or datetime.now()
-    total_minutes = max(0, int((end - start_time).total_seconds() // 60))
+    # ARCH-137 A2: вычитание идёт в Python, а start_time приезжает из БД aware
+    # (Postgres) или naive (sqlite) — без нормализации обеих сторон это TypeError
+    # на проде при end_time=None. as_utc() выравнивает оба случая.
+    end = as_utc(end_time) if end_time else utc_now()
+    total_minutes = max(0, int((end - as_utc(start_time)).total_seconds() // 60))
     hours = total_minutes // 60
     minutes = total_minutes % 60
     return hours, minutes

@@ -2,7 +2,7 @@
 SmartDispatcher - Интеллектуальная система автоматического назначения заявок на смены
 """
 
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from sqlalchemy import and_, or_
@@ -81,7 +81,7 @@ class SmartDispatcher:
         Returns:
             Результат назначения
         """
-        start_time = datetime.now()
+        start_time = utc_now()
         
         try:
             # Получаем заявки для назначения
@@ -132,7 +132,7 @@ class SmartDispatcher:
                     logger.error(error_msg)
             
             # Вычисляем время обработки
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (utc_now() - start_time).total_seconds()
             
             # Создаем сводку оптимизации
             optimization_summary = self._create_optimization_summary(results, active_shifts)
@@ -150,7 +150,7 @@ class SmartDispatcher:
             )
             
         except Exception as e:
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (utc_now() - start_time).total_seconds()
             logger.error(f"Критическая ошибка в диспетчере: {e}")
             return DispatchResult(0, 0, [], [str(e)], processing_time, {})
     
@@ -353,7 +353,7 @@ class SmartDispatcher:
     def _get_active_shifts(self) -> List[Shift]:
         """Получает активные смены для назначения"""
         try:
-            now = datetime.now()
+            now = utc_now()
             
             return self.db.query(Shift).filter(
                 and_(

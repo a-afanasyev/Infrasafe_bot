@@ -9,7 +9,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.helpers import get_text, get_user_language
-from datetime import datetime
+from uk_management_bot.utils.datetime_utils import utc_now
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session, la
             applicant_name = f"{applicant_label} {user.telegram_id}"
 
         # Добавляем ответ в примечания заявки
-        timestamp = datetime.now().strftime('%d.%m.%Y %H:%M')
+        timestamp = utc_now().strftime('%d.%m.%Y %H:%M')
         reply_label = get_text("clarification.reply_label", language=lang)
         new_note = f"\n\n--- {reply_label} {timestamp} ---\n"
         new_note += f"👤 {applicant_name}:\n"
@@ -125,7 +125,7 @@ async def handle_reply_text(message: Message, state: FSMContext, db: Session, la
         else:
             request.notes = new_note
 
-        request.updated_at = datetime.now()
+        request.updated_at = utc_now()
         db.commit()
 
         # Отправляем уведомление менеджерам
