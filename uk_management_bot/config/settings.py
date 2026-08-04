@@ -1,5 +1,6 @@
 import os
 import ipaddress
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from pathlib import Path
 from urllib.parse import urlparse
@@ -145,6 +146,19 @@ class Settings:
             "OUTBOX_SOURCE_INSTANCE must be set in production environment "
             "(profk|infrasafe)"
         )
+
+    # ARCH-137 (B1): зона ПОКАЗА — свойство развёртывания, одна на систему.
+    # UTC остаётся внутренним контрактом (хранение/рантайм/логи); переменная
+    # влияет только на рендер человеку (utils/business_time.BUSINESS_TZ) и
+    # отдаётся фронту полем display_tz публичного board-config. Номер заявки
+    # за ней НЕ следует (REQUEST_NUMBER_TZ — часть идентификатора).
+    DISPLAY_TZ = os.getenv("DISPLAY_TZ", "Asia/Tashkent")
+    try:
+        ZoneInfo(DISPLAY_TZ)
+    except Exception as _tz_exc:
+        raise ValueError(
+            f"DISPLAY_TZ is not a valid IANA zone: {DISPLAY_TZ!r}"
+        ) from _tz_exc
     
     # Rate limiting для /join команды
     JOIN_RATE_LIMIT_WINDOW = int(os.getenv("JOIN_RATE_LIMIT_WINDOW", "600"))  # 10 минут

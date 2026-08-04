@@ -17,6 +17,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG, enabled_module_ids
+from uk_management_bot.config.settings import settings
 from uk_management_bot.api.board_config.schemas import (
     BoardConfigResponse,
     StoredBoardConfigData,
@@ -152,6 +153,8 @@ def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
     enabled = set(enabled_module_ids())
     data = cfg.model_dump(mode="json")
     data["layout"] = [item for item in data["layout"] if item["id"] in enabled]
+    # ARCH-137 B5: зона показа — свойство ответа, не хранимого конфига.
+    data["display_tz"] = settings.DISPLAY_TZ
     return BoardConfigResponse.model_validate(data)
 
 

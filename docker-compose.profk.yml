@@ -108,6 +108,8 @@ services:
       # Полный URI целиком (не собирается из компонента-пароля: реконструкция теряет
       # порт/query и корректное кодирование спецсимволов).
       - DATABASE_URL=${MEDIA_DATABASE_URL:?MEDIA_DATABASE_URL is required — set it in Doppler (project uk-management)}
+      # ARCH-137 B4: зона показа для подписей к медиа (C1-bis); несекретное, дефолт = прежнее поведение
+      - DISPLAY_TZ=${DISPLAY_TZ:-Asia/Tashkent}
       # REDIS_URL строится из REDIS_PASSWORD (Doppler, Phase 1), не берётся целиком из .env —
       # иначе пароль редиса оставался бы plaintext на диске (redis db /1 у media на profk).
       # Сам media-код redis не использует; строка нужна только чтобы убрать пароль с диска.

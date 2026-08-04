@@ -35,11 +35,15 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, Union
 from zoneinfo import ZoneInfo
 
+from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.datetime_utils import utc_now
 
-# Бизнес-зона показа. Одна на систему: бот, номер заявки (YYMMDD) и фронт-дашборд
-# должны называть одну и ту же дату одним и тем же днём.
-BUSINESS_TZ = ZoneInfo("Asia/Tashkent")
+# Бизнес-зона ПОКАЗА. Одна на развёртывание: settings.DISPLAY_TZ (дефолт
+# Asia/Tashkent, ARCH-137 B2) — бот и фронт-дашборд называют одну дату одним
+# днём. Номер заявки (YYMMDD) за ней НЕ следует: у него своя прибитая
+# REQUEST_NUMBER_TZ (services/request_number_service.py) — префикс является
+# частью идентификатора и менять зону после запуска нельзя.
+BUSINESS_TZ = ZoneInfo(settings.DISPLAY_TZ)
 
 # Значение, которое может быть как инстантом, так и уже календарной датой
 # (у `date` конвертировать нечего — см. `_wall_value`).
