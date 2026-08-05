@@ -3,8 +3,9 @@
 Предоставляет детальную аналитику производительности исполнителей и смен
 """
 import logging
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, date
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.business_time import business_days_window, to_business
 from typing import Dict, List, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -228,11 +229,13 @@ class ShiftAnalytics:
             Анализ временных паттернов активности
         """
         try:
-            # Получаем заявки за период
+            # Получаем заявки за период (бизнес-окно дней, ARCH-135(б):
+            # раньше окно резалось по UTC-суткам)
+            period_start, period_end = business_days_window(date_from, date_to)
             requests = self.db.query(Request).filter(
                 and_(
-                    Request.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc),
-                    Request.created_at <= datetime.combine(date_to, datetime.max.time(), tzinfo=timezone.utc)
+                    Request.created_at >= period_start,
+                    Request.created_at < period_end,
                 )
             ).all()
             
@@ -249,10 +252,12 @@ class ShiftAnalytics:
             for i in range(24):
                 hourly_stats[i] = {"count": 0, "completed": 0, "avg_response_time": 0}
             
-            # Обработка данных
+            # Обработка данных (weekday/hour — по бизнес-зоне: заявка 20:30Z
+            # для объекта — час ночи следующего дня, а не вечер текущего)
             for request in requests:
-                weekday = request.created_at.weekday()
-                hour = request.created_at.hour
+                created_local = to_business(request.created_at)
+                weekday = created_local.weekday()
+                hour = created_local.hour
                 
                 # Статистика по дням недели
                 weekday_stats[weekday]["count"] += 1

@@ -5,8 +5,15 @@
 
 from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
+
+from uk_management_bot.utils.business_time import (
+    business_date_of,
+    business_day_window,
+    business_days_window,
+    business_today,
+)
 from dataclasses import dataclass
 from enum import Enum
 
@@ -236,15 +243,19 @@ class ScoringEngine:
     def _calculate_workload_score(self, shift: Shift, executor: User) -> float:
         """Рассчитывает оценку на основе текущей загруженности исполнителя"""
         try:
-            # Получаем активные смены исполнителя за неделю
-            week_start = shift.planned_start_time.date() - timedelta(days=7)
-            week_end = shift.planned_start_time.date() + timedelta(days=7)
+            # Получаем активные смены исполнителя за неделю. Опорный день —
+            # бизнес-дата смены (UTC-дата у ночной смены — вчерашняя), окно —
+            # бизнес-сутки ±7 дней.
+            base_day = business_date_of(shift.planned_start_time)
+            win_start, win_end = business_days_window(
+                base_day - timedelta(days=7), base_day + timedelta(days=7)
+            )
 
             executor_shifts = self.db.query(Shift).filter(
                 and_(
                     Shift.user_id == executor.id,
-                    func.date(Shift.planned_start_time) >= week_start,
-                    func.date(Shift.planned_start_time) <= week_end,
+                    Shift.planned_start_time >= win_start,
+                    Shift.planned_start_time < win_end,
                     Shift.status.in_(['planned', 'active'])
                 )
             ).count()
@@ -386,12 +397,17 @@ class ScoringEngine:
         """Рассчитывает штрафы за конфликты назначения"""
         penalties = 0.0
 
-        # Штраф за превышение максимальных смен в неделю
+        # Штраф за превышение максимальных смен в неделю (окно бизнес-дней
+        # ±3 от бизнес-даты смены)
+        base_day = business_date_of(shift.planned_start_time)
+        win_start, win_end = business_days_window(
+            base_day - timedelta(days=3), base_day + timedelta(days=3)
+        )
         week_shifts = self.db.query(Shift).filter(
             and_(
                 Shift.user_id == executor.id,
-                func.date(Shift.planned_start_time) >= shift.planned_start_time.date() - timedelta(days=3),
-                func.date(Shift.planned_start_time) <= shift.planned_start_time.date() + timedelta(days=3),
+                Shift.planned_start_time >= win_start,
+                Shift.planned_start_time < win_end,
                 Shift.status.in_(['planned', 'active'])
             )
         ).count()
@@ -422,14 +438,16 @@ class WorkloadBalancer:
         """
         try:
             if not target_date:
-                target_date = date.today() + timedelta(days=1)
+                target_date = business_today() + timedelta(days=1)
 
             logger.info(f"Начало балансировки нагрузки на {target_date}")
 
-            # Получаем все смены на указанную дату
+            # Получаем все смены на указанную дату (бизнес-окно дня)
+            day_start, day_end = business_day_window(target_date)
             shifts = self.db.query(Shift).filter(
                 and_(
-                    func.date(Shift.planned_start_time) == target_date,
+                    Shift.planned_start_time >= day_start,
+                    Shift.planned_start_time < day_end,
                     Shift.status == 'planned'
                 )
             ).all()
@@ -674,13 +692,17 @@ class RequestAssignmentEngine:
         """
         try:
             if target_date is None:
-                target_date = date.today()
+                target_date = business_today()
 
             logger.info(f"Автоназначение заявок исполнителям на {target_date}")
 
+            # Бизнес-окно дня — одно для смен и заявок
+            day_start, day_end = business_day_window(target_date)
+
             # Получаем активные смены на дату
             active_shifts = self.db.query(Shift).filter(
-                func.date(Shift.start_time) == target_date,
+                Shift.start_time >= day_start,
+                Shift.start_time < day_end,
                 Shift.status.in_(['planned', 'active']),
                 Shift.user_id.isnot(None)
             ).all()
@@ -688,7 +710,8 @@ class RequestAssignmentEngine:
             # Получаем неназначенные заявки
             unassigned_requests = self.db.query(Request).filter(
                 Request.status == 'new',
-                func.date(Request.created_at) == target_date
+                Request.created_at >= day_start,
+                Request.created_at < day_end,
             ).all()
 
             if not active_shifts or not unassigned_requests:
@@ -840,21 +863,24 @@ class RequestAssignmentEngine:
         """
         try:
             if target_date is None:
-                target_date = date.today()
+                target_date = business_today()
 
             logger.info(f"Синхронизация назначений заявок со сменами на {target_date}")
 
             # Получаем заявки с назначениями, где исполнитель не работает в этот день
             from uk_management_bot.database.models.request_assignment import RequestAssignment
 
+            day_start, day_end = business_day_window(target_date)
             mismatched_assignments = self.db.query(RequestAssignment).join(
                 Request, RequestAssignment.request_number == Request.request_number
             ).filter(
                 RequestAssignment.status == 'active',
-                func.date(Request.created_at) == target_date,
+                Request.created_at >= day_start,
+                Request.created_at < day_end,
                 ~RequestAssignment.executor_id.in_(
                     self.db.query(Shift.user_id).filter(
-                        func.date(Shift.start_time) == target_date,
+                        Shift.start_time >= day_start,
+                        Shift.start_time < day_end,
                         Shift.status.in_(['planned', 'active'])
                     )
                 )

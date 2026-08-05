@@ -12,7 +12,7 @@
 """
 import asyncio
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 
 import pytest
 import pytest_asyncio
@@ -171,8 +171,12 @@ def _silence_publish(monkeypatch):
 async def test_from_template_endpoint_returns_409(client, db_session):
     """POST /from-template через HTTP: конфликт → 409 (проводка router→ShiftOverlapError)."""
     user = await _executor(db_session, tg=90020)
+    # ARCH-135(б): from-template строит инстант как стенку бизнес-зоны —
+    # сеем существующую смену ровно на неё, чтобы конфликт гарантированно был.
+    from uk_management_bot.utils.business_time import business_wall_clock
+    tmpl_start = business_wall_clock(date(2026, 8, 1), 10)
     db_session.add(Shift(user_id=user.id, status="planned",
-                         start_time=BASE, end_time=BASE + timedelta(hours=2)))
+                         start_time=tmpl_start, end_time=tmpl_start + timedelta(hours=2)))
     tmpl = ShiftTemplate(name="Утро", start_hour=10, duration_hours=2, is_active=True)
     db_session.add(tmpl)
     await db_session.commit()

@@ -2,10 +2,19 @@
 Сервис планирования смен - основной компонент для управления расписанием смен
 """
 
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 from typing import List, Optional, Dict, Any
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
+
+from uk_management_bot.utils.business_time import (
+    business_date_of,
+    business_day_window,
+    business_days_window,
+    business_today,
+    business_wall_clock,
+    to_business,
+)
 
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_template import ShiftTemplate
@@ -19,6 +28,11 @@ from uk_management_bot.services.shift_assignment_service import ShiftAssignmentS
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Внутренние ключи статистики по дням недели. Раньше — strftime('%A'), то есть
+# зависимость от локали процесса; фиксированный кортеж даёт те же ключи
+# детерминированно (0 = понедельник, как у date.weekday()).
+_DAY_NAMES = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
 
 
 class ShiftPlanningService:
@@ -68,10 +82,13 @@ class ShiftPlanningService:
                 return []
             
             # Проверяем, есть ли уже смены на эту дату по этому шаблону
+            # (ARCH-135(б): бакет дня — бизнес-окно, не UTC-дата инстанта)
+            day_start, day_end = business_day_window(target_date)
             existing_shifts = self.db.query(Shift).filter(
                 and_(
                     Shift.shift_template_id == template_id,
-                    func.date(Shift.planned_start_time) == target_date
+                    Shift.planned_start_time >= day_start,
+                    Shift.planned_start_time < day_end,
                 )
             ).count()
             
@@ -171,7 +188,7 @@ class ShiftPlanningService:
             # Планируем смены на каждый день недели
             for day_offset in range(7):
                 current_date = week_start + timedelta(days=day_offset)
-                day_name = current_date.strftime('%A')
+                day_name = _DAY_NAMES[current_date.weekday()]
 
                 results['statistics']['shifts_by_day'][day_name] = 0
 
@@ -223,7 +240,7 @@ class ShiftPlanningService:
             Dict с результатами создания
         """
         try:
-            today = date.today()
+            today = business_today()
             results = {
                 'start_date': today,
                 'end_date': today + timedelta(days=days_ahead),
@@ -269,8 +286,8 @@ class ShiftPlanningService:
         except Exception as e:
             logger.error(f"Ошибка автосоздания смен: {e}")
             return {
-                'start_date': date.today(),
-                'end_date': date.today(),
+                'start_date': business_today(),
+                'end_date': business_today(),
                 'total_created': 0,
                 'created_by_date': {},
                 'errors': [str(e)]
@@ -292,19 +309,22 @@ class ShiftPlanningService:
             current_date = start_date
             
             while current_date <= end_date:
-                # Получаем все смены на текущую дату
+                # Получаем все смены на текущую дату (бизнес-окно дня)
+                day_start, day_end = business_day_window(current_date)
                 shifts = self.db.query(Shift).filter(
-                    func.date(Shift.planned_start_time) == current_date,
+                    Shift.planned_start_time >= day_start,
+                    Shift.planned_start_time < day_end,
                     Shift.status.in_(['planned', 'active'])
                 ).all()
-                
-                # Анализируем покрытие по часам (0-23)
+
+                # Анализируем покрытие по часам (0-23, часы бизнес-зоны:
+                # UTC-час сдвигал бы всю картину покрытия на офсет зоны)
                 hour_coverage = {hour: [] for hour in range(24)}
-                
+
                 for shift in shifts:
                     if shift.planned_start_time and shift.planned_end_time:
-                        start_hour = shift.planned_start_time.hour
-                        end_hour = shift.planned_end_time.hour
+                        start_hour = to_business(shift.planned_start_time).hour
+                        end_hour = to_business(shift.planned_end_time).hour
                         
                         # Заполняем покрытие по часам
                         current_hour = start_hour
@@ -341,17 +361,15 @@ class ShiftPlanningService:
     ) -> Optional[Shift]:
         """Создает одну смену на основе шаблона"""
         try:
-            # Вычисляем время начала и окончания смены
-            start_datetime = datetime.combine(
-                target_date, 
-                datetime.min.time().replace(
-                    hour=template.start_hour, 
-                    minute=template.start_minute or 0
-                )
+            # Время начала: часы/минуты шаблона — это СТЕНКА бизнес-зоны
+            # (шаблон «08:00» = 08:00 по зоне объекта), храним UTC-инстант.
+            # Раньше combine был наивным и стенка трактовалась как UTC.
+            start_datetime = business_wall_clock(
+                target_date, template.start_hour, template.start_minute or 0
             )
-            
+
             end_datetime = start_datetime + timedelta(hours=template.duration_hours)
-            
+
             # Получаем внутренний ID пользователя если задан executor_id (telegram_id)
             user_internal_id = None
             if executor_id:
@@ -449,13 +467,11 @@ class ShiftPlanningService:
     def _is_executor_busy(self, executor_id: int, target_date: date, template: ShiftTemplate) -> bool:
         """Проверяет, занят ли исполнитель в указанное время"""
         try:
-            # Вычисляем время предполагаемой смены
-            start_time = datetime.combine(
-                target_date, 
-                datetime.min.time().replace(
-                    hour=template.start_hour, 
-                    minute=template.start_minute or 0
-                )
+            # Время предполагаемой смены — та же семантика стенки бизнес-зоны,
+            # что в _create_single_shift_from_template (иначе проверка занятости
+            # смотрела бы в другое окно, чем создание).
+            start_time = business_wall_clock(
+                target_date, template.start_hour, template.start_minute or 0
             )
             end_time = start_time + timedelta(hours=template.duration_hours)
             
@@ -503,7 +519,7 @@ class ShiftPlanningService:
                     self.db.add(schedule)
                 
                 # Обновляем данные покрытия
-                day_name = current_date.strftime('%A')
+                day_name = _DAY_NAMES[current_date.weekday()]
                 shifts_count = results['statistics']['shifts_by_day'].get(day_name, 0)
                 
                 schedule.actual_coverage = {'shifts_created': shifts_count}
@@ -536,9 +552,11 @@ class ShiftPlanningService:
     def _calculate_optimization_score(self, target_date: date) -> float:
         """Вычисляет оценку оптимизации расписания для даты"""
         try:
-            # Получаем смены на дату
+            # Получаем смены на дату (бизнес-окно дня)
+            day_start, day_end = business_day_window(target_date)
             shifts = self.db.query(Shift).filter(
-                func.date(Shift.planned_start_time) == target_date,
+                Shift.planned_start_time >= day_start,
+                Shift.planned_start_time < day_end,
                 Shift.status.in_(['planned', 'active'])
             ).all()
             
@@ -581,14 +599,15 @@ class ShiftPlanningService:
         
         for shift in shifts:
             if shift.planned_start_time and shift.planned_end_time:
-                start_hour = shift.planned_start_time.hour
-                end_hour = shift.planned_end_time.hour
-                
+                # Часы бизнес-зоны — как в get_coverage_gaps (ARCH-135(б))
+                start_hour = to_business(shift.planned_start_time).hour
+                end_hour = to_business(shift.planned_end_time).hour
+
                 current_hour = start_hour
                 while current_hour != end_hour:
                     covered_hours.add(current_hour)
                     current_hour = (current_hour + 1) % 24
-        
+
         return list(covered_hours)
     
     def _calculate_load_balance_score(self, shifts: List[Shift]) -> float:
@@ -686,11 +705,12 @@ class ShiftPlanningService:
                 'recommendations': []
             }
             
-            # 1. Анализ смен через ShiftAnalytics
+            # 1. Анализ смен через ShiftAnalytics (бизнес-окно периода)
+            period_start, period_end = business_days_window(start_date, end_date)
             shifts = self.db.query(Shift).filter(
                 and_(
-                    func.date(Shift.planned_start_time) >= start_date,
-                    func.date(Shift.planned_start_time) <= end_date
+                    Shift.planned_start_time >= period_start,
+                    Shift.planned_start_time < period_end,
                 )
             ).all()
             
@@ -752,10 +772,12 @@ class ShiftPlanningService:
             Dict с рекомендациями по оптимизации
         """
         try:
-            # Анализируем текущее состояние
+            # Анализируем текущее состояние (бизнес-окно дня)
+            day_start, day_end = business_day_window(target_date)
             current_shifts = self.db.query(Shift).filter(
                 and_(
-                    func.date(Shift.planned_start_time) == target_date,
+                    Shift.planned_start_time >= day_start,
+                    Shift.planned_start_time < day_end,
                     Shift.status.in_(['planned', 'active'])
                 )
             ).all()
@@ -846,28 +868,32 @@ class ShiftPlanningService:
             # Получаем историю запросов по дням недели
             from uk_management_bot.database.models.request import Request
             
+            # Полуоткрытое окно бизнес-дней [historical_start, target_date)
+            hist_start = business_day_window(historical_start)[0]
+            hist_end = business_day_window(target_date)[0]
             historical_requests = self.db.query(Request).filter(
                 and_(
-                    func.date(Request.created_at) >= historical_start,
-                    func.date(Request.created_at) < target_date
+                    Request.created_at >= hist_start,
+                    Request.created_at < hist_end,
                 )
             ).all()
-            
-            # Группируем по дням недели
+
+            # Группируем по дням недели (бизнес-дата: заявка 20:30Z — это
+            # уже следующий бизнес-день, и его weekday)
             weekday_patterns = {i: [] for i in range(7)}  # 0 = понедельник
-            
+
             for request in historical_requests:
-                weekday = request.created_at.weekday()
+                weekday = business_date_of(request.created_at).weekday()
                 weekday_patterns[weekday].append(request)
             
             # Вычисляем средние значения по дням недели
             weekday_averages = {}
             for weekday, requests in weekday_patterns.items():
                 if requests:
-                    # Группируем по датам
+                    # Группируем по датам (бизнес-дата)
                     dates = {}
                     for req in requests:
-                        date_key = req.created_at.date()
+                        date_key = business_date_of(req.created_at)
                         dates[date_key] = dates.get(date_key, 0) + 1
                     
                     if dates:
@@ -934,11 +960,12 @@ class ShiftPlanningService:
     async def _analyze_planning_efficiency(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Анализирует эффективность планирования за период"""
         try:
-            # Получаем все запланированные и выполненные смены
+            # Получаем все запланированные и выполненные смены (бизнес-окно)
+            period_start, period_end = business_days_window(start_date, end_date)
             shifts = self.db.query(Shift).filter(
                 and_(
-                    func.date(Shift.planned_start_time) >= start_date,
-                    func.date(Shift.planned_start_time) <= end_date
+                    Shift.planned_start_time >= period_start,
+                    Shift.planned_start_time < period_end,
                 )
             ).all()
             
@@ -987,10 +1014,12 @@ class ShiftPlanningService:
             
             current_date = start_date
             while current_date <= end_date:
-                # Получаем смены на день
+                # Получаем смены на день (бизнес-окно дня)
+                day_start, day_end = business_day_window(current_date)
                 daily_shifts = self.db.query(Shift).filter(
                     and_(
-                        func.date(Shift.planned_start_time) == current_date,
+                        Shift.planned_start_time >= day_start,
+                        Shift.planned_start_time < day_end,
                         Shift.status.in_(['planned', 'active', 'completed'])
                     )
                 ).all()
@@ -1044,16 +1073,21 @@ class ShiftPlanningService:
     
     def _calculate_prediction_confidence(self, historical_requests: List, weekday: int) -> float:
         """Вычисляет уверенность в прогнозе на основе исторических данных"""
-        # Фильтруем запросы по дню недели
-        weekday_requests = [r for r in historical_requests if r.created_at.weekday() == weekday]
-        
+        # Фильтруем запросы по дню недели (бизнес-дата — та же разбивка, что
+        # у weekday_averages в predict_workload; UTC-разбивка считала бы
+        # уверенность по другому множеству заявок)
+        weekday_requests = [
+            r for r in historical_requests
+            if business_date_of(r.created_at).weekday() == weekday
+        ]
+
         if len(weekday_requests) < 5:  # Недостаточно данных
             return 0.5
-        
+
         # Группируем по датам и считаем вариативность
         dates = {}
         for req in weekday_requests:
-            date_key = req.created_at.date()
+            date_key = business_date_of(req.created_at)
             dates[date_key] = dates.get(date_key, 0) + 1
         
         if len(dates) < 2:
@@ -1120,13 +1154,15 @@ class ShiftPlanningService:
         """
         try:
             if target_date is None:
-                target_date = date.today()
+                target_date = business_today()
 
             logger.info(f"Начинаем перебалансировку назначений на {target_date}")
 
-            # Получаем все смены на указанную дату
+            # Получаем все смены на указанную дату (бизнес-окно дня)
+            day_start, day_end = business_day_window(target_date)
             daily_shifts = self.db.query(Shift).filter(
-                func.date(Shift.start_time) == target_date,
+                Shift.start_time >= day_start,
+                Shift.start_time < day_end,
                 Shift.status.in_(['planned', 'active'])
             ).all()
 

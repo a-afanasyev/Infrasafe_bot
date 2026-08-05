@@ -21,6 +21,7 @@ from uk_management_bot.api.shifts.schemas import (
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
+from uk_management_bot.utils.business_time import business_wall_clock
 from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.utils.user_names import full_name
 
@@ -601,11 +602,10 @@ async def create_from_template(
     # повторения шаблона.
     target_date = body.date
 
-    start_dt = datetime(
-        target_date.year, target_date.month, target_date.day,
-        tmpl.start_hour, tmpl.start_minute or 0,
-        tzinfo=timezone.utc,
-    )
+    # ARCH-135(б): часы шаблона — стенка бизнес-зоны, та же семантика, что у
+    # бот-пути (shift_planning_service._create_single_shift_from_template);
+    # прямой datetime(..., tzinfo=utc) давал рассинхрон путей на офсет зоны.
+    start_dt = business_wall_clock(target_date, tmpl.start_hour, tmpl.start_minute or 0)
     from datetime import timedelta
     end_dt = start_dt + timedelta(hours=tmpl.duration_hours or 8)
 

@@ -5,9 +5,10 @@
 import logging
 from datetime import timedelta
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.business_time import business_day_window, business_today
 from typing import Dict, List, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import and_
 from dataclasses import dataclass
 from enum import Enum
 
@@ -412,17 +413,19 @@ class RecommendationEngine:
     
     
     async def _get_daily_load_trend(self, period_days: int) -> List[int]:
-        """Получить тренд дневной нагрузки"""
-        end_date = utc_now().date()
+        """Получить тренд дневной нагрузки (по бизнес-дням, ARCH-135(б))"""
+        end_date = business_today()
         daily_loads = []
-        
+
         for i in range(period_days):
             date_to_check = end_date - timedelta(days=i)
+            day_start, day_end = business_day_window(date_to_check)
             daily_count = self.db.query(Request).filter(
-                func.date(Request.created_at) == date_to_check
+                Request.created_at >= day_start,
+                Request.created_at < day_end,
             ).count()
             daily_loads.append(daily_count)
-        
+
         return list(reversed(daily_loads))  # От старых к новым
     
     def _calculate_trend(self, values: List[int]) -> float:
