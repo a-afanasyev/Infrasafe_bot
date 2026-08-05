@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig, useUpdateBoardConfig } from '../hooks/useBoardConfig'
 import { defaultBoardConfig, toEditableBoardConfig } from '../types/boardConfig'
+import { isoToDatetimeLocal } from '../utils/timezone'
 import type {
   AnnouncementCfg,
   BoardConfigData,
@@ -211,7 +212,8 @@ export default function BoardEditorPage() {
       important: false,
       title: { ru: '', uz: '' },
       text: { ru: '', uz: '' },
-      published_at: new Date().toISOString().slice(0, 16),
+      // ARCH-138: дефолт «сейчас» — стенка display-зоны, не UTC (−5ч)
+      published_at: isoToDatetimeLocal(new Date().toISOString()),
     }
     patch((d) => {
       d.announcements = [...d.announcements, fresh]

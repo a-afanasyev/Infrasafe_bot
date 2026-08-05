@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import {
   DEFAULT_DISPLAY_TZ,
+  datetimeLocalToIso,
   fromDisplayTz,
   isoToDatetimeLocal,
   nowInDisplayTz,
@@ -85,5 +86,12 @@ describe('round-trip ввода не зависит от зоны браузер
     // Менеджер из Нью-Йорка ставит смену на 09:00 — это 04:00Z (Ташкент),
     // а НЕ 13:00Z (нью-йоркская трактовка new Date(...).toISOString()).
     expect(fromDisplayTz('2026-08-04T09:00')).toBe('2026-08-04T04:00:00.000Z')
+  })
+
+  it('datetimeLocalToIso (ARCH-138, «действителен до» в access): зона объекта + деградация', () => {
+    expect(datetimeLocalToIso('2026-08-04T09:00')).toBe('2026-08-04T04:00:00.000Z')
+    expect(datetimeLocalToIso('')).toBeUndefined()
+    expect(datetimeLocalToIso('   ')).toBeUndefined()
+    expect(datetimeLocalToIso('not-a-date')).toBeUndefined()
   })
 })

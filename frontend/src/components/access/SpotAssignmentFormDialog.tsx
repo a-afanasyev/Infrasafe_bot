@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { datetimeLocalToIso } from '../../utils/timezone'
 import {
   Dialog,
   DialogContent,
@@ -26,12 +27,8 @@ import type {
  */
 const OWNERSHIP_TYPES: OwnershipType[] = ['owned', 'rented']
 
-// datetime-local → ISO-строка (бэкенд принимает ISO 8601).
-function toIso(local: string): string | undefined {
-  if (!local.trim()) return undefined
-  const d = new Date(local)
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
-}
+// datetime-local → ISO-инстант display-зоны (ARCH-138): канон utils/timezone.
+const toIso = datetimeLocalToIso
 
 interface FormState {
   spotId: string
