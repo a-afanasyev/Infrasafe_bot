@@ -5,9 +5,12 @@
  * Conventions:
  *  - Russian/Uzbek calendars treat Monday as week-start, so all `start`
  *    helpers anchor on Monday (ISO weekday).
- *  - All Date math runs in the browser's local timezone; the actual
- *    timezone-aware bucketing of shifts uses `toTashkent` from
- *    `utils/timezone.ts` at the consumer call-site.
+ *  - All helpers here are pure wall-clock calendar math on the Date's local
+ *    fields. The convention (ARCH-137 B7): every calendar Date on the shifts
+ *    pages is a display-zone carrier produced by `toDisplayTz`/`nowInDisplayTz`
+ *    (`utils/timezone.ts`), so this math IS display-zone math — the browser's
+ *    own timezone never participates. Converting a carrier back to an instant
+ *    goes through `fromDisplayTz`, never `.toISOString()`.
  */
 
 export function startOfDay(d: Date): Date {

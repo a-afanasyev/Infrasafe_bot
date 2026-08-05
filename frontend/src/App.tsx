@@ -8,6 +8,7 @@ import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESO
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
+import { DisplayTzProvider } from './contexts/DisplayTzProvider'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
 import OfflineIndicator from './components/shared/OfflineIndicator'
 import { Toaster } from './components/ui/sonner'
@@ -112,6 +113,12 @@ export default function App() {
       <OfflineIndicator />
       <Toaster position="bottom-right" richColors />
       <GlobalErrorBoundary>
+        {/* ARCH-137 B6: зона показа резолвится ДО первого рендера страниц —
+            см. contexts/DisplayTzProvider.tsx. Гейт короткий (таймаут 4с), на
+            ошибке/старом бэке деградирует в Asia/Tashkent. Внутри
+            GlobalErrorBoundary, чтобы исключение в самом провайдере попадало
+            в штатный fallback, а не в белый экран. */}
+        <DisplayTzProvider fallback={<LoadingSpinner />}>
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
@@ -215,6 +222,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </BrowserRouter>
+        </DisplayTzProvider>
       </GlobalErrorBoundary>
     </QueryClientProvider>
   )

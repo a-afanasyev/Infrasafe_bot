@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { formatTime, toTashkent, dayOffset } from '../../utils/timezone'
+import { formatTime, toDisplayTz, dayOffset } from '../../utils/timezone'
 import {
   daysInMonth,
   executorKey,
@@ -78,7 +78,7 @@ export default function MonthResourceGrid({
         }
         map.set(key, row)
       }
-      const startTZ = toTashkent(shift.start_time)
+      const startTZ = toDisplayTz(shift.start_time)
       const dayOfMonth = startTZ.getDate()
       // Only assign to the day if it belongs to the visible month — multi-day
       // overflow into next month is out of scope for the month-grid (it's a

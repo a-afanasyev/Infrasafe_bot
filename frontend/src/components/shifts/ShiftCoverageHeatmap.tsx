@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent } from '../../utils/timezone'
+import { toDisplayTz } from '../../utils/timezone'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -10,8 +10,8 @@ interface Props {
 }
 
 function isShiftActiveInHour(shift: ShiftBrief, hour: number): boolean {
-  const startTZ = toTashkent(shift.start_time)
-  const endTZ = shift.end_time ? toTashkent(shift.end_time) : null
+  const startTZ = toDisplayTz(shift.start_time)
+  const endTZ = shift.end_time ? toDisplayTz(shift.end_time) : null
   if (!endTZ) return false
 
   const startH = startTZ.getHours()

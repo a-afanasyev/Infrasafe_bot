@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent } from '../../utils/timezone'
+import { toDisplayTz } from '../../utils/timezone'
 import {
   executorKey,
   isSameDay,
@@ -39,15 +39,15 @@ function dayKey(d: Date): string {
 
 /**
  * Pre-compute per-day executor sets in one pass over the shifts list.
- * Without this the render-loop calls `toTashkent` twice per shift per day
+ * Without this the render-loop calls `toDisplayTz` twice per shift per day
  * cell — at 600 shifts × 31 days that's ~37k tz conversions per render.
  */
 function buildDayCoverage(shifts: ShiftBrief[]): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>()
   for (const shift of shifts) {
-    const startTZ = toTashkent(shift.start_time)
+    const startTZ = toDisplayTz(shift.start_time)
     const startDay = new Date(startTZ.getFullYear(), startTZ.getMonth(), startTZ.getDate())
-    const endTZ = shift.end_time ? toTashkent(shift.end_time) : null
+    const endTZ = shift.end_time ? toDisplayTz(shift.end_time) : null
     const endDay = endTZ
       ? new Date(endTZ.getFullYear(), endTZ.getMonth(), endTZ.getDate())
       : startDay
