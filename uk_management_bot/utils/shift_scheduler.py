@@ -5,7 +5,9 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
+
+from uk_management_bot.utils.business_time import business_today
 from typing import Optional, Dict, Any, List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -308,8 +310,10 @@ class ShiftScheduler:
         try:
             planning_service = ShiftPlanningService(db)
 
-            # Перебалансируем назначения на сегодня и завтра
-            today = date.today()
+            # Перебалансируем назначения на сегодня и завтра (бизнес-день:
+            # date.today() в UTC-контейнере с 19:00Z кормил бы движки
+            # вчерашним «сегодня» — ARCH-135(б))
+            today = business_today()
             tomorrow = today + timedelta(days=1)
 
             results = [
@@ -537,8 +541,8 @@ class ShiftScheduler:
     def _weekly_planning_sync(self) -> int:
         db = SessionLocal()
         try:
-            # Планируем следующую неделю
-            next_monday = date.today() + timedelta(days=7 - date.today().weekday())
+            # Планируем следующую неделю (от бизнес-«сегодня»)
+            next_monday = business_today() + timedelta(days=7 - business_today().weekday())
             result = ShiftPlanningService(db).plan_weekly_schedule(next_monday)
             return int(result['statistics']['total_shifts'])
         finally:
@@ -568,8 +572,8 @@ class ShiftScheduler:
         try:
             assignment_service = ShiftAssignmentService(db)
 
-            # Назначаем заявки на сегодня и завтра
-            today = date.today()
+            # Назначаем заявки на сегодня и завтра (бизнес-день)
+            today = business_today()
             tomorrow = today + timedelta(days=1)
 
             total_assigned = 0
@@ -612,8 +616,8 @@ class ShiftScheduler:
         try:
             assignment_service = ShiftAssignmentService(db)
 
-            # Синхронизируем на сегодня и завтра
-            today = date.today()
+            # Синхронизируем на сегодня и завтра (бизнес-день)
+            today = business_today()
             tomorrow = today + timedelta(days=1)
 
             total_reassigned = 0

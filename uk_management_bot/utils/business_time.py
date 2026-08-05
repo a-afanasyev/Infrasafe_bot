@@ -115,3 +115,13 @@ def business_day_window(day: date) -> tuple[datetime, datetime]:
 def business_days_window(first: date, last: date) -> tuple[datetime, datetime]:
     """Диапазон бизнес-дней ВКЛЮЧИТЕЛЬНО → полуоткрытое UTC-окно."""
     return business_day_window(first)[0], business_day_window(last)[1]
+
+
+def business_wall_clock(day: date, hour: int, minute: int = 0) -> datetime:
+    """Стенка бизнес-зоны (день + чч:мм) → UTC-инстант.
+
+    Для времени из шаблонов/настроек: «08:00» там означает 08:00 по зоне
+    объекта, а не UTC (ARCH-135(б)).
+    """
+    wall = datetime.combine(day, time(hour=hour, minute=minute), tzinfo=BUSINESS_TZ)
+    return wall.astimezone(timezone.utc)

@@ -64,6 +64,16 @@ SWEPT_FILES: tuple[str, ...] = (
     "handlers/admin/materials.py",
     "handlers/health.py",
     "main.py",
+    # ARCH-135 группа (б): движки планирования/назначения/рекомендаций и
+    # аналитика смен — дневные бакеты решений на бизнес-сутках.
+    "services/shift_planning_service.py",
+    "services/shift_assignment_service.py",
+    "services/recommendation_engine.py",
+    "services/shift_analytics.py",
+    # + питатели движков: планировщик (кормил UTC-«сегодня») и API-путь
+    # создания смен из шаблона (дублировал семантику стенки шаблона).
+    "utils/shift_scheduler.py",
+    "api/shifts/router.py",
 )
 
 
