@@ -114,7 +114,7 @@ class TestViewCurrentShiftsUsesDbIdNotTelegramId:
                 callback,
                 state,
                 language="ru",
-                db=db,
+                _db=db,
                 user=user,
                 # require_role decorator kwargs
                 roles=["executor"],
@@ -154,7 +154,7 @@ class TestViewCurrentShiftsUsesDbIdNotTelegramId:
             callback,
             state,
             language="ru",
-            db=db,
+            _db=db,
             user=user,
             roles=["executor"],
         )
@@ -199,7 +199,7 @@ class TestViewCurrentShiftsUserResolution:
             callback,
             state,
             language="ru",
-            db=db,
+            _db=db,
             roles=["executor"],
         )
 

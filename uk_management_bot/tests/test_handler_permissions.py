@@ -394,7 +394,7 @@ class TestBugBot005ExecutorMyShifts:
             "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
         ):
             await handle_week_schedule(
-                cb, state, language="ru", db=db,
+                cb, state, language="ru", _db=db,
                 roles=["executor"], user=executor_user,
             )
 
@@ -424,7 +424,7 @@ class TestBugBot005ExecutorMyShifts:
             "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
         ):
             await handle_shift_history(
-                cb, state, language="ru", db=db,
+                cb, state, language="ru", _db=db,
                 roles=["executor"], user=executor_user,
             )
 
@@ -466,7 +466,7 @@ class TestBugBot005ExecutorMyShifts:
             "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
         ):
             await handle_shift_history(
-                cb, state, language="ru", db=db,
+                cb, state, language="ru", _db=db,
                 roles=["manager"], user=manager_user,
             )
 

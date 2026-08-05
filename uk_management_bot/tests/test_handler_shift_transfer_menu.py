@@ -97,8 +97,11 @@ class TestShiftTransferMenuHandler:
         db = _make_db(user=user)
 
         # session_scope() yields our mock session and closes it on exit.
+        # AUD3-37: сессию теперь открывает run_db (database/session.py) в
+        # worker-потоке — патчим session_scope там; заодно этот тест покрывает
+        # реальный thread-путь run_db (mock-сессия однопоточно-безопасна).
         with patch(
-            "uk_management_bot.handlers.my_shifts.session_scope",
+            "uk_management_bot.database.session.session_scope",
             _scope_yielding(db),
         ), patch(
             "uk_management_bot.handlers.my_shifts.get_text",
@@ -121,8 +124,11 @@ class TestShiftTransferMenuHandler:
         cb = _make_callback(user_id=99)
         db = _make_db(user=None)
 
+        # AUD3-37: сессию теперь открывает run_db (database/session.py) в
+        # worker-потоке — патчим session_scope там; заодно этот тест покрывает
+        # реальный thread-путь run_db (mock-сессия однопоточно-безопасна).
         with patch(
-            "uk_management_bot.handlers.my_shifts.session_scope",
+            "uk_management_bot.database.session.session_scope",
             _scope_yielding(db),
         ), patch(
             "uk_management_bot.handlers.my_shifts.get_text",

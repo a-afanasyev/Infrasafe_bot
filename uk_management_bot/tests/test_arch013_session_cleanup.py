@@ -140,45 +140,31 @@ async def test_pattern_a_shifts_end_shift_yes_uses_session_scope_and_closes():
 # --------------------------------------------------------------------------
 @pytest.mark.asyncio
 class TestPatternB_CmdMyShifts:
-    async def test_injected_session_not_closed(self):
+    """AUD3-37 (волна B1): cmd_my_shifts — чистый рендер без БД. Раньше хендлер
+    держал сигнатурный db и открывал сессию через _db_scope, хотя ни одного
+    запроса не делал — сессия на update создавалась зря (аспект AUD5-CODE-6).
+    Инвариант теперь: параметра db нет (aiogram DI не инъецирует
+    middleware-сессию) и никакая сессия не открывается вовсе."""
+
+    async def test_no_db_param_and_no_session_opened(self):
+        import inspect
+
+        from uk_management_bot.database import session as session_mod
         from uk_management_bot.handlers import my_shifts as mod
 
+        assert "db" not in inspect.signature(mod.cmd_my_shifts).parameters
+
         msg = _message()
-        injected = MagicMock()
         state = MagicMock()
         state.set_state = AsyncMock()
 
-        with patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
-             patch.object(mod, "get_my_shifts_menu", return_value=None):
-            await mod.cmd_my_shifts(msg, state=state, language="ru", db=injected)
-
-        injected.close.assert_not_called()  # middleware owns the injected session
-
-    async def test_fallback_session_is_closed(self):
-        from contextlib import contextmanager
-
-        from uk_management_bot.handlers import my_shifts as mod
-
-        msg = _message()
-        own = MagicMock()
-        state = MagicMock()
-        state.set_state = AsyncMock()
-
-        # ARC-05 Batch 3: cmd_my_shifts(db=None) идёт через _db_scope → session_scope();
-        # заглушка session_scope отдаёт `own` и закрывает её на выходе.
-        @contextmanager
-        def fake_scope():
-            try:
-                yield own
-            finally:
-                own.close()
-
-        with patch.object(mod, "session_scope", fake_scope), \
+        with patch.object(session_mod, "SessionLocal") as factory, \
              patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
              patch.object(mod, "get_my_shifts_menu", return_value=None):
-            await mod.cmd_my_shifts(msg, state=state, language="ru", db=None)
+            await mod.cmd_my_shifts(msg, state=state, language="ru")
 
-        own.close.assert_called_once()
+        factory.assert_not_called()
+        msg.answer.assert_awaited()
 
 
 @pytest.mark.asyncio

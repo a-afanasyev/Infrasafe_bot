@@ -103,9 +103,10 @@ async def test_fs02_transfer_menu_shows_button_for_active_shift(db):
     cb.message.edit_text = AsyncMock()
     cb.answer = AsyncMock()
 
-    with patch.object(ms, "session_scope", _scope_yielding(db)), \
-         patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-        await ms.handle_shift_transfer_menu(cb, state=MagicMock(), language="ru")
+    # AUD3-37: module-level session_scope в my_shifts больше нет — юнит получает
+    # сессию через run_db; тестовый seam — keyword-only _db (sync-исполнение).
+    with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        await ms.handle_shift_transfer_menu(cb, state=MagicMock(), language="ru", _db=db)
 
     cb.message.edit_text.assert_awaited_once()
     kb = cb.message.edit_text.await_args.kwargs["reply_markup"]
@@ -129,9 +130,10 @@ async def test_fs02_transfer_menu_empty_when_no_shifts(db):
     cb.message.edit_text = AsyncMock()
     cb.answer = AsyncMock()
 
-    with patch.object(ms, "session_scope", _scope_yielding(db)), \
-         patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-        await ms.handle_shift_transfer_menu(cb, state=MagicMock(), language="ru")
+    # AUD3-37: module-level session_scope в my_shifts больше нет — юнит получает
+    # сессию через run_db; тестовый seam — keyword-only _db (sync-исполнение).
+    with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        await ms.handle_shift_transfer_menu(cb, state=MagicMock(), language="ru", _db=db)
 
     kb = cb.message.edit_text.await_args.kwargs["reply_markup"]
     callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
@@ -209,12 +211,15 @@ def test_fs06_shift_list_keyboard_handles_adhoc_shift():
 ])
 def test_shift_detail_handlers_accept_di_params(handler_name):
     """require_role читает kwargs['roles']; aiogram отдаёт DI-параметры только если
-    они есть в сигнатуре хендлера. Без db/user/roles исполнителю прилетал
-    «нет прав доступа» на ЕГО ЖЕ смене. Проверяем, что параметры объявлены."""
+    они есть в сигнатуре хендлера. Без user/roles исполнителю прилетал
+    «нет прав доступа» на ЕГО ЖЕ смене. AUD3-37: параметр db теперь ЗАПРЕЩЁН —
+    объявленный db заставил бы aiogram инъецировать middleware-сессию, и юнит
+    исполнился бы на event loop; тестовый seam — keyword-only _db."""
     from uk_management_bot.handlers import my_shifts as ms
     sig = inspect.signature(getattr(ms, handler_name))
-    for p in ("db", "user", "roles"):
+    for p in ("user", "roles", "_db"):
         assert p in sig.parameters, f"{handler_name} не принимает DI-параметр {p}"
+    assert "db" not in sig.parameters, f"{handler_name}: db в сигнатуре возвращает сессию на loop"
 
 
 @pytest.mark.asyncio
@@ -244,7 +249,7 @@ async def test_shift_details_resolves_internal_user_id(db):
 
     with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
         # db/user инжектятся как DI — смена должна найтись и отрисоваться.
-        await ms.handle_shift_details(cb, state, language="ru", db=db, user=user, roles=["executor"])
+        await ms.handle_shift_details(cb, state, language="ru", _db=db, user=user, roles=["executor"])
 
     cb.message.edit_text.assert_awaited_once()
     # не ушли в ветку shift_not_found
@@ -279,6 +284,7 @@ async def test_end_shift_handles_tz_aware_start_time():
 
     query = MagicMock()
     query.filter.return_value = query
+    query.with_for_update.return_value = query
     query.first.return_value = shift
     db = MagicMock()
     db.query.return_value = query
@@ -295,7 +301,7 @@ async def test_end_shift_handles_tz_aware_start_time():
 
     with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch.object(ms, "get_my_shifts_menu", return_value=MagicMock()):
-        await ms.handle_end_shift(cb, state, language="ru", db=db, user=user, roles=["executor"])
+        await ms.handle_end_shift(cb, state, language="ru", _db=db, user=user, roles=["executor"])
 
     # дошли до summary (edit_text), не упали в error_occurred
     cb.message.edit_text.assert_awaited_once()
