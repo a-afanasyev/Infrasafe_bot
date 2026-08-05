@@ -167,6 +167,11 @@ services:
       - INFRASAFE_WEBHOOK_SECRET_NEXT=${INFRASAFE_WEBHOOK_SECRET_NEXT:-}
       - INFRASAFE_USE_NEXT_SECRET=${INFRASAFE_USE_NEXT_SECRET:-false}
       - UK_WEBHOOK_SECRET_NEXT=${UK_WEBHOOK_SECRET_NEXT:-}
+      # ARCH-107: dual-key ротация JWT_SECRET (та же форма, что webhook-NEXT выше).
+      # Подписант токенов живёт в api; верификатору access-api эти же переменные
+      # проброшены в его блоке. NEXT в Doppler — только на ротационное окно.
+      - JWT_SECRET_NEXT=${JWT_SECRET_NEXT:-}
+      - JWT_USE_NEXT_SECRET=${JWT_USE_NEXT_SECRET:-false}
     ports:
       - "127.0.0.1:8085:8080"
     depends_on:
@@ -241,6 +246,12 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
       - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      # ARCH-107: access-api верифицирует JWT (ws_security, registry) — во время
+      # ротационного окна он обязан знать оба ключа, иначе токены, подписанные
+      # NEXT-ключом в api, получат тут 401/403. Флаг подписанта прокинут для
+      # симметрии env (подписи access-api не выпускает).
+      - JWT_SECRET_NEXT=${JWT_SECRET_NEXT:-}
+      - JWT_USE_NEXT_SECRET=${JWT_USE_NEXT_SECRET:-false}
       # ARCH-010: идентификатор инсталляции для детерминированного event_id (frozen).
       - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
       #

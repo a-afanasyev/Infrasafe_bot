@@ -126,6 +126,22 @@ class Settings:
             f"minimum {JWT_SECRET_MIN_LENGTH} in production"
         )
 
+    # ARCH-107: graceful-ротация JWT_SECRET той же формой, что webhook-секреты
+    # (§4.4/R-18): NEXT появляется в Doppler на ротационное окно, верификатор
+    # (api/auth/service.py) принимает оба ключа по `kid` из заголовка токена,
+    # подписант переключается флагом. Процедура → .claude/skills/uk-deploy/SKILL.md.
+    JWT_SECRET_NEXT = os.getenv("JWT_SECRET_NEXT", "")
+    JWT_USE_NEXT_SECRET = os.getenv("JWT_USE_NEXT_SECRET", "false").lower() == "true"
+    if JWT_SECRET_NEXT and not DEBUG and len(JWT_SECRET_NEXT) < JWT_SECRET_MIN_LENGTH:
+        raise ValueError(
+            f"JWT_SECRET_NEXT too short ({len(JWT_SECRET_NEXT)} chars): "
+            f"minimum {JWT_SECRET_MIN_LENGTH} in production"
+        )
+    # Флаг без ключа — молчаливый провал ротации (подписант «переключился» в
+    # никуда и тихо остался на старом ключе). Ловим на старте, а не в проде.
+    if JWT_USE_NEXT_SECRET and not JWT_SECRET_NEXT:
+        raise ValueError("JWT_USE_NEXT_SECRET=true requires JWT_SECRET_NEXT to be set")
+
     # ARCH-010: неизменяемый идентификатор инсталляции — левая часть UUIDv5-name
     # исходящих вебхуков (services/webhook_sender.py). Менять НЕЛЬЗЯ: смена
     # значения меняет все будущие event_id и ломает дедуп InfraSafe.
@@ -291,6 +307,13 @@ class Settings:
                 raise ValueError("ADMIN_PASSWORD is too weak: needs at least 8 distinct characters")
         if JWT_SECRET and INVITE_SECRET and JWT_SECRET == INVITE_SECRET:
             raise ValueError("JWT_SECRET and INVITE_SECRET must be different in production")
+        # ARCH-107: те же правила разделения ключей для ротационного NEXT.
+        if JWT_SECRET_NEXT and INVITE_SECRET and JWT_SECRET_NEXT == INVITE_SECRET:
+            raise ValueError("JWT_SECRET_NEXT and INVITE_SECRET must be different in production")
+        # NEXT == primary — ротация-«пустышка»: окно «выглядит открытым», а ключ
+        # фактически не меняется. Это ошибка процедуры, не рабочее состояние.
+        if JWT_SECRET_NEXT and JWT_SECRET_NEXT == JWT_SECRET:
+            raise ValueError("JWT_SECRET_NEXT must differ from JWT_SECRET (rotation would be a no-op)")
         if not REDIS_URL or "redis://" not in REDIS_URL:
             raise ValueError("Valid REDIS_URL required in production")
         # SEC-124: проверять НАЛИЧИЕ пароля, а не только валидность URL.

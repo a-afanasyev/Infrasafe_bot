@@ -219,8 +219,9 @@ ASSIGNMENT: dict[str, dict] = {
     # хвост access-диалогов — ARCH-138 ниже.
     # ARCH-138 закрыт 2026-08-05: datetimeLocalToIso + 4 сайта, префилл/показ
     # PassDetailDialog, дефолт published_at; уезжает со следующей сборкой frontend.
-    "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
-                  note="решение: делать; форма — как у webhook *_NEXT"),
+    # ARCH-107 закрыт 2026-08-05: dual-key {primary,next} + kid в заголовке токена,
+    # форма webhook-*_NEXT; включение механизма — со следующим деплоем api+access-api,
+    # процедура ротации → uk-deploy SKILL.md.
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",
                  services="edge владельца (profk.uz)",
                  note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),

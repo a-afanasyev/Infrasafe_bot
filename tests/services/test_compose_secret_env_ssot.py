@@ -49,6 +49,8 @@ EXPECTED = {
         # Phase 2: dual-secret ротация — подписант и верификатор оба в api.
         "INFRASAFE_WEBHOOK_SECRET_NEXT",
         "UK_WEBHOOK_SECRET_NEXT",
+        # ARCH-107: dual-key ротация JWT — подписант токенов в api.
+        "JWT_SECRET_NEXT",
     ),
     "access-api": CORE_REQUIRED + (
         "ACCESS_CODE_SECRET",
@@ -56,6 +58,8 @@ EXPECTED = {
         "ACCESS_PHOTO_URL_SECRET",
         "ACCESS_SNAPSHOT_SIGNING_SEED",
         "MEDIA_API_KEY",
+        # ARCH-107: верификатор JWT в access-api обязан знать оба ключа окна.
+        "JWT_SECRET_NEXT",
     ),
     "migrate": CORE_REQUIRED,
     # AUD6-P1-2: runtime — под least-privilege ролью resource_app (пароль
