@@ -12,6 +12,7 @@ from urllib.parse import unquote, parse_qsl
 import bcrypt
 import redis.asyncio as aioredis
 from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError, JWTClaimsError
 
 from uk_management_bot.config.settings import settings
 
@@ -32,6 +33,64 @@ if not SECRET_KEY:
         raise RuntimeError("JWT_SECRET must be set")
 
 ALGORITHM = "HS256"
+
+# ARCH-107: graceful-ротация JWT_SECRET по форме webhook-секретов (§4.4/R-18).
+# Набор ключей {primary, next}; каждый выпущенный токен несёт `kid` в заголовке,
+# верификатор принимает любой ключ набора, подписант переключается флагом
+# JWT_USE_NEXT_SECRET. Настройки читаются лениво (на каждый вызов, не на импорт):
+# ротационное окно живёт через рестарт контейнера с новым env, а тестам не нужен
+# reload модуля. Процедура ротации → .claude/skills/uk-deploy/SKILL.md.
+_KID_PRIMARY = "primary"
+_KID_NEXT = "next"
+
+
+def _key_set() -> dict[str, str]:
+    keys = {_KID_PRIMARY: SECRET_KEY}
+    next_key = getattr(settings, "JWT_SECRET_NEXT", "")
+    if next_key:
+        keys[_KID_NEXT] = next_key
+    return keys
+
+
+def _signing_kid_and_key() -> tuple[str, str]:
+    keys = _key_set()
+    if getattr(settings, "JWT_USE_NEXT_SECRET", False) and _KID_NEXT in keys:
+        return _KID_NEXT, keys[_KID_NEXT]
+    return _KID_PRIMARY, keys[_KID_PRIMARY]
+
+
+def encode_jwt(payload: dict) -> str:
+    """Sign a JWT with the active key, stamping its `kid` into the header."""
+    kid, key = _signing_kid_and_key()
+    return jwt.encode(payload, key, algorithm=ALGORITHM, headers={"kid": kid})
+
+
+def decode_jwt(token: str, **decode_kwargs) -> dict:
+    """Decode a JWT against the key set; raises JWTError if no key matches.
+
+    The token's `kid` only orders the candidates — every configured key is
+    tried, because two legitimate token populations don't map onto the set:
+    tokens issued before this rollout carry no `kid` at all, and after a
+    finished rotation (NEXT promoted to primary) live tokens still say
+    kid="next" while their key is now registered as "primary".
+    """
+    keys = _key_set()
+    kid = jwt.get_unverified_header(token).get("kid")  # JWTError on malformed token
+    candidates = [keys[kid]] if kid in keys else []
+    candidates += [k for name, k in keys.items() if name != kid]
+    last_err: JWTError = JWTError("no JWT keys configured")
+    for key in candidates:
+        try:
+            return jwt.decode(token, key, algorithms=[ALGORITHM], **decode_kwargs)
+        except (ExpiredSignatureError, JWTClaimsError):
+            # Signature already matched this key (claims are checked after it),
+            # so no other key can succeed — surface the precise error.
+            raise
+        except JWTError as e:
+            last_err = e
+    raise last_err
+
+
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 # NICE-082: tightened 30d → 7d to shrink the stolen-refresh-token window.
 # (TWA endpoint issues an even shorter 24h refresh — see below.)
@@ -72,12 +131,12 @@ def create_access_token(
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     payload = {"sub": str(user_id), "roles": roles, "exp": expire}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return encode_jwt(payload)
 
 
 def verify_access_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_jwt(token)
     except JWTError:
         return None
     # SEC-01: purpose-scoped tokens (mfa_token from /login) are signed with the
@@ -172,15 +231,14 @@ def create_mfa_token(user_id: int) -> str:
         "exp": expire,
         "iss": "uk-management",
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return encode_jwt(payload)
 
 
 def verify_mfa_token(token: str) -> Optional[int]:
     """Verify MFA token and return user_id or None."""
     try:
-        payload = jwt.decode(
-            token, SECRET_KEY, algorithms=[ALGORITHM],
-            issuer="uk-management", options={"verify_aud": False},
+        payload = decode_jwt(
+            token, issuer="uk-management", options={"verify_aud": False},
         )
         if payload.get("purpose") != "mfa":
             return None
