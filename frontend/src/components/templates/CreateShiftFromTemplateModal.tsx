@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
 import { useEmployees } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../types/api'
+import { todayInDisplayTz } from '../../utils/timezone'
 import {
   Dialog,
   DialogContent,
@@ -27,8 +28,10 @@ function employeeName(e: EmployeeBrief): string {
   return full || e.phone || `#${e.id}`
 }
 
+// ARCH-137 B7: дефолт даты — день объекта (display-зона), а не UTC-день
+// (`toISOString` вечером по Ташкенту давал вчерашнюю дату).
 function today(): string {
-  return new Date().toISOString().split('T')[0]
+  return todayInDisplayTz()
 }
 
 export default function CreateShiftFromTemplateModal({ isOpen, onClose, templateId, templateName }: Props) {

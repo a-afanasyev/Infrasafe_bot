@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreateShift, useUpdateShift, useDeleteShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
-import { isoToDatetimeLocal } from '../../utils/timezone'
+import { fromDisplayTz, isoToDatetimeLocal } from '../../utils/timezone'
 import type { ShiftDetail } from '../../types/api'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import {
@@ -97,7 +97,9 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
       setError(t('errors.specifyEndTime'))
       return
     }
-    if (endTime && new Date(endTime) <= new Date(startTime)) {
+    // Лексикографическое сравнение: `YYYY-MM-DDTHH:mm` сортируется как время,
+    // без парсинга в браузерной зоне.
+    if (endTime && endTime <= startTime) {
       setError(t('errors.endAfterStart'))
       return
     }
@@ -106,10 +108,12 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
       if (isEdit && shift) {
         // REG-02: смена исполнителя только через /reassign — НЕ шлём user_id
         // в PATCH (он вернул бы 422 и обходил бы перенос заявок/аудит).
+        // ARCH-137 B7: datetime-local — display-зонная стенка, не браузерная;
+        // fromDisplayTz — пара к isoToDatetimeLocal в предзаполнении формы.
         await updateShift.mutateAsync({
           id: shift.id,
-          start_time: new Date(startTime).toISOString(),
-          end_time: endTime ? new Date(endTime).toISOString() : undefined,
+          start_time: fromDisplayTz(startTime),
+          end_time: endTime ? fromDisplayTz(endTime) : undefined,
           shift_type: shiftType,
           max_requests: Number(maxRequests),
           priority_level: Number(priority),
@@ -119,8 +123,8 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
       } else {
         await createShift.mutateAsync({
           user_id: Number(executorId),
-          start_time: new Date(startTime).toISOString(),
-          end_time: endTime ? new Date(endTime).toISOString() : undefined,
+          start_time: fromDisplayTz(startTime),
+          end_time: endTime ? fromDisplayTz(endTime) : undefined,
           shift_type: shiftType,
           max_requests: Number(maxRequests),
           priority_level: Number(priority),

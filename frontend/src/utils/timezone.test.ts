@@ -1,10 +1,25 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { formatDate, formatDateTime, formatTime, toTashkent, dayOffset, isoToDatetimeLocal } from './timezone'
+import {
+  DEFAULT_DISPLAY_TZ,
+  dayOffset,
+  formatDate,
+  formatDateTime,
+  formatTime,
+  fromDisplayTz,
+  getDisplayTz,
+  isValidTimeZone,
+  isoToDatetimeLocal,
+  setDisplayTz,
+  toDisplayTz,
+} from './timezone'
 
 // Asia/Tashkent is a fixed UTC+5 (no DST). 09:00 UTC → 14:00 Tashkent.
 // `format(..., { timeZone })` is deterministic regardless of the runner's TZ.
 const ISO = '2026-06-01T09:00:00Z'
+
+// Module-level zone leaks between tests unless restored.
+afterEach(() => setDisplayTz(DEFAULT_DISPLAY_TZ))
 
 describe('formatTime', () => {
   it('renders Tashkent wall-clock HH:mm', () => {
@@ -27,9 +42,56 @@ describe('formatDateTime', () => {
   })
 })
 
-describe('toTashkent', () => {
+describe('toDisplayTz', () => {
   it('returns a Date for a valid ISO string', () => {
-    expect(toTashkent(ISO)).toBeInstanceOf(Date)
+    expect(toDisplayTz(ISO)).toBeInstanceOf(Date)
+  })
+})
+
+describe('setDisplayTz — зона показа меняет вывод форматтеров (ARCH-137 B6)', () => {
+  it('formatTime follows the configured zone', () => {
+    setDisplayTz('Europe/London')
+    // 09:00Z в июне = 10:00 BST (Лондон с DST).
+    expect(formatTime(ISO)).toBe('10:00')
+    expect(getDisplayTz()).toBe('Europe/London')
+  })
+
+  it('isoToDatetimeLocal follows the configured zone', () => {
+    setDisplayTz('America/New_York')
+    // 09:00Z в июне = 05:00 EDT.
+    expect(isoToDatetimeLocal(ISO)).toBe('2026-06-01T05:00')
+  })
+})
+
+describe('fromDisplayTz', () => {
+  it('interprets a datetime-local string as display-zone wall clock', () => {
+    // 13:00 Ташкента = 08:00Z.
+    expect(fromDisplayTz('2026-06-05T13:00')).toBe('2026-06-05T08:00:00.000Z')
+  })
+
+  it('round-trips with isoToDatetimeLocal', () => {
+    for (const iso of [
+      '2026-06-05T08:00:00.000Z',
+      '2026-08-04T20:30:00.000Z', // 01:30 следующего дня в Ташкенте
+      '2026-12-31T19:00:00.000Z', // полночь Нового года в Ташкенте
+    ]) {
+      expect(fromDisplayTz(isoToDatetimeLocal(iso))).toBe(iso)
+    }
+  })
+
+  it('accepts a display-zone carrier Date (day-window building block)', () => {
+    // Carrier «2026-08-02 00:00 стенки объекта» → инстант 19:00Z накануне.
+    const carrier = toDisplayTz('2026-08-01T19:00:00.000Z')
+    expect(fromDisplayTz(carrier)).toBe('2026-08-01T19:00:00.000Z')
+  })
+})
+
+describe('isValidTimeZone', () => {
+  it('accepts IANA zones and rejects garbage', () => {
+    expect(isValidTimeZone('Asia/Tashkent')).toBe(true)
+    expect(isValidTimeZone('Europe/London')).toBe(true)
+    expect(isValidTimeZone('Not/AZone')).toBe(false)
+    expect(isValidTimeZone('')).toBe(false)
   })
 })
 

@@ -34,18 +34,10 @@ import {
   startOfMonth,
   startOfWeek,
 } from '../utils/shiftWeek'
+import { fromDisplayTz, nowInDisplayTz } from '../utils/timezone'
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
-
-function toIsoLocalMidnight(d: Date): string {
-  // `d` is local midnight (startOf{Day,Week,Month} in the browser/Tashkent tz).
-  // Send its exact UTC instant so the backend's start_time range matches the
-  // local day boundaries. The previous `toISOString().split('T')[0]+'T00:00:00Z'`
-  // dropped the time part and yielded the WRONG UTC day for tz ahead of UTC
-  // (UTC+5 → the day view fetched the previous day's shifts).
-  return d.toISOString()
-}
 
 export default function ShiftsPage() {
   const { t } = useTranslation()
@@ -54,7 +46,10 @@ export default function ShiftsPage() {
   const { setActions, clearActions } = useTopbar()
   useShiftsWebSocket()
   const [viewMode, setViewMode] = useState<ShiftViewMode>('day')
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  // ARCH-137 B7: selectedDate — календарный carrier в display-зоне (см.
+  // utils/timezone.ts), а не браузерный `new Date()`: у менеджера в поездке
+  // «сегодня» и границы недели/месяца должны быть днями объекта.
+  const [selectedDate, setSelectedDate] = useState(() => nowInDisplayTz())
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null)
   const [editShift, setEditShift] = useState<ShiftDetail | null>(null)
@@ -76,15 +71,17 @@ export default function ShiftsPage() {
     return { dateFrom: startOfMonth(selectedDate), dateTo: endOfMonth(selectedDate) }
   }, [viewMode, selectedDate])
 
+  // dateFrom/dateTo — display-зонные полуночи (carrier); их инстант для API
+  // строит fromDisplayTz — фронтовый аналог backend'ного business_day_window.
   const { data: shifts = [], isLoading: shiftsLoading } = useShiftSchedule(
-    toIsoLocalMidnight(dateFrom),
-    toIsoLocalMidnight(dateTo),
+    fromDisplayTz(dateFrom),
+    fromDisplayTz(dateTo),
   )
   const { data: stats } = useShiftStats()
   const { data: transfers = [] } = useShiftTransfers()
   const { data: templates = [] } = useShiftTemplates()
 
-  const goToday = () => setSelectedDate(new Date())
+  const goToday = () => setSelectedDate(nowInDisplayTz())
   const goPrev = () =>
     setSelectedDate(d => {
       if (viewMode === 'month') {

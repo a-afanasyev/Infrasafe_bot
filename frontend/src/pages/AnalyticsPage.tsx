@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toZonedTime } from 'date-fns-tz'
 import {
   BarChart,
   Bar,
@@ -17,7 +16,7 @@ import {
 import { useShiftStats, useRequestStats, type AnalyticsPeriod } from '../hooks/useAnalytics'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { AVATAR_GRADIENTS, getInitials } from '../utils/employeeUtils'
-import { formatDateTime } from '../utils/timezone'
+import { formatDateTime, nowInDisplayTz, toDisplayTz } from '../utils/timezone'
 import { tCategory, tStatus, type ApiStatus } from '../i18n/apiMaps'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import EmptyState from '../components/shared/EmptyState'
@@ -170,7 +169,7 @@ export default function AnalyticsPage() {
   // Clock — update every minute (Tashkent time)
   useEffect(() => {
     const update = () => {
-      const now = toZonedTime(new Date(), 'Asia/Tashkent')
+      const now = nowInDisplayTz()
       const hh = String(now.getHours()).padStart(2, '0')
       const mm = String(now.getMinutes()).padStart(2, '0')
       setClockStr(`${hh}:${mm}`)
@@ -312,7 +311,7 @@ export default function AnalyticsPage() {
                 />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(v: string) => t(`days.short.${DAY_ABBR_KEYS[toZonedTime(new Date(v), 'Asia/Tashkent').getDay()]}`)}
+                  tickFormatter={(v: string) => t(`days.short.${DAY_ABBR_KEYS[toDisplayTz(v).getDay()]}`)}
                   tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent, formatTime, dayOffset } from '../../utils/timezone'
+import { toDisplayTz, formatTime, dayOffset } from '../../utils/timezone'
 import {
   executorKey,
   isSameDay,
@@ -37,7 +37,7 @@ type DaySegment = {
  * Same-day shifts return a single segment.
  */
 function shiftSegmentsByDay(shift: ShiftBrief): DaySegment[] {
-  const start = toTashkent(shift.start_time)
+  const start = toDisplayTz(shift.start_time)
   if (!shift.end_time) {
     return [{
       shift,
@@ -47,7 +47,7 @@ function shiftSegmentsByDay(shift: ShiftBrief): DaySegment[] {
       part: 'full',
     }]
   }
-  const end = toTashkent(shift.end_time)
+  const end = toDisplayTz(shift.end_time)
 
   const startDay = startOfDay(start)
   const endDay = startOfDay(end)

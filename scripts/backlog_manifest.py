@@ -215,8 +215,10 @@ ASSIGNMENT: dict[str, dict] = {
     # пункта заведено ниже как `ARCH-135` и `BUG-136`.
     "ARCH-135": A(pkg="—", status="actionable", method="verified-2026-08-02",
                   note="группа (а)/API закрыта 2026-08-02 (бизнес-бакеты статистики + SWEPT-гейт); остаток — 22 сайта в движках, где бакет меняет РЕШЕНИЯ алгоритма"),
-    "ARCH-137": A(pkg="—", status="actionable", method="verified-2026-08-02",
-                  note="план docs/audit/2026-08-02-plan-utc-display-tz.md: 5 PR (A → B-бэк → C-показ → B-фронт → ARCH-135(б))"),
+    "ARCH-137": A(pkg="—", status="actionable", method="verified-2026-08-05",
+                  note="фазы A/B-бэк/C-показ раскатаны; B-фронт закрыт в коде — остаток только раскатка фронта"),
+    "ARCH-138": A(pkg="—", status="actionable", method="verified-2026-08-05",
+                  note="4 access-сайта datetime-local в зоне браузера; канон fromDisplayTz уже есть (B-фронт)"),
     "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
                   note="решение: делать; форма — как у webhook *_NEXT"),
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",

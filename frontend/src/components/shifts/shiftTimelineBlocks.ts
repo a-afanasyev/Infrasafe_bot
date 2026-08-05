@@ -1,5 +1,5 @@
 import type { ShiftBrief } from '../../hooks/useShifts'
-import { toTashkent } from '../../utils/timezone'
+import { toDisplayTz } from '../../utils/timezone'
 
 export interface ShiftBlock {
   shift: ShiftBrief
@@ -22,7 +22,7 @@ function dayKey(d: Date): number {
  * the start day, 00:00–13:00 on the end day, a full row on any day in between.
  */
 export function computeBlocks(shift: ShiftBrief, date: Date): ShiftBlock[] {
-  const start = toTashkent(shift.start_time)
+  const start = toDisplayTz(shift.start_time)
   const vd = dayKey(date)
   const sd = dayKey(start)
 
@@ -33,7 +33,7 @@ export function computeBlocks(shift: ShiftBrief, date: Date): ShiftBlock[] {
     return [{ shift, colStart: startHour + 2, colSpan: 1, isOvernight: false, part: 'full' }]
   }
 
-  const end = toTashkent(shift.end_time)
+  const end = toDisplayTz(shift.end_time)
   const ed = dayKey(end)
 
   // Shift doesn't overlap the viewed day at all.
