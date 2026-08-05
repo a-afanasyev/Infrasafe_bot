@@ -376,4 +376,75 @@ def test_require_role_handlers_declare_di_params(module_path, func_name):
     func = getattr(mod, func_name)
     params = inspect.signature(func).parameters
     assert "roles" in params, f"{func_name}: нет roles в сигнатуре (require_role-DI)"
-    assert "db" in params and "user" in params
+    assert "user" in params
+    # AUD3-37 (волна B2): в конвертированных модулях db в сигнатуре ЗАПРЕЩЁН —
+    # объявленный db заставляет aiogram DI инъецировать middleware-сессию, и
+    # DB-фаза исполняется на event loop; тестовый seam — keyword-only _db.
+    if module_path == "uk_management_bot.handlers.shift_transfer":
+        assert "db" not in params, f"{func_name}: db в сигнатуре возвращает сессию на loop"
+        assert "_db" in params
+    else:
+        assert "db" in params
+
+
+# ========== AUD3-37 волна B2: sync-юниты хендлеров (DTO через границу потока) ==========
+
+def test_unit_check_shift_selectable_verdicts(db):
+    from uk_management_bot.handlers import shift_transfer as st
+    owner = _user(db, 1, 101)
+    stranger = _user(db, 2, 202)
+    shift = _shift(db, 10, owner.id, status="planned")
+
+    assert st._check_shift_selectable(db, owner.telegram_id, shift.id)[1] == "ok"
+    # чужая смена = «не найдена» (фильтр по владельцу)
+    assert st._check_shift_selectable(db, stranger.telegram_id, shift.id)[1] == "not_found"
+
+    _service(db).create_transfer(shift_id=shift.id, from_executor_id=owner.id,
+                                 reason="personal", comment="", urgency_level="medium")
+    assert st._check_shift_selectable(db, owner.telegram_id, shift.id)[1] == "exists"
+
+
+def test_unit_assign_transfer_returns_recipient_dto(db):
+    from uk_management_bot.handlers import shift_transfer as st
+    frm = _user(db, 1, 101)
+    to = _user(db, 2, 202)
+    manager = _user(db, 3, 303, roles='["manager"]')
+    shift = _shift(db, 10, frm.id, status="planned")
+    res = _service(db).create_transfer(shift_id=shift.id, from_executor_id=frm.id,
+                                       reason="personal", comment="", urgency_level="medium")
+    assert res["success"]
+    transfer_id = res["transfer_id"]
+
+    lang, error, recipient = st._assign_transfer(db, manager.telegram_id, transfer_id, to.id)
+    assert error is None
+    # DTO — скаляры (tg_id, lang), не ORM: пригодно для отправки после закрытия сессии
+    assert recipient == (to.telegram_id, "ru")
+
+
+def test_unit_view_transfer_idor_guard(db):
+    from uk_management_bot.handlers import shift_transfer as st
+    frm = _user(db, 1, 101)
+    outsider = _user(db, 4, 404)
+    shift = _shift(db, 10, frm.id, status="planned")
+    res = _service(db).create_transfer(shift_id=shift.id, from_executor_id=frm.id,
+                                       reason="personal", comment="", urgency_level="medium")
+    transfer_id = res["transfer_id"]
+
+    assert st._load_view_transfer(db, frm.telegram_id, transfer_id, False)[1] == "ok"
+    assert st._load_view_transfer(db, outsider.telegram_id, transfer_id, False)[1] == "forbidden"
+    # менеджер видит чужую передачу
+    assert st._load_view_transfer(db, outsider.telegram_id, transfer_id, True)[1] == "ok"
+    assert st._load_view_transfer(db, frm.telegram_id, 9999, False)[1] == "not_found"
+
+
+def test_unit_load_my_transfers_returns_dto_rows(db):
+    from uk_management_bot.handlers import shift_transfer as st
+    frm = _user(db, 1, 101)
+    shift = _shift(db, 10, frm.id, status="planned")
+    _service(db).create_transfer(shift_id=shift.id, from_executor_id=frm.id,
+                                 reason="personal", comment="", urgency_level="medium")
+
+    lang, rows, current_id = st._load_my_transfers(db, frm.telegram_id)
+    assert current_id == frm.id
+    assert rows and all(isinstance(r, st._TransferRow) for r in rows)
+    assert rows[0].status == "pending"
