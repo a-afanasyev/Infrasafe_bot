@@ -1,4 +1,7 @@
+import asyncio
 from contextlib import contextmanager
+from typing import Callable, Optional, TypeVar
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -74,6 +77,35 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+_T = TypeVar("_T")
+
+
+async def run_db(unit: Callable[..., _T], *, db: Optional[object] = None) -> _T:
+    """AUD3-37 (вариант (б)): цельный sync unit-of-work в worker-потоке.
+
+    ``unit`` — синхронная функция одного аргумента (Session). Сессия открывается
+    И закрывается внутри потока (``session_scope``); наружу unit обязан
+    возвращать DTO/скаляры, НЕ ORM-объекты: у ORM-строки за пределами потока нет
+    живой сессии (lazy-load → DetachedInstanceError), а Session не
+    потокобезопасна. Коммит — явный, внутри unit (session_scope close-only).
+    Приём отработан на планировщике (П6c, utils/shift_scheduler.py).
+
+    ``db`` — тестовый seam: с переданной сессией unit исполняется синхронно
+    прямо на ней (sqlite-сессии тестов однопоточны). В проде хендлер обязан
+    передавать None; прокидывать сюда middleware-сессию нельзя — это вернуло бы
+    блокировку event loop, ради снятия которой run_db существует (гейт:
+    tests/services/test_aud337_async_handlers_gate.py).
+    """
+    if db is not None:
+        return unit(db)
+
+    def _work() -> _T:
+        with session_scope() as session:
+            return unit(session)
+
+    return await asyncio.to_thread(_work)
 
 
 @contextmanager

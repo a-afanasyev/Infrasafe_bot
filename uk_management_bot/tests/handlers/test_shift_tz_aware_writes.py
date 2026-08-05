@@ -42,6 +42,7 @@ def _make_user(user_id=7):
 def _make_db_returning(shift):
     query = MagicMock()
     query.filter.return_value = query
+    query.with_for_update.return_value = query
     query.first.return_value = shift
     db = MagicMock()
     db.query.return_value = query
@@ -67,7 +68,7 @@ class TestStartShiftWritesAwareStartTime:
                 _make_callback(),
                 _make_state(),
                 language="ru",
-                db=db,
+                _db=db,
                 user=_make_user(),
                 roles=["executor"],
             )
@@ -96,7 +97,7 @@ class TestEndShiftWritesAwareEndTimeAndDuration:
             callback,
             _make_state(),
             language="ru",
-            db=db,
+            _db=db,
             user=_make_user(),
             roles=["executor"],
         )

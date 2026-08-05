@@ -119,7 +119,7 @@ class TestCurrentShifts:
         cb, state = _callback(), _state()
         with _business_today_is(ms, BUSINESS_DAY), \
              patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-            await ms.handle_current_shifts(cb, state, language="ru", db=db,
+            await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
         text = _rendered(cb)
@@ -138,7 +138,7 @@ class TestCurrentShifts:
         cb, state = _callback(), _state()
         with _business_today_is(ms, BUSINESS_DAY), \
              patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-            await ms.handle_current_shifts(cb, state, language="ru", db=db,
+            await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
         text = _rendered(cb)
@@ -156,7 +156,7 @@ class TestCurrentShifts:
         cb, state = _callback(), _state()
         with _business_today_is(ms, BUSINESS_DAY), \
              patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-            await ms.handle_current_shifts(cb, state, language="ru", db=db,
+            await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
         kb = cb.message.edit_text.await_args.kwargs["reply_markup"]
@@ -176,7 +176,7 @@ class TestCurrentShifts:
         cb, state = _callback(), _state()
         with _business_today_is(ms, BUSINESS_DAY), \
              patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-            await ms.handle_current_shifts(cb, state, language="ru", db=db,
+            await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
         assert "no_current_shifts" in _rendered(cb)
@@ -195,7 +195,7 @@ class TestWeekSchedule:
         cb, state = _callback(data="view_week_schedule"), _state()
         with _business_today_is(ms, BUSINESS_DAY), \
              patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
-            await ms.handle_week_schedule(cb, state, language="ru", db=db,
+            await ms.handle_week_schedule(cb, state, language="ru", _db=db,
                                           user=user, roles=["executor"])
 
         text = _rendered(cb)

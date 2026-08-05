@@ -79,4 +79,25 @@ if "uk_management_bot.database.session" not in sys.modules:
             db.close()
 
     session_stub.session_scope = _stub_session_scope
+
+    # AUD3-37: зеркало run_db (database/session.py). Семантика обязана совпадать
+    # с реальной, потому что в полном сьюте stub подменяет модуль ДЛЯ ВСЕГО
+    # процесса (sys.modules), и тесты thread-пути гоняются против него:
+    #   * seam db → sync-исполнение на переданной сессии;
+    #   * без db → asyncio.to_thread + session_scope, причём session_scope
+    #     берётся АТРИБУТОМ модуля на момент вызова (как у реального run_db
+    #     module-global lookup) — иначе patch("...database.session.session_scope")
+    #     в тестах бил бы мимо.
+    async def _stub_run_db(unit, *, db=None):
+        if db is not None:
+            return unit(db)
+        import asyncio
+
+        def _work():
+            with session_stub.session_scope() as session:
+                return unit(session)
+
+        return await asyncio.to_thread(_work)
+
+    session_stub.run_db = _stub_run_db
     sys.modules["uk_management_bot.database.session"] = session_stub
