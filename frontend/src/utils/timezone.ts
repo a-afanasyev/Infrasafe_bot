@@ -70,6 +70,16 @@ export function fromDisplayTz(wallClock: Date | string): string {
   return fromZonedTime(wallClock, displayTz).toISOString()
 }
 
+/**
+ * `datetime-local` из формы (возможно пустой/битый) → ISO-инстант display-зоны
+ * или undefined. Канон для полей «действителен до» (ARCH-138): голый
+ * `new Date(local).toISOString()` трактовал стенку в зоне БРАУЗЕРА.
+ */
+export function datetimeLocalToIso(local: string): string | undefined {
+  if (!local.trim() || Number.isNaN(new Date(local).getTime())) return undefined
+  return fromDisplayTz(local)
+}
+
 export function formatTime(isoString: string): string {
   return format(toDisplayTz(isoString), 'HH:mm', { timeZone: displayTz })
 }

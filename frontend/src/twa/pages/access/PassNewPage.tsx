@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
+import { datetimeLocalToIso } from '../../../utils/timezone'
 import ApartmentSelect from './ApartmentSelect'
 import { useApartments } from './useApartments'
 import {
@@ -53,7 +54,8 @@ export default function PassNewPage() {
         .post<PassCreateResponse>(`${ACCESS_BASE}/passes`, {
           apartment_id: apartmentId,
           pass_type: passType,
-          valid_until: new Date(validUntil).toISOString(),
+          // ARCH-138: стенка display-зоны, не браузерной
+          valid_until: datetimeLocalToIso(validUntil),
           plate_number_original: plate.trim() || undefined,
           max_entries: 1,
         })
@@ -83,8 +85,10 @@ export default function PassNewPage() {
     },
   })
 
+  // Гейт по результату парсинга, а не по непустоте — как в access-диалогах
+  // дашборда: битое значение не должно уезжать в POST без valid_until.
   const canSubmit =
-    apartmentId != null && validUntil.trim().length > 0 && !createMutation.isPending
+    apartmentId != null && datetimeLocalToIso(validUntil) != null && !createMutation.isPending
 
   async function copyCode() {
     if (!oneTimeCode) return

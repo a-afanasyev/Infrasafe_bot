@@ -17,6 +17,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import { MetaField, ApplicantAddressZones } from './AccessMeta'
 import ZoneCheckboxes from './ZoneCheckboxes'
 import type { UpdatePassPayload, ZoneRef } from '../../types/access'
+import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from '../../utils/timezone'
 
 /**
  * Деталь пропуска + правка (менеджер): заявитель/адрес/зона, продление срока,
@@ -28,13 +29,12 @@ interface Props {
   onClose: () => void
 }
 
-/** ISO → значение для <input type="datetime-local"> (локальное время, без TZ). */
+/** ISO → значение для <input type="datetime-local"> — стенка display-зоны,
+ * пара к datetimeLocalToIso при сохранении (ARCH-138): раньше префилл шёл в
+ * зоне браузера, и «открыл-сохранил» у менеджера в чужой TZ сдвигал бы срок. */
 function toLocalInput(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return ''
+  return isoToDatetimeLocal(iso)
 }
 
 export default function PassDetailDialog({ passId, canManage, onClose }: Props) {
@@ -63,7 +63,9 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
   function handleSave() {
     if (!pass) return
     const payload: UpdatePassPayload = {}
-    if (validUntil) payload.valid_until = new Date(validUntil).toISOString()
+    // ARCH-138: стенка display-зоны, не браузерной
+    const validUntilIso = datetimeLocalToIso(validUntil)
+    if (validUntilIso) payload.valid_until = validUntilIso
     const me = Number(maxEntries)
     if (Number.isFinite(me) && me >= 1) payload.max_entries = me
     payload.plate_number_original = plate.trim() || null
@@ -174,7 +176,7 @@ export default function PassDetailDialog({ passId, canManage, onClose }: Props) 
             ) : (
               <MetaField
                 label={t('accessControl.passes.validUntil')}
-                value={pass.valid_until ? new Date(pass.valid_until).toLocaleString() : '—'}
+                value={pass.valid_until ? formatDateTime(pass.valid_until) : '—'}
               />
             )}
           </div>

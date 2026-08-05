@@ -217,8 +217,8 @@ ASSIGNMENT: dict[str, dict] = {
     # @ 3f0aa7e), пре-деплой аудит ночных шаблонов чист на обоих продах.
     # ARCH-137 закрыт 2026-08-05: все 4 фазы раскатаны (теги *-2026-08-05 @ 562744d);
     # хвост access-диалогов — ARCH-138 ниже.
-    "ARCH-138": A(pkg="—", status="actionable", method="verified-2026-08-05",
-                  note="4 access-сайта datetime-local в зоне браузера; канон fromDisplayTz уже есть (B-фронт)"),
+    # ARCH-138 закрыт 2026-08-05: datetimeLocalToIso + 4 сайта, префилл/показ
+    # PassDetailDialog, дефолт published_at; уезжает со следующей сборкой frontend.
     "ARCH-107": A(pkg="—", status="actionable", method="verified-2026-07-27",
                   note="решение: делать; форма — как у webhook *_NEXT"),
     "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",
