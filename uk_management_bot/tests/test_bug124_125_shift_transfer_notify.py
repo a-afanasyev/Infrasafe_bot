@@ -7,7 +7,6 @@ BUG-125: `shifts.py:end_shift_yes_with_id` did a local
 `from ...services.shift_service import async_notify_shift_ended` (wrong module) →
 ImportError swallowed by the notification `except`, so no notification was sent.
 """
-from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -54,7 +53,10 @@ def test_shift_transfer_no_longer_imports_get_db():
     import uk_management_bot.handlers.shift_transfer as st
 
     assert not hasattr(st, "get_db")
-    assert hasattr(st, "session_scope")
+    # AUD3-37 (волна B2): сессию открывает run_db в worker-потоке,
+    # module-level session_scope из хендлера ушёл.
+    assert not hasattr(st, "session_scope")
+    assert hasattr(st, "run_db")
 
 
 @pytest.mark.asyncio
@@ -71,15 +73,11 @@ async def test_reason_selection_renders_next_step_not_error():
 
     db = MagicMock()
 
-    @contextmanager
-    def fake_scope():
-        yield db
-
-    with patch.object(st, "session_scope", fake_scope), \
-         patch.object(st, "get_user_language", return_value="ru") as p_lang, \
+    # AUD3-37: сессия приходит через run_db; тестовый seam — keyword-only _db.
+    with patch.object(st, "get_user_language", return_value="ru") as p_lang, \
          patch.object(st, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch.object(st, "urgency_level_keyboard", return_value=None):
-        await st.handle_reason_selection(cb, state)
+        await st.handle_reason_selection(cb, state, _db=db)
 
     # sync helper called with (id, db) — not awaited, not 1-arg
     p_lang.assert_called_once_with(7, db)
@@ -108,15 +106,10 @@ async def test_shift_selection_uses_session_and_does_not_crash():
     shift = MagicMock(id=5)
     db.query.return_value.filter.return_value.first.side_effect = [current, shift, None]
 
-    @contextmanager
-    def fake_scope():
-        yield db
-
-    with patch.object(st, "session_scope", fake_scope), \
-         patch.object(st, "get_user_language", return_value="ru"), \
+    with patch.object(st, "get_user_language", return_value="ru"), \
          patch.object(st, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch.object(st, "transfer_reason_keyboard", return_value=None):
-        await st.handle_shift_selection(cb, state)
+        await st.handle_shift_selection(cb, state, _db=db)
 
     cb.message.edit_text.assert_called_once()
     assert "select_reason" in cb.message.edit_text.call_args[0][0]

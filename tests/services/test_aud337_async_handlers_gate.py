@@ -25,9 +25,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Волна B1 (2026-08-05): лидер по числу сайтов sync-запросов.
+# Волны B1–B2 (2026-08-05): лидеры по числу сайтов sync-запросов.
 CONVERTED = [
     "uk_management_bot/handlers/my_shifts.py",
+    "uk_management_bot/handlers/shift_transfer.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
