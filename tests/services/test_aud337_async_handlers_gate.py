@@ -25,11 +25,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Волны B1–B3 (2026-08-05..06): лидеры по числу сайтов sync-запросов.
+# Волны B1–B4 (2026-08-05..06): лидеры по числу сайтов sync-запросов.
 CONVERTED = [
     "uk_management_bot/handlers/my_shifts.py",
     "uk_management_bot/handlers/shift_transfer.py",
     "uk_management_bot/handlers/request_acceptance.py",
+    "uk_management_bot/handlers/employee_management.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

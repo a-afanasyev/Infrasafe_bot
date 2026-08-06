@@ -63,7 +63,7 @@ async def test_change_role_header_localizes_roles(monkeypatch):
     state = AsyncMock()
 
     await emp.change_employee_role(
-        callback, state=state, db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
+        callback, state=state, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
     )
 
     text = callback.message.edit_text.await_args.args[0]
@@ -94,7 +94,7 @@ async def test_return_to_employee_info_is_render_only(monkeypatch):
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
 
-    result = await emp._return_to_employee_info(callback, MagicMock(), 5, "ru")
+    result = await emp._return_to_employee_info(callback, 5, "ru", _db=MagicMock())
 
     assert result is True
     callback.message.edit_text.assert_awaited_once()
@@ -123,11 +123,11 @@ async def test_unblock_re_renders_card_not_list(monkeypatch):
     db.query.return_value.filter.return_value.first.return_value = MagicMock()
 
     await emp.unblock_employee(
-        callback, db=db, roles=["manager"], user=MagicMock(), language="ru"
+        callback, _db=db, roles=["manager"], user=MagicMock(), language="ru"
     )
 
     render.assert_awaited_once()
-    assert render.await_args.args[2] == 41
+    assert render.await_args.args[1] == 41
     show_list.assert_not_awaited()
 
 
@@ -141,7 +141,7 @@ async def test_return_to_employee_info_missing_returns_false(monkeypatch):
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
 
-    result = await emp._return_to_employee_info(callback, MagicMock(), 999, "ru")
+    result = await emp._return_to_employee_info(callback, 999, "ru", _db=MagicMock())
 
     assert result is False
     callback.message.edit_text.assert_not_awaited()

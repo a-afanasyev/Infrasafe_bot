@@ -65,7 +65,7 @@ async def _run_change_spec(monkeypatch, employee):
     callback = _callback("change_employee_specialization_5")
     state = _state()
     await emp.change_employee_specialization(
-        callback, state, db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
+        callback, state, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
     )
     return callback, state
 
@@ -117,7 +117,9 @@ async def test_comment_audit_old_specs_use_canon(monkeypatch):
     current_user.id = 9
 
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.side_effect = [current_user, target]
+    q = db.query.return_value.filter.return_value
+    q.with_for_update.return_value = q  # TOCTOU-лок в цепочке юнита
+    q.first.side_effect = [current_user, target]
     added = []
     db.add = added.append
 
@@ -127,7 +129,7 @@ async def test_comment_audit_old_specs_use_canon(monkeypatch):
     message.answer = AsyncMock()
     state = _state({"target_employee_id": 5, "current_specializations": ["plumber"]})
 
-    await emp.process_specialization_change_comment(message, state, db=db, language="ru")
+    await emp.process_specialization_change_comment(message, state, _db=db, language="ru")
 
     assert len(added) == 1
     details = json.loads(added[0].details)
@@ -188,12 +190,12 @@ async def test_show_employee_actions_uses_card_helper(monkeypatch):
 
     callback = _callback("employee_mgmt_employee_7")
     await emp.show_employee_actions(
-        callback, db=MagicMock(), roles=["manager"], user=MagicMock(), language="uz"
+        callback, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="uz"
     )
 
     render.assert_awaited_once()
     args = render.await_args.args
-    assert args[2] == 7 and args[3] == "uz"
+    assert args[1] == 7 and args[2] == "uz"
     callback.answer.assert_awaited_once_with()
 
 
@@ -205,7 +207,7 @@ async def test_show_employee_actions_not_found(monkeypatch):
 
     callback = _callback("employee_mgmt_employee_7")
     await emp.show_employee_actions(
-        callback, db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
+        callback, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
     )
 
     callback.answer.assert_awaited_once()

@@ -60,7 +60,7 @@ async def test_entry_opens_edit_menu(monkeypatch):
     callback.answer = AsyncMock()
 
     await emp.edit_employee_entry(
-        callback, db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
+        callback, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
     )
 
     svc.get_user_by_id.assert_called_once_with(5)
@@ -84,7 +84,7 @@ async def test_entry_non_manager_denied(monkeypatch):
     callback.answer = AsyncMock()
 
     await emp.edit_employee_entry(
-        callback, db=MagicMock(), roles=[], user=MagicMock(), language="ru"
+        callback, _db=MagicMock(), roles=[], user=MagicMock(), language="ru"
     )
 
     callback.message.edit_text.assert_not_awaited()
