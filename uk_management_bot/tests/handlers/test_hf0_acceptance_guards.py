@@ -203,7 +203,7 @@ class TestPendingAcceptanceList:
         _mk_request(db, "260610-104", REQUEST_STATUS_EXECUTED)              # НЕ видна
 
         msg = _mk_message(OWNER_TG)
-        await show_pending_acceptance_requests(msg, db=db)
+        await show_pending_acceptance_requests(msg, _db=db)
 
         msg.answer.assert_awaited()
         text = msg.answer.await_args.args[0]
@@ -228,10 +228,12 @@ def _mk_rate_callback(request_number, telegram_id, rating=5):
     return cb
 
 
-# AUD6-P1-6: легаси-нотификатор заменён парой «матрица интентов + канал»;
-# для guard-тестов достаточно заглушить обе точки выхода в Telegram.
-NOTIFY = "uk_management_bot.handlers.request_acceptance.dispatch_notify_intents_sync"
-NOTIFY_CHANNEL = "uk_management_bot.handlers.request_acceptance.notify_channel_status_changed"
+# AUD6-P1-6: легаси-нотификатор заменён парой «матрица интентов + канал».
+# AUD3-37 (волна B3): пара разрезана на fetch/render-фазу в потоке и send-фазу
+# на loop — для guard-тестов глушим обе SEND-точки выхода в Telegram
+# (fetch/render гоняется по-настоящему на тестовой БД).
+NOTIFY = "uk_management_bot.handlers.request_acceptance.send_notify_messages"
+NOTIFY_CHANNEL = "uk_management_bot.handlers.request_acceptance.send_channel_status_text"
 
 
 class TestAcceptGuard:
@@ -244,7 +246,7 @@ class TestAcceptGuard:
                           manager_confirmed=True)
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
-            await save_rating(cb, db=db)
+            await save_rating(cb, _db=db)
 
         db.refresh(req)
         assert req.status == REQUEST_STATUS_APPROVED
@@ -259,7 +261,7 @@ class TestAcceptGuard:
                           is_returned=True)
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
-            await save_rating(cb, db=db)
+            await save_rating(cb, _db=db)
 
         db.refresh(req)
         assert req.status == REQUEST_STATUS_COMPLETED, "status must not change"
@@ -275,7 +277,7 @@ class TestAcceptGuard:
         req = _mk_request(db, "260610-203", "В работе")
         cb = _mk_rate_callback(req.request_number, OWNER_TG)
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
-            await save_rating(cb, db=db)
+            await save_rating(cb, _db=db)
 
         db.refresh(req)
         assert req.status == "В работе"
@@ -288,7 +290,7 @@ class TestAcceptGuard:
         req = _mk_request(db, "260610-204", REQUEST_STATUS_COMPLETED)
         cb = _mk_rate_callback(req.request_number, STRANGER_TG)
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
-            await save_rating(cb, db=db)
+            await save_rating(cb, _db=db)
 
         db.refresh(req)
         assert req.status == REQUEST_STATUS_COMPLETED
@@ -302,7 +304,7 @@ class TestAcceptGuard:
         req = _mk_request(db, "260610-205", REQUEST_STATUS_COMPLETED)
         cb = _mk_rate_callback(req.request_number, NEIGHBOR_TG)
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
-            await save_rating(cb, db=db)
+            await save_rating(cb, _db=db)
 
         db.refresh(req)
         assert req.status == REQUEST_STATUS_APPROVED
@@ -336,7 +338,7 @@ class TestReturnGuard:
         message_obj.bot = MagicMock()
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(OWNER_TG, _mk_state(req.request_number),
-                                         db=db, message_obj=message_obj)
+                                         message_obj, _db=db)
 
         db.refresh(req)
         assert req.is_returned is True
@@ -356,7 +358,7 @@ class TestReturnGuard:
         message_obj.answer = AsyncMock()
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(OWNER_TG, _mk_state(req.request_number),
-                                         db=db, message_obj=message_obj)
+                                         message_obj, _db=db)
 
         db.refresh(req)
         assert req.return_reason == "первый возврат", "second return must be rejected"
@@ -373,7 +375,7 @@ class TestReturnGuard:
         message_obj.answer = AsyncMock()
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(NEIGHBOR_TG, _mk_state(req.request_number),
-                                         db=db, message_obj=message_obj)
+                                         message_obj, _db=db)
 
         db.refresh(req)
         assert req.is_returned is False, "neighbor must not be able to return"
@@ -389,7 +391,7 @@ class TestReturnGuard:
         message_obj.answer = AsyncMock()
         with patch(NOTIFY, new=AsyncMock()), patch(NOTIFY_CHANNEL, new=AsyncMock()):
             await process_return_request(STRANGER_TG, _mk_state(req.request_number),
-                                         db=db, message_obj=message_obj)
+                                         message_obj, _db=db)
 
         db.refresh(req)
         assert req.is_returned is False
@@ -423,7 +425,7 @@ class TestMediaViewGuard:
         req.completion_media = ["file_id_1"]
         db.commit()
         cb = _mk_media_callback(req.request_number, STRANGER_TG)
-        await view_completion_media(cb, db=db)
+        await view_completion_media(cb, _db=db)
 
         cb.message.answer.assert_not_awaited()
         cb.message.answer_photo.assert_not_awaited()
@@ -439,7 +441,7 @@ class TestMediaViewGuard:
         req.completion_media = ["file_id_1"]
         db.commit()
         cb = _mk_media_callback(req.request_number, OWNER_TG)
-        await view_completion_media(cb, db=db)
+        await view_completion_media(cb, _db=db)
 
         cb.message.answer.assert_awaited()      # заголовок отправлен → гейт пройден
         cb.message.answer_photo.assert_awaited()
@@ -452,7 +454,53 @@ class TestMediaViewGuard:
         req.completion_media = ["file_id_1"]
         db.commit()
         cb = _mk_media_callback(req.request_number, NEIGHBOR_TG)
-        await view_completion_media(cb, db=db)
+        await view_completion_media(cb, _db=db)
 
         cb.message.answer.assert_awaited()
         cb.message.answer_photo.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# AUD3-37 волна B3 (находка ревью): post-commit-уведомления best-effort —
+# сбой СБОРА (fetch/render-юнит) не превращает закоммиченный переход в ложную
+# ошибку и не мешает state.clear() в возврате.
+# ---------------------------------------------------------------------------
+
+class TestPostCommitNotificationsBestEffort:
+    @pytest.mark.asyncio
+    async def test_accept_survives_collect_failure(self, db):
+        from uk_management_bot.handlers import request_acceptance as ra
+
+        req = _mk_request(db, "260610-501", REQUEST_STATUS_COMPLETED)
+        cb = _mk_rate_callback(req.request_number, OWNER_TG)
+        with patch.object(ra, "_collect_status_change_notifications",
+                          side_effect=RuntimeError("collect boom")):
+            await ra.save_rating(cb, _db=db)
+
+        db.refresh(req)
+        assert req.status == REQUEST_STATUS_APPROVED, "переход закоммичен"
+        # пользователь видит «спасибо за оценку», а не error_saving_rating
+        cb.message.edit_text.assert_awaited()
+        answers = [c.args[0] for c in cb.answer.await_args_list if c.args]
+        assert not any("error" in a for a in answers if isinstance(a, str))
+
+    @pytest.mark.asyncio
+    async def test_return_survives_collect_failure_and_clears_state(self, db):
+        from uk_management_bot.handlers import request_acceptance as ra
+
+        req = _mk_request(db, "260610-502", REQUEST_STATUS_COMPLETED)
+        state = _mk_state(req.request_number)
+        message_obj = MagicMock()
+        message_obj.answer = AsyncMock()
+        message_obj.bot = MagicMock()
+        with patch.object(ra, "_collect_return_notifications",
+                          side_effect=RuntimeError("collect boom")):
+            await ra.process_return_request(OWNER_TG, state, message_obj, _db=db)
+
+        db.refresh(req)
+        assert req.is_returned is True, "возврат закоммичен"
+        state.clear.assert_awaited_once()
+        # финальный success-ответ отправлен, error-ветка не сработала
+        texts = [c.args[0] for c in message_obj.answer.await_args_list if c.args]
+        assert any("request_returned_success" in t or "возвращ" in t.lower()
+                   for t in texts if isinstance(t, str)) or message_obj.answer.await_count == 1
