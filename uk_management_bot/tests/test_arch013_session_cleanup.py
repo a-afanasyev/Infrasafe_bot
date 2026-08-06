@@ -180,7 +180,7 @@ async def test_pattern_b_request_acceptance_does_not_close_injected_session():
 
     with patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch("uk_management_bot.utils.helpers.get_user_language", return_value="ru"):
-        await mod.show_pending_acceptance_requests(msg, db=injected)
+        await mod.show_pending_acceptance_requests(msg, _db=injected)
 
     injected.close.assert_not_called()  # injected = middleware's, must survive
 
