@@ -226,7 +226,7 @@ class TestGoBack:
         db = _make_db()
 
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"), patch(
-            "uk_management_bot.handlers.base.get_user_contextual_keyboard", return_value=MagicMock()
+            "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
             await go_back(msg, state, db)
 
@@ -242,7 +242,7 @@ class TestGoBack:
         db = _make_db()
 
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"), patch(
-            "uk_management_bot.handlers.base.get_user_contextual_keyboard", return_value=MagicMock()
+            "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
             await go_back(msg, state, db)
 
@@ -415,7 +415,7 @@ class TestCancelAction:
         state.get_state = AsyncMock(return_value="SomeState:some_step")
 
         with patch(
-            "uk_management_bot.handlers.base.get_user_contextual_keyboard", return_value=MagicMock()
+            "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
             await cancel_action(msg, state)
 
@@ -432,7 +432,7 @@ class TestCancelAction:
         state.get_state = AsyncMock(return_value=None)
 
         with patch(
-            "uk_management_bot.handlers.base.get_user_contextual_keyboard", return_value=MagicMock()
+            "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
             await cancel_action(msg, state)
 
@@ -453,7 +453,7 @@ class TestCmdHelp:
         msg = _make_message()
 
         with patch(
-            "uk_management_bot.handlers.base.get_user_contextual_keyboard", return_value=MagicMock()
+            "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
             await cmd_help(msg)
 

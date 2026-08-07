@@ -14,7 +14,7 @@ if settings.SENTRY_DSN:
         traces_sample_rate=0.1,
         environment="production" if not settings.DEBUG else "development",
     )
-from uk_management_bot.database.session import engine, SessionLocal, LazySession
+from uk_management_bot.database.session import engine, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
@@ -319,11 +319,10 @@ async def main():
             elif update.inline_query:
                 user_id = update.inline_query.from_user.id
             if chat_id and user_id:
-                db = SessionLocal()
-                try:
-                    lang = get_user_language(user_id, db)
-                finally:
-                    db.close()
+                # AUD3-37 (F2): язык для error-ответа — тоже в worker-потоке,
+                # а не своя SessionLocal на event loop.
+                from uk_management_bot.database.session import run_db
+                lang = await run_db(lambda s: get_user_language(user_id, s))
                 error_text = get_text("errors.unexpected", language=lang)
                 await bot.send_message(chat_id, error_text)
         except Exception as notify_err:

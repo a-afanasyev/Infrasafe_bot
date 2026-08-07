@@ -173,7 +173,7 @@ async def open_admin_panel(message: Message, db: Session, roles: list = None, ac
     if not has_access:
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -192,7 +192,7 @@ async def open_user_management_panel(message: Message, db: Session, roles: list 
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -218,7 +218,7 @@ async def open_employee_management_panel(message: Message, db: Session, roles: l
     if not has_access:
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -250,7 +250,7 @@ async def list_new_requests(message: Message, db: Session, roles: list = None, a
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -274,7 +274,7 @@ async def list_active_requests(message: Message, db: Session, roles: list = None
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -297,7 +297,7 @@ async def show_completed_requests_menu(message: Message, db: Session, roles: lis
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -330,7 +330,7 @@ async def list_all_completed_requests(message: Message, db: Session, roles: list
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -365,7 +365,7 @@ async def list_returned_requests(message: Message, db: Session, roles: list = No
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -411,7 +411,7 @@ async def list_unaccepted_requests(message: Message, db: Session, roles: list = 
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -478,7 +478,7 @@ async def back_to_main_menu(message: Message, db: Session, roles: list = None, a
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -505,7 +505,7 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     
@@ -539,7 +539,7 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("errors.permission_denied", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     

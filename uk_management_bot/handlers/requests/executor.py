@@ -372,7 +372,7 @@ async def executor_process_purchase_comment(message: Message, state: FSMContext)
 
         await message.answer(
             get_text("requests.purchase_comment_saved", language=lang).format(request_number=request_number),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
 
         await state.clear()

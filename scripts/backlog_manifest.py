@@ -162,11 +162,8 @@ ASSIGNMENT: dict[str, dict] = {
     # соседнего paginate_back_to_list сознательно НЕ унифицирована.
     # Хвост П6 закрыт 2026-07-27: `WR-05` (N+1 в рассылке claim → один JOIN) и
     # `AUD5-ARCH-7` (гонка ПОДТВЕРЖДЕНА, закрыта compare-and-set перед записью).
-    # ── Программа B: sync-ORM в async-контуре
-    "AUD3-37": A(pkg="B", status="actionable", method="verified-2026-07-27",
-                 note="решение: вариант (б) — sync unit-of-work в to_thread"),
-    "AUD5-CODE-6": A(pkg="B", status="actionable", method="verified-2026-07-27",
-                 note="закрывается вместе с AUD3-37 вариантом (б)"),
+    # ── Программа B: sync-ORM в async-контуре — ЗАКРЫТА 2026-08-07
+    # (AUD3-37 + AUD5-CODE-6: волны B1–B4 + финал F1/F2, PR #362..#368 + F2)
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
     "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",

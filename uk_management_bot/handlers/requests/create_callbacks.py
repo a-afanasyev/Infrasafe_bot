@@ -132,7 +132,7 @@ async def handle_cancel_create(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text(get_text("requests.request_creation_cancelled", language=lang))
         await callback.message.answer(
             get_text("requests.return_to_main", language=lang),
-            reply_markup=get_user_contextual_keyboard(callback.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(callback.from_user.id)
         )
         await callback.answer()
 
@@ -258,7 +258,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 # Отправляем отдельное сообщение с главной клавиатурой
                 await callback.message.answer(
                     get_text("requests.return_to_main", language=lang),
-                    reply_markup=get_user_contextual_keyboard(callback.from_user.id)
+                    reply_markup=await get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await state.clear()
                 logger.info(f"Заявка создана пользователем {callback.from_user.id}")
@@ -267,7 +267,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 await state.clear()
                 await callback.message.answer(
                     get_text("errors.request_save_failed", language=lang),
-                    reply_markup=get_user_contextual_keyboard(callback.from_user.id)
+                    reply_markup=await get_user_contextual_keyboard(callback.from_user.id)
                 )
                 await callback.answer(get_text("errors.request_save_failed", language=lang), show_alert=True)
 
@@ -277,7 +277,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             )
             await callback.message.answer(
                 get_text("requests.return_to_main", language=lang),
-                reply_markup=get_user_contextual_keyboard(callback.from_user.id)
+                reply_markup=await get_user_contextual_keyboard(callback.from_user.id)
             )
             await state.clear()
             logger.info(f"Создание заявки отменено пользователем {callback.from_user.id}")

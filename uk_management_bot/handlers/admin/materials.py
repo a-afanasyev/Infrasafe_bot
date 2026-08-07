@@ -40,7 +40,7 @@ async def handle_admin_shifts_button(message: Message, state: FSMContext, db: Se
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("auth.no_access", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     

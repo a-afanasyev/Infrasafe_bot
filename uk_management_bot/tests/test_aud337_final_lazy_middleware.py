@@ -176,3 +176,38 @@ async def test_auth_does_not_open_middleware_lazy_session(thread_sessions):
 
     assert data["user"] is not None
     assert lazy.opened is False  # middleware-сессия осталась неоткрытой
+
+
+# ─────────────────────── F2: клавиатура в потоке ───────────────────────
+
+@pytest.mark.asyncio
+async def test_contextual_keyboard_loads_roles_off_the_event_loop(thread_sessions, monkeypatch):
+    """AUD3-37 F2: get_user_contextual_keyboard грузит роли в worker-потоке."""
+    from uk_management_bot.keyboards import base as kb
+
+    _seed_user(thread_sessions, tg_id=880)
+    loop_thread = threading.get_ident()
+    seen = {}
+    orig_unit = kb._load_keyboard_context
+
+    def spy_unit(s, user_id):
+        seen["thread"] = threading.get_ident()
+        return orig_unit(s, user_id)
+
+    monkeypatch.setattr(kb, "_load_keyboard_context", spy_unit)
+
+    result = await kb.get_user_contextual_keyboard(880)
+    assert seen["thread"] != loop_thread
+    assert result is not None
+
+
+def test_keyboard_context_unit_returns_dto_not_orm(db):
+    """Юнит возвращает кортеж примитивов — ORM через границу не выходит."""
+    from uk_management_bot.keyboards import base as kb
+
+    _seed_user(db, tg_id=881)
+    ctx = kb._load_keyboard_context(db, 881)
+    roles, active_role, user_status, language = ctx
+    assert roles == ["executor"]
+    assert (active_role, user_status, language) == ("executor", "approved", "ru")
+    assert kb._load_keyboard_context(db, 999999) is None

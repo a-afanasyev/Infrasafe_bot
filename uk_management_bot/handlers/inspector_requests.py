@@ -387,5 +387,5 @@ async def _cancel(message: Message, state: FSMContext, lang: str):
 
     await message.answer(
         get_text("requests.request_creation_cancelled", language=lang),
-        reply_markup=get_user_contextual_keyboard(message.chat.id),
+        reply_markup=await get_user_contextual_keyboard(message.chat.id),
     )
