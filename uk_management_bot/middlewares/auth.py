@@ -8,8 +8,25 @@ from uk_management_bot.utils.auth_helpers import get_user_roles, get_active_role
 from aiogram.types import Message, CallbackQuery
 
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 
 logger = logging.getLogger(__name__)
+
+
+def _load_auth_user_sync(db, telegram_id: int) -> Optional[User]:
+    """Юнит auth-загрузки (AUD3-37 финал): исполняется в worker-потоке run_db.
+
+    expunge отвязывает user от thread-сессии ДО её закрытия: наружу уходит
+    detached-объект с загруженными колонками. Читать их можно (все потребители —
+    has_admin_access, get_user_roles, localization — читают только колонки;
+    lazy-relationships через data["user"] в боте не используются), а вот
+    мутировать и коммитить его через ДРУГУЮ сессию нельзя — хендлеры и так
+    перечитывают своего user сами (проверено грепом по мутациям).
+    """
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if user is not None:
+        db.expunge(user)
+    return user
 
 
 async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
@@ -55,15 +72,19 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
         data["user_status"] = None
         return await handler(event, data)
 
-    db = data.get("db")
-    if db is None or telegram_id is None:
+    if telegram_id is None:
         data["user"] = None
         data["user_status"] = None
         return await handler(event, data)
 
     try:
-        user: Optional[User] = db.query(User).filter(User.telegram_id == telegram_id).first()
-        
+        # AUD3-37 (финал): запрос уходит в worker-поток со СВОЕЙ короткой
+        # сессией — middleware-сессия (data["db"], теперь ленивая) не
+        # открывается ради auth, и event loop не блокируется на каждый update.
+        user: Optional[User] = await run_db(
+            lambda s: _load_auth_user_sync(s, telegram_id)
+        )
+
         data["user"] = user
         data["user_status"] = getattr(user, "status", None) if user else None
         

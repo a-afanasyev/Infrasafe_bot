@@ -108,6 +108,38 @@ async def run_db(unit: Callable[..., _T], *, db: Optional[object] = None) -> _T:
     return await asyncio.to_thread(_work)
 
 
+class LazySession:
+    """AUD3-37 (финал): middleware-сессия, открывающаяся при первом обращении.
+
+    db_middleware кладёт этот прокси в ``data["db"]`` вместо готовой сессии.
+    Update, чьи хендлер и middleware не трогают ``db`` (конвертированные на
+    ``run_db`` файлы), проходит вообще без middleware-сессии; первый же
+    ``db.<attr>`` неконвертированного кода открывает настоящую SessionLocal —
+    дальше прокси прозрачен. ``opened`` — для commit/close в middleware:
+    их нельзя звать через прокси вслепую, это открыло бы сессию ради закрытия.
+    SessionLocal берётся module-global lookup'ом на момент открытия — тестовые
+    monkeypatch фабрики работают как с run_db.
+
+    Не определять __bool__/__len__: truthiness обязана оставаться дефолтной
+    (всегда True), как у настоящей Session — guard'ы вида ``and db`` в
+    require_role (middlewares/auth.py) полагаются на это неявно.
+    """
+
+    __slots__ = ("_real",)
+
+    def __init__(self) -> None:
+        self._real = None
+
+    @property
+    def opened(self) -> bool:
+        return self._real is not None
+
+    def __getattr__(self, name):
+        if self._real is None:
+            self._real = SessionLocal()
+        return getattr(self._real, name)
+
+
 @contextmanager
 def session_scope():
     """Синхронная сессия как context manager — гарантирует ``close()`` при любом

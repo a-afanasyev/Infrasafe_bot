@@ -14,7 +14,7 @@ if settings.SENTRY_DSN:
         traces_sample_rate=0.1,
         environment="production" if not settings.DEBUG else "development",
     )
-from uk_management_bot.database.session import engine, SessionLocal
+from uk_management_bot.database.session import engine, SessionLocal, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
@@ -58,7 +58,6 @@ from uk_management_bot.handlers.user_yards_management import router as user_yard
 from uk_management_bot.handlers.feedback import router as feedback_router  # Обратная связь
 from uk_management_bot.handlers.access_control import router as access_control_router  # Контроль доступа (ТЗ §6.4)
 
-from uk_management_bot.middlewares.shift import shift_context_middleware
 from uk_management_bot.middlewares.auth import auth_middleware, role_mode_middleware
 import sys
 import os
@@ -240,31 +239,37 @@ async def main():
     dp = Dispatcher(storage=storage)
     
     # Middleware для внедрения сессии БД (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
+    # AUD3-37 (финал): сессия ленивая — открывается первым реальным обращением.
+    # Update конвертированных на run_db хендлеров проходит без неё вовсе
+    # (auth грузит user своей thread-сессией), интерим «2 соединения на update»
+    # для них снят. commit/close — только если сессия фактически открывалась:
+    # вызов через прокси вслепую открыл бы её ради закрытия.
     @dp.update.middleware()
     async def db_middleware(handler, event, data):
-        db = SessionLocal()
+        db = LazySession()
         data["db"] = db
         try:
             result = await handler(event, data)
             # Коммитим только если не было исключений
-            if db.in_transaction():
+            if db.opened and db.in_transaction():
                 db.commit()
             return result
         except Exception as e:
             # Откатываем транзакцию при ошибке
             try:
-                if db.in_transaction():
+                if db.opened and db.in_transaction():
                     db.rollback()
             except Exception:
                 pass
             logger.error(f"Ошибка в middleware: {e}")
             raise
         finally:
-            # Закрываем сессию в любом случае
-            try:
-                db.close()
-            except Exception as close_err:
-                logger.warning(f"Ошибка закрытия сессии БД: {close_err}")
+            # Закрываем сессию, если она открывалась
+            if db.opened:
+                try:
+                    db.close()
+                except Exception as close_err:
+                    logger.warning(f"Ошибка закрытия сессии БД: {close_err}")
 
     # Подключаем auth-middleware глобально (должен быть вторым)
     @dp.update.middleware()
@@ -284,10 +289,9 @@ async def main():
     async def _localization_middleware(handler, event, data):
         return await localization_middleware(handler, event, data)
 
-    # Подключаем shift-middleware глобально через декоратор (последний)
-    @dp.update.middleware()
-    async def _shift_middleware(handler, event, data):
-        return await shift_context_middleware(handler, event, data)
+    # AUD3-37 (финал): shift-middleware удалён — data["shift_context"] не читал
+    # ни один хендлер/клавиатура/сервис (grep по репо = 0 потребителей), а его
+    # get_active_shift() стоил лишний sync-запрос БД на КАЖДЫЙ update.
 
     # Throttling middleware: max 2 messages/sec per user
     from uk_management_bot.middlewares.throttling import ThrottlingMiddleware

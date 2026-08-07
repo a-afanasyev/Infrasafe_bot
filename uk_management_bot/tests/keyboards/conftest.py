@@ -75,4 +75,23 @@ if "uk_management_bot.database.session" not in sys.modules:
         return await asyncio.to_thread(_work)
 
     session_stub.run_db = _stub_run_db
+
+    # AUD3-37 финал: зеркало LazySession (main.py импортирует её из
+    # database.session; семантика — открытие первым атрибутным доступом).
+    class _StubLazySession:
+        __slots__ = ("_real",)
+
+        def __init__(self):
+            self._real = None
+
+        @property
+        def opened(self):
+            return self._real is not None
+
+        def __getattr__(self, name):
+            if self._real is None:
+                self._real = session_stub.SessionLocal()
+            return getattr(self._real, name)
+
+    session_stub.LazySession = _StubLazySession
     sys.modules["uk_management_bot.database.session"] = session_stub
