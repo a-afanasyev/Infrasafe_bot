@@ -54,12 +54,12 @@ async def test_approve_re_renders_card_with_language(monkeypatch, language):
 
     callback = _make_callback("approve_employee_7")
     await emp.approve_employee(
-        callback, db=db, roles=["manager"], user=MagicMock(), language=language
+        callback, _db=db, roles=["manager"], user=MagicMock(), language=language
     )
 
     render.assert_awaited_once()
-    assert render.await_args.args[2] == 7            # employee_id
-    assert render.await_args.args[3] == language     # CODE-12: language threaded
+    assert render.await_args.args[1] == 7            # employee_id
+    assert render.await_args.args[2] == language     # CODE-12: language threaded
     show_list.assert_not_awaited()
     callback.answer.assert_awaited_once()
 
@@ -72,7 +72,7 @@ async def test_approve_render_error_logged_no_second_answer(monkeypatch):
 
     callback = _make_callback("approve_employee_7")
     await emp.approve_employee(
-        callback, db=db, roles=["manager"], user=MagicMock(), language="ru"
+        callback, _db=db, roles=["manager"], user=MagicMock(), language="ru"
     )
 
     render.assert_awaited_once()
@@ -91,12 +91,12 @@ async def test_reject_re_renders_card_with_language(monkeypatch, language):
 
     callback = _make_callback("reject_employee_9")
     await emp.reject_employee(
-        callback, db=db, roles=["manager"], user=MagicMock(), language=language
+        callback, _db=db, roles=["manager"], user=MagicMock(), language=language
     )
 
     render.assert_awaited_once()
-    assert render.await_args.args[2] == 9
-    assert render.await_args.args[3] == language
+    assert render.await_args.args[1] == 9
+    assert render.await_args.args[2] == language
     show_list.assert_not_awaited()
     callback.answer.assert_awaited_once()
 
@@ -110,7 +110,7 @@ async def test_delete_renders_neutral_screen_back_to_pending(monkeypatch, langua
 
     callback = _make_callback("delete_employee_12")
     await emp.delete_employee(
-        callback, db=db, roles=["manager"], user=MagicMock(), language=language
+        callback, _db=db, roles=["manager"], user=MagicMock(), language=language
     )
 
     # Neutral final screen edited in place, NOT a card (employee is gone).

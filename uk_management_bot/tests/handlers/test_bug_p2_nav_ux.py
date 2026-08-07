@@ -273,7 +273,7 @@ class TestBug025EmployeeSearchHandler:
             return_value=True,
         ):
             await handle_employee_search_query(
-                msg, state, db=db, user=MagicMock(), roles=["admin"], language="ru"
+                msg, state, _db=db, user=MagicMock(), roles=["admin"], language="ru"
             )
 
         msg.answer.assert_awaited()
@@ -309,7 +309,7 @@ class TestBug025EmployeeSearchHandler:
             return_value=True,
         ):
             await handle_employee_search_query(
-                msg, state, db=db, user=MagicMock(), roles=["admin"], language="ru"
+                msg, state, _db=db, user=MagicMock(), roles=["admin"], language="ru"
             )
 
         msg.answer.assert_awaited()

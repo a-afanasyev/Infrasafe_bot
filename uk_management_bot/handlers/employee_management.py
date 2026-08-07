@@ -6,14 +6,30 @@
 - Списков и поиска сотрудников
 - Действий модерации
 - Управления ролями и специализациями
+
+AUD3-37 (вариант (б), волна B4): DB-фаза каждого хендлера — цельный sync
+unit-of-work (`_load_*`/`_update_*`/`_apply_*`/`_moderate_*` ниже), исполняемый
+в worker-потоке через ``run_db``. Сессия живёт только внутри юнита; наружу
+выходят DTO (``_EmployeeRow``) — рендеринг и клавиатуры работают по ним
+duck-typed. Хендлеры НЕ объявляют параметр ``db``: иначе aiogram DI снова
+инъецировал бы middleware-сессию, и запрос исполнялся бы на event loop
+(гейт: tests/services/test_aud337_async_handlers_gate.py). Тестовый seam —
+keyword-only ``_db`` (aiogram это имя не инъецирует: ключа "_db" в data нет),
+с ним юнит исполняется синхронно на переданной сессии.
 """
 
 import logging
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
+
+from uk_management_bot.database.session import run_db
 
 from uk_management_bot.services.user_management_service import UserManagementService
 from uk_management_bot.services.auth_service import AuthService
@@ -40,7 +56,234 @@ def _format_employee_name(employee) -> str:
     return display_name(employee)
 
 
-async def _return_to_employee_info(callback: CallbackQuery, db: Session, employee_id: int, language: str = "ru") -> bool:
+# ==========================================================================
+# DTO + sync-юниты (AUD3-37, волна B4).
+# Имена полей DTO совпадают с ORM-атрибутами User — display_name и клавиатуры
+# (get_employee_list_keyboard, get_employee_actions_keyboard) работают по ним
+# duck-typed, их код не менялся. Юниты берут сессию первым аргументом, commit
+# делают сами (или он живёт в сервисе) — через границу потока ORM не выходит.
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _EmployeeRow:
+    id: int
+    telegram_id: Optional[int]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    username: Optional[str]
+    phone: Optional[str]
+    roles: Optional[str]
+    status: Optional[str]
+    specialization: Optional[str]
+    created_at: Optional[datetime]
+
+
+def _employee_row(user: User) -> _EmployeeRow:
+    return _EmployeeRow(
+        id=user.id,
+        telegram_id=user.telegram_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        phone=user.phone,
+        roles=user.roles,
+        status=user.status,
+        specialization=user.specialization,
+        created_at=user.created_at,
+    )
+
+
+def _load_employee_stats(db: Session) -> dict:
+    return UserManagementService(db).get_employee_stats()
+
+
+def _load_employees_page(db: Session, list_type: str, page: int) -> dict:
+    data = UserManagementService(db).get_employees_list(list_type, page)
+    return {**data, 'employees': [_employee_row(e) for e in data.get('employees', [])]}
+
+
+def _load_employee(db: Session, employee_id: int) -> Optional[_EmployeeRow]:
+    employee = UserManagementService(db).get_user_by_id(employee_id)
+    return _employee_row(employee) if employee else None
+
+
+def _moderate_employee(db: Session, actor_tg_id: int, employee_id: int,
+                       method_name: str, comment: str) -> str:
+    """Модерация через AuthService (approve_user/block_user/delete_user).
+
+    Возвращает "no_actor" (оператор не найден в БД), "ok" или "fail".
+    Commit — внутри AuthService.
+    """
+    current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not current_user:
+        return "no_actor"
+    success = getattr(AuthService(db), method_name)(employee_id, current_user.id, comment)
+    return "ok" if success else "fail"
+
+
+def _search_employees(db: Session, raw_query: str) -> List[_EmployeeRow]:
+    from uk_management_bot.utils.sql_search import (
+        ci_contains_any, escape_like, is_postgres,
+    )
+    pattern = f"%{escape_like(raw_query)}%"
+    employees = (
+        db.query(User)
+        .filter(
+            ci_contains_any(
+                (User.first_name, User.last_name, User.username, User.phone),
+                pattern,
+                is_postgres=is_postgres(db),
+            )
+        )
+        .limit(20)
+        .all()
+    )
+    return [_employee_row(e) for e in employees]
+
+
+def _load_detailed_spec_stats(db: Session) -> dict:
+    detailed = SpecializationService(db).get_detailed_specialization_stats()
+    return {
+        spec: {
+            'count': spec_data['count'],
+            'employees': [_employee_row(e) for e in spec_data['employees']],
+        }
+        for spec, spec_data in detailed.items()
+    }
+
+
+def _update_employee_name(db: Session, target_employee_id: int, new_name: str) -> bool:
+    user = db.query(User).filter(User.id == target_employee_id).first()
+    if not user:
+        return False
+    # Разделяем ФИО на имя и фамилию
+    name_parts = new_name.split()
+    if len(name_parts) >= 2:
+        user.first_name = name_parts[0]
+        user.last_name = ' '.join(name_parts[1:])
+    else:
+        user.first_name = new_name
+        user.last_name = None
+    db.commit()
+    return True
+
+
+def _update_employee_phone(db: Session, target_employee_id: int, new_phone: str) -> bool:
+    user = db.query(User).filter(User.id == target_employee_id).first()
+    if not user:
+        return False
+    user.phone = new_phone
+    db.commit()
+    return True
+
+
+def _apply_role_change(db: Session, actor_tg_id: int, target_employee_id: int,
+                       current_roles: list, comment: str) -> str:
+    """Смена набора ролей + best-effort аудит. "no_actor" | "no_target" | "ok"."""
+    current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not current_user:
+        return "no_actor"
+
+    # with_for_update: два менеджера правят набор ролей одного сотрудника —
+    # без блокировки last-write-wins тихо терял бы правку и рассинхронизировал
+    # аудит с фактическим состоянием (как в B1 для _start_shift; sqlite — no-op).
+    user = (
+        db.query(User)
+        .filter(User.id == target_employee_id)
+        .with_for_update()
+        .first()
+    )
+    if not user:
+        return "no_target"
+
+    logger.debug(f" Найден пользователь для обновления ролей: {user.id}")
+    old_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
+    logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
+
+    user.roles = json.dumps(current_roles)
+    if current_roles:
+        sync_legacy_role(user, current_roles[0])  # Первая роль как основная
+        # Инвариант: active_role всегда ∈ roles. Если активная роль
+        # больше не входит в набор (или не задана) — переводим на первую.
+        if not user.active_role or user.active_role not in current_roles:
+            user.active_role = current_roles[0]
+
+    # Создаем запись в аудит логе
+    try:
+        from uk_management_bot.database.models.audit import AuditLog
+        audit = AuditLog(
+            action="role_change",
+            user_id=current_user.id,  # ID пользователя, который вносит изменения
+            telegram_user_id=user.telegram_id,  # Telegram ID пользователя, у которого изменяются роли
+            details=json.dumps({
+                "target_user_id": target_employee_id,
+                "old_roles": old_roles,
+                "new_roles": current_roles,
+                "comment": comment,
+                "timestamp": utc_now().isoformat()
+            })
+        )
+        db.add(audit)
+        logger.debug(" AuditLog создан успешно")
+    except Exception as audit_error:
+        logger.error(f"Failed to create AuditLog: {audit_error}")
+        # Продолжаем выполнение даже если аудит не удался
+
+    db.commit()
+    return "ok"
+
+
+def _apply_specialization_change(db: Session, actor_tg_id: int, target_employee_id: int,
+                                 current_specializations: list, comment: str) -> str:
+    """Смена специализаций + best-effort аудит. "no_actor" | "no_target" | "ok"."""
+    current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not current_user:
+        return "no_actor"
+
+    # Сохраняем специализации напрямую в базу (обходя проверки сервиса).
+    # with_for_update — та же TOCTOU-защита, что в _apply_role_change.
+    user = (
+        db.query(User)
+        .filter(User.id == target_employee_id)
+        .with_for_update()
+        .first()
+    )
+    if not user:
+        return "no_target"
+
+    # AUD5-CODE-8: единый парсер вместо копии (json.loads без гейта —
+    # JSON-скаляр попадал в аудит числом, элементы не стрипались)
+    old_specializations = sorted(parse_specializations(user))
+
+    # Сохраняем специализации как JSON строку
+    user.specialization = json.dumps(current_specializations)
+
+    # Создаем запись в аудит логе
+    try:
+        from uk_management_bot.database.models.audit import AuditLog
+        audit = AuditLog(
+            action="specialization_change",
+            user_id=current_user.id,  # ID пользователя, который вносит изменения
+            telegram_user_id=user.telegram_id,  # Telegram ID пользователя, у которого изменяются специализации
+            details=json.dumps({
+                "target_user_id": target_employee_id,
+                "old_specializations": old_specializations,
+                "new_specializations": current_specializations,
+                "comment": comment,
+                "timestamp": utc_now().isoformat()
+            })
+        )
+        db.add(audit)
+    except Exception as audit_error:
+        logger.error(f"Ошибка создания AuditLog: {audit_error}")
+        # Продолжаем выполнение даже если аудит не удался
+
+    db.commit()
+    return "ok"
+
+
+async def _return_to_employee_info(callback: CallbackQuery, employee_id: int,
+                                   language: str = "ru", *, _db=None) -> bool:
     """MGR-05: render-only карточка сотрудника по employee_id.
 
     НЕ проверяет права и НЕ вызывает callback.answer() ни на одном пути — это
@@ -58,7 +301,7 @@ async def _return_to_employee_info(callback: CallbackQuery, db: Session, employe
         format_specializations,
     )
 
-    employee = UserManagementService(db).get_user_by_id(employee_id)
+    employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
     if not employee:
         return False
 
@@ -91,7 +334,7 @@ router = Router()
 # ═══ ГЛАВНОЕ МЕНЮ УПРАВЛЕНИЯ СОТРУДНИКАМИ ═══
 
 @router.callback_query(F.data == "employee_management_panel")
-async def show_employee_management_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_employee_management_panel(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Показать панель управления сотрудниками"""
     logger.debug(f"Employee management panel called: callback_data={callback.data}")
     lang = language
@@ -111,8 +354,7 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
     try:
         logger.debug(" Начинаем получение статистики сотрудников")
         # Получаем статистику сотрудников
-        user_mgmt_service = UserManagementService(db)
-        stats = user_mgmt_service.get_employee_stats()
+        stats = await run_db(_load_employee_stats, db=_db)
         logger.debug(f" Статистика получена: {stats}")
         
         # Показываем главное меню
@@ -142,13 +384,13 @@ async def show_employee_management_panel(callback: CallbackQuery, db: Session, r
 
 
 @router.callback_query(F.data == "employee_mgmt_main")
-async def back_to_main_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def back_to_main_panel(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Вернуться к главному меню панели управления"""
-    await show_employee_management_panel(callback, db, roles, active_role, user)
+    await show_employee_management_panel(callback, roles, active_role, user, _db=_db)
 
 
 @router.callback_query(F.data == "employee_mgmt_stats")
-async def show_employee_stats(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_employee_stats(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Показать статистику сотрудников"""
     lang = language
     
@@ -163,9 +405,8 @@ async def show_employee_stats(callback: CallbackQuery, db: Session, roles: list 
         return
     
     try:
-        user_mgmt_service = UserManagementService(db)
-        stats = user_mgmt_service.get_employee_stats()
-        
+        stats = await run_db(_load_employee_stats, db=_db)
+
         # Формируем текст статистики
         stats_text = f"📊 {get_text('employee_management.stats_title', language=lang)}\n\n"
         stats_text += f"📝 {get_text('employee_management.pending_employees', language=lang)}: {stats.get('pending', 0)}\n"
@@ -192,7 +433,7 @@ async def show_employee_stats(callback: CallbackQuery, db: Session, roles: list 
 # ═══ СПИСКИ СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.startswith("employee_mgmt_list_"))
-async def show_employee_list(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_employee_list(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Показать список сотрудников"""
     logger.debug(f" show_employee_list вызвана с callback_data: {callback.data}")
     lang = language
@@ -216,10 +457,9 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
         page = int(parts[4]) if len(parts) > 4 else 1
         
         logger.debug(f" Запрос списка сотрудников: тип={list_type}, страница={page}")
-        
-        user_mgmt_service = UserManagementService(db)
-        employees_data = user_mgmt_service.get_employees_list(list_type, page)
-        
+
+        employees_data = await run_db(lambda s: _load_employees_page(s, list_type, page), db=_db)
+
         logger.debug(f" Получены данные сотрудников: {len(employees_data.get('employees', []))} сотрудников")
         
         # Формируем заголовок
@@ -252,7 +492,7 @@ async def show_employee_list(callback: CallbackQuery, db: Session, roles: list =
 # ═══ ДЕЙСТВИЯ С СОТРУДНИКАМИ ═══
 
 @router.callback_query(F.data.startswith("employee_mgmt_employee_"))
-async def show_employee_actions(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_employee_actions(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Показать действия с сотрудником"""
     logger.debug(f" show_employee_actions вызвана с callback_data: {callback.data}")
     lang = language
@@ -278,7 +518,7 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
         # _return_to_employee_info — раньше здесь была вторая копия того же
         # текста. Вместе с копией ушёл fallback на deprecated employee.role:
         # роли живут в employee.roles (см. CLAUDE.md, «Роли в БД»).
-        rendered = await _return_to_employee_info(callback, db, employee_id, lang)
+        rendered = await _return_to_employee_info(callback, employee_id, lang, _db=_db)
         if rendered:
             await callback.answer()
         else:
@@ -298,7 +538,7 @@ async def show_employee_actions(callback: CallbackQuery, db: Session, roles: lis
 # ═══ ОДОБРЕНИЕ/ОТКЛОНЕНИЕ СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.startswith("approve_employee_"))
-async def approve_employee(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def approve_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Одобрить сотрудника"""
     lang = language
     
@@ -314,20 +554,20 @@ async def approve_employee(callback: CallbackQuery, db: Session, roles: list = N
     
     try:
         employee_id = int(callback.data.split('_')[2])
-        
-        # Получаем ID пользователя из базы данных по telegram_id
-        current_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _moderate_employee(
+                s, callback.from_user.id, employee_id,
+                "approve_user", "Одобрен через панель управления сотрудниками"),
+            db=_db)
+        if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
-        auth_service = AuthService(db)
-        success = auth_service.approve_user(employee_id, current_user.id, "Одобрен через панель управления сотрудниками")
-        
-        if success:
+
+        if outcome == "ok":
             await callback.answer(
                 get_text('employee_management.employee_approved', language=lang),
                 show_alert=True
@@ -338,7 +578,7 @@ async def approve_employee(callback: CallbackQuery, db: Session, roles: list = N
             # парсил `approve_employee_<id>` как список и падал IndexError.
             # callback уже отвечен — ошибка рендера только логируется.
             try:
-                await _return_to_employee_info(callback, db, employee_id, lang)
+                await _return_to_employee_info(callback, employee_id, lang, _db=_db)
             except Exception as render_err:
                 logger.error(f"Ошибка ре-рендера карточки после одобрения {employee_id}: {render_err}")
         else:
@@ -356,7 +596,7 @@ async def approve_employee(callback: CallbackQuery, db: Session, roles: list = N
 
 
 @router.callback_query(F.data.startswith("reject_employee_"))
-async def reject_employee(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def reject_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Отклонить сотрудника"""
     lang = language
     
@@ -372,20 +612,20 @@ async def reject_employee(callback: CallbackQuery, db: Session, roles: list = No
     
     try:
         employee_id = int(callback.data.split('_')[2])
-        
-        # Получаем ID пользователя из базы данных по telegram_id
-        current_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _moderate_employee(
+                s, callback.from_user.id, employee_id,
+                "block_user", "Отклонен через панель управления сотрудниками"),
+            db=_db)
+        if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
-        auth_service = AuthService(db)
-        success = auth_service.block_user(employee_id, current_user.id, "Отклонен через панель управления сотрудниками")
-        
-        if success:
+
+        if outcome == "ok":
             await callback.answer(
                 get_text('employee_management.employee_rejected', language=lang),
                 show_alert=True
@@ -395,7 +635,7 @@ async def reject_employee(callback: CallbackQuery, db: Session, roles: list = No
             # вместо show_employee_list(callback) (IndexError на разборе callback).
             # callback уже отвечен — ошибка рендера только логируется.
             try:
-                await _return_to_employee_info(callback, db, employee_id, lang)
+                await _return_to_employee_info(callback, employee_id, lang, _db=_db)
             except Exception as render_err:
                 logger.error(f"Ошибка ре-рендера карточки после отклонения {employee_id}: {render_err}")
         else:
@@ -415,7 +655,7 @@ async def reject_employee(callback: CallbackQuery, db: Session, roles: list = No
 # ═══ БЛОКИРОВКА/РАЗБЛОКИРОВКА СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.startswith("block_employee_"))
-async def block_employee(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def block_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Заблокировать сотрудника"""
     lang = language
     
@@ -431,20 +671,20 @@ async def block_employee(callback: CallbackQuery, db: Session, roles: list = Non
     
     try:
         employee_id = int(callback.data.split('_')[2])
-        
-        # Получаем ID пользователя из базы данных по telegram_id
-        current_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _moderate_employee(
+                s, callback.from_user.id, employee_id,
+                "block_user", "Заблокирован через панель управления сотрудниками"),
+            db=_db)
+        if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
-        auth_service = AuthService(db)
-        success = auth_service.block_user(employee_id, current_user.id, "Заблокирован через панель управления сотрудниками")
-        
-        if success:
+
+        if outcome == "ok":
             await callback.answer(
                 get_text('employee_management.employee_blocked', language=lang),
                 show_alert=True
@@ -454,7 +694,7 @@ async def block_employee(callback: CallbackQuery, db: Session, roles: list = Non
             # + кнопка «Разблокировать») вместо ухода в список. callback уже отвечен
             # выше — ошибка рендера только логируется, без повторного answer.
             try:
-                await _return_to_employee_info(callback, db, employee_id, lang)
+                await _return_to_employee_info(callback, employee_id, lang, _db=_db)
             except Exception as render_err:
                 logger.error(f"Ошибка ре-рендера карточки после блокировки {employee_id}: {render_err}")
         else:
@@ -472,7 +712,7 @@ async def block_employee(callback: CallbackQuery, db: Session, roles: list = Non
 
 
 @router.callback_query(F.data.startswith("unblock_employee_"))
-async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def unblock_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Разблокировать сотрудника"""
     lang = language
     
@@ -488,20 +728,20 @@ async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = N
     
     try:
         employee_id = int(callback.data.split('_')[2])
-        
-        # Получаем ID пользователя из базы данных по telegram_id
-        current_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _moderate_employee(
+                s, callback.from_user.id, employee_id,
+                "approve_user", "Разблокирован через панель управления сотрудниками"),
+            db=_db)
+        if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
-        auth_service = AuthService(db)
-        success = auth_service.approve_user(employee_id, current_user.id, "Разблокирован через панель управления сотрудниками")
-        
-        if success:
+
+        if outcome == "ok":
             await callback.answer(
                 get_text('employee_management.employee_unblocked', language=lang),
                 show_alert=True
@@ -512,7 +752,7 @@ async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = N
             # `unblock_employee_<id>` как `employee_mgmt_list_<type>_<page>` и падал
             # с IndexError. callback уже отвечен — ошибка рендера только логируется.
             try:
-                await _return_to_employee_info(callback, db, employee_id, lang)
+                await _return_to_employee_info(callback, employee_id, lang, _db=_db)
             except Exception as render_err:
                 logger.error(f"Ошибка ре-рендера карточки после разблокировки {employee_id}: {render_err}")
         else:
@@ -532,7 +772,7 @@ async def unblock_employee(callback: CallbackQuery, db: Session, roles: list = N
 # ═══ РЕДАКТИРОВАНИЕ СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.regexp(r"^edit_employee_\d+$"))
-async def edit_employee_entry(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def edit_employee_entry(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """MGR-03: вход в редактирование сотрудника (кнопка `edit_employee_<id>`).
 
     Раньше кнопка была no-op — листовые `edit_employee_name_`/`edit_employee_phone_`
@@ -549,8 +789,7 @@ async def edit_employee_entry(callback: CallbackQuery, db: Session, roles: list 
     try:
         employee_id = int(callback.data.split('_')[2])
 
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
+        employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
         if not employee:
             await callback.answer(get_text('errors.user_not_found', language=lang), show_alert=True)
             return
@@ -570,7 +809,7 @@ async def edit_employee_entry(callback: CallbackQuery, db: Session, roles: list 
 
 
 @router.callback_query(F.data.startswith("edit_employee_name_"))
-async def edit_employee_name(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def edit_employee_name(callback: CallbackQuery, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Редактировать ФИО сотрудника"""
     lang = language
     
@@ -586,18 +825,17 @@ async def edit_employee_name(callback: CallbackQuery, state: FSMContext, db: Ses
     
     try:
         employee_id = int(callback.data.split('_')[3])
-        
+
         # Получаем сотрудника
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        
+        employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
+
         if not employee:
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
+
         # Сохраняем данные в FSM
         await state.update_data({
             'target_employee_id': employee_id,
@@ -626,7 +864,7 @@ async def edit_employee_name(callback: CallbackQuery, state: FSMContext, db: Ses
 
 
 @router.callback_query(F.data.startswith("edit_employee_phone_"))
-async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Редактировать телефон сотрудника"""
     lang = language
     
@@ -642,18 +880,17 @@ async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, db: Se
     
     try:
         employee_id = int(callback.data.split('_')[3])
-        
+
         # Получаем сотрудника
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        
+        employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
+
         if not employee:
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
+
         # Сохраняем данные в FSM
         await state.update_data({
             'target_employee_id': employee_id,
@@ -682,32 +919,21 @@ async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, db: Se
 
 
 @router.message(EmployeeManagementStates.editing_full_name)
-async def process_employee_name_edit(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_employee_name_edit(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать изменение ФИО сотрудника"""
     try:
         new_name = message.text.strip()
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
-        
+
         if not new_name:
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.name_cannot_be_empty", language=lang))
             return
-        
+
         # Обновляем ФИО
-        user = db.query(User).filter(User.id == target_employee_id).first()
-        if user:
-            # Разделяем ФИО на имя и фамилию
-            name_parts = new_name.split()
-            if len(name_parts) >= 2:
-                user.first_name = name_parts[0]
-                user.last_name = ' '.join(name_parts[1:])
-            else:
-                user.first_name = new_name
-                user.last_name = None
-            
-            db.commit()
-            
+        updated = await run_db(lambda s: _update_employee_name(s, target_employee_id, new_name), db=_db)
+        if updated:
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.name_updated", language=lang).format(name=new_name))
         else:
@@ -724,24 +950,21 @@ async def process_employee_name_edit(message: Message, state: FSMContext, db: Se
 
 
 @router.message(EmployeeManagementStates.editing_phone)
-async def process_employee_phone_edit(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_employee_phone_edit(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать изменение телефона сотрудника"""
     try:
         new_phone = message.text.strip()
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
-        
+
         if not new_phone:
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.phone_cannot_be_empty", language=lang))
             return
-        
+
         # Обновляем телефон
-        user = db.query(User).filter(User.id == target_employee_id).first()
-        if user:
-            user.phone = new_phone
-            db.commit()
-            
+        updated = await run_db(lambda s: _update_employee_phone(s, target_employee_id, new_phone), db=_db)
+        if updated:
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.phone_updated", language=lang).format(phone=new_phone))
         else:
@@ -758,7 +981,7 @@ async def process_employee_phone_edit(message: Message, state: FSMContext, db: S
 
 
 @router.callback_query(F.data.startswith("change_employee_role_"))
-async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def change_employee_role(callback: CallbackQuery, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Изменить роль сотрудника"""
     lang = language
     
@@ -774,18 +997,17 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
     
     try:
         employee_id = int(callback.data.split('_')[3])
-        
+
         # Получаем сотрудника
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        
+        employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
+
         if not employee:
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
+
         # Получаем текущие роли (COD-01: канонический парсер, JSON+CSV)
         user_roles = parse_roles_safe(employee.roles)
         
@@ -830,7 +1052,7 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, db: S
 # ═══ УДАЛЕНИЕ СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.startswith("delete_employee_"))
-async def delete_employee(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def delete_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Удалить сотрудника"""
     lang = language
     
@@ -846,20 +1068,20 @@ async def delete_employee(callback: CallbackQuery, db: Session, roles: list = No
     
     try:
         employee_id = int(callback.data.split('_')[2])
-        
-        # Получаем ID пользователя из базы данных по telegram_id
-        current_user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _moderate_employee(
+                s, callback.from_user.id, employee_id,
+                "delete_user", "Удален через панель управления сотрудниками"),
+            db=_db)
+        if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
-        auth_service = AuthService(db)
-        success = auth_service.delete_user(employee_id, current_user.id, "Удален через панель управления сотрудниками")
-        
-        if success:
+
+        if outcome == "ok":
             await callback.answer(
                 get_text('employee_management.employee_deleted', language=lang),
                 show_alert=True
@@ -893,7 +1115,7 @@ async def delete_employee(callback: CallbackQuery, db: Session, roles: list = No
 # ═══ СПЕЦИАЛИЗАЦИИ СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data.startswith("change_employee_specialization_"))
-async def change_employee_specialization(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def change_employee_specialization(callback: CallbackQuery, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Изменить специализацию сотрудника"""
     lang = language
     
@@ -909,18 +1131,17 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
     
     try:
         employee_id = int(callback.data.split('_')[3])
-        
+
         # Получаем сотрудника
-        user_mgmt_service = UserManagementService(db)
-        employee = user_mgmt_service.get_user_by_id(employee_id)
-        
+        employee = await run_db(lambda s: _load_employee(s, employee_id), db=_db)
+
         if not employee:
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
                 show_alert=True
             )
             return
-        
+
         # AUD5-CODE-8: единый парсер вместо локальной копии — та делала
         # json.loads без гейта startswith('['), поэтому JSON-скаляр ('123')
         # превращался в int и ронял хендлер на .copy(), а элементы
@@ -972,7 +1193,7 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
 # ═══ ПОИСК СОТРУДНИКОВ ═══
 
 @router.callback_query(F.data == "employee_mgmt_search")
-async def start_employee_search(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def start_employee_search(callback: CallbackQuery, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Начать поиск сотрудников"""
     lang = language
 
@@ -1006,7 +1227,7 @@ async def start_employee_search(callback: CallbackQuery, state: FSMContext, db: 
 
 
 @router.message(EmployeeManagementStates.waiting_for_search_query)
-async def handle_employee_search_query(message: Message, state: FSMContext, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def handle_employee_search_query(message: Message, state: FSMContext, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """BUG-BOT-025: обработка введённого запроса поиска сотрудников.
 
     Ищем по first_name / last_name / username / phone (ILIKE %query%).
@@ -1027,22 +1248,7 @@ async def handle_employee_search_query(message: Message, state: FSMContext, db: 
         return
 
     try:
-        from uk_management_bot.utils.sql_search import (
-            ci_contains_any, escape_like, is_postgres,
-        )
-        pattern = f"%{escape_like(raw_query)}%"
-        employees = (
-            db.query(User)
-            .filter(
-                ci_contains_any(
-                    (User.first_name, User.last_name, User.username, User.phone),
-                    pattern,
-                    is_postgres=is_postgres(db),
-                )
-            )
-            .limit(20)
-            .all()
-        )
+        employees = await run_db(lambda s: _search_employees(s, raw_query), db=_db)
 
         if not employees:
             await message.answer(
@@ -1084,7 +1290,7 @@ async def handle_employee_search_query(message: Message, state: FSMContext, db: 
 # ═══ УПРАВЛЕНИЕ СПЕЦИАЛИЗАЦИЯМИ ═══
 
 @router.callback_query(F.data == "employee_mgmt_specializations")
-async def show_employee_specializations_management(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_employee_specializations_management(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Показать управление специализациями сотрудников"""
     lang = language
     
@@ -1100,9 +1306,8 @@ async def show_employee_specializations_management(callback: CallbackQuery, db: 
     
     try:
         # Получаем детальную статистику по специализациям
-        spec_service = SpecializationService(db)
-        detailed_stats = spec_service.get_detailed_specialization_stats()
-        
+        detailed_stats = await run_db(_load_detailed_spec_stats, db=_db)
+
         # Формируем сообщение со статистикой и списком сотрудников
         message_text = get_text("employee_mgmt.handlers.specialization_stats_title", language=lang) + "\n\n"
         
@@ -1180,7 +1385,7 @@ async def toggle_role(callback: CallbackQuery, state: FSMContext, language: str 
 
 
 @router.callback_query(F.data == "role_save", EmployeeManagementStates.selecting_roles)
-async def save_employee_roles(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def save_employee_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Сохранить роли сотрудника"""
     try:
         data = await state.get_data()
@@ -1213,17 +1418,17 @@ async def save_employee_roles(callback: CallbackQuery, state: FSMContext, db: Se
 
 
 @router.callback_query(F.data == "role_cancel", EmployeeManagementStates.selecting_roles)
-async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Отменить редактирование ролей"""
     try:
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
-        
+
         await state.clear()
 
         # Возвращаемся к информации о сотруднике (render-only helper не отвечает
         # на callback — отвечаем здесь ровно один раз).
-        rendered = await _return_to_employee_info(callback, db, target_employee_id, language)
+        rendered = await _return_to_employee_info(callback, target_employee_id, language, _db=_db)
         if rendered:
             await callback.answer()
         else:
@@ -1236,7 +1441,7 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: S
 
 
 @router.message(EmployeeManagementStates.waiting_for_role_comment)
-async def process_role_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать комментарий для изменения ролей"""
     try:
         comment = message.text
@@ -1253,63 +1458,25 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
             return
 
         logger.debug(f" Обработка комментария ролей. target_employee_id={target_employee_id}, current_roles={current_roles}")
-        
-        # Получаем ID пользователя, который вносит изменения
-        current_user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _apply_role_change(
+                s, message.from_user.id, target_employee_id, current_roles, comment),
+            db=_db)
+        if outcome == "no_actor":
             logger.error(f"User not found: telegram_id={message.from_user.id}")
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.user_not_found_error", language=lang))
             await state.clear()
             return
-
-        # Обновляем роли пользователя
-        user = db.query(User).filter(User.id == target_employee_id).first()
-        if user:
-            logger.debug(f" Найден пользователь для обновления ролей: {user.id}")
-            
-            old_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
-
-            logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
-            
-            user.roles = json.dumps(current_roles)
-            if current_roles:
-                sync_legacy_role(user, current_roles[0])  # Первая роль как основная
-                # Инвариант: active_role всегда ∈ roles. Если активная роль
-                # больше не входит в набор (или не задана) — переводим на первую.
-                if not user.active_role or user.active_role not in current_roles:
-                    user.active_role = current_roles[0]
-            
-            # Создаем запись в аудит логе
-            try:
-                from uk_management_bot.database.models.audit import AuditLog
-                audit = AuditLog(
-                    action="role_change",
-                    user_id=current_user.id,  # ID пользователя, который вносит изменения
-                    telegram_user_id=user.telegram_id,  # Telegram ID пользователя, у которого изменяются роли
-                    details=json.dumps({
-                        "target_user_id": target_employee_id,
-                        "old_roles": old_roles,
-                        "new_roles": current_roles,
-                        "comment": comment,
-                        "timestamp": utc_now().isoformat()
-                    })
-                )
-                db.add(audit)
-                logger.debug(" AuditLog создан успешно")
-            except Exception as audit_error:
-                logger.error(f"Failed to create AuditLog: {audit_error}")
-                # Продолжаем выполнение даже если аудит не удался
-            
-            db.commit()
-            logger.debug(" Роли успешно обновлены и сохранены")
-        else:
+        if outcome == "no_target":
             logger.error(f"Employee not found: ID {target_employee_id}")
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.employee_not_found", language=lang))
             await state.clear()
             return
 
+        logger.debug(" Роли успешно обновлены и сохранены")
         await state.clear()
 
         lang = language
@@ -1359,7 +1526,7 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "spec_save", EmployeeManagementStates.selecting_specializations)
-async def save_employee_specializations(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def save_employee_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Сохранить специализации сотрудника"""
     try:
         data = await state.get_data()
@@ -1392,17 +1559,17 @@ async def save_employee_specializations(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data == "spec_cancel", EmployeeManagementStates.selecting_specializations)
-async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Отменить редактирование специализаций"""
     try:
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
-        
+
         await state.clear()
 
         # Возвращаемся к информации о сотруднике (render-only helper не отвечает
         # на callback — отвечаем здесь ровно один раз).
-        rendered = await _return_to_employee_info(callback, db, target_employee_id, language)
+        rendered = await _return_to_employee_info(callback, target_employee_id, language, _db=_db)
         if rendered:
             await callback.answer()
         else:
@@ -1415,61 +1582,27 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(EmployeeManagementStates.waiting_for_specialization_comment)
-async def process_specialization_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать комментарий для изменения специализаций"""
     try:
         comment = message.text
         data = await state.get_data()
         target_employee_id = data.get('target_employee_id')
         current_specializations = data.get('current_specializations', [])
-        
-        # Получаем ID пользователя, который вносит изменения
-        current_user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if not current_user:
+
+        outcome = await run_db(
+            lambda s: _apply_specialization_change(
+                s, message.from_user.id, target_employee_id, current_specializations, comment),
+            db=_db)
+        if outcome == "no_actor":
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.user_not_found_error", language=lang))
             await state.clear()
             return
 
-        # Сохраняем специализации напрямую в базу (обходя проверки сервиса)
-        user = db.query(User).filter(User.id == target_employee_id).first()
-        if user:
-            # AUD5-CODE-8: единый парсер вместо копии (json.loads без гейта —
-            # JSON-скаляр попадал в аудит числом, элементы не стрипались)
-            old_specializations = sorted(parse_specializations(user))
-
-
-            # Сохраняем специализации как JSON строку
-            user.specialization = json.dumps(current_specializations)
-            
-            # Создаем запись в аудит логе
-            try:
-                from uk_management_bot.database.models.audit import AuditLog
-                audit = AuditLog(
-                    action="specialization_change",
-                    user_id=current_user.id,  # ID пользователя, который вносит изменения
-                    telegram_user_id=user.telegram_id,  # Telegram ID пользователя, у которого изменяются специализации
-                    details=json.dumps({
-                        "target_user_id": target_employee_id,
-                        "old_specializations": old_specializations,
-                        "new_specializations": current_specializations,
-                        "comment": comment,
-                        "timestamp": utc_now().isoformat()
-                    })
-                )
-                db.add(audit)
-            except Exception as audit_error:
-                logger.error(f"Ошибка создания AuditLog: {audit_error}")
-                # Продолжаем выполнение даже если аудит не удался
-            
-            db.commit()
-            success = True
-        else:
-            success = False
-        
         await state.clear()
-        
-        if success:
+
+        if outcome == "ok":
             lang = language
             no_specs_text = get_text("employee_mgmt.handlers.no_specializations", language=lang)
             await message.answer(
@@ -1497,7 +1630,7 @@ async def no_action_handler(callback: CallbackQuery, language: str = "ru"):
 
 
 @router.callback_query(F.data == "admin_panel")
-async def back_to_admin_panel(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def back_to_admin_panel(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Вернуться к админ панели"""
     lang = language
     
