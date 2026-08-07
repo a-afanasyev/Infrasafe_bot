@@ -63,10 +63,20 @@ async def _noop_handler(event, data):
 # ---------------------------------------------------------------------------
 
 class TestAuthMiddleware:
+    """AUD3-37 финал: auth грузит user через run_db (worker-поток, своя сессия),
+    data["db"] middleware-сессии для auth больше не нужна. Здесь run_db
+    подменяется синхронным исполнением юнита на mock-сессии — сам юнит
+    (_load_auth_user_sync: query + expunge) остаётся под тестом."""
+
     @pytest.fixture(autouse=True)
     def patch_get_text(self):
         with patch("uk_management_bot.middlewares.auth.get_text", return_value="blocked") as p:
             yield p
+
+    def _patch_run_db(self, db):
+        async def _fake_run_db(unit, *, db_seam=None):
+            return unit(db)
+        return patch("uk_management_bot.middlewares.auth.run_db", _fake_run_db)
 
     @pytest.mark.asyncio
     async def test_sets_user_and_status_for_approved_user(self):
@@ -75,26 +85,34 @@ class TestAuthMiddleware:
         db.query.return_value.filter.return_value.first.return_value = user
 
         msg = _make_message(telegram_id=1001)
-        data = {"db": db}
+        data = {}  # auth не зависит от data["db"] (AUD3-37 финал)
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, msg, data)
+        with self._patch_run_db(db):
+            result = await auth_middleware(_noop_handler, msg, data)
 
         assert data["user"] is user
         assert data["user_status"] == "approved"
+        db.expunge.assert_called_once_with(user)  # detach до закрытия thread-сессии
         assert result == "ok"
 
     @pytest.mark.asyncio
-    async def test_sets_none_when_no_db(self):
+    async def test_does_not_touch_middleware_db(self):
+        """Ленивая middleware-сессия не должна открываться ради auth."""
+        middleware_db = MagicMock()
+        thread_db = MagicMock()
+        user = _make_user(telegram_id=1001, status="approved")
+        thread_db.query.return_value.filter.return_value.first.return_value = user
+
         msg = _make_message(telegram_id=1001)
-        data = {}  # no db key
+        data = {"db": middleware_db}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, msg, data)
+        with self._patch_run_db(thread_db):
+            await auth_middleware(_noop_handler, msg, data)
 
-        assert data["user"] is None
-        assert data["user_status"] is None
-        assert result == "ok"
+        middleware_db.query.assert_not_called()
+        assert data["user"] is user
 
     @pytest.mark.asyncio
     async def test_sets_none_when_user_not_found(self):
@@ -102,13 +120,15 @@ class TestAuthMiddleware:
         db.query.return_value.filter.return_value.first.return_value = None
 
         msg = _make_message(telegram_id=9999)
-        data = {"db": db}
+        data = {}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, msg, data)
+        with self._patch_run_db(db):
+            result = await auth_middleware(_noop_handler, msg, data)
 
         assert data["user"] is None
         assert data["user_status"] is None
+        db.expunge.assert_not_called()
         assert result == "ok"
 
     @pytest.mark.asyncio
@@ -118,10 +138,11 @@ class TestAuthMiddleware:
         db.query.return_value.filter.return_value.first.return_value = user
 
         msg = _make_message(telegram_id=1001)
-        data = {"db": db}
+        data = {}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, msg, data)
+        with self._patch_run_db(db):
+            result = await auth_middleware(_noop_handler, msg, data)
 
         # Handler must NOT be called, event.answer must be called
         assert result is None
@@ -135,10 +156,11 @@ class TestAuthMiddleware:
         db.query.return_value.filter.return_value.first.return_value = user
 
         cb = _make_callback(telegram_id=1001)
-        data = {"db": db}
+        data = {}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, cb, data)
+        with self._patch_run_db(db):
+            result = await auth_middleware(_noop_handler, cb, data)
 
         assert result is None
         cb.answer.assert_called_once()
@@ -155,14 +177,15 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_fail_safe_on_db_error(self):
-        db = MagicMock()
-        db.query.side_effect = Exception("db failure")
+        async def _boom(unit, **kw):
+            raise Exception("db failure")
 
         msg = _make_message(telegram_id=1001)
-        data = {"db": db}
+        data = {}
 
         from uk_management_bot.middlewares.auth import auth_middleware
-        result = await auth_middleware(_noop_handler, msg, data)
+        with patch("uk_management_bot.middlewares.auth.run_db", _boom):
+            result = await auth_middleware(_noop_handler, msg, data)
 
         # Must not raise; handler must still be called
         assert data["user"] is None
