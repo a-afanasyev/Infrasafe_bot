@@ -1,37 +1,37 @@
+"""HTTP-слой заявок (AUD5-ARCH-2, волна 1: тонкий роутер).
+
+Весь прямой ORM/data-access вынесен в `api/requests/service.py` (образец —
+`api/shifts/service.py`, ARCH-05a). Здесь остаются: auth-deps, парсинг запроса,
+транспортный маппер workflow-payload, сериализация в схемы (`_make_request_card`),
+HTTPException и best-effort пост-обработка (realtime, background-уведомления).
+AST-гейт `tests/api/test_requests_router_inventory.py` держит прямой ORM
+роутера на нуле.
+"""
+
 import logging
 from typing import Optional
 from fastapi import (
     APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Request,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import (
     get_db, get_current_user, require_roles, require_approved_roles, _parse_user_roles,
 )
 from uk_management_bot.api.dependencies_access import check_request_access, is_assigned_executor
-from uk_management_bot.services.webhook_payloads import (
-    emit_request_created,
-)
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
     AddressResolutionError,
-    ResolvedAddress,
 )
+from uk_management_bot.api.requests import service as svc
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
     CreateRequestBody, CreateInspectorRequestBody, UpdateRequestBody,
     CommentBody, CommentOut,
 )
-from uk_management_bot.database.models.request import Request as RequestModel
-from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
-from uk_management_bot.services.request_number_service import RequestNumberService
 from uk_management_bot.services.workflow_notifications import (
     dispatch_notify_intents_detached,
 )
@@ -53,10 +53,6 @@ from uk_management_bot.utils.request_workflow import (
     WorkflowError,
     TERMINAL_STATUSES,
     normalize_status,
-)
-from uk_management_bot.utils.workflow_predicates import (
-    active_status_clause,
-    terminal_status_clause,
 )
 from uk_management_bot.utils import constants as C
 from uk_management_bot.api.rate_limit import limiter
@@ -142,45 +138,6 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
     return card
 
 
-async def _latest_accepted_inbox(db: AsyncSession, request_number: str) -> WebhookInbox | None:
-    """Return the most recent accepted webhook_inbox row for the request, or None.
-
-    Defensive ORDER BY id DESC LIMIT 1: in normal operation there's exactly
-    one inbox row per infrasafe-originated request (alert.created or
-    alert.engineer_required → accepted), but ordering protects against any
-    future contract where a request_number is reused across replays.
-    """
-    return await db.scalar(
-        select(WebhookInbox)
-        .where(
-            WebhookInbox.request_number == request_number,
-            WebhookInbox.outcome == "accepted",
-        )
-        .order_by(WebhookInbox.id.desc())
-        .limit(1)
-    )
-
-
-# AUD5-APIFE-3 — почему выборка разделена на две части.
-#
-# Раньше это был ОДИН запрос `ORDER BY created_at DESC LIMIT 500` на всю доску.
-# «Принято»/«Отменена» копятся вечно, поэтому после 500 строк с доски пропадали
-# самые старые АКТИВНЫЕ карточки — ровно та работа, которую менеджер обязан
-# видеть, — а `count` считался по обрезанному набору и врал.
-#
-# Теперь активные статусы отдаются целиком, каждая терминальная колонка —
-# верхушкой в `TERMINAL_COLUMN_LIMIT` карточек, но с НАСТОЯЩИМ `count` из
-# отдельного агрегата.
-#
-# Разбиение делается предикатом по `Request.status`, и это корректно, а не
-# приблизительно: `normalize_status` не производит терминальный статус из
-# нетерминального и не превращает терминальный в другой (её правила касаются
-# только «Выполнена»+manager_confirmed и «Исполнено»+is_returned), поэтому
-# дублировать нормализацию в SQL не требуется.
-#
-# Обоснование живёт в комментарии, а НЕ в docstring: FastAPI кладёт docstring в
-# `description` эндпоинта, то есть в публичный контракт API — внутренней
-# археологии там быть не должно (поймано гейтом OpenAPI-снапшота).
 @router.get("/kanban", response_model=KanbanResponse)
 async def get_kanban(
     executor_id: Optional[int] = Query(None),
@@ -194,53 +151,11 @@ async def get_kanban(
     последние `TERMINAL_COLUMN_LIMIT` карточек, а `count` показывает настоящее
     число заявок в колонке — то есть `count` может быть больше `len(requests)`.
     """
-    ExecutorUser = aliased(User)
-
-    def _scoped(stmt):
-        """Фильтры запроса — одни и те же для всех частей выборки и агрегата."""
-        if executor_id:
-            stmt = stmt.filter(RequestModel.executor_id == executor_id)
-        if category:
-            stmt = stmt.filter(RequestModel.category == category)
-        return stmt
-
-    def _cards_query():
-        return _scoped(
-            select(RequestModel, ExecutorUser)
-            .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
-        # Tiebreak по PK обязателен именно из-за обрезки: у заявок, созданных в
-        # одну секунду, порядок по created_at не определён, и «верхушка» в
-        # терминальной колонке зависела бы от порядка сканирования. У Request PK
-        # это `request_number` формата YYMMDD-NNN — лексикографический порядок
-        # совпадает с хронологическим.
-        ).order_by(RequestModel.created_at.desc(), RequestModel.request_number.desc())
-
-    active_rows = (await db.execute(_cards_query().where(active_status_clause()))).all()
-
-    # По одному запросу на терминальный статус: общий лимит на всю терминальную
-    # часть отдал бы весь бюджет одному статусу (сортировка по дате), и «Отменена»
-    # голодала бы при большом числе «Принято».
-    terminal_rows: list = []
-    for st in _TERMINAL_STATUSES:
-        terminal_rows.extend(
-            (
-                await db.execute(
-                    _cards_query()
-                    .where(RequestModel.status == st)
-                    .limit(TERMINAL_COLUMN_LIMIT)
-                )
-            ).all()
-        )
-
-    terminal_totals = dict(
-        (
-            await db.execute(
-                _scoped(
-                    select(RequestModel.status, func.count())
-                    .where(terminal_status_clause())
-                ).group_by(RequestModel.status)
-            )
-        ).all()
+    active_rows, terminal_rows, terminal_totals = await svc.kanban_rows(
+        db,
+        executor_id=executor_id,
+        category=category,
+        terminal_limit=TERMINAL_COLUMN_LIMIT,
     )
 
     # Карты несут канон-статус (PR7: _make_request_card нормализует, не
@@ -268,69 +183,19 @@ async def list_requests(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    ExecutorUser = aliased(User)
-    query = (
-        select(RequestModel, ExecutorUser)
-        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
+    # Server-enforced object-level scoping живёт в сервисе: клиентский `scope`
+    # не является authz-входом и в выборку не передаётся.
+    rows = await svc.list_requests_rows(
+        db,
+        user=user,
+        status=status,
+        category=category,
+        executor_id=executor_id,
+        source=source,
+        limit=limit,
+        offset=offset,
     )
-    # Server-enforced object-level scoping: only managers may list across all
-    # users. For everyone else, ownership/assignment filtering is applied
-    # unconditionally (the client-supplied `scope` param is not an authz input).
-    user_roles = _parse_user_roles(user)
-    if "manager" not in user_roles:
-        if "executor" in user_roles:
-            # Executor: individual assignments + group (if in shift) + executor_id fallback
-            from sqlalchemy import or_
-            from uk_management_bot.database.models.request_assignment import RequestAssignment
-            from uk_management_bot.database.models.shift import Shift
-            import json as _json
-
-            conditions = []
-            # 1. Individual assignments
-            assignment_sub = select(RequestAssignment.request_number).where(
-                RequestAssignment.executor_id == user.id,
-                RequestAssignment.status == "active",
-            )
-            conditions.append(RequestModel.request_number.in_(assignment_sub))
-            # 2. Group assignments (only if executor has active shift)
-            active_shift = await db.execute(
-                select(Shift).where(Shift.user_id == user.id, Shift.status == "active")
-            )
-            if active_shift.scalars().first():
-                specs = []
-                if user.specialization:
-                    try:
-                        raw = user.specialization
-                        if isinstance(raw, str) and raw.startswith("["):
-                            specs = _json.loads(raw)
-                        else:
-                            specs = [raw] if raw else []
-                    except Exception:
-                        specs = [user.specialization] if user.specialization else []
-                if specs:
-                    group_sub = select(RequestAssignment.request_number).where(
-                        RequestAssignment.assignment_type == "group",
-                        RequestAssignment.group_specialization.in_(specs),
-                        RequestAssignment.status == "active",
-                    )
-                    conditions.append(RequestModel.request_number.in_(group_sub))
-            # 3. Fallback: executor_id
-            conditions.append(RequestModel.executor_id == user.id)
-            query = query.filter(or_(*conditions))
-        else:
-            # Applicant: own requests only
-            query = query.filter(RequestModel.user_id == user.id)
-    if status:
-        query = query.filter(RequestModel.status == status)
-    if category:
-        query = query.filter(RequestModel.category == category)
-    if executor_id:
-        query = query.filter(RequestModel.executor_id == executor_id)
-    if source:
-        query = query.filter(RequestModel.source == source)
-
-    result = await db.execute(query.order_by(RequestModel.created_at.desc()).offset(offset).limit(limit))
-    return [_make_request_card(r, eu) for r, eu in result.all()]
+    return [_make_request_card(r, eu) for r, eu in rows]
 
 
 @router.get("/acceptance", response_model=list[RequestCard])
@@ -339,33 +204,8 @@ async def get_acceptance_requests(
     user: User = Depends(get_current_user),
 ):
     """Requests pending acceptance: own + apartment neighbors, status=Исполнено."""
-    from sqlalchemy import or_
-    from uk_management_bot.database.models.user_apartment import UserApartment
-
-    apt_result = await db.execute(
-        select(UserApartment.apartment_id).where(
-            UserApartment.user_id == user.id,
-            UserApartment.status == "approved",
-        )
-    )
-    apt_ids = [row[0] for row in apt_result.all()]
-
-    conditions = [RequestModel.user_id == user.id]
-    if apt_ids:
-        conditions.append(RequestModel.apartment_id.in_(apt_ids))
-
-    ExecutorUser = aliased(User)
-    result = await db.execute(
-        select(RequestModel, ExecutorUser)
-        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
-        .where(
-            or_(*conditions),
-            RequestModel.status == "Исполнено",
-        )
-        .order_by(RequestModel.updated_at.desc())
-        .limit(20)
-    )
-    return [_make_request_card(r, eu) for r, eu in result.all()]
+    rows = await svc.acceptance_rows(db, user=user)
+    return [_make_request_card(r, eu) for r, eu in rows]
 
 
 @router.get("/{request_number}", response_model=RequestCard)
@@ -377,85 +217,14 @@ async def get_request(
     # Access check (owner, executor, manager, apartment resident for acceptance)
     await check_request_access(request_number, db, user)
 
-    ExecutorUser = aliased(User)
-    result = await db.execute(
-        select(RequestModel, ExecutorUser)
-        .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
-        .where(RequestModel.request_number == request_number)
-    )
-    row = result.first()
+    row = await svc.request_with_executor(db, request_number)
     if not row:
         raise HTTPException(status_code=404, detail="Request not found")
     req, exec_user = row
     # INT-120 #3 — detail endpoint enriches with reopen-meta from webhook_inbox
     # (list endpoints skip this to keep their cost identical to the baseline).
-    inbox_row = await _latest_accepted_inbox(db, request_number)
+    inbox_row = await svc.latest_accepted_inbox(db, request_number)
     return _make_request_card(req, exec_user, inbox_row=inbox_row)
-
-
-async def _persist_request(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    category: str,
-    urgency: str,
-    description: str,
-    media_files: Optional[list],
-    source: str,
-    resolved: ResolvedAddress,
-    webhook_tag: str,
-) -> RequestModel:
-    """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
-
-    Транзакц. граница (ARCH-113): INSERT(request) + enqueue outbox эмитятся в
-    ОДНОМ commit (нет заявки без webhook-события). PR5: номер — атомарный
-    счётчик дня (RequestNumberService.next_number_async, та же транзакция;
-    прежний COUNT(*)+1 переиспользовал номер после удаления строки). Retry на
-    IntegrityError сохранён как defense-in-depth (rollback отменяет и
-    counter-инкремент → повтор с чистой транзакцией и СВЕЖИМ объектом —
-    переиспользование detached-инстанса после rollback ненадёжно).
-    Адрес/FK/source — из резолвера.
-    """
-
-    async def _attempt(number: str) -> RequestModel:
-        req = RequestModel(
-            request_number=number,
-            user_id=user_id,
-            category=category,
-            urgency=urgency,
-            description=description,
-            address=resolved.canonical_address,
-            apartment_id=resolved.apartment_id,
-            building_id=resolved.building_id,
-            yard_id=resolved.yard_id,
-            address_type=resolved.address_type,
-            status="Новая",
-            source=source,
-            media_files=media_files or [],
-        )
-        db.add(req)
-        # Outbox в той же транзакции (source-тег в метаданные, НЕ в wire-payload).
-        await emit_request_created(db, req, source=webhook_tag)
-        await db.commit()
-        await db.refresh(req)
-        return req
-
-    try:
-        req = await _attempt(await RequestNumberService.next_number_async(db))
-    except IntegrityError:
-        await db.rollback()
-        req = await _attempt(await RequestNumberService.next_number_async(db))
-
-    # Redis pub/sub — best-effort, уже после durable-commit.
-    await publish_request_event("request.created", RequestCard.model_validate(req).model_dump(mode="json"))
-
-    # FEAT-группы: авто-dispatch на группу-специализацию (Новая→В работе + group)
-    # через канонический run_command + realtime status_changed. Best-effort.
-    # refresh — чтобы карточка ответа отразила актуальный статус (В работе).
-    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
-    await auto_dispatch_new_request_async(req.request_number, category)
-    await db.refresh(req)
-    return req
 
 
 @router.post("", response_model=RequestCard, status_code=201)
@@ -478,7 +247,7 @@ async def create_request(
     except AddressResolutionError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    req = await _persist_request(
+    req = await svc.persist_request(
         db,
         user_id=user.id,
         category=body.category,
@@ -509,7 +278,7 @@ async def create_inspector_request(
     except AddressResolutionError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    req = await _persist_request(
+    req = await svc.persist_request(
         db,
         user_id=user.id,
         category=body.category,
@@ -621,8 +390,7 @@ async def update_request(
     duty_group_spec = None
     if target_status == C.REQUEST_STATUS_IN_PROGRESS and updates.get("assign_to_duty"):
         from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
-        category = await db.scalar(select(RequestModel.category).where(
-            RequestModel.request_number == request_number))
+        category = await svc.category_of(db, request_number)
         if category:
             duty_group_spec = CATEGORY_TO_SPECIALIZATION.get(category)
 
@@ -699,12 +467,7 @@ async def update_request(
 
         # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
         # закрыл её; READ COMMITTED → новый SELECT видит коммит).
-        ExecutorUser = aliased(User)
-        row = (await db.execute(
-            select(RequestModel, ExecutorUser)
-            .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
-            .where(RequestModel.request_number == request_number)
-        )).first()
+        row = await svc.request_with_executor(db, request_number)
         # APIFE-9: заявку могли конкурентно удалить между коммитом команды и этим
         # SELECT — распаковка None дала бы TypeError → 500. Отдаём честный 404.
         if row is None:
@@ -713,10 +476,7 @@ async def update_request(
         return _make_request_card(req, exec_user)
 
     # ═══════════════════ EDIT-ветка (без смены статуса) ═══════════════════
-    result = await db.execute(
-        select(RequestModel).where(RequestModel.request_number == request_number).with_for_update()
-    )
-    req = result.scalar_one_or_none()
+    req = await svc.request_for_update(db, request_number)
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
@@ -724,12 +484,7 @@ async def update_request(
 
     # ── Executor path: контент-поля своей заявки ──
     if "executor" in user_roles and "manager" not in user_roles:
-        from uk_management_bot.database.models.request_assignment import RequestAssignment
-        assignments = (await db.execute(
-            select(RequestAssignment).where(
-                RequestAssignment.request_number == request_number,
-            )
-        )).scalars().all()
+        assignments = await svc.assignments_for(db, request_number)
         if not is_assigned_executor(req, user, assignments):
             raise HTTPException(status_code=403, detail="Not assigned to this request")
         for field in list(updates.keys()):
@@ -757,13 +512,7 @@ async def update_request(
             detail="Cannot change urgency of a finalized request",
         )
 
-    old_values = {f: getattr(req, f) for f in updates}
-    for field, value in updates.items():
-        setattr(req, field, value)
-    changed = [f for f in updates if old_values[f] != getattr(req, f)]
-
-    await db.commit()
-    await db.refresh(req)
+    changed = await svc.apply_request_edits(db, req, updates)
 
     # Реалтайм для канбана при реальном изменении поля.
     if changed:
@@ -786,12 +535,9 @@ async def get_comments(
     user_roles = _parse_user_roles(user)
     is_manager = any(r in user_roles for r in ["manager", "admin"])
 
-    query = select(RequestComment).where(RequestComment.request_number == request_number)
-    if not is_manager:
-        query = query.where(RequestComment.is_internal == False)  # noqa: E712
-
-    result = await db.execute(query.order_by(RequestComment.created_at.asc()))
-    return result.scalars().all()
+    return await svc.comments_for(
+        db, request_number=request_number, include_internal=is_manager
+    )
 
 
 @router.post("/{request_number}/comments", response_model=CommentOut, status_code=201)
@@ -810,18 +556,14 @@ async def add_comment(
         if not any(r in user_roles for r in ["manager", "admin"]):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can create internal comments")
 
-    comment = RequestComment(
+    return await svc.create_comment(
+        db,
         request_number=request_number,
         user_id=user.id,
-        comment_type="clarification",
-        comment_text=body.text,
+        text=body.text,
         is_internal=body.is_internal,
-        media_files=body.media_files or [],
+        media_files=body.media_files,
     )
-    db.add(comment)
-    await db.commit()
-    await db.refresh(comment)
-    return comment
 
 
 @router.post(
@@ -833,15 +575,13 @@ async def remind_applicant(
     db: AsyncSession = Depends(get_db),
 ):
     """Send a Telegram reminder to the applicant to accept a completed request."""
-    req_result = await db.execute(select(RequestModel).where(RequestModel.request_number == request_number))
-    req = req_result.scalar_one_or_none()
+    req = await svc.request_by_number(db, request_number)
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
     if req.status != "Исполнено":
         raise HTTPException(status_code=422, detail="Request must be in 'Исполнено' status")
 
-    applicant_result = await db.execute(select(User).where(User.id == req.user_id))
-    applicant = applicant_result.scalar_one_or_none()
+    applicant = await svc.user_by_id(db, req.user_id)
     if not applicant or not getattr(applicant, "telegram_id", None):
         raise HTTPException(status_code=404, detail="Applicant has no Telegram account")
 

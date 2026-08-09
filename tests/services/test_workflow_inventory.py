@@ -150,7 +150,7 @@ def collect_write_sites(root: Path = PACKAGE_ROOT) -> set[tuple[str, str, str]]:
 BASELINE: set[tuple[str, str, str]] = {
     # 1. CREATE-фабрика (создание заявки, status="Новая")
     ('uk_management_bot/api/callcenter/router.py', 'ctor:Request', 'status'),
-    ('uk_management_bot/api/requests/router.py', 'ctor:RequestModel', 'status'),
+    ('uk_management_bot/api/requests/service.py', 'ctor:RequestModel', 'status'),
     # PR-29.2 (ARCH-01): create-фабрика заявки вынесена из handlers/requests.py
     # (save_request) в request_handler_service.create_request_record — ORM-слой
     # хендлера. status="Новая" задаётся ровно так же, поведение сохранено.
