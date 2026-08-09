@@ -195,8 +195,9 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
-    "AUD5-ARCH-4": A(pkg="A7", status="actionable", method="verified-2026-07-27",
-                     note="решение: contract-слой + AST-гейт (S); полная развязка отклонена"),
+    "AUD5-ARCH-4": A(pkg="A7", status="deferred", method="gate-2026-08-09",
+                     note="гейт границы стоит (test_aud5_arch4_domain_boundary_gate); "
+                          "развязка (L) — только при намерении разносить сервисы"),
     # Закрыто 2026-08-02 (волна 1 разбора бэклога): `AUD3-35`+`PENT-F11`
     # (RATE_LIMIT_TRUSTED_PROXIES выставлен на обоих продах, CIDR),
     # `SEC-131` (MEDIA_BOT_TOKEN снят из .env .105, Doppler-only),
