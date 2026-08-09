@@ -5,25 +5,19 @@ addresses, executor or user identifiers — so it is safe to serve openly.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import logging
 import time
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select, func
-from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from uk_management_bot.api.dependencies import get_db
+from uk_management_bot.api.public import service
 from uk_management_bot.api.rate_limit import limiter
-from uk_management_bot.database.models.request import Request as RequestModel
-from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_RETURNED,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -87,11 +81,7 @@ async def get_public_board(
         return _board_cache[0]
 
     # --- status_counts: one GROUP BY, then 0-fill all known statuses ---
-    counts_result = await db.execute(
-        select(RequestModel.status, func.count())
-        .group_by(RequestModel.status)
-    )
-    counts_raw = {status: count for status, count in counts_result.all()}
+    counts_raw = await service.status_counts_raw(db)
     # Проекция наружу (PR4 contract): канон «Возвращена» сворачивается в
     # «Исполнено» — публичный борт не знает канон-статус (как и до cutover,
     # когда возврат хранился как Исполнено+is_returned).
@@ -108,58 +98,24 @@ async def get_public_board(
     # a quiet one).
     active_requests: list[PublicBoardRequest] = []
     for status in PIPELINE_STATUSES:
-        rows_result = await db.execute(
-            select(RequestModel.category, RequestModel.status, RequestModel.created_at)
-            .where(RequestModel.status == status)
-            .order_by(RequestModel.created_at.desc())
-            .limit(PER_STATUS_LIMIT)
-        )
+        rows = await service.pipeline_rows(db, status=status, limit=PER_STATUS_LIMIT)
         active_requests.extend(
             PublicBoardRequest(category=row.category, status=row.status, created_at=row.created_at)
-            for row in rows_result.all()
+            for row in rows
         )
 
     # --- active_executors: distinct users on an active shift ---
-    exec_result = await db.execute(
-        select(func.count(func.distinct(Shift.user_id))).where(
-            Shift.status == "active",
-            Shift.user_id.isnot(None),
-        )
-    )
-    active_executors: int = exec_result.scalar() or 0
+    active_executors: int = await service.active_executor_count(db)
 
     # --- avg_resolution_hours: assigned -> completed over last 30 days ---
     period_start = datetime.now(timezone.utc) - timedelta(days=30)
-    avg_resolution_hours: Optional[float] = None
-    try:
-        avg_res_result = await db.execute(
-            select(
-                func.avg(
-                    func.extract("epoch", RequestModel.completed_at - RequestModel.assigned_at) / 3600
-                )
-            ).where(
-                RequestModel.status.in_(CLOSED_STATUSES),
-                RequestModel.completed_at >= period_start,
-                RequestModel.completed_at.isnot(None),
-                RequestModel.assigned_at.isnot(None),
-            )
-        )
-        avg_res_scalar = avg_res_result.scalar()
-        avg_resolution_hours = float(avg_res_scalar) if avg_res_scalar is not None else None
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("DB doesn't support epoch extraction: %s", e)
-        avg_resolution_hours = None
+    avg_resolution_hours = await service.avg_resolution_hours(
+        db, closed_statuses=CLOSED_STATUSES, period_start=period_start
+    )
 
     # --- avg_efficiency: shift efficiency over last 7 days ---
     eff_start = datetime.now(timezone.utc) - timedelta(days=7)
-    eff_result = await db.execute(
-        select(func.avg(Shift.efficiency_score)).where(
-            Shift.start_time >= eff_start,
-            Shift.efficiency_score.isnot(None),
-        )
-    )
-    eff_scalar = eff_result.scalar()
-    avg_efficiency = float(eff_scalar) if eff_scalar is not None else None
+    avg_efficiency = await service.avg_efficiency(db, since=eff_start)
 
     board = PublicBoardOut(
         status_counts=status_counts,

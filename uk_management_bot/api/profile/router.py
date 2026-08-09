@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles, _parse_user_roles
+from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -64,22 +64,18 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(User).where(User.id == user.id))
-    db_user = result.scalar_one()
-
-    if body.language is not None:
-        if body.language not in ALLOWED_LANGUAGES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"language must be one of: {sorted(ALLOWED_LANGUAGES)}",
-            )
-        db_user.language = body.language
-
-    if body.email is not None:
+    if body.language is not None and body.language not in ALLOWED_LANGUAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"language must be one of: {sorted(ALLOWED_LANGUAGES)}",
+        )
+    await service.apply_profile_update(
+        db,
+        user.id,
+        language=body.language,
         # Валидация формата — pydantic EmailStr (422 на невалидном).
-        db_user.email = str(body.email)
-
-    await db.commit()
+        email=str(body.email) if body.email is not None else None,
+    )
     return {"ok": True}
 
 
@@ -113,10 +109,7 @@ async def switch_role(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Role '{body.active_role}' not in user roles: {roles}",
         )
-    result = await db.execute(select(User).where(User.id == user.id))
-    db_user = result.scalar_one()
-    db_user.active_role = body.active_role
-    await db.commit()
+    await service.set_active_role(db, user.id, active_role=body.active_role)
     return RoleSwitchOut(active_role=body.active_role, roles=roles)
 
 
@@ -129,26 +122,7 @@ async def get_my_apartments(
     db: AsyncSession = Depends(get_db),
 ):
     """Get apartments linked to current user (approved only)."""
-    from uk_management_bot.database.models.user_apartment import UserApartment
-    from uk_management_bot.database.models.apartment import Apartment
-    from uk_management_bot.database.models.building import Building
-    from uk_management_bot.database.models.yard import Yard
-
-    result = await db.execute(
-        select(Apartment, Building.address, Yard.name)
-        .join(UserApartment, UserApartment.apartment_id == Apartment.id)
-        .join(Building, Apartment.building_id == Building.id)
-        .join(Yard, Building.yard_id == Yard.id)
-        .where(
-            UserApartment.user_id == user.id,
-            UserApartment.status == "approved",
-            # Активная цепочка квартира→дом→двор (план «Обходчик»).
-            Apartment.is_active.is_(True),
-            Building.is_active.is_(True),
-            Yard.is_active.is_(True),
-        )
-    )
-    rows = result.all()
+    rows = await service.approved_apartment_rows(db, user.id)
     return [
         {
             "apartment_id": apt.id,

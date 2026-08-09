@@ -4,9 +4,10 @@ RBAC: все эндпоинты (чтение и запись) — manager | sys
 approved (``require_approved_roles``); исполнитель работает через бот
 (sync-сервис), API ему не нужен.
 
-Роутер тонкий: вся учётная логика в services/material_service.py; здесь —
+Роутер тонкий: вся учётная логика в services/material_service.py, транзакции
+и data-access — в api/materials/service.py (AUD5-ARCH-2 волна 2); здесь —
 маппинг ошибок сервиса на HTTP-коды (Validation→422, NotFound→404,
-Conflict/Insufficient→409) и commit после успешной записи.
+Conflict/Insufficient→409).
 
 Статичные пути (/stock, /operations, ...) объявлены ДО /{material_id}.
 """
@@ -17,10 +18,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.materials import service as api_service
 from uk_management_bot.api.materials.schemas import (
     AdjustmentCreate,
     AdjustmentOut,
@@ -36,17 +37,14 @@ from uk_management_bot.api.materials.schemas import (
     RequestMaterialsOut,
     StockRow,
 )
-from uk_management_bot.database.models.material import Material
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.csv_escape import escape_csv_cell
-from uk_management_bot.utils.sql_search import ci_contains, is_postgres
 from uk_management_bot.services import material_service
 from uk_management_bot.services.material_service import (
     MaterialConflictError,
     MaterialNotFoundError,
     MaterialServiceError,
     MaterialValidationError,
-    _escape_like,
 )
 
 router = APIRouter()
@@ -93,21 +91,9 @@ async def list_materials(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ):
-    query = select(Material)
-    if q:
-        query = query.where(
-            ci_contains(
-                Material.name, f"%{_escape_like(q)}%", is_postgres=is_postgres(db),
-            )
-        )
-    if is_active is not None:
-        query = query.where(Material.is_active.is_(is_active))
-    rows = (
-        (await db.execute(query.order_by(Material.name).offset(offset).limit(limit)))
-        .scalars()
-        .all()
+    return await api_service.list_material_rows(
+        db, q=q, is_active=is_active, limit=limit, offset=offset,
     )
-    return rows
 
 
 @router.post("", response_model=MaterialCard, status_code=201)
@@ -117,11 +103,10 @@ async def create_material(
     user: User = Depends(_manager_only),
 ):
     try:
-        material = await material_service.create_material(
+        material = await api_service.create_material_tx(
             db, name=body.name, unit=body.unit,
             category=body.category, min_stock=body.min_stock,
         )
-        await db.commit()
     except MaterialServiceError as exc:
         raise _http_error(exc)
     return material
@@ -146,13 +131,12 @@ async def create_receipt(
     user: User = Depends(_manager_only),
 ):
     try:
-        receipt = await material_service.create_receipt(
+        receipt = await api_service.create_receipt_tx(
             db, material_id=body.material_id, qty=body.qty,
             unit_price=body.unit_price, created_by=user.id,
             supplier=body.supplier, doc_number=body.doc_number,
             doc_date=body.doc_date, note=body.note,
         )
-        await db.commit()
     except MaterialServiceError as exc:
         raise _http_error(exc)
     return receipt
@@ -165,12 +149,11 @@ async def create_issue(
     user: User = Depends(_manager_only),
 ):
     try:
-        issue = await material_service.issue_material(
+        issue = await api_service.create_issue_tx(
             db, material_id=body.material_id, qty=body.qty,
             created_by=user.id, doc_type=body.doc_type,
             request_number=body.request_number, reason=body.reason,
         )
-        await db.commit()
     except MaterialServiceError as exc:
         raise _http_error(exc)
     return issue
@@ -183,14 +166,13 @@ async def create_adjustment(
     user: User = Depends(_manager_only),
 ):
     try:
-        result = await material_service.adjust(
+        result = await api_service.adjust_tx(
             db, material_id=body.material_id, direction=body.direction,
             reason=body.reason, created_by=user.id,
             qty=body.qty, unit_price=body.unit_price,
             reversal_of_issue_id=body.reversal_of_issue_id,
             reversal_of_receipt_id=body.reversal_of_receipt_id,
         )
-        await db.commit()
     except MaterialServiceError as exc:
         raise _http_error(exc)
     if isinstance(result, list):
@@ -324,7 +306,7 @@ async def update_material(
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
-        material = await material_service.update_material(
+        material = await api_service.update_material_tx(
             db, material_id,
             name=fields.get("name"),
             unit=fields.get("unit"),
@@ -332,7 +314,6 @@ async def update_material(
             min_stock=fields["min_stock"] if "min_stock" in fields else ...,
             is_active=fields.get("is_active"),
         )
-        await db.commit()
     except MaterialServiceError as exc:
         raise _http_error(exc)
     return material
