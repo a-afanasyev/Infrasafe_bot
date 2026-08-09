@@ -317,3 +317,162 @@ async def send_otp_via_bot(telegram_id: int, code: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to send OTP via bot: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Refresh-token persistence (AUD5-ARCH-2 волна 3 — data-access из router.py)
+# ---------------------------------------------------------------------------
+# Импорты локализованы в секции: модуль исторически «чистое крипто + redis»,
+# и его тянут пути без БД (registration, access_control-контракт).
+
+import uuid  # noqa: E402
+
+from sqlalchemy import select as _sa_select, update as _sa_update  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from uk_management_bot.api.users.queries import get_user_by_id  # noqa: E402
+from uk_management_bot.database.models.refresh_token import (  # noqa: E402
+    RefreshToken, REASON_ROTATED, REASON_LOGOUT, REASON_REUSE,
+)
+from uk_management_bot.database.models.user import User  # noqa: E402
+
+
+async def user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    """Пользователь по email (password-login) или None."""
+    return (
+        await db.execute(_sa_select(User).where(User.email == email))
+    ).scalar_one_or_none()
+
+
+async def save_refresh_token(
+    db: AsyncSession,
+    user_id: int,
+    token_value: str,
+    device_info: str = "",
+    ttl: Optional[timedelta] = None,
+) -> None:
+    # TWA-08: callers may pass a shorter TTL (e.g. login_twa uses 24h instead
+    # of 30d) — see TWA_REFRESH_TOKEN_EXPIRE_HOURS.
+    # APIFE-14: this is the LOGIN path — every login starts a NEW token family
+    # (one family = one login = one device), so a reuse-revoke never spans logins.
+    effective_ttl = ttl if ttl is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expires = datetime.now(timezone.utc) + effective_ttl
+    rt = RefreshToken(
+        user_id=user_id,
+        token_hash=hash_token(token_value),
+        expires_at=expires,
+        device_info=device_info,
+        family_id=uuid.uuid4().hex,
+    )
+    db.add(rt)
+    await db.commit()
+
+
+# F-02: refresh-token rotation outcomes (typed so the route maps to HTTP codes).
+_REFRESH_OK = "ok"
+_REFRESH_INVALID = "invalid"
+_REFRESH_NOT_APPROVED = "not_approved"
+
+
+async def _rotate_refresh_token(
+    db: AsyncSession, token_value: str, *, ttl: Optional[timedelta], device_info: str = ""
+) -> tuple:
+    """F-02 + APIFE-14: atomic refresh-token rotation with family reuse detection.
+
+    Locks the presented token row ``FOR UPDATE``, re-checks state under the lock,
+    then either rotates (valid) or reacts to a replay. Returns
+    ``(outcome, user, new_refresh_value)``.
+
+    Reuse detection (APIFE-14): presenting an already-rotated token = replay/theft
+    (or a benign double-submit the client coordination failed to dedup) → fail
+    closed: revoke every still-active token in that family and 401. Only
+    ``rotated`` replays trigger this — a logout/admin-revoked (or legacy NULL)
+    token just 401s without touching the family, so a stale logout token can't DoS
+    the account. NB: this makes a concurrent double-submit of a *valid* token
+    self-defeating (the loser revokes the winner's fresh replacement); that's why
+    cross-tab client coordination (Web Locks + marker) is a hard prerequisite.
+
+    Assumes READ COMMITTED isolation (Postgres default, not overridden in
+    session.py): the loser's FOR UPDATE re-fetches the winner's committed row and
+    sees ``revoked_at``/``reason`` set. Under SERIALIZABLE the loser would instead
+    raise a serialization failure (500) — don't raise the engine isolation level
+    here without revisiting this path.
+
+    NB: any ``raise`` before ``commit`` is safe — ``get_db`` rolls the session
+    back on exception, so a rejected rotation persists nothing.
+    """
+    token_hash = hash_token(token_value)
+    result = await db.execute(
+        _sa_select(RefreshToken).where(RefreshToken.token_hash == token_hash).with_for_update()
+    )
+    rt = result.scalar_one_or_none()
+    if rt is None:
+        return _REFRESH_INVALID, None, None
+
+    now = datetime.now(timezone.utc)
+
+    if rt.revoked_at is not None:
+        # Already-revoked token presented again.
+        if rt.revocation_reason == REASON_ROTATED:
+            # Replay of a rotated token → fail-closed: kill the whole family.
+            await db.execute(
+                _sa_update(RefreshToken)
+                .where(
+                    RefreshToken.family_id == rt.family_id,
+                    RefreshToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=now, revocation_reason=REASON_REUSE)
+            )
+            await db.commit()
+        # logout / admin / legacy(NULL): plain 401, no family-wide revoke.
+        return _REFRESH_INVALID, None, None
+
+    if not rt.is_valid:  # revoked_at is None here → this means expired
+        return _REFRESH_INVALID, None, None
+
+    user = await get_user_by_id(db, rt.user_id)
+    if user is None:
+        return _REFRESH_INVALID, None, None
+    if user.status != "approved":
+        # Do not rotate an inactive account's token (no persistence — rollback).
+        return _REFRESH_NOT_APPROVED, None, None
+
+    new_value = create_refresh_token_value()
+    effective_ttl = ttl if ttl is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    rt.revoked_at = now
+    rt.revocation_reason = REASON_ROTATED
+    db.add(RefreshToken(
+        user_id=user.id,
+        token_hash=hash_token(new_value),
+        expires_at=now + effective_ttl,
+        device_info=device_info,
+        family_id=rt.family_id,          # child stays in the same family
+        parent_token_id=rt.id,
+    ))
+    # Single commit persists the revoke and the replacement together.
+    await db.commit()
+    return _REFRESH_OK, user, new_value
+
+
+async def revoke_refresh_token(db: AsyncSession, token_value: str) -> None:
+    """Logout: помечает предъявленный refresh-токен revoked (reason=logout).
+
+    APIFE-14: stamp reason=logout so a later replay of THIS token is not
+    mistaken for a rotation replay (which would revoke the whole family).
+    Незнакомый/уже-revoked токен — no-op.
+    """
+    token_hash = hash_token(token_value)
+    result = await db.execute(
+        _sa_select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    )
+    rt = result.scalar_one_or_none()
+    if rt and rt.revoked_at is None:
+        rt.revoked_at = datetime.now(timezone.utc)
+        rt.revocation_reason = REASON_LOGOUT
+        await db.commit()
+
+
+async def persist_password_hash(db: AsyncSession, user: User, password_hash: str) -> None:
+    """Сохраняет новый password_hash (проверки current-password — у роутера)."""
+    user.password_hash = password_hash
+    await db.commit()

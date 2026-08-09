@@ -1,8 +1,8 @@
-"""AUD5-ARCH-2 (волна 2): AST-инвентаризация прямого ORM в четырёх роутерах.
+"""AUD5-ARCH-2 (волны 2–3): AST-инвентаризация прямого ORM в тонких роутерах.
 
 ЗЕЛЁНЫЙ baseline-гейт по образцу test_requests_router_inventory.py (волна 1):
-фиксирует набор прямых ORM/data-access call-сайтов в роутерах callcenter,
-materials, profile и public как ПУСТОЙ. Data-access каждого вынесен в
+фиксирует набор прямых ORM/data-access call-сайтов в роутерах auth, callcenter,
+feedback, materials, profile и public как ПУСТОЙ. Data-access каждого вынесен в
 соседний `service.py`; роутер — тонкий HTTP-слой (auth-deps, парсинг,
 валидация, сериализация, HTTPException, маппинг доменных ошибок).
 
@@ -23,7 +23,9 @@ import pytest
 _API_ROOT = Path(__file__).resolve().parents[2] / "uk_management_bot" / "api"
 
 ROUTERS: dict[str, str] = {
+    "auth": "uk_management_bot/api/auth/router.py",
     "callcenter": "uk_management_bot/api/callcenter/router.py",
+    "feedback": "uk_management_bot/api/feedback/router.py",
     "materials": "uk_management_bot/api/materials/router.py",
     "profile": "uk_management_bot/api/profile/router.py",
     "public": "uk_management_bot/api/public/router.py",
@@ -79,7 +81,9 @@ def collect_orm_sites(rel: str) -> set[tuple[str, str]]:
 # Весь data-access — в uk_management_bot/api/<module>/service.py.
 # ---------------------------------------------------------------------------
 BASELINE: dict[str, set[tuple[str, str]]] = {
+    "auth": set(),
     "callcenter": set(),
+    "feedback": set(),
     "materials": set(),
     "profile": set(),
     "public": set(),

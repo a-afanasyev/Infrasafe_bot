@@ -8,7 +8,6 @@
 - GET   "/{fid}/media/{mid}/file"— стрим байтов вложения (manager; для <img> в дашборде)
 """
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -24,10 +23,10 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import Response
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_current_user, get_db, require_roles
+from uk_management_bot.api.feedback import service
 from uk_management_bot.api.feedback.schemas import (
     FeedbackDetailOut,
     FeedbackListItem,
@@ -136,10 +135,9 @@ async def create_feedback(
             )
 
     # 3) Сохраняем обращение
-    fb = Feedback(user_id=user.id, type=feedback_type, text=text, media_files=[], source="twa")
-    db.add(fb)
-    await db.commit()
-    await db.refresh(fb)
+    fb = await service.persist_feedback(
+        db, user_id=user.id, feedback_type=feedback_type, text=text, source="twa"
+    )
 
     # 4) Фото → media-service (best-effort; падение не валит сохранение)
     tg_fid: Optional[str] = None
@@ -161,8 +159,7 @@ async def create_feedback(
                 media_id = payload.get("id")
                 tg_fid = payload.get("telegram_file_id")
                 if media_id:
-                    fb.media_files = [media_id]
-                    await db.commit()
+                    await service.attach_media(db, fb, media_ids=[media_id])
             else:
                 logger.warning("feedback %s media upload status %s", fb.id, resp.status_code)
         except Exception as e:
@@ -204,29 +201,9 @@ async def list_feedback(
     if status and status not in _STATUSES:
         raise HTTPException(status_code=422, detail="invalid status filter")
 
-    conds = []
-    if feedback_type:
-        conds.append(Feedback.type == feedback_type)
-    if status:
-        conds.append(Feedback.status == status)
-
-    # count и rows используют ОДИН и тот же inner-join, иначе пагинация разъедется,
-    # если у обращения user_id ссылается на отсутствующего пользователя.
-    total = (
-        await db.execute(
-            select(func.count(Feedback.id)).join(User, Feedback.user_id == User.id).where(*conds)
-        )
-    ).scalar() or 0
-    rows = (
-        await db.execute(
-            select(Feedback, User)
-            .join(User, Feedback.user_id == User.id)
-            .where(*conds)
-            .order_by(Feedback.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-    ).all()
+    rows, total = await service.feedback_page(
+        db, feedback_type=feedback_type, status=status, limit=limit, offset=offset,
+    )
 
     items = [
         FeedbackListItem(
@@ -240,7 +217,7 @@ async def list_feedback(
 
 
 async def _get_feedback_or_404(db: AsyncSession, fid: int) -> Feedback:
-    fb = (await db.execute(select(Feedback).where(Feedback.id == fid))).scalar_one_or_none()
+    fb = await service.feedback_by_id(db, fid)
     if not fb:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return fb
@@ -263,7 +240,7 @@ async def get_feedback(
     db: AsyncSession = Depends(get_db),
 ):
     fb = await _get_feedback_or_404(db, fid)
-    author = (await db.execute(select(User).where(User.id == fb.user_id))).scalar_one_or_none()
+    author = await service.author_of(db, fb.user_id)
     return _detail(fb, author)
 
 
@@ -277,27 +254,27 @@ async def update_feedback(
     fb = await _get_feedback_or_404(db, fid)
 
     # Статус: валидируем переход (не просто membership)
+    new_status = None
     if body.status is not None and body.status != fb.status:
         if body.status not in _STATUSES:
             raise HTTPException(status_code=422, detail="invalid status")
         if body.status not in _TRANSITIONS.get(fb.status, set()):
             raise HTTPException(status_code=422, detail=f"invalid transition {fb.status} -> {body.status}")
-        fb.status = body.status
+        new_status = body.status
 
     # Ответ: пустой/пробельный игнорируем (no-op); уведомляем автора только при изменении текста
-    reply_changed = False
+    new_reply = None
     if body.reply is not None and body.reply.strip():
-        new_reply = body.reply.strip()
-        if new_reply != (fb.reply or ""):
-            fb.reply = new_reply
-            fb.replied_at = datetime.now(timezone.utc)
-            fb.replied_by = user.id
-            reply_changed = True
+        candidate = body.reply.strip()
+        if candidate != (fb.reply or ""):
+            new_reply = candidate
+    reply_changed = new_reply is not None
 
-    await db.commit()
-    await db.refresh(fb)
+    await service.apply_feedback_edits(
+        db, fb, status=new_status, reply=new_reply, replied_by=user.id if reply_changed else None,
+    )
 
-    author = (await db.execute(select(User).where(User.id == fb.user_id))).scalar_one_or_none()
+    author = await service.author_of(db, fb.user_id)
 
     if reply_changed and author and author.telegram_id:
         try:

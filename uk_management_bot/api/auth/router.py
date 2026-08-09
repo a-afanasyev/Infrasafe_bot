@@ -1,9 +1,7 @@
-import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
 
 from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.schemas import (
@@ -16,19 +14,19 @@ from uk_management_bot.api.auth.schemas import (
 from uk_management_bot.api.auth.service import (
     verify_telegram_widget, verify_twa_init_data,
     verify_password, hash_password,
-    create_access_token, create_refresh_token_value, hash_token,
+    create_access_token, create_refresh_token_value,
     ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
     TWA_REFRESH_TOKEN_EXPIRE_HOURS,
     create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, send_otp_via_bot,
+    user_by_email, save_refresh_token, _rotate_refresh_token,
+    revoke_refresh_token, persist_password_hash,
+    _REFRESH_INVALID, _REFRESH_NOT_APPROVED,
 )
 from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
 from uk_management_bot.api.users.queries import (
     get_user_by_telegram_id, get_user_by_id, require_user_by_id,
 )
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.refresh_token import (
-    RefreshToken, REASON_ROTATED, REASON_LOGOUT, REASON_REUSE,
-)
 from uk_management_bot.config.settings import settings
 
 # SEC-04: every route here is a credential/token operation (login, OTP,
@@ -91,116 +89,6 @@ def _build_token_response(user: User) -> dict:
     return {"access_token": access_token, "refresh_value": refresh_value, "roles": roles}
 
 
-async def _save_refresh_token(
-    db: AsyncSession,
-    user_id: int,
-    token_value: str,
-    device_info: str = "",
-    ttl: timedelta | None = None,
-) -> None:
-    # TWA-08: callers may pass a shorter TTL (e.g. login_twa uses 24h instead
-    # of 30d) — see TWA_REFRESH_TOKEN_EXPIRE_HOURS.
-    # APIFE-14: this is the LOGIN path — every login starts a NEW token family
-    # (one family = one login = one device), so a reuse-revoke never spans logins.
-    effective_ttl = ttl if ttl is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    expires = datetime.now(timezone.utc) + effective_ttl
-    rt = RefreshToken(
-        user_id=user_id,
-        token_hash=hash_token(token_value),
-        expires_at=expires,
-        device_info=device_info,
-        family_id=uuid.uuid4().hex,
-    )
-    db.add(rt)
-    await db.commit()
-
-
-# F-02: refresh-token rotation outcomes (typed so the route maps to HTTP codes).
-_REFRESH_OK = "ok"
-_REFRESH_INVALID = "invalid"
-_REFRESH_NOT_APPROVED = "not_approved"
-
-
-async def _rotate_refresh_token(
-    db: AsyncSession, token_value: str, *, ttl: timedelta | None, device_info: str = ""
-) -> tuple[str, User | None, str | None]:
-    """F-02 + APIFE-14: atomic refresh-token rotation with family reuse detection.
-
-    Locks the presented token row ``FOR UPDATE``, re-checks state under the lock,
-    then either rotates (valid) or reacts to a replay. Returns
-    ``(outcome, user, new_refresh_value)``.
-
-    Reuse detection (APIFE-14): presenting an already-rotated token = replay/theft
-    (or a benign double-submit the client coordination failed to dedup) → fail
-    closed: revoke every still-active token in that family and 401. Only
-    ``rotated`` replays trigger this — a logout/admin-revoked (or legacy NULL)
-    token just 401s without touching the family, so a stale logout token can't DoS
-    the account. NB: this makes a concurrent double-submit of a *valid* token
-    self-defeating (the loser revokes the winner's fresh replacement); that's why
-    cross-tab client coordination (Web Locks + marker) is a hard prerequisite.
-
-    Assumes READ COMMITTED isolation (Postgres default, not overridden in
-    session.py): the loser's FOR UPDATE re-fetches the winner's committed row and
-    sees ``revoked_at``/``reason`` set. Under SERIALIZABLE the loser would instead
-    raise a serialization failure (500) — don't raise the engine isolation level
-    here without revisiting this path.
-
-    NB: any ``raise`` before ``commit`` is safe — ``get_db`` rolls the session
-    back on exception, so a rejected rotation persists nothing.
-    """
-    token_hash = hash_token(token_value)
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == token_hash).with_for_update()
-    )
-    rt = result.scalar_one_or_none()
-    if rt is None:
-        return _REFRESH_INVALID, None, None
-
-    now = datetime.now(timezone.utc)
-
-    if rt.revoked_at is not None:
-        # Already-revoked token presented again.
-        if rt.revocation_reason == REASON_ROTATED:
-            # Replay of a rotated token → fail-closed: kill the whole family.
-            await db.execute(
-                update(RefreshToken)
-                .where(
-                    RefreshToken.family_id == rt.family_id,
-                    RefreshToken.revoked_at.is_(None),
-                )
-                .values(revoked_at=now, revocation_reason=REASON_REUSE)
-            )
-            await db.commit()
-        # logout / admin / legacy(NULL): plain 401, no family-wide revoke.
-        return _REFRESH_INVALID, None, None
-
-    if not rt.is_valid:  # revoked_at is None here → this means expired
-        return _REFRESH_INVALID, None, None
-
-    user = await get_user_by_id(db, rt.user_id)
-    if user is None:
-        return _REFRESH_INVALID, None, None
-    if user.status != "approved":
-        # Do not rotate an inactive account's token (no persistence — rollback).
-        return _REFRESH_NOT_APPROVED, None, None
-
-    new_value = create_refresh_token_value()
-    effective_ttl = ttl if ttl is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    rt.revoked_at = now
-    rt.revocation_reason = REASON_ROTATED
-    db.add(RefreshToken(
-        user_id=user.id,
-        token_hash=hash_token(new_value),
-        expires_at=now + effective_ttl,
-        device_info=device_info,
-        family_id=rt.family_id,          # child stays in the same family
-        parent_token_id=rt.id,
-    ))
-    # Single commit persists the revoke and the replacement together.
-    await db.commit()
-    return _REFRESH_OK, user, new_value
-
-
 @router.post("/telegram-widget", response_model=WebTokenResponse)
 @limiter.limit("10/minute")
 async def login_telegram_widget(
@@ -226,7 +114,7 @@ async def login_telegram_widget(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
     tokens = _build_token_response(user)
-    await _save_refresh_token(db, user.id, tokens["refresh_value"])
+    await save_refresh_token(db, user.id, tokens["refresh_value"])
     # Web flow (plan §7.2): refresh in cookie only, body carries access for clients
     # that want to keep it in memory and the existing "token in body" tests.
     _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
@@ -255,7 +143,7 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
     # TWA-08: TWA-issued refresh tokens get 24h TTL (vs 30d for web SPA).
     # Combined with the frontend re-init on auth-failed event, the window
     # for a stolen TWA refresh token is bounded to one day.
-    await _save_refresh_token(
+    await save_refresh_token(
         db,
         user.id,
         tokens["refresh_value"],
@@ -267,8 +155,7 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
 @router.post("/login")
 @limiter.limit("10/minute")
 async def login_password(request: Request, data: PasswordLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == data.email))
-    user = result.scalar_one_or_none()
+    user = await user_by_email(db, data.email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if user.status != "approved":
@@ -323,7 +210,7 @@ async def verify_login_otp(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
 
     tokens = _build_token_response(user)
-    await _save_refresh_token(db, user.id, tokens["refresh_value"])
+    await save_refresh_token(db, user.id, tokens["refresh_value"])
     _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
     return WebTokenResponse(access_token=tokens["access_token"])
 
@@ -414,15 +301,7 @@ async def logout(
         token_value = body.refresh_token
 
     if token_value:
-        token_hash = hash_token(token_value)
-        result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
-        rt = result.scalar_one_or_none()
-        if rt and rt.revoked_at is None:
-            # APIFE-14: stamp reason=logout so a later replay of THIS token is not
-            # mistaken for a rotation replay (which would revoke the whole family).
-            rt.revoked_at = datetime.now(timezone.utc)
-            rt.revocation_reason = REASON_LOGOUT
-            await db.commit()
+        await revoke_refresh_token(db, token_value)
 
     _clear_auth_cookies(response)
     return {"ok": True}
@@ -458,6 +337,5 @@ async def set_password(
                 detail="current_password_invalid",
             )
 
-    db_user.password_hash = hash_password(data.password)
-    await db.commit()
+    await persist_password_hash(db, db_user, hash_password(data.password))
     return {"ok": True}
