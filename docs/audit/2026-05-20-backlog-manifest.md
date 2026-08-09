@@ -22,11 +22,11 @@
 - закрыто маркером: **384**
 - открыто маркером: **24**
 
-  - `actionable` — **19**
+  - `actionable` — **18**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=8, P3=11.
+Из них actionable по приоритету: P2=7, P3=11.
 
 Значения `status`:
 
@@ -56,7 +56,7 @@
 | `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-10` | P3 | actionable | doc-2026-07-21 | A5 | — | — | — |  |
-| `AUD5-ARCH-4` | P2 | actionable | verified-2026-07-27 | A7 | — | — | — | решение: contract-слой + AST-гейт (S); полная развязка отклонена |
+| `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
 | `TEST-068` | P2 | actionable | verified-2026-08-02 | П11 | — | — | — | floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80% |
