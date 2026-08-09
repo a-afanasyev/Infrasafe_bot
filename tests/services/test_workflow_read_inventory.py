@@ -132,8 +132,8 @@ BASELINE: set[tuple[str, str, str]] = {
     # (`req.status != old_status` → bump status_version) — НЕ transition-guard,
     # решение о переходе уже принято чистым _decide; предикат здесь неуместен.
     ('uk_management_bot/services/workflow_runner.py', 'cmp:req', 'status'),
-    ('uk_management_bot/api/public/router.py', 'cmp:RequestModel', 'status'),
-    ('uk_management_bot/api/public/router.py', 'in_:RequestModel', 'status'),
+    ('uk_management_bot/api/public/service.py', 'cmp:RequestModel', 'status'),
+    ('uk_management_bot/api/public/service.py', 'in_:RequestModel', 'status'),
     # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = User, status "blocked"/
     # "approved" (router.py:50,52) — не workflow заявки.
     ('uk_management_bot/api/registration/router.py', 'cmp:existing', 'status'),
