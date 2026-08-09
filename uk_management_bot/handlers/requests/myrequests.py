@@ -239,7 +239,7 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
             if not req or not user or req.user_id != user.id:
                 await message.answer(get_text("requests.request_not_found_or_unavailable", language=lang))
                 await state.clear()
-                await message.answer(get_text("common.return_to_menu", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+                await message.answer(get_text("common.return_to_menu", language=lang), reply_markup=await get_user_contextual_keyboard(message.from_user.id))
                 return
             existing = (req.notes or "").strip()
             to_add = message.text.strip()

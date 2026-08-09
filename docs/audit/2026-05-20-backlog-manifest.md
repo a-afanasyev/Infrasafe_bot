@@ -19,14 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **408**
-- закрыто маркером: **382**
-- открыто маркером: **26**
+- закрыто маркером: **384**
+- открыто маркером: **24**
 
-  - `actionable` — **21**
+  - `actionable` — **19**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=9, P3=12.
+Из них actionable по приоритету: P2=8, P3=11.
 
 Значения `status`:
 
@@ -57,8 +57,6 @@
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-10` | P3 | actionable | doc-2026-07-21 | A5 | — | — | — |  |
 | `AUD5-ARCH-4` | P2 | actionable | verified-2026-07-27 | A7 | — | — | — | решение: contract-слой + AST-гейт (S); полная развязка отклонена |
-| `AUD3-37` | P3 | actionable | verified-2026-07-27 | B | — | — | — | решение: вариант (б) — sync unit-of-work в to_thread |
-| `AUD5-CODE-6` | P2 | actionable | verified-2026-07-27 | B | — | — | — | закрывается вместе с AUD3-37 вариантом (б) |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
 | `AUD3-25` | P3 | actionable | doc-2026-07-14 | П11 | — | — | — |  |
 | `TEST-068` | P2 | actionable | verified-2026-08-02 | П11 | — | — | — | floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80% |

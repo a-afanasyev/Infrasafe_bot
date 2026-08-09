@@ -281,7 +281,7 @@ async def cmd_help(message: Message, language: str = "ru"):
     lang = language
     help_text = get_text("base.handlers.help_text", language=lang)
 
-    await message.answer(help_text, reply_markup=get_user_contextual_keyboard(message.from_user.id))
+    await message.answer(help_text, reply_markup=await get_user_contextual_keyboard(message.from_user.id))
 
 @router.message(F.text.in_(CANCEL_TEXTS))
 async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None, language: str = "ru"):
@@ -292,14 +292,14 @@ async def cancel_action(message: Message, state: FSMContext, roles: list[str] = 
         lang = language
         await message.answer(
             get_text("cancel", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         logger.info(f"Пользователь {message.from_user.id} отменил действие в состоянии {current_state}")
     else:
         lang = language
         await message.answer(
             get_text("cancel", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
 
 @router.message(F.text.in_(BACK_TEXTS))
@@ -307,7 +307,7 @@ async def go_back(message: Message, state: FSMContext, db: Session = None, roles
     """Возврат в главное меню"""
     await state.clear()
     lang = get_user_language(message.from_user.id, db)
-    await message.answer(get_text("back", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+    await message.answer(get_text("back", language=lang), reply_markup=await get_user_contextual_keyboard(message.from_user.id))
 
 
 # Обработчики меню исполнителя
@@ -500,7 +500,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
     
     if message.text in CANCEL_TEXTS:
         await state.clear()
-        await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=get_user_contextual_keyboard(message.from_user.id))
+        await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=await get_user_contextual_keyboard(message.from_user.id))
         return
 
     # SEC-01: rate-limit на перебор пароля — 5 попыток за 5 минут с аккаунта.
@@ -510,7 +510,7 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
         logger.warning(f"Rate-limit на ввод admin-пароля для пользователя {message.from_user.id}")
         await message.answer(
             safe_get_text("admin.too_many_attempts", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
 
@@ -550,6 +550,6 @@ async def process_admin_password(message: Message, state: FSMContext, db: Sessio
     else:
         await message.answer(
             safe_get_text("admin.assignment_failed", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         logger.warning(f"Неверная попытка назначения администратора от {message.from_user.id}")

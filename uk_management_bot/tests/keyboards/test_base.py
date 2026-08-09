@@ -349,7 +349,11 @@ class TestGetYesNoKeyboard:
 # ---------------------------------------------------------------------------
 
 class TestGetUserContextualKeyboard:
-    def test_user_found_returns_reply_keyboard(self):
+    """AUD3-37 F2: функция стала async (run_db); патч SessionLocal остаётся —
+    run_db открывает сессию через session_scope, который читает фабрику
+    module-global lookup'ом, то есть в worker-потоке отдаётся мок теста."""
+    @pytest.mark.asyncio
+    async def test_user_found_returns_reply_keyboard(self):
         user = MagicMock()
         user.roles = ["executor"]
         user.active_role = "executor"
@@ -363,22 +367,24 @@ class TestGetUserContextualKeyboard:
         with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-            result = get_user_contextual_keyboard(user_id=123)
+            result = await get_user_contextual_keyboard(user_id=123)
 
         assert isinstance(result, ReplyKeyboardMarkup)
 
-    def test_user_not_found_returns_default_keyboard(self):
+    @pytest.mark.asyncio
+    async def test_user_not_found_returns_default_keyboard(self):
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
         with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-            result = get_user_contextual_keyboard(user_id=999)
+            result = await get_user_contextual_keyboard(user_id=999)
 
         assert isinstance(result, ReplyKeyboardMarkup)
 
-    def test_db_exception_propagates_and_is_logged(self, caplog):
+    @pytest.mark.asyncio
+    async def test_db_exception_propagates_and_is_logged(self, caplog):
         """AUD5-CODE-7: сбой БД не подменяется applicant-клавиатурой.
 
         Прежний тест фиксировал ровно обратное («вернуть клавиатуру по
@@ -397,13 +403,14 @@ class TestGetUserContextualKeyboard:
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
             with caplog.at_level(logging.ERROR, logger="uk_management_bot.keyboards.base"):
                 with pytest.raises(Exception, match="DB failure"):
-                    get_user_contextual_keyboard(user_id=0)
+                    await get_user_contextual_keyboard(user_id=0)
 
         assert any(r.levelno >= logging.ERROR for r in caplog.records), \
             "сбой обязан попасть в лог уровня ERROR, иначе он снова невидим"
         assert mock_db.close.called, "сессия должна закрываться и на ошибке (finally)"
 
-    def test_user_not_found_is_not_treated_as_failure(self, caplog):
+    @pytest.mark.asyncio
+    async def test_user_not_found_is_not_treated_as_failure(self, caplog):
         """Отсутствие пользователя — легитимный случай, не ERROR.
 
         Граница важна: если бы «нет пользователя» тоже логировалось ошибкой,
@@ -417,12 +424,13 @@ class TestGetUserContextualKeyboard:
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
             with caplog.at_level(logging.DEBUG, logger="uk_management_bot.keyboards.base"):
-                result = get_user_contextual_keyboard(user_id=999)
+                result = await get_user_contextual_keyboard(user_id=999)
 
         assert isinstance(result, ReplyKeyboardMarkup)
         assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
-    def test_user_with_no_roles_but_legacy_role(self):
+    @pytest.mark.asyncio
+    async def test_user_with_no_roles_but_legacy_role(self):
         """Falls back to user.role when user.roles is empty."""
         user = MagicMock()
         user.roles = None
@@ -438,11 +446,12 @@ class TestGetUserContextualKeyboard:
              patch("uk_management_bot.utils.auth_helpers.parse_roles_safe", return_value=[]), \
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text()):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-            result = get_user_contextual_keyboard(user_id=456)
+            result = await get_user_contextual_keyboard(user_id=456)
 
         assert isinstance(result, ReplyKeyboardMarkup)
 
-    def test_user_with_pending_status(self):
+    @pytest.mark.asyncio
+    async def test_user_with_pending_status(self):
         user = MagicMock()
         user.roles = ["applicant"]
         user.active_role = "applicant"
@@ -457,7 +466,7 @@ class TestGetUserContextualKeyboard:
         with patch("uk_management_bot.database.session.SessionLocal", return_value=mock_db), \
              patch("uk_management_bot.keyboards.base.get_text", side_effect=_make_get_text(mapping)):
             from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-            result = get_user_contextual_keyboard(user_id=789)
+            result = await get_user_contextual_keyboard(user_id=789)
 
         texts = _all_button_texts(result)
         assert "Создать заявку" not in texts

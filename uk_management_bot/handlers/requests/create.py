@@ -396,7 +396,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
             await state.clear()
             await message.answer(
                 get_text("requests.request_created_success", language=lang),
-                reply_markup=get_contextual_keyboard(roles, active_role) if roles and active_role else get_user_contextual_keyboard(message.from_user.id)
+                reply_markup=get_contextual_keyboard(roles, active_role) if roles and active_role else await get_user_contextual_keyboard(message.from_user.id)
             )
             logger.info(f"Пользователь {message.from_user.id} создал заявку")
         else:
@@ -404,7 +404,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
             await state.clear()
             await message.answer(
                 get_text("errors.request_save_failed", language=lang),
-                reply_markup=get_user_contextual_keyboard(message.from_user.id)
+                reply_markup=await get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")
         return
@@ -420,7 +420,7 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
     await state.clear()
     await message.answer(
         get_text("requests.request_creation_cancelled", language=lang),
-        reply_markup=get_user_contextual_keyboard(message.from_user.id)
+        reply_markup=await get_user_contextual_keyboard(message.from_user.id)
     )
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
 

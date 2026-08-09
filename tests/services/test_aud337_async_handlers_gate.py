@@ -97,3 +97,34 @@ def test_converted_handler_modules_keep_db_off_the_event_loop():
 def test_converted_list_is_not_empty():
     """Гейт не должен тихо превратиться в пустышку при рефакторинге списка."""
     assert CONVERTED
+
+
+def test_no_handler_mixes_declared_db_with_run_db():
+    """F1-ревью follow-up: хендлер с объявленным ``db`` не зовёт run_db напрямую.
+
+    Такой микс держал бы ленивую middleware-сессию открытой, пока worker-поток
+    берёт ВТОРОЕ соединение из того же пула — при исчерпании пула это
+    самонаведённая задержка до pool_timeout. Конвертированные файлы не
+    объявляют db (первый тест), неконвертированные не зовут run_db — инвариант
+    держит границу между мирами для ВСЕХ файлов handlers/.
+    """
+    problems: list[str] = []
+    for path in sorted((ROOT / "uk_management_bot" / "handlers").rglob("*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in _async_defs(tree):
+            args = fn.args
+            declared = {a.arg for a in [*args.posonlyargs, *args.args, *args.kwonlyargs]}
+            if "db" not in declared:
+                continue
+            for node in ast.walk(fn):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "run_db"
+                ):
+                    problems.append(
+                        f"{rel}:{node.lineno}: async def {fn.name} объявляет db "
+                        "И зовёт run_db — две сессии на один update"
+                    )
+    assert not problems, "AUD3-37 mix-гейт:\n" + "\n".join(problems)

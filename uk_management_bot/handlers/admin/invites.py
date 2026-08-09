@@ -38,7 +38,7 @@ async def start_invite_creation(message: Message, db: Session, roles: list = Non
     if not has_admin_access(roles=roles, user=user):
         await message.answer(
             get_text("invites.manager_only", language=lang),
-            reply_markup=get_user_contextual_keyboard(message.from_user.id)
+            reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         return
     

@@ -30,8 +30,35 @@ def get_contextual_keyboard(roles: list = None, active_role: str = None, languag
     return get_main_keyboard_for_role(active_role=active_role, roles=roles, language=language)
 
 
-def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+def _load_keyboard_context(db, user_id: int):
+    """DB-юнит клавиатуры (AUD3-37 F2): исполняется в worker-потоке run_db.
+
+    Возвращает DTO ``(roles, active_role, user_status, language)`` или None,
+    если пользователя нет (легитимный случай, не ошибка).
+    """
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+
+    user = db.query(User).filter(User.telegram_id == user_id).first()
+    if not user:
+        return None
+
+    roles = get_user_roles(user)
+    return (
+        roles,
+        user.active_role or (roles[0] if roles else "applicant"),
+        user.status or "approved",
+        user.language or "ru",
+    )
+
+
+async def get_user_contextual_keyboard(user_id: int, *, _db=None) -> ReplyKeyboardMarkup:
     """Получить клавиатуру пользователя, загрузив его роли из БД.
+
+    AUD3-37 (F2): DB-фаза — юнит ``_load_keyboard_context`` в worker-потоке
+    через ``run_db`` со своей короткой сессией (раньше здесь была собственная
+    ``SessionLocal()`` прямо на event loop — третья сессия update и loop-блок
+    на ~40 колл-сайтах). Тестовый seam — keyword-only ``_db``.
 
     Пользователя нет в БД — легитимный случай (незарегистрированный), отдаём
     базовую клавиатуру. Любой ДРУГОЙ сбой логируется и пробрасывается.
@@ -49,22 +76,13 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     возвращает True — процесс не падает, а человек видит понятную ошибку и
     повторяет действие вместо того, чтобы застрять с неверным меню.
     """
-    from uk_management_bot.database.session import SessionLocal
-    from uk_management_bot.database.models.user import User
+    from uk_management_bot.database.session import run_db
 
-    db = SessionLocal()
     try:
-        user = db.query(User).filter(User.telegram_id == user_id).first()
+        ctx = await run_db(lambda s: _load_keyboard_context(s, user_id), db=_db)
 
-        if user:
-            from uk_management_bot.utils.auth_helpers import get_user_roles
-
-            roles = get_user_roles(user)
-
-            active_role = user.active_role or (roles[0] if roles else "applicant")
-            user_status = user.status or "approved"
-            language = user.language or "ru"
-
+        if ctx is not None:
+            roles, active_role, user_status, language = ctx
             return get_main_keyboard_for_role(
                 active_role=active_role,
                 roles=roles,
@@ -83,8 +101,6 @@ def get_user_contextual_keyboard(user_id: int) -> ReplyKeyboardMarkup:
             user_id, exc_info=True,
         )
         raise
-    finally:
-        db.close()
 
 def get_cancel_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Клавиатура с кнопкой отмены"""
