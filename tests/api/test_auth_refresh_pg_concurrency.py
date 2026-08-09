@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.refresh_token import RefreshToken
 from uk_management_bot.database.session import Base
-from uk_management_bot.api.auth.router import (
+from uk_management_bot.api.auth.service import (
     _rotate_refresh_token, _REFRESH_OK, _REFRESH_INVALID,
 )
 from uk_management_bot.api.auth.service import hash_token, create_refresh_token_value

@@ -18,7 +18,7 @@ from uk_management_bot.database.models.refresh_token import (
     RefreshToken, REASON_ROTATED, REASON_LOGOUT, REASON_REUSE,
 )
 from uk_management_bot.api.auth.service import hash_token, create_refresh_token_value
-from uk_management_bot.api.auth.router import (
+from uk_management_bot.api.auth.service import (
     _rotate_refresh_token, _REFRESH_OK, _REFRESH_INVALID,
 )
 
