@@ -616,7 +616,7 @@ class TestProcessAdminPasswordRateLimit:
              patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
                    new=AsyncMock(return_value=True)) as mock_limit, \
              patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
-                   return_value=MagicMock()):
+                   new=AsyncMock(return_value=MagicMock())):
             await process_admin_password(msg, state, db)
 
         mock_limit.assert_awaited_once_with("admin_pwd:555", 5, 300)
@@ -640,7 +640,7 @@ class TestProcessAdminPasswordRateLimit:
              patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
                    new=AsyncMock(return_value=False)), \
              patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
-                   return_value=MagicMock()):
+                   new=AsyncMock(return_value=MagicMock())):
             await process_admin_password(msg, state, db)
 
         mock_service.make_admin_by_password.assert_awaited_once_with(
