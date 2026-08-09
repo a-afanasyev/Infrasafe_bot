@@ -137,7 +137,7 @@ BASELINE: set[tuple[str, str, str]] = {
     # FALSE-POSITIVE (подтверждено PR2-pre/2): existing = User, status "blocked"/
     # "approved" (router.py:50,52) — не workflow заявки.
     ('uk_management_bot/api/registration/router.py', 'cmp:existing', 'status'),
-    ('uk_management_bot/api/requests/router.py', 'cmp:RequestModel', 'status'),
+    ('uk_management_bot/api/requests/service.py', 'cmp:RequestModel', 'status'),
     # PR4 cutover: kanban-группировка переведена с сырого `r.status == st` на
     # проецированный `card.status == st` (project_public_status в
     # _make_request_card) → 'cmp:r' status в этом файле исчез.
