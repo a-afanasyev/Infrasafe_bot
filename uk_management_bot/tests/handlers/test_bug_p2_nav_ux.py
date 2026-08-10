@@ -266,10 +266,10 @@ class TestBug025EmployeeSearchHandler:
         db.query.return_value.filter.return_value.limit.return_value.all.return_value = [emp]
 
         with patch(
-            "uk_management_bot.handlers.employee_management.get_text",
+            "uk_management_bot.handlers.employee_management.lists.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.employee_management.has_admin_access",
+            "uk_management_bot.handlers.employee_management.lists.has_admin_access",
             return_value=True,
         ):
             await handle_employee_search_query(
@@ -302,10 +302,10 @@ class TestBug025EmployeeSearchHandler:
         db.query.return_value.filter.return_value.limit.return_value.all.return_value = []
 
         with patch(
-            "uk_management_bot.handlers.employee_management.get_text",
+            "uk_management_bot.handlers.employee_management.lists.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.employee_management.has_admin_access",
+            "uk_management_bot.handlers.employee_management.lists.has_admin_access",
             return_value=True,
         ):
             await handle_employee_search_query(

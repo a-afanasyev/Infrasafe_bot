@@ -20,7 +20,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import uk_management_bot.handlers.employee_management as emp
+# AUD5-ARCH-3: спец-хендлеры живут в roles_specs, show_employee_actions — в
+# lists, юниты (UserManagementService, _format_employee_name) — в _units.
+from uk_management_bot.handlers.employee_management import _units
+from uk_management_bot.handlers.employee_management import lists as emp_lists
+from uk_management_bot.handlers.employee_management import roles_specs as emp
 import uk_management_bot.keyboards.employee_management as emp_kb
 from uk_management_bot.services.specialization_service import SpecializationService
 
@@ -61,7 +65,7 @@ async def _run_change_spec(monkeypatch, employee):
     monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
     svc = MagicMock()
     svc.get_user_by_id.return_value = employee
-    monkeypatch.setattr(emp, "UserManagementService", lambda db: svc)
+    monkeypatch.setattr(_units, "UserManagementService", lambda db: svc)
     callback = _callback("change_employee_specialization_5")
     state = _state()
     await emp.change_employee_specialization(
@@ -166,14 +170,14 @@ def test_detailed_stats_none():
 
 # ═══ Имена: _format_employee_name → канон display_name (REFACTOR-133) ═══
 
-@pytest.mark.parametrize("fmt", [emp._format_employee_name, emp_kb._format_employee_name])
+@pytest.mark.parametrize("fmt", [_units._format_employee_name, emp_kb._format_employee_name])
 def test_format_name_only_last_name(fmt):
     """Канон показывает фамилию, даже когда first_name пуст (копии падали в @username)."""
     e = _employee(None, first_name=None, last_name="Иванов", username="ivn")
     assert fmt(e) == "Иванов"
 
 
-@pytest.mark.parametrize("fmt", [emp._format_employee_name, emp_kb._format_employee_name])
+@pytest.mark.parametrize("fmt", [_units._format_employee_name, emp_kb._format_employee_name])
 def test_format_name_telegram_id_fallback(fmt):
     """Единый фолбэк канона: 'ID<telegram_id>' (в копиях был 'ID: <id>')."""
     e = _employee(None, first_name=None, last_name=None, username=None, telegram_id=42)
@@ -184,12 +188,12 @@ def test_format_name_telegram_id_fallback(fmt):
 
 @pytest.mark.asyncio
 async def test_show_employee_actions_uses_card_helper(monkeypatch):
-    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(emp_lists, "has_admin_access", lambda **kw: True)
     render = AsyncMock(return_value=True)
-    monkeypatch.setattr(emp, "_return_to_employee_info", render)
+    monkeypatch.setattr(emp_lists, "_return_to_employee_info", render)
 
     callback = _callback("employee_mgmt_employee_7")
-    await emp.show_employee_actions(
+    await emp_lists.show_employee_actions(
         callback, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="uz"
     )
 
@@ -201,12 +205,12 @@ async def test_show_employee_actions_uses_card_helper(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_show_employee_actions_not_found(monkeypatch):
-    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(emp_lists, "has_admin_access", lambda **kw: True)
     render = AsyncMock(return_value=False)
-    monkeypatch.setattr(emp, "_return_to_employee_info", render)
+    monkeypatch.setattr(emp_lists, "_return_to_employee_info", render)
 
     callback = _callback("employee_mgmt_employee_7")
-    await emp.show_employee_actions(
+    await emp_lists.show_employee_actions(
         callback, _db=MagicMock(), roles=["manager"], user=MagicMock(), language="ru"
     )
 

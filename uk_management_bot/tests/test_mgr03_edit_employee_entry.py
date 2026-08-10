@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.types import CallbackQuery
 
-import uk_management_bot.handlers.employee_management as emp
+# AUD5-ARCH-3: edit_employee_entry живёт в editing, UserManagementService
+# резолвится в _units.
+import uk_management_bot.handlers.employee_management.editing as emp
+from uk_management_bot.handlers.employee_management import _units
 from uk_management_bot.handlers.employee_management import router as employee_router
 
 
@@ -51,7 +54,7 @@ async def test_entry_opens_edit_menu(monkeypatch):
     employee.first_name, employee.last_name = "Иван", "Петров"
     svc = MagicMock()
     svc.get_user_by_id.return_value = employee
-    monkeypatch.setattr(emp, "UserManagementService", lambda db: svc)
+    monkeypatch.setattr(_units, "UserManagementService", lambda db: svc)
 
     callback = MagicMock()
     callback.data = "edit_employee_5"

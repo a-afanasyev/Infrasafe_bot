@@ -18,7 +18,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import uk_management_bot.handlers.employee_management as emp
+# AUD5-ARCH-3: патчим модуль, где живёт исполняемый код —
+# approve/reject/delete живут в moderation, AuthService резолвится в _units,
+# show_employee_list — в lists.
+import uk_management_bot.handlers.employee_management.moderation as emp
+from uk_management_bot.handlers.employee_management import _units, lists
 from uk_management_bot.utils.helpers import get_text
 
 
@@ -35,9 +39,9 @@ def _patch_common(monkeypatch, *, auth_method: str, success: bool = True):
     monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
     auth = MagicMock()
     getattr(auth, auth_method).return_value = success
-    monkeypatch.setattr(emp, "AuthService", lambda db: auth)
+    monkeypatch.setattr(_units, "AuthService", lambda db: auth)
     show_list = AsyncMock()
-    monkeypatch.setattr(emp, "show_employee_list", show_list)
+    monkeypatch.setattr(lists, "show_employee_list", show_list)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = MagicMock()
     return auth, show_list, db

@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import uk_management_bot.handlers.employee_management as emp
+# AUD5-ARCH-3: патчим по месту жительства исполняемого кода —
+# change_employee_role в roles_specs, unblock_employee в moderation,
+# show_employee_list в lists, юниты/_return_to_employee_info — в _units.
+from uk_management_bot.handlers.employee_management import _units, lists, moderation
+from uk_management_bot.handlers.employee_management import roles_specs as emp
 from uk_management_bot.utils.helpers import get_text
 
 
@@ -53,7 +57,7 @@ async def test_change_role_header_localizes_roles(monkeypatch):
     employee.first_name, employee.last_name, employee.username = "Иван", "Петров", None
     svc = MagicMock()
     svc.get_user_by_id.return_value = employee
-    monkeypatch.setattr(emp, "UserManagementService", lambda db: svc)
+    monkeypatch.setattr(_units, "UserManagementService", lambda db: svc)
 
     callback = MagicMock()
     callback.data = "change_employee_role_5"
@@ -88,13 +92,13 @@ async def test_return_to_employee_info_is_render_only(monkeypatch):
     employee.created_at.strftime.return_value = "01.01.2026 10:00"
     svc = MagicMock()
     svc.get_user_by_id.return_value = employee
-    monkeypatch.setattr(emp, "UserManagementService", lambda db: svc)
+    monkeypatch.setattr(_units, "UserManagementService", lambda db: svc)
 
     callback = MagicMock()
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
 
-    result = await emp._return_to_employee_info(callback, 5, "ru", _db=MagicMock())
+    result = await _units._return_to_employee_info(callback, 5, "ru", _db=MagicMock())
 
     assert result is True
     callback.message.edit_text.assert_awaited_once()
@@ -106,14 +110,14 @@ async def test_unblock_re_renders_card_not_list(monkeypatch):
     """MGR-05 follow-up: unblock must re-render the card via _return_to_employee_info,
     not call show_employee_list(callback) (which parsed unblock_employee_<id> as a
     list callback and raised IndexError)."""
-    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(moderation, "has_admin_access", lambda **kw: True)
     auth = MagicMock()
     auth.approve_user.return_value = True
-    monkeypatch.setattr(emp, "AuthService", lambda db: auth)
+    monkeypatch.setattr(_units, "AuthService", lambda db: auth)
     render = AsyncMock()
-    monkeypatch.setattr(emp, "_return_to_employee_info", render)
+    monkeypatch.setattr(moderation, "_return_to_employee_info", render)
     show_list = AsyncMock()
-    monkeypatch.setattr(emp, "show_employee_list", show_list)
+    monkeypatch.setattr(lists, "show_employee_list", show_list)
 
     callback = MagicMock()
     callback.data = "unblock_employee_41"
@@ -122,7 +126,7 @@ async def test_unblock_re_renders_card_not_list(monkeypatch):
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = MagicMock()
 
-    await emp.unblock_employee(
+    await moderation.unblock_employee(
         callback, _db=db, roles=["manager"], user=MagicMock(), language="ru"
     )
 
@@ -135,13 +139,13 @@ async def test_unblock_re_renders_card_not_list(monkeypatch):
 async def test_return_to_employee_info_missing_returns_false(monkeypatch):
     svc = MagicMock()
     svc.get_user_by_id.return_value = None
-    monkeypatch.setattr(emp, "UserManagementService", lambda db: svc)
+    monkeypatch.setattr(_units, "UserManagementService", lambda db: svc)
 
     callback = MagicMock()
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
 
-    result = await emp._return_to_employee_info(callback, 999, "ru", _db=MagicMock())
+    result = await _units._return_to_employee_info(callback, 999, "ru", _db=MagicMock())
 
     assert result is False
     callback.message.edit_text.assert_not_awaited()
