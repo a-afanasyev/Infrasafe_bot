@@ -30,7 +30,14 @@ CONVERTED = [
     "uk_management_bot/handlers/my_shifts.py",
     "uk_management_bot/handlers/shift_transfer.py",
     "uk_management_bot/handlers/request_acceptance.py",
-    "uk_management_bot/handlers/employee_management.py",
+    # AUD5-ARCH-3 волна 1: god-файл employee_management.py разбит на пакет —
+    # гейт держит все файлы пакета с хендлерами + модуль sync-юнитов.
+    "uk_management_bot/handlers/employee_management/_units.py",
+    "uk_management_bot/handlers/employee_management/panels.py",
+    "uk_management_bot/handlers/employee_management/lists.py",
+    "uk_management_bot/handlers/employee_management/moderation.py",
+    "uk_management_bot/handlers/employee_management/editing.py",
+    "uk_management_bot/handlers/employee_management/roles_specs.py",
     "uk_management_bot/handlers/user_verification.py",
     "uk_management_bot/handlers/request_status_management.py",
 ]

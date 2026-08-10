@@ -18,7 +18,10 @@ from uk_management_bot.database import session as session_mod
 from uk_management_bot.database.session import Base
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.handlers import employee_management as emp
+# AUD5-ARCH-3: юниты/DTO живут в _units, контуры хендлеров — в lists/roles_specs.
+from uk_management_bot.handlers.employee_management import _units as emp
+from uk_management_bot.handlers.employee_management import lists as emp_lists
+from uk_management_bot.handlers.employee_management import roles_specs as emp_roles
 from uk_management_bot.utils.helpers import get_text
 
 _engine = create_engine(
@@ -195,11 +198,11 @@ def test_moderate_employee_routes_to_auth_service(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_show_employee_list_renders_via_thread_path(thread_sessions, monkeypatch):
     """Полный контур без seam: юнит уходит в worker-поток и видит сид."""
-    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(emp_lists, "has_admin_access", lambda **kw: True)
     _user(thread_sessions, db_id=1, tg_id=101, first_name="Иван")
 
     callback = _callback("employee_mgmt_list_active_1")
-    await emp.show_employee_list(callback, roles=["manager"], user=MagicMock(), language="ru")
+    await emp_lists.show_employee_list(callback, roles=["manager"], user=MagicMock(), language="ru")
 
     callback.message.edit_text.assert_awaited_once()
     kb = callback.message.edit_text.await_args.kwargs["reply_markup"]
@@ -210,7 +213,7 @@ async def test_show_employee_list_renders_via_thread_path(thread_sessions, monke
 
 @pytest.mark.asyncio
 async def test_process_role_change_comment_full_contour_on_seam(db, monkeypatch):
-    monkeypatch.setattr(emp, "has_admin_access", lambda **kw: True)
+    monkeypatch.setattr(emp_roles, "has_admin_access", lambda **kw: True)
     _user(db, db_id=9, tg_id=900, roles='["manager"]', active_role="manager")
     _user(db, db_id=5, tg_id=555, roles='["executor"]', active_role="executor")
 
@@ -220,7 +223,7 @@ async def test_process_role_change_comment_full_contour_on_seam(db, monkeypatch)
     message.answer = AsyncMock()
     state = _state({"target_employee_id": 5, "current_roles": ["manager", "executor"]})
 
-    await emp.process_role_change_comment(message, state, language="ru", _db=db)
+    await emp_roles.process_role_change_comment(message, state, language="ru", _db=db)
 
     fresh = db.get(User, 5)
     assert json.loads(fresh.roles) == ["manager", "executor"]

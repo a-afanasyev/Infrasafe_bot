@@ -58,7 +58,14 @@ SWEPT_FILES: tuple[str, ...] = (
     "services/user_verification_service.py",
     "handlers/clarification_replies.py",
     "handlers/health.py",
-    "handlers/employee_management.py",
+    # AUD5-ARCH-3 волна 1: employee_management.py разбит на пакет — метём все
+    # файлы пакета (datetime живёт в _units, остальные — тривиально чистые).
+    "handlers/employee_management/_units.py",
+    "handlers/employee_management/panels.py",
+    "handlers/employee_management/lists.py",
+    "handlers/employee_management/moderation.py",
+    "handlers/employee_management/editing.py",
+    "handlers/employee_management/roles_specs.py",
     "utils/health_server.py",
 )
 
