@@ -83,23 +83,20 @@ class UserVerificationService:
             self.db.rollback()
             raise
     
-    async def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
-        """
-        Одобрить верификацию пользователя
+    def approve_verification_db(self, user_id: int, admin_id: int, notes: str = None):
+        """DB-фазы одобрения верификации (без сети): статусы + авто-одобрение
+        квартир. → (ok, telegram_id | None).
 
-        Args:
-            user_id: ID пользователя
-            admin_id: ID администратора
-            notes: Комментарии администратора
-
-        Returns:
-            True если успешно
+        AUD3-07: выделено из async approve_verification, чтобы хендлеры могли
+        исполнять DB-часть в worker-потоке (run_db), а сетевую зачистку media —
+        отдельно на event loop. Семантика фаз и коммитов — 1:1 с историческим
+        телом.
         """
         try:
             # Обновляем статус пользователя
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
-                return False
+                return False, None
 
             user.verification_status = "verified"
             user.verification_notes = notes
@@ -145,47 +142,59 @@ class UserVerificationService:
                 logger.error(f"Ошибка автоматического одобрения квартир для пользователя {user_id}: {e}")
                 # Продолжаем выполнение, так как верификация уже одобрена
 
-            # Удаляем документы пользователя из Media Service (канал ARCHIVE)
-            from uk_management_bot.utils.media_helpers import (
-                MediaCleanupResult, delete_user_documents_from_media_service,
-            )
-            try:
-                cleanup = await delete_user_documents_from_media_service(user.telegram_id)
-                # Раньше здесь стояло безусловное «документы удалены» — утверждение,
-                # неверное всякий раз, когда Media Service был недоступен.
-                if cleanup is MediaCleanupResult.DELETED:
-                    logger.info(f"Документы пользователя {user.telegram_id} удалены из Media Service")
-                elif cleanup is MediaCleanupResult.NOTHING_TO_DELETE:
-                    logger.info(f"Документов пользователя {user.telegram_id} в Media Service не было")
-                else:
-                    logger.warning(
-                        "Зачистка документов пользователя %s в Media Service НЕ состоялась (%s) — "
-                        "файлы остались; повторить по этому telegram_id",
-                        user.telegram_id, cleanup.value,
-                    )
-            except Exception as e:
-                logger.error(f"Ошибка удаления документов из Media Service для пользователя {user.telegram_id}: {e}")
-                # Продолжаем выполнение, так как верификация уже одобрена
-
-            # Удаляем записи о документах из базы данных
-            # ВАЖНО: файлы останутся на серверах Telegram, но file_id больше не будет доступен в системе
-            try:
-                documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
-                for doc in documents:
-                    self.db.delete(doc)
-                self.db.commit()
-                logger.info(f"Удалено {len(documents)} записей о документах пользователя {user_id} из базы данных")
-            except Exception as e:
-                logger.error(f"Ошибка удаления записей о документах из БД для пользователя {user_id}: {e}")
-                # Продолжаем выполнение
-
-            return True
+            return True, user.telegram_id
 
         except Exception as e:
             logger.error(f"Ошибка одобрения верификации: {e}")
             self.db.rollback()
+            return False, None
+
+    def purge_user_documents_db(self, user_id: int) -> None:
+        """Финальная DB-фаза одобрения: удаление записей о документах.
+
+        ВАЖНО: файлы останутся на серверах Telegram, но file_id больше не будет
+        доступен в системе. Best-effort — ошибка логируется, верификация уже
+        одобрена.
+        """
+        try:
+            documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
+            for doc in documents:
+                self.db.delete(doc)
+            self.db.commit()
+            logger.info(f"Удалено {len(documents)} записей о документах пользователя {user_id} из базы данных")
+        except Exception as e:
+            logger.error(f"Ошибка удаления записей о документах из БД для пользователя {user_id}: {e}")
+            # Продолжаем выполнение
+
+    async def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
+        """
+        Одобрить верификацию пользователя
+
+        Args:
+            user_id: ID пользователя
+            admin_id: ID администратора
+            notes: Комментарии администратора
+
+        Returns:
+            True если успешно
+        """
+        # Внешний try — byte-семантика исторического тела для вызывающих
+        # (panels.py): любое неожиданное исключение (включая недостижимые на
+        # практике углы вроде сбоя импорта в best-effort фазах) даёт
+        # rollback + False, а не проброс (находка ревью волны A2-1).
+        try:
+            ok, telegram_id = self.approve_verification_db(user_id, admin_id, notes)
+            if not ok:
+                return False
+
+            await cleanup_user_documents_media(telegram_id)
+            self.purge_user_documents_db(user_id)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка одобрения верификации: {e}")
+            self.db.rollback()
             return False
-    
+
     def reject_verification(self, user_id: int, admin_id: int, notes: str) -> bool:
         """
         Отклонить верификацию пользователя
@@ -757,3 +766,30 @@ class UserVerificationService:
         except Exception as e:
             logger.error(f"Ошибка валидации файла: {e}")
             return False, "Ошибка валидации файла"
+
+
+async def cleanup_user_documents_media(telegram_id: int) -> None:
+    """Зачистка документов пользователя в Media Service (канал ARCHIVE).
+
+    Сеть, БЕЗ сессии БД — вызывается вне worker-потока. Best-effort: любой
+    исход логируется, исключение не пробрасывается (верификация уже одобрена).
+    """
+    from uk_management_bot.utils.media_helpers import (
+        MediaCleanupResult, delete_user_documents_from_media_service,
+    )
+    try:
+        cleanup = await delete_user_documents_from_media_service(telegram_id)
+        # Раньше здесь стояло безусловное «документы удалены» — утверждение,
+        # неверное всякий раз, когда Media Service был недоступен.
+        if cleanup is MediaCleanupResult.DELETED:
+            logger.info(f"Документы пользователя {telegram_id} удалены из Media Service")
+        elif cleanup is MediaCleanupResult.NOTHING_TO_DELETE:
+            logger.info(f"Документов пользователя {telegram_id} в Media Service не было")
+        else:
+            logger.warning(
+                "Зачистка документов пользователя %s в Media Service НЕ состоялась (%s) — "
+                "файлы остались; повторить по этому telegram_id",
+                telegram_id, cleanup.value,
+            )
+    except Exception as e:
+        logger.error(f"Ошибка удаления документов из Media Service для пользователя {telegram_id}: {e}")
