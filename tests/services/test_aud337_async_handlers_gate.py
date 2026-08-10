@@ -32,6 +32,7 @@ CONVERTED = [
     "uk_management_bot/handlers/request_acceptance.py",
     "uk_management_bot/handlers/employee_management.py",
     "uk_management_bot/handlers/user_verification.py",
+    "uk_management_bot/handlers/request_status_management.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

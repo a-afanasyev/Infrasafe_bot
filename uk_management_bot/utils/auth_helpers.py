@@ -143,6 +143,23 @@ def get_active_role(user: User) -> str:
     
     return "applicant"
 
+def check_user_role_sync(user_id: int, required_role: str, db) -> bool:
+    """Sync-ядро check_user_role (AUD3-07): тело 1:1, вызывается и из
+    async-обёртки (неконвертированные хендлеры), и из run_db-юнитов
+    конвертированных (сессия воркер-потока)."""
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return False
+        
+        user_roles = get_user_roles(user)
+        return required_role in user_roles
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки роли пользователя {user_id}: {e}")
+        return False
+
+
 async def check_user_role(user_id: int, required_role: str, db) -> bool:
     """
     Проверяет, имеет ли пользователь указанную роль
@@ -155,17 +172,7 @@ async def check_user_role(user_id: int, required_role: str, db) -> bool:
     Returns:
         bool: True если пользователь имеет требуемую роль, False иначе
     """
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            return False
-        
-        user_roles = get_user_roles(user)
-        return required_role in user_roles
-        
-    except Exception as e:
-        logger.error(f"Ошибка проверки роли пользователя {user_id}: {e}")
-        return False
+    return check_user_role_sync(user_id, required_role, db)
 
 
 def legacy_role_filter(*roles: str):
