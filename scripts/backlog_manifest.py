@@ -183,6 +183,7 @@ ASSIGNMENT: dict[str, dict] = {
     # ── Программа A: архитектура
     "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
                  note="168 .query( = 159 db.query + 9 db_local.query"),
+    "BUG-137": A(pkg="A2", status="actionable", method="review-2026-08-10"),
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
     "AUD5-ARCH-3": A(pkg="A3", status="actionable", method="verified-2026-07-27",
                      note="scope: core-15 / +access_control 17 / +media 19; иначе respec"),
