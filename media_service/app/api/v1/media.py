@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -512,11 +513,19 @@ def _image_response(data: bytes, meta: dict, fallback_type: str) -> Response:
         (meta["original_filename"] or "file")
         .replace('"', "").replace("\r", "").replace("\n", "")[:255]
     )
+    # RFC 6266/5987: HTTP-заголовки — latin-1, и не-ASCII имя файла (например,
+    # скриншот с macOS «Снимок экрана …».png) роняло Response в
+    # UnicodeEncodeError → 500 на выдаче. ASCII-часть — в filename=, полное
+    # имя — percent-encoded в filename*=UTF-8''.
+    ascii_filename = safe_filename.encode("ascii", "ignore").decode().strip(" .") or "file"
+    disposition = f'inline; filename="{ascii_filename}"'
+    if ascii_filename != safe_filename:
+        disposition += f"; filename*=UTF-8''{quote(safe_filename)}"
     return Response(
         content=data,
         media_type=effective_type,
         headers={
-            "Content-Disposition": f'inline; filename="{safe_filename}"',
+            "Content-Disposition": disposition,
             "X-Content-Type-Options": "nosniff",
         },
     )
