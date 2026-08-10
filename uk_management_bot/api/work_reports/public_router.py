@@ -29,15 +29,14 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports import coordination
+from uk_management_bot.api.work_reports import service as api_service
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.services.work_report_service import revoke_stale_publications
 
 logger = logging.getLogger(__name__)
@@ -150,26 +149,7 @@ async def get_public_work_reports(
         return cached[0]
 
     try:
-        total = (
-            await db.execute(
-                select(func.count())
-                .select_from(WorkReport)
-                .where(WorkReport.status == "published")
-            )
-        ).scalar_one()
-        rows = (
-            (
-                await db.execute(
-                    select(WorkReport)
-                    .where(WorkReport.status == "published")
-                    .order_by(WorkReport.published_at.desc(), WorkReport.id.desc())
-                    .offset(offset)
-                    .limit(limit)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows, total = await api_service.published_page(db, limit=limit, offset=offset)
     except (OperationalError, ProgrammingError) as e:
         # Table not migrated yet — same graceful-degrade convention as
         # api/board_config/service.py's load_board_config: never 500 the
@@ -231,9 +211,7 @@ async def get_public_work_report(
         raise HTTPException(status_code=404)
 
     try:
-        report = (
-            await db.execute(select(WorkReport).where(WorkReport.id == report_id))
-        ).scalar_one_or_none()
+        report = await api_service.report_by_id(db, report_id)
     except (OperationalError, ProgrammingError) as e:
         # Таблицы ещё нет (миграция не накатана) — 404, а не 500: тот же принцип
         # «публичная страница не белеет», что и у ленты выше.
@@ -291,9 +269,7 @@ async def get_public_work_report_media(
     if not settings.WORK_REPORTS_ENABLED:
         raise HTTPException(status_code=404)
 
-    report = (
-        await db.execute(select(WorkReport).where(WorkReport.id == report_id))
-    ).scalar_one_or_none()
+    report = await api_service.report_by_id(db, report_id)
 
     if report is None or report.status != "published":
         raise HTTPException(status_code=404)
