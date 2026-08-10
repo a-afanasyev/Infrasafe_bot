@@ -263,6 +263,28 @@ class NotificationService:
         """Get language from user object, default to 'ru'."""
         return getattr(user, 'language', None) or 'ru'
     
+    def collect_verification_request_message(self, user_id: int, info_type: str, comment: str):
+        """Fetch-фаза уведомления о запросе информации (AUD3-07, B3-канон
+        collect/send): sync SQL + текст, БЕЗ сети. → (telegram_id, text) | None."""
+        from uk_management_bot.database.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            return None
+
+        # Формируем сообщение
+        lang = self._get_user_lang(user)
+        info_name = get_text(f"info_types.{info_type}", language=lang)
+
+        message = (
+            f"{get_text('notifications.request_additional_info_title', language=lang)}\n\n"
+            f"{get_text('notifications.admin_requests_info', language=lang).replace('{info_name}', info_name)}\n\n"
+            f"{get_text('notifications.comment', language=lang).replace('{comment}', comment)}\n\n"
+            f"{get_text('notifications.please_provide_info', language=lang)}"
+        )
+        return user.telegram_id, message
+
     async def send_verification_request_notification(self, user_id: int, info_type: str, comment: str) -> None:
         """
         Отправить уведомление о запросе дополнительной информации
@@ -273,32 +295,36 @@ class NotificationService:
             comment: Комментарий администратора
         """
         try:
-            from uk_management_bot.database.models.user import User
-            
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            pair = self.collect_verification_request_message(user_id, info_type, comment)
+            if pair is None:
                 return
-            
-            # Формируем сообщение
-            lang = self._get_user_lang(user)
-            info_name = get_text(f"info_types.{info_type}", language=lang)
+            telegram_id, message = pair
 
-            message = (
-                f"{get_text('notifications.request_additional_info_title', language=lang)}\n\n"
-                f"{get_text('notifications.admin_requests_info', language=lang).replace('{info_name}', info_name)}\n\n"
-                f"{get_text('notifications.comment', language=lang).replace('{comment}', comment)}\n\n"
-                f"{get_text('notifications.please_provide_info', language=lang)}"
-            )
-            
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
+            await bot.send_message(telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление о запросе информации отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о запросе информации: {e}")
     
+    def collect_verification_approved_message(self, user_id: int):
+        """Fetch-фаза уведомления (approved) — sync SQL + текст, без сети.
+        → (telegram_id, text) | None."""
+        from uk_management_bot.database.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            return None
+
+        lang = self._get_user_lang(user)
+        message = (
+            f"{get_text('notifications.verification_approved_title', language=lang)}\n\n"
+            f"{get_text('notifications.verification_approved_body', language=lang)}"
+        )
+        return user.telegram_id, message
+
     async def send_verification_approved_notification(self, user_id: int) -> None:
         """
         Отправить уведомление об одобрении верификации
@@ -307,27 +333,36 @@ class NotificationService:
             user_id: ID пользователя
         """
         try:
-            from uk_management_bot.database.models.user import User
-            
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            pair = self.collect_verification_approved_message(user_id)
+            if pair is None:
                 return
-            
-            lang = self._get_user_lang(user)
-            message = (
-                f"{get_text('notifications.verification_approved_title', language=lang)}\n\n"
-                f"{get_text('notifications.verification_approved_body', language=lang)}"
-            )
-            
+            telegram_id, message = pair
+
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
+            await bot.send_message(telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об одобрении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об одобрении верификации: {e}")
     
+    def collect_verification_rejected_message(self, user_id: int):
+        """Fetch-фаза уведомления (rejected) — sync SQL + текст, без сети.
+        → (telegram_id, text) | None."""
+        from uk_management_bot.database.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            return None
+
+        lang = self._get_user_lang(user)
+        message = (
+            f"{get_text('notifications.verification_rejected_title', language=lang)}\n\n"
+            f"{get_text('notifications.verification_rejected_body', language=lang)}"
+        )
+        return user.telegram_id, message
+
     async def send_verification_rejected_notification(self, user_id: int) -> None:
         """
         Отправить уведомление об отклонении верификации
@@ -336,22 +371,14 @@ class NotificationService:
             user_id: ID пользователя
         """
         try:
-            from uk_management_bot.database.models.user import User
-            
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                logger.error(f"Пользователь {user_id} не найден для отправки уведомления")
+            pair = self.collect_verification_rejected_message(user_id)
+            if pair is None:
                 return
-            
-            lang = self._get_user_lang(user)
-            message = (
-                f"{get_text('notifications.verification_rejected_title', language=lang)}\n\n"
-                f"{get_text('notifications.verification_rejected_body', language=lang)}"
-            )
-            
+            telegram_id, message = pair
+
             # Отправляем уведомление пользователю
             bot = self._get_bot()
-            await bot.send_message(user.telegram_id, message, request_timeout=SEND_TIMEOUT)
+            await bot.send_message(telegram_id, message, request_timeout=SEND_TIMEOUT)
             logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
                 
         except Exception as e:

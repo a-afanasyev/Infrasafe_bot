@@ -56,7 +56,7 @@ class TestSelectInfoType:
         cb = _make_callback("request_info_123_property_deed")
         state = _make_state()
 
-        await select_info_type(cb, state, db=MagicMock(), roles=["manager"])
+        await select_info_type(cb, state, roles=["manager"])
 
         state.update_data.assert_awaited_once_with(
             target_user_id=123, info_type="property_deed"
@@ -70,7 +70,7 @@ class TestSelectInfoType:
         cb = _make_callback("request_info_7_address")
         state = _make_state()
 
-        await select_info_type(cb, state, db=MagicMock(), roles=["manager"])
+        await select_info_type(cb, state, roles=["manager"])
 
         state.update_data.assert_awaited_once_with(
             target_user_id=7, info_type="address"
