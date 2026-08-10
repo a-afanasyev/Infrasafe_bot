@@ -177,7 +177,11 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
-    ('uk_management_bot/services/shift_assignment_service.py', 'attr:shift', 'assigned_at'),
+    # AUD5-ARCH-3 волна 2, block-move: shift_assignment_service.py разнесён на
+    # пакет; write-сайты shift.assigned_at теперь в balancer (ребаланс) и
+    # service (_assign_single_shift / reassign_on_absence). Код байт-в-байт.
+    ('uk_management_bot/services/shift_assignment_service/balancer.py', 'attr:shift', 'assigned_at'),
+    ('uk_management_bot/services/shift_assignment_service/service.py', 'attr:shift', 'assigned_at'),
     # REG-02: фантомный transfer_single_request (писал request.executor_id/
     # assigned_at/assigned_by сырьём) удалён — перенос заявок теперь идёт через
     # allowlist-слой assignment_service.reassign_executor (status-preserving).

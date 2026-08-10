@@ -67,7 +67,14 @@ SWEPT_FILES: tuple[str, ...] = (
     # ARCH-135 группа (б): движки планирования/назначения/рекомендаций и
     # аналитика смен — дневные бакеты решений на бизнес-сутках.
     "services/shift_planning_service.py",
-    "services/shift_assignment_service.py",
+    # AUD5-ARCH-3 волна 2, block-move: shift_assignment_service.py разнесён на
+    # пакет — метём все содержательные подмодули (код байт-в-байт).
+    "services/shift_assignment_service/_types.py",
+    "services/shift_assignment_service/scoring.py",
+    "services/shift_assignment_service/balancer.py",
+    "services/shift_assignment_service/conflicts.py",
+    "services/shift_assignment_service/request_engine.py",
+    "services/shift_assignment_service/service.py",
     "services/recommendation_engine.py",
     "services/shift_analytics.py",
     # + питатели движков: планировщик (кормил UTC-«сегодня») и API-путь

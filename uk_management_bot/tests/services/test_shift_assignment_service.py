@@ -74,8 +74,9 @@ def _make_service():
     """Build service with all dependencies mocked."""
     db = MagicMock()
     with (
-        patch("uk_management_bot.services.shift_assignment_service.AssignmentService"),
-        patch("uk_management_bot.services.shift_assignment_service.NotificationService"),
+        # AUD5-ARCH-3 волна 2: модуль резолва имён — подмодуль пакета .service
+        patch("uk_management_bot.services.shift_assignment_service.service.AssignmentService"),
+        patch("uk_management_bot.services.shift_assignment_service.service.NotificationService"),
     ):
         service = ShiftAssignmentService(db)
     service.db = db
