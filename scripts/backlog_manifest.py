@@ -181,7 +181,6 @@ ASSIGNMENT: dict[str, dict] = {
                   note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
     "AUD3-25": A(pkg="П11", status="actionable", method="doc-2026-07-14"),
     # ── Программа A: архитектура
-    "AUD5-ARCH-2": A(pkg="A1", status="actionable", method="doc-2026-07-21"),
     "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
                  note="168 .query( = 159 db.query + 9 db_local.query"),
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
