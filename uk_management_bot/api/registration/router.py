@@ -1,21 +1,16 @@
 from __future__ import annotations
-import json
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db
-from uk_management_bot.api.users.queries import (
-    get_user_by_telegram_id, require_user_by_telegram_id,
-)
+from uk_management_bot.api.registration import service
+from uk_management_bot.api.users.queries import get_user_by_telegram_id
 from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.service import verify_twa_init_data
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.api.registration.tickets import (
     create_registration_ticket, verify_registration_ticket,
 )
@@ -29,7 +24,6 @@ from uk_management_bot.services.addresses.exceptions import (
     AddressConflict, AddressNotFound, AddressValidationError,
 )
 from uk_management_bot.utils.validators import Validator
-from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 logger = logging.getLogger(__name__)
 # SEC-04: self-registration is a brute-force surface (ticket guessing, spam
@@ -99,62 +93,31 @@ async def register_applicant(
     if not await is_apartment_selectable(db, body.apartment_id):
         raise HTTPException(status_code=400, detail="Квартира недоступна для выбора")
 
-    def _apply_applicant_fields(u: User) -> None:
-        u.first_name = full_name.split()[0]
-        u.last_name = " ".join(full_name.split()[1:])
-        u.phone = phone
-        u.active_role = "applicant"
-        r = set(parse_roles_safe(u.roles))
-        r.add("applicant")
-        u.roles = json.dumps(sorted(r))
-
-    def _reject_if_privileged(u: User) -> None:
-        """SEC-06: self-регистрация НЕ должна перетирать pre-provisioned аккаунт.
-
-        Валидный тикет привязан к telegram_id, но если этот аккаунт уже наделён
-        ролью, отличной от ``applicant`` (executor/manager/inspector/
-        security_operator — заведён менеджером), самостоятельная заявка
-        перезаписала бы ``first_name/last_name/phone`` и выставила
-        ``active_role="applicant"``. Отклоняем — такой аккаунт ведёт менеджер.
-        """
-        privileged = set(parse_roles_safe(u.roles)) - {"applicant"}
-        if privileged:
-            raise HTTPException(
-                status_code=403,
-                detail="Аккаунт уже имеет роль в системе — обратитесь к менеджеру",
-            )
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    if user and user.status == "blocked":
+    # SEC-06 и IntegrityError-ретрай — в service.upsert_pending_applicant;
+    # маппинг типизированных исходов на HTTP-коды — здесь.
+    outcome, user = await service.upsert_pending_applicant(
+        db,
+        telegram_id=telegram_id,
+        first_name=full_name.split()[0],
+        last_name=" ".join(full_name.split()[1:]),
+        phone=phone,
+    )
+    if outcome == service.UPSERT_BLOCKED:
         raise HTTPException(status_code=403, detail="Пользователь заблокирован")
-    if user and user.status == "approved":
+    if outcome == service.UPSERT_APPROVED:
         raise HTTPException(status_code=409, detail="Уже зарегистрирован")
-    if user is not None:
-        _reject_if_privileged(user)
-    if user is None:
-        user = User(telegram_id=telegram_id, status="pending")
-        db.add(user)
-    _apply_applicant_fields(user)
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        user = await require_user_by_telegram_id(db, telegram_id)
-        if user.status == "blocked":
-            raise HTTPException(status_code=403, detail="Пользователь заблокирован")
-        if user.status == "approved":
-            raise HTTPException(status_code=409, detail="Уже зарегистрирован")
-        _reject_if_privileged(user)
-        _apply_applicant_fields(user)
-        await db.flush()
+    if outcome == service.UPSERT_PRIVILEGED:
+        raise HTTPException(
+            status_code=403,
+            detail="Аккаунт уже имеет роль в системе — обратитесь к менеджеру",
+        )
 
-    existing_ua = (await db.execute(select(UserApartment).where(
-        UserApartment.user_id == user.id,
-        UserApartment.apartment_id == body.apartment_id,
-    ))).scalar_one_or_none()
+    existing_ua = await service.apartment_link_of(
+        db, user_id=user.id, apartment_id=body.apartment_id
+    )
     if existing_ua is not None:
         if existing_ua.status == "pending":
-            await db.commit()
+            await service.commit_registration(db)
             return RegistrationResult(status="pending")
         if existing_ua.status == "approved":
             await db.rollback()
