@@ -25,6 +25,7 @@ from uk_management_bot.keyboards.requests import (
     resolve_category_key,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.completion_media import get_completion_media_file_ids
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.user_names import display_name
 
@@ -105,9 +106,12 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         if request.notes:
             message_text += get_text("admin.handlers.request_detail_notes", language=lang).format(notes=request.notes) + "\n"
 
-        # Проверяем наличие медиафайлов
+        # Проверяем наличие медиафайлов. Фотоотчёт: SSOT — media-service
+        # (дашборд/TWA грузят туда, минуя legacy-поле), фолбэк — completion_media.
         media_files = request.media_files if request.media_files else []
-        completion_media = request.completion_media if request.completion_media else []
+        completion_media = await get_completion_media_file_ids(
+            request.request_number, request.completion_media
+        )
         has_media = len(media_files) > 0 or len(completion_media) > 0
 
         # Создаем клавиатуру действий для менеджера
@@ -226,12 +230,12 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(f"Ошибка парсинга media_files для заявки {request.request_number}: {e}")
 
-        completion_media = []
-        if request.completion_media:
-            try:
-                completion_media = json.loads(request.completion_media) if isinstance(request.completion_media, str) else request.completion_media
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"Ошибка парсинга completion_media для заявки {request.request_number}: {e}")
+        # Фотоотчёт: SSOT — media-service, фолбэк — legacy-поле (парсинг
+        # JSON-строки/dict'ов внутри сервиса). Элементы — telegram file_id,
+        # цикл отправки ниже работает и со строками, и с legacy-dict'ами.
+        completion_media = await get_completion_media_file_ids(
+            request.request_number, request.completion_media
+        )
 
         if not media_files and not completion_media:
             await callback.answer(get_text("admin.handlers.no_media_attached", language=lang), show_alert=True)

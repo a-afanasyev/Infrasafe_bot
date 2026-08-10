@@ -3,15 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { render, screen, waitFor } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
+import { apiClient } from '../../api/client'
 import RequestDetailModal from './RequestDetailModal'
 
 // useHasRole gates the manager-only urgency editor — mock it per test.
+// useHasAnyRole гейтит RequestMaterialsBlock (склад) и загрузчик фотоотчёта;
+// по умолчанию false (beforeEach), включается точечно в тестах фотоотчёта.
 const mockHasRole = vi.fn()
+const mockHasAnyRole = vi.fn()
 vi.mock('../../hooks/useHasRole', () => ({
   useHasRole: (r: string) => mockHasRole(r),
-  // RequestMaterialsBlock (склад) гейтится useHasAnyRole — в этих тестах
-  // блок не участвует, всегда выключен.
-  useHasAnyRole: () => false,
+  useHasAnyRole: (roles: readonly string[]) => mockHasAnyRole(roles),
 }))
 
 function noop() {}
@@ -51,6 +53,8 @@ async function renderModal(req: Record<string, unknown>) {
 
 beforeEach(() => {
   mockHasRole.mockReset()
+  mockHasAnyRole.mockReset()
+  mockHasAnyRole.mockReturnValue(false)
 })
 
 describe('RequestDetailModal — manager urgency editor gating (TASK 17)', () => {
@@ -129,6 +133,82 @@ describe('RequestDetailModal — status dropdown «В работе» executor ga
     )
     expect(await screen.findByText('Назначить исполнителя')).toBeInTheDocument()
     expect(getBody()).toBeNull()
+  })
+})
+
+describe('RequestDetailModal — фотоотчёт: загрузка менеджером + группировка', () => {
+  // Минимальный JPEG-префикс: MediaThumb конвертирует blob в data: URL через
+  // FileReader — телу достаточно быть валидным Blob'ом.
+  const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff])
+
+  function mockMediaEndpoints(items: Array<Record<string, unknown>>) {
+    server.use(
+      http.get('*/api/v2/media/request/:number', () => HttpResponse.json(items)),
+      http.get('*/api/v2/media/:id/file', () =>
+        new HttpResponse(jpegBytes, { headers: { 'Content-Type': 'image/jpeg' } })),
+      // RequestMaterialsBlock активируется тем же useHasAnyRole-моком.
+      http.get('*/api/v2/materials/by-request/:number', () =>
+        HttpResponse.json({ items: [], total_cost: 0 })),
+    )
+  }
+
+  it('менеджер: секция «Фотоотчёт» с кнопкой добавления; категории разведены по секциям', async () => {
+    mockHasRole.mockReturnValue(true)
+    mockHasAnyRole.mockReturnValue(true)
+    mockMediaEndpoints([
+      { id: 1, file_type: 'photo', mime_type: 'image/jpeg', category: 'request_photo' },
+      { id: 2, file_type: 'photo', mime_type: 'image/jpeg', category: 'completion_photo' },
+    ])
+    await renderModal(makeRequest({}))
+    expect(await screen.findByText('Фото')).toBeInTheDocument()
+    expect(screen.getByText('Фотоотчёт')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Добавить фото работ' })).toBeInTheDocument()
+  })
+
+  it('не-менеджер без медиа: раздела и кнопки нет', async () => {
+    mockHasRole.mockReturnValue(false)
+    mockHasAnyRole.mockReturnValue(false)
+    mockMediaEndpoints([])
+    await renderModal(makeRequest({}))
+    expect(screen.queryByText('Фотоотчёт')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Добавить фото работ' })).not.toBeInTheDocument()
+  })
+
+  it('выбор файла шлёт FormData с category=completion_photo и инвалидирует список', async () => {
+    mockHasRole.mockReturnValue(true)
+    mockHasAnyRole.mockReturnValue(true)
+    let listCalls = 0
+    mockMediaEndpoints([])
+    server.use(
+      http.get('*/api/v2/media/request/:number', () => {
+        listCalls += 1
+        return HttpResponse.json([])
+      }),
+    )
+    // Не msw: парсинг multipart-тела (request.formData) падает на CI-ноде
+    // (undici AssertionError на jsdom-File). Шпион на apiClient.post видит
+    // исходный FormData без сериализации — стабильно на любой ноде.
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { id: 10 } } as never)
+    try {
+      await renderModal(makeRequest({}))
+      await waitFor(() => expect(listCalls).toBeGreaterThan(0))
+      const callsBeforeUpload = listCalls
+
+      const input = screen.getByTestId('completion-upload-input')
+      const file = new File([jpegBytes], 'work.jpg', { type: 'image/jpeg' })
+      await userEvent.upload(input, file)
+
+      await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(1))
+      const [url, form] = postSpy.mock.calls[0] as [string, FormData]
+      expect(url).toBe('/api/v2/media/upload')
+      expect(form.get('category')).toBe('completion_photo')
+      expect(form.get('request_number')).toBe('260101-001')
+      expect((form.get('file') as File).name).toBe('work.jpg')
+      // Успешная загрузка инвалидирует ['request-media', number] → refetch.
+      await waitFor(() => expect(listCalls).toBeGreaterThan(callsBeforeUpload))
+    } finally {
+      postSpy.mockRestore()
+    }
   })
 })
 

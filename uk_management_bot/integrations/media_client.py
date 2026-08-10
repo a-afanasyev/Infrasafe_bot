@@ -201,7 +201,8 @@ class MediaServiceClient:
         self,
         request_number: str,
         category: Optional[str] = None,
-        limit: int = 50
+        limit: int = 50,
+        retries: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Получение всех медиа-файлов для заявки
@@ -210,6 +211,10 @@ class MediaServiceClient:
             request_number: Номер заявки
             category: Фильтр по категории
             limit: Лимит результатов
+            retries: Переопределение числа попыток; None — дефолт get_with_retries.
+                retries=1 уместен у вызывающих с мгновенным фолбэком (например,
+                чтение фотоотчёта с запасным legacy-полем): бэкофф-ожидание там
+                хуже быстрого перехода на фолбэк.
 
         Returns:
             Список медиа-файлов заявки
@@ -219,10 +224,12 @@ class MediaServiceClient:
             if category:
                 params["category"] = category
 
+            retry_kwargs = {} if retries is None else {"retries": retries}
             response = await get_with_retries(
                 self.client,
                 f"/media/request/{request_number}",
                 params=params,
+                **retry_kwargs,
             )
 
             response.raise_for_status()
