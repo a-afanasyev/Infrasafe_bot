@@ -22,15 +22,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from uk_management_bot.api.board_config.schemas import WorkReportsCfg
 from uk_management_bot.api.board_config.service import load_board_config, merge_and_save_board_config
 from uk_management_bot.api.dependencies import get_db, require_approved_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports import coordination
+from uk_management_bot.api.work_reports import service as api_service
 from uk_management_bot.api.work_reports.schemas import (
     WorkReportCreateIn,
     WorkReportListOut,
@@ -42,14 +41,11 @@ from uk_management_bot.api.work_reports.schemas import (
 )
 from uk_management_bot.config.settings import settings
 from uk_management_bot.constants.work_reports import MEDIA_EDITABLE_STATUSES
-from uk_management_bot.database.models.apartment import Apartment
-from uk_management_bot.database.models.building import Building
 # Alias — `Request` (fastapi) нужен для slowapi rate-limit сигнатуры ниже
 # (см. тот же приём в api/requests/router.py, api/public/router.py).
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.work_report import WorkReport
-from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services import work_report_service
 from uk_management_bot.services.request_address import format_building_address, format_yard_address
@@ -119,18 +115,12 @@ async def _resolve_manual_address(
                 detail="legacy request requires exactly one of building_id/yard_id",
             )
         if building_id is not None:
-            building = (
-                await db.execute(
-                    select(Building)
-                    .options(selectinload(Building.yard))
-                    .where(Building.id == building_id)
-                )
-            ).scalar_one_or_none()
+            building = await api_service.building_with_yard(db, building_id)
             if building is None:
                 raise HTTPException(status_code=422, detail=f"building {building_id} not found")
             return format_building_address(building)
 
-        yard = (await db.execute(select(Yard).where(Yard.id == yard_id))).scalar_one_or_none()
+        yard = await api_service.yard_by_id(db, yard_id)
         if yard is None:
             raise HTTPException(status_code=422, detail=f"yard {yard_id} not found")
         return format_yard_address(yard)
@@ -138,19 +128,7 @@ async def _resolve_manual_address(
     if building_id is not None or yard_id is not None:
         raise HTTPException(status_code=422, detail="address_override_not_allowed")
 
-    loaded = (
-        await db.execute(
-            select(RequestModel)
-            .options(
-                selectinload(RequestModel.building_obj).selectinload(Building.yard),
-                selectinload(RequestModel.apartment_obj)
-                .selectinload(Apartment.building)
-                .selectinload(Building.yard),
-                selectinload(RequestModel.yard_obj),
-            )
-            .where(RequestModel.request_number == request_row.request_number)
-        )
-    ).scalar_one()
+    loaded = await api_service.request_with_address_chain(db, request_row.request_number)
     address = derive_public_address(loaded)
     if address is None:
         raise HTTPException(status_code=422, detail="could not derive public address")
@@ -173,23 +151,8 @@ async def list_work_reports(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ) -> WorkReportListOut:
-    filters = [WorkReport.status.in_(status)] if status else []
-
-    total = (
-        await db.execute(select(func.count()).select_from(WorkReport).where(*filters))
-    ).scalar_one()
-    rows = (
-        (
-            await db.execute(
-                select(WorkReport)
-                .where(*filters)
-                .order_by(WorkReport.created_at.desc())
-                .limit(limit)
-                .offset(offset)
-            )
-        )
-        .scalars()
-        .all()
+    rows, total = await api_service.work_reports_page(
+        db, statuses=list(status) if status else None, limit=limit, offset=offset
     )
     return WorkReportListOut(items=list(rows), total=total, limit=limit, offset=offset)
 
@@ -288,21 +251,13 @@ async def create_work_report(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ) -> WorkReport:
-    existing = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.request_number == body.request_number)
-        )
-    ).scalar_one_or_none()
+    existing = await api_service.report_by_request_number(db, body.request_number)
     if existing is not None:
         raise HTTPException(
             status_code=409, detail=f"work report for {body.request_number} already exists"
         )
 
-    request_row = (
-        await db.execute(
-            select(RequestModel).where(RequestModel.request_number == body.request_number)
-        )
-    ).scalar_one_or_none()
+    request_row = await api_service.request_by_number(db, body.request_number)
     if request_row is None:
         raise HTTPException(status_code=404, detail=f"request {body.request_number} not found")
     if not is_report_eligible(request_row):
@@ -329,10 +284,7 @@ async def create_work_report(
         status="pending",
         source="manual",
     )
-    db.add(report)
-    await db.commit()
-    await db.refresh(report)
-    return report
+    return await api_service.persist_manual_report(db, report)
 
 
 # ── POST /autofill-pending ───────────────────────────────────────────────
@@ -355,20 +307,7 @@ async def autofill_pending(
     # перепроверкой статуса под локом. Защита от гонки с сагой публикации
     # сохранена той же перепроверкой: publishing в _MEDIA_EDITABLE_STATUSES не
     # входит, уехавшая строка молча пропускается (см. patch_work_report).
-    candidates = (
-        (
-            await db.execute(
-                select(WorkReport.id, WorkReport.request_number)
-                .where(
-                    WorkReport.media_synced_at.is_(None),
-                    WorkReport.status.in_(_MEDIA_EDITABLE_STATUSES),
-                )
-                .order_by(WorkReport.created_at)
-                .limit(20)
-            )
-        )
-        .all()
-    )
+    candidates = await api_service.autofill_candidates(db, limit=20)
     processed = 0
     for report_id, request_number in candidates:
         try:
@@ -381,22 +320,9 @@ async def autofill_pending(
                 "autofill-pending: отчёт %s не автозаполнен: %s", report_id, e
             )
             continue
-        row = (
-            await db.execute(
-                select(WorkReport)
-                .where(
-                    WorkReport.id == report_id,
-                    WorkReport.status.in_(_MEDIA_EDITABLE_STATUSES),
-                )
-                .with_for_update()
-            )
-        ).scalar_one_or_none()
-        if row is None:
-            await db.commit()
-            continue
-        work_report_service.apply_media_selection(row, before_ids, after_ids)
-        await db.commit()
-        processed += 1
+        applied = await api_service.apply_autofill_locked(db, report_id, before_ids, after_ids)
+        if applied:
+            processed += 1
     return {"processed": processed}
 
 
@@ -453,13 +379,10 @@ async def autofill_one(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
 
-    # `with_for_update()`: см. patch_work_report — без блокировки строки это
-    # состязается с сагой публикации и может перезаписать уже замороженный состав.
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
+    # `with_for_update()` (внутри locked_report): см. patch_work_report — без
+    # блокировки строки это состязается с сагой публикации и может перезаписать
+    # уже замороженный состав.
+    report = await api_service.locked_report(db, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail=f"work report {report_id} not found")
     if report.status not in _MEDIA_EDITABLE_STATUSES:
@@ -469,8 +392,7 @@ async def autofill_one(
         )
 
     await work_report_service.autofill_media(db, media_client, report)
-    await db.commit()
-    await db.refresh(report)
+    await api_service.finalize_report(db, report)
     return report
 
 
@@ -494,11 +416,7 @@ async def patch_work_report(
     # не видел его как осиротевший, потому что locked_media_ids всё ещё его
     # перечислял. Блокировка строки закрывает все точки склейки: любое
     # чередование оставляет статус publishing/published, и проверка ниже даёт 409.
-    report = (
-        await db.execute(
-            select(WorkReport).where(WorkReport.id == report_id).with_for_update()
-        )
-    ).scalar_one_or_none()
+    report = await api_service.locked_report(db, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail=f"work report {report_id} not found")
     if report.status not in _MEDIA_EDITABLE_STATUSES:
@@ -510,11 +428,7 @@ async def patch_work_report(
     fields = body.model_dump(exclude_unset=True)
 
     if "building_id" in fields or "yard_id" in fields:
-        request_row = (
-            await db.execute(
-                select(RequestModel).where(RequestModel.request_number == report.request_number)
-            )
-        ).scalar_one_or_none()
+        request_row = await api_service.request_by_number(db, report.request_number)
         if request_row is None:
             raise HTTPException(
                 status_code=404, detail=f"request {report.request_number} not found"
@@ -552,8 +466,7 @@ async def patch_work_report(
         elif both_sides_present and report.status == "needs_media":
             report.status = "pending"
 
-    await db.commit()
-    await db.refresh(report)
+    await api_service.finalize_report(db, report)
     return report
 
 

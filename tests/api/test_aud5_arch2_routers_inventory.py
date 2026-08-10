@@ -2,7 +2,7 @@
 
 ЗЕЛЁНЫЙ baseline-гейт по образцу test_requests_router_inventory.py (волна 1):
 фиксирует набор прямых ORM/data-access call-сайтов в роутерах auth, callcenter,
-feedback, materials, profile, public и registration как ПУСТОЙ. Data-access каждого вынесен в
+feedback, materials, profile, public, registration и обоих work_reports как ПУСТОЙ. Data-access каждого вынесен в
 соседний `service.py`; роутер — тонкий HTTP-слой (auth-deps, парсинг,
 валидация, сериализация, HTTPException, маппинг доменных ошибок).
 
@@ -30,6 +30,8 @@ ROUTERS: dict[str, str] = {
     "profile": "uk_management_bot/api/profile/router.py",
     "public": "uk_management_bot/api/public/router.py",
     "registration": "uk_management_bot/api/registration/router.py",
+    "work_reports": "uk_management_bot/api/work_reports/router.py",
+    "work_reports_public": "uk_management_bot/api/work_reports/public_router.py",
 }
 
 # session-методы, считающиеся прямым ORM при вызове на db|session
@@ -89,6 +91,8 @@ BASELINE: dict[str, set[tuple[str, str]]] = {
     "profile": set(),
     "public": set(),
     "registration": set(),
+    "work_reports": set(),
+    "work_reports_public": set(),
 }
 
 
