@@ -43,6 +43,7 @@ from uk_management_bot.services.workflow_notifications import (
     send_channel_status_text,
     send_notify_messages,
 )
+from uk_management_bot.services.completion_media import get_completion_media_file_ids
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
     can_accept,
@@ -315,8 +316,12 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
         else:
             text += get_text("request_acceptance.handlers.no_report", language=lang) + "\n\n"
 
-        # Проверяем наличие медиа
-        completion_media = view.completion_media
+        # Проверяем наличие медиа: SSOT — media-service (дашборд/TWA грузят
+        # фотоотчёт туда, минуя legacy-поле), фолбэк — legacy-поле из DTO.
+        # Вызов — в async-слое, вне db-фазы run_db (это HTTP, не БД).
+        completion_media = await get_completion_media_file_ids(
+            view.request_number, view.completion_media
+        )
         if len(completion_media) > 0:
             text += get_text("request_acceptance.handlers.media_attached", language=lang).format(count=len(completion_media)) + "\n"
             text += get_text("request_acceptance.handlers.press_to_view_media", language=lang) + "\n\n"
@@ -364,6 +369,13 @@ async def view_completion_media(callback: CallbackQuery, language: str = "ru", *
         if verdict == "forbidden":
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=language), show_alert=True)
             return
+
+        # SSOT — media-service (см. services/completion_media): элементы —
+        # telegram file_id, фолбэк — legacy-поле из db-фазы. Вызов — в
+        # async-слое, вне run_db (это HTTP, не БД).
+        completion_media = await get_completion_media_file_ids(
+            request_number_display, completion_media
+        )
 
         if not completion_media:
             await callback.answer(get_text("request_acceptance.handlers.media_not_found", language=language), show_alert=True)

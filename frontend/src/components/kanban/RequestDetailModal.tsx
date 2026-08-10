@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronDown, ImageOff, X as XIcon } from 'lucide-react'
+import { ChevronDown, ImageOff, ImagePlus, X as XIcon } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useHasRole, useHasAnyRole } from '../../hooks/useHasRole'
 import { URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
@@ -388,7 +388,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 </p>
               )}
 
-              {/* Media (фото/видео заявки). Раздел скрывается, если медиа нет. */}
+              {/* Media: фото заявки + фотоотчёт (менеджер может дозагрузить).
+                  Раздел скрывается, если медиа нет и грузить некому. */}
               <RequestMedia requestNumber={request.request_number} />
 
               {/* Meta */}
@@ -659,9 +660,28 @@ async function fetchMediaDataUrl(mediaId: number): Promise<string> {
   })
 }
 
+// Категории фотоотчёта — зеркалят FileCategories media-прокси (SEC-021 whitelist).
+const COMPLETION_CATEGORIES = new Set(['completion_photo', 'completion_video', 'completion_document'])
+// Accept зеркалит magic-byte allowlist прокси (jpeg/png/gif/mp4/mov) — файл иного
+// типа всё равно упрётся в 415 на сервере, так что не даём его выбрать.
+const UPLOAD_ACCEPT = 'image/jpeg,image/png,image/gif,video/mp4,video/quicktime'
+
+function uploadErrorHint(error: unknown, t: (k: string) => string): string {
+  const status = (error as { response?: { status?: number } })?.response?.status
+  // 413 может прийти от edge-nginx раньше нашего лимита — тела с detail там нет.
+  if (status === 413) return t('kanban.fileTooLarge')
+  if (status === 415) return t('kanban.unsupportedFileType')
+  return safeErrorMessage(error, 'An error occurred')
+}
+
 function RequestMedia({ requestNumber }: { requestNumber: string }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [lightboxId, setLightboxId] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Фотоотчёт может прикладывать менеджер (та же пара ролей, что и остальные
+  // менеджерские мутации заявки; backend-гейт — check_request_access).
+  const canUpload = useHasAnyRole(['manager', 'system_admin'])
 
   const { data: items = [] } = useQuery<MediaItem[]>({
     queryKey: ['request-media', requestNumber],
@@ -670,18 +690,107 @@ function RequestMedia({ requestNumber }: { requestNumber: string }) {
     staleTime: 60_000,
   })
 
-  if (items.length === 0) return null
+  const upload = useMutation({
+    mutationFn: async (files: File[]) => {
+      // Последовательно и best-effort (как TWA CompletionReport): падение одного
+      // файла не отменяет остальные.
+      const failures: unknown[] = []
+      for (const file of files) {
+        const form = new FormData()
+        form.append('file', file)
+        form.append('request_number', requestNumber)
+        form.append('category', file.type.startsWith('video/') ? 'completion_video' : 'completion_photo')
+        try {
+          await apiClient.post('/api/v2/media/upload', form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          })
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+      return { total: files.length, failures }
+    },
+    onSuccess: ({ total, failures }) => {
+      // Частичный успех тоже показываем: что-то уже загрузилось.
+      if (failures.length < total) {
+        queryClient.invalidateQueries({ queryKey: ['request-media', requestNumber] })
+      }
+      if (failures.length === 0) {
+        toast.success(t('toast.workPhotosUploaded'))
+      } else {
+        toast.error(t('toast.workPhotosUploadFailed'), {
+          description: uploadErrorHint(failures[failures.length - 1], t),
+        })
+      }
+    },
+  })
+
+  const handleFilesPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length > 0) upload.mutate(files)
+    // Сброс, чтобы тот же файл можно было выбрать повторно.
+    e.target.value = ''
+  }
+
+  const requestItems = items.filter((m) => !COMPLETION_CATEGORIES.has(m.category ?? ''))
+  const completionItems = items.filter((m) => COMPLETION_CATEGORIES.has(m.category ?? ''))
+
+  if (items.length === 0 && !canUpload) return null
 
   return (
-    <div>
-      <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
-        {t('kanban.photos')}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {items.map((m) => (
-          <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
-        ))}
-      </div>
+    <div className="flex flex-col gap-3">
+      {requestItems.length > 0 && (
+        <div>
+          <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
+            {t('kanban.photos')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {requestItems.map((m) => (
+              <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {(completionItems.length > 0 || canUpload) && (
+        <div>
+          <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
+            {t('kanban.completionPhotos')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {completionItems.map((m) => (
+              <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
+            ))}
+            {canUpload && (
+              <button
+                type="button"
+                aria-label={t('kanban.addWorkPhotos')}
+                title={t('kanban.addWorkPhotos')}
+                disabled={upload.isPending}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  'w-20 h-20 rounded-lg border-2 border-dashed border-border-default bg-bg-surface',
+                  'flex flex-col items-center justify-center gap-0.5 text-text-muted hover:text-text-secondary hover:border-text-muted transition-colors',
+                  upload.isPending && 'animate-pulse cursor-wait',
+                )}
+              >
+                <ImagePlus size={18} />
+                <span className="text-[10px] leading-tight px-1 text-center">{t('kanban.addWorkPhotos')}</span>
+              </button>
+            )}
+          </div>
+          {canUpload && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={UPLOAD_ACCEPT}
+              onChange={handleFilesPicked}
+              className="hidden"
+              data-testid="completion-upload-input"
+            />
+          )}
+        </div>
+      )}
       {lightboxId !== null && (
         <MediaLightbox key={lightboxId} id={lightboxId} onClose={() => setLightboxId(null)} />
       )}
