@@ -232,8 +232,12 @@ BASELINE: set[tuple[str, str, str]] = {
     # is_role_allowed_for_transition (авторизацию решает канон workflow).
     # AUD6: `cmp:r`-чтение удалено вместе с мёртвым calculate_system_kpis.
     ('uk_management_bot/services/shift_analytics.py', 'cmp:request', 'status'),
-    ('uk_management_bot/services/shift_assignment_service.py', 'cmp:Request', 'status'),
-    ('uk_management_bot/services/shift_assignment_service.py', 'in_:Request', 'status'),
+    # AUD5-ARCH-3 волна 2, block-move: shift_assignment_service.py разнесён на
+    # пакет; те же сырые чтения переехали вместе с кодом (байт-в-байт):
+    # cmp:Request status — request_engine (фильтр 'new'-заявок),
+    # in_:Request status — scoring (набор активных статусов для загруженности).
+    ('uk_management_bot/services/shift_assignment_service/request_engine.py', 'cmp:Request', 'status'),
+    ('uk_management_bot/services/shift_assignment_service/scoring.py', 'in_:Request', 'status'),
     ('uk_management_bot/services/shift_transfer_service.py', 'in_:Request', 'status'),
     # REG-02: _move_active_requests фильтрует заявки активных статусов перед
     # status-preserving переносом (В работе/Закуп/Уточнение) — это набор-фильтр
