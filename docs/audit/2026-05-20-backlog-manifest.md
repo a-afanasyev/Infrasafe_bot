@@ -18,15 +18,15 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **410**
+- пунктов всего (с Priority): **411**
 - закрыто маркером: **385**
-- открыто маркером: **25**
+- открыто маркером: **26**
 
-  - `actionable` — **19**
+  - `actionable` — **20**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=7, P3=12.
+Из них actionable по приоритету: P2=7, P3=13.
 
 Значения `status`:
 
@@ -53,6 +53,7 @@
 | `AUD3-06` | P2 | actionable | doc-2026-07-14 | A3 | — | — | — |  |
 | `AUD5-ARCH-3` | P2 | actionable | verified-2026-07-27 | A3 | — | — | — | scope: core-15 / +access_control 17 / +media 19; иначе respec |
 | `BUG-138` | P3 | actionable | review-2026-08-10 | A3 | — | — | — |  |
+| `BUG-139` | P3 | actionable | review-2026-08-11 | A3 | — | — | — |  |
 | `AUD3-27` | P3 | actionable | plan-2026-07-26 | A4 | — | — | — | политика, а не точечный баг: ещё и shift_planning_service.py |
 | `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |

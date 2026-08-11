@@ -189,6 +189,7 @@ ASSIGNMENT: dict[str, dict] = {
                      note="scope: core-15 / +access_control 17 / +media 19; иначе respec"),
     "AUD3-06": A(pkg="A3", status="actionable", method="doc-2026-07-14"),
     "BUG-138": A(pkg="A3", status="actionable", method="review-2026-08-10"),
+    "BUG-139": A(pkg="A3", status="actionable", method="review-2026-08-11"),
     "AUD5-ARCH-5": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-13": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD3-27": A(pkg="A4", status="actionable", method="plan-2026-07-26",
