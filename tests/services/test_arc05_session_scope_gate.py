@@ -13,7 +13,15 @@ MIGRATED_FILES = [
     ROOT / "uk_management_bot" / "handlers" / "inspector_requests.py",
     ROOT / "uk_management_bot" / "handlers" / "request_acceptance.py",
     # ARC-05 Batch 1 (inline Pattern 1)
-    ROOT / "uk_management_bot" / "handlers" / "address_apartments.py",
+    # AUD5-ARCH-3 волна 3: address_apartments.py разбит на пакет — все
+    # содержательные под-модули под гейтом (navigation.py сейчас БД не трогает,
+    # но остаётся в охвате, чтобы next(get_db()) не вполз незаметно).
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "viewing.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "details.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "creation.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "editing.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "autofill.py",
+    ROOT / "uk_management_bot" / "handlers" / "address_apartments" / "navigation.py",
     ROOT / "uk_management_bot" / "handlers" / "address_buildings.py",
     ROOT / "uk_management_bot" / "handlers" / "user_apartments.py",
     ROOT / "uk_management_bot" / "handlers" / "user_apartment_selection.py",
