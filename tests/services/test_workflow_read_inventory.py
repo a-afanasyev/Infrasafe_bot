@@ -156,8 +156,10 @@ BASELINE: set[tuple[str, str, str]] = {
     # подсистема смен (вне scope), фактически всегда False.
     ('uk_management_bot/database/models/shift_assignment.py', 'cmp:request', 'status'),
     # FALSE-POSITIVE (подтверждено PR2-pre/2): r = resident (UserApartment),
-    # status 'approved'/'pending'/'rejected' (address_apartments.py:377-379).
-    ('uk_management_bot/handlers/address_apartments.py', 'cmp:r', 'status'),
+    # status 'approved'/'pending'/'rejected' (show_apartment_residents).
+    # AUD5-ARCH-3 волна 3: address_apartments.py разбит на пакет — сайт
+    # переехал в details.py.
+    ('uk_management_bot/handlers/address_apartments/details.py', 'cmp:r', 'status'),
     # PR2-pre/2: composite-флаги (manager_confirmed/is_returned) admin.py
     # мигрированы на предикаты awaiting_manager/awaiting_applicant/returned_for_review.
     # PR-29.3 (ARCH-01): class-level query-выражения `Request.status == ...` /

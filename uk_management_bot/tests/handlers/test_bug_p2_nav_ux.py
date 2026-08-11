@@ -199,13 +199,13 @@ class TestBug021CancelApartmentSelectionContext:
         state = _make_state({"entry_from": "profile"})
 
         with patch(
-            "uk_management_bot.handlers.address_apartments.get_text",
+            "uk_management_bot.handlers.address_apartments.navigation.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.address_apartments._return_to_profile_apartments",
+            "uk_management_bot.handlers.address_apartments.navigation._return_to_profile_apartments",
             new=AsyncMock(return_value=True),
         ) as profile_return, patch(
-            "uk_management_bot.handlers.address_apartments._return_to_admin_yards",
+            "uk_management_bot.handlers.address_apartments.navigation._return_to_admin_yards",
             new=AsyncMock(return_value=True),
         ) as admin_return:
             await cancel_apartment_action(callback, state, language="ru")
@@ -223,13 +223,13 @@ class TestBug021CancelApartmentSelectionContext:
         state = _make_state({"entry_from": "admin"})
 
         with patch(
-            "uk_management_bot.handlers.address_apartments.get_text",
+            "uk_management_bot.handlers.address_apartments.navigation.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.address_apartments._return_to_profile_apartments",
+            "uk_management_bot.handlers.address_apartments.navigation._return_to_profile_apartments",
             new=AsyncMock(return_value=True),
         ) as profile_return, patch(
-            "uk_management_bot.handlers.address_apartments._return_to_admin_yards",
+            "uk_management_bot.handlers.address_apartments.navigation._return_to_admin_yards",
             new=AsyncMock(return_value=True),
         ) as admin_return:
             await cancel_apartment_action(callback, state, language="ru")
