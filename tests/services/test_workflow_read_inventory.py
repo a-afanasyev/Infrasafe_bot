@@ -33,9 +33,14 @@ REQUEST_RECEIVERS = frozenset({
 })
 EXCLUDED_PARTS = {"tests", "__pycache__"}
 # Сам модуль предикатов и SSOT-ядро — единственные легальные места сырых чтений
+# AUD5-ARCH-3 волна 10, block-move: utils/request_workflow.py разнесён на пакет;
+# единственные сырые чтения ядра (dual-read в normalize_status: if:state
+# is_returned/manager_confirmed) переехали байт-в-байт в projections.py —
+# в allowlist ТОЛЬКО он, пофайлово (остальные под-модули ядра сырых чтений
+# не содержат и гейтом покрываются).
 ALLOWLIST_FILES = {
     "uk_management_bot/utils/workflow_predicates.py",
-    "uk_management_bot/utils/request_workflow.py",
+    "uk_management_bot/utils/request_workflow/projections.py",
 }
 
 
