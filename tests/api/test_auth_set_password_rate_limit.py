@@ -27,15 +27,25 @@ VALID_BODY = {
 }
 
 
+# One base snapshot per pytest invocation (module import), NOT per call:
+# per-call time.monotonic_ns() gave each salt its own base, and unlucky
+# offsets made two "distinct" salts collide on the same octet — flaked CI
+# three times (2026-08-12: 203.0.113.144 == 203.0.113.144). A single base
+# keeps octets deterministic within a run while still rotating between runs
+# (the property the Redis-backed limiter needs).
+_BASE = (time.monotonic_ns() >> 4) & 0xFF
+
+
 def _unique_ip(salt: int = 0) -> str:
     """A reserved TEST-NET-3 IP (203.0.113.0/24, RFC 5737) whose last
     octet rotates per pytest invocation. Distinct salts within one test
     give independent buckets; one test's IPs never collide with another
     test's IPs."""
-    base = (time.monotonic_ns() >> 4) & 0xFF
-    octet = (base + salt) % 256
+    octet = (_BASE + salt) % 256
     # 0 and 255 sometimes get treated specially by tooling — squeeze the
-    # range to [1, 254] to stay safe.
+    # range to [1, 254] to stay safe. (With the module-level base the
+    # squeeze cannot alias two of this file's salts {0, 50, 120} onto one
+    # octet: only one of them can land on 0/255 for any given base.)
     if octet in (0, 255):
         octet = 1
     return f"203.0.113.{octet}"
