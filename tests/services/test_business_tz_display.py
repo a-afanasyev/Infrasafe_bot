@@ -57,7 +57,15 @@ SWEPT_FILES: tuple[str, ...] = (
     "handlers/shift_management/shared.py",
     "keyboards/my_shifts.py",
     "keyboards/shift_transfer.py",
-    "services/notification_service.py",
+    # AUD5-ARCH-3 волна 13, block-move: notification_service.py разнесён на
+    # пакет — метём все содержательные под-модули (код байт-в-байт).
+    "services/notification_service/channel.py",
+    "services/notification_service/shared_bot.py",
+    "services/notification_service/shifts.py",
+    "services/notification_service/documents.py",
+    "services/notification_service/service.py",
+    "services/notification_service/requests_roles.py",
+    "services/notification_service/feedback.py",
     "services/shift_transfer_service.py",
     "services/shift_management_service.py",
     # ARCH-135 фаза 1: дневные бакеты статистики дашборда переведены на

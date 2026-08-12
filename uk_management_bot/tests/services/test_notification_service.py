@@ -297,7 +297,7 @@ class TestSendToChannel:
     async def test_sends_when_channel_id_configured(self):
         bot = AsyncMock()
         with patch(
-            "uk_management_bot.services.notification_service.settings"
+            "uk_management_bot.services.notification_service.channel.settings"
         ) as mock_settings:
             mock_settings.TELEGRAM_CHANNEL_ID = "-100123456789"
             await send_to_channel(bot, "Hello channel")
@@ -309,7 +309,7 @@ class TestSendToChannel:
     async def test_skips_when_no_channel_id(self):
         bot = AsyncMock()
         with patch(
-            "uk_management_bot.services.notification_service.settings"
+            "uk_management_bot.services.notification_service.channel.settings"
         ) as mock_settings:
             mock_settings.TELEGRAM_CHANNEL_ID = None
             await send_to_channel(bot, "Hello channel")
@@ -320,7 +320,7 @@ class TestSendToChannel:
         bot = AsyncMock()
         bot.send_message.side_effect = Exception("Forbidden")
         with patch(
-            "uk_management_bot.services.notification_service.settings"
+            "uk_management_bot.services.notification_service.channel.settings"
         ) as mock_settings:
             mock_settings.TELEGRAM_CHANNEL_ID = "-100123"
             await send_to_channel(bot, "text")  # should not raise
@@ -405,10 +405,10 @@ class TestAsyncNotifyShift:
         shift = _make_shift(start_time=datetime(2026, 4, 2, 9, 0, 0))
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.shifts.send_to_user",
             new_callable=AsyncMock,
         ) as mock_user, patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.shifts.send_to_channel",
             new_callable=AsyncMock,
         ) as mock_channel:
             await async_notify_shift_started(bot, db, user, shift)
@@ -426,10 +426,10 @@ class TestAsyncNotifyShift:
         shift = _make_shift(start_time=start, end_time=end)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.shifts.send_to_user",
             new_callable=AsyncMock,
         ) as mock_user, patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.shifts.send_to_channel",
             new_callable=AsyncMock,
         ) as mock_channel:
             await async_notify_shift_ended(bot, db, user, shift)
@@ -445,7 +445,7 @@ class TestAsyncNotifyShift:
         shift = _make_shift(start_time=datetime(2026, 4, 2, 9, 0, 0))
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.shifts.send_to_user",
             side_effect=Exception("network error"),
         ):
             await async_notify_shift_started(bot, db, user, shift)
@@ -472,7 +472,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked_text",
         ):
             await svc.send_verification_approved_notification(user_id=1)
@@ -494,7 +494,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked_text",
         ):
             await svc.send_verification_rejected_notification(user_id=1)
@@ -506,7 +506,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service()
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.service.send_to_channel",
             new_callable=AsyncMock,
         ) as mock_channel:
             await svc.send_system_notification("Title", "Body text")
@@ -524,10 +524,10 @@ class TestNotificationService:
             "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
             return_value=[111, 222],
         ), patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock, return_value=True,
         ) as m_user, patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.service.send_to_channel",
             new_callable=AsyncMock,
         ) as m_chan:
             await svc.send_manager_notification("T", "B")
@@ -542,10 +542,10 @@ class TestNotificationService:
             "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
             return_value=[],
         ), patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock,
         ) as m_user, patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.service.send_to_channel",
             new_callable=AsyncMock,
         ) as m_chan:
             await svc.send_manager_notification("T", "B")
@@ -559,10 +559,10 @@ class TestNotificationService:
             "uk_management_bot.services.feedback_service.manager_telegram_ids_sync",
             return_value=[111],
         ), patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock, return_value=False,
         ) as m_user, patch(
-            "uk_management_bot.services.notification_service.send_to_channel",
+            "uk_management_bot.services.notification_service.service.send_to_channel",
             new_callable=AsyncMock,
         ):
             await svc.send_manager_notification("T", "B")  # не бросает
@@ -575,10 +575,10 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
         shift = _make_shift(shift_id=5, start_time=datetime(2026, 7, 3, 9, 0))
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock, return_value=True,
         ) as m_user, patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             side_effect=lambda k, **kw: k,
         ):
             await svc.send_shift_reminder(executor_id=42, shift=shift, time_until="1ч 30м")
@@ -591,7 +591,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user=None)
         shift = _make_shift(shift_id=5)
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock,
         ) as m_user:
             await svc.send_shift_reminder(executor_id=999, shift=shift, time_until="1ч")
@@ -603,7 +603,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
         shift = _make_shift(shift_id=5)
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new_callable=AsyncMock,
         ) as m_user:
             await svc.send_shift_reminder(executor_id=42, shift=shift, time_until="1ч")
@@ -616,7 +616,7 @@ class TestNotificationService:
         bot.send_message.side_effect = Exception("Forbidden")
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="text",
         ):
             await svc.send_verification_approved_notification(user_id=1)
@@ -632,7 +632,7 @@ class TestNotificationService:
         svc = NotificationService(db, bot=None)
         mock_bot = MagicMock()
         with patch(
-            "uk_management_bot.services.notification_service._get_shared_bot",
+            "uk_management_bot.services.notification_service.service._get_shared_bot",
             return_value=mock_bot,
         ):
             result = svc._get_bot()
@@ -657,7 +657,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_document_approved_notification(user_id=1, document_type="passport")
@@ -677,7 +677,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_document_rejected_notification(user_id=1, document_type="passport")
@@ -690,7 +690,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_document_rejected_notification(
@@ -705,7 +705,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_access_rights_granted_notification(
@@ -720,7 +720,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_access_rights_granted_notification(
@@ -735,7 +735,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_access_rights_revoked_notification(
@@ -750,7 +750,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_access_rights_revoked_notification(
@@ -765,7 +765,7 @@ class TestNotificationService:
         svc, db, bot = self._make_service(user)
 
         with patch(
-            "uk_management_bot.services.notification_service.get_text",
+            "uk_management_bot.services.notification_service.service.get_text",
             return_value="mocked",
         ):
             await svc.send_verification_request_notification(
@@ -807,7 +807,7 @@ class TestAsyncNotifyRoleSwitched:
         user = _make_user(telegram_id=123)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             new_callable=AsyncMock,
         ) as mock_send:
             await async_notify_role_switched(bot, db, user, "applicant", "executor")
@@ -824,7 +824,7 @@ class TestAsyncNotifyRoleSwitched:
         user = _make_user(telegram_id=123)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             side_effect=Exception("network"),
         ):
             await async_notify_role_switched(bot, db, user, "applicant", "executor")
@@ -846,7 +846,7 @@ class TestAsyncNotifyActionDenied:
         db.query.return_value.filter.return_value.first.return_value = user
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             new_callable=AsyncMock,
         ) as mock_send:
             await async_notify_action_denied(bot, db, 555, "not_in_shift")
@@ -863,7 +863,7 @@ class TestAsyncNotifyActionDenied:
         db.query.return_value.filter.return_value.first.return_value = None
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             new_callable=AsyncMock,
         ):
             await async_notify_action_denied(bot, db, 999, "permission_denied")
@@ -884,11 +884,11 @@ class TestAsyncNotifyDocumentRequest:
 
         with (
             patch(
-                "uk_management_bot.services.notification_service.send_to_user",
+                "uk_management_bot.services.notification_service.documents.send_to_user",
                 new_callable=AsyncMock,
             ) as mock_user,
             patch(
-                "uk_management_bot.services.notification_service.send_to_channel",
+                "uk_management_bot.services.notification_service.documents.send_to_channel",
                 new_callable=AsyncMock,
             ) as mock_channel,
         ):
@@ -906,7 +906,7 @@ class TestAsyncNotifyDocumentRequest:
         user = _make_user(telegram_id=301)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.documents.send_to_user",
             side_effect=Exception("fail"),
         ):
             await async_notify_document_request(bot, db, user, "text", "passport")
@@ -925,11 +925,11 @@ class TestAsyncNotifyMultipleDocumentsRequest:
 
         with (
             patch(
-                "uk_management_bot.services.notification_service.send_to_user",
+                "uk_management_bot.services.notification_service.documents.send_to_user",
                 new_callable=AsyncMock,
             ) as mock_user,
             patch(
-                "uk_management_bot.services.notification_service.send_to_channel",
+                "uk_management_bot.services.notification_service.documents.send_to_channel",
                 new_callable=AsyncMock,
             ) as mock_channel,
         ):
@@ -960,7 +960,7 @@ class TestSharedBotRegistry:
         ns.set_shared_bot(None)
         try:
             # Ленивый fallback идёт через единственную фабрику ботов.
-            with patch.object(ns, "build_bot", return_value="lazy-bot") as MockBot:
+            with patch.object(ns.shared_bot, "build_bot", return_value="lazy-bot") as MockBot:
                 got = ns._get_shared_bot()
             assert got == "lazy-bot"
             MockBot.assert_called_once()
