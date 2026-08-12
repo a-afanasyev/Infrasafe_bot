@@ -57,7 +57,7 @@ class TestBugBot029NotifyUser:
         svc = NotificationService(db=db, bot=bot)
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new=AsyncMock(return_value=True),
         ) as mock_send:
             svc.notify_user(user_id=1, title="Hello", message="World")
@@ -84,7 +84,7 @@ class TestBugBot029NotifyUser:
         svc = NotificationService(db=db, bot=MagicMock())
 
         with patch(
-            "uk_management_bot.services.notification_service.send_to_user",
+            "uk_management_bot.services.notification_service.service.send_to_user",
             new=AsyncMock(),
         ) as mock_send:
             svc.notify_user(user_id=1, title="Hello", message="World")

@@ -111,7 +111,7 @@ class TestPerCallProfiles:
     ):
         """`send_to_user` — рассылочный путь: свой короткий предел."""
         monkeypatch.setattr(tc, "SESSION_TIMEOUT", 20.0)
-        monkeypatch.setattr(ns, "SEND_TIMEOUT", 1.0)
+        monkeypatch.setattr(ns.channel, "SEND_TIMEOUT", 1.0)
         bot = tc.build_bot(TOKEN)
         try:
             elapsed = await _elapsed(ns.send_to_user(bot, 1, "x"))
@@ -132,8 +132,8 @@ class TestPerCallProfiles:
         страховку теста; с ним — примерно 3 × 1 с.
         """
         monkeypatch.setattr(tc, "SESSION_TIMEOUT", 20.0)
-        monkeypatch.setattr(ns, "SEND_TIMEOUT", 1.0)
-        monkeypatch.setattr(ns, "_resolve_channel_id", lambda: None)
+        monkeypatch.setattr(ns.feedback, "SEND_TIMEOUT", 1.0)
+        monkeypatch.setattr(ns.feedback, "_resolve_channel_id", lambda: None)
         bot = tc.build_bot(TOKEN)
         try:
             elapsed = await _elapsed(
@@ -164,7 +164,7 @@ class TestPerCallProfiles:
                 calls["photo"] = kw.get("request_timeout")
                 return _Msg()
 
-        monkeypatch.setattr(ns, "_resolve_channel_id", lambda: None)
+        monkeypatch.setattr(ns.feedback, "_resolve_channel_id", lambda: None)
         await ns.deliver_feedback_to_managers(
             _Bot(), telegram_ids=[1], text="hi", photo=b"rawbytes"
         )
