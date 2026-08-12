@@ -224,7 +224,9 @@ BASELINE: set[tuple[str, str, str]] = {
     # бот-глю списания) проверяет загруженный `request.status == «В работе»`.
     # Оба статуса не участвуют в dual-read канон-нормализации A — сырые
     # чтения осознанны.
-    ('uk_management_bot/services/material_service.py', 'cmp:Request', 'status'),
+    # AUD5-ARCH-3 волна 9, block-move: material_service.py разнесён на пакет;
+    # то же сырое чтение (get_procurement) переехало вместе с кодом в reads.py.
+    ('uk_management_bot/services/material_service/reads.py', 'cmp:Request', 'status'),
     ('uk_management_bot/services/request_handler_service.py', 'cmp:request', 'status'),
     # П7a (AUD5-DEAD-1/DEAD-2, 2026-07-27): записи `metrics_manager.py` и
     # `recommendation_engine.py` убраны — сырые чтения жили в методах, до
