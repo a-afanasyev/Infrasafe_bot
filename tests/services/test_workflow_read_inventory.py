@@ -146,10 +146,15 @@ BASELINE: set[tuple[str, str, str]] = {
     # (тонкий роутер, ARCH-05a-паттерн) → `Request.status.in_/not_in(CLOSED_STATUSES)`
     # переехал вместе с ORM-слоем (ср. api/shifts/service.py ниже).
     ('uk_management_bot/api/requests/stats_service.py', 'in_:Request', 'status'),
-    ('uk_management_bot/api/shifts/service.py', 'in_:Request', 'status'),
+    # AUD5-ARCH-3 волна 5, block-move: api/shifts/service.py разнесён на пакет;
+    # in_:Request status разошёлся по двум под-модулям (байт-в-байт):
+    # employees.py — count_active_requests/soft_delete_employee (ACTIVE_REQUEST_
+    # STATUSES-фильтр), web_transfers.py — fallback _move_active_requests_web.
+    ('uk_management_bot/api/shifts/service/employees.py', 'in_:Request', 'status'),
+    ('uk_management_bot/api/shifts/service/web_transfers.py', 'in_:Request', 'status'),
     # REG-02: _move_active_requests_web фильтрует заявки активных статусов перед
     # status-preserving переносом при reassign смены (набор-фильтр, не переход).
-    ('uk_management_bot/api/shifts/service.py', 'cmp:req', 'status'),
+    ('uk_management_bot/api/shifts/service/web_transfers.py', 'cmp:req', 'status'),
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
     # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
     # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,

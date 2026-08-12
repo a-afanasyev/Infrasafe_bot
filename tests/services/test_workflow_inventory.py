@@ -170,10 +170,12 @@ BASELINE: set[tuple[str, str, str]] = {
     # а async-обёртка лишь грузит объекты и зовёт его (см. attr:request/attr:active
     # выше, в assignment_service.py).
     # 3. SHIFT-машина (вне scope; одноимённые поля Shift/ShiftTransfer)
-    ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_at'),
+    # AUD5-ARCH-3 волна 5, block-move: api/shifts/service.py разнесён на пакет;
+    # оба сайта (approve_transfer) переехали в под-модуль transfers.py байт-в-байт.
+    ('uk_management_bot/api/shifts/service/transfers.py', 'attr:transfer', 'assigned_at'),
     # REG-02: approve_transfer (assign-only) пишет ShiftTransfer.assigned_by —
     # аудит «кто из менеджеров назначил» (НЕ Request.assigned_by; совпадает имя).
-    ('uk_management_bot/api/shifts/service.py', 'attr:transfer', 'assigned_by'),
+    ('uk_management_bot/api/shifts/service/transfers.py', 'attr:transfer', 'assigned_by'),
     ('uk_management_bot/database/models/shift_assignment.py', 'attr:self', 'completed_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'assigned_at'),
     ('uk_management_bot/database/models/shift_transfer.py', 'attr:self', 'completed_at'),
