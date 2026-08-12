@@ -66,7 +66,13 @@ SWEPT_FILES: tuple[str, ...] = (
     "main.py",
     # ARCH-135 группа (б): движки планирования/назначения/рекомендаций и
     # аналитика смен — дневные бакеты решений на бизнес-сутках.
-    "services/shift_planning_service.py",
+    # AUD5-ARCH-3 волна 4, block-move: shift_planning_service.py разнесён на
+    # пакет (mixin-под-модули) — метём все файлы пакета (код байт-в-байт).
+    "services/shift_planning_service/__init__.py",
+    "services/shift_planning_service/planning.py",
+    "services/shift_planning_service/scoring.py",
+    "services/shift_planning_service/analytics.py",
+    "services/shift_planning_service/rebalance.py",
     # AUD5-ARCH-3 волна 2, block-move: shift_assignment_service.py разнесён на
     # пакет — метём все содержательные подмодули (код байт-в-байт).
     "services/shift_assignment_service/_types.py",
