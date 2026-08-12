@@ -31,7 +31,12 @@ def capture_core_updates(monkeypatch):
         yield MagicMock()
 
     monkeypatch.setattr(addr_svc._core, "update_building", _fake_core_update)
-    monkeypatch.setattr(addr_svc, "_async_session", _fake_session)
+    # AUD5-ARCH-3 волна 6: address_service — пакет; `_async_session` забиндено
+    # from-импортом в каждом write-подмодуле — патч только на пакете молча
+    # перестаёт действовать. Патчим все сайты биндинга разом.
+    for mod in (addr_svc, addr_svc._helpers, addr_svc.yards, addr_svc.buildings,
+                addr_svc.apartments, addr_svc.residency):
+        monkeypatch.setattr(mod, "_async_session", _fake_session)
     return captured
 
 

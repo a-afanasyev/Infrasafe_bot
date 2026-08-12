@@ -6,7 +6,9 @@ regression-guard, чтобы широкий except / schema-leak не верну
 REFACTOR-032: нет eager f-string логов. REFACTOR-088: Optional-аннотация.
 REFACTOR-089: UserApartmentStatus(str, Enum) — wire-совместим.
 """
+import importlib
 import inspect
+import pkgutil
 import re
 import typing
 
@@ -16,19 +18,31 @@ from uk_management_bot.database.models.user_apartment import (
 )
 
 
+def _svc_source() -> str:
+    """AUD5-ARCH-3 волна 6: address_service стал пакетом — inspect.getsource
+    на пакете видит только __init__.py, и source-гейты ниже проверяли бы не то.
+    Агрегируем исходники __init__ и всех подмодулей пакета."""
+    parts = [inspect.getsource(svc)]
+    for m in pkgutil.iter_modules(svc.__path__):
+        parts.append(
+            inspect.getsource(importlib.import_module(f"{svc.__name__}.{m.name}"))
+        )
+    return "".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # BUG-028 — regression guard (ARCH-014 уже закрыл по сути)
 # ---------------------------------------------------------------------------
 
 class TestBug028NoBroadExceptOrLeak:
     def test_no_bare_except_exception(self):
-        src = inspect.getsource(svc)
+        src = _svc_source()
         assert "except Exception" not in src, "широкий except вернулся — BUG-028"
 
     def test_infra_errors_return_opaque_message(self):
         """SQLAlchemyError-ветки логируют traceback и отдают generic-текст,
         НЕ str(e) (без утечки схемы)."""
-        src = inspect.getsource(svc)
+        src = _svc_source()
         # каждая SQLAlchemyError-ветка должна звать logger.exception
         assert src.count("except SQLAlchemyError") >= 1
         assert src.count("logger.exception") >= src.count("except SQLAlchemyError")
@@ -42,13 +56,13 @@ class TestBug028NoBroadExceptOrLeak:
 
 class TestRefactor032LazyLogging:
     def test_no_fstring_logger_calls(self):
-        src = inspect.getsource(svc)
+        src = _svc_source()
         assert not re.search(r"logger\.(error|warning|info|exception|debug)\(f[\"']", src), \
             "eager f-string в логере — REFACTOR-032"
 
     def test_no_user_names_in_logs(self):
         """PII: имена (first_name/last_name) не должны форматироваться в логи."""
-        src = inspect.getsource(svc)
+        src = _svc_source()
         for line in src.splitlines():
             if "logger." in line:
                 assert "first_name" not in line and "last_name" not in line

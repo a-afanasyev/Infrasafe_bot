@@ -9,6 +9,7 @@ side effects (session.commit/add/rollback, queue_webhook_sync) that no longer
 apply, so they were retired. Only the read-method tests remain — read methods
 still operate on the caller's sync Session and are unchanged.
 """
+import contextlib
 import json
 from pathlib import Path
 
@@ -210,17 +211,35 @@ class _FakeAsyncCM:
         return False
 
 
+# AUD5-ARCH-3 волна 6: address_service — пакет; `_async_session` забиндено
+# from-импортом в каждом write-подмодуле, так что патч только на пакете
+# МОЛЧА перестаёт действовать (тела методов резолвят имя в своих модулях).
+# Патчим все сайты биндинга разом. Патч `_core.{method}` правки не требует:
+# мутируется сам core-модуль (объект общий для всех импортёров).
+_ASYNC_SESSION_MODULES = [
+    "uk_management_bot.services.address_service",           # реэкспорт пакета
+    "uk_management_bot.services.address_service._helpers",  # определение
+    "uk_management_bot.services.address_service.yards",
+    "uk_management_bot.services.address_service.buildings",
+    "uk_management_bot.services.address_service.apartments",
+    "uk_management_bot.services.address_service.residency",
+]
+
+
 def _patch_core(method: str, exc: Exception):
     """Patch a core coroutine to raise `exc`, and stub _async_session."""
+    session_stub = contextlib.ExitStack()
+    for mod in _ASYNC_SESSION_MODULES:
+        session_stub.enter_context(patch(
+            f"{mod}._async_session",
+            new=lambda: _FakeAsyncCM(MagicMock()),
+        ))
     return (
         patch(
             f"uk_management_bot.services.address_service._core.{method}",
             new=AsyncMock(side_effect=exc),
         ),
-        patch(
-            "uk_management_bot.services.address_service._async_session",
-            new=lambda: _FakeAsyncCM(MagicMock()),
-        ),
+        session_stub,
     )
 
 

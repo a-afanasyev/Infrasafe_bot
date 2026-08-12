@@ -41,7 +41,14 @@ def _bot_uses_test_session(address_async_db, monkeypatch):
     async def _proxy():
         yield address_async_db
 
-    monkeypatch.setattr(address_service, "_async_session", _proxy)
+    # AUD5-ARCH-3 волна 6: address_service — пакет; `_async_session` забиндено
+    # from-импортом в каждом write-подмодуле — патч только на пакете молча
+    # перестаёт действовать (бот-путь открыл бы РЕАЛЬНУЮ сессию мимо
+    # rollback-обёртки). Патчим все сайты биндинга разом.
+    for mod in (address_service, address_service._helpers, address_service.yards,
+                address_service.buildings, address_service.apartments,
+                address_service.residency):
+        monkeypatch.setattr(mod, "_async_session", _proxy)
 
     async def _noop(event, data):  # noqa: ANN001
         return None
