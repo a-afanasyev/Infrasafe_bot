@@ -162,9 +162,21 @@ async def test_multi_active_shifts_not_blocked_at_db(db_session):
 
 @pytest.fixture(autouse=True)
 def _silence_publish(monkeypatch):
+    # AUD5-ARCH-3 волна 8: роутер — пакет; publish_shift_event забинжен
+    # from-импортом в под-модулях — патчим каждый модуль резолва имени
+    # (setattr на пакете до-разносного вида молча не действовал бы).
+    import importlib
+    import pkgutil
     from unittest.mock import AsyncMock
     import uk_management_bot.api.shifts.router as r
-    monkeypatch.setattr(r, "publish_shift_event", AsyncMock())
+    mock = AsyncMock()
+    patched = 0
+    for m in pkgutil.iter_modules(r.__path__):
+        mod = importlib.import_module(f"{r.__name__}.{m.name}")
+        if hasattr(mod, "publish_shift_event"):
+            monkeypatch.setattr(mod, "publish_shift_event", mock)
+            patched += 1
+    assert patched, "ни один под-модуль роутера не импортирует publish_shift_event"
 
 
 @pytest.mark.asyncio

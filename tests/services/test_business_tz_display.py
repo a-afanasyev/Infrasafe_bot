@@ -93,7 +93,16 @@ SWEPT_FILES: tuple[str, ...] = (
     # + питатели движков: планировщик (кормил UTC-«сегодня») и API-путь
     # создания смен из шаблона (дублировал семантику стенки шаблона).
     "utils/shift_scheduler.py",
-    "api/shifts/router.py",
+    # AUD5-ARCH-3 волна 8, block-move: api/shifts/router.py разнесён на
+    # пакет — метём все файлы пакета (код байт-в-байт).
+    "api/shifts/router/__init__.py",
+    "api/shifts/router/_router.py",
+    "api/shifts/router/_helpers.py",
+    "api/shifts/router/employees.py",
+    "api/shifts/router/shifts_read.py",
+    "api/shifts/router/templates.py",
+    "api/shifts/router/transfers.py",
+    "api/shifts/router/shift_crud.py",
 )
 
 
