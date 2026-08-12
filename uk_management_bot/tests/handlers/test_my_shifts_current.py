@@ -107,7 +107,7 @@ class TestViewCurrentShiftsUsesDbIdNotTelegramId:
         state = _make_state()
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_shift_list_keyboard",
+            "uk_management_bot.handlers.my_shifts.viewing.get_shift_list_keyboard",
             return_value=MagicMock(),
         ):
             await handle_current_shifts(

@@ -61,7 +61,7 @@ class TestStartShiftWritesAwareStartTime:
         db = _make_db_returning(shift)
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_shift_actions_keyboard",
+            "uk_management_bot.handlers.my_shifts.lifecycle.get_shift_actions_keyboard",
             return_value=MagicMock(),
         ):
             await handle_start_shift(

@@ -391,7 +391,7 @@ class TestBugBot005ExecutorMyShifts:
         db.query.return_value = q
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
+            "uk_management_bot.handlers.my_shifts.viewing.get_text", return_value="text"
         ):
             await handle_week_schedule(
                 cb, state, language="ru", _db=db,
@@ -421,7 +421,7 @@ class TestBugBot005ExecutorMyShifts:
         db.query.return_value = q
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
+            "uk_management_bot.handlers.my_shifts.history.get_text", return_value="text"
         ):
             await handle_shift_history(
                 cb, state, language="ru", _db=db,
@@ -463,7 +463,7 @@ class TestBugBot005ExecutorMyShifts:
         db.query.return_value = q
 
         with patch(
-            "uk_management_bot.handlers.my_shifts.get_text", return_value="text"
+            "uk_management_bot.handlers.my_shifts.history.get_text", return_value="text"
         ):
             await handle_shift_history(
                 cb, state, language="ru", _db=db,

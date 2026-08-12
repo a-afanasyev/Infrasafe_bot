@@ -104,7 +104,7 @@ class TestShiftTransferMenuHandler:
             "uk_management_bot.database.session.session_scope",
             _scope_yielding(db),
         ), patch(
-            "uk_management_bot.handlers.my_shifts.get_text",
+            "uk_management_bot.handlers.my_shifts.transfers.get_text",
             side_effect=lambda key, language="ru", **kw: key,
         ):
             await handle_shift_transfer_menu(cb, state=MagicMock(), language="ru")
@@ -131,7 +131,7 @@ class TestShiftTransferMenuHandler:
             "uk_management_bot.database.session.session_scope",
             _scope_yielding(db),
         ), patch(
-            "uk_management_bot.handlers.my_shifts.get_text",
+            "uk_management_bot.handlers.my_shifts.transfers.get_text",
             side_effect=lambda key, language="ru", **kw: key,
         ):
             await handle_shift_transfer_menu(cb, state=MagicMock(), language="ru")

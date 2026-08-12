@@ -27,7 +27,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # Волны B1–B4 (2026-08-05..06): лидеры по числу сайтов sync-запросов.
 CONVERTED = [
-    "uk_management_bot/handlers/my_shifts.py",
+    # AUD5-ARCH-3 волна 7: my_shifts.py разбит на пакет — гейт держит все
+    # файлы пакета с хендлерами + модуль sync-юнитов.
+    "uk_management_bot/handlers/my_shifts/_units.py",
+    "uk_management_bot/handlers/my_shifts/menu.py",
+    "uk_management_bot/handlers/my_shifts/viewing.py",
+    "uk_management_bot/handlers/my_shifts/lifecycle.py",
+    "uk_management_bot/handlers/my_shifts/history.py",
+    "uk_management_bot/handlers/my_shifts/transfers.py",
     "uk_management_bot/handlers/shift_transfer.py",
     "uk_management_bot/handlers/request_acceptance.py",
     # AUD5-ARCH-3 волна 1: god-файл employee_management.py разбит на пакет —

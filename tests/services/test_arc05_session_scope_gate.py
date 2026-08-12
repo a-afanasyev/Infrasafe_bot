@@ -30,7 +30,15 @@ MIGRATED_FILES = [
     ROOT / "uk_management_bot" / "handlers" / "user_yards_management.py",
     ROOT / "uk_management_bot" / "keyboards" / "requests.py",
     # ARC-05 Batch 3 (seam-E _db_scope + nested-D/inline session_scope)
-    ROOT / "uk_management_bot" / "handlers" / "my_shifts.py",
+    # AUD5-ARCH-3 волна 7: my_shifts.py разбит на пакет — все содержательные
+    # под-модули под гейтом (menu.py сейчас БД не трогает, но остаётся в
+    # охвате, чтобы next(get_db()) не вполз незаметно).
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "_units.py",
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "menu.py",
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "viewing.py",
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "lifecycle.py",
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "history.py",
+    ROOT / "uk_management_bot" / "handlers" / "my_shifts" / "transfers.py",
     ROOT / "uk_management_bot" / "handlers" / "shifts.py",
     ROOT / "uk_management_bot" / "handlers" / "address_yards.py",
 ]

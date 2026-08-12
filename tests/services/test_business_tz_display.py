@@ -38,7 +38,14 @@ import pytest
 PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "uk_management_bot"
 
 SWEPT_FILES: tuple[str, ...] = (
-    "handlers/my_shifts.py",
+    # AUD5-ARCH-3 волна 7, block-move: my_shifts.py разнесён на пакет —
+    # метём все содержательные под-модули (код байт-в-байт).
+    "handlers/my_shifts/_units.py",
+    "handlers/my_shifts/menu.py",
+    "handlers/my_shifts/viewing.py",
+    "handlers/my_shifts/lifecycle.py",
+    "handlers/my_shifts/history.py",
+    "handlers/my_shifts/transfers.py",
     "handlers/shifts.py",
     "handlers/shift_transfer.py",
     "handlers/shift_management/schedule.py",

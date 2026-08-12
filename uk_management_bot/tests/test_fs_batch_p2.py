@@ -86,7 +86,8 @@ def test_fs01_shifts_history_accepts_from_user_id():
 @pytest.mark.asyncio
 async def test_fs02_transfer_menu_shows_button_for_active_shift(db):
     """Активная смена (user_id=user.id) → в меню есть кнопка initiate_transfer."""
-    from uk_management_bot.handlers import my_shifts as ms
+    # AUD5-ARCH-3 волна 7: патчи бьют в модуль РЕЗОЛВА имени (под-модуль пакета).
+    from uk_management_bot.handlers.my_shifts import transfers as ms
 
     # id != telegram_id — именно это расхождение ломало фильтр.
     user = User(id=1, telegram_id=9999, username="u", first_name="A", last_name="B",
@@ -117,7 +118,8 @@ async def test_fs02_transfer_menu_shows_button_for_active_shift(db):
 @pytest.mark.asyncio
 async def test_fs02_transfer_menu_empty_when_no_shifts(db):
     """Без смен — кнопки передачи нет (контроль: пустота не от бага id)."""
-    from uk_management_bot.handlers import my_shifts as ms
+    # AUD5-ARCH-3 волна 7: патчи бьют в модуль РЕЗОЛВА имени (под-модуль пакета).
+    from uk_management_bot.handlers.my_shifts import transfers as ms
 
     user = User(id=2, telegram_id=8888, username="u2", first_name="C", last_name="D",
                 roles='["executor"]', active_role="executor", status="approved", language="ru")
@@ -227,7 +229,8 @@ async def test_shift_details_resolves_internal_user_id(db):
     """Деталь смены ищется по Shift.user_id == user.id (внутренний DB id),
     а не telegram_id. Раньше сравнивалось с callback.from_user.id (telegram_id)
     → смена не находилась («shift_not_found») / нет прав."""
-    from uk_management_bot.handlers import my_shifts as ms
+    # AUD5-ARCH-3 волна 7: патчи бьют в модуль РЕЗОЛВА имени (под-модуль пакета).
+    from uk_management_bot.handlers.my_shifts import viewing as ms
 
     # id != telegram_id — именно это расхождение ломало выборку.
     user = User(id=7, telegram_id=70707, username="ex", first_name="E", last_name="X",
@@ -269,7 +272,8 @@ async def test_end_shift_handles_tz_aware_start_time():
     """
     from datetime import timezone
     from unittest.mock import MagicMock as _MM
-    from uk_management_bot.handlers import my_shifts as ms
+    # AUD5-ARCH-3 волна 7: патчи бьют в модуль РЕЗОЛВА имени (под-модуль пакета).
+    from uk_management_bot.handlers.my_shifts import lifecycle as ms
 
     user = _MM()
     user.id = 8
