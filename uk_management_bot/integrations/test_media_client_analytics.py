@@ -5,12 +5,9 @@ AUD5-ARCH-3 волна 14: часть исходного test_media_client.py (1
 import io
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from datetime import datetime
 
 from uk_management_bot.integrations.media_client import (
     MediaServiceClient,
-    upload_request_photo,
-    upload_completion_photo,
 )
 
 # update_media_tags

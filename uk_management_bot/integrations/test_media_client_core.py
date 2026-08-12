@@ -11,8 +11,6 @@ from datetime import datetime
 
 from uk_management_bot.integrations.media_client import (
     MediaServiceClient,
-    upload_request_photo,
-    upload_completion_photo,
 )
 
 # ---------------------------------------------------------------------------
