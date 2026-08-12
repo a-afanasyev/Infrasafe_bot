@@ -1,15 +1,20 @@
-"""ARCH-05a (PR-27): AST-инвентаризация прямого ORM в api/shifts/router.py.
+"""ARCH-05a (PR-27): AST-инвентаризация прямого ORM в api/shifts/router/.
 
 ЗЕЛЁНЫЙ baseline-гейт: фиксирует набор прямых ORM/data-access call-сайтов в
-роутере смен как ПУСТОЙ. После выноса слоя в `api/shifts/service.py` роутер —
+роутере смен как ПУСТОЙ. После выноса слоя в `api/shifts/service` роутер —
 тонкий HTTP-слой (auth-deps, парсинг, сериализация, HTTPException). Прямого
 ORM в нём быть НЕ должно.
+
+AUD5-ARCH-3 волна 8: router.py разнесён block-move на пакет
+`api/shifts/router/` — гейт агрегирует ВСЕ .py-файлы пакета (включая
+`_helpers.py`/`__init__.py`), чтобы разнос не сузил охват (урок волны 6:
+гейт по одному файлу на пакете становится вакуумным).
 
 Любой НОВЫЙ прямой ORM в роутере (db.execute/add/commit/refresh/delete/flush/
 scalar/scalars/get на db|session, top-level select(/update(/delete(/insert(,
 либо <recv>.query(...)) ломает этот тест ОСОЗНАННО — перенесите доступ к данным
-в service.py. Если какой-то ORM-вызов действительно невозможно вынести, добавьте
-его в BASELINE с инлайн-обоснованием.
+в api/shifts/service. Если какой-то ORM-вызов действительно невозможно вынести,
+добавьте его в BASELINE с инлайн-обоснованием.
 """
 
 from __future__ import annotations
@@ -17,11 +22,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-ROUTER_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "uk_management_bot" / "api" / "shifts" / "router.py"
-)
-ROUTER_REL = "uk_management_bot/api/shifts/router.py"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+ROUTER_PKG = _REPO_ROOT / "uk_management_bot" / "api" / "shifts" / "router"
 
 # session-методы, считающиеся прямым ORM при вызове на db|session
 ORM_METHODS = frozenset({
@@ -33,6 +35,16 @@ ORM_RECEIVERS = frozenset({"db", "session"})
 QUERY_BUILDERS = frozenset({"select", "update", "delete", "insert"})
 
 
+def _router_files() -> list[Path]:
+    """Все .py пакета роутера. Пустой список = разнос сломал гейт молча."""
+    assert ROUTER_PKG.is_dir(), (
+        f"{ROUTER_PKG} не найден — пакет роутера переехал? Обнови ROUTER_PKG."
+    )
+    files = sorted(ROUTER_PKG.glob("*.py"))
+    assert files, f"в {ROUTER_PKG} нет .py-файлов — гейт стал вакуумным"
+    return files
+
+
 def _receiver_name(node: ast.expr) -> str:
     if isinstance(node, ast.Name):
         return node.id
@@ -41,35 +53,37 @@ def _receiver_name(node: ast.expr) -> str:
     return type(node).__name__
 
 
-def collect_orm_sites(path: Path = ROUTER_PATH) -> set[tuple[str, str]]:
-    """→ {(relpath, signal)} прямого ORM в роутере."""
+def collect_orm_sites() -> set[tuple[str, str]]:
+    """→ {(relpath, signal)} прямого ORM по всем файлам пакета роутера."""
     sites: set[tuple[str, str]] = set()
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        fn = node.func
-        # db.execute(...) / session.scalars(...) / db.query(...) / db.add(...)
-        if isinstance(fn, ast.Attribute):
-            recv = fn.value
-            recv_name = recv.id if isinstance(recv, ast.Name) else None
-            if recv_name in ORM_RECEIVERS:
-                if fn.attr in ORM_METHODS:
-                    sites.add((ROUTER_REL, f"{recv_name}.{fn.attr}"))
+    for path in _router_files():
+        rel = path.relative_to(_REPO_ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            # db.execute(...) / session.scalars(...) / db.query(...) / db.add(...)
+            if isinstance(fn, ast.Attribute):
+                recv = fn.value
+                recv_name = recv.id if isinstance(recv, ast.Name) else None
+                if recv_name in ORM_RECEIVERS:
+                    if fn.attr in ORM_METHODS:
+                        sites.add((rel, f"{recv_name}.{fn.attr}"))
+                    elif fn.attr == "query":
+                        sites.add((rel, f"{recv_name}.query"))
+                # <recv>.query(...) на любом получателе (legacy Query API)
                 elif fn.attr == "query":
-                    sites.add((ROUTER_REL, f"{recv_name}.query"))
-            # <recv>.query(...) на любом получателе (legacy Query API)
-            elif fn.attr == "query":
-                sites.add((ROUTER_REL, f"{_receiver_name(recv)}.query"))
-        # top-level select(/update(/delete(/insert(
-        elif isinstance(fn, ast.Name) and fn.id in QUERY_BUILDERS:
-            sites.add((ROUTER_REL, f"{fn.id}()"))
+                    sites.add((rel, f"{_receiver_name(recv)}.query"))
+            # top-level select(/update(/delete(/insert(
+            elif isinstance(fn, ast.Name) and fn.id in QUERY_BUILDERS:
+                sites.add((rel, f"{fn.id}()"))
     return sites
 
 
 # ---------------------------------------------------------------------------
 # BASELINE — ПУСТО (роутер полностью очищен от прямого ORM, ARCH-05a 2026-06-18).
-# Весь data-access вынесен в uk_management_bot/api/shifts/service.py.
+# Весь data-access вынесен в uk_management_bot/api/shifts/service.
 # ---------------------------------------------------------------------------
 BASELINE: set[tuple[str, str]] = set()
 
@@ -81,7 +95,7 @@ def test_shifts_router_has_no_direct_orm():
     msg = []
     if new_sites:
         msg.append(
-            "Прямой ORM в api/shifts/router.py (вынесите в api/shifts/service.py):\n"
+            "Прямой ORM в api/shifts/router/ (вынесите в api/shifts/service):\n"
             + "\n".join(f"  {s!r}," for s in sorted(new_sites))
         )
     if gone_sites:

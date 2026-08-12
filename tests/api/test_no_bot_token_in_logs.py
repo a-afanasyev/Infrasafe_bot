@@ -165,7 +165,7 @@ class TestDocumentProxyLogging:
 
 class TestInviteBotUsernameLogging:
     """Предсуществующий сайт с тем же дефектом: `getMe` при выдаче инвайт-ссылки
-    (`api/shifts/router.py`) логировал сырое исключение тем же способом."""
+    (`api/shifts/router/_helpers.py`) логировал сырое исключение тем же способом."""
 
     async def test_token_absent_from_logs(self, caplog):
         from uk_management_bot.api.shifts import router as shifts_router
@@ -182,7 +182,10 @@ class TestInviteBotUsernameLogging:
         with patch.object(settings, "BOT_USERNAME", None), \
                 patch.object(settings, "BOT_TOKEN", FAKE_TOKEN), \
                 caplog.at_level(logging.ERROR):
-            with patch("uk_management_bot.api.shifts.router.httpx.AsyncClient",
+            # AUD5-ARCH-3 волна 8: httpx импортирован в _helpers-модуле пакета —
+            # патчим модуль РЕЗОЛВА имени, а не пакет (реэкспорт httpx из
+            # __init__ был бы мусорным namespace).
+            with patch("uk_management_bot.api.shifts.router._helpers.httpx.AsyncClient",
                        _raising_client(boom)):
                 result = await shifts_router._resolve_bot_username()
 

@@ -61,7 +61,10 @@ def _mock_db(shift, overlap=None):
 
 
 async def _call(shift, body, overlap=None):
-    from uk_management_bot.api.shifts import router as shift_router
+    # AUD5-ARCH-3 волна 8: update_shift живёт в под-модуле shift_crud пакета
+    # роутера — патчим модуль РЕЗОЛВА имён (_shift_detail/publish_shift_event
+    # забинжены from-импортом в shift_crud; патч на пакете не действовал бы).
+    from uk_management_bot.api.shifts.router import shift_crud as shift_router
     with patch.object(shift_router, "_shift_detail", return_value=MagicMock()), \
          patch.object(shift_router, "publish_shift_event", new=AsyncMock()):
         return await shift_router.update_shift(

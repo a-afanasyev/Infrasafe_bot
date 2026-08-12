@@ -12,7 +12,9 @@ the endpoint must fail loudly instead of emitting a t.me/None link.
 """
 import pytest
 
-from uk_management_bot.api.shifts import router as router_mod
+# AUD5-ARCH-3 волна 8: _resolve_bot_username и его httpx живут в _helpers-модуле
+# пакета роутера — берём модуль резолва имени (у пакета атрибута httpx нет).
+from uk_management_bot.api.shifts.router import _helpers as router_mod
 from uk_management_bot.config.settings import settings
 
 

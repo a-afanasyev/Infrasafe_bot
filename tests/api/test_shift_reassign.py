@@ -174,10 +174,21 @@ async def test_reassign_web_completed_shift_not_transferable(db_session):
 
 @pytest.fixture(autouse=True)
 def _silence_publish(monkeypatch):
+    # AUD5-ARCH-3 волна 8: роутер — пакет; publish_* забинжены from-импортом
+    # в под-модулях — патчим каждый модуль резолва имени (setattr на пакете
+    # до-разносного вида молча не действовал бы).
+    import importlib
+    import pkgutil
     from unittest.mock import AsyncMock
     import uk_management_bot.api.shifts.router as r
-    monkeypatch.setattr(r, "publish_shift_event", AsyncMock())
-    monkeypatch.setattr(r, "publish_request_event", AsyncMock())
+    patched = 0
+    for m in pkgutil.iter_modules(r.__path__):
+        mod = importlib.import_module(f"{r.__name__}.{m.name}")
+        for name in ("publish_shift_event", "publish_request_event"):
+            if hasattr(mod, name):
+                monkeypatch.setattr(mod, name, AsyncMock())
+                patched += 1
+    assert patched, "ни один под-модуль роутера не импортирует publish_*"
 
 
 @pytest.mark.asyncio
