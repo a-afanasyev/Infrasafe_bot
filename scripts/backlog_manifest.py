@@ -192,6 +192,7 @@ ASSIGNMENT: dict[str, dict] = {
     "BUG-139": A(pkg="A3", status="actionable", method="review-2026-08-11"),
     "BUG-140": A(pkg="A3", status="actionable", method="review-2026-08-12"),
     "BUG-141": A(pkg="A3", status="actionable", method="review-2026-08-12"),
+    "BUG-142": A(pkg="A3", status="actionable", method="review-2026-08-12"),
     "AUD5-ARCH-5": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-13": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD3-27": A(pkg="A4", status="actionable", method="plan-2026-07-26",
