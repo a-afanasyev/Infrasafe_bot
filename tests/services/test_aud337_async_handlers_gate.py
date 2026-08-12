@@ -45,7 +45,14 @@ CONVERTED = [
     "uk_management_bot/handlers/employee_management/moderation.py",
     "uk_management_bot/handlers/employee_management/editing.py",
     "uk_management_bot/handlers/employee_management/roles_specs.py",
-    "uk_management_bot/handlers/user_verification.py",
+    # AUD5-ARCH-3 волна 11: user_verification.py разбит на пакет — гейт держит
+    # все файлы пакета с хендлерами + модуль sync-юнитов.
+    "uk_management_bot/handlers/user_verification/_units.py",
+    "uk_management_bot/handlers/user_verification/panel.py",
+    "uk_management_bot/handlers/user_verification/documents.py",
+    "uk_management_bot/handlers/user_verification/info_requests.py",
+    "uk_management_bot/handlers/user_verification/document_review.py",
+    "uk_management_bot/handlers/user_verification/access_decision.py",
     "uk_management_bot/handlers/request_status_management.py",
 ]
 
