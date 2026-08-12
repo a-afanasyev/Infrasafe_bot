@@ -18,15 +18,15 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **416**
-- закрыто маркером: **385**
+- пунктов всего (с Priority): **418**
+- закрыто маркером: **387**
 - открыто маркером: **31**
 
   - `actionable` — **25**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=8, P3=17.
+Из них actionable по приоритету: P2=7, P3=18.
 
 Значения `status`:
 
@@ -50,8 +50,6 @@
 | `AUD3-07` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — | 168 .query( = 159 db.query + 9 db_local.query |
 | `AUD5-ARCH-1` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — |  |
 | `BUG-137` | P2 | actionable | review-2026-08-10 | A2 | — | — | — |  |
-| `AUD3-06` | P2 | actionable | doc-2026-07-14 | A3 | — | — | — |  |
-| `AUD5-ARCH-3` | P2 | actionable | verified-2026-07-27 | A3 | — | — | — | scope: core-15 / +access_control 17 / +media 19; иначе respec |
 | `BUG-138` | P3 | actionable | review-2026-08-10 | A3 | — | — | — |  |
 | `BUG-139` | P3 | actionable | review-2026-08-11 | A3 | — | — | — |  |
 | `BUG-140` | P2 | actionable | review-2026-08-12 | A3 | — | — | — |  |
@@ -59,6 +57,8 @@
 | `BUG-142` | P3 | actionable | review-2026-08-12 | A3 | — | — | — |  |
 | `BUG-143` | P3 | actionable | review-2026-08-12 | A3 | — | — | — |  |
 | `BUG-144` | P3 | actionable | review-2026-08-13 | A3 | — | — | — |  |
+| `BUG-145` | P2 | actionable | review-2026-08-13 | A3 | — | — | — |  |
+| `BUG-146` | P3 | actionable | review-2026-08-13 | A3 | — | — | — |  |
 | `AUD3-27` | P3 | actionable | plan-2026-07-26 | A4 | — | — | — | политика, а не точечный баг: ещё и shift_planning_service.py |
 | `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
