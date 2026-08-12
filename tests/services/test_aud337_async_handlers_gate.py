@@ -53,7 +53,16 @@ CONVERTED = [
     "uk_management_bot/handlers/user_verification/info_requests.py",
     "uk_management_bot/handlers/user_verification/document_review.py",
     "uk_management_bot/handlers/user_verification/access_decision.py",
-    "uk_management_bot/handlers/request_status_management.py",
+    # AUD5-ARCH-3 волна 12: request_status_management.py разбит на пакет —
+    # гейт держит все файлы пакета с хендлерами + модуль sync-юнитов.
+    "uk_management_bot/handlers/request_status_management/_units.py",
+    "uk_management_bot/handlers/request_status_management/status_flow.py",
+    "uk_management_bot/handlers/request_status_management/executor_actions.py",
+    "uk_management_bot/handlers/request_status_management/completion.py",
+    "uk_management_bot/handlers/request_status_management/confirmation.py",
+    # availability.py сейчас без async-хендлеров, но держим в охвате гейта
+    # (урок A3-3: будущий async в под-модуле не должен быть невидим).
+    "uk_management_bot/handlers/request_status_management/availability.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

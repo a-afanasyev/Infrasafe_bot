@@ -187,7 +187,9 @@ BASELINE: set[tuple[str, str, str]] = {
     ('uk_management_bot/handlers/clarification_replies.py', 'cmp:request', 'status'),
     # PR2a-6: request_reports.py:118,239 переведены на is_awaiting_applicant
     # (возвращённые исключены) — сняты из read-baseline.
-    ('uk_management_bot/handlers/request_status_management.py', 'in_:Request', 'status'),
+    # AUD5-ARCH-3 волна 12: request_status_management.py разбит на пакет —
+    # сайт `.in_(active_statuses)` (_apply_purchase) переехал в _units.py.
+    ('uk_management_bot/handlers/request_status_management/_units.py', 'in_:Request', 'status'),
     # PR-29.2 (ARCH-01): cmp:r/req/request — сравнения статуса на УЖЕ
     # ЗАГРУЖЕННОМ объекте (выбор клавиатуры/ветки UI) — ОСТАЮТСЯ в хендлере.
     # AUD3-06: requests.py разбит на пакет handlers/requests/ — те же UI-сравнения
