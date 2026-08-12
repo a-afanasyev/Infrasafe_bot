@@ -150,7 +150,9 @@ class TestPatternB_CmdMyShifts:
         import inspect
 
         from uk_management_bot.database import session as session_mod
-        from uk_management_bot.handlers import my_shifts as mod
+        # AUD5-ARCH-3 волна 7: cmd_my_shifts живёт в под-модуле menu —
+        # патчи бьют в модуль РЕЗОЛВА имени.
+        from uk_management_bot.handlers.my_shifts import menu as mod
 
         assert "db" not in inspect.signature(mod.cmd_my_shifts).parameters
 

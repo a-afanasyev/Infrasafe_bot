@@ -117,8 +117,8 @@ class TestCurrentShifts:
         _planned_shift(db, user.id, CROSSOVER_UTC)
 
         cb, state = _callback(), _state()
-        with _business_today_is(ms, BUSINESS_DAY), \
-             patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        with _business_today_is(ms._units, BUSINESS_DAY), \
+             patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
@@ -136,8 +136,8 @@ class TestCurrentShifts:
         _planned_shift(db, user.id, CROSSOVER_UTC)
 
         cb, state = _callback(), _state()
-        with _business_today_is(ms, BUSINESS_DAY), \
-             patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        with _business_today_is(ms._units, BUSINESS_DAY), \
+             patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
@@ -154,8 +154,8 @@ class TestCurrentShifts:
         _planned_shift(db, user.id, CROSSOVER_UTC)
 
         cb, state = _callback(), _state()
-        with _business_today_is(ms, BUSINESS_DAY), \
-             patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        with _business_today_is(ms._units, BUSINESS_DAY), \
+             patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
@@ -174,8 +174,8 @@ class TestCurrentShifts:
         _planned_shift(db, user.id, CROSSOVER_UTC - timedelta(days=1))
 
         cb, state = _callback(), _state()
-        with _business_today_is(ms, BUSINESS_DAY), \
-             patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        with _business_today_is(ms._units, BUSINESS_DAY), \
+             patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await ms.handle_current_shifts(cb, state, language="ru", _db=db,
                                            user=user, roles=["executor"])
 
@@ -193,8 +193,8 @@ class TestWeekSchedule:
         _planned_shift(db, user.id, CROSSOVER_UTC)
 
         cb, state = _callback(data="view_week_schedule"), _state()
-        with _business_today_is(ms, BUSINESS_DAY), \
-             patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+        with _business_today_is(ms._units, BUSINESS_DAY), \
+             patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
             await ms.handle_week_schedule(cb, state, language="ru", _db=db,
                                           user=user, roles=["executor"])
 

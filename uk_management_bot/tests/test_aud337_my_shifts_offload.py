@@ -150,7 +150,8 @@ def test_end_shift_unit_returns_summary_dto(db, monkeypatch):
     # аварийно-честный aware-aware прода здесь моделируется naive-naive той же
     # арифметики: utc_now юнита пиннится naive-значением.
     naive_now = utc_now().replace(tzinfo=None)
-    monkeypatch.setattr(ms, "utc_now", lambda: naive_now)
+    # AUD5-ARCH-3 волна 7: utc_now резолвится в под-модуле _units.
+    monkeypatch.setattr(ms._units, "utc_now", lambda: naive_now)
 
     user = _executor(db)
     start = naive_now - timedelta(hours=3)
@@ -207,7 +208,7 @@ async def test_handle_current_shifts_renders_via_thread_path(thread_sessions):
     state = MagicMock()
     state.set_state = AsyncMock()
 
-    with patch.object(ms, "get_text", side_effect=lambda key, language="ru", **kw: key):
+    with patch.object(ms.viewing, "get_text", side_effect=lambda key, language="ru", **kw: key):
         await ms.handle_current_shifts(cb, state, language="ru", user=None, roles=["executor"])
 
     cb.message.edit_text.assert_awaited_once()
