@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **418**
-- закрыто маркером: **388**
-- открыто маркером: **30**
+- пунктов всего (с Priority): **419**
+- закрыто маркером: **394**
+- открыто маркером: **25**
 
-  - `actionable` — **23**
+  - `actionable` — **18**
   - `decision` — **1**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=5, P3=18.
+Из них actionable по приоритету: P2=5, P3=13.
 
 Значения `status`:
 
@@ -52,13 +52,8 @@
 | `AUD5-ARCH-1` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — |  |
 | `BUG-137` | P2 | decision | verified-2026-08-13 | A2 | — | — | — | инвентарь живости: жив 1/11 хендлеров (починен в #421); ретайр vs оживление — вопрос владельцу |
 | `BUG-138` | P3 | actionable | review-2026-08-10 | A3 | — | — | — |  |
-| `BUG-139` | P3 | actionable | review-2026-08-11 | A3 | — | — | — |  |
-| `BUG-141` | P3 | actionable | review-2026-08-12 | A3 | — | — | — |  |
-| `BUG-142` | P3 | actionable | review-2026-08-12 | A3 | — | — | — |  |
-| `BUG-143` | P3 | actionable | review-2026-08-12 | A3 | — | — | — |  |
-| `BUG-144` | P3 | actionable | review-2026-08-13 | A3 | — | — | — |  |
 | `BUG-145` | P2 | actionable | verified-2026-08-13 | A3 | — | — | — | живая часть закрыта #421; остаток в мёртвом коде — судьба с BUG-137 |
-| `BUG-146` | P3 | actionable | review-2026-08-13 | A3 | — | — | — |  |
+| `BUG-147` | P3 | actionable | review-2026-08-13 | A3 | — | — | — |  |
 | `AUD3-27` | P3 | actionable | plan-2026-07-26 | A4 | — | — | — | политика, а не точечный баг: ещё и shift_planning_service.py |
 | `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
