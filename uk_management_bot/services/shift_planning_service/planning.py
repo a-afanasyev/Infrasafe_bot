@@ -110,7 +110,9 @@ class PlanningMixin:
                         available_executors = self._get_available_executors_for_template(template, target_date)
                         for i, shift in enumerate(created_shifts[:len(available_executors)]):
                             if not shift.user_id:
-                                shift.user_id = available_executors[i].telegram_id
+                                # BUG-140: user_id — FK на users.id (как в
+                                # _create_single_shift_from_template), не telegram_id
+                                shift.user_id = available_executors[i].id
             
             if created_shifts:
                 self.db.commit()
@@ -306,10 +308,15 @@ class PlanningMixin:
                     if shift.planned_start_time and shift.planned_end_time:
                         start_hour = to_business(shift.planned_start_time).hour
                         end_hour = to_business(shift.planned_end_time).hour
-                        
-                        # Заполняем покрытие по часам
+
+                        # Заполняем покрытие по часам [start, end).
+                        # BUG-140: у суточной смены start_hour == end_hour —
+                        # старый while не исполнялся ни разу (нулевое покрытие).
+                        hours_span = (end_hour - start_hour) % 24
+                        if hours_span == 0 and shift.planned_end_time > shift.planned_start_time:
+                            hours_span = 24
                         current_hour = start_hour
-                        while current_hour != end_hour:
+                        for _ in range(hours_span):
                             hour_coverage[current_hour].append(shift)
                             current_hour = (current_hour + 1) % 24
                 
@@ -436,7 +443,9 @@ class PlanningMixin:
             for executor in all_executors:
                 if self._can_executor_work_template(executor, template):
                     # Проверяем, не занят ли исполнитель в это время
-                    if not self._is_executor_busy(executor.telegram_id, target_date, template):
+                    # (BUG-140: Shift.user_id — FK на users.id, поэтому проверка
+                    # занятости идёт по внутреннему id, не по telegram_id)
+                    if not self._is_executor_busy(executor.id, target_date, template):
                         available_executors.append(executor)
             
             return available_executors
@@ -446,7 +455,11 @@ class PlanningMixin:
             return []
     
     def _is_executor_busy(self, executor_id: int, target_date: date, template: ShiftTemplate) -> bool:
-        """Проверяет, занят ли исполнитель в указанное время"""
+        """Проверяет, занят ли исполнитель в указанное время.
+
+        executor_id — ВНУТРЕННИЙ ``users.id`` (им заполнен FK ``Shift.user_id``),
+        не telegram_id (BUG-140).
+        """
         try:
             # Время предполагаемой смены — та же семантика стенки бизнес-зоны,
             # что в _create_single_shift_from_template (иначе проверка занятости

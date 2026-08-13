@@ -500,3 +500,115 @@ class TestGetSpecializationPriority:
         assert result, "priority list must be non-empty for non-empty history"
         assert result[0]["specialization"] == "Сантехника"
         assert result[0]["request_count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# BUG-140: id-семантика планировщика (user_id ↔ telegram_id) и 24h-покрытие
+# ---------------------------------------------------------------------------
+
+class TestBug140IdSemantics:
+    def test_available_executors_check_busy_by_internal_user_id(self):
+        """_is_executor_busy фильтрует Shift.user_id (FK на users.id) — на вход
+        обязан идти внутренний id исполнителя, не telegram_id."""
+        service, db = _make_service()
+        executor = MagicMock()
+        executor.id = 7
+        executor.telegram_id = 999_777_555
+        db.query.return_value.filter.return_value.all.return_value = [executor]
+
+        with (
+            patch.object(service, "_can_executor_work_template", return_value=True),
+            patch.object(service, "_is_executor_busy", return_value=False) as busy,
+        ):
+            service._get_available_executors_for_template(
+                _make_template(), date(2026, 8, 13)
+            )
+
+        busy.assert_called_once()
+        assert busy.call_args[0][0] == 7, (
+            "занятость должна проверяться по внутреннему User.id: "
+            f"передан {busy.call_args[0][0]!r}"
+        )
+
+    def test_fallback_assignment_writes_internal_user_id(self):
+        """Fallback-ветка create_shift_from_template (авто-назначение упало)
+        обязана писать в FK Shift.user_id внутренний id, как это делает
+        _create_single_shift_from_template."""
+        service, db = _make_service()
+        template = _make_template(min_executors=1)
+        db.query.return_value.filter.return_value.first.return_value = template
+        db.query.return_value.filter.return_value.count.return_value = 0
+
+        fake_shift = MagicMock()
+        fake_shift.user_id = None
+        executor = MagicMock()
+        executor.id = 7
+        executor.telegram_id = 999_777_555
+
+        service.assignment_service = MagicMock()
+        service.assignment_service.auto_assign_executors_to_shifts.side_effect = (
+            RuntimeError("auto-assign down")
+        )
+
+        with (
+            patch.object(
+                service, "_create_single_shift_from_template", return_value=fake_shift
+            ),
+            patch.object(
+                service,
+                "_get_available_executors_for_template",
+                return_value=[executor],
+            ),
+        ):
+            created = service.create_shift_from_template(1, date(2026, 8, 13))
+
+        assert created == [fake_shift]
+        assert fake_shift.user_id == 7, (
+            "в FK user_id должен попадать внутренний User.id, "
+            f"а не telegram_id: записано {fake_shift.user_id!r}"
+        )
+
+
+class TestBug140FullDayCoverage:
+    def test_hour_coverage_full_day_shift_covers_all_24(self):
+        """Суточная смена (start == end по часам, 24 ч) должна покрывать все
+        24 часа, а не ноль (цикл while current != end не исполнялся ни разу)."""
+        from datetime import datetime, timedelta, timezone
+
+        service, _ = _make_service()
+        shift = MagicMock()
+        start = datetime(2026, 8, 13, 3, 0, tzinfo=timezone.utc)
+        shift.planned_start_time = start
+        shift.planned_end_time = start + timedelta(hours=24)
+
+        covered = service._calculate_hour_coverage([shift])
+        assert len(covered) == 24, f"покрыто {len(covered)} часов вместо 24"
+
+    def test_hour_coverage_partial_shift_unchanged(self):
+        """Регресс-инвариант: обычная смена покрывает часы [start, end)."""
+        from datetime import datetime, timedelta, timezone
+
+        service, _ = _make_service()
+        shift = MagicMock()
+        # 03:00 UTC = 08:00 бизнес-зоны (Asia/Tashkent)
+        start = datetime(2026, 8, 13, 3, 0, tzinfo=timezone.utc)
+        shift.planned_start_time = start
+        shift.planned_end_time = start + timedelta(hours=8)
+
+        covered = sorted(service._calculate_hour_coverage([shift]))
+        assert covered == [8, 9, 10, 11, 12, 13, 14, 15]
+
+    def test_coverage_gaps_full_day_shift_no_gaps(self):
+        """Тот же 24h-дефект в planning.get_coverage_gaps: суточная смена
+        должна закрывать день целиком (день без пробелов не попадает в gaps)."""
+        from datetime import datetime, timedelta, timezone
+
+        service, db = _make_service()
+        shift = MagicMock()
+        start = datetime(2026, 8, 13, 3, 0, tzinfo=timezone.utc)
+        shift.planned_start_time = start
+        shift.planned_end_time = start + timedelta(hours=24)
+        db.query.return_value.filter.return_value.all.return_value = [shift]
+
+        gaps = service.get_coverage_gaps(date(2026, 8, 13), date(2026, 8, 13))
+        assert gaps == [], f"суточная смена оставила пробелы: {gaps}"

@@ -90,8 +90,9 @@ async def handle_materials_input(message: Message, state: FSMContext, language: 
     """Обработка ввода списка материалов"""
     try:
         lang = language
-        # Получаем список материалов
-        materials = message.text.strip()
+        # Получаем список материалов (BUG-145: guard на не-текст — фото/стикер
+        # в стейте ввода ронял хендлер AttributeError; образец — completion.py)
+        materials = message.text.strip() if message.text else ""
 
         if not materials:
             await message.answer(get_text("request_status_mgmt.handlers.please_enter_materials", language=lang))

@@ -31,28 +31,23 @@ class ScoringMixin:
                 return 0.0
             
             total_score = 0.0
-            factors = 0
             
             # Фактор 1: Покрытие времени (вес 30%)
             hour_coverage = self._calculate_hour_coverage(shifts)
             coverage_score = len(hour_coverage) / 24.0 * 100
             total_score += coverage_score * 0.3
-            factors += 1
             
             # Фактор 2: Загруженность исполнителей (вес 25%)
             load_balance_score = self._calculate_load_balance_score(shifts)
             total_score += load_balance_score * 0.25
-            factors += 1
             
             # Фактор 3: Покрытие специализаций (вес 25%)
             specialization_score = self._calculate_specialization_coverage_score(shifts)
             total_score += specialization_score * 0.25
-            factors += 1
             
             # Фактор 4: Эффективность (вес 20%)
             efficiency_score = self._calculate_efficiency_score(shifts)
             total_score += efficiency_score * 0.2
-            factors += 1
             
             return round(total_score, 2)
             
@@ -70,8 +65,13 @@ class ScoringMixin:
                 start_hour = to_business(shift.planned_start_time).hour
                 end_hour = to_business(shift.planned_end_time).hour
 
+                # BUG-140: у суточной смены start_hour == end_hour — старый
+                # while не исполнялся ни разу (нулевое покрытие).
+                hours_span = (end_hour - start_hour) % 24
+                if hours_span == 0 and shift.planned_end_time > shift.planned_start_time:
+                    hours_span = 24
                 current_hour = start_hour
-                while current_hour != end_hour:
+                for _ in range(hours_span):
                     covered_hours.add(current_hour)
                     current_hour = (current_hour + 1) % 24
 
