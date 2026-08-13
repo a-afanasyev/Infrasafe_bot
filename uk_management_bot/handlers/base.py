@@ -454,7 +454,6 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
             await cb.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
             return
         
-        old_active = user.active_role
         user.active_role = target
         db.commit()
         
@@ -472,7 +471,7 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, db: Sessio
         try:
             from aiogram import Bot
             bot: Bot = cb.message.bot
-            await async_notify_role_switched(bot, db, user, old_active or "", target)
+            await async_notify_role_switched(bot, db, user, target)
         except Exception:
             pass
             

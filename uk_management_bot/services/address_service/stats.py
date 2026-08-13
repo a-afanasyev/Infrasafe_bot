@@ -123,7 +123,8 @@ class StatsMixin:
     @staticmethod
     def get_user_approved_apartments(session: Session, user_telegram_id: int) -> List[Apartment]:
         """
-        Получить список одобренных квартир пользователя для создания заявок (async обертка)
+        Получить список одобренных квартир пользователя для создания заявок
+        (sync-алиас get_user_approved_apartments_sync; в DEASYNC-списке pr18)
 
         Args:
             session: SQLAlchemy session

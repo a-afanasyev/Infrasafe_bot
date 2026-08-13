@@ -27,14 +27,19 @@ def _resolve_channel_id() -> str | None:
     return stripped
 
 
-async def send_to_channel(bot, text: str) -> None:
+async def send_to_channel(bot, text: str) -> bool:
+    """Отправить сообщение в ops-канал. Возвращает True при фактической
+    доставке, False — канал не настроен или отправка упала (BUG-146, по
+    образцу send_to_user / BUG-BOT-036)."""
     try:
         channel_id = _resolve_channel_id()
         if not channel_id:
-            return
+            return False
         await bot.send_message(channel_id, text, request_timeout=SEND_TIMEOUT)
+        return True
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение в канал: {e}")
+        return False
 
 
 async def send_to_user(bot, user_telegram_id: int, text: str) -> bool:

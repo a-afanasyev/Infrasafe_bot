@@ -810,7 +810,7 @@ class TestAsyncNotifyRoleSwitched:
             "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             new_callable=AsyncMock,
         ) as mock_send:
-            await async_notify_role_switched(bot, db, user, "applicant", "executor")
+            await async_notify_role_switched(bot, db, user, "executor")
 
         mock_send.assert_called_once()
         assert mock_send.call_args.args[1] == 123
@@ -827,7 +827,7 @@ class TestAsyncNotifyRoleSwitched:
             "uk_management_bot.services.notification_service.requests_roles.send_to_user",
             side_effect=Exception("network"),
         ):
-            await async_notify_role_switched(bot, db, user, "applicant", "executor")
+            await async_notify_role_switched(bot, db, user, "executor")
 
 
 # ---------------------------------------------------------------------------

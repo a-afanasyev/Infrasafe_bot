@@ -46,7 +46,9 @@ def _build_request_status_message_channel(request: Request, old_status: str, new
 
 
 # ====== 6.8 Role switch and action denied notifications ======
-def build_role_switched_message(user: User, old_role: str, new_role: str) -> str:
+# BUG-146: параметр old_role удалён из билдера и уведомителя — текст строится
+# только от новой роли, старая никогда не использовалась.
+def build_role_switched_message(user: User, new_role: str) -> str:
     """Строит локализованное сообщение о смене активной роли."""
     try:
         from uk_management_bot.utils.helpers import get_text
@@ -58,10 +60,10 @@ def build_role_switched_message(user: User, old_role: str, new_role: str) -> str
         return f"Режим переключён: {new_role}"
 
 
-async def async_notify_role_switched(bot, db: Session, user: User, old_role: str, new_role: str) -> None:
+async def async_notify_role_switched(bot, db: Session, user: User, new_role: str) -> None:
     """Отправляет пользователю уведомление о смене режима (best-effort)."""
     try:
-        text = build_role_switched_message(user, old_role, new_role)
+        text = build_role_switched_message(user, new_role)
         await send_to_user(bot, user.telegram_id, text)
     except Exception as e:
         logger.warning(f"Ошибка отправки уведомления о смене режима: {e}")

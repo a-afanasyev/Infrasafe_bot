@@ -7,7 +7,6 @@ from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.utils.business_time import fmt_datetime
 
 from uk_management_bot.services.notification_service.channel import (
-    _resolve_channel_id,
     send_to_channel,
     send_to_user,
 )
@@ -419,10 +418,11 @@ class NotificationService:
             else:
                 logger.warning(f"send_manager_notification: не доставлено tg={tg_id}")
 
-        await send_to_channel(bot, text)  # ops-канал (гейт _resolve_channel_id)
+        # BUG-146: «канал=on/off» — по факту доставки, не по конфигу.
+        channel_delivered = await send_to_channel(bot, text)  # ops-канал
         logger.info(
             f"send_manager_notification: доставлено {sent}/{len(tg_ids)} менеджерам; "
-            f"канал={'on' if _resolve_channel_id() else 'off'}"
+            f"канал={'on' if channel_delivered else 'off'}"
         )
 
     async def send_shift_reminder(self, executor_id: int, shift, time_until: str) -> None:

@@ -56,8 +56,11 @@ class TestBug028NoBroadExceptOrLeak:
 
 class TestRefactor032LazyLogging:
     def test_no_fstring_logger_calls(self):
+        # BUG-141: `\s*` покрывает и многострочный вызов (`logger.info(` +
+        # перенос строки перед f-строкой) — прежний паттерн требовал `(f"`
+        # вплотную и был слеп к нему. Нулевой `\s*` сохраняет прежний охват.
         src = _svc_source()
-        assert not re.search(r"logger\.(error|warning|info|exception|debug)\(f[\"']", src), \
+        assert not re.search(r"logger\.(error|warning|info|exception|debug)\(\s*f[\"']", src), \
             "eager f-string в логере — REFACTOR-032"
 
     def test_no_user_names_in_logs(self):
