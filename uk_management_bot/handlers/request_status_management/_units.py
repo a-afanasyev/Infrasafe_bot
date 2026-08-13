@@ -191,6 +191,10 @@ def _apply_purchase(db, request_number: str, materials: str, actor_tg: int,
     # комментарий) + комментарий-лог. run_command писал в своей сессии →
     # перечитываем заявку свежей.
     request = db.query(Request).filter(Request.request_number == request_number).first()
+    if request is None:
+        # BUG-145: заявка удалена конкурентно между канон-переходом и
+        # перечиткой — раньше падали AttributeError на None.
+        return _PurchaseOutcome("no_request")
     if restored_comment:
         request.manager_materials_comment = restored_comment
     request.purchase_materials = materials  # legacy-зеркало (вне workflow-полей)
