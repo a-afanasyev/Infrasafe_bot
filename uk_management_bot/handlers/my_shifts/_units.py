@@ -275,17 +275,19 @@ def _load_transfer_menu_counts(db, telegram_id: int):
     # FS-02: Shift.user_id / from_/to_executor_id — FK на users.id (НЕ telegram_id).
     # Окно по start_time убрано: текущая (уже идущая) active-смена тоже
     # должна быть доступна к передаче, а не только будущие planned.
-    active_count = len(db.query(Shift).filter(
+    # BUG-142: честный count() вместо len(limit(N).all()) — иначе при >10
+    # смен / >5 передач цифры в тексте меню занижались.
+    active_count = db.query(Shift).filter(
         Shift.user_id == user_id,
         Shift.status.in_(['planned', 'active'])
-    ).order_by(Shift.start_time).limit(10).all())
+    ).count()
 
-    transfers_count = len(db.query(ShiftTransfer).filter(
+    transfers_count = db.query(ShiftTransfer).filter(
         or_(
             ShiftTransfer.from_executor_id == user_id,
             ShiftTransfer.to_executor_id == user_id
         )
-    ).order_by(ShiftTransfer.created_at.desc()).limit(5).all())
+    ).count()
 
     return active_count, transfers_count
 

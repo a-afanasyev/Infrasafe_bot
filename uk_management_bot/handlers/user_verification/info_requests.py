@@ -19,7 +19,7 @@ from uk_management_bot.states.user_verification import UserVerificationStates
 from uk_management_bot.utils.helpers import get_text
 
 from ._router import router
-from ._units import _create_request_and_collect_notify
+from ._units import _create_request_and_collect_notify, _load_verification_stats
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +108,13 @@ async def process_request_comment(message: Message, state: FSMContext, roles: li
         # Очищаем состояние
         await state.clear()
 
+        # BUG-144: статистику пересчитываем перед перерисовкой меню — с пустым
+        # {} счётчики на кнопках обнулялись до следующего захода в панель.
+        stats = await run_db(_load_verification_stats, db=_db)
+
         await message.answer(
             get_text('verification.request_sent_successfully', language=lang),
-            reply_markup=get_verification_main_keyboard({}, lang)
+            reply_markup=get_verification_main_keyboard(stats, lang)
         )
 
     except Exception as e:

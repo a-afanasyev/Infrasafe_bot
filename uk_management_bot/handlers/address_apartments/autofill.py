@@ -234,18 +234,20 @@ def parse_apartment_range(range_text: str) -> list[str]:
 
         if "-" in part:
             # Это диапазон
+            # BUG-139: проверка start>end вынесена из try — раньше её ValueError
+            # ловился тем же except и оборачивался второй раз (вложенная ошибка).
             try:
                 start, end = part.split("-")
                 start_num = int(start.strip())
                 end_num = int(end.strip())
+            except ValueError:
+                raise ValueError(f"Некорректный диапазон '{part}'")
 
-                if start_num > end_num:
-                    raise ValueError(f"Некорректный диапазон: {start_num} > {end_num}")
+            if start_num > end_num:
+                raise ValueError(f"Некорректный диапазон: {start_num} > {end_num}")
 
-                for num in range(start_num, end_num + 1):
-                    result.add(str(num))
-            except ValueError as e:
-                raise ValueError(f"Некорректный диапазон '{part}': {e}")
+            for num in range(start_num, end_num + 1):
+                result.add(str(num))
         else:
             # Это одиночное число
             try:

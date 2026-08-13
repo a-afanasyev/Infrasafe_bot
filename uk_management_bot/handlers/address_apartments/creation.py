@@ -104,7 +104,8 @@ async def process_apartment_number(message: Message, state: FSMContext, language
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_entrance_number))
-async def process_apartment_entrance(message: Message, state: FSMContext, language: str = "ru"):
+async def process_apartment_entrance(message: Message, state: FSMContext, language: str = "ru",
+                                     roles: list = None, active_role: str = None):
     """Обработка номера подъезда"""
     lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
@@ -115,7 +116,7 @@ async def process_apartment_entrance(message: Message, state: FSMContext, langua
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
         return
     else:
@@ -140,7 +141,8 @@ async def process_apartment_entrance(message: Message, state: FSMContext, langua
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_floor_number))
-async def process_apartment_floor(message: Message, state: FSMContext, language: str = "ru"):
+async def process_apartment_floor(message: Message, state: FSMContext, language: str = "ru",
+                                  roles: list = None, active_role: str = None):
     """Обработка номера этажа"""
     lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
@@ -151,7 +153,7 @@ async def process_apartment_floor(message: Message, state: FSMContext, language:
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
         return
     else:
@@ -176,7 +178,8 @@ async def process_apartment_floor(message: Message, state: FSMContext, language:
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_rooms_count))
-async def process_apartment_rooms(message: Message, state: FSMContext, language: str = "ru"):
+async def process_apartment_rooms(message: Message, state: FSMContext, language: str = "ru",
+                                  roles: list = None, active_role: str = None):
     """Обработка количества комнат и переход к вводу площади"""
     lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
@@ -187,7 +190,7 @@ async def process_apartment_rooms(message: Message, state: FSMContext, language:
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
         return
     else:
@@ -212,7 +215,8 @@ async def process_apartment_rooms(message: Message, state: FSMContext, language:
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_area))
-async def process_apartment_area(message: Message, state: FSMContext, language: str = "ru"):
+async def process_apartment_area(message: Message, state: FSMContext, language: str = "ru",
+                                 roles: list = None, active_role: str = None):
     """Обработка площади квартиры и создание квартиры"""
     lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
@@ -223,7 +227,7 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
         await state.clear()
         await message.answer(
             get_text("address_apartments.handlers.creation_cancelled", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
         return
     else:
@@ -248,7 +252,7 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
             if not user:
                 await message.answer(
                     get_text("address_apartments.handlers.user_not_found", language=lang),
-                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
                 )
                 await state.clear()
                 return
@@ -267,7 +271,7 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
             if error:
                 await message.answer(
                     get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
-                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
                 )
                 await state.clear()
                 return
@@ -298,7 +302,7 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
         logger.exception("create apartment handler failed")
         await message.answer(
             get_text("address_apartments.handlers.creation_exception", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
     finally:
         await state.clear()

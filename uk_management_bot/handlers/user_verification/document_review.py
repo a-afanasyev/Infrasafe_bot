@@ -18,7 +18,7 @@ from uk_management_bot.database.models.user_verification import (
 from uk_management_bot.utils.helpers import get_text
 
 from ._router import router
-from ._units import _load_document, _verify_document
+from ._units import _fmt_created_at, _load_document, _verify_document
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,10 @@ async def verify_document(callback: CallbackQuery, roles: list = None, language:
         # Показываем информацию о документе
         doc_size = str(document.file_size) if document.file_size else get_text("user_verification.handlers.unknown_value", language=lang)
         doc_status = get_text(f'verification.document_status.{document.status.value}', language=lang)
+        # BUG-144: тип локализуем (как в documents.py/panel.py), created_at — NULL-safe.
         document_info = get_text("user_verification.handlers.document_info", language=lang).format(
-            doc_type=document.type_value,
-            uploaded=document.created_at.strftime('%d.%m.%Y %H:%M'),
+            doc_type=get_text(f'verification.document_types.{document.type_value}', language=lang),
+            uploaded=_fmt_created_at(document.created_at),
             size=doc_size,
             status=doc_status
         )

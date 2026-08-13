@@ -62,6 +62,11 @@ class _UserCard:
     access_rights: List[_AccessRightRow] = field(default_factory=list)
 
 
+def _fmt_created_at(created_at: Optional[datetime]) -> str:
+    """BUG-144: created_at в модели Optional — NULL не должен ронять хендлер."""
+    return created_at.strftime('%d.%m.%Y %H:%M') if created_at else '—'
+
+
 def _document_row(doc, *, with_file: bool = False) -> _DocumentRow:
     return _DocumentRow(
         id=doc.id,

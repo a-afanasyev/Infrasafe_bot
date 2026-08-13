@@ -19,7 +19,7 @@ from uk_management_bot.database.models.user_verification import (
 from uk_management_bot.utils.helpers import get_text
 
 from ._router import router
-from ._units import _load_document, _load_documents_page
+from ._units import _fmt_created_at, _load_document, _load_documents_page
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ async def view_user_documents(callback: CallbackQuery, roles: list = None, langu
             documents_text += f"   📁 {get_text('user_verification.handlers.file_label', language=lang)}: {doc.file_name or get_text('user_verification.handlers.no_title', language=lang)}\n"
             if doc.file_size:
                 documents_text += f"   📏 {get_text('user_verification.handlers.size_label', language=lang)}: {doc.file_size // 1024} KB\n"
-            documents_text += f"   📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {doc.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            documents_text += f"   📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {_fmt_created_at(doc.created_at)}\n"
 
             if doc.notes:
                 documents_text += f"   📝 {get_text('user_verification.handlers.comment_label', language=lang)}: {doc.notes}\n"
@@ -158,8 +158,9 @@ async def download_user_document(callback: CallbackQuery, roles: list = None, la
         bot = callback.bot
 
         try:
+            # BUG-144: «Загружен» — через ключ uploaded_date (как выше), NULL-safe дата.
             caption = (f"📄 {get_text(f'verification.document_types.{document.type_value}', language=lang)}\n"
-                      f"📅 Загружен: {document.created_at.strftime('%d.%m.%Y %H:%M')}")
+                      f"📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {_fmt_created_at(document.created_at)}")
 
             # Пробуем отправить как документ, если не получится - как фото
             try:
