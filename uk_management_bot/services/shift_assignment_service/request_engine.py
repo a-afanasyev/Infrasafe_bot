@@ -22,12 +22,18 @@ class RequestAssignmentEngine:
     def __init__(self, db: Session):
         self.db = db
 
-    def auto_assign_requests_to_shift_executors(self, target_date: Optional[date] = None) -> Dict[str, Any]:
+    def auto_assign_requests_to_shift_executors(
+        self,
+        target_date: Optional[date] = None,
+        assigned_by: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Автоматически назначает заявки исполнителям на основе их смен
 
         Args:
             target_date: Целевая дата (по умолчанию - сегодня)
+            assigned_by: id актора-человека; None — системное назначение
+                (BUG-138.1: раньше был захардкожен assigned_by=1)
 
         Returns:
             Dict с результатами назначения заявок
@@ -79,22 +85,26 @@ class RequestAssignmentEngine:
             # Пытаемся назначить каждую заявку
             for request in unassigned_requests:
                 try:
-                    # Находим подходящую смену для заявки
+                    # Pre-check: есть ли вообще подходящая смена-кандидат
                     best_shift = self._find_best_shift_for_request(request, active_shifts)
 
                     if best_shift:
                         # Назначаем заявку исполнителю смены
                         assignment_result = assignment_service.smart_assign_request(
                             request_number=request.request_number,
-                            assigned_by=1  # Система автоназначения
+                            assigned_by=assigned_by,  # None = система автоназначения
                         )
 
                         if assignment_result:
+                            # BUG-138.1: отчёт — по ФАКТИЧЕСКОМУ назначению от
+                            # smart_assign_request, а не по проигнорированному
+                            # best_shift. Механизм назначения (RequestAssignment)
+                            # смену не фиксирует — shift_id честно None.
                             results['assigned_requests'] += 1
                             results['assignment_details'].append({
                                 'request_number': request.request_number,
-                                'executor_id': best_shift.user_id,
-                                'shift_id': best_shift.id,
+                                'executor_id': assignment_result.executor_id,
+                                'shift_id': None,
                                 'specialization': request.specialization,
                                 'status': 'assigned'
                             })
@@ -237,6 +247,11 @@ class RequestAssignmentEngine:
                 'details': []
             }
 
+            # BUG-138.2: точечное переназначение конкретной заявки вместо
+            # полного прогона auto_assign_requests_to_shift_executors на каждый
+            # mismatch (O(N²) + вложенные коммиты внутри незакрытой транзакции).
+            assignment_service = AssignmentService(self.db)
+
             # Переназначаем несоответствующие заявки
             for assignment in mismatched_assignments:
                 try:
@@ -244,15 +259,28 @@ class RequestAssignmentEngine:
                     assignment.status = 'cancelled'
                     assignment.cancelled_at = datetime.now(timezone.utc)
 
-                    # Пытаемся найти новое назначение
-                    self.auto_assign_requests_to_shift_executors(target_date)
+                    # Точечно переназначаем именно эту заявку
+                    new_assignment = assignment_service.smart_assign_request(
+                        request_number=assignment.request_number,
+                        assigned_by=None,  # системный ресинк
+                    )
 
-                    results['reassigned'] += 1
-                    results['details'].append({
-                        'request_id': assignment.request_number,
-                        'old_executor': assignment.executor_id,
-                        'status': 'reassigned'
-                    })
+                    if new_assignment:
+                        # reassigned — только при подтверждённом успехе
+                        results['reassigned'] += 1
+                        results['details'].append({
+                            'request_id': assignment.request_number,
+                            'old_executor': assignment.executor_id,
+                            'new_executor': new_assignment.executor_id,
+                            'status': 'reassigned'
+                        })
+                    else:
+                        results['failed_reassignments'] += 1
+                        results['details'].append({
+                            'request_id': assignment.request_number,
+                            'old_executor': assignment.executor_id,
+                            'status': 'reassignment_failed'
+                        })
 
                 except Exception as e:
                     logger.error(f"Ошибка переназначения заявки {assignment.request_number}: {e}")
