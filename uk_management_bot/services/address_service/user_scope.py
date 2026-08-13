@@ -88,8 +88,9 @@ class UserScopeMixin:
             yards = sorted(yards_dict.values(), key=lambda y: y.name)
 
             logger.info(
-                f"Найдено {len(yards)} доступных дворов для пользователя {user_telegram_id} "
-                f"({len(yards_from_apartments)} основных + {len(additional_yards)} дополнительных)"
+                "Найдено %s доступных дворов для пользователя %s (%s основных + %s дополнительных)",
+                len(yards), user_telegram_id,
+                len(yards_from_apartments), len(additional_yards),
             )
             return list(yards)
 

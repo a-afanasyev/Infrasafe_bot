@@ -7,6 +7,7 @@ Block-move из services/material_service.py (AUD5-ARCH-3 волна 9), тел�
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.material import Material, MaterialReceipt
@@ -39,7 +40,14 @@ async def create_material(db: AsyncSession, *, name: str, unit: str,
         )
     material = Material(name=name, unit=unit, category=category, min_stock=min_stock)
     db.add(material)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # BUG-143: select-then-insert — гонка; конкурентная вставка того же
+        # имени бьётся об UNIQUE(name) уже на flush. Мапим в доменный конфликт
+        # (роутер отдаёт 409), а не отдаём сырой IntegrityError → 500.
+        await db.rollback()
+        raise MaterialConflictError(f"материал «{name}» уже существует")
     return material
 
 

@@ -7,7 +7,10 @@ SQLite не имеет row-locking (FOR UPDATE молча выбрасывает
       остатка, qty_remaining >= 0, инвариант qty_remaining = qty − SUM(alloc);
   (б) два параллельных сторно одного расхода — surplus-партии созданы ровно
       один раз, второй запрос получает MaterialConflictError (лок исходного
-      issue FOR UPDATE сериализует проверку «уже сторнирован»).
+      issue FOR UPDATE сериализует проверку «уже сторнирован»);
+  (в) BUG-143: два конкурентных create_material одного имени — дубль-проверка
+      select-then-insert проходит у обоих, второй INSERT бьётся об UNIQUE(name)
+      и обязан отдать MaterialConflictError (409), а не сырой IntegrityError.
 
 Изоляция: собственная temp-схема в той же БД (schema_translate_map).
 Скип, если DATABASE_URL не Postgres (см. POSTGRES_TEST_URL в conftest).
@@ -137,6 +140,36 @@ async def test_concurrent_issues_never_oversell(pg_factory):
             .where(MaterialIssueAllocation.receipt_id == receipt.id)
         )).scalar_one()
         assert Decimal(str(receipt.qty)) - Decimal(str(allocated)) == remaining
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_same_name_second_conflicts(pg_factory):
+    """BUG-143: обе стороны гонки проходят дубль-SELECT, второй INSERT бьётся
+    об UNIQUE(name) → доменный MaterialConflictError (409), не сырой 500.
+
+    Окно гонки воспроизводится детерминированно: победитель держит INSERT
+    незакоммиченным (READ COMMITTED: дубль-SELECT проигравшего его не видит),
+    проигравший виснет на unique-индексе, commit победителя будит его с
+    IntegrityError."""
+    name = "Гонка имён"
+    async with pg_factory() as db1, pg_factory() as db2:
+        await material_service.create_material(db1, name=name, unit="pcs")
+
+        loser = asyncio.create_task(
+            material_service.create_material(db2, name=name, unit="pcs")
+        )
+        await asyncio.sleep(0.3)  # проигравший прошёл SELECT и завис на INSERT
+        assert not loser.done(), "проигравший обязан ждать на unique-индексе"
+
+        await db1.commit()
+        with pytest.raises(MaterialConflictError):
+            await loser
+
+    async with pg_factory() as db:
+        count = (await db.execute(
+            select(func.count(Material.id)).where(Material.name == name)
+        )).scalar_one()
+        assert count == 1
 
 
 async def _reverse(factory, material_id: int, user_id: int, issue_id: int):

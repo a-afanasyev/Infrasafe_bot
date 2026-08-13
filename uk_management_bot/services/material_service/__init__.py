@@ -22,7 +22,7 @@ sync/async-обёртки. FIFO-математика одна на оба пут
 # (карточки API), movements (приход/списание/корректировки/сторно), reads
 # (остатки/журнал/отчёты), _sa (SQL-хелперы журнала).
 
-# `_escape_like` реэкспортируется (его импортирует api/materials/router.py);
+# `_escape_like` реэкспортируется (его импортирует api/materials/service.py);
 # поиск по названию материала обязан идти через `ci_contains` — см. докстринг
 # `utils/sql_search` про локаль `C` на проде.
 from uk_management_bot.utils.sql_search import (  # noqa: F401
