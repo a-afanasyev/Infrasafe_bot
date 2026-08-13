@@ -90,7 +90,13 @@ async def process_autofill_range(message: Message, state: FSMContext, language: 
             return
 
     except ValueError as e:
-        await message.answer(get_text("address_apartments.handlers.range_parse_error", language=lang).format(error=e))
+        # BUG-147: рендер по коду ошибки на языке пользователя (сырой русский
+        # str(e) — только фолбэк для plain-ValueError без кода).
+        await message.answer(
+            get_text("address_apartments.handlers.range_parse_error", language=lang).format(
+                error=_localize_range_error(e, lang)
+            )
+        )
         return
 
     # Получаем данные из state
@@ -209,6 +215,29 @@ async def cancel_autofill_apartments(callback: CallbackQuery, state: FSMContext,
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ АВТОЗАПОЛНЕНИЯ
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class ApartmentRangeError(ValueError):
+    """BUG-147: локализуемая ошибка парсинга диапазона квартир.
+
+    Несёт код ошибки (ключ в address_apartments.handlers.*) и параметры для
+    format; str(exc) остаётся русским текстом — фолбэк для логов.
+    """
+
+    def __init__(self, message: str, code: str, **params):
+        super().__init__(message)
+        self.code = code
+        self.params = params
+
+
+def _localize_range_error(exc: ValueError, lang: str) -> str:
+    """Рендерит ошибку диапазона на языке пользователя по коду ошибки."""
+    code = getattr(exc, "code", None)
+    if not code:
+        return str(exc)
+    return get_text(
+        f"address_apartments.handlers.{code}", language=lang
+    ).format(**getattr(exc, "params", {}))
+
+
 def parse_apartment_range(range_text: str) -> list[str]:
     """
     Парсит диапазон номеров квартир
@@ -241,10 +270,16 @@ def parse_apartment_range(range_text: str) -> list[str]:
                 start_num = int(start.strip())
                 end_num = int(end.strip())
             except ValueError:
-                raise ValueError(f"Некорректный диапазон '{part}'")
+                raise ApartmentRangeError(
+                    f"Некорректный диапазон '{part}'",
+                    code="range_invalid_chunk", part=part,
+                )
 
             if start_num > end_num:
-                raise ValueError(f"Некорректный диапазон: {start_num} > {end_num}")
+                raise ApartmentRangeError(
+                    f"Некорректный диапазон: {start_num} > {end_num}",
+                    code="range_reversed", start=start_num, end=end_num,
+                )
 
             for num in range(start_num, end_num + 1):
                 result.add(str(num))
@@ -254,7 +289,10 @@ def parse_apartment_range(range_text: str) -> list[str]:
                 num = int(part)
                 result.add(str(num))
             except ValueError:
-                raise ValueError(f"Некорректный номер квартиры: '{part}'")
+                raise ApartmentRangeError(
+                    f"Некорректный номер квартиры: '{part}'",
+                    code="range_invalid_number", part=part,
+                )
 
     # Сортируем по числовому значению
     return sorted(result, key=lambda x: int(x))

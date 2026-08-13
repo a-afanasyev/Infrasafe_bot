@@ -155,7 +155,7 @@ class WorkloadBalancer:
                     break
 
                 # Пытаемся найти подходящего недогруженного исполнителя
-                for i, (underloaded_executor, underload) in enumerate(underloaded):
+                for idx, (underloaded_executor, underload) in enumerate(underloaded):
                     executor = self.db.query(User).filter(User.id == underloaded_executor).first()
 
                     if executor and self._can_assign_shift(shift, executor):
@@ -170,10 +170,21 @@ class WorkloadBalancer:
                             'to_executor': underloaded_executor
                         })
 
-                        # Обновляем счетчики
-                        underloaded[i] = (underloaded_executor, underload + 1)
-                        if underload + 1 >= avg_load:
-                            underloaded.pop(i)
+                        # Обновляем счетчики: строим НОВЫЙ список вместо мутации
+                        # итерируемого (BUG-138.3: было underloaded[i] = ... /
+                        # underloaded.pop(i) внутри итерации по нему же).
+                        new_load = underload + 1
+                        if new_load >= avg_load:
+                            new_underloaded = (
+                                underloaded[:idx] + underloaded[idx + 1:]
+                            )
+                        else:
+                            new_underloaded = (
+                                underloaded[:idx]
+                                + [(underloaded_executor, new_load)]
+                                + underloaded[idx + 1:]
+                            )
+                        underloaded = new_underloaded
 
                         break
 

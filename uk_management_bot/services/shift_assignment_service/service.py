@@ -587,8 +587,14 @@ class ShiftAssignmentService:
 
     # ========== ИНТЕГРАЦИЯ С СИСТЕМОЙ ЗАЯВОК ==========
 
-    def auto_assign_requests_to_shift_executors(self, target_date: Optional[date] = None) -> Dict[str, Any]:
-        return self.request_engine.auto_assign_requests_to_shift_executors(target_date)
+    def auto_assign_requests_to_shift_executors(
+        self,
+        target_date: Optional[date] = None,
+        assigned_by: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        return self.request_engine.auto_assign_requests_to_shift_executors(
+            target_date, assigned_by=assigned_by
+        )
 
     def sync_request_assignments_with_shifts(self, target_date: Optional[date] = None) -> Dict[str, Any]:
         return self.request_engine.sync_request_assignments_with_shifts(target_date)
