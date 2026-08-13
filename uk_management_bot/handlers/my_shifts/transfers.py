@@ -67,6 +67,9 @@ async def handle_shift_transfer_menu(callback: CallbackQuery, state: FSMContext,
             parse_mode="HTML"
         )
 
+        # BUG-142: снять спиннер на кнопке (как в соседних хендлерах пакета).
+        await callback.answer()
+
     except Exception as e:
         logger.error(f"Ошибка меню передачи смен: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_loading_menu", language=user_lang), show_alert=True)
@@ -99,6 +102,9 @@ async def handle_initiate_transfer(callback: CallbackQuery, state: FSMContext, l
             reply_markup=shift_selection_keyboard(active_shifts, user_lang)
         )
 
+        # BUG-142: снять спиннер на кнопке (как в соседних хендлерах пакета).
+        await callback.answer()
+
     except Exception as e:
         logger.error(f"Ошибка инициации передачи: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_initiating_transfer", language=user_lang), show_alert=True)
@@ -129,6 +135,9 @@ async def handle_view_my_transfers(callback: CallbackQuery, state: FSMContext, l
             view_text,
             reply_markup=transfers_list_keyboard(my_transfers, user_lang)
         )
+
+        # BUG-142: снять спиннер на кнопке (как в соседних хендлерах пакета).
+        await callback.answer()
 
     except Exception as e:
         logger.error(f"Ошибка просмотра передач: {e}")

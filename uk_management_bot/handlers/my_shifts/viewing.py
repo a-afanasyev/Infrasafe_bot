@@ -69,8 +69,11 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
             eff_start = shift.planned_start_time or shift.start_time
             eff_end = shift.planned_end_time or shift.end_time
             shift_date = business_date_of(eff_start)
+            # BUG-142: метка — от фактической даты смены, а не от позиции в окне
+            # (образец — handle_shift_details ниже).
             is_today = shift_date == today
-            date_prefix = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}"
+            is_tomorrow = shift_date == today + timedelta(days=1)
+            date_prefix = f"🔥 {get_text('my_shifts.handlers.today', language=lang)}" if is_today else f"📅 {get_text('my_shifts.handlers.tomorrow', language=lang)}" if is_tomorrow else f"📅 {fmt_date(shift_date)}"
 
             start_time = fmt_time(eff_start)
             end_time = fmt_time(eff_end) if eff_end else "?"

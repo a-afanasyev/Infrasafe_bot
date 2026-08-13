@@ -66,8 +66,8 @@ async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru")
             status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
             await callback.answer(get_text("address_apartments.handlers.apartment_status_changed", language=lang).format(status=status_text))
 
-            # Обновляем отображение
-            await show_apartment_details(callback)
+            # Обновляем отображение (BUG-139: язык пробрасываем, иначе карточка ru)
+            await show_apartment_details(callback, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса квартиры: {e}")
@@ -134,8 +134,8 @@ async def delete_apartment(callback: CallbackQuery, language: str = "ru"):
 
             logger.info(f"Квартира {apartment_id} удалена пользователем {callback.from_user.id}")
 
-            # Показываем список квартир
-            await show_apartments_list(callback, None)
+            # Показываем список квартир (BUG-139: язык пробрасываем, иначе список ru)
+            await show_apartments_list(callback, None, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при удалении квартиры: {e}")
@@ -163,8 +163,10 @@ async def start_edit_apartment_area(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_new_area))
-async def process_new_apartment_area(message: Message, state: FSMContext, language: str = "ru"):
+async def process_new_apartment_area(message: Message, state: FSMContext, language: str = "ru",
+                                     roles: list = None, active_role: str = None):
     """Обработка новой площади квартиры"""
+    # BUG-139: роли из middleware-контекста (DI), не хардкод "manager".
     lang = language
     cancel_text = get_text("buttons.cancel", language=lang)
     if message.text == cancel_text:
@@ -210,14 +212,14 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
             if error:
                 await message.answer(
                     get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
-                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
                 )
                 await state.clear()
                 return
 
             await message.answer(
                 get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
-                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+                reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
             )
 
             logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
@@ -226,7 +228,7 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
         logger.exception("update apartment area handler failed")
         await message.answer(
             get_text("address_apartments.handlers.area_update_exception", language=lang),
-            reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
         )
     finally:
         await state.clear()
