@@ -1,5 +1,4 @@
 import asyncio
-import traceback
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
@@ -80,6 +79,50 @@ from uk_management_bot.utils.datetime_utils import utc_now
 # Инициализация логирования
 setup_structured_logging()
 logger = get_logger(__name__, component="main")
+
+
+async def global_error_handler(event: ErrorEvent, bot: Bot) -> bool:
+    """Глобальный error-handler диспетчера (AUD5-ARCH-5).
+
+    Вынесен из main() на модульный уровень: `bot` приходит DI-инъекцией
+    aiogram, поведение регистрации не изменилось. `return True` — паттерн
+    aiogram «ошибка обработана», пользователю уходит errors.unexpected.
+
+    Лог — через exc_info=event.exception: печатается трейсбек ИМЕННО того
+    исключения, что несёт событие. Прежний traceback.format_exc() зависел от
+    ambient exc-контекста вызывающего: вне активного except-блока (прямой
+    вызов, смена внутренностей aiogram) в лог уходил «NoneType: None», и
+    реальный трейсбек терялся.
+    """
+    logger.error(
+        "Unhandled exception in update processing", exc_info=event.exception
+    )
+    try:
+        from uk_management_bot.utils.helpers import get_text, get_user_language
+
+        update = event.update
+        # Определяем chat_id и user_id из апдейта
+        chat_id: int | None = None
+        user_id: int | None = None
+        if update.message:
+            chat_id = update.message.chat.id
+            user_id = update.message.from_user.id if update.message.from_user else None
+        elif update.callback_query:
+            chat_id = update.callback_query.message.chat.id if update.callback_query.message else None
+            user_id = update.callback_query.from_user.id
+        elif update.inline_query:
+            user_id = update.inline_query.from_user.id
+        if chat_id and user_id:
+            # AUD3-37 (F2): язык для error-ответа — тоже в worker-потоке,
+            # а не своя SessionLocal на event loop.
+            from uk_management_bot.database.session import run_db
+            lang = await run_db(lambda s: get_user_language(user_id, s))
+            error_text = get_text("errors.unexpected", language=lang)
+            await bot.send_message(chat_id, error_text)
+    except Exception as notify_err:
+        logger.warning(f"Не удалось отправить сообщение об ошибке пользователю: {notify_err}")
+    return True
+
 
 async def initialize_scheduler(bot: Bot):
     """Инициализация планировщика смен.
@@ -297,38 +340,7 @@ async def main():
     from uk_management_bot.middlewares.throttling import ThrottlingMiddleware
     dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
 
-    # Глобальный обработчик ошибок
-    from uk_management_bot.utils.helpers import get_text, get_user_language
-
-    async def global_error_handler(event: ErrorEvent) -> bool:
-        logger.error(
-            f"Unhandled exception: {event.exception!r}\n"
-            + traceback.format_exc()
-        )
-        try:
-            update = event.update
-            # Определяем chat_id и user_id из апдейта
-            chat_id: int | None = None
-            user_id: int | None = None
-            if update.message:
-                chat_id = update.message.chat.id
-                user_id = update.message.from_user.id if update.message.from_user else None
-            elif update.callback_query:
-                chat_id = update.callback_query.message.chat.id if update.callback_query.message else None
-                user_id = update.callback_query.from_user.id
-            elif update.inline_query:
-                user_id = update.inline_query.from_user.id
-            if chat_id and user_id:
-                # AUD3-37 (F2): язык для error-ответа — тоже в worker-потоке,
-                # а не своя SessionLocal на event loop.
-                from uk_management_bot.database.session import run_db
-                lang = await run_db(lambda s: get_user_language(user_id, s))
-                error_text = get_text("errors.unexpected", language=lang)
-                await bot.send_message(chat_id, error_text)
-        except Exception as notify_err:
-            logger.warning(f"Не удалось отправить сообщение об ошибке пользователю: {notify_err}")
-        return True
-
+    # Глобальный обработчик ошибок (module-level: см. global_error_handler)
     dp.errors.register(global_error_handler)
 
     # Регистрируем роутеры

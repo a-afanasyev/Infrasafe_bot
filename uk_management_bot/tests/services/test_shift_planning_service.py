@@ -401,13 +401,18 @@ class TestIsExecutorBusy:
         result = service._is_executor_busy(10, date(2026, 4, 5), template)
         assert result is True
 
-    def test_returns_true_on_db_error(self):
+    def test_db_error_propagates_not_busy(self):
+        """A4/AUD3-27: DB-ошибка больше НЕ превращается в «занят» (safe default
+        тихо резал все назначения при лежащей БД) — пропагируется."""
+        import pytest
+        from sqlalchemy.exc import OperationalError, SQLAlchemyError
+
         service, db = _make_service()
         template = _make_template(start_hour=9, start_minute=0, duration_hours=8)
-        db.query.side_effect = Exception("fail")
+        db.query.side_effect = OperationalError("SELECT 1", {}, RuntimeError("down"))
 
-        result = service._is_executor_busy(10, date(2026, 4, 5), template)
-        assert result is True  # safe default
+        with pytest.raises(SQLAlchemyError):
+            service._is_executor_busy(10, date(2026, 4, 5), template)
 
 
 # ---------------------------------------------------------------------------

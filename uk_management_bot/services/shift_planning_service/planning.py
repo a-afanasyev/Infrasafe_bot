@@ -4,6 +4,7 @@
 from datetime import date, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import SQLAlchemyError
 
 from uk_management_bot.utils.business_time import (
     business_day_window,
@@ -119,10 +120,17 @@ class PlanningMixin:
                 logger.info(f"Создано {len(created_shifts)} смен по шаблону {template.name} на {target_date}")
             
             return created_shifts
-            
-        except Exception as e:
+
+        except SQLAlchemyError:
+            # AUD3-27: DB-ошибка после rollback пропагируется — вызывающие
+            # (plan_weekly_schedule / auto_create_shifts) кладут её в честный
+            # errors-отчёт, а не считают «0 смен создано».
             self.db.rollback()
-            logger.error(f"Ошибка создания смен по шаблону {template_id}: {e}")
+            logger.exception(f"Ошибка БД при создании смен по шаблону {template_id}")
+            raise
+        except Exception:
+            self.db.rollback()
+            logger.exception(f"Ошибка создания смен по шаблону {template_id}")
             return []
     
     def plan_weekly_schedule(
@@ -449,9 +457,14 @@ class PlanningMixin:
                         available_executors.append(executor)
             
             return available_executors
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения доступных исполнителей: {e}")
+
+        except SQLAlchemyError:
+            # AUD3-27: DB-ошибка не гасится в [] («никто не доступен») —
+            # пропагируем к create_shift_from_template / планировщику.
+            logger.exception("Ошибка БД при получении доступных исполнителей")
+            raise
+        except Exception:
+            logger.exception("Ошибка получения доступных исполнителей")
             return []
     
     def _is_executor_busy(self, executor_id: int, target_date: date, template: ShiftTemplate) -> bool:
@@ -492,10 +505,14 @@ class PlanningMixin:
             ).count()
             
             return overlapping_shifts > 0
-            
-        except Exception as e:
-            logger.error(f"Ошибка проверки занятости исполнителя {executor_id}: {e}")
-            return True  # В случае ошибки считаем занятым для безопасности
+
+        except SQLAlchemyError:
+            # AUD3-27: «считаем занятым для безопасности» маскировало DB-ошибку —
+            # при лежащей БД ВСЕ исполнители тихо становились «занятыми» и
+            # назначения молча прекращались. Ошибка БД обязана всплыть к
+            # планировщику (у него честный errors-отчёт после BUG-138).
+            logger.exception(f"Ошибка БД при проверке занятости исполнителя {executor_id}")
+            raise
     
     def _update_shift_schedule(self, week_start: date, results: Dict[str, Any]) -> None:
         """Обновляет информацию о расписании смен в таблице ShiftSchedule"""

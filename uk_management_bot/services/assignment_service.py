@@ -5,6 +5,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
+from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
@@ -114,9 +115,9 @@ class AssignmentService:
             logger.info(f"Заявка {request_number} назначена группе {specialization} пользователем {assigned_by}")
             return assignment
             
-        except Exception as e:
+        except Exception:
             self.db.rollback()
-            logger.error(f"Ошибка назначения заявки группе: {e}")
+            logger.exception("Ошибка назначения заявки группе")
             raise
     
     def assign_to_executor(self, request_number: str, executor_id: int, assigned_by: int) -> RequestAssignment:
@@ -178,9 +179,9 @@ class AssignmentService:
             logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} пользователем {assigned_by}")
             return assignment
 
-        except Exception as e:
+        except Exception:
             self.db.rollback()
-            logger.error(f"Ошибка назначения заявки исполнителю: {e}")
+            logger.exception("Ошибка назначения заявки исполнителю")
             raise
 
     def reassign_executor(self, request_number: str, new_executor_id: int) -> bool:
@@ -276,9 +277,9 @@ class AssignmentService:
             logger.info(f"Назначение {assignment_id} отменено пользователем {cancelled_by}")
             return True
             
-        except Exception as e:
+        except Exception:
             self.db.rollback()
-            logger.error(f"Ошибка отмены назначения: {e}")
+            logger.exception("Ошибка отмены назначения")
             raise
     
     def get_available_executors(self, specialization: str) -> List[User]:
@@ -342,8 +343,10 @@ class AssignmentService:
                 details=f"Заявка {request_number}: {action_description}",
             )
             self.db.add(audit_log)
-        except Exception as e:
-            logger.warning(f"Не удалось создать запись в аудите: {e}")
+        except Exception:
+            # Best-effort: аудит не роняет назначение, но след обязан быть в
+            # логе с полным трейсбеком (CODE-09: тут уже гасился TypeError).
+            logger.exception("Не удалось создать запись в аудите")
     
     def _notify_group_assignment(self, request: Request, assignment: RequestAssignment):
         """Уведомление о назначении группе"""
@@ -359,8 +362,9 @@ class AssignmentService:
                     message=f"Заявка #{request.request_number} назначена группе {assignment.group_specialization}",
                     data={"request_number": request.request_number, "assignment_id": assignment.id}
                 )
-        except Exception as e:
-            logger.warning(f"Не удалось отправить уведомления о назначении группе: {e}")
+        except Exception:
+            # Best-effort уведомления; полный трейсбек вместо «{e}».
+            logger.exception("Не удалось отправить уведомления о назначении группе")
     
     def _notify_executor_assignment(self, request: Request, assignment: RequestAssignment):
         """Уведомление о назначении исполнителю"""
@@ -372,8 +376,8 @@ class AssignmentService:
                 message=f"Заявка #{request.request_number} назначена вам для выполнения",
                 data={"request_number": request.request_number, "assignment_id": assignment.id}
             )
-        except Exception as e:
-            logger.warning(f"Не удалось отправить уведомление исполнителю: {e}")
+        except Exception:
+            logger.exception("Не удалось отправить уведомление исполнителю")
     
     # Методы интеграции с ЭТАПОМ 3
     
@@ -404,8 +408,17 @@ class AssignmentService:
                 logger.warning(f"SmartDispatcher не смог назначить заявку {request_number}")
                 return None
                 
-        except Exception as e:
-            logger.error(f"Ошибка умного назначения заявки {request_number}: {e}")
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не маскируется под «диспетчер не
+            # нашёл исполнителя» (None).
+            logger.exception(f"Ошибка БД умного назначения заявки {request_number}")
+            raise
+        except Exception:
+            # BUG-148 (decision pending): путь фактически мёртв — SmartDispatcher
+            # не имеет auto_assign_request, AttributeError гасится здесь.
+            # Поведение для не-DB ошибок сохранено байт-в-байт до решения
+            # владельца; сменился только формат лога (полный трейсбек).
+            logger.exception(f"Ошибка умного назначения заявки {request_number}")
             return None
     
     def _get_request_by_number(self, request_number: str) -> Optional[Request]:

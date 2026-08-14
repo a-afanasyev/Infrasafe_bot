@@ -251,13 +251,17 @@ class TestCalculateWorkloadScore:
         score = service.scoring_engine._calculate_workload_score(shift, executor)
         assert score == 0.0
 
-    def test_db_error_returns_neutral(self):
+    def test_db_error_propagates(self):
+        """A4/AUD3-27: DB-ошибка больше НЕ маскируется нейтральной 0.5."""
+        import pytest
+        from sqlalchemy.exc import OperationalError, SQLAlchemyError
+
         service, db = _make_service()
         shift = _make_shift()
         executor = _make_executor()
-        db.query.side_effect = Exception("DB error")
-        score = service.scoring_engine._calculate_workload_score(shift, executor)
-        assert score == 0.5
+        db.query.side_effect = OperationalError("SELECT 1", {}, RuntimeError("down"))
+        with pytest.raises(SQLAlchemyError):
+            service.scoring_engine._calculate_workload_score(shift, executor)
 
 
 # ---------------------------------------------------------------------------
