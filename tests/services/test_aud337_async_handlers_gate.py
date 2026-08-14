@@ -107,6 +107,10 @@ CONVERTED = [
     # (или в get_report_details_keyboard без прод-вызовов). Живое назначение
     # заявки идёт через assign_duty_/assign_specific_/assign_executor_ из
     # keyboards/admin.py. Файл сохранён байт-в-байт до decision владельца.
+    # A2-хвост волна 5: ответ заявителя на уточнение. Оба хендлера живые —
+    # команду /reply_{номер} диктует живое уведомление об уточнении
+    # (admin.handlers.notify_user_clarification), второй ловит FSM-состояние.
+    "uk_management_bot/handlers/clarification_replies.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
