@@ -86,6 +86,11 @@ CONVERTED = [
     # — вызывается только в тестах) сохранён байт-в-байт до decision владельца
     # (прецедент BUG-137/148/150) и держит .query( в async def. После
     # ретайра/оживления — добавить сюда.
+    # A2-хвост волна 5: комментарии к заявкам. Все восемь хендлеров имеют
+    # живые генераторы триггеров (keyboards/requests.get_discussion_rows,
+    # keyboards/request_comments.*, keyboards/request_reports.py + FSM-цепочка
+    # внутри файла).
+    "uk_management_bot/handlers/request_comments.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
