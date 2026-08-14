@@ -34,8 +34,9 @@ logger = logging.getLogger(__name__)
 
 # PR-25 (BUG-BOT-034): manager accept_/purchase_ actions bound to the shared
 # request-number core (strict regex) instead of open-set startswith+exclusion
-# lambdas, so accept_request_/purchase_materials_ and any future accept_*/
-# purchase_* callbacks fall through to their own handlers.
+# lambdas, so accept_request_ and any future accept_*/purchase_* callbacks
+# fall through to their own handlers instead of being swallowed here
+# (the purchase_materials_ handler itself was retired as dead code, BUG-137).
 _ACCEPT_REQUEST_NUMBER_RE = rf"^accept_{REQUEST_NUMBER_CORE}$"
 _PURCHASE_REQUEST_NUMBER_RE = rf"^purchase_{REQUEST_NUMBER_CORE}$"
 

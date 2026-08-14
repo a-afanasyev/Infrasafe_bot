@@ -1,7 +1,8 @@
 """Регресс: кнопка «📦 Материалы» на РЕАЛЬНОЙ карточке заявки исполнителя.
 
 Первая реализация PR-4 добавила кнопку в get_executor_status_actions_keyboard
-(keyboards/request_status.py) — а эта функция НИГДЕ не вызывается (мёртвая), и
+(keyboards/request_status.py) — а та функция нигде не вызывалась (мёртвая;
+ретайрена вместе со всем keyboards/request_status.py в BUG-137), и
 живая карточка исполнителя строится инлайн в handlers/requests/listing.py::
 handle_view_request. Баг найден MCP-тестом бота: кнопка не появлялась.
 
