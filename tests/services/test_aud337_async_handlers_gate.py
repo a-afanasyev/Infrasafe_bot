@@ -65,6 +65,12 @@ CONVERTED = [
     # владельца (прецедент BUG-137/148) и трое из них зовут session_scope в
     # async def. После ретайра/оживления — добавить сюда.
     "uk_management_bot/handlers/address_yards.py",
+    # A2-хвост волна 2: лидеры остатка. Все хендлеры трёх файлов живые
+    # (инвентарь генераторов callback_data: keyboards/profile.py,
+    # keyboards/user_management.py, keyboards/address_management.py + in-file).
+    "uk_management_bot/handlers/user_apartments.py",
+    "uk_management_bot/handlers/address_buildings.py",
+    "uk_management_bot/handlers/profile_editing.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

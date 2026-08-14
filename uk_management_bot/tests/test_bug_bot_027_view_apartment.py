@@ -28,12 +28,16 @@ class TestBugBot027ViewApartment:
         assert "Ariza" not in result
 
     def test_joinedload_uses_valid_model_attrs(self) -> None:
-        """В коде должны использоваться правильные nested joinedload (Apartment.building → Building.yard)."""
+        """В коде должны использоваться правильные nested joinedload (Apartment.building → Building.yard).
+
+        AUD3-07: DB-фаза view_apartment_details живёт в sync-юните
+        `_load_apartment_view` (run_db) — getsource целится в него.
+        """
         import inspect
         import re
         from uk_management_bot.handlers import user_apartments
 
-        src = inspect.getsource(user_apartments.view_apartment_details)
+        src = inspect.getsource(user_apartments._load_apartment_view)
         # Снимаем комментарии чтобы не ловить старый паттерн в documentation
         src_code_only = re.sub(r"#[^\n]*", "", src)
 

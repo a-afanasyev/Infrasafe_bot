@@ -10,13 +10,16 @@
 - Фильтрация зданий по двору
 """
 import logging
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
+
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import BuildingManagementStates
 from uk_management_bot.keyboards.address_management import (
@@ -42,47 +45,157 @@ SKIP_TEXTS = get_skip_texts()
 CANCEL_TEXTS = get_cancel_texts()
 
 
+# ==========================================================================
+# DTO для async-слоя: наружу из run_db выходят примитивы, не ORM-строки
+# (у ORM-объекта за пределами worker-потока нет живой сессии).
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _BuildingRow:
+    """Строка списка зданий — ровно те атрибуты, что читает
+    get_buildings_list_keyboard (hasattr(., 'apartments_count') остаётся True,
+    как у property модели Building)."""
+    id: int
+    address: str
+    is_active: bool
+    apartments_count: int
+
+
+@dataclass(frozen=True)
+class _BuildingView:
+    """Карточка здания для show_building_details / toggle / confirm-delete."""
+    id: int
+    address: str
+    is_active: bool
+    gps_latitude: Optional[float]
+    gps_longitude: Optional[float]
+    entrance_count: Optional[int]
+    floor_count: Optional[int]
+    apartments_count: int
+    yard_name: Optional[str]
+    description: Optional[str]
+    created_at: Optional[datetime]
+
+
+@dataclass(frozen=True)
+class _YardOption:
+    """Пункт выбора двора для get_user_apartment_selection_keyboard."""
+    id: int
+    name: str
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# Мутации зданий (create/update/delete_building) сюда НЕ входят: это
+# async-методы AddressService с собственной async-сессией — их хендлер
+# await'ит напрямую (sync-параметр session ими не используется).
+# ==========================================================================
+
+def _user_id_by_tg(db, telegram_id: int) -> Optional[int]:
+    from uk_management_bot.database.models.user import User
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    return user.id if user else None
+
+
+def _building_row_from(building) -> _BuildingRow:
+    return _BuildingRow(
+        id=building.id,
+        address=building.address,
+        is_active=building.is_active,
+        apartments_count=building.apartments_count if hasattr(building, 'apartments_count') else len(building.apartments),
+    )
+
+
+def _load_buildings_overview(db) -> list:
+    """-> [_BuildingRow] для списка/страницы зданий."""
+    from uk_management_bot.database.models import Building
+    from sqlalchemy import select
+
+    result = db.execute(
+        select(Building)
+        .where(Building.is_active.is_(True))
+        .order_by(Building.address)
+    )
+    buildings = result.scalars().all()
+    return [_building_row_from(b) for b in buildings]
+
+
+def _load_yard_buildings(db, yard_id: int) -> Optional[tuple]:
+    """-> (yard_name, [_BuildingRow]) | None (None — двор не найден)."""
+    yard = AddressService.get_yard_by_id(db, yard_id)
+    if not yard:
+        return None
+    buildings = AddressService.get_buildings_by_yard(db, yard_id, only_active=False)
+    return yard.name, [_building_row_from(b) for b in buildings]
+
+
+def _load_building_view(db, building_id: int, include_yard: bool = False) -> Optional[_BuildingView]:
+    """-> _BuildingView | None (None — здание не найдено)."""
+    building = AddressService.get_building_by_id(db, building_id, include_yard=include_yard)
+    if not building:
+        return None
+    return _BuildingView(
+        id=building.id,
+        address=building.address,
+        is_active=building.is_active,
+        gps_latitude=building.gps_latitude,
+        gps_longitude=building.gps_longitude,
+        entrance_count=building.entrance_count,
+        floor_count=building.floor_count,
+        apartments_count=building.apartments_count if hasattr(building, 'apartments_count') else len(building.apartments),
+        yard_name=(building.yard.name if building.yard else None) if include_yard else None,
+        description=building.description,
+        created_at=building.created_at,
+    )
+
+
+def _load_active_yards(db) -> list:
+    """-> [_YardOption] для выбора двора при создании здания."""
+    yards = AddressService.get_all_yards(db, only_active=True)
+    return [_YardOption(id=yard.id, name=yard.name) for yard in yards]
+
+
+def _load_yard_name(db, yard_id: int) -> Optional[str]:
+    yard = AddressService.get_yard_by_id(db, yard_id)
+    return yard.name if yard else None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ПРОСМОТР СПИСКА ЗДАНИЙ
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_buildings_list")
-async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContext] = None, language: str = "ru"):
+async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContext] = None, language: str = "ru", *, _db=None):
     """Показать список всех зданий"""
     if state is not None:
         await state.clear()
 
     try:
-        with session_scope() as db:
-            # Загружаем все здания
-            from uk_management_bot.database.models import Building
-            from sqlalchemy import select
+        buildings = await run_db(_load_buildings_overview, db=_db)
 
-            result = db.execute(
-                select(Building)
-                .where(Building.is_active.is_(True))
-                .order_by(Building.address)
-            )
-            buildings = result.scalars().all()
-
-            if not buildings:
-                lang = language
-                await callback.message.edit_text(
-                    get_text("address_buildings.handlers.buildings_list_empty", language=lang),
-                    reply_markup=get_buildings_list_keyboard([], page=0)
-                )
-                return
-
+        if not buildings:
             lang = language
-            active_count = sum(1 for b in buildings if b.is_active)
-            text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(
-                total=len(buildings), active=active_count
-            )
-
             await callback.message.edit_text(
-                text,
-                reply_markup=get_buildings_list_keyboard(buildings, page=0)
+                get_text("address_buildings.handlers.buildings_list_empty", language=lang),
+                reply_markup=get_buildings_list_keyboard([], page=0)
             )
+            return
+
+        lang = language
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): выборка уже отфильтрована
+        # по is_active, поэтому active_count всегда == len(buildings) — заголовок
+        # «всего/активных» не различает неактивные здания (они в список не попадают,
+        # в отличие от списка дворов, где only_active=False).
+        active_count = sum(1 for b in buildings if b.is_active)
+        text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(
+            total=len(buildings), active=active_count
+        )
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_buildings_list_keyboard(buildings, page=0)
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке списка зданий: {e}")
@@ -91,29 +204,20 @@ async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContex
 
 
 @router.callback_query(F.data.startswith("addr_buildings_page:"))
-async def show_buildings_page(callback: CallbackQuery, language: str = "ru"):
+async def show_buildings_page(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Показать конкретную страницу списка зданий"""
     page = int(callback.data.split(":")[1])
 
     try:
-        with session_scope() as db:
-            from uk_management_bot.database.models import Building
-            from sqlalchemy import select
+        buildings = await run_db(_load_buildings_overview, db=_db)
 
-            result = db.execute(
-                select(Building)
-                .where(Building.is_active.is_(True))
-                .order_by(Building.address)
-            )
-            buildings = result.scalars().all()
+        lang = language
+        text = get_text("address_buildings.handlers.buildings_list_page", language=lang).format(page=page + 1, total=len(buildings))
 
-            lang = language
-            text = get_text("address_buildings.handlers.buildings_list_page", language=lang).format(page=page + 1, total=len(buildings))
-
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_buildings_list_keyboard(buildings, page=page)
-            )
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_buildings_list_keyboard(buildings, page=page)
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке страницы зданий: {e}")
@@ -122,33 +226,35 @@ async def show_buildings_page(callback: CallbackQuery, language: str = "ru"):
 
 
 @router.callback_query(F.data.startswith("addr_buildings_by_yard:"))
-async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
+async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Показать здания конкретного двора"""
     yard_id = int(callback.data.split(":")[1])
 
-    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
-    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается после db-фазы,
+    # и если она бросит (недоступна БД), `except` ниже сошлётся
     # на несвязанное имя → NameError вместо сообщения об ошибке.
     lang = "ru"
     try:
-        with session_scope() as db:
-            lang = language
-            yard = AddressService.get_yard_by_id(db, yard_id)
-            if not yard:
-                await callback.answer(get_text("address_buildings.handlers.yard_not_found", language=lang), show_alert=True)
-                return
+        loaded = await run_db(lambda s: _load_yard_buildings(s, yard_id), db=_db)
+        lang = language
+        if loaded is None:
+            await callback.answer(get_text("address_buildings.handlers.yard_not_found", language=lang), show_alert=True)
+            return
 
-            buildings = AddressService.get_buildings_by_yard(db, yard_id, only_active=False)
+        yard_name, buildings = loaded
 
-            text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard.name, total=len(buildings))
+        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard_name, total=len(buildings))
 
-            if not buildings:
-                text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
+        if not buildings:
+            text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
 
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_buildings_list_keyboard(buildings, page=0, yard_id=yard_id)
-            )
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): пагинация этого списка
+        # генерит callback `addr_buildings_by_yard_page:<id>`, хендлера для
+        # которого нет — кнопки страниц по двору мертвы (silent click).
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_buildings_list_keyboard(buildings, page=0, yard_id=yard_id)
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке зданий двора {yard_id}: {e}")
@@ -160,44 +266,45 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru"):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_view:"))
-async def show_building_details(callback: CallbackQuery, language: str = "ru"):
+async def show_building_details(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Показать детальную информацию о здании"""
     building_id = int(callback.data.split(":")[1])
 
-    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
-    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается после db-фазы,
+    # и если она бросит (недоступна БД), `except` ниже сошлётся
     # на несвязанное имя → NameError вместо сообщения об ошибке.
     lang = "ru"
     try:
-        with session_scope() as db:
-            lang = language
-            building = AddressService.get_building_by_id(db, building_id, include_yard=True)
+        building = await run_db(lambda s: _load_building_view(s, building_id, include_yard=True), db=_db)
+        lang = language
 
-            if not building:
-                await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
-                return
+        if not building:
+            await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
+            return
 
-            status = get_text("address_buildings.handlers.status_active", language=lang) if building.is_active else get_text("address_buildings.handlers.status_inactive", language=lang)
-            gps = f"📍 {building.gps_latitude}, {building.gps_longitude}" if building.gps_latitude and building.gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
-            apartments_count = building.apartments_count if hasattr(building, 'apartments_count') else len(building.apartments)
-            yard_name = building.yard.name if building.yard else get_text("address_buildings.handlers.not_specified", language=lang)
+        status = get_text("address_buildings.handlers.status_active", language=lang) if building.is_active else get_text("address_buildings.handlers.status_inactive", language=lang)
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): координата 0.0 falsy —
+        # легитимный GPS "0.0, X" показался бы как «не задан».
+        gps = f"📍 {building.gps_latitude}, {building.gps_longitude}" if building.gps_latitude and building.gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
+        apartments_count = building.apartments_count
+        yard_name = building.yard_name if building.yard_name else get_text("address_buildings.handlers.not_specified", language=lang)
 
-            text = get_text("address_buildings.handlers.building_details", language=lang).format(
-                address=building.address, yard=yard_name, status=status,
-                entrances=building.entrance_count, floors=building.floor_count,
-                apartments=apartments_count, gps=gps
-            )
+        text = get_text("address_buildings.handlers.building_details", language=lang).format(
+            address=building.address, yard=yard_name, status=status,
+            entrances=building.entrance_count, floors=building.floor_count,
+            apartments=apartments_count, gps=gps
+        )
 
-            if building.description:
-                text += get_text("address_buildings.handlers.description_label", language=lang).format(description=building.description)
+        if building.description:
+            text += get_text("address_buildings.handlers.description_label", language=lang).format(description=building.description)
 
-            if building.created_at:
-                text += get_text("address_buildings.handlers.created_label", language=lang).format(date=building.created_at.strftime('%d.%m.%Y %H:%M'))
+        if building.created_at:
+            text += get_text("address_buildings.handlers.created_label", language=lang).format(date=building.created_at.strftime('%d.%m.%Y %H:%M'))
 
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_building_details_keyboard(building_id)
-            )
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_building_details_keyboard(building_id)
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке информации о здании {building_id}: {e}")
@@ -209,32 +316,31 @@ async def show_building_details(callback: CallbackQuery, language: str = "ru"):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_building_create")
-async def start_building_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def start_building_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Начать создание нового здания - выбор двора"""
     await state.clear()
 
-    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
-    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается после db-фазы,
+    # и если она бросит (недоступна БД), `except` ниже сошлётся
     # на несвязанное имя → NameError вместо сообщения об ошибке.
     lang = "ru"
     try:
-        with session_scope() as db:
-            yards = AddressService.get_all_yards(db, only_active=True)
+        yards = await run_db(_load_active_yards, db=_db)
 
-            lang = language
-            if not yards:
-                await callback.message.edit_text(
-                    get_text("address_buildings.handlers.no_yards_available", language=lang),
-                    reply_markup=get_cancel_keyboard_inline()
-                )
-                return
-
-            await state.set_state(BuildingManagementStates.waiting_for_yard_selection)
-
+        lang = language
+        if not yards:
             await callback.message.edit_text(
-                get_text("address_buildings.handlers.create_building_step1", language=lang),
-                reply_markup=get_user_apartment_selection_keyboard(yards, "yard", "building_create_yard")
+                get_text("address_buildings.handlers.no_yards_available", language=lang),
+                reply_markup=get_cancel_keyboard_inline()
             )
+            return
+
+        await state.set_state(BuildingManagementStates.waiting_for_yard_selection)
+
+        await callback.message.edit_text(
+            get_text("address_buildings.handlers.create_building_step1", language=lang),
+            reply_markup=get_user_apartment_selection_keyboard(yards, "yard", "building_create_yard")
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при начале создания здания: {e}")
@@ -242,22 +348,21 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext, la
 
 
 @router.callback_query(F.data.startswith("building_create_yard:"))
-async def process_building_yard_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def process_building_yard_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработка выбора двора для нового здания"""
     yard_id = int(callback.data.split(":")[1])
 
-    with session_scope() as db:
-        lang = language
-        yard = AddressService.get_yard_by_id(db, yard_id)
-        yard_name = yard.name if yard else get_text("address_buildings.handlers.unknown_yard", language=lang)
+    lang = language
+    loaded_name = await run_db(lambda s: _load_yard_name(s, yard_id), db=_db)
+    yard_name = loaded_name if loaded_name else get_text("address_buildings.handlers.unknown_yard", language=lang)
 
-        await state.update_data(yard_id=yard_id, yard_name=yard_name)
-        await state.set_state(BuildingManagementStates.waiting_for_building_address)
+    await state.update_data(yard_id=yard_id, yard_name=yard_name)
+    await state.set_state(BuildingManagementStates.waiting_for_building_address)
 
-        await callback.message.edit_text(
-            get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard=yard_name),
-            reply_markup=get_cancel_keyboard_inline()
-        )
+    await callback.message.edit_text(
+        get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard=yard_name),
+        reply_markup=get_cancel_keyboard_inline()
+    )
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_building_address))
@@ -362,7 +467,7 @@ async def process_floor_count(message: Message, state: FSMContext, language: str
 
 
 @router.message(StateFilter(BuildingManagementStates.waiting_for_building_gps))
-async def process_building_gps(message: Message, state: FSMContext, language: str = "ru"):
+async def process_building_gps(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработка GPS координат здания и создание записи"""
     gps_latitude = None
     gps_longitude = None
@@ -399,48 +504,50 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
     data = await state.get_data()
 
     try:
-        with session_scope() as db:
-            # Получаем user.id из базы данных (не telegram_id!)
-            from uk_management_bot.database.models.user import User
-            user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-            if not user:
-                await message.answer(
-                    get_text("address_buildings.handlers.user_not_found", language=lang),
-                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
-                )
-                await state.clear()
-                return
-
-            building, error = await AddressService.create_building(
-                session=db,
-                address=data['address'],
-                yard_id=data['yard_id'],
-                created_by=user.id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
-                gps_latitude=gps_latitude,
-                gps_longitude=gps_longitude,
-                entrance_count=data.get('entrance_count', 1),
-                floor_count=data.get('floor_count', 1)
-            )
-
-            if error:
-                await message.answer(
-                    get_text("address_buildings.handlers.building_creation_error", language=lang).format(error=error),
-                    reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
-                )
-                await state.clear()
-                return
-
-            gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude and gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
-
+        # Получаем user.id из базы данных (не telegram_id!)
+        user_id = await run_db(lambda s: _user_id_by_tg(s, message.from_user.id), db=_db)
+        if user_id is None:
             await message.answer(
-                get_text("address_buildings.handlers.building_created_success", language=lang).format(
-                    address=building.address, yard=data.get('yard_name', ''),
-                    entrances=building.entrance_count, floors=building.floor_count, gps=gps_info
-                ),
-                reply_markup=get_address_management_menu()
+                get_text("address_buildings.handlers.user_not_found", language=lang),
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
             )
+            await state.clear()
+            return
 
-            logger.info(f"Создано новое здание: {building.address} (ID: {building.id}) пользователем {message.from_user.id}")
+        # create_building — async-метод с собственной async-сессией; параметр
+        # session им не используется (пишет через _async_session()).
+        building, error = await AddressService.create_building(
+            session=None,
+            address=data['address'],
+            yard_id=data['yard_id'],
+            created_by=user_id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
+            gps_latitude=gps_latitude,
+            gps_longitude=gps_longitude,
+            entrance_count=data.get('entrance_count', 1),
+            floor_count=data.get('floor_count', 1)
+        )
+
+        if error:
+            await message.answer(
+                get_text("address_buildings.handlers.building_creation_error", language=lang).format(error=error),
+                reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
+            )
+            await state.clear()
+            return
+
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): координата 0.0 falsy —
+        # легитимный GPS "0.0, X" показался бы как «не задан».
+        gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude and gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
+
+        await message.answer(
+            get_text("address_buildings.handlers.building_created_success", language=lang).format(
+                address=building.address, yard=data.get('yard_name', ''),
+                entrances=building.entrance_count, floors=building.floor_count, gps=gps_info
+            ),
+            reply_markup=get_address_management_menu()
+        )
+
+        logger.info(f"Создано новое здание: {building.address} (ID: {building.id}) пользователем {message.from_user.id}")
 
     except Exception:
         logger.exception("create building handler failed")
@@ -469,38 +576,41 @@ async def show_building_edit_menu(callback: CallbackQuery, language: str = "ru")
 
 
 @router.callback_query(F.data.startswith("addr_building_toggle:"))
-async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
+async def toggle_building_status(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Переключить активность здания"""
     building_id = int(callback.data.split(":")[1])
 
-    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
-    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается после db-фазы,
+    # и если она бросит (недоступна БД), `except` ниже сошлётся
     # на несвязанное имя → NameError вместо сообщения об ошибке.
     lang = "ru"
     try:
-        with session_scope() as db:
-            lang = language
-            building = AddressService.get_building_by_id(db, building_id)
-            if not building:
-                await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
-                return
+        building = await run_db(lambda s: _load_building_view(s, building_id), db=_db)
+        lang = language
+        if not building:
+            await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
+            return
 
-            new_status = not building.is_active
-            building, error = await AddressService.update_building(
-                session=db,
-                building_id=building_id,
-                is_active=new_status
-            )
+        new_status = not building.is_active
+        # update_building — async-метод с собственной async-сессией; параметр
+        # session им не используется.
+        building, error = await AddressService.update_building(
+            session=None,
+            building_id=building_id,
+            is_active=new_status
+        )
 
-            if error:
-                await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
-                return
+        if error:
+            await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
+            return
 
-            status_text = get_text("address_buildings.handlers.activated", language=lang) if new_status else get_text("address_buildings.handlers.deactivated", language=lang)
-            await callback.answer(get_text("address_buildings.handlers.building_status_changed", language=lang).format(status=status_text))
+        status_text = get_text("address_buildings.handlers.activated", language=lang) if new_status else get_text("address_buildings.handlers.deactivated", language=lang)
+        await callback.answer(get_text("address_buildings.handlers.building_status_changed", language=lang).format(status=status_text))
 
-            # Обновляем отображение
-            await show_building_details(callback)
+        # Обновляем отображение
+        # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): language не
+        # пробрасывается — карточка после переключения рендерится на "ru".
+        await show_building_details(callback)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса здания: {e}")
@@ -512,41 +622,40 @@ async def toggle_building_status(callback: CallbackQuery, language: str = "ru"):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_delete:"))
-async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru"):
+async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Подтверждение удаления здания"""
     building_id = int(callback.data.split(":")[1])
 
-    # WR-06 (класс): дефолт ДО try. `lang` присваивается внутри
-    # `with`-блока, и если он бросит (недоступна БД), `except` ниже сошлётся
+    # WR-06 (класс): дефолт ДО try. `lang` присваивается после db-фазы,
+    # и если она бросит (недоступна БД), `except` ниже сошлётся
     # на несвязанное имя → NameError вместо сообщения об ошибке.
     lang = "ru"
     try:
-        with session_scope() as db:
-            lang = language
-            building = AddressService.get_building_by_id(db, building_id)
-            if not building:
-                await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
-                return
+        building = await run_db(lambda s: _load_building_view(s, building_id), db=_db)
+        lang = language
+        if not building:
+            await callback.answer(get_text("address_buildings.handlers.building_not_found", language=lang), show_alert=True)
+            return
 
-            apartments_count = building.apartments_count if hasattr(building, 'apartments_count') else len(building.apartments)
+        apartments_count = building.apartments_count
 
-            warning = ""
-            if apartments_count > 0:
-                warning = get_text("address_buildings.handlers.delete_warning_apartments", language=lang).format(
-                    count=apartments_count
-                )
-
-            confirm_text = get_text("address_buildings.handlers.confirm_delete_building", language=lang).format(
-                address=building.address
-            ) + warning
-
-            await callback.message.edit_text(
-                confirm_text,
-                reply_markup=get_confirmation_keyboard(
-                    confirm_callback=f"addr_building_delete_confirm:{building_id}",
-                    cancel_callback=f"addr_building_view:{building_id}"
-                )
+        warning = ""
+        if apartments_count > 0:
+            warning = get_text("address_buildings.handlers.delete_warning_apartments", language=lang).format(
+                count=apartments_count
             )
+
+        confirm_text = get_text("address_buildings.handlers.confirm_delete_building", language=lang).format(
+            address=building.address
+        ) + warning
+
+        await callback.message.edit_text(
+            confirm_text,
+            reply_markup=get_confirmation_keyboard(
+                confirm_callback=f"addr_building_delete_confirm:{building_id}",
+                cancel_callback=f"addr_building_view:{building_id}"
+            )
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при подготовке удаления здания: {e}")
@@ -554,27 +663,30 @@ async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru
 
 
 @router.callback_query(F.data.startswith("addr_building_delete_confirm:"))
-async def delete_building(callback: CallbackQuery, language: str = "ru"):
+async def delete_building(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Удаление здания"""
     building_id = int(callback.data.split(":")[1])
     lang = language
 
     try:
-        with session_scope() as db:
-            success, error = await AddressService.delete_building(db, building_id)
+        # delete_building — async-метод с собственной async-сессией; параметр
+        # session им не используется. Sync-SQL здесь нет — run_db не нужен.
+        success, error = await AddressService.delete_building(None, building_id)
 
-            if not success:
-                await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
-                return
+        if not success:
+            await callback.answer(f"❌ {localize_address_error(error, lang)}", show_alert=True)
+            return
 
-            await callback.message.edit_text(
-                get_text("address_buildings.handlers.building_deleted_success", language=lang)
-            )
+        await callback.message.edit_text(
+            get_text("address_buildings.handlers.building_deleted_success", language=lang)
+        )
 
-            logger.info(f"Здание {building_id} удалено пользователем {callback.from_user.id}")
+        logger.info(f"Здание {building_id} удалено пользователем {callback.from_user.id}")
 
-            # Показываем список зданий
-            await show_buildings_list(callback, None)
+        # Показываем список зданий
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): show_buildings_list без
+        # language — заголовок списка после удаления всегда на ru.
+        await show_buildings_list(callback, None, _db=_db)
 
     except Exception:
         logger.exception("delete building handler failed")
