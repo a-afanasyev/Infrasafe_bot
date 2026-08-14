@@ -77,6 +77,15 @@ CONVERTED = [
     # внутрифайловые клавиатуры FSM-цепочки регистрации).
     "uk_management_bot/handlers/user_apartment_selection.py",
     "uk_management_bot/handlers/address_moderation.py",
+    # A2-хвост волна 4: непринятые заявки менеджера. Все четыре хендлера
+    # живые (триггеры генерит keyboards/admin.py).
+    "uk_management_bot/handlers/unaccepted_requests.py",
+    # handlers/request_reports.py в волне 4 конвертирован в ЖИВОЙ части, но в
+    # ратчет не входит: мёртвый handle_back_to_report (единственный генератор
+    # префикса back_to_report_ — keyboards/request_reports.get_report_details_keyboard
+    # — вызывается только в тестах) сохранён байт-в-байт до decision владельца
+    # (прецедент BUG-137/148/150) и держит .query( в async def. После
+    # ретайра/оживления — добавить сюда.
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

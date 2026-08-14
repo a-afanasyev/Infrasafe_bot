@@ -1,16 +1,33 @@
 """
 Обработчики для управления отчетами о выполнении заявок
 Обеспечивает функциональность просмотра и принятия отчетов
+
+AUD3-07/AUD5-ARCH-1: DB-фаза ЖИВЫХ хендлеров — цельный sync unit-of-work в
+worker-потоке (``run_db``), наружу DTO/скаляры. Канонический переход
+``run_command_sync`` (своя сессия из SessionLocal) уходит в поток целиком
+через ``asyncio.to_thread``. Сеть — в async-слое, вне сессии.
+
+ВНИМАНИЕ: ``handle_back_to_report`` (префикс ``back_to_report_``) НЕ
+конвертирован — он мёртв: единственный генератор его callback_data,
+``keyboards/request_reports.get_report_details_keyboard``, не вызывается ниоткуда
+(0 вызовов вне тестов; зафиксирован и в docs/audit/2026-05-20-backlog.md как
+мёртвая клавиатура). Хендлер сохранён байт-в-байт до decision владельца
+(прецедент BUG-137/148/150). Из-за него файл НЕ входит в ратчет CONVERTED
+(tests/services/test_aud337_async_handlers_gate.py).
 """
 
+import asyncio
 import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from dataclasses import dataclass
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 from uk_management_bot.states.request_reports import RequestReportStates
 from uk_management_bot.services.comment_service import CommentService
 from uk_management_bot.services.request_access import has_request_access_sync
@@ -25,7 +42,7 @@ from uk_management_bot.keyboards.requests import (
     get_category_display,
     resolve_category_key,
 )
-from uk_management_bot.utils.auth_helpers import check_user_role
+from uk_management_bot.utils.auth_helpers import check_user_role_sync
 from uk_management_bot.utils.workflow_predicates import is_awaiting_applicant
 from uk_management_bot.utils.constants import (
     ROLE_APPLICANT,
@@ -34,130 +51,261 @@ from uk_management_bot.utils.constants import (
 router = Router()
 logger = logging.getLogger(__name__)
 
+
+# ==========================================================================
+# DTO для async-слоя: наружу из run_db выходят примитивы, не ORM-строки.
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _ReportView:
+    """Готовый экран отчёта: текст собран в юните, клавиатура — снаружи."""
+    request_number: str
+    status: str
+    report_text: str
+
+
+@dataclass(frozen=True)
+class _RequestBrief:
+    """Поля заявки, нужные экранам «принять» / «на доработку»."""
+    status: str
+    category: str
+    address: Optional[str]
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# ==========================================================================
+
+def _load_report_view(db, request_number: str, telegram_id: int, lang: str) -> tuple:
+    """-> ('request_not_found'|'user_not_found'|'no_access'|'no_report', None)
+       | ('ok', _ReportView).
+
+    Текст отчёта рендерится здесь же (B3): format_report_for_display читает
+    ORM-заявку и lazy-связь ``comment.user`` — вне сессии их не существует.
+    """
+    # Проверяем существование заявки
+    request = db.query(Request).filter(Request.request_number == request_number).first()
+    if not request:
+        return ("request_not_found", None)
+
+    # Пользователь ищется по telegram_id, а НЕ по id: `callback.from_user.id`
+    # это Telegram-идентификатор, а `users.id` — обычный serial. Прежний
+    # `User.id == callback.from_user.id` не находил никого, из-за чего
+    # хендлер всегда отвечал «пользователь не найден» и до самого отчёта
+    # дело не доходило (тестами это место не покрыто).
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+
+    if not user:
+        return ("user_not_found", None)
+
+    # Права — канон `utils/request_access` (П5). Здесь была копия правил, в
+    # которой роль проверялась подстрокой по JSON-тексту `user.roles`
+    # ('manager' in '["manager"]'), не учитывались назначения через
+    # RequestAssignment, а `request.user_id` сравнивался с Telegram-id.
+    has_access = has_request_access_sync(db, user, request)
+
+    if not has_access:
+        return ("no_access", None)
+
+    # Проверяем, есть ли отчет
+    if not request.completion_report:
+        return ("no_report", None)
+
+    # Получаем комментарии с отчетами
+    comment_service = CommentService(db)
+    report_comments = comment_service.get_comments_by_type(request.request_number, "report")
+
+    # Формируем текст отчета
+    report_text = format_report_for_display(request, report_comments, lang)
+
+    return (
+        "ok",
+        _ReportView(
+            request_number=request.request_number,
+            status=request.status,
+            report_text=report_text,
+        ),
+    )
+
+
+def _load_applicant_action_context(db, request_number: str, telegram_id: int) -> tuple:
+    """Общая db-фаза кнопок заявителя «принять» / «на доработку».
+
+    -> ('no_role'|'request_not_found'|'not_owner'|'not_awaiting', None)
+       | ('ok', _RequestBrief).
+    """
+    # Проверяем права доступа (только заявитель)
+    # ⚠️ Предсуществующий дефект (сохранён 1:1): в check_user_role уходит
+    # Telegram-id, а внутри фильтр `User.id == user_id` — по serial-ключу.
+    # Совпадение практически недостижимо, поэтому обе кнопки заявителя
+    # (принять / доработка) всегда отвечают «нет доступа».
+    if not check_user_role_sync(telegram_id, ROLE_APPLICANT, db):
+        return ("no_role", None)
+
+    # Проверяем существование заявки
+    request = db.query(Request).filter(Request.request_number == request_number).first()
+    if not request:
+        return ("request_not_found", None)
+
+    # Проверяем, что заявка принадлежит этому пользователю
+    # ⚠️ Предсуществующий дефект (сохранён 1:1): `request.user_id` — это
+    # `users.id`, а сравнивается с Telegram-id (тот же класс id-микса).
+    if request.user_id != telegram_id:
+        return ("not_owner", None)
+
+    # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
+    # канон-предикат вместо сырого status==Исполнено (возвращённые ждут
+    # менеджера и в отчёт/доработку заявителем не идут).
+    if not is_awaiting_applicant(request):
+        return ("not_awaiting", None)
+
+    return (
+        "ok",
+        _RequestBrief(
+            status=request.status,
+            category=request.category,
+            address=request.address,
+        ),
+    )
+
+
+def _load_revision_actor(db, request_number: str, telegram_id: int) -> tuple:
+    """-> ('request_not_found'|'actor_not_found', None) | ('ok', actor_id)."""
+    # Получаем текущую заявку
+    request = db.query(Request).filter(Request.request_number == request_number).first()
+    if not request:
+        return ("request_not_found", None)
+
+    actor = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not actor:
+        return ("actor_not_found", None)
+
+    return ("ok", actor.id)
+
+
+def _add_revision_comment(db, request_number: str, telegram_id: int, revision_reason: str) -> None:
+    """Добавляем комментарий о доработке (пишет и коммитит CommentService).
+
+    ⚠️ Предсуществующие дефекты (сохранены 1:1):
+    1. keyword `request_id=` при сигнатуре
+       `add_clarification_comment(request_number, user_id, clarification)` —
+       вызов падает TypeError; переход APPLICANT_RETURN к этому моменту уже
+       закоммичен, поэтому пользователь видит «ошибка», хотя статус сменился.
+    2. `user_id` — Telegram-id, а add_comment ищет `User.id == user_id`.
+    3. RU-хардкод текста комментария (UZ-заявитель получит русский).
+    """
+    comment_service = CommentService(db)
+
+    comment_service.add_clarification_comment(
+        request_id=request_number,
+        user_id=telegram_id,
+        clarification=f"Запрошена доработка. Причина: {revision_reason}"
+    )
+
+
 @router.callback_query(F.data.startswith("view_report_"))
-async def handle_view_report(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_view_report(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Просмотр отчета о выполнении заявки"""
     try:
         # Получаем номер заявки
         request_number = callback.data.split("_")[-1]
-        
-        # Проверяем существование заявки
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
+
+        lang = language
+        verdict, view = await run_db(
+            lambda s: _load_report_view(s, request_number, callback.from_user.id, lang), db=_db
+        )
+
+        if verdict == "request_not_found":
             from uk_management_bot.utils.safe_localization import safe_get_text
             await callback.answer(safe_get_text("errors.request_not_found", language=language), show_alert=True)
             return
 
-        # Пользователь ищется по telegram_id, а НЕ по id: `callback.from_user.id`
-        # это Telegram-идентификатор, а `users.id` — обычный serial. Прежний
-        # `User.id == callback.from_user.id` не находил никого, из-за чего
-        # хендлер всегда отвечал «пользователь не найден» и до самого отчёта
-        # дело не доходило (тестами это место не покрыто).
-        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-
-        if not user:
+        if verdict == "user_not_found":
             from uk_management_bot.utils.safe_localization import safe_get_text
             await callback.answer(safe_get_text("errors.user_not_found", language=language), show_alert=True)
             return
 
-        # Права — канон `utils/request_access` (П5). Здесь была копия правил, в
-        # которой роль проверялась подстрокой по JSON-тексту `user.roles`
-        # ('manager' in '["manager"]'), не учитывались назначения через
-        # RequestAssignment, а `request.user_id` сравнивался с Telegram-id.
-        has_access = has_request_access_sync(db, user, request)
-
-        if not has_access:
+        if verdict == "no_access":
             await callback.answer(get_text("request_reports.handlers.no_access_view_report", language=language), show_alert=True)
             return
 
-        # Проверяем, есть ли отчет
-        if not request.completion_report:
+        if verdict == "no_report":
             await callback.answer(get_text("request_reports.handlers.no_report_yet", language=language), show_alert=True)
             return
 
-        # Получаем комментарии с отчетами
-        comment_service = CommentService(db)
-        report_comments = comment_service.get_comments_by_type(request.request_number, "report")
-
-        # Формируем текст отчета
-        lang = language
-        report_text = format_report_for_display(request, report_comments, lang)
-        
         # Показываем отчет
-        keyboard = get_report_actions_keyboard(request.request_number, request.status, lang)
-        
+        keyboard = get_report_actions_keyboard(view.request_number, view.status, lang)
+
         await callback.message.edit_text(
-            report_text,
+            view.report_text,
             reply_markup=keyboard
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка просмотра отчета: {e}")
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("approve_request_"))
-async def handle_approve_request(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_approve_request(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Принятие заявки заявителем"""
     try:
-        # Проверяем права доступа (только заявитель)
-        if not await check_user_role(callback.from_user.id, ROLE_APPLICANT, db):
+        request_number = callback.data.split("_")[-1]
+
+        verdict, brief = await run_db(
+            lambda s: _load_applicant_action_context(s, request_number, callback.from_user.id), db=_db
+        )
+
+        if verdict == "no_role":
             await callback.answer(get_text("request_reports.handlers.no_access_approve", language=language), show_alert=True)
             return
-        
-        request_number = callback.data.split("_")[-1]
-        
-        # Проверяем существование заявки
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
+
+        if verdict == "request_not_found":
             await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
             return
 
-        # Проверяем, что заявка принадлежит этому пользователю
-        if request.user_id != callback.from_user.id:
+        if verdict == "not_owner":
             await callback.answer(get_text("request_reports.handlers.only_own_requests", language=language), show_alert=True)
             return
 
-        # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
-        # канон-предикат вместо сырого status==Исполнено (возвращённые ждут
-        # менеджера и в отчёт/доработку заявителем не идут).
-        if not is_awaiting_applicant(request):
+        if verdict == "not_awaiting":
             await callback.answer(get_text("request_reports.handlers.only_completed_requests", language=language), show_alert=True)
             return
-        
+
         # Сохраняем данные в состоянии
         await state.update_data(
             request_number=request_number,
-            current_status=request.status
+            current_status=brief.status
         )
-        
+
         # Показываем подтверждение принятия
         lang = language
         keyboard = get_report_confirmation_keyboard(lang)
-        
+
         confirmation_text = get_text("reports.approval_confirmation", language=lang).format(
             request_id=request_number,
-            category=request.category,
-            address=request.address
+            category=brief.category,
+            address=brief.address
         )
-        
+
         await callback.message.edit_text(
             confirmation_text,
             reply_markup=keyboard
         )
-        
+
         # Переходим в состояние подтверждения
         await state.set_state(RequestReportStates.waiting_for_approval_confirmation)
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка принятия заявки: {e}")
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "confirm_approval")
-async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Подтверждение принятия заявки"""
     try:
         # Получаем данные из состояния
@@ -187,12 +335,12 @@ async def handle_approval_confirmation(callback: CallbackQuery, state: FSMContex
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data == "cancel_approval")
-async def handle_approval_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_approval_cancellation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена принятия заявки"""
     try:
         # Очищаем состояние
         await state.clear()
-        
+
         lang = language
         await callback.message.edit_text(get_text("request_reports.handlers.approval_cancelled", language=lang))
         await callback.answer(get_text("request_reports.handlers.approval_cancelled", language=lang))
@@ -202,62 +350,59 @@ async def handle_approval_cancellation(callback: CallbackQuery, state: FSMContex
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.callback_query(F.data.startswith("request_revision_"))
-async def handle_request_revision(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_request_revision(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Запрос доработки заявки"""
     try:
-        # Проверяем права доступа (только заявитель)
-        if not await check_user_role(callback.from_user.id, ROLE_APPLICANT, db):
+        request_number = callback.data.split("_")[-1]
+
+        verdict, brief = await run_db(
+            lambda s: _load_applicant_action_context(s, request_number, callback.from_user.id), db=_db
+        )
+
+        if verdict == "no_role":
             await callback.answer(get_text("request_reports.handlers.no_access_revision", language=language), show_alert=True)
             return
 
-        request_number = callback.data.split("_")[-1]
-
-        # Проверяем существование заявки
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
+        if verdict == "request_not_found":
             await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
             return
 
-        # Проверяем, что заявка принадлежит этому пользователю
-        if request.user_id != callback.from_user.id:
+        if verdict == "not_owner":
             await callback.answer(get_text("request_reports.handlers.only_own_revision", language=language), show_alert=True)
             return
 
-        # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
-        # канон-предикат вместо сырого status==Исполнено (возвращённые ждут
-        # менеджера и в отчёт/доработку заявителем не идут).
-        if not is_awaiting_applicant(request):
+        if verdict == "not_awaiting":
             await callback.answer(get_text("request_reports.handlers.only_completed_revision", language=language), show_alert=True)
             return
-        
+
         # Сохраняем данные в состоянии
         await state.update_data(
             request_number=request_number,
             action="revision"
         )
-        
+
         # Запрашиваем причину доработки
         lang = language
         await callback.message.edit_text(
             get_text("reports.enter_revision_reason", language=lang)
         )
-        
+
         # Переходим в состояние ввода причины
         await state.set_state(RequestReportStates.waiting_for_revision_reason)
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка запроса доработки: {e}")
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 @router.message(RequestReportStates.waiting_for_revision_reason)
-async def handle_revision_reason_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_revision_reason_input(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработка ввода причины доработки"""
     try:
         # Получаем причину доработки
         revision_reason = message.text.strip()
-        
+
         if not revision_reason:
             await message.answer(get_text("request_reports.handlers.enter_revision_reason_prompt", language=language))
             return
@@ -265,16 +410,18 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
         if len(revision_reason) < 10:
             await message.answer(get_text("request_reports.handlers.revision_reason_too_short", language=language))
             return
-        
+
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
-        
-        comment_service = CommentService(db)
 
-        # Получаем текущую заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
+        verdict, actor_id = await run_db(
+            lambda s: _load_revision_actor(s, request_number, message.from_user.id), db=_db
+        )
+
+        # Обе ветки исторически отвечали одним и тем же текстом «заявка не
+        # найдена» — сохранено 1:1.
+        if verdict in ("request_not_found", "actor_not_found"):
             await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
             return
 
@@ -287,14 +434,13 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
             run_command_sync, RequestNotFound)
         from uk_management_bot.utils.request_workflow import (
             Action, ActionCommand, PrincipalRef, WorkflowError)
-        actor = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-        if not actor:
-            await message.answer(get_text("request_reports.handlers.request_not_found", language=language))
-            return
         try:
-            run_command_sync(
+            # AUD3-37: run_command_sync открывает СВОЮ сессию из SessionLocal и
+            # весь синхронный — уводим его в поток целиком.
+            await asyncio.to_thread(
+                run_command_sync,
                 SessionLocal, request_number,
-                PrincipalRef(kind="user", user_id=actor.id, source="telegram"),
+                PrincipalRef(kind="user", user_id=actor_id, source="telegram"),
                 ActionCommand(f"revision:{request_number}", Action.APPLICANT_RETURN,
                               {"return_reason": revision_reason}),
             )
@@ -307,35 +453,38 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, db: 
             return
 
         # Добавляем комментарий о доработке
-        comment_service.add_clarification_comment(
-            request_id=request_number,
-            user_id=message.from_user.id,
-            clarification=f"Запрошена доработка. Причина: {revision_reason}"
+        await run_db(
+            lambda s: _add_revision_comment(s, request_number, message.from_user.id, revision_reason), db=_db
         )
-        
+
         # Показываем подтверждение
         lang = language
         success_text = get_text("reports.revision_requested", language=lang).format(
             request_id=request_number,
             reason=revision_reason
         )
-        
+
         await message.answer(success_text)
-        
+
         # Очищаем состояние
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Ошибка сохранения причины доработки: {e}")
         await message.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)))
 
 @router.callback_query(F.data.startswith("back_to_report_"))
 async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
-    """Возврат к отчету"""
+    """Возврат к отчету
+
+    ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. docstring модуля): генератор `back_to_report_` —
+    `get_report_details_keyboard` — не вызывается ниоткуда. Тело сохранено
+    байт-в-байт до decision владельца: НЕ конвертировать, НЕ удалять.
+    """
     try:
         # Получаем ID заявки
         request_number = callback.data.split("_")[-1]
-        
+
         # Получаем заявку
         request = db.query(Request).filter(Request.request_number == request_number).first()
         if not request:
@@ -349,17 +498,17 @@ async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: 
         # Формируем текст отчета
         lang = language
         report_text = format_report_for_display(request, report_comments, lang)
-        
+
         # Показываем отчет
         keyboard = get_report_actions_keyboard(request.request_number, request.status, lang)
-        
+
         await callback.message.edit_text(
             report_text,
             reply_markup=keyboard
         )
-        
+
         await callback.answer()
-        
+
     except Exception as e:
         logger.error(f"Ошибка возврата к отчету: {e}")
         await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
@@ -367,7 +516,11 @@ async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: 
 # Вспомогательные функции
 
 def format_report_for_display(request: Request, report_comments: list, language: str = "ru") -> str:
-    """Форматирование отчета для отображения"""
+    """Форматирование отчета для отображения
+
+    Вызывается ИЗ sync-юнита (worker-поток): читает ORM-заявку и lazy-связь
+    `comment.user`, поэтому обязана исполняться при живой сессии.
+    """
     try:
         # Основная информация о заявке
         report_text = f"📋 **{get_text('request_reports.handlers.report_title', language=language)} #{request.request_number}**\n\n"
@@ -385,6 +538,8 @@ def format_report_for_display(request: Request, report_comments: list, language:
         report_text += f"📊 **{get_text('request_reports.handlers.status', language=language)}**: {get_status_display(request.status, language=language)}\n"
 
         # Информация о выполнении
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой strftime по
+        # completed_at — время показывается в UTC мимо канона business_time.
         if request.completed_at:
             report_text += f"✅ **{get_text('request_reports.handlers.completed_at', language=language)}**: {request.completed_at.strftime('%d.%m.%Y %H:%M')}\n"
 
