@@ -13,9 +13,6 @@ from aiogram.types import CallbackQuery
 
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.admin import router as admin_router
-from uk_management_bot.handlers.request_status_management import (
-    router as request_status_management_router,
-)
 
 
 async def _matching_handlers(router, data: str) -> list[str]:
@@ -117,15 +114,9 @@ async def test_requests_router_does_not_shadow_mgr_delete():
     assert await _matching_handlers(requests_router, "mgr_delete_250528-001") == []
 
 
-@pytest.mark.asyncio
-async def test_complete_work_routes_to_status_management():
-    """complete_work_* must reach the dedicated status-management handler, not the
-    bare complete_ duplicate that used to swallow it by prefix."""
-    assert await _matching_handlers(
-        request_status_management_router, "complete_work_250528-001"
-    ) == ["handle_complete_work"]
-    assert await _matching_handlers(admin_router, "complete_work_250528-001") == []
-    assert await _matching_handlers(requests_router, "complete_work_250528-001") == []
+# BUG-137: test_complete_work_routes_to_status_management удалён — флоу
+# complete_work_ ретайрен вместе с handle_complete_work (исполнитель
+# завершает работу через executor_complete_, см. ниже).
 
 
 @pytest.mark.asyncio

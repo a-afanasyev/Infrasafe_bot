@@ -578,11 +578,10 @@ async def handle_edit_request(callback: CallbackQuery, state: FSMContext):
 
 # Менеджерское завершение заявки перенесено на префикс `mgr_complete_` и живёт в
 # handlers/admin.py::handle_complete_request (статус EXECUTED + AuditLog). Прежний
-# bare-`complete_` исполнительский complete здесь затенял и админский менеджерский
-# complete, и выделенный `complete_work_` (по префиксу). Исполнитель завершает
-# через `executor_complete_` (ниже) и `complete_work_` (request_status_management).
-# Удалён — см. test_bug_duty_assign_routing::{test_admin_router_owns_mgr_complete,
-# test_complete_work_routes_to_status_management}.
+# bare-`complete_` исполнительский complete здесь затенял админский менеджерский
+# complete (по префиксу). Исполнитель завершает работу только через
+# `executor_complete_` (ниже); флоу `complete_work_` ретайрен (BUG-137).
+# Удалён — см. test_bug_duty_assign_routing::test_admin_router_owns_mgr_complete.
 
 
 # BUG-BOT-022: ранее здесь был дубликат handler-а `clarify_<NNN>`. Он
