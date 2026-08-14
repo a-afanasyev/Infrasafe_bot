@@ -71,6 +71,12 @@ CONVERTED = [
     "uk_management_bot/handlers/user_apartments.py",
     "uk_management_bot/handlers/address_buildings.py",
     "uk_management_bot/handlers/profile_editing.py",
+    # A2-хвост волна 3: регистрация выбора квартиры и модерация адресных
+    # заявок. Все хендлеры обоих файлов живые (триггеры генерят
+    # keyboards/address_management.py, keyboards/user_management.py и
+    # внутрифайловые клавиатуры FSM-цепочки регистрации).
+    "uk_management_bot/handlers/user_apartment_selection.py",
+    "uk_management_bot/handlers/address_moderation.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
