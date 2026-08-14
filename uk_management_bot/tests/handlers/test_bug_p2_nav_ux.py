@@ -174,13 +174,20 @@ class TestBug020CancelInputRereadsUser:
             "uk_management_bot.handlers.profile_editing.get_text",
             side_effect=lambda key, **kw: key,
         ):
-            await handle_cancel_input(callback, state, db)
+            # AUD3-07: DI-параметр db снят — DB-фаза живёт в sync-юните под
+            # run_db; тестовая сессия заходит через seam `_db`.
+            await handle_cancel_input(callback, state, _db=db)
 
         # Handler must have queried fresh user from DB and rendered keyboard
-        # for that fresh user object (not a stale state.data dict).
-        assert captured.get("user") is fresh_user, (
+        # with that fresh user's values (run_db-юнит отдаёт frozen DTO,
+        # поэтому сверяем поля, а не identity ORM-объекта).
+        rendered = captured.get("user")
+        assert rendered is not None, (
             "cancel_input must re-render the keyboard with the user reread from DB"
         )
+        assert rendered.phone == fresh_user.phone
+        assert rendered.first_name == fresh_user.first_name
+        assert rendered.last_name == fresh_user.last_name
 
 
 # ─── BUG-BOT-021 ────────────────────────────────────────────────────────────
