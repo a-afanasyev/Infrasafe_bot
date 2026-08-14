@@ -186,10 +186,6 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
     "BUG-148": A(pkg="A3", status="decision", method="verified-2026-08-13",
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
-    "AUD5-ARCH-5": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
-    "AUD5-CODE-13": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
-    "AUD3-27": A(pkg="A4", status="actionable", method="plan-2026-07-26",
-                 note="политика, а не точечный баг: ещё и shift_planning_service.py"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
