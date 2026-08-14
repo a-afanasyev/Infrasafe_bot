@@ -91,6 +91,10 @@ CONVERTED = [
     # keyboards/request_comments.*, keyboards/request_reports.py + FSM-цепочка
     # внутри файла).
     "uk_management_bot/handlers/request_comments.py",
+    # A2-хвост волна 5: действия модерации пользователей. Все 13 хендлеров
+    # имеют живые генераторы триггеров (keyboards/user_management.py,
+    # keyboards/user_verification.py).
+    "uk_management_bot/handlers/user_management/actions.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

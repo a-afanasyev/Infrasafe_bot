@@ -92,7 +92,7 @@ class TestDocumentChecklist:
         state = _make_state({"selected_documents": []})
 
         await handle_check_document(
-            cb, state, db=MagicMock(), roles=["manager"], user=MagicMock()
+            cb, state, roles=["manager"], user=MagicMock()
         )
 
         state.update_data.assert_awaited_once_with(
@@ -110,7 +110,7 @@ class TestDocumentChecklist:
         state = _make_state({"selected_documents": ["utility_bill", "passport"]})
 
         await handle_uncheck_document(
-            cb, state, db=MagicMock(), roles=["manager"], user=MagicMock()
+            cb, state, roles=["manager"], user=MagicMock()
         )
 
         state.update_data.assert_awaited_once_with(
@@ -132,7 +132,7 @@ class TestDocumentChecklist:
         db.query.return_value.filter.return_value.first.return_value = manager
 
         await handle_request_selected_documents(
-            cb, state, db=db, roles=["manager"], user=MagicMock()
+            cb, state, roles=["manager"], user=MagicMock(), _db=db
         )
 
         state.update_data.assert_awaited_once_with(
