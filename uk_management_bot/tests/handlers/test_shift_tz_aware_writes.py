@@ -150,10 +150,9 @@ class TestShiftsPySelectEndWritesAwareEndTime:
         callback = _make_callback()
         callback.data = "shift_end_confirm_yes:1"
 
-        with patch.object(shifts_module, "session_scope") as mock_scope:
-            mock_scope.return_value.__enter__.return_value = db
-            mock_scope.return_value.__exit__.return_value = False
-            await shifts_module.end_shift_yes_with_id(callback, language="ru")
+        # AUD3-07: сессию открывает run_db в worker-потоке — тестовый seam
+        # keyword-only `_db` (sync-исполнение юнита на переданной сессии).
+        await shifts_module.end_shift_yes_with_id(callback, language="ru", _db=db)
 
         assert shift.end_time.tzinfo is not None
         assert shift.end_time.utcoffset() == timedelta(0)
