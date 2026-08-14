@@ -188,6 +188,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
+    "BUG-151": A(pkg="A2", status="actionable", method="verified-2026-08-14",
+                 note="8 дефектов волны 2 (#434); п.1 P2 живой — set_primary падает (raw SQL без text())"),
     "BUG-150": A(pkg="A2", status="decision", method="verified-2026-08-14",
                  note="4 мёртвых хендлера shifts.py + клавиатуры-сироты; ретайр открывает файлу CONVERTED"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
