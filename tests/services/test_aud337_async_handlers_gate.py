@@ -95,6 +95,12 @@ CONVERTED = [
     # имеют живые генераторы триггеров (keyboards/user_management.py,
     # keyboards/user_verification.py).
     "uk_management_bot/handlers/user_management/actions.py",
+    # handlers/user_management/panels.py в волне 5 конвертирован в ЖИВОЙ части
+    # (6 хендлеров), но в ратчет не входит: три хендлера мертвы — генераторов
+    # "user_mgmt_stats_with_verification", "quick_verify_", "quick_reject_" в
+    # репозитории нет вовсе — и сохранены байт-в-байт до decision владельца
+    # (прецедент BUG-137/148/150), продолжая держать db/.query( в async def.
+    # После ретайра/оживления — добавить сюда.
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
