@@ -91,7 +91,7 @@ class TestAddrStatsHandler:
             residents_by_status={"approved": 7, "pending": 3, "rejected": 2},
         )
 
-        await show_address_stats(cb, state, language="ru", db=db)
+        await show_address_stats(cb, state, language="ru", _db=db)
 
         # Message must be edited (not silent).
         cb.message.edit_text.assert_awaited_once()
@@ -126,7 +126,7 @@ class TestAddrStatsHandler:
             residents_by_status={},  # no rows at all
         )
 
-        await show_address_stats(cb, state, language="ru", db=db)
+        await show_address_stats(cb, state, language="ru", _db=db)
 
         cb.message.edit_text.assert_awaited_once()
         cb.answer.assert_awaited_once()

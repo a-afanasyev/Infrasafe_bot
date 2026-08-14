@@ -58,6 +58,13 @@ CONVERTED = [
     # availability) ретайрен — в охвате остались живые файлы пакета.
     "uk_management_bot/handlers/request_status_management/_units.py",
     "uk_management_bot/handlers/request_status_management/executor_actions.py",
+    # A2-хвост волна 1: address_yards сконвертирован целиком. shifts.py
+    # сконвертирован в живой части, но в ратчет НЕ входит: 4 мёртвых хендлера
+    # (end_shift_yes, end_shift_no, manager_active_shifts, force_end_shift —
+    # генераторов их триггеров в проде нет) сохранены байт-в-байт до decision
+    # владельца (прецедент BUG-137/148) и трое из них зовут session_scope в
+    # async def. После ретайра/оживления — добавить сюда.
+    "uk_management_bot/handlers/address_yards.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

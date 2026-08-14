@@ -105,13 +105,15 @@ class TestStartShift:
         ) as MockService, patch(
             "uk_management_bot.handlers.shifts.get_shifts_main_keyboard", return_value=MagicMock()
         ), patch(
-            "uk_management_bot.handlers.shifts.async_notify_shift_started", new_callable=AsyncMock
+            "uk_management_bot.handlers.shifts.send_to_user", new_callable=AsyncMock
+        ), patch(
+            "uk_management_bot.handlers.shifts.send_to_channel", new_callable=AsyncMock
         ):
             svc = MockService.return_value
             svc.start_shift.return_value = {"success": True, "shift": shift}
             svc._get_user_by_tg.return_value = _make_db_user()
 
-            await start_shift(msg, db=db)
+            await start_shift(msg, _db=db)
 
         msg.answer.assert_called()
         svc.start_shift.assert_called_once_with(msg.from_user.id)
@@ -134,7 +136,7 @@ class TestStartShift:
             svc = MockService.return_value
             svc.start_shift.return_value = {"success": False, "message": "У вас уже есть активная смена"}
 
-            await start_shift(msg, db=db)
+            await start_shift(msg, _db=db)
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
@@ -153,7 +155,7 @@ class TestStartShift:
         ), patch(
             "uk_management_bot.handlers.shifts.get_shifts_main_keyboard", return_value=MagicMock()
         ):
-            await start_shift(msg, db=db, user_status="pending")
+            await start_shift(msg, _db=db, user_status="pending")
 
         msg.answer.assert_called_once()
         # ShiftService.start_shift should NOT have been called
@@ -175,7 +177,9 @@ class TestStartShift:
         ) as MockService, patch(
             "uk_management_bot.handlers.shifts.get_shifts_main_keyboard", return_value=MagicMock()
         ), patch(
-            "uk_management_bot.handlers.shifts.async_notify_shift_started", new_callable=AsyncMock
+            "uk_management_bot.handlers.shifts.send_to_user", new_callable=AsyncMock
+        ), patch(
+            "uk_management_bot.handlers.shifts.send_to_channel", new_callable=AsyncMock
         ), patch(
             "uk_management_bot.handlers.shifts.get_executor_suggestion_inline", return_value=MagicMock()
         ):
@@ -186,7 +190,7 @@ class TestStartShift:
             # User has executor role but current active_role is applicant
             await start_shift(
                 msg,
-                db=db,
+                _db=db,
                 roles=["applicant", "executor"],
                 active_role="applicant",
             )
@@ -222,7 +226,7 @@ class TestEndShiftConfirm:
         db.query.side_effect = _query
 
         with patch("uk_management_bot.handlers.shifts.get_user_language", return_value="ru"):
-            await end_shift_confirm(msg, db=db)
+            await end_shift_confirm(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -257,9 +261,9 @@ class TestEndShiftConfirm:
         ), patch(
             "uk_management_bot.handlers.shifts.show_shift_end_details", new_callable=AsyncMock
         ) as mock_details:
-            await end_shift_confirm(msg, db=db)
+            await end_shift_confirm(msg, _db=db)
 
-        mock_details.assert_called_once_with(msg, 42, db, "ru")
+        mock_details.assert_called_once_with(msg, 42, "ru", _db=db)
 
     @pytest.mark.asyncio
     async def test_user_not_found_sends_error(self):
@@ -278,7 +282,7 @@ class TestEndShiftConfirm:
         db.query.side_effect = _query
 
         with patch("uk_management_bot.handlers.shifts.get_user_language", return_value="ru"):
-            await end_shift_confirm(msg, db=db)
+            await end_shift_confirm(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -306,7 +310,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=999, db=db, lang="ru")
+        await show_shift_end_details(msg, shift_id=999, lang="ru", _db=db)
 
         msg.answer.assert_called_once()
 
@@ -344,7 +348,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=5, db=db, lang="ru")
+        await show_shift_end_details(msg, shift_id=5, lang="ru", _db=db)
 
         msg.answer.assert_called_once()
         # Keyboard should be passed as reply_markup
@@ -374,7 +378,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=7, db=db, lang="ru")
+        await show_shift_end_details(msg, shift_id=7, lang="ru", _db=db)
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
@@ -404,7 +408,7 @@ class TestMyShift:
             svc = MockService.return_value
             svc.get_active_shift.return_value = None
 
-            await my_shift(msg, db=db)
+            await my_shift(msg, _db=db)
 
         msg.answer.assert_called_once()
         svc.get_active_shift.assert_called_once_with(msg.from_user.id)
@@ -430,7 +434,7 @@ class TestMyShift:
             svc = MockService.return_value
             svc.get_active_shift.return_value = shift
 
-            await my_shift(msg, db=db)
+            await my_shift(msg, _db=db)
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
@@ -530,7 +534,7 @@ class TestShiftsHistory:
             svc = MockService.return_value
             svc.list_shifts.return_value = []
 
-            await shifts_history(msg, state, db=db)
+            await shifts_history(msg, state, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -560,7 +564,7 @@ class TestShiftsHistory:
             svc = MockService.return_value
             svc.list_shifts.return_value = [shift]
 
-            await shifts_history(msg, state, db=db)
+            await shifts_history(msg, state, _db=db)
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
