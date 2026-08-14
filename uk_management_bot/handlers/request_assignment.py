@@ -1,6 +1,34 @@
 """
 Обработчики для назначения заявок на исполнение
 Обеспечивает функциональность назначения заявок группам и конкретным исполнителям
+
+⚠️ МЁРТВЫЙ КЛАСТЕР ЦЕЛИКОМ (инвентарь A2-хвост волна 5, AUD3-07/AUD5-ARCH-1).
+Ни один из восьми хендлеров недостижим в проде, поэтому файл НЕ конвертирован
+на run_db-канон и НЕ входит в ратчет tests/services/test_aud337_async_handlers_gate.py.
+Тела сохранены байт-в-байт до decision владельца (ретайр vs оживление) —
+прецедент BUG-137/148/150.
+
+Доказательство мёртвости (греп генераторов callback_data по всему репозиторию):
+
+* ``assign_request_`` — генератора НЕТ вовсе. Это единственный вход в цепочку,
+  и он недостижим (в locales есть лишь ключи логов ``auto_assign_request_N``).
+* ``assign_group_`` / ``assign_individual_`` — генерит только
+  ``keyboards/request_assignment.get_request_assignment_keyboard``, а её зовёт
+  один ``handle_request_assignment_start`` (выше). Транзитивно мертвы.
+* ``specialization_`` — только ``get_specialization_selection_keyboard``,
+  которую зовёт мёртвый ``handle_group_assignment``.
+* ``executor_{id}`` — только ``get_executor_selection_keyboard`` из мёртвого
+  ``handle_individual_assignment``. (Живые ``executor_complete_`` и соседи
+  генерит handlers/requests/listing.py, но их разбирает requests-роутер,
+  включённый в main.py раньше — #360 против #377.)
+* ``confirm_assignment`` / ``cancel_assignment`` — только клавиатуры этой же
+  мёртвой цепочки.
+* ``view_assignments_`` — только ``keyboards/request_reports.get_report_details_keyboard``,
+  у которой нет ни одного прод-вызова (тот же случай, что у ``back_to_report_``
+  в волне 4).
+
+ЖИВОЙ путь назначения заявки — другой: ``assign_duty_`` / ``assign_specific_`` /
+``assign_executor_`` из ``keyboards/admin.py``, разбираемые admin-роутером.
 """
 
 import logging
@@ -26,6 +54,7 @@ from uk_management_bot.utils.constants import ROLE_MANAGER
 router = Router()
 logger = logging.getLogger(__name__)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "assign_request_" в живом коде нет.
 @router.callback_query(F.data.startswith("assign_request_"))
 async def handle_request_assignment_start(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Начало процесса назначения заявки"""
@@ -63,6 +92,7 @@ async def handle_request_assignment_start(callback: CallbackQuery, state: FSMCon
         logger.error(f"Ошибка начала назначения заявки: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "assign_group_" в живом коде нет.
 @router.callback_query(F.data.startswith("assign_group_"))
 async def handle_group_assignment(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Назначение заявки группе исполнителей"""
@@ -99,6 +129,7 @@ async def handle_group_assignment(callback: CallbackQuery, state: FSMContext, db
         logger.error(f"Ошибка назначения группе: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "assign_individual_" в живом коде нет.
 @router.callback_query(F.data.startswith("assign_individual_"))
 async def handle_individual_assignment(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Назначение заявки конкретному исполнителю"""
@@ -165,6 +196,7 @@ async def handle_individual_assignment(callback: CallbackQuery, state: FSMContex
         logger.error(f"Ошибка назначения исполнителю: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "specialization_" в живом коде нет.
 @router.callback_query(F.data.startswith("specialization_"))
 async def handle_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора специализации для группового назначения"""
@@ -208,6 +240,7 @@ async def handle_specialization_selection(callback: CallbackQuery, state: FSMCon
         logger.error(f"Ошибка выбора специализации: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "executor_" в живом коде нет.
 @router.callback_query(F.data.startswith("executor_"))
 async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Обработка выбора конкретного исполнителя"""
@@ -253,6 +286,8 @@ async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, 
         logger.error(f"Ошибка выбора исполнителя: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "confirm_assignment" генерят только
+# клавиатуры недостижимой цепочки назначения.
 @router.callback_query(F.data == "confirm_assignment")
 async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Подтверждение назначения заявки"""
@@ -305,6 +340,8 @@ async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMCont
         logger.error(f"Ошибка подтверждения назначения: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "cancel_assignment" генерят только
+# клавиатуры недостижимой цепочки назначения.
 @router.callback_query(F.data == "cancel_assignment")
 async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Отмена процесса назначения"""
@@ -321,6 +358,8 @@ async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMCont
         logger.error(f"Ошибка отмены назначения: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "view_assignments_" генерит только
+# get_report_details_keyboard, у которой нет прод-вызовов.
 @router.callback_query(F.data.startswith("view_assignments_"))
 async def handle_view_assignments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
     """Просмотр назначений заявки"""
