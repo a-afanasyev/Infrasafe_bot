@@ -186,6 +186,10 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
     "BUG-148": A(pkg="A3", status="decision", method="verified-2026-08-13",
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
+    "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
+                 note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
+    "BUG-150": A(pkg="A2", status="decision", method="verified-2026-08-14",
+                 note="4 мёртвых хендлера shifts.py + клавиатуры-сироты; ретайр открывает файлу CONVERTED"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
