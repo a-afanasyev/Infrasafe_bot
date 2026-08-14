@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **420**
-- закрыто маркером: **398**
-- открыто маркером: **22**
+- закрыто маркером: **401**
+- открыто маркером: **19**
 
-  - `actionable` — **15**
+  - `actionable` — **12**
   - `decision` — **1**
   - `calendar` — **1**
   - `no-pr` — **1**
 
-Из них actionable по приоритету: P2=4, P3=11.
+Из них actionable по приоритету: P2=3, P3=9.
 
 Значения `status`:
 
@@ -51,9 +51,6 @@
 | `AUD3-07` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — | 168 .query( = 159 db.query + 9 db_local.query |
 | `AUD5-ARCH-1` | P2 | actionable | plan-2026-07-26 | A2 | — | — | — |  |
 | `BUG-148` | P2 | decision | verified-2026-08-13 | A3 | — | — | — | мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр |
-| `AUD3-27` | P3 | actionable | plan-2026-07-26 | A4 | — | — | — | политика, а не точечный баг: ещё и shift_planning_service.py |
-| `AUD5-ARCH-5` | P2 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
-| `AUD5-CODE-13` | P3 | actionable | doc-2026-07-21 | A4 | — | — | — |  |
 | `AUD5-CODE-10` | P3 | actionable | doc-2026-07-21 | A5 | — | — | — |  |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `AUD5-ARCH-6` | P3 | actionable | doc-2026-07-21 | П10 | — | — | — |  |
