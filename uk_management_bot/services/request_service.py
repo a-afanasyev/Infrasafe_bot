@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional, Dict, Any
 import logging
 
@@ -114,9 +115,9 @@ class RequestService:
             logger.info(f"Создана заявка {request.request_number} пользователем {user_id}")
             return request
             
-        except Exception as e:
+        except Exception:
             self.db.rollback()
-            logger.error(f"Ошибка создания заявки: {e}")
+            logger.exception("Ошибка создания заявки")
             raise
     
     def get_user_requests(
@@ -167,9 +168,11 @@ class RequestService:
             logger.info(f"Получено {len(requests)} заявок для пользователя {user_id} (limit={limit}, offset={offset})")
             return requests
 
-        except Exception as e:
-            logger.error(f"Ошибка получения заявок пользователя {user_id}: {e}")
-            return []
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не маскируется пустым списком
+            # («у вас нет заявок» на лежащей БД).
+            logger.exception(f"Ошибка БД при получении заявок пользователя {user_id}")
+            raise
     
     def get_request_by_number(self, request_number: str) -> Optional[Request]:
         """
@@ -203,9 +206,11 @@ class RequestService:
             )
             return request
 
-        except Exception as e:
-            logger.error(f"Ошибка получения заявки {request_number}: {e}")
-            return None
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не должна выглядеть как «заявка не
+            # найдена» (None) — от этого зависят статусные money-path'ы.
+            logger.exception(f"Ошибка БД при получении заявки {request_number}")
+            raise
     
     # Устаревший метод для совместимости - будет удален
     def get_request_by_id(self, request_id: int) -> Optional[Request]:
@@ -225,9 +230,10 @@ class RequestService:
     def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:
         try:
             return self.db.query(User).filter(User.telegram_id == telegram_id).first()
-        except Exception as e:
-            logger.error(f"Ошибка поиска пользователя по telegram_id {telegram_id}: {e}")
-            return None
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка ≠ «пользователь не найден».
+            logger.exception(f"Ошибка БД при поиске пользователя по telegram_id {telegram_id}")
+            raise
 
     def update_status_by_actor(
         self,
@@ -318,17 +324,23 @@ class RequestService:
             # Уведомления (best-effort, post-commit; durable audit/outbox уже в tx)
             try:
                 notify_status_changed(self.db, request, outcome.old_status, outcome.new_status)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления о смене статуса для заявки {request_number}: {e}")
+            except Exception:
+                # Best-effort post-commit уведомление: не роняем успешный
+                # переход, но логируем с полным трейсбеком.
+                logger.exception(
+                    f"Ошибка отправки уведомления о смене статуса для заявки {request_number}"
+                )
             logger.info(
                 f"Пользователь {actor.id} изменил статус заявки {request_number} "
                 f"с '{outcome.old_status}' на '{outcome.new_status}' (canon)")
             if outcome.no_op:
                 return {"success": True, "message": "Статус не изменён", "request": request}
             return {"success": True, "message": "Статус обновлен", "request": request}
-        except Exception as e:
+        except Exception:
+            # Осознанно широкий: контракт метода — envelope {success, message,
+            # request}, честно сообщающий об ошибке (не «безопасный» дефолт).
             self.db.rollback()
-            logger.error(f"Ошибка update_status_by_actor для заявки {request_number}: {e}")
+            logger.exception(f"Ошибка update_status_by_actor для заявки {request_number}")
             return {"success": False, "message": "Ошибка при обновлении статуса", "request": None}
 
     @staticmethod
@@ -432,9 +444,10 @@ class RequestService:
             logger.info(f"Найдено {len(requests)} заявок (limit={limit}, offset={offset})")
             return requests
 
-        except Exception as e:
-            logger.error(f"Ошибка поиска заявок: {e}")
-            return []
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не маскируется «ничего не найдено».
+            logger.exception("Ошибка БД при поиске заявок")
+            raise
     
     def get_request_statistics(self, user_id: Optional[int] = None) -> Dict[str, Any]:
         """
@@ -494,14 +507,10 @@ class RequestService:
                 "urgency_statistics": urgency_stats
             }
             
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики: {e}")
-            return {
-                "total_requests": 0,
-                "status_statistics": {},
-                "category_statistics": {},
-                "urgency_statistics": {}
-            }
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не рисует менеджеру нулевую статистику.
+            logger.exception("Ошибка БД при получении статистики")
+            raise
     
     def delete_request(self, request_number: str, user_id: int) -> bool:
         """
@@ -532,11 +541,13 @@ class RequestService:
             
             logger.info(f"Заявка {request_number} удалена пользователем {user_id}")
             return True
-            
-        except Exception as e:
+
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не должна выглядеть как «нет прав /
+            # не найдена» (False) — после rollback пропагируем.
             self.db.rollback()
-            logger.error(f"Ошибка удаления заявки {request_number}: {e}")
-            return False
+            logger.exception(f"Ошибка БД при удалении заявки {request_number}")
+            raise
     
     def add_media_to_request(self, request_number: str, file_ids: List[str]) -> Optional[Request]:
         """
@@ -564,11 +575,13 @@ class RequestService:
             
             logger.info(f"Добавлено {len(file_ids)} медиафайлов к заявке {request_number}")
             return request
-            
-        except Exception as e:
+
+        except SQLAlchemyError:
+            # A4/AUD5-CODE-13: DB-ошибка не маскируется None («заявка не
+            # найдена») — медиа молча терялись бы.
             self.db.rollback()
-            logger.error(f"Ошибка добавления медиафайлов к заявке {request_number}: {e}")
-            return None
+            logger.exception(f"Ошибка БД при добавлении медиафайлов к заявке {request_number}")
+            raise
     
     def _get_user_name(self, user_id: int) -> str:
         """Получение имени пользователя по ID"""

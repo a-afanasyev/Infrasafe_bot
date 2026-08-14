@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import List, Dict
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from uk_management_bot.utils.business_time import (
@@ -39,8 +40,15 @@ class ScoringEngine:
                 score = self._calculate_executor_score(shift, executor)
                 if score.total_score > 0:  # Только подходящих исполнителей
                     scores.append(score)
-            except Exception as e:
-                logger.error(f"Ошибка оценки исполнителя {executor.id}: {e}")
+            except SQLAlchemyError:
+                # AUD3-27: ошибка БД — не повод молча выкинуть кандидата
+                # (список «худел» и назначение честно «не находило» людей).
+                logger.exception(f"Ошибка БД при оценке исполнителя {executor.id}")
+                raise
+            except Exception:
+                # Данные-ошибки одного кандидата не роняют пачку — кандидат
+                # пропускается, но с полным трейсбеком в логе.
+                logger.exception(f"Ошибка оценки исполнителя {executor.id}")
 
         return scores
 
@@ -225,9 +233,13 @@ class ScoringEngine:
 
             return (shift_load_score + request_load_score) / 2
 
-        except Exception as e:
-            logger.error(f"Ошибка расчета загруженности для исполнителя {executor.id}: {e}")
-            return 0.5  # Средняя оценка при ошибке
+        except SQLAlchemyError:
+            # AUD3-27: DB-ошибка не маскируется «нейтральной» оценкой 0.5 —
+            # скоринг на лежащей БД давал бы ложную картину загруженности.
+            logger.exception(
+                f"Ошибка БД при расчете загруженности для исполнителя {executor.id}"
+            )
+            raise
 
     def _calculate_rating_score(self, executor: User) -> float:
         """Рассчитывает оценку на основе рейтинга исполнителя"""
@@ -329,9 +341,14 @@ class ScoringEngine:
 
             return 1.0  # Полная доступность
 
-        except Exception as e:
-            logger.error(f"Ошибка расчета доступности для исполнителя {executor.id}: {e}")
-            return 0.5
+        except SQLAlchemyError:
+            # AUD3-27: DB-ошибка не маскируется «нейтральной» доступностью 0.5.
+            # Ожидаемые данные-ошибки (кривой JSON specialization_focus)
+            # обрабатываются локальными fallback'ами на json.loads выше.
+            logger.exception(
+                f"Ошибка БД при расчете доступности для исполнителя {executor.id}"
+            )
+            raise
 
     def _calculate_preference_score(self, shift: Shift, executor: User) -> float:
         """Рассчитывает соответствие предпочтениям исполнителя"""

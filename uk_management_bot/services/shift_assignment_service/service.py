@@ -1,6 +1,7 @@
 from datetime import datetime, date, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy import and_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift import Shift
@@ -445,9 +446,14 @@ class ShiftAssignmentService:
             # Возвращаем лучшего
             return max(executor_scores, key=lambda x: x.total_score)
 
-        except Exception as e:
-            logger.error(f"Ошибка получения лучшего исполнителя для смены {shift.id}: {e}")
-            return None
+        except SQLAlchemyError:
+            # AUD3-27: DB-ошибка не маскируется под «лучший исполнитель не
+            # найден» (None) — вызывающий должен отличать сбой от отсутствия
+            # кандидатов. Данные-ошибки кандидатов скоринг обрабатывает сам.
+            logger.exception(
+                f"Ошибка БД при получении лучшего исполнителя для смены {shift.id}"
+            )
+            raise
 
     def reassign_on_absence(self, executor_id: int, reason: str = "absence") -> Dict[str, Any]:
         """

@@ -109,10 +109,15 @@ class StructuredLogger:
         self.logger = logging.getLogger(name)
         self.context = context
     
-    def _log(self, level: int, message: str, **kwargs):
-        """Внутренний метод для логирования с контекстом"""
+    def _log(self, level: int, message: str, exc_info=None, **kwargs):
+        """Внутренний метод для логирования с контекстом.
+
+        ``exc_info`` прокидывается в stdlib-logging как есть (исключение /
+        кортеж / True), а не в ``extra``: ключ ``exc_info`` в extra запрещён
+        stdlib'ом (перекрывает атрибут LogRecord).
+        """
         extra = {**self.context, **kwargs}
-        self.logger.log(level, message, extra=extra)
+        self.logger.log(level, message, extra=extra, exc_info=exc_info)
     
     def debug(self, message: str, **kwargs):
         """Debug уровень логирования"""
