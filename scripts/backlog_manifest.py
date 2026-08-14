@@ -183,13 +183,9 @@ ASSIGNMENT: dict[str, dict] = {
     # ── Программа A: архитектура
     "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
                  note="168 .query( = 159 db.query + 9 db_local.query"),
-    "BUG-137": A(pkg="A2", status="decision", method="verified-2026-08-13",
-                 note="инвентарь живости: жив 1/11 хендлеров (починен в #421); ретайр vs оживление — вопрос владельцу"),
     "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
     "BUG-148": A(pkg="A3", status="decision", method="verified-2026-08-13",
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
-    "BUG-145": A(pkg="A3", status="actionable", method="verified-2026-08-13",
-                 note="живая часть закрыта #421; остаток в мёртвом коде — судьба с BUG-137"),
     "AUD5-ARCH-5": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD5-CODE-13": A(pkg="A4", status="actionable", method="doc-2026-07-21"),
     "AUD3-27": A(pkg="A4", status="actionable", method="plan-2026-07-26",
