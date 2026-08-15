@@ -120,14 +120,7 @@ CONVERTED = [
     "uk_management_bot/handlers/address_apartments/creation.py",
     "uk_management_bot/handlers/address_apartments/autofill.py",
     "uk_management_bot/handlers/address_apartments/details.py",
-    # handlers/inspector_requests.py волной 6 конвертирован в БОЛЬШЕЙ части
-    # (все три сайта выбора двора/дома + три сайта sync-хелперов, которые
-    # раньше открывали свой session_scope и звались из async синхронно), но в
-    # ратчет не входит: inspector_confirm сохраняет session_scope, потому что
-    # save_request (handlers/requests/create.py, общая с applicant-флоу
-    # async-функция) внутри одной транзакции мешает sync-SQL с await'ом.
-    # Добавить сюда после раскроя save_request на sync-ядро + async-обёртку.
-    # A2-хвост волна 6: роли и специализации пользователя. Все 10 хендлеров
+    # A2-хвост волна 6: роли и специализации пользователя. Все 11 хендлеров
     # живые (генератор триггеров — keyboards/user_management.py: 182 user_roles_,
     # 189 user_specializations_, get_roles_management_keyboard role_add_/
     # role_remove_/roles_save/roles_cancel, get_specializations_selection_keyboard
@@ -135,6 +128,16 @@ CONVERTED = [
     # которые ставит сам файл).
     "uk_management_bot/handlers/user_management/roles_specs.py",
 ]
+
+# ЗА пределами списка (кандидаты, ждущие своего условия):
+#
+# handlers/inspector_requests.py — волной 6 конвертирован в БОЛЬШЕЙ части (все
+# сайты выбора двора/дома + три sync-хелпера, которые раньше открывали свой
+# session_scope и звались из async синхронно, блокируя loop), но в ратчет НЕ
+# входит: inspector_confirm сохраняет session_scope, потому что save_request
+# (handlers/requests/create.py, общая с applicant-флоу async-функция) внутри
+# одной транзакции мешает sync-SQL с await'ом. Добавить сюда после раскроя
+# save_request на sync-ядро + async-обёртку.
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
 _FORBIDDEN_ATTR_CALLS = {"query", "commit"}
