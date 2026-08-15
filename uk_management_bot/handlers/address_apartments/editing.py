@@ -37,11 +37,12 @@ class _ApartmentStatus:
 
 @dataclass(frozen=True)
 class _ApartmentDeleteCard:
-    """Карточка подтверждения удаления. ``full_address`` — property модели,
-    читающая lazy-связь building, поэтому вычисляется внутри юнита;
-    apartment_address() локализует её уже в async-слое (это рендер, не БД)."""
+    """Карточка подтверждения удаления. ``address_text`` — уже локализованный
+    адрес: apartment_address() читает lazy-связь building, поэтому зовётся
+    внутри юнита (и прямого чтения `full_address` в коде показа не возникает —
+    его запрещает FS-11-гейт tests/services/test_address_i18n.py)."""
     residents_count: int
-    full_address: str
+    address_text: str
 
 
 # ==========================================================================
@@ -60,14 +61,14 @@ def _load_apartment_status(db, apartment_id: int) -> Optional[_ApartmentStatus]:
     return _ApartmentStatus(is_active=apartment.is_active)
 
 
-def _load_apartment_delete_card(db, apartment_id: int) -> Optional[_ApartmentDeleteCard]:
+def _load_apartment_delete_card(db, apartment_id: int, lang: str) -> Optional[_ApartmentDeleteCard]:
     """-> _ApartmentDeleteCard | None (None — квартира не найдена)."""
     apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
     if not apartment:
         return None
     return _ApartmentDeleteCard(
         residents_count=apartment.residents_count if hasattr(apartment, 'residents_count') else 0,
-        full_address=apartment.full_address,
+        address_text=apartment_address(apartment, lang),
     )
 
 
@@ -139,7 +140,7 @@ async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "r
     lang = language
 
     try:
-        card = await run_db(lambda s: _load_apartment_delete_card(s, apartment_id), db=_db)
+        card = await run_db(lambda s: _load_apartment_delete_card(s, apartment_id, lang), db=_db)
         if card is None:
             await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
             return
@@ -150,7 +151,7 @@ async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "r
         if residents_count > 0:
             warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
 
-        full_address = apartment_address(card, lang)
+        full_address = card.address_text
 
         await callback.message.edit_text(
             get_text("address_apartments.handlers.delete_confirm", language=lang).format(

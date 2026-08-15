@@ -36,34 +36,18 @@ class _BuildingOption:
     apartments_count: int
 
 
-@dataclass(frozen=True)
-class _ApartmentRow:
-    """Строка списка квартир — ровно те атрибуты, что читает
-    get_apartments_list_keyboard: is_active, residents_count (hasattr остаётся
-    True, как у property модели Apartment), full_address (через
-    apartment_address) и id."""
-    id: int
-    is_active: bool
-    residents_count: int
-    full_address: str
-
-
 # ==========================================================================
 # Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
 # run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
 # Тела запросов перенесены байт-в-байт.
+#
+# Клавиатура списка квартир собирается ВНУТРИ юнита и уходит наружу готовой
+# разметкой (канон допускает InlineKeyboardMarkup через границу run_db):
+# get_apartments_list_keyboard читает lazy-property строки и канонический адрес
+# через address_helpers.apartment_address, а DTO с полем full_address означал бы
+# прямое чтение `full_address` в коде показа — его запрещает FS-11-гейт
+# (tests/services/test_address_i18n.py).
 # ==========================================================================
-
-def _apartment_row_from(apartment) -> _ApartmentRow:
-    # residents_count / full_address — property модели, читающие lazy-связи;
-    # вычисляются здесь, пока сессия жива.
-    return _ApartmentRow(
-        id=apartment.id,
-        is_active=apartment.is_active,
-        residents_count=apartment.residents_count if hasattr(apartment, 'residents_count') else 0,
-        full_address=apartment.full_address,
-    )
-
 
 def _load_buildings_with_counts(db) -> list:
     """-> [_BuildingOption] для меню выбора здания (список квартир)."""
@@ -98,20 +82,32 @@ def _load_buildings_with_counts(db) -> list:
     return options
 
 
-def _load_building_apartments(db, building_id: int) -> Optional[tuple]:
-    """-> (building_address, [_ApartmentRow]) | None (None — здание не найдено)."""
+def _load_building_apartments(db, building_id: int, page: int) -> Optional[tuple]:
+    """-> (building_address, total, разметка списка) | None (здание не найдено)."""
     building = AddressService.get_building_by_id(db, building_id, include_yard=True)
     if not building:
         return None
 
     apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
-    return building.address, [_apartment_row_from(a) for a in apartments]
+    # ⚠️ Предсуществующий дефект (сохранён 1:1): в клавиатуру не пробрасывается
+    # language — подписи кнопок и адреса всегда рендерятся на ru.
+    return (
+        building.address,
+        len(apartments),
+        get_apartments_list_keyboard(apartments, page=page, building_id=building_id),
+    )
 
 
-def _search_apartment_rows(db, query_text: str) -> list:
-    """-> [_ApartmentRow] по поисковому запросу."""
+def _search_apartments_markup(db, query_text: str) -> tuple:
+    """-> (total, разметка списка | None при пустом результате)."""
     apartments = AddressService.search_apartments(db, query_text, only_active=True)
-    return [_apartment_row_from(a) for a in apartments]
+    if not apartments:
+        return 0, None
+    # ⚠️ Предсуществующие дефекты (сохранены 1:1): (1) language не пробрасывается
+    # в клавиатуру — результаты поиска всегда на ru; (2) без building_id
+    # пагинация генерит callback `addr_apartments_page:<n>`, хендлера которого
+    # в проекте нет — кнопки страниц поиска мертвы.
+    return len(apartments), get_apartments_list_keyboard(apartments, page=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -192,26 +188,24 @@ async def show_apartments_by_building(callback: CallbackQuery, language: str = "
     lang = language
 
     try:
-        loaded = await run_db(lambda s: _load_building_apartments(s, building_id), db=_db)
+        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, 0), db=_db)
         if loaded is None:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
 
-        building_address, apartments = loaded
+        building_address, total, markup = loaded
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
             address=building_address,
-            total=len(apartments)
+            total=total
         )
 
-        if not apartments:
+        if not total:
             text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): в клавиатуру не пробрасывается
-        # language — подписи кнопок и адреса всегда рендерятся на ru.
         await callback.message.edit_text(
             text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=0, building_id=building_id)
+            reply_markup=markup
         )
 
     except Exception as e:
@@ -228,26 +222,24 @@ async def paginate_apartments_by_building(callback: CallbackQuery, language: str
     lang = language
 
     try:
-        loaded = await run_db(lambda s: _load_building_apartments(s, building_id), db=_db)
+        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, page), db=_db)
         if loaded is None:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
 
-        building_address, apartments = loaded
+        building_address, total, markup = loaded
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
             address=building_address,
-            total=len(apartments)
+            total=total
         )
 
-        if not apartments:
+        if not total:
             text += "\n" + get_text("address_apartments.handlers.apartments_list_empty", language=lang)
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается
-        # в клавиатуру — страница списка всегда на ru.
         await callback.message.edit_text(
             text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=page, building_id=building_id)
+            reply_markup=markup
         )
 
     except Exception as e:
@@ -293,9 +285,9 @@ async def process_apartment_search(message: Message, state: FSMContext, language
         return
 
     try:
-        apartments = await run_db(lambda s: _search_apartment_rows(s, query), db=_db)
+        total, markup = await run_db(lambda s: _search_apartments_markup(s, query), db=_db)
 
-        if not apartments:
+        if not total:
             no_results_text = (
                 f"{get_text('requests.search_results_title', language=lang)}\n\n"
                 f"{get_text('requests.search_no_results', language=lang, query=query)}\n\n"
@@ -311,17 +303,13 @@ async def process_apartment_search(message: Message, state: FSMContext, language
         text = (
             f"{get_text('requests.search_results_title', language=lang)}\n\n"
             f"{get_text('requests.search_query_label', language=lang, query=query)}\n"
-            f"{get_text('requests.search_found_count', language=lang, count=len(apartments))}\n\n"
+            f"{get_text('requests.search_found_count', language=lang, count=total)}\n\n"
             f"{get_text('requests.search_select_apartment', language=lang)}"
         )
 
-        # ⚠️ Предсуществующие дефекты (сохранены 1:1): (1) language не
-        # пробрасывается в клавиатуру — результаты поиска всегда на ru;
-        # (2) без building_id пагинация генерит callback `addr_apartments_page:<n>`,
-        # хендлера которого в проекте нет — кнопки страниц поиска мертвы.
         await message.answer(
             text,
-            reply_markup=get_apartments_list_keyboard(apartments, page=0)
+            reply_markup=markup
         )
 
         await state.clear()
