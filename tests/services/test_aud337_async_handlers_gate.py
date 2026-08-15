@@ -120,6 +120,13 @@ CONVERTED = [
     "uk_management_bot/handlers/address_apartments/creation.py",
     "uk_management_bot/handlers/address_apartments/autofill.py",
     "uk_management_bot/handlers/address_apartments/details.py",
+    # handlers/inspector_requests.py волной 6 конвертирован в БОЛЬШЕЙ части
+    # (все три сайта выбора двора/дома + три сайта sync-хелперов, которые
+    # раньше открывали свой session_scope и звались из async синхронно), но в
+    # ратчет не входит: inspector_confirm сохраняет session_scope, потому что
+    # save_request (handlers/requests/create.py, общая с applicant-флоу
+    # async-функция) внутри одной транзакции мешает sync-SQL с await'ом.
+    # Добавить сюда после раскроя save_request на sync-ядро + async-обёртку.
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

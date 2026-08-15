@@ -22,7 +22,7 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db, session_scope
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
@@ -76,34 +76,60 @@ async def _lang(event) -> str:
         return "ru"
 
 
-def _approved_inspector(telegram_id: int) -> bool:
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db — сессию открывает и закрывает run_db, хендлер её не видит. Раньше
+# каждый из них открывал свой session_scope и вызывался из async-хендлера
+# синхронно, то есть блокировал event loop. Наружу отдают только примитивы
+# (кортежи id/подпись), ORM за границу run_db не выходит.
+# ==========================================================================
+
+
+def _approved_inspector(db, telegram_id: int) -> bool:
     from uk_management_bot.api.dependencies import _parse_user_roles
 
-    with session_scope() as db:
-        user = db.query(User).filter(User.telegram_id == telegram_id).first()
-        if not user or user.status != "approved":
-            return False
-        return "inspector" in _parse_user_roles(user)
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user or user.status != "approved":
+        return False
+    return "inspector" in _parse_user_roles(user)
 
 
-def _active_yards() -> list[tuple[int, str]]:
-    with session_scope() as db:
-        yards = db.query(Yard).filter(Yard.is_active.is_(True)).order_by(Yard.name).all()
-        return [(y.id, y.name) for y in yards]
+def _active_yards(db) -> list[tuple[int, str]]:
+    yards = db.query(Yard).filter(Yard.is_active.is_(True)).order_by(Yard.name).all()
+    return [(y.id, y.name) for y in yards]
 
 
-def _active_buildings(yard_id: int) -> list[tuple[int, str]]:
-    with session_scope() as db:
-        yard = db.query(Yard).filter(Yard.id == yard_id, Yard.is_active.is_(True)).first()
-        if not yard:
-            return []
-        buildings = (
-            db.query(Building)
-            .filter(Building.yard_id == yard_id, Building.is_active.is_(True))
-            .order_by(Building.address)
-            .all()
-        )
-        return [(b.id, b.address) for b in buildings]
+def _active_buildings(db, yard_id: int) -> list[tuple[int, str]]:
+    yard = db.query(Yard).filter(Yard.id == yard_id, Yard.is_active.is_(True)).first()
+    if not yard:
+        return []
+    buildings = (
+        db.query(Building)
+        .filter(Building.yard_id == yard_id, Building.is_active.is_(True))
+        .order_by(Building.address)
+        .all()
+    )
+    return [(b.id, b.address) for b in buildings]
+
+
+# Коды отказа резолва адреса — наружу из юнита уходит код, не исключение.
+_RESOLVE_NO_USER = "no_user"
+_RESOLVE_ADDRESS_UNAVAILABLE = "address_unavailable"
+
+
+def _resolve_building_address(db, telegram_id: int, building_id: int) -> tuple:
+    """-> (canonical_address, None) | (None, код отказа).
+
+    Резолв при выборе (дом+двор активны). Принадлежность для inspector не нужна.
+    """
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return None, _RESOLVE_NO_USER
+    try:
+        resolved = resolve_request_address_sync(db, user.id, "inspector", "building", building_id)
+    except AddressResolutionError:
+        return None, _RESOLVE_ADDRESS_UNAVAILABLE
+    return resolved.canonical_address, None
 
 
 def _paged_keyboard(items: list[tuple[int, str]], prefix: str, page: int, language: str,
@@ -158,12 +184,12 @@ def _confirm_keyboard(language: str) -> InlineKeyboardMarkup:
 
 
 @router.message(F.text.in_(INSPECTOR_CREATE_TEXTS))
-async def start_inspector_request(message: Message, state: FSMContext):
+async def start_inspector_request(message: Message, state: FSMContext, *, _db=None):
     lang = await _lang(message)
-    if not _approved_inspector(message.from_user.id):
+    if not await run_db(lambda s: _approved_inspector(s, message.from_user.id), db=_db):
         await message.answer(get_text("inspector.only_approved", language=lang))
         return
-    yards = _active_yards()
+    yards = await run_db(_active_yards, db=_db)
     if not yards:
         await message.answer(get_text("inspector.no_yards", language=lang))
         return
@@ -176,20 +202,21 @@ async def start_inspector_request(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("insp_yard_page:"), InspectorRequestStates.yard)
-async def inspector_yard_page(callback: CallbackQuery, state: FSMContext):
+async def inspector_yard_page(callback: CallbackQuery, state: FSMContext, *, _db=None):
     lang = await _lang(callback)
     page = int(callback.data.split(":", 1)[1])
+    yards = await run_db(_active_yards, db=_db)
     await callback.message.edit_reply_markup(
-        reply_markup=_paged_keyboard(_active_yards(), "insp_yard", page, lang, "🏘️")
+        reply_markup=_paged_keyboard(yards, "insp_yard", page, lang, "🏘️")
     )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("insp_yard:"), InspectorRequestStates.yard)
-async def inspector_yard_selected(callback: CallbackQuery, state: FSMContext):
+async def inspector_yard_selected(callback: CallbackQuery, state: FSMContext, *, _db=None):
     lang = await _lang(callback)
     yard_id = int(callback.data.split(":", 1)[1])
-    buildings = _active_buildings(yard_id)
+    buildings = await run_db(lambda s: _active_buildings(s, yard_id), db=_db)
     if not buildings:
         await callback.answer(get_text("inspector.no_buildings", language=lang), show_alert=True)
         return
@@ -204,39 +231,38 @@ async def inspector_yard_selected(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith("insp_bld_page:"), InspectorRequestStates.building)
-async def inspector_building_page(callback: CallbackQuery, state: FSMContext):
+async def inspector_building_page(callback: CallbackQuery, state: FSMContext, *, _db=None):
     lang = await _lang(callback)
     page = int(callback.data.split(":", 1)[1])
     data = await state.get_data()
+    buildings = await run_db(lambda s: _active_buildings(s, data.get("yard_id")), db=_db)
     await callback.message.edit_reply_markup(
-        reply_markup=_paged_keyboard(_active_buildings(data.get("yard_id")), "insp_bld", page, lang, "🏢")
+        reply_markup=_paged_keyboard(buildings, "insp_bld", page, lang, "🏢")
     )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("insp_bld:"), InspectorRequestStates.building)
-async def inspector_building_selected(callback: CallbackQuery, state: FSMContext):
+async def inspector_building_selected(callback: CallbackQuery, state: FSMContext, *, _db=None):
     lang = await _lang(callback)
     building_id = int(callback.data.split(":", 1)[1])
 
-    # Резолв при выборе (дом+двор активны). Принадлежность для inspector не нужна.
-    with session_scope() as db:
-        user = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not user:
-            await callback.answer(get_text("errors.default", language=lang), show_alert=True)
-            return
-        try:
-            resolved = resolve_request_address_sync(db, user.id, "inspector", "building", building_id)
-        except AddressResolutionError:
-            await callback.answer(get_text("requests.address_not_available", language=lang), show_alert=True)
-            return
+    canonical_address, error = await run_db(
+        lambda s: _resolve_building_address(s, callback.from_user.id, building_id), db=_db
+    )
+    if error == _RESOLVE_NO_USER:
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
+        return
+    if error == _RESOLVE_ADDRESS_UNAVAILABLE:
+        await callback.answer(get_text("requests.address_not_available", language=lang), show_alert=True)
+        return
 
     await state.update_data(
-        address_type="building", address_id=building_id, address=resolved.canonical_address,
+        address_type="building", address_id=building_id, address=canonical_address,
     )
     await state.set_state(InspectorRequestStates.category)
     await callback.message.edit_text(
-        get_text("requests.address_selected", language=lang, address=resolved.canonical_address)
+        get_text("requests.address_selected", language=lang, address=canonical_address)
     )
     await callback.message.answer(
         get_text("requests.select_category", language=lang), reply_markup=_category_keyboard(lang)
@@ -344,15 +370,22 @@ async def inspector_media_text(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "insp_confirm_yes", InspectorRequestStates.confirm)
-async def inspector_confirm(callback: CallbackQuery, state: FSMContext):
+async def inspector_confirm(callback: CallbackQuery, state: FSMContext, *, _db=None):
     lang = await _lang(callback)
-    if not _approved_inspector(callback.from_user.id):
+    if not await run_db(lambda s: _approved_inspector(s, callback.from_user.id), db=_db):
         await callback.answer(get_text("inspector.only_approved", language=lang), show_alert=True)
         await state.clear()
         return
     data = await state.get_data()
     from uk_management_bot.handlers.requests import save_request
 
+    # ⚠️ Сохранение НЕ переведено на run_db осознанно: save_request —
+    # общая с applicant-флоу async-функция (handlers/requests/create.py),
+    # которая внутри одной транзакции мешает sync-SQL с await'ом (загрузка
+    # медиа в Media Service после commit). Разрезать её на sync-ядро + async-
+    # обёртку — работа по её собственному файлу, а не по этому. Поэтому
+    # session_scope здесь сохранён байт-в-байт, а inspector_requests.py НЕ
+    # входит в CONVERTED-ратчет гейта (tests/services/test_aud337_async_handlers_gate.py).
     with session_scope() as db:
         request_number = await save_request(
             data, callback.from_user.id, db, callback.bot,
