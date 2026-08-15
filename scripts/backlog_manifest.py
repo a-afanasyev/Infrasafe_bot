@@ -190,6 +190,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
     "BUG-154": A(pkg="A2", status="decision", method="verified-2026-08-14",
                  note="request_assignment мёртв целиком (~370 строк) + 3 в panels; решать с BUG-150"),
+    "BUG-158": A(pkg="A2", status="decision", method="verified-2026-08-16",
+                 note="4 мёртвых хендлера onboarding; решать с BUG-150 и BUG-154 одним движением"),
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
                  note="8 дефектов волны 6; мёртвая пагинация чинится вместе с BUG-151 п.6"),
     "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-15",
