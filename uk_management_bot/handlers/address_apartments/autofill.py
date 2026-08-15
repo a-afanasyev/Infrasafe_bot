@@ -1,10 +1,12 @@
 import logging
+from dataclasses import dataclass
+from typing import Optional
 from aiogram import F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
@@ -20,38 +22,77 @@ from ._router import router
 logger = logging.getLogger(__name__)
 
 
+# ==========================================================================
+# DTO для async-слоя: наружу из run_db выходят примитивы, не ORM-строки.
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _BuildingHead:
+    """Шапка здания для приглашения к автозаполнению."""
+    address: str
+    yard_name: Optional[str]
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db. bulk_create_apartments сюда НЕ входит: это async-метод AddressService
+# с собственной async-сессией (и собственным commit в services/addresses/core),
+# параметр session им не используется — хендлер await'ит его с session=None.
+# ==========================================================================
+
+def _load_building_head(db, building_id: int) -> Optional[_BuildingHead]:
+    """-> _BuildingHead | None (None — здание не найдено)."""
+    building = AddressService.get_building_by_id(db, building_id, include_yard=True)
+    if not building:
+        return None
+    return _BuildingHead(
+        address=building.address,
+        yard_name=building.yard.name if building.yard else None,
+    )
+
+
+def _user_id_by_tg(db, telegram_id: int) -> Optional[int]:
+    """-> users.id | None. Запрос перенесён байт-в-байт."""
+    from uk_management_bot.database.models import User
+    from sqlalchemy import select
+
+    user = db.execute(
+        select(User).where(User.telegram_id == telegram_id)
+    ).scalar_one_or_none()
+    return user.id if user else None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # АВТОЗАПОЛНЕНИЕ КВАРТИР
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_building_autofill:"))
-async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Начать процесс автозаполнения квартир для здания"""
     building_id = int(callback.data.split(":")[1])
     lang = language
 
     try:
-        with session_scope() as db:
-            building = AddressService.get_building_by_id(db, building_id, include_yard=True)
-            if not building:
-                await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
-                return
+        building = await run_db(lambda s: _load_building_head(s, building_id), db=_db)
+        if building is None:
+            await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
+            return
 
-            # Сохраняем ID здания в state
-            await state.update_data(autofill_building_id=building_id)
-            await state.set_state(ApartmentManagementStates.waiting_for_autofill_range)
+        # Сохраняем ID здания в state
+        await state.update_data(autofill_building_id=building_id)
+        await state.set_state(ApartmentManagementStates.waiting_for_autofill_range)
 
-            yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {building.yard.name}" if building.yard else ""
+        yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {building.yard_name}" if building.yard_name else ""
 
-            text = get_text("address_apartments.handlers.autofill_prompt", language=lang).format(
-                address=building.address,
-                yard_line=yard_line
-            )
+        text = get_text("address_apartments.handlers.autofill_prompt", language=lang).format(
+            address=building.address,
+            yard_line=yard_line
+        )
 
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_cancel_keyboard_inline()
-            )
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_cancel_keyboard_inline()
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при начале автозаполнения: {e}")
@@ -62,6 +103,8 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, 
 async def process_autofill_range(message: Message, state: FSMContext, language: str = "ru"):
     """Обработать ввод диапазона номеров квартир"""
     lang = language
+    # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение в этом
+    # FSM-состоянии даёт message.text is None → AttributeError мимо обработчиков.
     range_text = message.text.strip()
 
     cancel_text = get_text("address.keyboards.cancel", language=lang)
@@ -126,7 +169,7 @@ async def process_autofill_range(message: Message, state: FSMContext, language: 
 
 
 @router.callback_query(F.data == "addr_autofill_confirm")
-async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Подтвердить и выполнить автозаполнение"""
     data = await state.get_data()
     building_id = data.get("autofill_building_id")
@@ -139,65 +182,58 @@ async def confirm_autofill_apartments(callback: CallbackQuery, state: FSMContext
         await state.clear()
         return
 
-    # ARC-05: with оборачивает весь try/except, чтобы db оставался открыт для
-    # db.rollback() в except (session_scope закрывает сессию только на выходе из with).
-    with session_scope() as db:
-        try:
-            # Получаем user.id из базы данных по telegram_id
-            from uk_management_bot.database.models import User
-            from sqlalchemy import select
+    try:
+        # Получаем user.id из базы данных по telegram_id
+        user_id = await run_db(lambda s: _user_id_by_tg(s, callback.from_user.id), db=_db)
 
-            user = db.execute(
-                select(User).where(User.telegram_id == callback.from_user.id)
-            ).scalar_one_or_none()
+        if user_id is None:
+            await callback.answer(get_text("address_apartments.handlers.autofill_user_not_found", language=lang), show_alert=True)
+            await state.clear()
+            return
 
-            if not user:
-                await callback.answer(get_text("address_apartments.handlers.autofill_user_not_found", language=lang), show_alert=True)
-                await state.clear()
-                return
+        # Выполняем массовое создание квартир
+        # bulk_create_apartments — async-метод с собственной async-сессией;
+        # параметр session им не используется. Прежние db.commit()/db.rollback()
+        # на sync-сессии хендлера были no-op: в ней выполнялся только SELECT
+        # пользователя, а квартиры коммитит сам сервис (services/addresses/core).
+        created_count, skipped_count, errors = await AddressService.bulk_create_apartments(
+            None,
+            building_id=building_id,
+            apartment_numbers=apartment_numbers,
+            created_by=user_id  # Используем user.id вместо telegram_id
+        )
 
-            # Выполняем массовое создание квартир
-            created_count, skipped_count, errors = await AddressService.bulk_create_apartments(
-                db,
-                building_id=building_id,
-                apartment_numbers=apartment_numbers,
-                created_by=user.id  # Используем user.id вместо telegram_id
+        # Формируем результат
+        text = get_text("address_apartments.handlers.autofill_success", language=lang).format(
+            created_count=created_count
+        )
+
+        if skipped_count > 0:
+            text += get_text("address_apartments.handlers.autofill_skipped", language=lang).format(
+                skipped_count=skipped_count
             )
 
-            db.commit()
-
-            # Формируем результат
-            text = get_text("address_apartments.handlers.autofill_success", language=lang).format(
-                created_count=created_count
-            )
-
-            if skipped_count > 0:
-                text += get_text("address_apartments.handlers.autofill_skipped", language=lang).format(
-                    skipped_count=skipped_count
+        if errors:
+            text += get_text("address_apartments.handlers.autofill_errors_header", language=lang)
+            for error in errors[:5]:  # Показываем только первые 5 ошибок
+                text += f"• {localize_address_error(error, lang)}\n"
+            if len(errors) > 5:
+                text += get_text("address_apartments.handlers.autofill_more_errors", language=lang).format(
+                    count=len(errors) - 5
                 )
 
-            if errors:
-                text += get_text("address_apartments.handlers.autofill_errors_header", language=lang)
-                for error in errors[:5]:  # Показываем только первые 5 ошибок
-                    text += f"• {localize_address_error(error, lang)}\n"
-                if len(errors) > 5:
-                    text += get_text("address_apartments.handlers.autofill_more_errors", language=lang).format(
-                        count=len(errors) - 5
-                    )
+        text += get_text("address_apartments.handlers.autofill_select_action", language=lang)
 
-            text += get_text("address_apartments.handlers.autofill_select_action", language=lang)
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_address_management_menu()
+        )
 
-            await callback.message.edit_text(
-                text,
-                reply_markup=get_address_management_menu()
-            )
-
-        except Exception as e:
-            logger.error(f"Ошибка при автозаполнении квартир: {e}")
-            await callback.answer(get_text("address_apartments.handlers.autofill_creation_error", language=lang), show_alert=True)
-            db.rollback()
-        finally:
-            await state.clear()
+    except Exception as e:
+        logger.error(f"Ошибка при автозаполнении квартир: {e}")
+        await callback.answer(get_text("address_apartments.handlers.autofill_creation_error", language=lang), show_alert=True)
+    finally:
+        await state.clear()
 
 
 @router.callback_query(F.data == "addr_autofill_cancel")
