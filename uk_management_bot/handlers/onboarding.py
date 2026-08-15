@@ -1,11 +1,43 @@
 """
 Обработчики онбординга новых пользователей
+
+AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза ЖИВЫХ хендлеров — цельный
+sync unit-of-work, исполняемый в worker-потоке через ``run_db``; наружу выходят
+примитивы, а не ORM-строки (у ORM-объекта вне потока нет живой сессии).
+Сеть (загрузка документа в Media Service) вынесена МЕЖДУ юнитами, в async-слой.
+
+Инвентарь живости (волна 7). ЖИВЫЕ: ``start_phone_input`` (кнопку
+«📱 Указать телефон» рисует base.handle_regular_start), ``process_contact`` и
+``process_manual_phone`` (FSM waiting_for_phone), весь кластер документов —
+``process_document_type_selection`` / ``process_document_file`` /
+``process_document_confirmation`` / ``save_document`` / ``cancel_document_upload``
+/ ``skip_documents`` / ``start_document_upload`` / ``complete_onboarding_with_documents``
+/ ``add_more_documents`` / ``complete_onboarding_final`` (вход даёт
+handlers/user_apartment_selection.py: ставит OnboardingStates.waiting_for_document_type
+и показывает get_document_type_keyboard()).
+
+⚠️ МЁРТВЫЕ (сохранены байт-в-байт до decision владельца, прецедент BUG-137/148/150 —
+поэтому файл НЕ входит в ратчет tests/services/test_aud337_async_handlers_gate.py:
+все четыре продолжают объявлять ``db``):
+  • ``start_onboarding`` — ``F.text == "/start"`` перекрыт ``base.cmd_start``
+    на ``start_router``, который main.py включает ПЕРВЫМ («/start FIRST»);
+    aiogram останавливает propagation на первом совпавшем роутере.
+  • ``complete_onboarding`` — вызывающих нет ни одного во всём репозитории.
+  • ``complete_onboarding_without_documents`` — единственный генератор его
+    триггера «✅ Завершить без документов» живёт внутри мёртвого
+    ``complete_onboarding``.
+  • ``start_address_input`` — генератора текста «🏠 Указать адрес» нет в репо
+    вовсе (сам помечен LEGACY HANDLER).
 """
 import logging
+from typing import Optional
+
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.profile_service import ProfileService
 from uk_management_bot.services.user_verification_service import UserVerificationService
@@ -74,6 +106,76 @@ ARCHIVE_TEXTS = get_archive_texts()
 ACCEPTANCE_TEXTS = get_acceptance_texts()
 ADMIN_PANEL_TEXTS = get_admin_panel_texts()
 
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# Наружу — только примитивы и словари-сводки, ORM-строки за границу не выходят.
+#
+# Запрос пользователя по telegram_id — тело ``AuthService.get_user_by_telegram_id``
+# 1:1 (``self.db.query(User).filter(User.telegram_id == telegram_id).first()``).
+# Метод объявлен ``async def``, хотя внутри чистый sync-SQL, поэтому из sync-юнита
+# его не await'нуть; сам SQL сохранён байт-в-байт.
+# ==========================================================================
+
+
+def _apply_phone(db, telegram_id: int, phone_number: str) -> bool:
+    """Сохраняет телефон. -> True | False (пользователя нет в БД)."""
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+
+    if not user:
+        return False
+
+    user.phone = phone_number
+    db.commit()
+    return True
+
+
+def _load_document_owner_id(db, telegram_id: int) -> Optional[int]:
+    """-> user.id | None (пользователя нет в БД). Только id: ORM-строка наружу
+    из потока не выходит."""
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+
+    if not user:
+        return None
+
+    return user.id
+
+
+def _apply_document(db, user_id: int, document_type: DocumentType,
+                    file_id: str, file_name: Optional[str], file_size: Optional[int]) -> None:
+    """Сохраняет документ пользователя (коммитит сам сервис)."""
+    verification_service = UserVerificationService(db)
+    verification_service.save_user_document(
+        user_id=user_id,
+        document_type=document_type,
+        file_id=file_id,
+        file_name=file_name,
+        file_size=file_size
+    )
+
+
+def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
+    """-> (user_status, documents_summary) | None (пользователя нет в БД).
+
+    ``documents_summary`` — словарь примитивов (см.
+    UserVerificationService.get_user_documents_summary), безопасен вне сессии.
+    """
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+
+    if not user:
+        return None
+
+    verification_service = UserVerificationService(db)
+    documents_summary = verification_service.get_user_documents_summary(user.id)
+    return user.status, documents_summary
+
+
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): ``F.text == "/start"`` перекрыт
+# ``base.cmd_start`` на ``start_router``, который main.py включает ПЕРВЫМ
+# (строка «dp.include_router(start_router)  # /start FIRST»); aiogram
+# останавливает propagation на первом совпавшем роутере, а onboarding_router
+# идёт много позже. Сохранён байт-в-байт до decision владельца.
 @router.message(F.text == "/start")
 async def start_onboarding(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Начинает процесс онбординга для нового пользователя"""
@@ -134,7 +236,7 @@ async def start_onboarding(message: Message, state: FSMContext, db: Session, lan
         await message.answer(get_text("errors.unknown_error", language=lang))
 
 @router.message(F.text.in_(SPECIFY_PHONE_TEXTS))
-async def start_phone_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def start_phone_input(message: Message, state: FSMContext, language: str = "ru"):
     """Начинает процесс ввода телефона"""
     lang = language
     
@@ -156,23 +258,22 @@ async def start_phone_input(message: Message, state: FSMContext, db: Session, la
     logger.info(f"Пользователь {message.from_user.id} начал ввод телефона")
 
 @router.message(OnboardingStates.waiting_for_phone, F.contact)
-async def process_contact(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_contact(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обрабатывает получение контакта"""
     lang = language
-    
+
     try:
         # Получаем номер телефона
         phone_number = message.contact.phone_number
         if not phone_number.startswith('+'):
             phone_number = '+' + phone_number
-        
+
         # Сохраняем телефон в базе данных
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if user:
-            user.phone = phone_number
-            db.commit()
+        saved = await run_db(
+            lambda s: _apply_phone(s, message.from_user.id, phone_number), db=_db
+        )
+
+        if saved:
             logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
 
             await message.answer(
@@ -199,13 +300,13 @@ async def process_contact(message: Message, state: FSMContext, db: Session, lang
         await state.clear()
 
 @router.message(OnboardingStates.waiting_for_phone, F.text)
-async def process_manual_phone(message: Message, state: FSMContext, db: Session, user_status: str = None, language: str = "ru"):
+async def process_manual_phone(message: Message, state: FSMContext, user_status: str = None, language: str = "ru", *, _db=None):
     """Обрабатывает ручной ввод телефона"""
     lang = language
-    
+
     # Проверяем на отмену
     if message.text in CANCEL_TEXTS:
-        await cancel_onboarding(message, state, db, user_status)
+        await cancel_onboarding(message, state, user_status)
         return
     
     # Проверяем системные команды/кнопки - не обрабатываем их как телефон
@@ -237,12 +338,11 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
     
     try:
         # Сохраняем телефон
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if user:
-            user.phone = phone_number
-            db.commit()
+        saved = await run_db(
+            lambda s: _apply_phone(s, message.from_user.id, phone_number), db=_db
+        )
+
+        if saved:
             logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
 
             await message.answer(
@@ -262,6 +362,10 @@ async def process_manual_phone(message: Message, state: FSMContext, db: Session,
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
+# ⚠️ МЁРТВАЯ ФУНКЦИЯ (A2-хвост, волна 7): вызывающих нет ни одного во всём
+# репозитории (grep `complete_onboarding(` = 0 вызовов). Вместе с ней мертва и
+# единственная точка рождения кнопок «📄 Загрузить документы» /
+# «✅ Завершить без документов». Сохранена байт-в-байт до decision владельца.
 async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None, language: str = "ru"):
     """Завершает процесс онбординга"""
     lang = language
@@ -308,6 +412,10 @@ async def complete_onboarding(message: Message, state: FSMContext, db: Session, 
     await state.clear()
     logger.info(f"Онбординг завершен для пользователя {message.from_user.id}")
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): единственный генератор его триггера
+# «✅ Завершить без документов» — клавиатура внутри мёртвой ``complete_onboarding``
+# (см. выше), больше этот текст в репозитории не рождается нигде.
+# Сохранён байт-в-байт до decision владельца.
 @router.message(F.text.in_(COMPLETE_WITHOUT_DOCS_TEXTS))
 async def complete_onboarding_without_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """Завершает онбординг без документов"""
@@ -336,7 +444,7 @@ async def complete_onboarding_without_documents(message: Message, state: FSMCont
         logger.error(f"Ошибка завершения онбординга без документов для {message.from_user.id}: {e}")
         await message.answer(get_text("errors.unknown_error", language=lang))
 
-async def cancel_onboarding(message: Message, state: FSMContext, db: Session, user_status: str = None, language: str = "ru"):
+async def cancel_onboarding(message: Message, state: FSMContext, user_status: str = None, language: str = "ru"):
     """Отменяет процесс онбординга"""
     lang = language
     
@@ -348,6 +456,10 @@ async def cancel_onboarding(message: Message, state: FSMContext, db: Session, us
     await state.clear()
     logger.info(f"Онбординг отменен для пользователя {message.from_user.id}")
 
+# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): текст «🏠 Указать адрес»
+# (SPECIFY_ADDRESS_TEXTS) не рождается в репозитории НИ РАЗУ — генератора нет
+# вовсе, сам хендлер помечен LEGACY. Сохранён байт-в-байт до decision владельца
+# (объявленный `db` он не использует, но правка мёртвого кода вне канона волны).
 @router.message(F.text.in_(SPECIFY_ADDRESS_TEXTS))
 async def start_address_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
     """
@@ -376,8 +488,11 @@ async def start_address_input(message: Message, state: FSMContext, db: Session, 
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
+# Регистрация по UPLOAD_DOCUMENTS_TEXTS мертва (генератор кнопки — мёртвая
+# ``complete_onboarding``), но САМА функция живая: её напрямую зовёт
+# ``process_document_confirmation`` по кнопке «загрузить ещё документ».
 @router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
-async def start_document_upload(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def start_document_upload(message: Message, state: FSMContext, language: str = "ru"):
     """Начинает процесс загрузки документов"""
     lang = language
     
@@ -390,16 +505,16 @@ async def start_document_upload(message: Message, state: FSMContext, db: Session
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
 
 @router.message(OnboardingStates.waiting_for_document_type, F.text)
-async def process_document_type_selection(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_document_type_selection(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обрабатывает выбор типа документа"""
     lang = language
-    
+
     # Проверяем специальные команды
     if message.text in SKIP_DOCUMENTS_TEXTS:
-        await skip_documents(message, state, db)
+        await skip_documents(message, state)
         return
     elif message.text in COMPLETE_ONBOARDING_TEXTS:
-        await complete_onboarding_with_documents(message, state, db)
+        await complete_onboarding_with_documents(message, state, _db=_db)
         return
     
     # Определяем тип документа
@@ -426,7 +541,7 @@ async def process_document_type_selection(message: Message, state: FSMContext, d
     logger.info(f"Пользователь {message.from_user.id} выбрал тип документа: {document_type.value}")
 
 @router.message(OnboardingStates.waiting_for_document_file)
-async def process_document_file(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_document_file(message: Message, state: FSMContext, language: str = "ru"):
     """Обрабатывает загрузку файла документа"""
     lang = language
     
@@ -461,8 +576,11 @@ async def process_document_file(message: Message, state: FSMContext, db: Session
         await message.answer(get_text("onboarding.documents.file_invalid", language=lang))
         return
     
-    # Валидируем файл
-    verification_service = UserVerificationService(db)
+    # Валидируем файл. run_db здесь НЕ нужен: validate_document_file —
+    # чистая проверка file_id/размера/расширения, к self.db она не обращается
+    # ни в одной ветке, поэтому сессия сервису не передаётся (открывать её
+    # ради проверки строки — лишнее соединение из пула на каждый файл).
+    verification_service = UserVerificationService(None)
     is_valid, error_message = verification_service.validate_document_file(file_id, file_name, file_size)
     
     if not is_valid:
@@ -492,23 +610,28 @@ async def process_document_file(message: Message, state: FSMContext, db: Session
     await state.set_state(OnboardingStates.waiting_for_document_confirmation)
 
 @router.message(OnboardingStates.waiting_for_document_confirmation, F.text)
-async def process_document_confirmation(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_document_confirmation(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обрабатывает подтверждение загрузки документа"""
     lang = language
-    
+
     if message.text in CONFIRM_UPLOAD_TEXTS:
-        await save_document(message, state, db)
+        await save_document(message, state, _db=_db)
     elif message.text in ONBOARDING_CANCEL_TEXTS:
-        await cancel_document_upload(message, state, db)
+        await cancel_document_upload(message, state)
     elif message.text in UPLOAD_ANOTHER_DOCUMENT_TEXTS:
-        await start_document_upload(message, state, db)
+        await start_document_upload(message, state)
     else:
         await message.answer(get_text("errors.unknown_error", language=lang))
 
-async def save_document(message: Message, state: FSMContext, db: Session, language: str = "ru"):
-    """Сохраняет документ в базе данных"""
+async def save_document(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+    """Сохраняет документ в базе данных.
+
+    Раскрой «БД → сеть → БД»: загрузка файла в Media Service — сетевой await,
+    он обязан идти МЕЖДУ юнитами, а не внутри открытой сессии. Порядок шагов
+    сохранён исходный (найти пользователя → выгрузить в Media → записать в БД).
+    """
     lang = language
-    
+
     try:
         # Получаем данные из состояния
         data = await state.get_data()
@@ -523,14 +646,15 @@ async def save_document(message: Message, state: FSMContext, db: Session, langua
             return
         
         # Получаем пользователя
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if not user:
+        user_id = await run_db(
+            lambda s: _load_document_owner_id(s, message.from_user.id), db=_db
+        )
+
+        if user_id is None:
             await message.answer(get_text("errors.unknown_error", language=lang))
             await state.clear()
             return
-        
+
         # Загружаем документ в Media Service (в канал ARCHIVE)
         from uk_management_bot.utils.media_helpers import upload_document_to_media_service
         try:
@@ -549,14 +673,10 @@ async def save_document(message: Message, state: FSMContext, db: Session, langua
             # Продолжаем сохранение даже если загрузка не удалась
 
         # Сохраняем документ в базу данных
-        verification_service = UserVerificationService(db)
         document_type = DocumentType(document_type_value)
-        verification_service.save_user_document(
-            user_id=user.id,
-            document_type=document_type,
-            file_id=file_id,
-            file_name=file_name,
-            file_size=file_size
+        await run_db(
+            lambda s: _apply_document(s, user_id, document_type, file_id, file_name, file_size),
+            db=_db,
         )
 
         # Показываем успешное сообщение
@@ -577,7 +697,7 @@ async def save_document(message: Message, state: FSMContext, db: Session, langua
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-async def cancel_document_upload(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def cancel_document_upload(message: Message, state: FSMContext, language: str = "ru"):
     """Отменяет загрузку документа"""
     lang = language
     
@@ -587,7 +707,7 @@ async def cancel_document_upload(message: Message, state: FSMContext, db: Sessio
     )
     await state.clear()
 
-async def skip_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def skip_documents(message: Message, state: FSMContext, language: str = "ru"):
     """Пропускает загрузку документов"""
     lang = language
     
@@ -598,24 +718,23 @@ async def skip_documents(message: Message, state: FSMContext, db: Session, langu
     )
     await state.clear()
 
-async def complete_onboarding_with_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def complete_onboarding_with_documents(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Завершает онбординг с документами"""
     lang = language
-    
+
     try:
-        # Получаем пользователя
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if not user:
+        # Получаем пользователя и сводку документов одним юнитом
+        loaded = await run_db(
+            lambda s: _load_documents_completion(s, message.from_user.id), db=_db
+        )
+
+        if loaded is None:
             await message.answer(get_text("errors.unknown_error", language=lang))
             await state.clear()
             return
-        
-        # Получаем сводку документов
-        verification_service = UserVerificationService(db)
-        documents_summary = verification_service.get_user_documents_summary(user.id)
-        
+
+        user_status, documents_summary = loaded
+
         # Формируем сообщение о завершении
         completion_text = get_text("onboarding.completed", language=lang)
         
@@ -633,7 +752,7 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
         
         await message.answer(
             completion_text,
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=lang)
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status, language=lang)
         )
 
         await state.clear()
@@ -647,7 +766,7 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
 # ═══ ОБРАБОТЧИКИ КНОПОК ЗАВЕРШЕНИЯ ОНБОРДИНГА ═══
 
 @router.message(F.text.in_(ADD_MORE_DOCUMENTS_TEXTS))
-async def add_more_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def add_more_documents(message: Message, state: FSMContext, language: str = "ru"):
     """Обрабатывает нажатие кнопки 'Добавить еще документы'"""
     lang = language
     
@@ -660,6 +779,6 @@ async def add_more_documents(message: Message, state: FSMContext, db: Session, l
     logger.info(f"Пользователь {message.from_user.id} решил добавить еще документы")
 
 @router.message(F.text.in_(COMPLETE_ONBOARDING_TEXTS))
-async def complete_onboarding_final(message: Message, state: FSMContext, db: Session):
+async def complete_onboarding_final(message: Message, state: FSMContext, *, _db=None):
     """Обрабатывает нажатие кнопки 'Завершить онбординг'"""
-    await complete_onboarding_with_documents(message, state, db)
+    await complete_onboarding_with_documents(message, state, _db=_db)
