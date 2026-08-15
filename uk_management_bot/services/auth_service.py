@@ -86,8 +86,12 @@ class AuthService:
             return True
         return False
     
-    async def auto_approve_user(self, telegram_id: int, role: str = "applicant") -> bool:
-        """Одобрить пользователя (только для менеджеров)"""
+    def auto_approve_user_sync(self, telegram_id: int, role: str = "applicant") -> bool:
+        """Одобрить пользователя (sync-ядро).
+
+        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
+        сохраняет контракт для неконвертированных вызывающих.
+        """
         if role not in settings.USER_ROLES:
             return False
             
@@ -108,7 +112,11 @@ class AuthService:
             logger.info(f"Пользователь {telegram_id} одобрен с ролью {role}")
             return True
         return False
-    
+
+    async def auto_approve_user(self, telegram_id: int, role: str = "applicant") -> bool:
+        """Одобрить пользователя (async-обёртка над sync-ядром)."""
+        return self.auto_approve_user_sync(telegram_id=telegram_id, role=role)
+
     async def block_user_by_telegram_id(self, telegram_id: int) -> bool:
         """Заблокировать пользователя по telegram_id"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -548,8 +556,11 @@ class AuthService:
         """Получить всех пользователей"""
         return self.db.query(User).all()
     
-    async def get_users_by_role(self, role: str) -> list[User]:
-        """Получить пользователей по роли (SQL-level filtering instead of Python loop).
+    def get_users_by_role_sync(self, role: str) -> list[User]:
+        """Получить пользователей по роли (sync-ядро; SQL-level filtering).
+
+        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
+        сохраняет контракт для неконвертированных вызывающих.
 
         Uses LIKE with JSON-style quoting to match exact role strings
         in the JSON array stored in User.roles TEXT column.
@@ -566,7 +577,11 @@ class AuthService:
                 legacy_role_filter(role),
             )
         ).all()
-    
+
+    async def get_users_by_role(self, role: str) -> list[User]:
+        """Получить пользователей по роли (async-обёртка над sync-ядром)."""
+        return self.get_users_by_role_sync(role)
+
     def make_admin_by_password_sync(self, telegram_id: int, password: str) -> bool:
         """Назначить пользователя администратором по паролю (sync-ядро).
 

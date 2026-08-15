@@ -1,11 +1,28 @@
+"""Вход по кнопке/команде и регистрация по инвайт-токену (/join → анкета).
+
+AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза каждого хендлера — цельный
+sync unit-of-work под ``run_db``; наружу выходят только примитивы. Telegram-IO
+(уведомления админам, ответы пользователю) — вне сессии.
+
+Инвентарь живости: все семь функций живые. ``/join`` и ``/login`` — команды;
+``confirm_position`` / ``cancel_registration`` рождают внутрифайловые
+клавиатуры анкеты; ``waiting_for_full_name`` / ``waiting_for_phone`` —
+FSM-состояния той же цепочки. Мёртвых нет.
+
+⚠️ Регистрация ``login_via_button`` по тексту кнопки «🔑 Войти»
+(``auth.login_button``) МЁРТВАЯ: генератора этой кнопки в репозитории нет
+вовсе. Сама функция живая — её напрямую зовёт ``login_command`` (/login),
+поэтому она сконвертирована, а не заморожена.
+"""
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.orm import Session
 
 from ..states.registration import RegistrationStates
 
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter, TokenAlreadyUsedError
 from uk_management_bot.utils.helpers import get_text
@@ -21,28 +38,169 @@ router = Router()
 LOGIN_TEXTS = get_login_texts()
 
 
-@router.message(F.text.in_(LOGIN_TEXTS))
-async def login_via_button(message: Message, db: Session, user_status: str = None, language: str = "ru"):
-    # language injected by middleware
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# ==========================================================================
 
+
+def _apply_login(db, telegram_id: int, username, first_name, last_name):
+    """-> ('already_approved'|'ok'|'failed', статус пользователя).
+
+    Статус читается ПОСЛЕ попытки авто-одобрения: auto_approve_user правит ту
+    же строку в identity map, и исходный код брал ``user.status`` уже после неё.
+    """
     auth = AuthService(db)
-    user = await auth.get_or_create_user(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name,
+    user = auth.get_or_create_user_sync(
+        telegram_id=telegram_id,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
     )
     if user.status == "approved":
+        return ("already_approved", user.status)
+
+    ok = auth.auto_approve_user_sync(telegram_id, role="applicant")
+    return ("ok" if ok else "failed", user.status)
+
+
+def _load_join_gate(db, token: str, telegram_id: int):
+    """-> ('invalid', текст ошибки) | ('already_registered', None)
+       | ('registration_pending', None) | ('ok', invite_data).
+
+    ``validate_invite`` здесь БЕЗ ``mark_used_by`` — только чтение, nonce
+    гасится позже, в ``_apply_registration``.
+    """
+    # Валидируем токен
+    invite_service = InviteService(db)
+
+    try:
+        invite_data = invite_service.validate_invite(token)
+    except ValueError as e:
+        logger.info(f"Невалидный токен от {telegram_id}: {e}")
+        return ("invalid", str(e))
+
+    # Проверяем, не зарегистрирован ли уже пользователь. Запрос — тело
+    # AuthService.get_user_by_telegram_id 1:1 (метод объявлен async при чистом
+    # sync-SQL, из юнита его не await'нуть).
+    existing_user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    logger.info(f"Проверка существующего пользователя {telegram_id}: {existing_user.status if existing_user else 'не найден'}")
+
+    if existing_user:
+        # Если пользователь уже одобрен, запрещаем повторную регистрацию
+        if existing_user.status == "approved":
+            logger.info(f"Пользователь {telegram_id} уже одобрен, регистрация запрещена")
+            return ("already_registered", None)
+        # Пользователь в статусе pending:
+        # само-онбординговый кандидат (roles ровно ["applicant"], создан
+        # обычным /start) ещё НЕ проходил инвайт — разрешаем апгрейд роли по
+        # инвайту. Иначе инструкция «нажмите Начать, затем /join <token>»
+        # ведёт в тупик: /start создаёт pending-applicant, а /join его же
+        # отвергает. Кандидатов, уже поднявших роль по инвайту и ждущих
+        # одобрения (в roles есть роль сверх applicant), не пускаем повторно.
+        elif existing_user.status == "pending":
+            existing_roles = parse_roles_safe(existing_user.roles)
+            if existing_roles != ["applicant"]:
+                logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
+                return ("registration_pending", None)
+            logger.info(f"Pending-applicant {telegram_id} проходит апгрейд роли по инвайту")
+        # Для других статусов (blocked и т.д.) разрешаем повторную регистрацию
+        else:
+            logger.info(f"Пользователь {telegram_id} имеет статус {existing_user.status}, разрешаем повторную регистрацию")
+
+    return ("ok", invite_data)
+
+
+def _apply_registration(db, token: str, telegram_id: int, username, first_name, last_name,
+                        full_name, phone):
+    """-> ('used', None) | ('invalid', текст ошибки) | ('ok', DTO-кортеж).
+
+    DTO: (role, specialization, user_id, created_at_str, [telegram_id админов]).
+
+    Гашение nonce и присоединение по инвайту живут в ОДНОЙ транзакции
+    осознанно: ``_use_nonce_atomically`` лишь flush'ит INSERT nonce внутри
+    SAVEPOINT, а коммитит его ``commit`` из ``process_invite_join``. Разнеси
+    их по двум сессиям — nonce откатится, и одноразовый токен перестанет быть
+    одноразовым.
+    """
+    auth_service = AuthService(db)
+
+    # Атомарно гасим nonce и получаем свежие данные инвайта (single-use):
+    # раньше завершение звало no-op sync_legacy_role — роль не добавлялась и
+    # nonce не гасился (токен переиспользуем). Валидация тут же ловит
+    # истёкший/погашенный токен, если он «протух» за время анкеты.
+    invite_service = InviteService(db)
+    try:
+        invite_data = invite_service.validate_invite(
+            token, mark_used_by=telegram_id
+        )
+    except TokenAlreadyUsedError:
+        return ("used", None)
+    except ValueError as e:
+        return ("invalid", str(e))
+
+    # Свежие роль/специализация из подписанного токена — источник истины.
+    role = invite_data["role"]
+    specialization = invite_data.get("specialization", "")
+
+    # Присоединяем по инвайту: добавляет роль в user.roles, ставит active_role,
+    # специализацию, статус pending (та же логика, что и deep-link /start).
+    user = auth_service.process_invite_join_sync(
+        telegram_id=telegram_id,
+        invite_data=invite_data,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+    )
+
+    # Перезаписываем ФИО/телефон из данных анкеты (точнее телеграмных).
+    name_parts = (full_name or "").split()
+    user.first_name = name_parts[0] if name_parts else ""
+    user.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+    user.phone = phone
+    db.commit()
+
+    # Получаем список админов
+    admin_users = auth_service.get_users_by_role_sync("admin")
+
+    return (
+        "ok",
+        (
+            role,
+            specialization,
+            user.id,
+            user.created_at.strftime('%d.%m.%Y %H:%M'),
+            [admin.telegram_id for admin in admin_users],
+        ),
+    )
+
+
+# ⚠️ Регистрация по тексту «🔑 Войти» мертва (генератора кнопки в репозитории
+# нет), но САМА функция живая: её напрямую зовёт login_command (/login).
+@router.message(F.text.in_(LOGIN_TEXTS))
+async def login_via_button(message: Message, user_status: str = None, language: str = "ru", *, _db=None):
+    # language injected by middleware
+
+    verdict, status = await run_db(
+        lambda s: _apply_login(
+            s,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
+            message.from_user.last_name,
+        ),
+        db=_db,
+    )
+    if verdict == "already_approved":
         await message.answer(
             get_text("auth.already_authorized", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=language)
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], status, language=language)
         )
         return
-    ok = await auth.auto_approve_user(message.from_user.id, role="applicant")
-    if ok:
+    if verdict == "ok":
         await message.answer(
             get_text("auth.login_success", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=language),
+            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], status, language=language),
         )
     else:
         await message.answer(
@@ -52,13 +210,13 @@ async def login_via_button(message: Message, db: Session, user_status: str = Non
 
 
 @router.message(F.text == "/login")
-async def login_command(message: Message, db: Session):
+async def login_command(message: Message, *, _db=None):
     # Аналог кнопки — одобряем пользователя как заявителя
-    await login_via_button(message, db)
+    await login_via_button(message, _db=_db)
 
 
 @router.message(Command("join"))
-async def join_with_invite(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def join_with_invite(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """
     Обработчик команды /join <token>
     Открывает веб-приложение для регистрации по приглашению
@@ -92,57 +250,36 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
             return
         
         token = text_parts[1].strip()
-        
-        # Валидируем токен
-        invite_service = InviteService(db)
-        
-        try:
-            invite_data = invite_service.validate_invite(token)
-        except ValueError as e:
-            error_msg = str(e).lower()
+
+        verdict, payload = await run_db(
+            lambda s: _load_join_gate(s, token, telegram_id), db=_db
+        )
+
+        if verdict == "invalid":
+            error_msg = payload.lower()
             if "expired" in error_msg:
                 await message.answer(get_text("invites.expired_token", language=lang))
             elif "already used" in error_msg:
                 await message.answer(get_text("invites.used_token", language=lang))
             else:
                 await message.answer(get_text("invites.invalid_token", language=lang))
-            
-            logger.info(f"Невалидный токен от {telegram_id}: {e}")
+
             return
-        
-        # Проверяем, не зарегистрирован ли уже пользователь
-        auth_service = AuthService(db)
-        existing_user = await auth_service.get_user_by_telegram_id(telegram_id)
-        logger.info(f"Проверка существующего пользователя {telegram_id}: {existing_user.status if existing_user else 'не найден'}")
-        
-        if existing_user:
-            # Если пользователь уже одобрен, запрещаем повторную регистрацию
-            if existing_user.status == "approved":
-                logger.info(f"Пользователь {telegram_id} уже одобрен, регистрация запрещена")
-                await message.answer(
-                    get_text("invites.already_registered", language=lang)
-                )
-                return
-            # Пользователь в статусе pending:
-            # само-онбординговый кандидат (roles ровно ["applicant"], создан
-            # обычным /start) ещё НЕ проходил инвайт — разрешаем апгрейд роли по
-            # инвайту. Иначе инструкция «нажмите Начать, затем /join <token>»
-            # ведёт в тупик: /start создаёт pending-applicant, а /join его же
-            # отвергает. Кандидатов, уже поднявших роль по инвайту и ждущих
-            # одобрения (в roles есть роль сверх applicant), не пускаем повторно.
-            elif existing_user.status == "pending":
-                existing_roles = parse_roles_safe(existing_user.roles)
-                if existing_roles != ["applicant"]:
-                    logger.info(f"Пользователь {telegram_id} уже зарегистрирован со статусом pending, регистрация запрещена")
-                    await message.answer(
-                        get_text("auth.registration_pending", language=lang)
-                    )
-                    return
-                logger.info(f"Pending-applicant {telegram_id} проходит апгрейд роли по инвайту")
-            # Для других статусов (blocked и т.д.) разрешаем повторную регистрацию
-            else:
-                logger.info(f"Пользователь {telegram_id} имеет статус {existing_user.status}, разрешаем повторную регистрацию")
-        
+
+        if verdict == "already_registered":
+            await message.answer(
+                get_text("invites.already_registered", language=lang)
+            )
+            return
+
+        if verdict == "registration_pending":
+            await message.answer(
+                get_text("auth.registration_pending", language=lang)
+            )
+            return
+
+        invite_data = payload
+
         # Получаем информацию о приглашении для отображения
         role = invite_data["role"]
         role_name = get_text(f"roles.{role}", language=lang)
@@ -203,7 +340,7 @@ async def join_with_invite(message: Message, state: FSMContext, db: Session, lan
 # Обработчики пошаговой регистрации
 
 @router.message(RegistrationStates.waiting_for_full_name)
-async def handle_full_name_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_full_name_input(message: Message, state: FSMContext, language: str = "ru"):
     """Обработчик ввода ФИО"""
     logger.info(f"Обработчик ФИО вызван для пользователя {message.from_user.id}")
     
@@ -266,7 +403,7 @@ async def handle_full_name_input(message: Message, state: FSMContext, db: Sessio
 
 
 @router.message(RegistrationStates.waiting_for_phone)
-async def handle_phone_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_phone_input(message: Message, state: FSMContext, language: str = "ru"):
     """Обработчик ввода номера телефона"""
     logger.info(f"Обработчик телефона вызван для пользователя {message.from_user.id}")
     lang = language
@@ -331,10 +468,10 @@ async def handle_phone_input(message: Message, state: FSMContext, db: Session, l
 
 
 @router.callback_query(F.data == "confirm_position")
-async def handle_position_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_position_confirmation(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработчик подтверждения должности"""
     lang = language
-    
+
     try:
         # Получаем все данные
         data = await state.get_data()
@@ -342,53 +479,36 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         phone = data.get("phone")
         role = data.get("invite_role")
         specialization = data.get("invite_specialization", "")
-        
-        auth_service = AuthService(db)
+
         token = data.get("invite_token")
 
-        # Атомарно гасим nonce и получаем свежие данные инвайта (single-use):
-        # раньше завершение звало no-op sync_legacy_role — роль не добавлялась и
-        # nonce не гасился (токен переиспользуем). Валидация тут же ловит
-        # истёкший/погашенный токен, если он «протух» за время анкеты.
-        invite_service = InviteService(db)
-        try:
-            invite_data = invite_service.validate_invite(
-                token, mark_used_by=callback.from_user.id
-            )
-        except TokenAlreadyUsedError:
+        verdict, payload = await run_db(
+            lambda s: _apply_registration(
+                s, token, callback.from_user.id,
+                callback.from_user.username,
+                callback.from_user.first_name,
+                callback.from_user.last_name,
+                full_name, phone,
+            ),
+            db=_db,
+        )
+
+        if verdict == "used":
             await callback.answer(get_text("invites.used_token", language=lang), show_alert=True)
             await state.clear()
             return
-        except ValueError as e:
-            msg_key = "invites.expired_token" if "expired" in str(e).lower() else "invites.invalid_token"
+        if verdict == "invalid":
+            msg_key = "invites.expired_token" if "expired" in payload.lower() else "invites.invalid_token"
             await callback.answer(get_text(msg_key, language=lang), show_alert=True)
             await state.clear()
             return
 
         # Свежие роль/специализация из подписанного токена — источник истины.
-        role = invite_data["role"]
-        specialization = invite_data.get("specialization", "")
+        role, specialization, user_id, created_at_display, admin_telegram_ids = payload
 
-        # Присоединяем по инвайту: добавляет роль в user.roles, ставит active_role,
-        # специализацию, статус pending (та же логика, что и deep-link /start).
-        user = await auth_service.process_invite_join(
-            telegram_id=callback.from_user.id,
-            invite_data=invite_data,
-            username=callback.from_user.username,
-            first_name=callback.from_user.first_name,
-            last_name=callback.from_user.last_name,
-        )
-
-        # Перезаписываем ФИО/телефон из данных анкеты (точнее телеграмных).
-        name_parts = (full_name or "").split()
-        user.first_name = name_parts[0] if name_parts else ""
-        user.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-        user.phone = phone
-        db.commit()
-        
         # Отправляем заявку администратору
         from ..keyboards.admin import get_user_approval_keyboard
-        
+
         # Формируем сообщение для админа
         admin_message = f"{get_text('auth.registration_admin_title', language='ru')}\n\n"
         admin_message += f"{get_text('auth.user_field', language='ru')} {full_name}\n"
@@ -401,22 +521,20 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
             spec_names = [get_text(f"specializations.{spec.strip()}", language='ru') for spec in specializations]
             admin_message += f"{get_text('auth.specialization_field', language='ru')} {', '.join(spec_names)}\n"
 
-        admin_message += f"{get_text('auth.date_field', language='ru')} {user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-        
-        # Получаем список админов
-        admin_users = await auth_service.get_users_by_role("admin")
-        
-        # Отправляем уведомление всем админам
-        for admin in admin_users:
+        admin_message += f"{get_text('auth.date_field', language='ru')} {created_at_display}\n"
+
+        # Отправляем уведомление всем админам (сеть — вне сессии; список
+        # telegram_id собран в юните)
+        for admin_telegram_id in admin_telegram_ids:
             try:
-                keyboard = get_user_approval_keyboard(user.id)
+                keyboard = get_user_approval_keyboard(user_id)
                 await callback.bot.send_message(
-                    admin.telegram_id,
+                    admin_telegram_id,
                     admin_message,
                     reply_markup=keyboard
                 )
             except Exception as e:
-                logger.error(f"Не удалось отправить уведомление админу {admin.telegram_id}: {e}")
+                logger.error(f"Не удалось отправить уведомление админу {admin_telegram_id}: {e}")
         
         # Отправляем подтверждение пользователю
         await callback.message.edit_text(

@@ -62,13 +62,15 @@ async def test_pending_applicant_passes_join():
     inv.validate_invite.return_value = {"role": "manager", "specialization": ""}
 
     auth_svc = MagicMock()
-    auth_svc.get_user_by_telegram_id = AsyncMock(return_value=_pending_applicant())
+    # AUD3-07: юнит _load_join_gate ищет пользователя запросом по сессии.
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = _pending_applicant()
 
     with patch.object(auth_handlers, "InviteService", return_value=inv), \
          patch.object(auth_handlers, "AuthService", return_value=auth_svc), \
          patch.object(auth_handlers.InviteRateLimiter, "is_allowed",
                       AsyncMock(return_value=True)):
-        await auth_handlers.join_with_invite(msg, st, MagicMock(), language="ru")
+        await auth_handlers.join_with_invite(msg, st, language="ru", _db=db)
 
     st.set_state.assert_awaited_with(RegistrationStates.waiting_for_full_name)
 
@@ -86,14 +88,15 @@ async def test_pending_upgraded_user_still_rejected():
     inv.validate_invite.return_value = {"role": "manager", "specialization": ""}
 
     auth_svc = MagicMock()
-    auth_svc.get_user_by_telegram_id = AsyncMock(
-        return_value=_pending_applicant(roles='["applicant", "manager"]'))
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = _pending_applicant(
+        roles='["applicant", "manager"]')
 
     with patch.object(auth_handlers, "InviteService", return_value=inv), \
          patch.object(auth_handlers, "AuthService", return_value=auth_svc), \
          patch.object(auth_handlers.InviteRateLimiter, "is_allowed",
                       AsyncMock(return_value=True)):
-        await auth_handlers.join_with_invite(msg, st, MagicMock(), language="ru")
+        await auth_handlers.join_with_invite(msg, st, language="ru", _db=db)
 
     st.set_state.assert_not_awaited()
     msg.answer.assert_awaited()  # получил отказ (registration_pending)
@@ -123,18 +126,19 @@ async def test_completion_applies_role_and_consumes_nonce():
     inv = MagicMock()
     inv.validate_invite.return_value = {"role": "manager", "specialization": "", "nonce": "n"}
 
+    # AUD3-07: юнит _apply_registration зовёт sync-ядра сервиса.
     auth_svc = MagicMock()
-    auth_svc.process_invite_join = AsyncMock(return_value=joined_user)
-    auth_svc.get_users_by_role = AsyncMock(return_value=[])
+    auth_svc.process_invite_join_sync = MagicMock(return_value=joined_user)
+    auth_svc.get_users_by_role_sync = MagicMock(return_value=[])
 
     db = MagicMock()
 
     with patch.object(auth_handlers, "InviteService", return_value=inv), \
          patch.object(auth_handlers, "AuthService", return_value=auth_svc):
-        await auth_handlers.handle_position_confirmation(cb, st, db, language="ru")
+        await auth_handlers.handle_position_confirmation(cb, st, language="ru", _db=db)
 
     # nonce погашен атомарно (mark_used_by = telegram_id кандидата)
     inv.validate_invite.assert_called_once()
     assert inv.validate_invite.call_args.kwargs.get("mark_used_by") == 7124503338
     # роль применена штатной логикой присоединения
-    auth_svc.process_invite_join.assert_awaited_once()
+    auth_svc.process_invite_join_sync.assert_called_once()
