@@ -1,10 +1,12 @@
 import logging
+from dataclasses import dataclass
+from typing import Optional
 from aiogram import F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
@@ -21,6 +23,53 @@ from .details import show_apartment_details
 from .viewing import show_apartments_list
 
 logger = logging.getLogger(__name__)
+
+
+# ==========================================================================
+# DTO для async-слоя: наружу из run_db выходят примитивы, не ORM-строки.
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _ApartmentStatus:
+    """Состояние квартиры для переключения активности."""
+    is_active: bool
+
+
+@dataclass(frozen=True)
+class _ApartmentDeleteCard:
+    """Карточка подтверждения удаления. ``address_text`` — уже локализованный
+    адрес: apartment_address() читает lazy-связь building, поэтому зовётся
+    внутри юнита (и прямого чтения `full_address` в коде показа не возникает —
+    его запрещает FS-11-гейт tests/services/test_address_i18n.py)."""
+    residents_count: int
+    address_text: str
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db. Мутации квартир (update_apartment/delete_apartment) сюда НЕ входят:
+# это async-методы AddressService с собственной async-сессией
+# (services/address_service/apartments.py) — параметр session ими не
+# используется ни на одном пути, поэтому хендлер await'ит их с session=None.
+# ==========================================================================
+
+def _load_apartment_status(db, apartment_id: int) -> Optional[_ApartmentStatus]:
+    """-> _ApartmentStatus | None (None — квартира не найдена)."""
+    apartment = AddressService.get_apartment_by_id(db, apartment_id)
+    if not apartment:
+        return None
+    return _ApartmentStatus(is_active=apartment.is_active)
+
+
+def _load_apartment_delete_card(db, apartment_id: int, lang: str) -> Optional[_ApartmentDeleteCard]:
+    """-> _ApartmentDeleteCard | None (None — квартира не найдена)."""
+    apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
+    if not apartment:
+        return None
+    return _ApartmentDeleteCard(
+        residents_count=apartment.residents_count if hasattr(apartment, 'residents_count') else 0,
+        address_text=apartment_address(apartment, lang),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -40,34 +89,40 @@ async def show_apartment_edit_menu(callback: CallbackQuery, language: str = "ru"
 
 
 @router.callback_query(F.data.startswith("addr_apartment_toggle:"))
-async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru"):
+async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Переключить активность квартиры"""
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
     try:
-        with session_scope() as db:
-            apartment = AddressService.get_apartment_by_id(db, apartment_id)
-            if not apartment:
-                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-                return
+        status = await run_db(lambda s: _load_apartment_status(s, apartment_id), db=_db)
+        if status is None:
+            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+            return
 
-            new_status = not apartment.is_active
-            apartment, error = await AddressService.update_apartment(
-                session=db,
-                apartment_id=apartment_id,
-                is_active=new_status
-            )
+        new_status = not status.is_active
+        # update_apartment — async-метод с собственной async-сессией; параметр
+        # session им не используется.
+        apartment, error = await AddressService.update_apartment(
+            session=None,
+            apartment_id=apartment_id,
+            is_active=new_status
+        )
 
-            if error:
-                await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=error), show_alert=True)
-                return
+        if error:
+            # ⚠️ Предсуществующий дефект (сохранён 1:1): наружу уходит сырой код
+            # ошибки сервиса ("save_failed"/"not_found"), без localize_address_error —
+            # ср. address_buildings.toggle_building_status.
+            await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=error), show_alert=True)
+            return
 
-            status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
-            await callback.answer(get_text("address_apartments.handlers.apartment_status_changed", language=lang).format(status=status_text))
+        status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
+        await callback.answer(get_text("address_apartments.handlers.apartment_status_changed", language=lang).format(status=status_text))
 
-            # Обновляем отображение (BUG-139: язык пробрасываем, иначе карточка ru)
-            await show_apartment_details(callback, language=lang)
+        # Обновляем отображение (BUG-139: язык пробрасываем, иначе карточка ru)
+        # Тестовый seam _db через границу модулей не прокидываем: в проде он
+        # всегда None, а тесты патчат сам вызов show_apartment_details.
+        await show_apartment_details(callback, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса квартиры: {e}")
@@ -79,35 +134,34 @@ async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru")
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("addr_apartment_delete:"))
-async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "ru"):
+async def confirm_apartment_deletion(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Подтверждение удаления квартиры"""
     apartment_id = int(callback.data.split(":")[1])
     lang = language
 
     try:
-        with session_scope() as db:
-            apartment = AddressService.get_apartment_by_id(db, apartment_id, include_building=True)
-            if not apartment:
-                await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
-                return
+        card = await run_db(lambda s: _load_apartment_delete_card(s, apartment_id, lang), db=_db)
+        if card is None:
+            await callback.answer(get_text("address_apartments.handlers.apartment_not_found", language=lang), show_alert=True)
+            return
 
-            residents_count = apartment.residents_count if hasattr(apartment, 'residents_count') else 0
+        residents_count = card.residents_count
 
-            warning = ""
-            if residents_count > 0:
-                warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
+        warning = ""
+        if residents_count > 0:
+            warning = "\n\n" + get_text("address_apartments.handlers.delete_warning_residents", language=lang).format(count=residents_count)
 
-            full_address = apartment_address(apartment, lang)
+        full_address = card.address_text
 
-            await callback.message.edit_text(
-                get_text("address_apartments.handlers.delete_confirm", language=lang).format(
-                    address=full_address
-                ) + warning,
-                reply_markup=get_confirmation_keyboard(
-                    confirm_callback=f"addr_apartment_delete_confirm:{apartment_id}",
-                    cancel_callback=f"addr_apartment_view:{apartment_id}"
-                )
+        await callback.message.edit_text(
+            get_text("address_apartments.handlers.delete_confirm", language=lang).format(
+                address=full_address
+            ) + warning,
+            reply_markup=get_confirmation_keyboard(
+                confirm_callback=f"addr_apartment_delete_confirm:{apartment_id}",
+                cancel_callback=f"addr_apartment_view:{apartment_id}"
             )
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при подготовке удаления квартиры: {e}")
@@ -121,21 +175,24 @@ async def delete_apartment(callback: CallbackQuery, language: str = "ru"):
     lang = language
 
     try:
-        with session_scope() as db:
-            success, error = await AddressService.delete_apartment(db, apartment_id)
+        # delete_apartment — async-метод с собственной async-сессией; параметр
+        # session им не используется. Sync-SQL здесь нет — run_db не нужен.
+        success, error = await AddressService.delete_apartment(None, apartment_id)
 
-            if not success:
-                await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=error), show_alert=True)
-                return
+        if not success:
+            # ⚠️ Предсуществующий дефект (сохранён 1:1): в текст подставляется
+            # сырой код ошибки сервиса, без localize_address_error.
+            await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=error), show_alert=True)
+            return
 
-            await callback.message.edit_text(
-                get_text("address_apartments.handlers.delete_success", language=lang)
-            )
+        await callback.message.edit_text(
+            get_text("address_apartments.handlers.delete_success", language=lang)
+        )
 
-            logger.info(f"Квартира {apartment_id} удалена пользователем {callback.from_user.id}")
+        logger.info(f"Квартира {apartment_id} удалена пользователем {callback.from_user.id}")
 
-            # Показываем список квартир (BUG-139: язык пробрасываем, иначе список ru)
-            await show_apartments_list(callback, None, language=lang)
+        # Показываем список квартир (BUG-139: язык пробрасываем, иначе список ru)
+        await show_apartments_list(callback, None, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при удалении квартиры: {e}")
@@ -202,27 +259,30 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
         return
 
     try:
-        with session_scope() as db:
-            apartment, error = await AddressService.update_apartment(
-                session=db,
-                apartment_id=apartment_id,
-                area=area
-            )
+        # update_apartment — async-метод с собственной async-сессией; параметр
+        # session им не используется. Sync-SQL здесь нет — run_db не нужен.
+        apartment, error = await AddressService.update_apartment(
+            session=None,
+            apartment_id=apartment_id,
+            area=area
+        )
 
-            if error:
-                await message.answer(
-                    get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
-                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
-                )
-                await state.clear()
-                return
-
+        if error:
+            # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой код ошибки
+            # сервиса в тексте пользователю, без localize_address_error.
             await message.answer(
-                get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
+                get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
                 reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
             )
+            await state.clear()
+            return
 
-            logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
+        await message.answer(
+            get_text("address_apartments.handlers.area_update_success", language=lang).format(area=area),
+            reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
+        )
+
+        logger.info(f"Площадь квартиры {apartment_id} обновлена на {area} кв.м пользователем {message.from_user.id}")
 
     except Exception:
         logger.exception("update apartment area handler failed")

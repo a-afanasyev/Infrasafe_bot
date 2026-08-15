@@ -10,19 +10,11 @@
   4. parse_apartment_range оборачивал ValueError дважды — пользователю уходило
      вложенное «Некорректный диапазон '…': Некорректный диапазон …».
 """
-from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from uk_management_bot.utils.helpers import get_text
-
-
-def _scope_yielding(session):
-    @contextmanager
-    def _cm():
-        yield session
-    return _cm
 
 
 def _make_callback(data):
@@ -48,12 +40,13 @@ async def test_toggle_apartment_status_passes_language():
     apartment = MagicMock()
     apartment.is_active = True
 
-    with patch.object(editing, "session_scope", _scope_yielding(MagicMock())), \
-         patch.object(editing, "AddressService") as svc, \
+    # A2-хвост волна 6: db-фаза ушла в sync-юнит под run_db — сессия приходит
+    # тестовым seam'ом _db, а не патчем session_scope.
+    with patch.object(editing, "AddressService") as svc, \
          patch.object(editing, "show_apartment_details", new=AsyncMock()) as details:
         svc.get_apartment_by_id.return_value = apartment
         svc.update_apartment = AsyncMock(return_value=(apartment, None))
-        await editing.toggle_apartment_status(cb, language="uz")
+        await editing.toggle_apartment_status(cb, language="uz", _db=MagicMock())
 
     assert details.await_count == 1
     assert "uz" in _passed_values(details.await_args), (
@@ -67,8 +60,7 @@ async def test_delete_apartment_passes_language():
 
     cb = _make_callback("addr_apartment_delete_confirm:5")
 
-    with patch.object(editing, "session_scope", _scope_yielding(MagicMock())), \
-         patch.object(editing, "AddressService") as svc, \
+    with patch.object(editing, "AddressService") as svc, \
          patch.object(editing, "show_apartments_list", new=AsyncMock()) as listing:
         svc.delete_apartment = AsyncMock(return_value=(True, None))
         await editing.delete_apartment(cb, language="uz")
@@ -90,8 +82,7 @@ async def test_edit_area_keyboard_uses_middleware_roles():
     state = AsyncMock()
     state.get_data.return_value = {"editing_apartment_id": 3}
 
-    with patch.object(editing, "session_scope", _scope_yielding(MagicMock())), \
-         patch.object(editing, "AddressService") as svc, \
+    with patch.object(editing, "AddressService") as svc, \
          patch.object(editing, "get_main_keyboard_for_role") as kb:
         svc.update_apartment = AsyncMock(return_value=(MagicMock(), None))
         await editing.process_new_apartment_area(

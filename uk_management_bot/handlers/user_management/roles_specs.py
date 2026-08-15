@@ -19,17 +19,153 @@ from uk_management_bot.states.user_management import UserManagementStates
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.session import run_db
 
 from ._router import router
 
 logger = logging.getLogger(__name__)
 
 
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# Наружу — примитивы и готовая InlineKeyboardMarkup: форматтеры
+# (format_user_info/_format_user_roles/get_user_actions_keyboard) читают
+# ORM-объект, поэтому вызываются здесь, пока сессия жива. Мутации ролей и
+# специализаций коммитят сами сервисы (AuthService/SpecializationService).
+# ==========================================================================
+
+
+def _load_roles_context(db: Session, target_user_id: int, actor_tg_id: int):
+    """-> (user_roles, manager_id) | None (None — менеджер не найден в БД)."""
+    auth_service = AuthService(db)
+    user_roles = auth_service.get_user_roles(target_user_id)
+
+    # Получаем внутренний ID менеджера из базы данных
+    manager = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not manager:
+        return None
+    return user_roles, manager.id
+
+
+def _load_roles_screen_text(db: Session, target_user_id: int, lang: str) -> str:
+    """-> текст экрана выбора ролей.
+
+    ⚠️ Предсуществующий дефект (сохранён 1:1): target_user отсутствует в БД →
+    AttributeError, который ловит общий except хендлера и показывает
+    'errors.unknown_error' вместо «пользователь не найден».
+    """
+    user_mgmt_service = UserManagementService(db)
+    target_user = user_mgmt_service.get_user_by_id(target_user_id)
+    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+
+    message_text = get_text('moderation.select_roles', language=lang).format(user_name=user_name)
+    message_text += f"\n\n{get_text('moderation.current_roles', language=lang)}: "
+    message_text += user_mgmt_service._format_user_roles(target_user, lang)
+    return message_text
+
+
+def _load_specializations_context(db: Session, target_user_id: int, actor_tg_id: int):
+    """-> (user_specializations, manager_id) | None (None — менеджер не найден)."""
+    spec_service = SpecializationService(db)
+    user_specializations = spec_service.get_user_specializations(target_user_id)
+
+    # Получаем внутренний ID менеджера из базы данных
+    manager = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not manager:
+        return None
+    return user_specializations, manager.id
+
+
+def _load_specializations_screen_text(db: Session, target_user_id: int,
+                                      user_specializations: list, lang: str) -> str:
+    """-> текст экрана выбора специализаций (тот же ⚠️-класс, что у ролей)."""
+    spec_service = SpecializationService(db)
+    user_mgmt_service = UserManagementService(db)
+    target_user = user_mgmt_service.get_user_by_id(target_user_id)
+    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+
+    message_text = get_text('specializations.select_specializations', language=lang).format(user_name=user_name)
+    message_text += f"\n\n{get_text('specializations.current_specializations', language=lang)}: "
+    message_text += spec_service.format_specializations_list(user_specializations, lang)
+    return message_text
+
+
+def _load_user_card(db: Session, target_user_id: int, lang: str):
+    """-> (user_info, клавиатура действий) | None (None — пользователь не найден)."""
+    user_mgmt_service = UserManagementService(db)
+    target_user = user_mgmt_service.get_user_by_id(target_user_id)
+
+    if not target_user:
+        return None
+
+    return (
+        user_mgmt_service.format_user_info(target_user, lang, detailed=True),
+        get_user_actions_keyboard(target_user, lang),
+    )
+
+
+def _apply_role_changes(db: Session, target_user_id: int, added_roles, removed_roles,
+                        manager_id: int, comment: str, lang: str):
+    """Применяет набор ролей. -> (success, user_name, user_info, клавиатура).
+
+    ⚠️ Предсуществующий дефект (сохранён 1:1): каждая роль применяется своей
+    транзакцией сервиса — при отказе на середине уже применённые изменения
+    остаются, а пользователь видит только «операция не удалась».
+    """
+    auth_service = AuthService(db)
+
+    success = True
+
+    # Добавляем новые роли
+    for role in added_roles:
+        if not auth_service.assign_role(target_user_id, role, manager_id, comment):
+            success = False
+
+    # Удаляем роли
+    for role in removed_roles:
+        if not auth_service.remove_role(target_user_id, role, manager_id, comment):
+            success = False
+
+    if not success:
+        return False, None, None, None
+
+    user_mgmt_service = UserManagementService(db)
+    target_user = user_mgmt_service.get_user_by_id(target_user_id)
+
+    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+    user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
+    return True, user_name, user_info, get_user_actions_keyboard(target_user, lang)
+
+
+def _apply_specialization_changes(db: Session, target_user_id: int, current_specializations: list,
+                                  manager_id: int, comment: str, lang: str):
+    """Применяет специализации. -> (success, user_name, user_info, клавиатура)."""
+    spec_service = SpecializationService(db)
+    success = spec_service.set_user_specializations(
+        target_user_id,
+        current_specializations,
+        manager_id,
+        comment
+    )
+
+    if not success:
+        return False, None, None, None
+
+    user_mgmt_service = UserManagementService(db)
+    target_user = user_mgmt_service.get_user_by_id(target_user_id)
+
+    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+    user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
+    return True, user_name, user_info, get_user_actions_keyboard(target_user, lang)
+
+
 # ═══ УПРАВЛЕНИЕ РОЛЯМИ ═══
 
 @router.callback_query(F.data.startswith("user_roles_"))
-async def show_user_roles_management(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                   roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
+                                   roles: list = None, active_role: str = None, user: User = None,
+                                   language: str = "ru", *, _db=None):
     """Показать управление ролями пользователя"""
     lang = language
     
@@ -45,34 +181,30 @@ async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
     
     try:
         target_user_id = int(callback.data.split('_')[-1])
-        
-        auth_service = AuthService(db)
-        user_roles = auth_service.get_user_roles(target_user_id)
-        
-        # Получаем внутренний ID менеджера из базы данных
-        manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not manager:
+
+        context = await run_db(
+            lambda s: _load_roles_context(s, target_user_id, callback.from_user.id), db=_db
+        )
+        if context is None:
             await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
-            
+
+        user_roles, manager_id = context
+
         # Сохраняем данные в состоянии
         await state.update_data({
             'target_user_id': target_user_id,
-            'manager_id': manager.id,  # Используем внутренний ID из базы данных
+            'manager_id': manager_id,  # Используем внутренний ID из базы данных
             'original_roles': user_roles.copy(),
             'current_roles': user_roles.copy()
         })
-        
+
         await state.set_state(UserManagementStates.selecting_roles)
-        
-        user_mgmt_service = UserManagementService(db)
-        target_user = user_mgmt_service.get_user_by_id(target_user_id)
-        user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
-        
-        message_text = get_text('moderation.select_roles', language=lang).format(user_name=user_name)
-        message_text += f"\n\n{get_text('moderation.current_roles', language=lang)}: "
-        message_text += user_mgmt_service._format_user_roles(target_user, lang)
-        
+
+        message_text = await run_db(
+            lambda s: _load_roles_screen_text(s, target_user_id, lang), db=_db
+        )
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_roles_management_keyboard(user_roles, lang)
@@ -196,27 +328,26 @@ async def save_user_roles(callback: CallbackQuery, state: FSMContext, language: 
 
 
 @router.callback_query(F.data == "roles_cancel", UserManagementStates.selecting_roles)
-async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Отменить редактирование ролей"""
     lang = language
-    
+
     try:
         data = await state.get_data()
         target_user_id = data.get('target_user_id')
-        
+
         await state.clear()
-        
+
         # Возвращаемся к деталям пользователя
-        user_mgmt_service = UserManagementService(db)
-        target_user = user_mgmt_service.get_user_by_id(target_user_id)
-        
-        if target_user:
-            user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
+        card = await run_db(lambda s: _load_user_card(s, target_user_id, lang), db=_db)
+
+        if card is not None:
+            user_info, keyboard = card
             await callback.message.edit_text(
                 user_info,
-                reply_markup=get_user_actions_keyboard(target_user, lang)
+                reply_markup=keyboard
             )
-        
+
         await callback.answer(
             get_text('buttons.operation_cancelled', language=lang)
         )
@@ -230,53 +361,44 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, db: S
 
 
 @router.message(UserManagementStates.waiting_for_role_comment)
-async def process_role_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать комментарий к изменению ролей"""
     lang = language
-    
+
     try:
         data = await state.get_data()
         target_user_id = data.get('target_user_id')
         manager_id = data.get('manager_id')
         original_roles = data.get('original_roles', [])
         current_roles = data.get('current_roles', [])
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение даёт
+        # comment=None — в аудит уедет null, отдельной обработки нет.
         comment = message.text
-        
-        auth_service = AuthService(db)
-        
+
         # Определяем добавленные и удаленные роли
         added_roles = set(current_roles) - set(original_roles)
         removed_roles = set(original_roles) - set(current_roles)
-        
-        success = True
-        
-        # Добавляем новые роли
-        for role in added_roles:
-            if not auth_service.assign_role(target_user_id, role, manager_id, comment):
-                success = False
-        
-        # Удаляем роли
-        for role in removed_roles:
-            if not auth_service.remove_role(target_user_id, role, manager_id, comment):
-                success = False
-        
+
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): права администратора
+        # проверяются только на входе в экран (show_user_roles_management);
+        # шаг применения полагается на FSM-состояние.
+        success, user_name, user_info, keyboard = await run_db(
+            lambda s: _apply_role_changes(
+                s, target_user_id, added_roles, removed_roles, manager_id, comment, lang
+            ), db=_db
+        )
+
         if success:
-            user_mgmt_service = UserManagementService(db)
-            target_user = user_mgmt_service.get_user_by_id(target_user_id)
-            
-            user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
-            
             await message.answer(
                 get_text('moderation.roles_updated_successfully', language=lang).format(
                     user_name=user_name
                 )
             )
-            
+
             # Показываем обновленные детали пользователя
-            user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
             await message.answer(
                 user_info,
-                reply_markup=get_user_actions_keyboard(target_user, lang)
+                reply_markup=keyboard
             )
         else:
             await message.answer(
@@ -296,8 +418,9 @@ async def process_role_change_comment(message: Message, state: FSMContext, db: S
 # ═══ УПРАВЛЕНИЕ СПЕЦИАЛИЗАЦИЯМИ ═══
 
 @router.callback_query(F.data.startswith("user_specializations_"))
-async def show_user_specializations_management(callback: CallbackQuery, state: FSMContext, db: Session, 
-                                             roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def show_user_specializations_management(callback: CallbackQuery, state: FSMContext,
+                                             roles: list = None, active_role: str = None, user: User = None,
+                                             language: str = "ru", *, _db=None):
     """Показать управление специализациями пользователя"""
     lang = language
     
@@ -313,34 +436,31 @@ async def show_user_specializations_management(callback: CallbackQuery, state: F
     
     try:
         target_user_id = int(callback.data.split('_')[-1])
-        
-        spec_service = SpecializationService(db)
-        user_specializations = spec_service.get_user_specializations(target_user_id)
-        
-        # Получаем внутренний ID менеджера из базы данных
-        manager = db.query(User).filter(User.telegram_id == callback.from_user.id).first()
-        if not manager:
+
+        context = await run_db(
+            lambda s: _load_specializations_context(s, target_user_id, callback.from_user.id), db=_db
+        )
+        if context is None:
             await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
-            
+
+        user_specializations, manager_id = context
+
         # Сохраняем данные в состоянии
         await state.update_data({
             'target_user_id': target_user_id,
-            'manager_id': manager.id,  # Используем внутренний ID из базы данных
+            'manager_id': manager_id,  # Используем внутренний ID из базы данных
             'original_specializations': user_specializations.copy(),
             'current_specializations': user_specializations.copy()
         })
-        
+
         await state.set_state(UserManagementStates.selecting_specializations)
-        
-        user_mgmt_service = UserManagementService(db)
-        target_user = user_mgmt_service.get_user_by_id(target_user_id)
-        user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
-        
-        message_text = get_text('specializations.select_specializations', language=lang).format(user_name=user_name)
-        message_text += f"\n\n{get_text('specializations.current_specializations', language=lang)}: "
-        message_text += spec_service.format_specializations_list(user_specializations, lang)
-        
+
+        message_text = await run_db(
+            lambda s: _load_specializations_screen_text(s, target_user_id, user_specializations, lang),
+            db=_db
+        )
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_specializations_selection_keyboard(user_specializations, lang)
@@ -426,27 +546,26 @@ async def save_user_specializations(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data == "spec_cancel", UserManagementStates.selecting_specializations)
-async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def cancel_specializations_editing(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Отменить редактирование специализаций"""
     lang = language
-    
+
     try:
         data = await state.get_data()
         target_user_id = data.get('target_user_id')
-        
+
         await state.clear()
-        
+
         # Возвращаемся к деталям пользователя
-        user_mgmt_service = UserManagementService(db)
-        target_user = user_mgmt_service.get_user_by_id(target_user_id)
-        
-        if target_user:
-            user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
+        card = await run_db(lambda s: _load_user_card(s, target_user_id, lang), db=_db)
+
+        if card is not None:
+            user_info, keyboard = card
             await callback.message.edit_text(
                 user_info,
-                reply_markup=get_user_actions_keyboard(target_user, lang)
+                reply_markup=keyboard
             )
-        
+
         await callback.answer(
             get_text('buttons.operation_cancelled', language=lang)
         )
@@ -460,42 +579,36 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(UserManagementStates.waiting_for_specialization_comment)
-async def process_specialization_change_comment(message: Message, state: FSMContext, db: Session, language: str = "ru"):
+async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработать комментарий к изменению специализаций"""
     lang = language
-    
+
     try:
         data = await state.get_data()
         target_user_id = data.get('target_user_id')
         manager_id = data.get('manager_id')
         current_specializations = data.get('current_specializations', [])
+        # ⚠️ Тот же ⚠️-класс, что в process_role_change_comment: нетекстовое
+        # сообщение даёт comment=None.
         comment = message.text
-        
-        spec_service = SpecializationService(db)
-        success = spec_service.set_user_specializations(
-            target_user_id, 
-            current_specializations, 
-            manager_id, 
-            comment
+
+        success, user_name, user_info, keyboard = await run_db(
+            lambda s: _apply_specialization_changes(
+                s, target_user_id, current_specializations, manager_id, comment, lang
+            ), db=_db
         )
-        
+
         if success:
-            user_mgmt_service = UserManagementService(db)
-            target_user = user_mgmt_service.get_user_by_id(target_user_id)
-            
-            user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
-            
             await message.answer(
                 get_text('specializations.specializations_updated', language=lang).format(
                     user_name=user_name
                 )
             )
-            
+
             # Показываем обновленные детали пользователя
-            user_info = user_mgmt_service.format_user_info(target_user, lang, detailed=True)
             await message.answer(
                 user_info,
-                reply_markup=get_user_actions_keyboard(target_user, lang)
+                reply_markup=keyboard
             )
         else:
             await message.answer(
