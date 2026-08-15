@@ -111,6 +111,11 @@ CONVERTED = [
     # команду /reply_{номер} диктует живое уведомление об уточнении
     # (admin.handlers.notify_user_clarification), второй ловит FSM-состояние.
     "uk_management_bot/handlers/clarification_replies.py",
+    # A2-хвост волна 6: пакет address_apartments (5 файлов одного роутера,
+    # разнесён в A3 волне 3). Все хендлеры пакета живые — генераторы триггеров:
+    # keyboards/address_management.py (меню адресов, карточки здания/квартиры,
+    # список квартир) + внутрипакетные FSM-цепочки создания/поиска/автозаполнения.
+    "uk_management_bot/handlers/address_apartments/viewing.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
