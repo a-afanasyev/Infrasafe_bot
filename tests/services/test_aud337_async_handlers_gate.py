@@ -129,6 +129,7 @@ CONVERTED = [
     "uk_management_bot/handlers/user_management/roles_specs.py",
     "uk_management_bot/handlers/feedback.py",
     "uk_management_bot/handlers/base.py",
+    "uk_management_bot/handlers/user_yards_management.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):
