@@ -116,6 +116,7 @@ CONVERTED = [
     # keyboards/address_management.py (меню адресов, карточки здания/квартиры,
     # список квартир) + внутрипакетные FSM-цепочки создания/поиска/автозаполнения.
     "uk_management_bot/handlers/address_apartments/viewing.py",
+    "uk_management_bot/handlers/address_apartments/editing.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
