@@ -131,6 +131,7 @@ CONVERTED = [
     "uk_management_bot/handlers/base.py",
     "uk_management_bot/handlers/user_yards_management.py",
     "uk_management_bot/handlers/user_management/fsm.py",
+    "uk_management_bot/handlers/shift_management/templates_b.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):
