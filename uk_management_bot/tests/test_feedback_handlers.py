@@ -67,7 +67,7 @@ async def test_confirm_creates_feedback_and_notifies(db):
     bot = MagicMock()
 
     with patch.object(fb_handlers, "deliver_feedback_to_managers", new=AsyncMock()) as deliver:
-        await fb_handlers.feedback_confirm(cb, st, db, bot, language="ru")
+        await fb_handlers.feedback_confirm(cb, st, bot, language="ru", _db=db)
 
     rows = db.query(Feedback).all()
     assert len(rows) == 1
@@ -92,7 +92,7 @@ async def test_confirm_with_photo_uploads_media(db):
     with patch.object(fb_handlers, "deliver_feedback_to_managers", new=AsyncMock()), \
          patch.object(fb_handlers, "upload_telegram_file_to_media_service",
                       new=AsyncMock(return_value=media_resp)) as upload:
-        await fb_handlers.feedback_confirm(cb, st, db, bot, language="ru")
+        await fb_handlers.feedback_confirm(cb, st, bot, language="ru", _db=db)
 
     upload.assert_awaited_once()
     assert upload.await_args.kwargs["request_number"].startswith("fb-")

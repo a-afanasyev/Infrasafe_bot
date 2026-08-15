@@ -127,6 +127,7 @@ CONVERTED = [
     # spec_toggle_/spec_save/spec_cancel; оба message-хендлера ловят FSM-состояния,
     # которые ставит сам файл).
     "uk_management_bot/handlers/user_management/roles_specs.py",
+    "uk_management_bot/handlers/feedback.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):
