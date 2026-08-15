@@ -1,10 +1,12 @@
 import logging
+from dataclasses import dataclass
+from typing import Optional
 from aiogram import F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
@@ -21,42 +23,80 @@ from ._router import router
 logger = logging.getLogger(__name__)
 
 
+# ==========================================================================
+# DTO для async-слоя: наружу из run_db выходят примитивы, не ORM-строки.
+# ==========================================================================
+
+@dataclass(frozen=True)
+class _BuildingOption:
+    """Пункт выбора здания для get_user_apartment_selection_keyboard
+    (item_type="building" читает только .address и .id)."""
+    id: int
+    address: str
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db. Создание квартиры (create_apartment) сюда НЕ входит: это async-метод
+# AddressService с собственной async-сессией — параметр session им не
+# используется ни на одном пути, поэтому хендлер await'ит его с session=None.
+# ==========================================================================
+
+def _load_active_buildings(db) -> list:
+    """-> [_BuildingOption] для шага выбора здания."""
+    from uk_management_bot.database.models import Building
+    from sqlalchemy import select
+
+    result = db.execute(
+        select(Building)
+        .where(Building.is_active.is_(True))
+        .order_by(Building.address)
+        .limit(50)
+    )
+    buildings = result.scalars().all()
+    return [_BuildingOption(id=b.id, address=b.address) for b in buildings]
+
+
+def _load_building_address(db, building_id: int) -> Optional[str]:
+    """-> адрес здания | None (None — здание не найдено)."""
+    building = AddressService.get_building_by_id(db, building_id)
+    return building.address if building else None
+
+
+def _user_id_by_tg(db, telegram_id: int) -> Optional[int]:
+    from uk_management_bot.database.models.user import User
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    return user.id if user else None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # СОЗДАНИЕ НОВОЙ КВАРТИРЫ
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "addr_apartment_create")
-async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Начать создание новой квартиры - выбор здания"""
     await state.clear()
     lang = language
 
     try:
-        with session_scope() as db:
-            from uk_management_bot.database.models import Building
-            from sqlalchemy import select
+        # ⚠️ Предсуществующий дефект (сохранён 1:1): limit(50) без пагинации —
+        # при большем числе активных зданий остальные недоступны для выбора.
+        buildings = await run_db(_load_active_buildings, db=_db)
 
-            result = db.execute(
-                select(Building)
-                .where(Building.is_active.is_(True))
-                .order_by(Building.address)
-                .limit(50)
-            )
-            buildings = result.scalars().all()
-
-            if not buildings:
-                await callback.message.edit_text(
-                    get_text("address_apartments.handlers.create_no_buildings", language=lang),
-                    reply_markup=get_cancel_keyboard_inline()
-                )
-                return
-
-            await state.set_state(ApartmentManagementStates.waiting_for_building_selection)
-
+        if not buildings:
             await callback.message.edit_text(
-                get_text("address_apartments.handlers.create_step1_select_building", language=lang),
-                reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building")
+                get_text("address_apartments.handlers.create_no_buildings", language=lang),
+                reply_markup=get_cancel_keyboard_inline()
             )
+            return
+
+        await state.set_state(ApartmentManagementStates.waiting_for_building_selection)
+
+        await callback.message.edit_text(
+            get_text("address_apartments.handlers.create_step1_select_building", language=lang),
+            reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building")
+        )
 
     except Exception as e:
         logger.error(f"Ошибка при начале создания квартиры: {e}")
@@ -64,7 +104,7 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
 
 
 @router.callback_query(F.data.startswith("apartment_create_building:"))
-async def process_apartment_building_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def process_apartment_building_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Обработка выбора здания для новой квартиры"""
     building_id = int(callback.data.split(":")[1])
     lang = language
@@ -72,20 +112,22 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
     await state.update_data(building_id=building_id)
     await state.set_state(ApartmentManagementStates.waiting_for_apartment_number)
 
-    with session_scope() as db:
-        building = AddressService.get_building_by_id(db, building_id)
-        building_addr = building.address if building else get_text("address_apartments.handlers.unknown_building", language=lang)
+    address = await run_db(lambda s: _load_building_address(s, building_id), db=_db)
+    building_addr = address if address is not None else get_text("address_apartments.handlers.unknown_building", language=lang)
 
-        await callback.message.edit_text(
-            get_text("address_apartments.handlers.create_step2_enter_number", language=lang).format(address=building_addr),
-            reply_markup=get_cancel_keyboard_inline()
-        )
+    await callback.message.edit_text(
+        get_text("address_apartments.handlers.create_step2_enter_number", language=lang).format(address=building_addr),
+        reply_markup=get_cancel_keyboard_inline()
+    )
 
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_apartment_number))
 async def process_apartment_number(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка номера квартиры"""
     lang = language
+    # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение (фото,
+    # стикер) в FSM-состоянии даёт message.text is None → AttributeError мимо
+    # обработчиков ошибок; класс общий для всей цепочки создания.
     number = message.text.strip()
 
     if len(number) < 1 or len(number) > 20:
@@ -216,7 +258,7 @@ async def process_apartment_rooms(message: Message, state: FSMContext, language:
 
 @router.message(StateFilter(ApartmentManagementStates.waiting_for_area))
 async def process_apartment_area(message: Message, state: FSMContext, language: str = "ru",
-                                 roles: list = None, active_role: str = None):
+                                 roles: list = None, active_role: str = None, *, _db=None):
     """Обработка площади квартиры и создание квартиры"""
     lang = language
     skip_text = get_text("address.keyboards.skip", language=lang)
@@ -245,58 +287,60 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
     data = await state.get_data()
 
     try:
-        with session_scope() as db:
-            # Получаем user.id из базы данных (не telegram_id!)
-            from uk_management_bot.database.models.user import User
-            user = db.query(User).filter(User.telegram_id == message.from_user.id).first()
-            if not user:
-                await message.answer(
-                    get_text("address_apartments.handlers.user_not_found", language=lang),
-                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
-                )
-                await state.clear()
-                return
-
-            apartment, error = await AddressService.create_apartment(
-                session=db,
-                building_id=data['building_id'],
-                apartment_number=data['apartment_number'],
-                created_by=user.id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
-                entrance=data.get('entrance'),
-                floor=data.get('floor'),
-                rooms_count=data.get('rooms_count'),
-                area=area  # ДОБАВЛЕНО: передаём площадь
-            )
-
-            if error:
-                await message.answer(
-                    get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
-                    reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
-                )
-                await state.clear()
-                return
-
-            text = get_text("address_apartments.handlers.creation_success", language=lang).format(
-                number=apartment.apartment_number
-            )
-
-            if apartment.entrance:
-                text += get_text("address_apartments.handlers.detail_entrance", language=lang).format(value=apartment.entrance)
-            if apartment.floor:
-                text += get_text("address_apartments.handlers.detail_floor", language=lang).format(value=apartment.floor)
-            if apartment.rooms_count:
-                text += get_text("address_apartments.handlers.detail_rooms", language=lang).format(value=apartment.rooms_count)
-            if apartment.area:
-                text += get_text("address_apartments.handlers.detail_area", language=lang).format(value=apartment.area)
-
-            text += "\n" + get_text("address_apartments.handlers.select_action", language=lang)
-
+        # Получаем user.id из базы данных (не telegram_id!)
+        user_id = await run_db(lambda s: _user_id_by_tg(s, message.from_user.id), db=_db)
+        if user_id is None:
             await message.answer(
-                text,
-                reply_markup=get_address_management_menu()
+                get_text("address_apartments.handlers.user_not_found", language=lang),
+                reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
             )
+            await state.clear()
+            return
 
-            logger.info(f"Создана новая квартира: {apartment.apartment_number} (ID: {apartment.id}) пользователем {message.from_user.id}")
+        # create_apartment — async-метод с собственной async-сессией; параметр
+        # session им не используется.
+        apartment, error = await AddressService.create_apartment(
+            session=None,
+            building_id=data['building_id'],
+            apartment_number=data['apartment_number'],
+            created_by=user_id,  # ИСПРАВЛЕНО: используем user.id из БД, а не telegram_id
+            entrance=data.get('entrance'),
+            floor=data.get('floor'),
+            rooms_count=data.get('rooms_count'),
+            area=area  # ДОБАВЛЕНО: передаём площадь
+        )
+
+        if error:
+            # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой код ошибки
+            # сервиса в тексте пользователю, без localize_address_error.
+            await message.answer(
+                get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
+                reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
+            )
+            await state.clear()
+            return
+
+        text = get_text("address_apartments.handlers.creation_success", language=lang).format(
+            number=apartment.apartment_number
+        )
+
+        if apartment.entrance:
+            text += get_text("address_apartments.handlers.detail_entrance", language=lang).format(value=apartment.entrance)
+        if apartment.floor:
+            text += get_text("address_apartments.handlers.detail_floor", language=lang).format(value=apartment.floor)
+        if apartment.rooms_count:
+            text += get_text("address_apartments.handlers.detail_rooms", language=lang).format(value=apartment.rooms_count)
+        if apartment.area:
+            text += get_text("address_apartments.handlers.detail_area", language=lang).format(value=apartment.area)
+
+        text += "\n" + get_text("address_apartments.handlers.select_action", language=lang)
+
+        await message.answer(
+            text,
+            reply_markup=get_address_management_menu()
+        )
+
+        logger.info(f"Создана новая квартира: {apartment.apartment_number} (ID: {apartment.id}) пользователем {message.from_user.id}")
 
     except Exception:
         logger.exception("create apartment handler failed")
