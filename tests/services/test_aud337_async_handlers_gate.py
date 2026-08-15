@@ -86,6 +86,31 @@ CONVERTED = [
     # — вызывается только в тестах) сохранён байт-в-байт до decision владельца
     # (прецедент BUG-137/148/150) и держит .query( в async def. После
     # ретайра/оживления — добавить сюда.
+    # A2-хвост волна 5: комментарии к заявкам. Все восемь хендлеров имеют
+    # живые генераторы триггеров (keyboards/requests.get_discussion_rows,
+    # keyboards/request_comments.*, keyboards/request_reports.py + FSM-цепочка
+    # внутри файла).
+    "uk_management_bot/handlers/request_comments.py",
+    # A2-хвост волна 5: действия модерации пользователей. Все 13 хендлеров
+    # имеют живые генераторы триггеров (keyboards/user_management.py,
+    # keyboards/user_verification.py).
+    "uk_management_bot/handlers/user_management/actions.py",
+    # handlers/user_management/panels.py в волне 5 конвертирован в ЖИВОЙ части
+    # (6 хендлеров), но в ратчет не входит: три хендлера мертвы — генераторов
+    # "user_mgmt_stats_with_verification", "quick_verify_", "quick_reject_" в
+    # репозитории нет вовсе — и сохранены байт-в-байт до decision владельца
+    # (прецедент BUG-137/148/150), продолжая держать db/.query( в async def.
+    # После ретайра/оживления — добавить сюда.
+    # handlers/request_assignment.py волной 5 НЕ конвертирован: инвентарь
+    # показал мёртвый кластер целиком — входа "assign_request_" не генерит
+    # никто, остальные семь триггеров рождаются только внутри самой цепочки
+    # (или в get_report_details_keyboard без прод-вызовов). Живое назначение
+    # заявки идёт через assign_duty_/assign_specific_/assign_executor_ из
+    # keyboards/admin.py. Файл сохранён байт-в-байт до decision владельца.
+    # A2-хвост волна 5: ответ заявителя на уточнение. Оба хендлера живые —
+    # команду /reply_{номер} диктует живое уведомление об уточнении
+    # (admin.handlers.notify_user_clarification), второй ловит FSM-состояние.
+    "uk_management_bot/handlers/clarification_replies.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
