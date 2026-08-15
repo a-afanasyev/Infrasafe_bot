@@ -39,11 +39,17 @@ class AuthService:
         # смены ролей идёт через Redis (try_set_active_role_with_rate_limit).
         self.db = db
 
-    async def get_or_create_user(self, telegram_id: int, username: str = None, 
+    def get_or_create_user_sync(self, telegram_id: int, username: str = None,
                                 first_name: str = None, last_name: str = None) -> User:
-        """Получить или создать пользователя"""
+        """Получить или создать пользователя (sync-ядро).
+
+        AUD3-07/AUD5-ARCH-1: тело метода целиком синхронно (SQL без единого
+        ``await``), поэтому оно вынесено в sync-ядро — его зовут sync-юниты,
+        которые ``run_db`` уводит в worker-поток. ``async``-обёртка ниже
+        сохранена байт-в-байт по контракту для неконвертированных вызывающих.
+        """
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
-        
+
         if not user:
             user = User(
                 telegram_id=telegram_id,
@@ -58,9 +64,19 @@ class AuthService:
             self.db.commit()
             self.db.refresh(user)
             logger.info(f"Создан новый пользователь: {telegram_id}")
-        
+
         return user
-    
+
+    async def get_or_create_user(self, telegram_id: int, username: str = None,
+                                first_name: str = None, last_name: str = None) -> User:
+        """Получить или создать пользователя (async-обёртка над sync-ядром)."""
+        return self.get_or_create_user_sync(
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
     async def update_user_language(self, telegram_id: int, language: str) -> bool:
         """Обновить язык пользователя"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -107,31 +123,36 @@ class AuthService:
         """Получить пользователя по Telegram ID"""
         return self.db.query(User).filter(User.telegram_id == telegram_id).first()
     
-    async def process_invite_join(self, telegram_id: int, invite_data: dict, 
-                                  username: str = None, first_name: str = None, 
-                                  last_name: str = None) -> User:
+    def process_invite_join_sync(self, telegram_id: int, invite_data: dict,
+                                 username: str = None, first_name: str = None,
+                                 last_name: str = None) -> User:
         """
-        Обрабатывает присоединение по инвайту
-        
+        Обрабатывает присоединение по инвайту (sync-ядро)
+
+        AUD3-07/AUD5-ARCH-1: единственный ``await`` в исходном теле вёл в
+        ``get_or_create_user``, которая сама целиком синхронна — здесь зовётся
+        её sync-ядро. Всё остальное — SQL, поэтому метод пригоден для
+        sync-юнита под ``run_db``; async-обёртка ниже сохраняет контракт.
+
         Args:
             telegram_id: Telegram ID пользователя
             invite_data: Данные из токена приглашения
             username: Username пользователя
             first_name: Имя пользователя
             last_name: Фамилия пользователя
-            
+
         Returns:
             Обновлённый объект User
         """
         try:
             # Получаем или создаём пользователя
-            user = await self.get_or_create_user(
+            user = self.get_or_create_user_sync(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
                 last_name=last_name
             )
-            
+
             # Добавляем роль если её нет
             role = invite_data["role"]
             current_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
@@ -160,12 +181,24 @@ class AuthService:
             
             logger.info(f"Пользователь {telegram_id} присоединился по инвайту с ролью {role}")
             return user
-            
+
         except Exception as e:
             logger.error(f"Ошибка обработки инвайта для {telegram_id}: {e}")
             self.db.rollback()
             raise
-    
+
+    async def process_invite_join(self, telegram_id: int, invite_data: dict,
+                                  username: str = None, first_name: str = None,
+                                  last_name: str = None) -> User:
+        """Присоединение по инвайту (async-обёртка над sync-ядром)."""
+        return self.process_invite_join_sync(
+            telegram_id=telegram_id,
+            invite_data=invite_data,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
     # ═══ МЕТОДЫ МОДЕРАЦИИ ПОЛЬЗОВАТЕЛЕЙ ═══
     
     def approve_user(self, user_id: int, approved_by: int, comment: str = "") -> bool:
@@ -534,8 +567,12 @@ class AuthService:
             )
         ).all()
     
-    async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
-        """Назначить пользователя администратором по паролю"""
+    def make_admin_by_password_sync(self, telegram_id: int, password: str) -> bool:
+        """Назначить пользователя администратором по паролю (sync-ядро).
+
+        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
+        сохраняет контракт для неконвертированных вызывающих.
+        """
         from uk_management_bot.config.settings import settings
         
         if not secrets.compare_digest(password.encode('utf-8'), settings.ADMIN_PASSWORD.encode('utf-8')):
@@ -555,6 +592,10 @@ class AuthService:
             logger.info(f"Пользователь {telegram_id} назначен администратором по паролю")
             return True
         return False
+
+    async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
+        """Назначить администратором по паролю (async-обёртка над sync-ядром)."""
+        return self.make_admin_by_password_sync(telegram_id=telegram_id, password=password)
 
     async def set_active_role(self, telegram_id: int, role: str) -> bool:
         """Установить активную роль, если она присутствует у пользователя.
