@@ -119,6 +119,7 @@ CONVERTED = [
     "uk_management_bot/handlers/address_apartments/editing.py",
     "uk_management_bot/handlers/address_apartments/creation.py",
     "uk_management_bot/handlers/address_apartments/autofill.py",
+    "uk_management_bot/handlers/address_apartments/details.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
