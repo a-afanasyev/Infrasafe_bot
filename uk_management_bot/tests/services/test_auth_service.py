@@ -1,7 +1,7 @@
 """Unit tests for AuthService."""
 import json
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 from uk_management_bot.services.auth_service import AuthService
 
@@ -776,7 +776,9 @@ class TestTrustVerificationInvariant:
         user = _make_user(roles=None, active_role=None)
         user.verification_status = "pending"
         service = AuthService(MagicMock())
-        service.get_or_create_user = AsyncMock(return_value=user)
+        # AUD3-07: process_invite_join делегирует sync-ядру, оно и резолвит
+        # get_or_create_user_sync — патч бьём именно туда.
+        service.get_or_create_user_sync = MagicMock(return_value=user)
 
         result = await service.process_invite_join(100, {"role": "manager"})
 
@@ -788,7 +790,7 @@ class TestTrustVerificationInvariant:
         user = _make_user(roles=None, active_role=None)
         user.verification_status = "pending"
         service = AuthService(MagicMock())
-        service.get_or_create_user = AsyncMock(return_value=user)
+        service.get_or_create_user_sync = MagicMock(return_value=user)
 
         result = await service.process_invite_join(100, {"role": "executor"})
 

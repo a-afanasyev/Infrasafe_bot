@@ -83,8 +83,8 @@ class TestRegisterWebAppButton:
         user = _make_pending_user()
 
         with patch("uk_management_bot.handlers.base.AuthService") as MockAuth:
-            MockAuth.return_value.get_or_create_user = AsyncMock(return_value=user)
-            await handle_regular_start(msg, db)
+            MockAuth.return_value.get_or_create_user_sync = MagicMock(return_value=user)
+            await handle_regular_start(msg, _db=db)
 
         msg.answer.assert_called_once()
         reply_markup = msg.answer.call_args.kwargs.get("reply_markup")
@@ -112,8 +112,8 @@ class TestRegisterWebAppButton:
         user = _make_pending_user()
 
         with patch("uk_management_bot.handlers.base.AuthService") as MockAuth:
-            MockAuth.return_value.get_or_create_user = AsyncMock(return_value=user)
-            await handle_regular_start(msg, db)
+            MockAuth.return_value.get_or_create_user_sync = MagicMock(return_value=user)
+            await handle_regular_start(msg, _db=db)
 
         msg.answer.assert_called_once()
         reply_markup = msg.answer.call_args.kwargs.get("reply_markup")

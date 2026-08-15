@@ -102,9 +102,9 @@ class TestHandleRegularStart:
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ):
             auth_instance = MockAuth.return_value
-            auth_instance.get_or_create_user = AsyncMock(return_value=user)
+            auth_instance.get_or_create_user_sync = MagicMock(return_value=user)
 
-            await handle_regular_start(msg, db, roles=["applicant"], active_role="applicant", user_status="approved")
+            await handle_regular_start(msg, roles=["applicant"], active_role="applicant", user_status="approved", _db=db)
 
         msg.answer.assert_called_once()
         call_kwargs = msg.answer.call_args
@@ -124,9 +124,9 @@ class TestHandleRegularStart:
             "uk_management_bot.handlers.base.AuthService"
         ) as MockAuth:
             auth_instance = MockAuth.return_value
-            auth_instance.get_or_create_user = AsyncMock(return_value=user)
+            auth_instance.get_or_create_user_sync = MagicMock(return_value=user)
 
-            await handle_regular_start(msg, db)
+            await handle_regular_start(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -147,9 +147,9 @@ class TestHandleRegularStart:
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ):
             auth_instance = MockAuth.return_value
-            auth_instance.get_or_create_user = AsyncMock(return_value=user)
+            auth_instance.get_or_create_user_sync = MagicMock(return_value=user)
 
-            await handle_regular_start(msg, db, roles=["applicant"], active_role="applicant", user_status="blocked")
+            await handle_regular_start(msg, roles=["applicant"], active_role="applicant", user_status="blocked", _db=db)
 
         msg.answer.assert_called_once()
         # The rendered text should contain the blocked-status locale text
@@ -177,10 +177,10 @@ class TestHandleRegularStart:
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ) as mock_kb:
             auth_instance = MockAuth.return_value
-            auth_instance.get_or_create_user = AsyncMock(return_value=user)
+            auth_instance.get_or_create_user_sync = MagicMock(return_value=user)
 
             # roles=None triggers DB fallback
-            await handle_regular_start(msg, db, roles=None, active_role=None)
+            await handle_regular_start(msg, roles=None, active_role=None, _db=db)
 
         mock_kb.assert_called_once()
         # active_role should have been resolved from DB
@@ -204,9 +204,9 @@ class TestHandleRegularStart:
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ):
             auth_instance = MockAuth.return_value
-            auth_instance.get_or_create_user = AsyncMock(return_value=user)
+            auth_instance.get_or_create_user_sync = MagicMock(return_value=user)
 
-            await cmd_start(msg, db, state)
+            await cmd_start(msg, state, _db=db)
 
         state.clear.assert_called_once()
 
@@ -228,7 +228,7 @@ class TestGoBack:
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"), patch(
             "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
-            await go_back(msg, state, db)
+            await go_back(msg, state, _db=db)
 
         state.clear.assert_called_once()
 
@@ -244,7 +244,7 @@ class TestGoBack:
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"), patch(
             "uk_management_bot.handlers.base.get_user_contextual_keyboard", new=AsyncMock(return_value=MagicMock())
         ):
-            await go_back(msg, state, db)
+            await go_back(msg, state, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -263,7 +263,7 @@ class TestShowHelp:
         db = _make_db()
 
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"):
-            await show_help(msg, db=db)
+            await show_help(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -276,7 +276,7 @@ class TestShowHelp:
         db = _make_db()
 
         with patch("uk_management_bot.handlers.base.get_user_language", return_value="ru"):
-            await show_help(msg, db=db)
+            await show_help(msg, _db=db)
 
         sent_text = msg.answer.call_args[0][0]
         assert isinstance(sent_text, str)
@@ -293,7 +293,7 @@ class TestShowHelp:
         with patch(
             "uk_management_bot.handlers.base.get_user_language", return_value="uz"
         ) as mock_lang:
-            await show_help(msg, db=db)
+            await show_help(msg, _db=db)
 
         mock_lang.assert_called_once_with(msg.from_user.id, db)
 
@@ -329,7 +329,7 @@ class TestShowProfile:
             ps_inst.format_profile_text.return_value = formatted_text
             mock_inline.return_value = MagicMock(inline_keyboard=[])
 
-            await show_profile(msg, db)
+            await show_profile(msg, _db=db)
 
         ps_inst.get_user_profile_data.assert_called_once_with(msg.from_user.id)
 
@@ -355,7 +355,7 @@ class TestShowProfile:
             ps_inst.format_profile_text.return_value = formatted_text
             mock_inline.return_value = MagicMock(inline_keyboard=[])
 
-            await show_profile(msg, db)
+            await show_profile(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -375,7 +375,7 @@ class TestShowProfile:
             ps_inst = MockPS.return_value
             ps_inst.get_user_profile_data.return_value = None
 
-            await show_profile(msg, db)
+            await show_profile(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -395,7 +395,7 @@ class TestShowProfile:
             ps_inst = MockPS.return_value
             ps_inst.get_user_profile_data.side_effect = RuntimeError("db error")
 
-            await show_profile(msg, db)
+            await show_profile(msg, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -486,12 +486,12 @@ class TestSwitchRole:
         with patch(
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ), patch(
-            "uk_management_bot.handlers.base.async_notify_role_switched", new_callable=AsyncMock
+            "uk_management_bot.handlers.base.send_to_user", new_callable=AsyncMock
         ):
             await switch_role(
                 cb,
                 callback_data=callback_data,
-                db=db,
+                _db=db,
                 roles=["applicant", "executor"],
                 active_role="applicant",
                 user_status="approved",
@@ -513,7 +513,7 @@ class TestSwitchRole:
         await switch_role(
             cb,
             callback_data=callback_data,
-            db=db,
+            _db=db,
             roles=["applicant"],
             active_role="applicant",
         )
@@ -541,7 +541,7 @@ class TestSwitchRole:
         await switch_role(
             cb,
             callback_data=callback_data,
-            db=db,
+            _db=db,
             roles=["applicant", "executor"],
             active_role="applicant",
         )
@@ -564,11 +564,10 @@ class TestHandleRestartBot:
         cb = _make_callback(data="restart_bot")
         db = _make_db()
 
-        with patch("uk_management_bot.handlers.base.AuthService") as MockAuth:
-            auth_inst = MockAuth.return_value
-            auth_inst.get_user_by_telegram_id = AsyncMock(return_value=None)
+        with patch("uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()):
+            db.query.return_value.filter.return_value.first.return_value = None
 
-            await handle_restart_bot(cb, db=db)
+            await handle_restart_bot(cb, _db=db)
 
         cb.answer.assert_called_once()
         _, call_kwargs = cb.answer.call_args
@@ -583,13 +582,12 @@ class TestHandleRestartBot:
         db = _make_db()
         user = _make_db_user(status="approved")
 
-        with patch("uk_management_bot.handlers.base.AuthService") as MockAuth, patch(
+        with patch(
             "uk_management_bot.handlers.base.get_main_keyboard_for_role", return_value=MagicMock()
         ):
-            auth_inst = MockAuth.return_value
-            auth_inst.get_user_by_telegram_id = AsyncMock(return_value=user)
+            db.query.return_value.filter.return_value.first.return_value = user
 
-            await handle_restart_bot(cb, db=db)
+            await handle_restart_bot(cb, _db=db)
 
         cb.message.answer.assert_called_once()
         cb.answer.assert_called_once()
@@ -610,17 +608,17 @@ class TestProcessAdminPasswordRateLimit:
         db = _make_db()
 
         mock_service = MagicMock()
-        mock_service.make_admin_by_password = AsyncMock(return_value=True)
+        mock_service.make_admin_by_password_sync = MagicMock(return_value=True)
 
         with patch("uk_management_bot.handlers.base.AuthService", return_value=mock_service), \
              patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
                    new=AsyncMock(return_value=True)) as mock_limit, \
              patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
                    new=AsyncMock(return_value=MagicMock())):
-            await process_admin_password(msg, state, db)
+            await process_admin_password(msg, state, _db=db)
 
         mock_limit.assert_awaited_once_with("admin_pwd:555", 5, 300)
-        mock_service.make_admin_by_password.assert_not_called()
+        mock_service.make_admin_by_password_sync.assert_not_called()
         state.clear.assert_called_once()
         msg.answer.assert_called_once()
 
@@ -634,16 +632,16 @@ class TestProcessAdminPasswordRateLimit:
         db = _make_db()
 
         mock_service = MagicMock()
-        mock_service.make_admin_by_password = AsyncMock(return_value=False)
+        mock_service.make_admin_by_password_sync = MagicMock(return_value=False)
 
         with patch("uk_management_bot.handlers.base.AuthService", return_value=mock_service), \
              patch("uk_management_bot.utils.redis_rate_limiter.is_rate_limited",
                    new=AsyncMock(return_value=False)), \
              patch("uk_management_bot.handlers.base.get_user_contextual_keyboard",
                    new=AsyncMock(return_value=MagicMock())):
-            await process_admin_password(msg, state, db)
+            await process_admin_password(msg, state, _db=db)
 
-        mock_service.make_admin_by_password.assert_awaited_once_with(
+        mock_service.make_admin_by_password_sync.assert_called_once_with(
             telegram_id=555, password="wrong-password"
         )
         state.clear.assert_called_once()

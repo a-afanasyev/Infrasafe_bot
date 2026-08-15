@@ -2,14 +2,26 @@
 Управление дополнительными дворами пользователей
 
 Позволяет администраторам добавлять/удалять дополнительные дворы для жителей
+
+AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза каждого хендлера — sync
+unit-of-work под ``run_db``; наружу выходят примитивы и готовая
+InlineKeyboardMarkup. Сборщики клавиатур (``get_user_yards_keyboard`` /
+``get_yard_selection_keyboard``) открывают СВОЙ ``session_scope`` и читают
+ORM-строки дворов — по канону они вызываются ВНУТРИ юнита, то есть их сессия
+тоже уезжает в worker-поток и больше не блокирует event loop.
+
+Инвентарь живости: все четыре хендлера живые. Корень цепочки —
+``manage_user_yards_{telegram_id}`` из keyboards/user_management.py:195;
+``add_user_yard_`` и ``remove_user_yard_`` рождает get_user_yards_keyboard,
+``user_yard_add_confirm_`` — get_yard_selection_keyboard (обе в этом файле).
+Мёртвых нет.
 """
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.state import State, StatesGroup
-from sqlalchemy.orm import Session
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db, session_scope
 from uk_management_bot.database.models import User, Yard
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -156,12 +168,55 @@ def get_yard_selection_keyboard(user_telegram_id: int, lang: str = 'ru') -> Inli
         ])
 
 
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# ==========================================================================
+
+
+def _lang(db, telegram_id: int) -> str:
+    """Язык пользователя из БД (тот же helper, что и раньше)."""
+    return get_user_language(telegram_id, db)
+
+
+def _load_manage_screen(db, user_telegram_id: int, lang: str):
+    """-> (имя пользователя, готовая клавиатура) | None (пользователя нет)."""
+    target_user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
+    if not target_user:
+        return None
+
+    user_name = f"{target_user.first_name or ''} {target_user.last_name or ''}".strip() or f"ID: {user_telegram_id}"
+    return user_name, get_user_yards_keyboard(user_telegram_id, lang)
+
+
+def _load_yard_selection(db, user_telegram_id: int, lang: str) -> InlineKeyboardMarkup:
+    """Клавиатура выбора двора. Сессию юнита не использует — сборщик открывает
+    СВОЙ session_scope; юнит нужен, чтобы этот scope жил в worker-потоке."""
+    return get_yard_selection_keyboard(user_telegram_id, lang)
+
+
+def _apply_add_yard(db, user_telegram_id: int, yard_id: int, granted_by_id: int, comment: str) -> bool:
+    """Добавляет двор пользователю. -> success."""
+    return AddressService.add_user_yard(
+        db,
+        user_telegram_id,
+        yard_id,
+        granted_by_id,
+        comment
+    )
+
+
+def _apply_remove_yard(db, user_telegram_id: int, yard_id: int) -> bool:
+    """Удаляет дополнительный двор. -> success."""
+    return AddressService.remove_user_yard(db, user_telegram_id, yard_id)
+
+
 # ============= ОБРАБОТЧИКИ =============
 
 @router.callback_query(F.data.startswith("manage_user_yards_"))
-async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_manage_user_yards(callback: CallbackQuery, roles: list = None, user: User = None, *, _db=None):
     """Показать управление дворами пользователя"""
-    lang = get_user_language(callback.from_user.id, db)
+    lang = await run_db(lambda s: _lang(s, callback.from_user.id), db=_db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -174,19 +229,21 @@ async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: 
     try:
         user_telegram_id = int(callback.data.split("_")[-1])
 
-        target_user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
-        if not target_user:
+        loaded = await run_db(
+            lambda s: _load_manage_screen(s, user_telegram_id, lang), db=_db
+        )
+        if loaded is None:
             await callback.answer(get_text("user_yards.user_not_found_alert", language=lang), show_alert=True)
             return
 
-        user_name = f"{target_user.first_name or ''} {target_user.last_name or ''}".strip() or f"ID: {user_telegram_id}"
+        user_name, yards_keyboard = loaded
 
         await callback.message.edit_text(
             get_text("user_yards.manage_yards_message", language=lang).format(
                 user_name=user_name,
                 user_telegram_id=user_telegram_id
             ),
-            reply_markup=get_user_yards_keyboard(user_telegram_id, lang)
+            reply_markup=yards_keyboard
         )
         await callback.answer()
 
@@ -196,9 +253,9 @@ async def handle_manage_user_yards(callback: CallbackQuery, db: Session, roles: 
 
 
 @router.callback_query(F.data.startswith("add_user_yard_"))
-async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_add_user_yard(callback: CallbackQuery, roles: list = None, user: User = None, *, _db=None):
     """Показать список дворов для добавления"""
-    lang = get_user_language(callback.from_user.id, db)
+    lang = await run_db(lambda s: _lang(s, callback.from_user.id), db=_db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -211,9 +268,13 @@ async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list
     try:
         user_telegram_id = int(callback.data.split("_")[-1])
 
+        selection_keyboard = await run_db(
+            lambda s: _load_yard_selection(s, user_telegram_id, lang), db=_db
+        )
+
         await callback.message.edit_text(
             get_text("user_yards.add_yard_message", language=lang),
-            reply_markup=get_yard_selection_keyboard(user_telegram_id, lang)
+            reply_markup=selection_keyboard
         )
         await callback.answer()
 
@@ -223,9 +284,9 @@ async def handle_add_user_yard(callback: CallbackQuery, db: Session, roles: list
 
 
 @router.callback_query(F.data.startswith("user_yard_add_confirm_"))
-async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_confirm_add_yard(callback: CallbackQuery, roles: list = None, user: User = None, *, _db=None):
     """Подтвердить добавление двора"""
-    lang = get_user_language(callback.from_user.id, db)
+    lang = await run_db(lambda s: _lang(s, callback.from_user.id), db=_db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -247,18 +308,17 @@ async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: l
             return
 
         # Добавляем двор
-        success = AddressService.add_user_yard(
-            db,
-            user_telegram_id,
-            yard_id,
-            user.id,
-            f"Добавлено администратором {user.first_name or callback.from_user.id}"
+        granted_by_id = user.id
+        comment = f"Добавлено администратором {user.first_name or callback.from_user.id}"
+        success = await run_db(
+            lambda s: _apply_add_yard(s, user_telegram_id, yard_id, granted_by_id, comment),
+            db=_db,
         )
 
         if success:
             await callback.answer(get_text("user_yards.yard_added_success", language=lang), show_alert=True)
             # Возвращаемся к управлению дворами
-            await handle_manage_user_yards(callback, db, roles, user)
+            await handle_manage_user_yards(callback, roles, user, _db=_db)
         else:
             await callback.answer(get_text("user_yards.yard_add_failed", language=lang), show_alert=True)
 
@@ -268,9 +328,9 @@ async def handle_confirm_add_yard(callback: CallbackQuery, db: Session, roles: l
 
 
 @router.callback_query(F.data.startswith("remove_user_yard_"))
-async def handle_remove_user_yard(callback: CallbackQuery, db: Session, roles: list = None, user: User = None):
+async def handle_remove_user_yard(callback: CallbackQuery, roles: list = None, user: User = None, *, _db=None):
     """Удалить дополнительный двор у пользователя"""
-    lang = get_user_language(callback.from_user.id, db)
+    lang = await run_db(lambda s: _lang(s, callback.from_user.id), db=_db)
 
     # Проверяем права доступа
     if not has_admin_access(roles=roles, user=user):
@@ -286,12 +346,14 @@ async def handle_remove_user_yard(callback: CallbackQuery, db: Session, roles: l
         yard_id = int(parts[4])
 
         # Удаляем двор
-        success = AddressService.remove_user_yard(db, user_telegram_id, yard_id)
+        success = await run_db(
+            lambda s: _apply_remove_yard(s, user_telegram_id, yard_id), db=_db
+        )
 
         if success:
             await callback.answer(get_text("user_yards.yard_removed_success", language=lang), show_alert=True)
             # Обновляем интерфейс
-            await handle_manage_user_yards(callback, db, roles, user)
+            await handle_manage_user_yards(callback, roles, user, _db=_db)
         else:
             await callback.answer(get_text("user_yards.yard_remove_failed", language=lang), show_alert=True)
 

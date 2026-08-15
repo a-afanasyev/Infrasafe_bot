@@ -102,6 +102,6 @@ async def test_process_approval_comment_notifies_in_user_language(monkeypatch):
     message.answer = AsyncMock()
     message.bot.send_message = AsyncMock()
 
-    await um.fsm.process_approval_comment(message, state, db=db, language="ru")
+    await um.fsm.process_approval_comment(message, state, language="ru", _db=db)
 
     _assert_uz(message.bot.send_message)

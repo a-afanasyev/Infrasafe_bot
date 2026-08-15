@@ -1,10 +1,35 @@
-"""Создание заявки: FSM (категория→адрес→описание→срочность→медиа→подтв.) + save_request."""
+"""Создание заявки: FSM (категория→адрес→описание→срочность→медиа→подтв.) + save_request.
+
+AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза — sync unit-of-work под
+``run_db``. Прежние ``with _db_scope(None) as db:`` в двух хендлерах открывали
+сессию прямо на event loop и держали её через ``await``'ы (ответы в Telegram);
+теперь БД живёт только внутри юнитов.
+
+``save_request`` РАСКРОЕНА на sync-ядро ``save_request_sync`` + async-обёртку.
+Это оказалось прямолинейно: единственный ``await`` внутри функции — загрузка
+медиа в Media Service, и он уже стоял СТРОГО ПОСЛЕ ``service.commit()``
+(перенос сделан в PR5, чтобы row-lock счётчика номеров не держался на время
+сетевого I/O). Значит шаги «валидация → пользователь → резолв адреса →
+номер → INSERT → outbox → commit → авто-dispatch» образуют непрерывный
+синхронный блок и уезжают в worker-поток целиком, а сеть остаётся снаружи.
+Раскрой снимает блокер и с handlers/inspector_requests.py.
+
+Третий параметр обёртки называется ``_db`` (seam): внешние вызывающие
+(inspector_requests.py, create_callbacks.py) передают его ТРЕТЬИМ ПОЗИЦИОННЫМ
+аргументом со своей открытой сессией — run_db с непустым db исполняет ядро
+синхронно прямо на ней, ровно как раньше. Их код менять не пришлось.
+
+Инвентарь живости: все 11 хендлеров живые. Вход — кнопка «Создать заявку»
+(CREATE_REQUEST_TEXTS, главное меню); ``addr:``/``addr_page:`` рождает
+keyboards/requests.py:614/620/623; остальные ловят FSM-состояния этой же
+цепочки. Мёртвых нет.
+"""
 
 from aiogram import F, Bot
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.orm import Session
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 
 from uk_management_bot.keyboards.requests import (
@@ -29,7 +54,6 @@ from uk_management_bot.utils.helpers import get_text
 from ._router import router
 
 from .shared import (
-    _db_scope,
     _get_user_language,
     _deny_if_pending_message,
     _deny_if_pending_callback,
@@ -40,6 +64,54 @@ from .shared import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ==========================================================================
+# Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
+# run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
+# ==========================================================================
+
+
+def _load_applicant_gate(db, telegram_id: int) -> str:
+    """-> 'applicant_only' | 'phone_required' | 'ok'.
+
+    Approved-applicant гейт (план «Обходчик»): applicant-flow стал role-gated.
+    Менеджер/обходчик заводят заявки своими путями. Гейт — ЖЁСТКИЙ: при
+    отсутствии юзера/ошибке БД не входим в FSM (fail-closed): исключение
+    пробрасывается наружу и ловится тем же except, что и раньше.
+    """
+    user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
+    if user is None:
+        return "applicant_only"
+    from uk_management_bot.api.dependencies import _parse_user_roles
+    user_roles = _parse_user_roles(user)
+    if "applicant" not in user_roles or user.status != "approved":
+        return "applicant_only"
+    if not user.phone:
+        return "phone_required"
+    return "ok"
+
+
+def _resolve_selected_address(db, telegram_id: int, atype: str, address_id: int):
+    """-> ('no_user', None) | ('not_available', None) | ('ok', ResolvedAddress).
+
+    ``ResolvedAddress`` — frozen dataclass из примитивов, за границу потока
+    выходит безопасно.
+    """
+    from uk_management_bot.services.request_address import (
+        resolve_request_address_sync,
+        AddressResolutionError,
+    )
+
+    user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
+    if not user:
+        return ("no_user", None)
+    try:
+        resolved = resolve_request_address_sync(db, user.id, "applicant", atype, address_id)
+    except AddressResolutionError:
+        return ("not_available", None)
+
+    return ("ok", resolved)
 
 
 # Начало создания заявки
@@ -61,22 +133,13 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
 
     # Проверяем наличие телефона у пользователя
     try:
-        with _db_scope(None) as db:
-            user = RequestHandlerService(db).get_user_by_telegram_id(message.from_user.id)
-            # Approved-applicant гейт (план «Обходчик»): applicant-flow стал
-            # role-gated. Менеджер/обходчик заводят заявки своими путями. Гейт —
-            # ЖЁСТКИЙ: при отсутствии юзера/ошибке БД не входим в FSM (fail-closed).
-            if user is None:
-                await message.answer(get_text("requests.applicant_only", language=lang))
-                return
-            from uk_management_bot.api.dependencies import _parse_user_roles
-            user_roles = _parse_user_roles(user)
-            if "applicant" not in user_roles or user.status != "approved":
-                await message.answer(get_text("requests.applicant_only", language=lang))
-                return
-            if not user.phone:
-                await message.answer(get_text("requests.phone_required", language=lang))
-                return
+        verdict = await run_db(lambda s: _load_applicant_gate(s, message.from_user.id))
+        if verdict == "applicant_only":
+            await message.answer(get_text("requests.applicant_only", language=lang))
+            return
+        if verdict == "phone_required":
+            await message.answer(get_text("requests.phone_required", language=lang))
+            return
     except Exception as e:
         logger.error(f"Ошибка проверки доступа пользователя {message.from_user.id}: {e}", exc_info=True)
         await message.answer(get_text("errors.default", language=lang))
@@ -140,23 +203,17 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
         return
 
-    from uk_management_bot.services.request_address import (
-        resolve_request_address_sync,
-        AddressResolutionError,
+    verdict, resolved = await run_db(
+        lambda s: _resolve_selected_address(s, callback.from_user.id, atype, address_id)
     )
-
-    with _db_scope(None) as db:
-        user = RequestHandlerService(db).get_user_by_telegram_id(callback.from_user.id)
-        if not user:
-            await callback.answer(get_text("errors.default", language=lang), show_alert=True)
-            return
-        try:
-            resolved = resolve_request_address_sync(db, user.id, "applicant", atype, address_id)
-        except AddressResolutionError:
-            await callback.answer(
-                get_text("requests.address_not_available", language=lang), show_alert=True
-            )
-            return
+    if verdict == "no_user":
+        await callback.answer(get_text("errors.default", language=lang), show_alert=True)
+        return
+    if verdict == "not_available":
+        await callback.answer(
+            get_text("requests.address_not_available", language=lang), show_alert=True
+        )
+        return
 
     await state.update_data(
         address=resolved.canonical_address,
@@ -368,7 +425,7 @@ async def show_confirmation(message: Message, state: FSMContext):
 
 # Обработка подтверждения
 @router.message(RequestStates.confirm)
-async def process_confirmation(message: Message, state: FSMContext, db: Session, roles: list = None, active_role: str = None):
+async def process_confirmation(message: Message, state: FSMContext, roles: list = None, active_role: str = None, *, _db=None):
     """Обработка подтверждения заявки"""
     lang = await _get_user_language(message=message)
 
@@ -389,7 +446,7 @@ async def process_confirmation(message: Message, state: FSMContext, db: Session,
 
         # Сохраняем заявку в базу данных
         request_number = await save_request(
-            data, message.from_user.id, db, message.bot, source="bot", role="applicant"
+            data, message.from_user.id, _db, message.bot, source="bot", role="applicant"
         )
 
         if request_number:
@@ -425,15 +482,20 @@ async def cancel_request(message: Message, state: FSMContext, roles: list = None
     logger.info(f"Пользователь {message.from_user.id} отменил создание заявки")
 
 # Сохранение заявки в базу данных
-async def save_request(
+def save_request_sync(
     data: dict,
     user_id: int,
-    db: Session,
-    bot: Bot = None,
+    db,
     source: str = "bot",
     role: str = "applicant",
-) -> Optional[str]:
-    """Сохранение заявки в базу данных. Возвращает номер заявки (str) или None.
+):
+    """Sync-ядро сохранения заявки: всё ДО сетевой загрузки медиа.
+
+    -> (request_number, внутренний user.id, media_file_ids) | None.
+
+    Цельный unit-of-work: валидация → пользователь → re-резолв адреса → номер
+    (row-lock счётчика) → INSERT → outbox → commit → авто-dispatch. Ни одного
+    ``await`` внутри — поэтому run_db уводит блок в worker-поток целиком.
 
     План «Обходчик»: адрес НЕ доверяем FSM-данным — re-резолвим выбранный
     `(address_type, address_id)` через resolve_request_address_sync (проверка
@@ -524,6 +586,41 @@ async def save_request(
         from uk_management_bot.services.dispatch import auto_dispatch_new_request_sync
         auto_dispatch_new_request_sync(request_number, data['category'])
 
+        return request_number, user.id, media_file_ids
+    except Exception as e:
+        logger.error(f"[SAVE_REQUEST] ❌ Ошибка сохранения заявки: {e}", exc_info=True)
+        return None
+
+
+async def save_request(
+    data: dict,
+    user_id: int,
+    _db=None,
+    bot: Bot = None,
+    source: str = "bot",
+    role: str = "applicant",
+) -> Optional[str]:
+    """Сохранение заявки в базу данных. Возвращает номер заявки (str) или None.
+
+    Async-обёртка над ``save_request_sync``: БД-фаза уезжает в worker-поток
+    через run_db, сетевая загрузка медиа остаётся здесь — она и раньше шла
+    строго ПОСЛЕ commit (PR5).
+
+    ``_db`` — seam: вызывающие, у которых уже открыта своя сессия
+    (inspector_requests.py, requests/create_callbacks.py), передают её ТРЕТЬИМ
+    ПОЗИЦИОННЫМ аргументом, и run_db исполняет ядро синхронно прямо на ней.
+    В applicant-флоу бота передаётся None — сессию открывает сам run_db.
+    """
+    try:
+        saved = await run_db(
+            lambda s: save_request_sync(data, user_id, s, source=source, role=role),
+            db=_db,
+        )
+        if saved is None:
+            return None
+
+        request_number, owner_id, media_file_ids = saved
+
         # PR5: загрузка медиа в Media Service — ПОСЛЕ commit (раньше шла между
         # генерацией номера и INSERT, удерживая блокировки на время сетевого
         # I/O). Результат upload'а в Request не сохраняется (media_files несёт
@@ -537,7 +634,7 @@ async def save_request(
                     bot=bot,
                     file_ids=media_file_ids,
                     request_number=request_number,
-                    uploaded_by=user.id
+                    uploaded_by=owner_id
                 )
                 logger.info(f"[SAVE_REQUEST] Загружено {len(uploaded_files)} файлов в Media Service для заявки {request_number}")
             except Exception as e:

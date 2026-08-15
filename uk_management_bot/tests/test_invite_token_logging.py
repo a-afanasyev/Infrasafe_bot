@@ -83,12 +83,14 @@ async def test_join_handler_masks_token_in_log(caplog):
     fake_invite_service_instance.validate_invite.return_value = fake_invite_data
 
     # Stub AuthService: no existing user → registration is allowed.
+    # AUD3-07: юнит _load_join_gate ищет пользователя запросом по сессии
+    # (тело AuthService.get_user_by_telegram_id 1:1) — стабим сессию.
     fake_auth_service_instance = MagicMock()
-    fake_auth_service_instance.get_user_by_telegram_id = AsyncMock(return_value=None)
 
     msg = _make_message(f"/join {STUB_TOKEN}", user_id=42)
     state = _make_state()
     db = _make_db()
+    db.query.return_value.filter.return_value.first.return_value = None
 
     with caplog.at_level(logging.INFO, logger="uk_management_bot.handlers.auth"), \
         patch(
@@ -107,7 +109,7 @@ async def test_join_handler_masks_token_in_log(caplog):
             "uk_management_bot.handlers.auth.get_text",
             side_effect=lambda key, language="ru", **kw: f"<text:{key}>",
         ):
-        await join_with_invite(msg, state, db, language="ru")
+        await join_with_invite(msg, state, language="ru", _db=db)
 
     # Locate ONLY the FIX-006 target log message — the "received web
     # registration link" line at auth.py:172. Other log lines in this
@@ -164,12 +166,14 @@ async def test_join_handler_no_full_token_in_any_log(caplog):
     fake_invite_service_instance = MagicMock()
     fake_invite_service_instance.validate_invite.return_value = fake_invite_data
 
+    # AUD3-07: юнит _load_join_gate ищет пользователя запросом по сессии
+    # (тело AuthService.get_user_by_telegram_id 1:1) — стабим сессию.
     fake_auth_service_instance = MagicMock()
-    fake_auth_service_instance.get_user_by_telegram_id = AsyncMock(return_value=None)
 
     msg = _make_message(f"/join {STUB_TOKEN}", user_id=42)
     state = _make_state()
     db = _make_db()
+    db.query.return_value.filter.return_value.first.return_value = None
 
     with caplog.at_level(logging.INFO, logger="uk_management_bot.handlers.auth"), \
         patch(
@@ -188,7 +192,7 @@ async def test_join_handler_no_full_token_in_any_log(caplog):
             "uk_management_bot.handlers.auth.get_text",
             side_effect=lambda key, language="ru", **kw: f"<text:{key}>",
         ):
-        await join_with_invite(msg, state, db, language="ru")
+        await join_with_invite(msg, state, language="ru", _db=db)
 
     all_text = "\n".join(rec.getMessage() for rec in caplog.records
                          if rec.name == "uk_management_bot.handlers.auth")

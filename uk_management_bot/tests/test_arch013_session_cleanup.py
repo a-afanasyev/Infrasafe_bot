@@ -211,7 +211,7 @@ async def test_pattern_c_user_yards_opens_no_extra_session():
          patch.object(mod, "has_admin_access", return_value=True), \
          patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key), \
          patch.object(mod, "get_user_yards_keyboard", return_value=None):
-        await mod.handle_manage_user_yards(cb, db=injected, roles=["manager"], user=MagicMock(id=1))
+        await mod.handle_manage_user_yards(cb, roles=["manager"], user=MagicMock(id=1), _db=injected)
 
     # session_scope never called (asserted via _boom); injected session used, not closed by handler.
     injected.close.assert_not_called()

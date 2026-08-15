@@ -85,7 +85,7 @@ async def test_process_document_request_no_access_no_crash(monkeypatch):
     state.clear = AsyncMock()
 
     await user_mgmt.fsm.process_document_request(
-        message, state, MagicMock(), roles=[], user=MagicMock(), language="ru"
+        message, state, roles=[], user=MagicMock(), language="ru", _db=MagicMock()
     )
 
     # reply_markup=get_main_keyboard(lang) must resolve (was an undefined name).

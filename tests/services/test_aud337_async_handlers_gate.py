@@ -127,17 +127,32 @@ CONVERTED = [
     # spec_toggle_/spec_save/spec_cancel; оба message-хендлера ловят FSM-состояния,
     # которые ставит сам файл).
     "uk_management_bot/handlers/user_management/roles_specs.py",
+    "uk_management_bot/handlers/feedback.py",
+    "uk_management_bot/handlers/base.py",
+    "uk_management_bot/handlers/user_yards_management.py",
+    "uk_management_bot/handlers/user_management/fsm.py",
+    "uk_management_bot/handlers/shift_management/templates_b.py",
+    # A2-хвост волна 7: создание заявки. save_request РАСКРОЕНА на sync-ядро
+    # save_request_sync + async-обёртку (единственный await — загрузка медиа —
+    # и раньше стоял строго ПОСЛЕ commit, PR5). Все 11 хендлеров живые.
+    "uk_management_bot/handlers/requests/create.py",
+    # A2-хвост волна 7: вход и регистрация по инвайту. Все семь функций живые
+    # (⚠️ регистрация login_via_button по тексту «🔑 Войти» мертва — генератора
+    # кнопки нет в репо — но саму функцию зовёт живой login_command /login).
+    "uk_management_bot/handlers/auth.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):
 #
 # handlers/inspector_requests.py — волной 6 конвертирован в БОЛЬШЕЙ части (все
 # сайты выбора двора/дома + три sync-хелпера, которые раньше открывали свой
-# session_scope и звались из async синхронно, блокируя loop), но в ратчет НЕ
-# входит: inspector_confirm сохраняет session_scope, потому что save_request
-# (handlers/requests/create.py, общая с applicant-флоу async-функция) внутри
-# одной транзакции мешает sync-SQL с await'ом. Добавить сюда после раскроя
-# save_request на sync-ядро + async-обёртку.
+# session_scope и звались из async синхронно, блокируя loop), но в ратчет пока
+# НЕ входит: inspector_confirm сохраняет session_scope байт-в-байт.
+# БЛОКЕР СНЯТ волной 7: save_request раскроена на save_request_sync +
+# async-обёртку, третий параметр обёртки — seam ``_db``, так что позиционный
+# вызов из inspector_confirm работает без правок. Осталось механическое:
+# заменить `with session_scope() as db: await save_request(..., db, ...)` на
+# `await save_request(..., None, ...)` и снять параметр db у хендлера.
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
 _FORBIDDEN_ATTR_CALLS = {"query", "commit"}
