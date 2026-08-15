@@ -127,6 +127,13 @@ CONVERTED = [
     # save_request (handlers/requests/create.py, общая с applicant-флоу
     # async-функция) внутри одной транзакции мешает sync-SQL с await'ом.
     # Добавить сюда после раскроя save_request на sync-ядро + async-обёртку.
+    # A2-хвост волна 6: роли и специализации пользователя. Все 10 хендлеров
+    # живые (генератор триггеров — keyboards/user_management.py: 182 user_roles_,
+    # 189 user_specializations_, get_roles_management_keyboard role_add_/
+    # role_remove_/roles_save/roles_cancel, get_specializations_selection_keyboard
+    # spec_toggle_/spec_save/spec_cancel; оба message-хендлера ловят FSM-состояния,
+    # которые ставит сам файл).
+    "uk_management_bot/handlers/user_management/roles_specs.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
