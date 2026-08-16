@@ -468,7 +468,14 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             if shift_specs:  # Если у смены указаны специализации
                 missing_specs = set(shift_specs) - set(executor_specs)
                 if missing_specs:
-                    from uk_management_bot.utils.specializations import translate_specializations
+                    # BUG-161: здесь стоял `from uk_management_bot.utils.specializations
+                    # import translate_specializations` — такой функции в модуле нет
+                    # (только parse_specializations/parse_shift_specs/has_required_specs),
+                    # то есть ветка падала ImportError. Хуже того, сам факт локального
+                    # импорта делал имя ЛОКАЛЬНЫМ для всей функции, поэтому обращение
+                    # ниже (строка со spec_text, обычная ветка без конфликта) давало
+                    # UnboundLocalError уже ПОСЛЕ коммита назначения. Канон —
+                    # модульный импорт из .shared в шапке файла.
                     missing_text = translate_specializations(list(missing_specs), lang)
                     available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
                     required_text = translate_specializations(shift_specs, lang)
@@ -544,19 +551,26 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             # Назначаем исполнителя
             service.assign_executor(shift, executor_id)
 
-            # Отправляем уведомление исполнителю
-            try:
-                from uk_management_bot.services.notification_service import NotificationService
-                notification_service = NotificationService(db)
-                await notification_service.send_shift_assignment_notification(
-                    executor_id=executor_id,
-                    shift_id=shift_id
-                )
-            except Exception as e:
-                logger.warning(f"Не удалось отправить уведомление: {e}")
-
             # Переводим специализацию
             spec_text = translate_specializations(shift.specialization_focus, lang)
+
+            # Отправляем уведомление исполнителю.
+            # BUG-160: здесь стоял вызов несуществующего метода
+            # NotificationService.send_shift_assignment_notification —
+            # AttributeError гасился этим же except, и исполнитель о назначении
+            # не узнавал никогда. Специализация переводится на язык ПОЛУЧАТЕЛЯ,
+            # а не менеджера.
+            from uk_management_bot.services.notification_service import async_notify_shift_assigned
+
+            executor_lang = executor.language or "ru"
+            await async_notify_shift_assigned(
+                callback.bot,
+                executor,
+                shift,
+                specialization=translate_specializations(
+                    shift.specialization_focus, executor_lang
+                ),
+            )
 
             shift_date_str = fmt_date(shift.start_time)
             start_time_str = fmt_time(shift.start_time)
@@ -628,7 +642,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             if shift_specs:
                 missing_specs = set(shift_specs) - set(executor_specs)
                 if missing_specs:
-                    from uk_management_bot.utils.specializations import translate_specializations
+                    # BUG-161 (второй сайт того же дефекта, см. комментарий выше).
                     required_text = translate_specializations(shift_specs, lang)
                     missing_text = translate_specializations(list(missing_specs), lang)
 
@@ -650,6 +664,22 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
                 shift,
                 executor_id,
                 f"\n[КОНФЛИКТ РАСПИСАНИЯ] Назначено принудительно {fmt_date(business_today())}",
+            )
+
+            # BUG-160: принудительное назначение не уведомляло исполнителя вовсе
+            # (даже битого вызова здесь не было) — при том что смена ему уже
+            # назначена и пересекается с его расписанием, о чём он обязан знать.
+            from uk_management_bot.services.notification_service import async_notify_shift_assigned
+
+            executor_lang = executor.language or "ru"
+            await async_notify_shift_assigned(
+                callback.bot,
+                executor,
+                shift,
+                specialization=translate_specializations(
+                    shift.specialization_focus, executor_lang
+                ),
+                forced=True,
             )
 
             shift_date = fmt_date(shift.start_time)

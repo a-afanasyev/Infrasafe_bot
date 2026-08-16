@@ -5,7 +5,8 @@ import logging
 from uk_management_bot.utils.datetime_utils import as_utc, utc_now
 from datetime import datetime
 # ARCH-116: показ времени смен — только через канон бизнес-зоны.
-from uk_management_bot.utils.business_time import fmt_datetime
+from uk_management_bot.utils.business_time import fmt_date, fmt_datetime, fmt_time
+from uk_management_bot.utils.helpers import get_text
 
 from uk_management_bot.services.notification_service.channel import (
     send_to_channel,
@@ -55,6 +56,74 @@ def build_shift_ended_message(user: User, shift: Shift, for_channel: bool = Fals
     if for_channel:
         return f"📤 Смена завершена: user_id={user.telegram_id} в {ended} (длительность {duration})"
     return f"✅ Смена завершена в {ended}. Длительность: {duration}"
+
+
+def build_shift_assignment_message(
+    user: User,
+    shift: Shift,
+    *,
+    specialization: str | None = None,
+    forced: bool = False,
+) -> str:
+    """BUG-160: текст уведомления исполнителю о назначении на смену.
+
+    Язык — ПОЛУЧАТЕЛЯ (``user.language``), а не инициатора назначения: менеджер
+    и исполнитель могут работать на разных языках (канон B3 / BUG-153 п.1).
+
+    ``specialization`` приходит готовой строкой: переводчик специализаций живёт
+    в слое хендлеров (``handlers/shift_management/shared.py``), тянуть его в
+    сервисный слой нельзя — это нарушило бы границу пакетов.
+    """
+    lang = user.language or "ru"
+    end = fmt_time(shift.end_time) if shift.end_time else get_text(
+        "shifts.assignment_notification_open_end", language=lang
+    )
+
+    text = get_text("shifts.assignment_notification", language=lang).format(
+        date=fmt_date(shift.start_time),
+        start_time=fmt_time(shift.start_time),
+        end_time=end,
+    )
+
+    if specialization:
+        text += get_text(
+            "shifts.assignment_notification_specialization", language=lang
+        ).format(specialization=specialization)
+
+    if forced:
+        text += get_text("shifts.assignment_notification_forced", language=lang)
+
+    return text + get_text("shifts.assignment_notification_footer", language=lang)
+
+
+async def async_notify_shift_assigned(
+    bot,
+    user: User,
+    shift: Shift,
+    *,
+    specialization: str | None = None,
+    forced: bool = False,
+) -> None:
+    """Best-effort DM исполнителю о назначении на смену (BUG-160).
+
+    Сбой отправки НЕ должен отменять уже выполненное назначение — назначение к
+    этому моменту закоммичено сервисом, поэтому исключение только логируется.
+    Канал не задействован намеренно: назначение адресное, а канальная лента о
+    каждом назначении — шум.
+    """
+    if not user.telegram_id:
+        logger.warning(f"shift_assigned: у исполнителя user_id={user.id} нет telegram_id")
+        return
+    try:
+        await send_to_user(
+            bot,
+            user.telegram_id,
+            build_shift_assignment_message(
+                user, shift, specialization=specialization, forced=forced
+            ),
+        )
+    except Exception as e:
+        logger.warning(f"Ошибка уведомления о назначении на смену user_id={user.id}: {e}")
 
 
 async def async_notify_shift_started(bot, db: Session, user: User, shift: Shift) -> None:
