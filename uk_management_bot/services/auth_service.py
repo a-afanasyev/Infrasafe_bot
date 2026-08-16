@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 # поэтому они не проходят гейт верификации и не должны висеть в очереди одобрения.
 TRUSTED_VERIFICATION_ROLES = {"manager", "admin"}
 
+# Роли персонала: их выдача по инвайту означает, что человек пришёл РАБОТАТЬ,
+# а не жить, — см. process_invite_join_sync.
+_STAFF_ROLES = {"executor", "manager", "inspector"}
+
+# Капабилити, а не «жительство»: resource_meter_entry открывает Mini App «Ввод
+# показаний» и может стоять у кого угодно, поэтому при подсчёте «чистого
+# кандидата» он не учитывается.
+_CAPABILITY_ROLES = {"resource_meter_entry"}
+
 
 def _enforce_trusted_verification(user, granted_roles) -> None:
     """Если пользователю выданы доверенные роли — помечаем verified.
@@ -165,10 +174,29 @@ class AuthService:
             role = invite_data["role"]
             current_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
 
+            # Свежий кандидат — тот, кто жителем ещё не пожил. Строку с ролью
+            # applicant создаёт первый же /start, ДО того как человек ответит
+            # «кто вы», поэтому её наличие само по себе ничего не значит.
+            # Считаем ДО добавления новой роли.
+            was_fresh_candidate = (
+                user.status == "pending"
+                and set(current_roles) - _CAPABILITY_ROLES == {"applicant"}
+            )
+
             # Добавляем новую роль если её нет
             if role not in current_roles:
                 current_roles.append(role)
-                user.roles = json.dumps(current_roles)
+
+            # Пришёл по стафф-инвайту, жителем не был — роль жителя снимаем,
+            # иначе он висит разом в «Жителях» и «Сотрудниках», а операции над
+            # его аккаунтом из «Жителей» отбивает guard мультиролевого.
+            # НАСТОЯЩЕГО жителя (status approved, есть квартиры и заявки),
+            # которого позже пригласили сотрудником, не трогаем — снятие роли
+            # отняло бы у него доступ к собственным заявкам.
+            if role in _STAFF_ROLES and was_fresh_candidate:
+                current_roles = [r for r in current_roles if r != "applicant"]
+
+            user.roles = json.dumps(current_roles)
 
             # Менеджер/админ по инвайту — корень доверия, не держим в pending
             _enforce_trusted_verification(user, [role])
