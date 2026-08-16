@@ -570,6 +570,19 @@ class ShiftScheduler:
     def _auto_assign_requests_sync(self) -> int:
         db = SessionLocal()
         try:
+            # Выключатель автоназначения гасит и эту джобу: менеджер, снявший
+            # тумблер, вправе ожидать, что заявки никто не раздаёт вообще.
+            # ⚠️ Джоба и без того ничего не назначает — внутри она фильтрует
+            # `status == 'new'`, а канон хранит «Новая» (см. BUG-150/154/158 про
+            # ретайр мёртвого кода). Гейт оставлен, чтобы тумблер был честным,
+            # если движок когда-нибудь оживят; сам код не трогаем.
+            from uk_management_bot.services.auto_manager.config import (
+                is_auto_assign_enabled_sync,
+            )
+            if not is_auto_assign_enabled_sync(db):
+                logger.info("Автоназначение выключено — джоба пропущена")
+                return 0
+
             assignment_service = ShiftAssignmentService(db)
 
             # Назначаем заявки на сегодня и завтра (бизнес-день)

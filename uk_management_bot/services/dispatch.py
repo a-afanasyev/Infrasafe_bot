@@ -51,11 +51,59 @@ def _specialization_for(category: Optional[str]) -> Optional[str]:
     return CATEGORY_TO_SPECIALIZATION.get(category)
 
 
+def _auto_assign_enabled_sync(db=None) -> bool:
+    """Флаг автоназначения; любая ошибка чтения → False.
+
+    Fail-safe направление: не сумели прочитать конфиг — не раздаём. Заявка
+    останется «Новая» и достанется человеку; молча раздавать её при сломанной
+    БД было бы хуже. Чтение обязано быть best-effort по той же причине, что и
+    сам dispatch: оно идёт ПОСЛЕ commit создания заявки и не вправе её уронить.
+    """
+    from uk_management_bot.services.auto_manager.config import is_auto_assign_enabled_sync
+    try:
+        if db is not None:
+            return is_auto_assign_enabled_sync(db)
+        from uk_management_bot.database.session import SessionLocal
+        session = SessionLocal()
+        try:
+            return is_auto_assign_enabled_sync(session)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("[DISPATCH] конфиг автоназначения недоступен, считаю выключенным: %s", e)
+        return False
+
+
+async def _auto_assign_enabled_async(db=None) -> bool:
+    """Асинхронный аналог — то же fail-safe направление."""
+    from uk_management_bot.services.auto_manager.config import is_auto_assign_enabled
+    try:
+        if db is not None:
+            return await is_auto_assign_enabled(db)
+        from uk_management_bot.database.session import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            return await is_auto_assign_enabled(session)
+    except Exception as e:
+        logger.warning("[DISPATCH] конфиг автоназначения недоступен, считаю выключенным: %s", e)
+        return False
+
+
 def auto_dispatch_new_request_sync(request_number: str,
-                                   category: Optional[str]) -> None:
-    """Бот-путь: Новая→В работе + group-назначение (best-effort)."""
+                                   category: Optional[str],
+                                   *, _db=None) -> None:
+    """Бот-путь: Новая→В работе + group-назначение (best-effort).
+
+    `_db` — seam для тестов; в проде сессия открывается здесь же. Прокинуть
+    сессию вызывающего нельзя: точки вызова передают только номер и категорию,
+    а `run_command_sync` всё равно открывает свою — читать флаг на короткой
+    сессии дешевле, чем менять контракт трёх вызывающих.
+    """
     spec = _specialization_for(category)
     if not spec:
+        return
+    if not _auto_assign_enabled_sync(_db):
+        logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
+                    request_number)
         return
     from uk_management_bot.database.session import SessionLocal
     from uk_management_bot.services.workflow_runner import run_command_sync
@@ -71,10 +119,15 @@ def auto_dispatch_new_request_sync(request_number: str,
 
 
 async def auto_dispatch_new_request_async(request_number: str,
-                                          category: Optional[str]) -> None:
+                                          category: Optional[str],
+                                          *, _db=None) -> None:
     """API/TWA/обходчик: Новая→В работе + group + realtime status_changed."""
     spec = _specialization_for(category)
     if not spec:
+        return
+    if not await _auto_assign_enabled_async(_db):
+        logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
+                    request_number)
         return
     from uk_management_bot.database.session import AsyncSessionLocal
     from uk_management_bot.services.workflow_runner import run_command_async
