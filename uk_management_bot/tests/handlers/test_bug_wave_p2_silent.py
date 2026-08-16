@@ -253,3 +253,44 @@ class TestClarificationReplyNotifiesManagers:
 
         db.expire_all()
         assert "Мастер не пришёл" in db.get(Request, "260816-004").notes
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BUG-159 — комментарий об изменении материалов (admin/materials)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestMaterialsCommentHistory:
+    """Найден при этой же волне: три чужих kwarg'а разом → TypeError под except."""
+
+    def _state(self, data):
+        store = dict(data)
+
+        async def _get_data():
+            return dict(store)
+
+        st = AsyncMock()
+        st.get_data = AsyncMock(side_effect=_get_data)
+        return st
+
+    @pytest.mark.asyncio
+    async def test_manager_comment_change_is_recorded(self, db):
+        from uk_management_bot.handlers.admin import materials
+        from uk_management_bot.utils.constants import REQUEST_STATUS_PURCHASE
+
+        manager = _user(db, 5, 555, roles='["manager"]')
+        _request(db, "260816-005", 5, status=REQUEST_STATUS_PURCHASE)
+
+        msg = MagicMock()
+        msg.from_user.id = 555
+        msg.text = "Купить кабель 3×2.5"
+        msg.answer = AsyncMock()
+
+        await materials.handle_materials_edit_text(
+            msg, self._state({"edit_materials_request_number": "260816-005"}),
+            db=db, roles=["manager"], active_role="manager", user=manager, language="ru",
+        )
+
+        comments = db.query(RequestComment).all()
+        assert len(comments) == 1, "изменение комментария к материалам должно попадать в историю заявки"
+        assert "Купить кабель 3×2.5" in comments[0].comment_text
+        assert comments[0].user_id == 5
