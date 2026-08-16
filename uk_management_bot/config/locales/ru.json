@@ -6869,7 +6869,12 @@
     "shift_not_found": "❌ Смена не найдена",
     "error_selecting_shift": "❌ Ошибка при выборе смены",
     "active_shift_since": "🟢 Активная смена с {start_time}",
-    "shift_history_empty": "📋 История смен пуста"
+    "shift_history_empty": "📋 История смен пуста",
+    "assignment_notification": "📅 <b>Вас назначили на смену</b>\n\nДата: {date}\nВремя: {start_time} – {end_time}",
+    "assignment_notification_specialization": "\nСпециализация: {specialization}",
+    "assignment_notification_forced": "\n\n⚠️ Назначение принудительное: смена пересекается с вашим расписанием.",
+    "assignment_notification_footer": "\n\nПодробности — в разделе «Мои смены».",
+    "assignment_notification_open_end": "не указано"
   },
   "specializations": {
     "cleaning": "Уборка",

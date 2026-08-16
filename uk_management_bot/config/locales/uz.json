@@ -6869,7 +6869,12 @@
     "shift_not_found": "❌ Smena topilmadi",
     "error_selecting_shift": "❌ Smenani tanlashda xatolik",
     "active_shift_since": "🟢 Faol smena {start_time} dan beri",
-    "shift_history_empty": "📋 Smenalar tarixi bo'sh"
+    "shift_history_empty": "📋 Smenalar tarixi bo'sh",
+    "assignment_notification": "📅 <b>Siz smenaga tayinlandingiz</b>\n\nSana: {date}\nVaqt: {start_time} – {end_time}",
+    "assignment_notification_specialization": "\nMutaxassislik: {specialization}",
+    "assignment_notification_forced": "\n\n⚠️ Tayinlash majburiy: smena sizning jadvalingiz bilan kesishadi.",
+    "assignment_notification_footer": "\n\nTafsilotlar — «Mening smenalarim» bo‘limida.",
+    "assignment_notification_open_end": "belgilanmagan"
   },
   "specializations": {
     "cleaning": "Tozalash",

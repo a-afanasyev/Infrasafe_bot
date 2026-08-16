@@ -29,8 +29,10 @@ from uk_management_bot.services.notification_service.shifts import (
     _format_duration_hm,
     build_shift_started_message,
     build_shift_ended_message,
+    build_shift_assignment_message,
     async_notify_shift_started,
     async_notify_shift_ended,
+    async_notify_shift_assigned,
 )
 from uk_management_bot.services.notification_service.documents import (
     build_document_request_message,
@@ -67,8 +69,10 @@ __all__ = [
     "_format_duration_hm",
     "build_shift_started_message",
     "build_shift_ended_message",
+    "build_shift_assignment_message",
     "async_notify_shift_started",
     "async_notify_shift_ended",
+    "async_notify_shift_assigned",
     "build_document_request_message",
     "async_notify_document_request",
     "build_multiple_documents_request_message",
