@@ -944,7 +944,7 @@
     "returnToWork": "Вернуть в работу",
     "commentOptional": "Комментарий (необязательно):",
     "commentPlaceholder": "Всё выполнено качественно",
-    "returnReasonLabel": "Причина возврата:",
+    "returnReasonLabel": "Причина возврата",
     "returnPlaceholder": "Опишите что нужно доделать",
     "returnAction": "Вернуть",
     "remindResident": "Напомнить жителю",
@@ -970,7 +970,10 @@
     "alertSource": "Источник: InfraSafe",
     "workingRange": "рабочий диапазон",
     "unread": "Непрочитанное обновление",
-    "unreadReply": "новый ответ"
+    "unreadReply": "новый ответ",
+    "returnToWorkTitle": "Вернуть в работу",
+    "returnReasonPlaceholder": "Что нужно переделать? Исполнитель увидит этот текст",
+    "managerReturnReason": "↩️ Причина возврата менеджером:"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",

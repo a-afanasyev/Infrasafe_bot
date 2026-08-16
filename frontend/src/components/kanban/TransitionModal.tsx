@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEmployees } from '../../hooks/useEmployees'
 import { tStatus } from '../../i18n/apiMaps'
+import { needsReturnReasonModal } from './transitions'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -23,28 +24,38 @@ export interface TransitionData {
   notes?: string
   requested_materials?: string
   completion_report?: string
+  /** Причина возврата. Имя поля транспортное — сервер переводит его в payload
+   *  `reason` для MANAGER_RETURN_TO_WORK (api/requests/router.py). */
+  return_reason?: string
 }
 
 interface Props {
   requestNumber: string
   targetStatus: string
+  /** Колонка, из которой тащат. Нужна, чтобы отличить возврат в работу
+   *  (спрашиваем причину) от взятия заявки (спрашиваем исполнителя). */
+  sourceStatus?: string
   onConfirm: (data: TransitionData) => void
   onCancel: () => void
 }
 
-export default function TransitionModal({ targetStatus, onConfirm, onCancel }: Props) {
+export default function TransitionModal({ targetStatus, sourceStatus, onConfirm, onCancel }: Props) {
   const { t } = useTranslation()
   const [executorId, setExecutorId] = useState<number | 'duty' | ''>('')
   const [text, setText] = useState('')
   const { data: employees = [] } = useEmployees({ verification_status: 'verified' })
+  const isReturnToWork = needsReturnReasonModal(sourceStatus, targetStatus)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- намеренный сброс полей формы при смене целевого статуса
     setExecutorId('')
     setText('')
-  }, [targetStatus])
+  }, [targetStatus, sourceStatus])
 
   const isValid = (): boolean => {
+    // Причина обязательна: ядро отклонит пустую, и менеджер получил бы 422
+    // вместо понятной подсказки.
+    if (isReturnToWork) return text.trim().length > 0
     if (targetStatus === 'В работе') return executorId !== ''
     if (targetStatus === 'Закуп') return text.trim().length > 0
     if (targetStatus === 'Уточнение') return text.trim().length > 0
@@ -54,6 +65,11 @@ export default function TransitionModal({ targetStatus, onConfirm, onCancel }: P
 
   const handleConfirm = () => {
     const data: TransitionData = { status: targetStatus }
+    if (isReturnToWork) {
+      data.return_reason = text.trim()
+      onConfirm(data)
+      return
+    }
     if (targetStatus === 'В работе' && executorId !== 'duty' && executorId !== '') {
       data.executor_id = executorId as number
     }
@@ -81,11 +97,26 @@ export default function TransitionModal({ targetStatus, onConfirm, onCancel }: P
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {TITLES[targetStatus] ?? t('kanban.transitionTo', { status: tStatus(targetStatus, t) })}
+            {isReturnToWork
+              ? t('kanban.returnToWorkTitle')
+              : TITLES[targetStatus] ?? t('kanban.transitionTo', { status: tStatus(targetStatus, t) })}
           </DialogTitle>
         </DialogHeader>
 
-        {targetStatus === 'В работе' && (
+        {isReturnToWork && (
+          <div className="space-y-1.5">
+            <Label className="text-text-secondary">{t('kanban.returnReasonLabel')}</Label>
+            <Textarea
+              className="min-h-[100px]"
+              placeholder={t('kanban.returnReasonPlaceholder')}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              autoFocus
+            />
+          </div>
+        )}
+
+        {!isReturnToWork && targetStatus === 'В работе' && (
           <div className="space-y-2">
             <Label className="text-text-secondary">{t('kanban.selectExecutorLabel')}</Label>
             <button

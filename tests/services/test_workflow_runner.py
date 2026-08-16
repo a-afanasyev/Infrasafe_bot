@@ -38,6 +38,7 @@ from uk_management_bot.utils.request_workflow import (
     ActionCommand,
     PrincipalRef,
     NotAuthorized,
+    PayloadInvalid,
     RepeatRejected,
 )
 import uk_management_bot.utils.constants as C
@@ -495,16 +496,28 @@ class TestManagerReturnToWork:
     """PR2b: канон расширен — Исполнено→В работе менеджером (re-open подтверждённой)."""
 
     def test_return_from_completed_clears_confirmed(self, factory):
+        # Причина обязательна (волна C): пустой payload здесь раньше проходил,
+        # и исполнитель не узнавал, что переделывать.
         SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED, manager_confirmed=True)
-        out = run_command_sync(SF, "260610-001", _mgr(),
-                               ActionCommand("c", Action.MANAGER_RETURN_TO_WORK, {}))
+        out = run_command_sync(
+            SF, "260610-001", _mgr(),
+            ActionCommand("c", Action.MANAGER_RETURN_TO_WORK,
+                          {"reason": "Переделать шов"}))
         assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
         s = SF()
         req = s.query(Request).filter_by(request_number="260610-001").first()
         assert req.status == C.REQUEST_STATUS_IN_PROGRESS
         assert req.manager_confirmed is False
         assert req.is_returned is False
+        assert req.manager_return_reason == "Переделать шов"
         s.close()
+
+    def test_return_without_reason_rejected(self, factory):
+        """Сквозная проверка: обязательность живёт в ядре, не в адаптере."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED, manager_confirmed=True)
+        with pytest.raises(PayloadInvalid):
+            run_command_sync(SF, "260610-001", _mgr(),
+                             ActionCommand("c", Action.MANAGER_RETURN_TO_WORK, {}))
 
 
 class TestRunnerContract:

@@ -1,6 +1,7 @@
 """Менеджер: просмотр заявок, медиа, подтверждение, пагинация."""
 from aiogram import F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
+from aiogram.fsm.context import FSMContext
 from sqlalchemy.orm import Session
 
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
@@ -28,6 +29,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.services.completion_media import get_completion_media_file_ids
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.user_names import display_name
+from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 
 from ._router import router
 
@@ -483,8 +485,13 @@ async def handle_manager_reconfirm_completed(callback: CallbackQuery, db: Sessio
 
 
 @router.callback_query(F.data.startswith("return_to_work_"))
-async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, roles: list = None, user: User = None, language: str = "ru"):
-    """Менеджер возвращает заявку в работу"""
+async def handle_manager_return_to_work(callback: CallbackQuery, state: FSMContext, db: Session, roles: list = None, user: User = None, language: str = "ru"):
+    """Менеджер возвращает заявку в работу — шаг 1: спрашиваем причину.
+
+    Сам переход исполняет `handle_return_to_work_reason`: возврат без причины
+    бесполезен исполнителю, поэтому она обязательна (ядро отклонит пустой
+    payload). Оживляет уже объявленное состояние `awaiting_return_to_work_reason`.
+    """
     try:
         lang = language
         logger.info(f"Возврат заявки в работу менеджером {callback.from_user.id}")
@@ -496,6 +503,67 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
 
         request_number = callback.data.replace("return_to_work_", "")
 
+        await callback.message.edit_text(
+            get_text("admin.handlers.return_to_work_prompt", language=lang).format(
+                request_number=request_number),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=get_text("admin.handlers.btn_cancel", language=lang),
+                    # СВОЙ callback, а не общий `view_`: тот не снимает FSM, и
+                    # состояние «жду причину» пережило бы отмену. Тогда любое
+                    # следующее сообщение менеджера — заметка, ответ в другом
+                    # диалоге — было бы съедено как причина и молча вернуло бы
+                    # заявку в работу.
+                    callback_data=f"rtw_cancel_{request_number}")
+            ]]),
+        )
+
+        await state.update_data(return_to_work_number=request_number)
+        await state.set_state(ManagerAcceptanceStates.awaiting_return_to_work_reason)
+
+        logger.info(f"Запрошена причина возврата в работу по заявке {request_number}")
+
+    except Exception as e:
+        logger.error(f"Ошибка запроса причины возврата в работу: {e}")
+        await callback.answer(get_text("admin.handlers.error_changing_status", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("rtw_cancel_"))
+async def handle_return_to_work_cancel(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+    """Отмена сбора причины: снимаем состояние, иначе следующее сообщение
+    менеджера будет принято за причину и вернёт заявку в работу."""
+    await state.clear()
+    request_number = callback.data.replace("rtw_cancel_", "")
+    await callback.message.edit_text(
+        get_text("admin.handlers.return_to_work_cancelled", language=language).format(
+            request_number=request_number)
+    )
+
+
+@router.message(ManagerAcceptanceStates.awaiting_return_to_work_reason)
+async def handle_return_to_work_reason(message: Message, state: FSMContext, db: Session, roles: list = None, user: User = None, language: str = "ru"):
+    """Шаг 2: причина получена — исполняем канонический переход."""
+    lang = language
+    try:
+        if not has_admin_access(roles=roles, user=user):
+            await message.answer(get_text("admin.handlers.no_access_change_status", language=lang))
+            await state.clear()
+            return
+
+        reason = (message.text or "").strip()
+        if not reason:
+            # Не отправляем пустое в движок — он всё равно отклонит, а менеджер
+            # получил бы невнятную ошибку вместо понятной просьбы.
+            await message.answer(get_text("admin.handlers.return_to_work_reason_empty", language=lang))
+            return
+
+        data = await state.get_data()
+        request_number = data.get("return_to_work_number")
+        if not request_number:
+            await message.answer(get_text("admin.handlers.request_not_found", language=lang))
+            await state.clear()
+            return
+
         # Канонический переход (PR2a-2): Выполнена/Возвращена → В работе.
         from uk_management_bot.database.session import SessionLocal
         from uk_management_bot.services.workflow_runner import (
@@ -506,27 +574,31 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
             outcome = run_command_sync(
                 SessionLocal, request_number,
                 PrincipalRef(kind="user", user_id=user.id, source="telegram"),
-                ActionCommand(callback.id, Action.MANAGER_RETURN_TO_WORK, {}),
+                ActionCommand(f"rtw:{request_number}:{message.message_id}",
+                              Action.MANAGER_RETURN_TO_WORK, {"reason": reason}),
             )
         except RequestNotFound:
-            await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
+            await message.answer(get_text("admin.handlers.request_not_found", language=lang))
+            await state.clear()
             return
         except WorkflowError as e:
             logger.info(f"MANAGER_RETURN_TO_WORK отклонён для {request_number}: {e}")
-            await callback.answer(get_text("admin.handlers.error_changing_status", language=lang), show_alert=True)
+            await message.answer(get_text("admin.handlers.error_changing_status", language=lang))
+            await state.clear()
             return
 
-        # Best-effort post-commit (PR0 Р7): уведомление + правка сообщения.
+        # Best-effort post-commit (PR0 Р7): уведомление + подтверждение менеджеру.
         request = AdminHandlerService(db).get_request_by_number(request_number)
-        # Адресно — по матрице интентов (не бросает); в канал — хелпером.
         await dispatch_notify_intents_sync(
-            db, request_number, outcome.post_commit_intents, bot=callback.bot)
+            db, request_number, outcome.post_commit_intents, bot=message.bot)
         await notify_channel_status_changed(
-            callback.bot, request, outcome.old_status, outcome.public_status)
+            message.bot, request, outcome.old_status, outcome.public_status)
 
-        await callback.message.edit_text(
-            get_text("admin.handlers.request_returned_to_work", language=lang).format(request_number=request_number)
+        await message.answer(
+            get_text("admin.handlers.request_returned_to_work", language=lang).format(
+                request_number=request_number)
         )
+        await state.clear()
 
         logger.info(f"Заявка {request_number} возвращена в работу менеджером {user.id} (canon)")
 
@@ -534,7 +606,8 @@ async def handle_manager_return_to_work(callback: CallbackQuery, db: Session, ro
         logger.error(f"Ошибка возврата заявки в работу: {e}")
         if db:
             AdminHandlerService(db).rollback()
-        await callback.answer(get_text("admin.handlers.error_changing_status", language=lang), show_alert=True)
+        await message.answer(get_text("admin.handlers.error_changing_status", language=lang))
+        await state.clear()
 
 
 @router.callback_query(F.data.startswith("mreq_page_"))

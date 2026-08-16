@@ -30,7 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
 import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
-import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal } from './transitions'
+import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal, needsReturnReasonModal } from './transitions'
 import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
@@ -250,8 +250,11 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                       // Исполнено/Возвращена) executor_id НЕ принимается backend'ом
                       // (→ 422 «unexpected field 'executor_id'»), поэтому коммитим
                       // переход напрямую. Зеркалит фикс в KanbanBoard.handleDragEnd.
+                      // Возврат в работу обязан нести причину (ядро иначе даёт
+                      // 422) — открываем модалку, а не коммитим напрямую.
                       if (
                         targetStatus === 'В работе' &&
+                        !needsReturnReasonModal(request.status, targetStatus) &&
                         !inProgressNeedsExecutorModal(request.status, Boolean(request.executor_id))
                       ) {
                         updateRequest.mutate({ status: targetStatus })
@@ -451,6 +454,15 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   <span className="text-text-primary">{request.return_reason}</span>
                 </div>
               )}
+              {/* Причина менеджера — отдельным блоком и своей подписью: это
+                  ответная реплика на возврат жителя, слипшись они бы
+                  дезинформировали исполнителя. */}
+              {request.manager_return_reason && (
+                <div className="bg-[#ea580c]/8 border border-[#ea580c]/20 rounded-[10px] px-3 py-2.5 text-[13px]">
+                  <span className="font-semibold text-[#ea580c]">{t('kanban.managerReturnReason')} </span>
+                  <span className="text-text-primary">{request.manager_return_reason}</span>
+                </div>
+              )}
 
               {/* Manager actions — status: Выполнена */}
               {request.status === 'Выполнена' && (
@@ -643,6 +655,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
       <TransitionModal
         requestNumber={requestNumber}
         targetStatus={pendingTargetStatus}
+        sourceStatus={request?.status}
         onConfirm={handleTransitionConfirm}
         onCancel={() => setPendingTargetStatus(null)}
       />

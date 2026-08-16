@@ -944,7 +944,7 @@
     "returnToWork": "Ishga qaytarish",
     "commentOptional": "Izoh (ixtiyoriy):",
     "commentPlaceholder": "Hammasi sifatli bajarildi",
-    "returnReasonLabel": "Qaytarish sababi:",
+    "returnReasonLabel": "Qaytarish sababi",
     "returnPlaceholder": "Nima tugatish kerakligini yozing",
     "returnAction": "Qaytarish",
     "remindResident": "Aholiga eslatish",
@@ -970,7 +970,10 @@
     "alertSource": "Manba: InfraSafe",
     "workingRange": "ish oralig'i",
     "unread": "Oʻqilmagan yangilanish",
-    "unreadReply": "yangi javob"
+    "unreadReply": "yangi javob",
+    "returnToWorkTitle": "Ishga qaytarish",
+    "returnReasonPlaceholder": "Nimani qayta qilish kerak? Ijrochi shu matnni koʻradi",
+    "managerReturnReason": "↩️ Menejer qaytarish sababi:"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",

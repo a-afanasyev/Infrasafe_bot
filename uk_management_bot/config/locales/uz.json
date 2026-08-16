@@ -957,7 +957,10 @@
       "purchase_history_entry_comment": "Menejer izohi: {comment}",
       "purchase_history_entry_updated": "Yangilangan: {date}",
       "comment_changed_text": "Materiallar izohlari menejer tomonidan o'zgartirildi:\n\nAvval: {old_comment}\n\nKeyin: {new_comment}",
-      "comment_absent": "Izoh yo'q edi"
+      "comment_absent": "Izoh yo'q edi",
+      "return_to_work_prompt": "↩️ {request_number} arizasini ishga qaytarish.\n\nSababini yozing — ijrochi uni arizada va bildirishnomada koʻradi.",
+      "return_to_work_reason_empty": "Sabab boʻsh boʻlishi mumkin emas. Nimani qayta qilish kerakligini yozing.",
+      "return_to_work_cancelled": "↩️ {request_number} arizasini qaytarish bekor qilindi."
     },
     "panel_title": "⚙️ Boshqaruv paneli"
   },
@@ -6144,7 +6147,9 @@
     "send_photo_or_video": "📎 Rasm yoki video yuboring (5 tagacha) yoki davom etish uchun tugmani bosing.",
     "request_created_success": "✅ Ariza muvaffaqiyatli yaratildi!",
     "request_creation_cancelled": "❌ Ariza yaratish bekor qilindi.",
-    "return_to_main": "🔙 Asosiy menyuga qaytish"
+    "return_to_main": "🔙 Asosiy menyuga qaytish",
+    "manager_return_reason_label": "↩️ Menejer qaytarish sababi:",
+    "applicant_return_reason_label": "🔁 Rezident qaytarish sababi:"
   },
   "role": {
     "not_allowed": "Bu rol siz uchun mavjud emas",
@@ -8162,7 +8167,8 @@
       "executed": "✅ #{request_number} arizasi bo‘yicha ishlar bajarildi\n\n📍 {address}\n\nNatijani tekshiring va ishni qabul qiling yoki qayta ishlashga qaytaring.",
       "ready_for_acceptance": "📋 #{request_number} arizasi qabul qilishga tayyor\n\n📍 {address}\n\n«Qabul qilish» bo‘limida ish sifatini baholang.",
       "returned_to_work": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}",
-      "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}"
+      "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}",
+      "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}"
     }
   },
   "document_types": {

@@ -127,8 +127,12 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
             ops += [("manager_confirmation_notes", Op.SET,
                      payload["confirmation_notes"])]
     elif action == Action.MANAGER_RETURN_TO_WORK:
+        # Причина пишется в СВОЮ колонку: notes затирается обычным менеджерским
+        # PATCH и уже занят уточнением/отменой, а `return_reason` принадлежит
+        # жителю — это контекст, на который менеджер и отвечает.
         ops += [("is_returned", Op.SET, False),
-                ("manager_confirmed", Op.SET, False)]
+                ("manager_confirmed", Op.SET, False),
+                ("manager_return_reason", Op.SET, payload["reason"].strip())]
     elif action == Action.APPLICANT_ACCEPT:
         ops += [("completed_at", Op.SET_NOW, None)]
     elif action == Action.APPLICANT_RETURN:

@@ -4088,6 +4088,17 @@
             "title": "Manager Confirmed",
             "type": "boolean"
           },
+          "manager_return_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Return Reason"
+          },
           "metric_label": {
             "anyOf": [
               {

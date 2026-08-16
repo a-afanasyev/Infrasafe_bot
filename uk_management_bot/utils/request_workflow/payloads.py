@@ -19,6 +19,11 @@ from .types import Action, PayloadInvalid
 class PayloadSchema:
     required: Mapping[str, type] = field(default_factory=dict)
     optional: Mapping[str, type] = field(default_factory=dict)
+    # Поля, которым мало быть строкой — они должны нести текст. Проверки типа
+    # недостаточно там, где значение читает человек: "   " формально str, но
+    # исполнитель увидит пустоту. Держим правило рядом со схемой, а не в
+    # plan_transition — иначе оно потеряется при добавлении новых действий.
+    non_empty: frozenset[str] = frozenset()
 
     def validate(self, action: Action, payload: Mapping[str, object]) -> None:
         for key, typ in self.required.items():
@@ -27,6 +32,10 @@ class PayloadSchema:
             if not isinstance(payload[key], typ):
                 raise PayloadInvalid(
                     f"{action.value}: '{key}' must be {typ.__name__}")
+        for key in self.non_empty:
+            value = payload.get(key)
+            if isinstance(value, str) and not value.strip():
+                raise PayloadInvalid(f"{action.value}: '{key}' must not be blank")
         allowed = set(self.required) | set(self.optional)
         for key in payload:
             if key not in allowed:
@@ -63,9 +72,12 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         optional={"completion_report": str, "completion_media": list}),
     Action.MANAGER_CONFIRM: PayloadSchema(
         optional={"confirmation_notes": str}),
-    # reason опционален: Telegram-кнопка «вернуть в работу» причину не собирает
-    # (и patch её не пишет — только audit). API при желании может прислать.
-    Action.MANAGER_RETURN_TO_WORK: PayloadSchema(optional={"reason": str}),
+    # reason ОБЯЗАТЕЛЕН и непуст: возврат без объяснения бесполезен исполнителю
+    # — он не знает, что переделывать. Раньше причина была опциональной, бот слал
+    # пустой payload, а текст оседал только в audit_logs. Одна проверка в ядре
+    # закрывает все три точки входа (бот, API, request_service).
+    Action.MANAGER_RETURN_TO_WORK: PayloadSchema(
+        required={"reason": str}, non_empty=frozenset({"reason"})),
     Action.APPLICANT_ACCEPT: PayloadSchema(required={"rating": int}),
     Action.APPLICANT_RETURN: PayloadSchema(
         required={"return_reason": str}, optional={"return_media": list}),
