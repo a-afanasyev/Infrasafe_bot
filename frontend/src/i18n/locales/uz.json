@@ -968,7 +968,9 @@
     "engineerEscalation": "Muhandisga eskalatsiya",
     "engineerReason": "Sabab:",
     "alertSource": "Manba: InfraSafe",
-    "workingRange": "ish oralig'i"
+    "workingRange": "ish oralig'i",
+    "unread": "Oʻqilmagan yangilanish",
+    "unreadReply": "yangi javob"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",

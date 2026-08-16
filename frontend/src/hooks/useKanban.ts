@@ -49,6 +49,10 @@ export function useKanban(filters: Record<string, string | undefined> = {}) {
     queryKey,
     queryFn: () => apiClient.get('/api/v2/requests/kanban', { params: filters }).then((r) => r.data),
     staleTime: 30_000,
+    // Страховка к WS: доска обязана показать ответ жителя на уточнение даже
+    // если сокет мёртв (AUD5-APIFE-7). Минута — компромисс между свежестью
+    // индикаторов и нагрузкой.
+    refetchInterval: 60_000,
   })
 
   useWebSocket('kanban', (event) => {

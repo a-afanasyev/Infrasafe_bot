@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DndContext,
@@ -17,6 +17,7 @@ import RequestCard from './RequestCard'
 import TransitionModal, { type TransitionData } from './TransitionModal'
 import { commitTransition as doCommitTransition } from './commitTransition'
 import { useQueryClient } from '@tanstack/react-query'
+import { useSeenRequests } from '../../hooks/useSeenRequests'
 import {
   MODAL_STATUSES,
   KANBAN_STATUSES,
@@ -24,6 +25,10 @@ import {
   isTransitionAllowed,
   inProgressNeedsExecutorModal,
 } from './transitions'
+
+// Колонки, где отслеживается «непрочитанное». Остальные не подсвечиваем:
+// «В работе» меняется постоянно и точка там означала бы только шум.
+const UNREAD_TRACKED_STATUSES = new Set(['Уточнение', 'Закуп'])
 
 interface PendingTransition {
   requestNumber: string
@@ -44,6 +49,24 @@ export default function KanbanBoard({ onCardClick }: Props) {
   const [overItemId, setOverItemId] = useState<string | null>(null)
   const [pendingTransition, setPendingTransition] = useState<PendingTransition | null>(null)
   const [transitionError, setTransitionError] = useState<string | null>(null)
+  const { isUnread, markSeen } = useSeenRequests()
+
+  // Индикаторы считаем один раз на доску: вниз идёт множество номеров, колонки
+  // и карточки остаются презентационными. Отслеживаем только те колонки, где
+  // менеджеру важно увидеть обновление: ответ жителя на уточнение и новая
+  // заявка на закуп.
+  const unreadNumbers = useMemo(() => {
+    const result = new Set<string>()
+    for (const col of columns) {
+      if (!UNREAD_TRACKED_STATUSES.has(col.status)) continue
+      for (const card of col.requests) {
+        if (isUnread(card.request_number, card.updated_at, card.created_at)) {
+          result.add(card.request_number)
+        }
+      }
+    }
+    return result
+  }, [columns, isUnread])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 20 } }),
@@ -120,6 +143,10 @@ export default function KanbanBoard({ onCardClick }: Props) {
         setTransitionError(t('errors.transitionFailed'))
         setTimeout(() => setTransitionError(null), 4000)
       },
+      // `updated_at` бампает onupdate на самой колонке, поэтому собственный
+      // drag менеджера в «Уточнение»/«Закуп» иначе сразу зажёг бы точку на
+      // карточке, которую он только что туда перетащил.
+      onSuccess: (card) => markSeen(requestNumber, card?.updated_at ?? null),
     })
 
   const handleTransitionConfirm = (data: TransitionData) => {
@@ -172,6 +199,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
                 activeDragStatus={activeDragStatus}
                 overColumnId={overColumnId}
                 overItemId={overItemId}
+                unreadNumbers={unreadNumbers}
               />
             ))}
           </div>

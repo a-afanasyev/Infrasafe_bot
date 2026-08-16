@@ -187,4 +187,45 @@ describe('commitTransition — реконсиляция с сервером', ()
       }),
     ).resolves.toBeUndefined()
   })
+
+  it('onSuccess получает карточку из ответа PATCH', async () => {
+    // Ответ раньше выбрасывался. Вызывающему он нужен, чтобы отметить заявку
+    // прочитанной на той версии, которую он сам же и создал переходом:
+    // `updated_at` бампается ЛЮБЫМ изменением строки, включая своё.
+    const key = kanbanQueryKey({})
+    seed(qc, key)
+    const card = { request_number: '260725-001', updated_at: '2026-08-16T12:00:00Z' }
+    vi.mocked(apiClient.patch).mockResolvedValueOnce({ data: card } as never)
+    const onSuccess = vi.fn()
+
+    await commitTransition({
+      queryClient: qc,
+      queryKey: key,
+      requestNumber: '260725-001',
+      data: { status: 'Уточнение' },
+      onError: () => {},
+      onSuccess,
+    })
+
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+    expect(onSuccess.mock.calls[0][0]).toMatchObject({ updated_at: '2026-08-16T12:00:00Z' })
+  })
+
+  it('onSuccess НЕ зовётся при ошибке PATCH', async () => {
+    const key = kanbanQueryKey({})
+    seed(qc, key)
+    vi.mocked(apiClient.patch).mockRejectedValueOnce(new Error('422'))
+    const onSuccess = vi.fn()
+
+    await commitTransition({
+      queryClient: qc,
+      queryKey: key,
+      requestNumber: '260725-001',
+      data: { status: 'Уточнение' },
+      onError: () => {},
+      onSuccess,
+    })
+
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
 })

@@ -14,6 +14,9 @@ interface Props {
   activeDragStatus: string | null
   overColumnId: string | null
   overItemId: string | null
+  /** Номера непрочитанных заявок этой колонки — считает доска, колонка только
+   *  рисует. Пустое множество = индикаторов нет. */
+  unreadNumbers?: ReadonlySet<string>
 }
 
 const STATUS_GLOW: Record<ApiStatus, string> = {
@@ -81,7 +84,7 @@ function DropPlaceholder({ status, visible }: { status: string; visible: boolean
   )
 }
 
-export default function KanbanColumn({ column, onCardClick, activeDragStatus, overColumnId, overItemId }: Props) {
+export default function KanbanColumn({ column, onCardClick, activeDragStatus, overColumnId, overItemId, unreadNumbers }: Props) {
   const { t } = useTranslation()
   const frozen = FROZEN_STATUSES.has(column.status)
   const { setNodeRef } = useDroppable({ id: column.status, disabled: frozen })
@@ -95,6 +98,9 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
   const isInvalidTarget = isDragging && !isValidTarget && activeDragStatus !== column.status
   const isHoveredValid = overColumnId === column.status && isValidTarget
   const isSource = activeDragStatus === column.status
+  const unreadCount = unreadNumbers
+    ? column.requests.reduce((n, r) => (unreadNumbers.has(r.request_number) ? n + 1 : n), 0)
+    : 0
 
   // Find insertion index for the placeholder
   const overCardIndex = overItemId
@@ -130,9 +136,20 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
             {tStatus(column.status, t)}
           </span>
         </div>
-        <span className="bg-bg-card text-text-secondary border border-border-default text-[11px] font-bold rounded-full px-2 py-px font-[family-name:var(--font-display)]">
-          {column.count}
-        </span>
+        <div className="flex items-center gap-1">
+          {unreadCount > 0 && (
+            <span
+              data-testid="unread-count"
+              title={t('kanban.unread')}
+              className="bg-red/12 text-red border border-red/30 text-[11px] font-bold rounded-full px-2 py-px font-[family-name:var(--font-display)]"
+            >
+              {unreadCount}
+            </span>
+          )}
+          <span className="bg-bg-card text-text-secondary border border-border-default text-[11px] font-bold rounded-full px-2 py-px font-[family-name:var(--font-display)]">
+            {column.count}
+          </span>
+        </div>
       </div>
 
       {/* Cards area */}
@@ -154,6 +171,7 @@ export default function KanbanColumn({ column, onCardClick, activeDragStatus, ov
               <RequestCard
                 card={card}
                 onClick={() => onCardClick(card.request_number)}
+                unread={unreadNumbers?.has(card.request_number)}
               />
             </div>
           ))}
