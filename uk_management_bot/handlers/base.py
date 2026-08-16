@@ -434,22 +434,6 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     )
 
 
-async def send_onboarding_screen(message: Message, tg_user, language: str = "ru", *, _db=None):
-    """Показать экран онбординга жителя. Вход для колбэка «Я житель».
-
-    ``tg_user`` передаётся отдельно: у сообщения, на которое отвечает колбэк,
-    ``from_user`` — это БОТ, а нам нужен человек.
-    """
-    ctx = await run_db(
-        lambda s: _load_start_context(
-            s, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name,
-        ),
-        db=_db,
-    )
-    text, keyboard = _build_onboarding_screen(ctx, language)
-    await message.answer(text, reply_markup=keyboard)
-
-
 async def handle_regular_start(message: Message, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru", *, offer_role_choice: bool = False, _db=None):
     """Обработка обычного /start без токена.
 

@@ -375,13 +375,45 @@ class TestReceiveToken:
         assert isinstance(markup, ReplyKeyboardMarkup), "должен вернуться экран жителя"
 
 
+class TestNonTextInput:
+    @pytest.mark.asyncio
+    async def test_photo_instead_of_code_gets_an_answer(self):
+        """Скриншот приглашения вместо кода — самый частый способ прислать его.
+        Без этого хендлера апдейт уходил бы в никуда, и бот молчал."""
+        from uk_management_bot.handlers.start_role_choice import reject_non_text_token
+
+        msg = _make_message(text=None)
+        await reject_non_text_token(msg)
+
+        msg.answer.assert_awaited()
+
+
+class TestJoinCommandRateLimit:
+    @pytest.mark.asyncio
+    async def test_bare_join_does_not_burn_a_rate_limit_attempt(self):
+        """Лимитер списывает попытку на КАЖДОЙ проверке (3 на 600 c). Голый
+        /join — не попытка ввода кода, и тратить её на него нельзя: три таких,
+        и человек заперт на 10 минут, ни разу не прислав токен."""
+        from uk_management_bot.handlers.auth import join_with_invite
+
+        msg = _make_message(text="/join")
+        state = _make_state()
+
+        with patch("uk_management_bot.handlers.auth.InviteRateLimiter.is_allowed",
+                   new=AsyncMock(return_value=True)) as limiter:
+            await join_with_invite(msg, state, _db=MagicMock())
+
+        limiter.assert_not_awaited()
+        msg.answer.assert_awaited()
+
+
 # ─── 12. Локали ─────────────────────────────────────────────────────────────
 
 class TestLocales:
     KEYS = [
         "title", "hint", "btn_resident", "btn_employee",
         "token_prompt", "btn_no_token", "no_token_hint",
-        "token_not_recognized", "applicant_token",
+        "token_not_recognized", "token_expect_text", "applicant_token",
     ]
 
     def _load(self, lang):

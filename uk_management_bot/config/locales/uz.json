@@ -8380,6 +8380,7 @@
     "btn_no_token": "◀️ Menda kod yo'q",
     "no_token_hint": "Taklif kodini menejer beradi. Kodni so'rang va u sizda bo'lganda /start yuboring.",
     "token_not_recognized": "❌ Bu taklif kodiga o'xshamaydi.\nKod invite_v1: bilan boshlanadi — uni to'liq yuboring.",
-    "applicant_token": "⚠️ Bu kod xodim rolini bermaydi — u rezident uchun.\nRezident sifatida davom etamiz, xodim kodi uchun menejerga murojaat qiling."
+    "applicant_token": "⚠️ Bu kod xodim rolini bermaydi — u rezident uchun.\nRezident sifatida davom etamiz, xodim kodi uchun menejerga murojaat qiling.",
+    "token_expect_text": "📋 Kodni matn ko'rinishida yuboring — rasm va fayl bo'lmaydi."
   }
 }

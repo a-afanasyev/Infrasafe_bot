@@ -21,8 +21,9 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.auth import start_invite_registration
-from uk_management_bot.handlers.base import send_onboarding_screen
+from uk_management_bot.handlers.base import _build_onboarding_screen, _load_start_context
 from uk_management_bot.keyboards.base import get_no_invite_token_inline
 from uk_management_bot.states.registration import RegistrationStates
 from uk_management_bot.utils.button_texts import get_back_texts, get_cancel_texts
@@ -54,6 +55,24 @@ def extract_invite_token(text) -> str | None:
     if not match:
         return None
     return f"invite_v1:{match.group(1)}.{match.group(2)}"
+
+
+async def send_onboarding_screen(message: Message, tg_user, language: str = "ru", *, _db=None):
+    """Показать экран онбординга жителя — тот же, что рисует /start.
+
+    ``tg_user`` передаётся отдельно: у сообщения, на которое отвечает колбэк,
+    ``from_user`` — это БОТ, а нам нужен человек. Сборка экрана переиспользуется
+    из base: собственная копия незаметно потеряла бы WebApp-кнопку регистрации
+    при следующей правке.
+    """
+    ctx = await run_db(
+        lambda s: _load_start_context(
+            s, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name,
+        ),
+        db=_db,
+    )
+    text, keyboard = _build_onboarding_screen(ctx, language)
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data == "start_role:resident")
@@ -127,6 +146,16 @@ async def receive_invite_token(message: Message, state: FSMContext, language: st
 
     # invalid / rate_limited / error — причина уже отправлена, остаёмся в
     # состоянии: опечатка при вставке кода не должна стоить прохода заново.
+
+
+@router.message(RegistrationStates.waiting_for_invite_token)
+async def reject_non_text_token(message: Message, language: str = "ru"):
+    """Код прислали не текстом (скриншот приглашения — самый частый случай).
+
+    Без этого хендлера апдейт молча уходил бы в никуда: состояние ожидания
+    токена не ловит никто другой, и человек не понимал бы, почему бот молчит.
+    """
+    await message.answer(get_text("start_role.token_expect_text", language=language))
 
 
 async def _strip_markup(callback: CallbackQuery) -> None:
