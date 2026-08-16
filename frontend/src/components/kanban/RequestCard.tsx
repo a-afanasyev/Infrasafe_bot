@@ -28,9 +28,12 @@ interface Props {
   card: TCard
   onClick: () => void
   isOverlay?: boolean
+  /** Заявка изменилась с тех пор, как менеджер её открывал. Считается снаружи
+   *  (useSeenRequests) — карточка остаётся презентационной. */
+  unread?: boolean
 }
 
-export default function RequestCard({ card, onClick, isOverlay }: Props) {
+export default function RequestCard({ card, onClick, isOverlay, unread }: Props) {
   const urgency = URGENCY[card.urgency ?? '']
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
   const frozen = FROZEN_STATUSES.has(card.status)
@@ -44,7 +47,7 @@ export default function RequestCard({ card, onClick, isOverlay }: Props) {
   if (isOverlay) {
     return (
       <div className="bg-bg-card border border-accent/30 rounded-[10px] px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.3),0_0_0_1px_rgba(var(--accent-rgb),0.15)]">
-        <CardContent card={card} urgency={urgency} />
+        <CardContent card={card} urgency={urgency} unread={unread} />
       </div>
     )
   }
@@ -76,19 +79,34 @@ export default function RequestCard({ card, onClick, isOverlay }: Props) {
         }
       }}
     >
-      <CardContent card={card} urgency={urgency} />
+      <CardContent card={card} urgency={urgency} unread={unread} />
     </div>
   )
 }
 
-function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; text: string } | undefined }) {
+function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: string; text: string } | undefined; unread?: boolean }) {
   const { t } = useTranslation()
+  // Бейдж «новый ответ» — только для уточнения: там непрочитанное означает
+  // конкретное событие (житель ответил). В «Закупе» смысл индикатора другой
+  // («новая заявка на закуп»), и достаточно точки.
+  const showUnreadReply = Boolean(unread) && card.status === 'Уточнение'
   return (
     <>
       {/* Header row */}
       <div className="flex justify-between items-center mb-[5px]">
-        <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted tracking-wide">
-          {card.request_number}
+        <span className="flex items-center gap-1.5">
+          {/* Точка — в header-строке, а не на рамке карточки: `cn` это twMerge,
+              и новый border-* перебил бы border-0 у перетаскиваемой карточки. */}
+          {unread && (
+            <span
+              data-testid="unread-dot"
+              aria-label={t('kanban.unread')}
+              className="inline-block w-1.5 h-1.5 rounded-full bg-red shrink-0"
+            />
+          )}
+          <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted tracking-wide">
+            {card.request_number}
+          </span>
         </span>
         <span className="text-[11px] opacity-80">
           {SOURCE_ICON[card.source ?? ''] ?? ''}
@@ -118,9 +136,17 @@ function CardContent({ card, urgency }: { card: TCard; urgency: { bg: string; te
         </div>
       )}
 
-      {/* Badges */}
-      {(card.urgency || card.manager_confirmed) && (
+      {/* Badges. Условие обязано учитывать бейдж «новый ответ» — иначе он
+          проглатывался бы у карточки без срочности и без подтверждения. И
+          именно его, а не голый `unread`: у непрочитанной карточки в «Закупе»
+          бейджа нет, и контейнер остался бы пустым (лишний отступ). */}
+      {(card.urgency || card.manager_confirmed || showUnreadReply) && (
         <div className="flex gap-1 flex-wrap mt-1">
+          {showUnreadReply && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber/12 text-[#d97706] font-[family-name:var(--font-display)]">
+              💬 {t('kanban.unreadReply')}
+            </span>
+          )}
           {urgency && (
             <span className={cn(
               'text-[10px] font-bold px-2 py-0.5 rounded-full font-[family-name:var(--font-display)]',

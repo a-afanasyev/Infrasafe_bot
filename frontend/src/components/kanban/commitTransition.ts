@@ -53,6 +53,10 @@ interface CommitTransitionArgs {
   requestNumber: string
   data: TransitionData
   onError: () => void
+  /** Карточка из ответа PATCH. Нужна вызывающему, чтобы отметить заявку
+   *  прочитанной на той версии, которую он сам же и создал переходом —
+   *  `updated_at` бампается любым изменением строки, включая своё. */
+  onSuccess?: (card: RequestCard | undefined) => void
 }
 
 /** Применить переход: оптимистично локально, затем PATCH, затем сверка с сервером.
@@ -71,13 +75,15 @@ export async function commitTransition({
   requestNumber,
   data,
   onError,
+  onSuccess,
 }: CommitTransitionArgs): Promise<void> {
   queryClient.setQueryData(queryKey, (old: KanbanBoardData | undefined) =>
     applyOptimisticTransition(old, requestNumber, data.status),
   )
 
   try {
-    await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
+    const response = await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
+    onSuccess?.(response?.data as RequestCard | undefined)
   } catch {
     onError()
   } finally {

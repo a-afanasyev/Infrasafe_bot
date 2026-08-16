@@ -272,6 +272,19 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
             await state.clear()
             return
 
+        # Открытая доска узнаёт об ответе только через WS: у канбана нет иного
+        # пути обновления, поэтому без этой публикации менеджер не увидел бы ни
+        # свежих примечаний, ни индикатора непрочитанного. Тип события фронт уже
+        # слушает (useKanban) — правок в SPA не нужно. Публикуем здесь, а не в
+        # юните: publish_request_event асинхронна, а DB-фаза идёт в потоке.
+        # Best-effort: мёртвый Redis не должен стоить жителю его ответа.
+        try:
+            from uk_management_bot.services.redis_pubsub import publish_request_event
+
+            await publish_request_event("request.updated", {"number": request_number})
+        except Exception as e:
+            logger.debug(f"realtime publish для {request_number} пропущен: {e}")
+
         # Уведомляем менеджеров (B3: сеть вне сессии, best-effort — сбой
         # отдельного получателя не должен ронять ответ заявителю).
         from uk_management_bot.services.notification_service import send_to_user

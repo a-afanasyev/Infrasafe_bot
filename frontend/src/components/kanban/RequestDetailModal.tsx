@@ -7,6 +7,7 @@ import { apiClient } from '../../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
 import { useHasRole, useHasAnyRole } from '../../hooks/useHasRole'
+import { useSeenRequests } from '../../hooks/useSeenRequests'
 import { URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
@@ -116,6 +117,17 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     queryFn: () => apiClient.get(`/api/v2/requests/${requestNumber}/comments`).then(r => r.data),
     enabled: !!requestNumber,
   })
+
+  // Открытая карточка считается прочитанной на своей текущей версии. Эффект
+  // по `updated_at` покрывает оба пути входа — клик по карточке на доске и
+  // deep-link `?request=` — и до-гасит точку, если заявка обновилась, пока
+  // модалка открыта.
+  const { markSeen } = useSeenRequests()
+  const requestUpdatedAt: string | null = request?.updated_at ?? request?.created_at ?? null
+  useEffect(() => {
+    if (!requestNumber || !requestUpdatedAt) return
+    markSeen(requestNumber, requestUpdatedAt)
+  }, [requestNumber, requestUpdatedAt, markSeen])
 
   const isManager = useHasRole('manager')
 

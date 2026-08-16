@@ -968,7 +968,9 @@
     "engineerEscalation": "Эскалация на инженера",
     "engineerReason": "Причина:",
     "alertSource": "Источник: InfraSafe",
-    "workingRange": "рабочий диапазон"
+    "workingRange": "рабочий диапазон",
+    "unread": "Непрочитанное обновление",
+    "unreadReply": "новый ответ"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",
