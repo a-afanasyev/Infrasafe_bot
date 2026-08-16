@@ -192,6 +192,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="request_assignment мёртв целиком (~370 строк) + 3 в panels; решать с BUG-150"),
     "BUG-158": A(pkg="A2", status="decision", method="verified-2026-08-16",
                  note="4 мёртвых хендлера onboarding; решать с BUG-150 и BUG-154 одним движением"),
+    "BUG-160": A(pkg="A2", status="decision", method="verified-2026-08-16",
+                 note="исполнитель не узнаёт о назначении на смену: метода send_shift_assignment_notification нет в репо; нужен НОВЫЙ текст уведомления = продуктовое решение (реализовать по канону shifts.py vs снять вызов)"),
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
                  note="8 дефектов волны 6; мёртвая пагинация чинится вместе с BUG-151 п.6"),
     "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-15",
