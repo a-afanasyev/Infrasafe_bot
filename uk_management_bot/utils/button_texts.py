@@ -207,6 +207,13 @@ def _init_button_texts() -> dict:
         "onboarding.handlers.btn_specify_phone",
         fallback_text="📱 Указать телефон"
     )
+    # Ключ ТОТ ЖЕ, что рисует handlers/base.py в клавиатуре онбординга. Эта
+    # идентичность и есть смысл записи: кнопка была мёртвой ровно потому, что
+    # фильтра на её текст не существовало. Другой ключ — тот же дефект заново.
+    button_texts['select_apartment'] = get_button_texts_for_all_languages(
+        "base.handlers.btn_select_apartment",
+        fallback_text="🏠 Выбрать квартиру"
+    )
     button_texts['complete_without_docs'] = get_button_texts_for_all_languages(
         "onboarding.handlers.btn_complete_without_docs",
         fallback_text="✅ Завершить без документов"
@@ -533,6 +540,11 @@ def get_shift_history_texts() -> List[str]:
 
 def get_login_texts() -> List[str]:
     return BUTTON_TEXTS.get('login', ["🔑 Войти"])
+
+
+def get_select_apartment_texts() -> List[str]:
+    """Тексты кнопки «🏠 Выбрать квартиру» для всех языков."""
+    return BUTTON_TEXTS.get('select_apartment', ["🏠 Выбрать квартиру"])
 
 
 def get_specify_phone_texts() -> List[str]:

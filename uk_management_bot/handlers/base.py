@@ -31,6 +31,7 @@ from uk_management_bot.keyboards.base import (
     get_cancel_keyboard,
     get_main_keyboard_for_role,
     get_role_switch_inline,
+    get_start_role_choice_inline,
     get_user_contextual_keyboard,
 )
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
@@ -98,6 +99,7 @@ class _MenuContext:
     status: Optional[str]
     phone: Optional[str]
     has_approved_apartment: bool
+    has_any_apartment: bool
     db_roles: list
     active_role: Optional[str]
 
@@ -110,9 +112,28 @@ def _menu_context(user) -> _MenuContext:
         status=user.status,
         phone=user.phone,
         has_approved_apartment=has_approved_apartment,
+        # Заявка на квартиру в ЛЮБОМ статусе = регистрация жителя уже начата.
+        # Полноту профиля по-прежнему определяет только approved (поле выше);
+        # это — признак «человек уже сделал выбор», для развилки первого входа.
+        has_any_apartment=bool(user.user_apartments),
         # COD-01: канонический парсер ролей (JSON+CSV)
         db_roles=parse_roles_safe(getattr(user, "roles", None)),
         active_role=getattr(user, "active_role", None),
+    )
+
+
+def _needs_role_choice(ctx: _MenuContext) -> bool:
+    """Первый вход: человек ещё никак себя не обозначил.
+
+    Развилку «житель / сотрудник» показываем только здесь. Как только он оставил
+    телефон, подал заявку на квартиру (в любом статусе) или получил роль сверх
+    applicant — выбор считается сделанным, и вопрос больше не задаём.
+    """
+    return (
+        ctx.status == "pending"
+        and not ctx.phone
+        and not ctx.has_any_apartment
+        and (ctx.db_roles or ["applicant"]) == ["applicant"]
     )
 
 
@@ -373,10 +394,52 @@ async def cmd_start(message: Message, state: FSMContext = None, roles: list[str]
                 return
     
     # Если нет токена, продолжаем обычную обработку /start
-    await handle_regular_start(message, roles, active_role, user_status, language=language, _db=_db)
+    await handle_regular_start(message, roles, active_role, user_status, language=language,
+                               offer_role_choice=True, _db=_db)
 
-async def handle_regular_start(message: Message, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru", *, _db=None):
-    """Обработка обычного /start без токена"""
+def _build_onboarding_screen(ctx: _MenuContext, lang: str):
+    """-> (текст, клавиатура) онбординга жителя, либо (текст, None).
+
+    Вынесено из handle_regular_start дословно, чтобы экран у жителя был ОДИН:
+    колбэк «Я житель» зовёт эту же сборку. Собственная копия экрана незаметно
+    потеряла бы WebApp-кнопку регистрации при следующей правке.
+    """
+    welcome_text = get_text("onboarding.welcome_new_user", language=lang)
+    welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
+
+    # Создаём клавиатуру онбординга
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+    missing_items = []
+    if not ctx.phone:
+        missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
+    if not ctx.has_approved_apartment:
+        missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
+
+    if not missing_items:
+        return welcome_text, None
+
+    keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
+    # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL)
+    if settings.FRONTEND_URL:
+        keyboard_rows.append([
+            KeyboardButton(
+                text=get_text("base.handlers.btn_register_webapp", language=lang),
+                web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/register"),
+            )
+        ])
+    return welcome_text, ReplyKeyboardMarkup(
+        keyboard=keyboard_rows,
+        resize_keyboard=True,
+        one_time_keyboard=False
+    )
+
+
+async def handle_regular_start(message: Message, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru", *, offer_role_choice: bool = False, _db=None):
+    """Обработка обычного /start без токена.
+
+    ``offer_role_choice`` включает развилку «житель / сотрудник» и передаётся
+    ТОЛЬКО из cmd_start: /menu переспрашивать роль не должен.
+    """
     ctx = await run_db(
         lambda s: _load_start_context(
             s, message.from_user.id,
@@ -393,38 +456,23 @@ async def handle_regular_start(message: Message, roles: list[str] = None, active
     has_approved_apartment = ctx.has_approved_apartment
     is_profile_complete = ctx.phone and has_approved_apartment
 
+    if offer_role_choice and _needs_role_choice(ctx):
+        # Первый вход: пока не спросим, человек молча уйдёт в жители — ровно то,
+        # что случалось с приглашёнными сотрудниками.
+        choice_text = get_text("start_role.title", language=lang)
+        choice_text += f"\n\n{get_text('start_role.hint', language=lang)}"
+        await message.answer(choice_text, reply_markup=get_start_role_choice_inline(lang))
+        logger.info(f"Пользователю {message.from_user.id} показана развилка роли")
+        return
+
     if not is_profile_complete and ctx.status == "pending":
         # Новый пользователь - показываем онбординг
-        welcome_text = get_text("onboarding.welcome_new_user", language=lang)
-        welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
-
-        # Создаём клавиатуру онбординга
-        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
-        missing_items = []
-        if not ctx.phone:
-            missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
-        if not has_approved_apartment:
-            missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
-
-        if missing_items:
-            keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
-            # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL)
-            if settings.FRONTEND_URL:
-                keyboard_rows.append([
-                    KeyboardButton(
-                        text=get_text("base.handlers.btn_register_webapp", language=lang),
-                        web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/register"),
-                    )
-                ])
-            onboarding_keyboard = ReplyKeyboardMarkup(
-                keyboard=keyboard_rows,
-                resize_keyboard=True,
-                one_time_keyboard=False
-            )
+        welcome_text, onboarding_keyboard = _build_onboarding_screen(ctx, lang)
+        if onboarding_keyboard is not None:
             await message.answer(welcome_text, reply_markup=onboarding_keyboard)
             logger.info(f"Новый пользователь {message.from_user.id} начал онбординг")
             return
-    
+
     # Обычное приветствие
     welcome_text = get_text("welcome", language=lang)
 

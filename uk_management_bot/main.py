@@ -15,6 +15,7 @@ if settings.SENTRY_DSN:
     )
 from uk_management_bot.database.session import engine, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
+from uk_management_bot.handlers.start_role_choice import router as start_role_choice_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
 from uk_management_bot.handlers.shifts import router as shifts_router
@@ -345,6 +346,11 @@ async def main():
 
     # Регистрируем роутеры
     dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
+    # Развилка «житель/сотрудник» — часть воронки /start. Строго ПОСЛЕ
+    # start_router (чтобы /start оставался выходом из ожидания токена) и ДО
+    # auth_router: шаг ввода токена обязан выигрывать у Command("join"), иначе
+    # один и тот же ввод пойдёт двумя разными путями.
+    dp.include_router(start_role_choice_router)
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)
     
