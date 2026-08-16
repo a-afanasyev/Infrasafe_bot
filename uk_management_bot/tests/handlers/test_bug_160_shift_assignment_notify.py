@@ -205,6 +205,31 @@ class TestHandlersNotifyExecutor:
         assert db.get(Shift, 10).user_id is None, "без нужной специализации смена не назначается"
 
     @pytest.mark.asyncio
+    async def test_force_assign_missing_specialization_branch_is_reachable(self, db):
+        """BUG-161 был в ДВУХ сайтах — второй (force_assign) тоже под тестом.
+
+        Принудительное назначение обязано отказать при нехватке специализации,
+        а не падать ImportError в generic-ошибку.
+        """
+        from uk_management_bot.handlers.shift_management import assignment_b
+
+        manager = _user(db, 5, 555, roles='["manager"]')
+        _user(db, 1, 111, spec='["plumbing"]')
+        _shift(db, 10, specs=["electric"])
+
+        cb = _callback("force_assign:10:1")
+        sent = AsyncMock(return_value=True)
+        with patch("uk_management_bot.services.notification_service.shifts.send_to_user", sent):
+            await assignment_b.handle_force_assign(
+                cb, MagicMock(), db=db, user=manager, roles=["manager"],
+            )
+
+        cb.message.edit_text.assert_awaited()
+        db.expire_all()
+        assert db.get(Shift, 10).user_id is None, "принудительное назначение без специализации запрещено"
+        assert sent.await_count == 0, "отказ не должен слать уведомление о назначении"
+
+    @pytest.mark.asyncio
     async def test_send_failure_does_not_break_assignment(self, db):
         """Сбой Telegram не должен отменять уже выполненное назначение."""
         from uk_management_bot.handlers.shift_management import assignment_b
