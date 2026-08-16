@@ -134,7 +134,7 @@ def _load_my_apartments(db, telegram_id: int) -> Optional[list]:
 def _set_primary_apartment(db, user_apartment_id: int, telegram_id: int) -> str:
     """-> 'not_found' | 'access_denied' | 'not_approved' | 'ok'."""
     from uk_management_bot.database.models import UserApartment
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     user_apartment = db.execute(
         select(UserApartment).where(UserApartment.id == user_apartment_id)
@@ -149,17 +149,18 @@ def _set_primary_apartment(db, user_apartment_id: int, telegram_id: int) -> str:
     if user_apartment.status != 'approved':
         return "not_approved"
 
-    # Снимаем флаг is_primary со всех квартир пользователя
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт при A2-конвертации):
-    # сырая SQL-строка без text() — SQLAlchemy 2.0 (в проекте 2.0.x) бросает
-    # ArgumentError ещё до запроса, т.е. ветка «Сделать основной» всегда
-    # уходит в except с generic error_update. Кандидат в BUG-пункт.
+    # Снимаем флаг is_primary со всех квартир пользователя.
+    # BUG-151 п.1: здесь стояла сырая SQL-строка без text() — SQLAlchemy 2.x
+    # бросает ArgumentError ещё до запроса, поэтому «Сделать основной» всегда
+    # уходила в except с generic error_update.
     db.execute(
-        """
+        text(
+            """
         UPDATE user_apartments
         SET is_primary = false
         WHERE user_id = :user_id
-        """,
+        """
+        ),
         {"user_id": user_apartment.user_id}
     )
 
