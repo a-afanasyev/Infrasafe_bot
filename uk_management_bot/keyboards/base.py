@@ -236,6 +236,35 @@ def get_role_switch_inline(roles: list[str], active_role: str, language: str = "
     return builder.as_markup()
 
 
+def get_start_role_choice_inline(language: str = "ru") -> InlineKeyboardMarkup:
+    """Inline-клавиатура развилки первого входа: житель или сотрудник.
+
+    Инлайн, а не reply: reply-клавиатура «липкая» — проигнорированная, она
+    висела бы поверх следующих экранов, а инлайн-разметку снимает сам хендлер.
+    """
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(
+        text=get_text("start_role.btn_resident", language=language),
+        callback_data="start_role:resident",
+    ))
+    builder.add(InlineKeyboardButton(
+        text=get_text("start_role.btn_employee", language=language),
+        callback_data="start_role:employee",
+    ))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_no_invite_token_inline(language: str = "ru") -> InlineKeyboardMarkup:
+    """Выход из шага ввода токена: «у меня нет кода» → вернуться к жителю."""
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(
+        text=get_text("start_role.btn_no_token", language=language),
+        callback_data="start_role:no_token",
+    ))
+    return builder.as_markup()
+
+
 def get_executor_suggestion_inline(yes_text: str, no_text: str) -> InlineKeyboardMarkup:
     """Inline‑клавиатура для предложения перейти в режим исполнителя после старта смены.
 

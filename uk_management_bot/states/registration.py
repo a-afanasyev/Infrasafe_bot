@@ -3,7 +3,11 @@ from aiogram.fsm.state import State, StatesGroup
 
 class RegistrationStates(StatesGroup):
     """Состояния для пошаговой регистрации"""
-    
+
+    # Ожидание инвайт-токена после выбора «Я сотрудник» на экране /start.
+    # Предшествует анкете: принятый токен переводит в waiting_for_full_name.
+    waiting_for_invite_token = State()
+
     # Начальное состояние - ожидание ввода ФИО
     waiting_for_full_name = State()
     

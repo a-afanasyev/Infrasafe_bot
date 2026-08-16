@@ -893,7 +893,7 @@
       "error_role_not_selected": "Xato: rol tanlanmagan",
       "invite_created_header": "✅ Taklifnoma yaratildi!",
       "invite_link_label": "🔗 Ro'yxatdan o'tish havolasi:",
-      "invite_instructions": "📋 Nomzod uchun ko'rsatma:\n1. Havolaga o'ting\n2. «Boshlash» tugmasini bosing\n3. Buyruqni yuboring: `/join {token}`",
+      "invite_instructions": "📋 Nomzod uchun ko'rsatma:\n1. Havolaga o'ting\n2. «Boshlash» tugmasini bosing\n3. «🧰 Men xodimman (taklif bo'yicha)» ni tanlang\n4. Kodni yuboring:\n`{token}`",
       "back_to_admin_panel": "Admin panelga qaytish:",
       "no_access_actions": "Amallarni bajarish uchun ruxsat yo'q",
       "request_accepted_choose_assignment": "✅ <b>Ariza #{request_number} ishga qabul qilindi</b>\n\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n\n<b>Ijrochini tayinlash usulini tanlang:</b>",
@@ -8370,5 +8370,16 @@
       "utility_bill": "kommunal to‘lov cheki",
       "other": "boshqa"
     }
+  },
+  "start_role": {
+    "title": "👋 Xush kelibsiz! Siz kimsiz?",
+    "hint": "Rezident — agar shu uyda yashasangiz.\nXodim — agar menejer sizga taklif kodini bergan bo'lsa.",
+    "btn_resident": "🏠 Men rezidentman",
+    "btn_employee": "🧰 Men xodimman (taklif bo'yicha)",
+    "token_prompt": "🔑 Taklif kodini bitta xabar bilan yuboring.\n\nBu invite_v1: bilan boshlanadigan uzun satr.",
+    "btn_no_token": "◀️ Menda kod yo'q",
+    "no_token_hint": "Taklif kodini menejer beradi. Kodni so'rang va u sizda bo'lganda /start yuboring.",
+    "token_not_recognized": "❌ Bu taklif kodiga o'xshamaydi.\nKod invite_v1: bilan boshlanadi — uni to'liq yuboring.",
+    "applicant_token": "⚠️ Bu kod xodim rolini bermaydi — u rezident uchun.\nRezident sifatida davom etamiz, xodim kodi uchun menejerga murojaat qiling."
   }
 }

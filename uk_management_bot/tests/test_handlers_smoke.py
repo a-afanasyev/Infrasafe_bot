@@ -7,6 +7,7 @@ from aiogram import Router
 # which are present in the codebase but not in the original spec list.
 HANDLER_MODULES = [
     "uk_management_bot.handlers.base",
+    "uk_management_bot.handlers.start_role_choice",
     "uk_management_bot.handlers.requests",
     "uk_management_bot.handlers.admin",
     "uk_management_bot.handlers.shifts",

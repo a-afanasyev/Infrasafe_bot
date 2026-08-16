@@ -215,21 +215,27 @@ async def login_command(message: Message, *, _db=None):
     await login_via_button(message, _db=_db)
 
 
-@router.message(Command("join"))
-async def join_with_invite(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def start_invite_registration(message: Message, state: FSMContext, token: str,
+                                    language: str = "ru", *, staff_only: bool = False, _db=None):
+    """Проверить инвайт-токен и запустить анкету. -> (вердикт, роль|None).
+
+    Вердикты: ok | applicant_token | rate_limited | invalid | already_registered |
+    registration_pending | error. Роль возвращается при ``ok`` и ``applicant_token``.
+
+    ``staff_only`` — для ветки «Я сотрудник»: приглашение с ролью «Заявитель»
+    (она есть в клавиатуре выдачи инвайтов) роли сотрудника не даёт, анкету по
+    нему запускать незачем — иначе человек её пройдёт, сожжёт токен и останется
+    жителем, то есть ровно там, откуда и пришёл.
+
+    Общее тело для двух входов: команды ``/join <token>`` и шага ввода токена
+    после «Я сотрудник» на экране /start. Живёт ИМЕННО в этом модуле — тесты
+    (test_invite_token_logging, test_invite_pending_applicant) патчат
+    ``handlers.auth.{InviteService,AuthService,InviteRateLimiter}`` и проверяют
+    имя логгера; переезд в сервис-слой сломал бы их без единой правки поведения.
     """
-    Обработчик команды /join <token>
-    Открывает веб-приложение для регистрации по приглашению
-    """
-    # FIX-006: НЕ логировать полный токен. message.text начинается с "/join <token>",
-    # маскируем второй аргумент той же схемой что и на выходе хендлера.
-    _join_parts = (message.text or "").split(maxsplit=1)
-    _token_arg = _join_parts[1] if len(_join_parts) > 1 else ""
-    _masked = f"{_token_arg[:8]}…" if _token_arg else "(empty)"
-    logger.info(f"Команда /join получена от пользователя {message.from_user.id}: /join {_masked}")
     lang = language
     telegram_id = message.from_user.id
-    
+
     try:
         # Проверяем rate limiting
         if not await InviteRateLimiter.is_allowed(telegram_id):
@@ -237,19 +243,8 @@ async def join_with_invite(message: Message, state: FSMContext, language: str = 
             await message.answer(
                 get_text("invites.rate_limited", language=lang, minutes=remaining_minutes)
             )
-            logger.warning(f"Превышен rate limit для /join от пользователя {telegram_id}")
-            return
-        
-        # Извлекаем токен из команды (None-safe — Command("join") фильтр
-        # обычно гарантирует .text, но защищаемся от forwarded/media-only маршрутов)
-        text_parts = (message.text or "").split(maxsplit=1)
-        if len(text_parts) < 2:
-            await message.answer(
-                get_text("invites.usage_help", language=lang)
-            )
-            return
-        
-        token = text_parts[1].strip()
+            logger.warning(f"Превышен rate limit для инвайта от пользователя {telegram_id}")
+            return "rate_limited", None
 
         verdict, payload = await run_db(
             lambda s: _load_join_gate(s, token, telegram_id), db=_db
@@ -264,24 +259,30 @@ async def join_with_invite(message: Message, state: FSMContext, language: str = 
             else:
                 await message.answer(get_text("invites.invalid_token", language=lang))
 
-            return
+            return "invalid", None
 
         if verdict == "already_registered":
             await message.answer(
                 get_text("invites.already_registered", language=lang)
             )
-            return
+            return "already_registered", None
 
         if verdict == "registration_pending":
             await message.answer(
                 get_text("auth.registration_pending", language=lang)
             )
-            return
+            return "registration_pending", None
 
         invite_data = payload
 
         # Получаем информацию о приглашении для отображения
         role = invite_data["role"]
+
+        if staff_only and role == "applicant":
+            await message.answer(get_text("start_role.applicant_token", language=lang))
+            logger.info(f"Пользователю {telegram_id} пришёл applicant-инвайт на ветке сотрудника")
+            return "applicant_token", role
+
         role_name = get_text(f"roles.{role}", language=lang)
         
         # Формируем сообщение о начале регистрации
@@ -329,12 +330,43 @@ async def join_with_invite(message: Message, state: FSMContext, language: str = 
         
         # SEC-08: токен (даже префикс) в логи не пишем — см. test_invite_token_logging.py
         logger.info(f"Пользователь {telegram_id} получил ссылку на веб-регистрацию по инвайт-токену")
-        
+
+        return "ok", role
+
     except Exception as e:
-        logger.error(f"Ошибка обработки /join от {telegram_id}: {e}")
+        logger.error(f"Ошибка обработки инвайта от {telegram_id}: {e}")
         await message.answer(
             get_text("errors.unknown_error", language=lang)
         )
+        return "error", None
+
+
+@router.message(Command("join"))
+async def join_with_invite(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+    """
+    Обработчик команды /join <token>
+    Открывает веб-приложение для регистрации по приглашению
+    """
+    # FIX-006: НЕ логировать полный токен. message.text начинается с "/join <token>",
+    # маскируем второй аргумент той же схемой что и на выходе хендлера.
+    _join_parts = (message.text or "").split(maxsplit=1)
+    _token_arg = _join_parts[1] if len(_join_parts) > 1 else ""
+    _masked = f"{_token_arg[:8]}…" if _token_arg else "(empty)"
+    logger.info(f"Команда /join получена от пользователя {message.from_user.id}: /join {_masked}")
+    lang = language
+
+    # Извлекаем токен из команды (None-safe — Command("join") фильтр
+    # обычно гарантирует .text, но защищаемся от forwarded/media-only маршрутов)
+    text_parts = (message.text or "").split(maxsplit=1)
+    if len(text_parts) < 2:
+        await message.answer(
+            get_text("invites.usage_help", language=lang)
+        )
+        return
+
+    await start_invite_registration(
+        message, state, text_parts[1].strip(), language=lang, _db=_db
+    )
 
 
 # Обработчики пошаговой регистрации

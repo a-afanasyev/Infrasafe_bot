@@ -24,12 +24,15 @@ from uk_management_bot.keyboards.address_management import (
     get_confirmation_keyboard
 )
 from uk_management_bot.utils.address_helpers import apartment_address
+from uk_management_bot.utils.button_texts import get_select_apartment_texts
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+SELECT_APARTMENT_TEXTS = get_select_apartment_texts()
 
 
 # ==========================================================================
@@ -237,11 +240,15 @@ def _load_admin_notification_texts(db, user_id: int, apartment_id: int) -> Optio
 # НАЧАЛО ВЫБОРА КВАРТИРЫ
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@router.message(F.text.in_(SELECT_APARTMENT_TEXTS))
 async def start_apartment_selection(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """
     Начать процесс выбора квартиры (может вызываться из onboarding или профиля)
 
-    Эта функция вызывается из onboarding.py после ввода телефона
+    Вызывается двумя путями: программно из onboarding.py после ввода телефона и
+    нажатием кнопки «🏠 Выбрать квартиру» на экране онбординга. Декоратора
+    раньше не было — кнопка в base.py рисовалась, но не ловилась ничем, и
+    нажатие первой кнопкой не давало ровным счётом ничего.
     """
     try:
         yards = await run_db(_load_active_yards, db=_db)

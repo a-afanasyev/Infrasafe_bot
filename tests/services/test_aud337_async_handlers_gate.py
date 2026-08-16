@@ -140,6 +140,10 @@ CONVERTED = [
     # (⚠️ регистрация login_via_button по тексту «🔑 Войти» мертва — генератора
     # кнопки нет в репо — но саму функцию зовёт живой login_command /login).
     "uk_management_bot/handlers/auth.py",
+    # Развилка «житель/сотрудник» на /start: собственной DB-фазы нет вовсе —
+    # обе ветки делегируют в base.send_onboarding_screen и
+    # auth.start_invite_registration, которые уже под run_db.
+    "uk_management_bot/handlers/start_role_choice.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):

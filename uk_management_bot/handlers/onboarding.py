@@ -56,6 +56,7 @@ from uk_management_bot.states.onboarding import OnboardingStates
 from uk_management_bot.database.models.user_verification import DocumentType
 from uk_management_bot.utils.button_texts import (
     get_specify_phone_texts,
+    get_select_apartment_texts,
     get_complete_without_docs_texts,
     get_specify_address_texts,
     get_upload_documents_texts,
@@ -84,6 +85,7 @@ router = Router()
 
 # Button text constants for filters
 SPECIFY_PHONE_TEXTS = get_specify_phone_texts()
+SELECT_APARTMENT_TEXTS = get_select_apartment_texts()
 COMPLETE_WITHOUT_DOCS_TEXTS = get_complete_without_docs_texts()
 SPECIFY_ADDRESS_TEXTS = get_specify_address_texts()
 UPLOAD_DOCUMENTS_TEXTS = get_upload_documents_texts()
@@ -314,6 +316,7 @@ async def process_manual_phone(message: Message, state: FSMContext, user_status:
     for texts_list in [PROFILE_TEXTS, CREATE_REQUEST_TEXTS, MY_REQUESTS_TEXTS,
                        HELP_TEXTS, SHIFT_TEXTS, SWITCH_ROLE_TEXTS,
                        SPECIFY_ADDRESS_TEXTS, SPECIFY_PHONE_TEXTS,
+                       SELECT_APARTMENT_TEXTS,
                        MY_SHIFTS_TEXTS, ACTIVE_REQUESTS_TEXTS, ARCHIVE_TEXTS,
                        ACCEPTANCE_TEXTS, ADMIN_PANEL_TEXTS, CANCEL_TEXTS,
                        UPLOAD_DOCUMENTS_TEXTS, COMPLETE_WITHOUT_DOCS_TEXTS]:
