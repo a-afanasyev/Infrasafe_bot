@@ -101,17 +101,26 @@ def _load_request_exists(db, request_number: str) -> bool:
     return request is not None
 
 
-def _apply_comment(db, request_number: str, author_id: int, comment_text: str, comment_type: str) -> str:
-    """-> 'request_not_found' | 'ok'. Коммитит CommentService.add_comment.
+def _apply_comment(db, request_number: str, author_telegram_id: int, comment_text: str, comment_type: str) -> str:
+    """-> 'request_not_found' | 'author_not_found' | 'ok'. Коммитит CommentService.add_comment.
 
     Исключения ``add_comment`` (ValueError валидации, ошибки записи) намеренно
     НЕ гасятся: они всплывают наружу через run_db в общий ``except`` хендлера —
     ровно как всплывали при прямом вызове на middleware-сессии.
+
+    BUG-155 п.1: сюда передавался Telegram-id автора, а ``add_comment`` ищет
+    ``User.id == user_id`` (обычный serial) и на несовпадении бросал
+    ValueError — подтверждение комментария в проде падало в алерт «ошибка»
+    всегда. Резолв telegram_id → users.id делается здесь, в той же сессии.
     """
     # Получаем заявку для получения ID
     request = db.query(Request).filter(Request.request_number == request_number).first()
     if not request:
         return "request_not_found"
+
+    author = db.query(User).filter(User.telegram_id == author_telegram_id).first()
+    if not author:
+        return "author_not_found"
 
     # Создаем сервис комментариев
     comment_service = CommentService(db)
@@ -119,11 +128,7 @@ def _apply_comment(db, request_number: str, author_id: int, comment_text: str, c
     # Добавляем комментарий
     comment_service.add_comment(
         request_id=request.request_number,
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): сюда идёт Telegram-id
-        # автора, а `add_comment` ищет `User.id == user_id` (обычный serial) и
-        # на несовпадении бросает ValueError. Флоу подтверждения комментария
-        # из-за этого падает в общий except с алертом об ошибке.
-        user_id=author_id,
+        user_id=author.id,
         comment_text=comment_text,
         comment_type=comment_type
     )
@@ -385,6 +390,10 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
 
         if verdict == "request_not_found":
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "author_not_found":
+            await callback.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
             return
 
         # Показываем сообщение об успехе
