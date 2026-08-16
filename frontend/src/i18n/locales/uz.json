@@ -1084,7 +1084,7 @@
     "inviteFormDesc": "Rol va amal qilish muddatini tanlang — bot taklif havolasini beradi.",
     "inviteCreated": "Taklif yaratildi — havolani nomzodga yuboring. Xodim bot orqali kirgach «Tasdiqlashni kutayotganlar»da paydo bo'ladi.",
     "inviteToken": "Taklif tokeni",
-    "inviteInstruction": "Xodimga bot havolasi va tokenni yuboring. Botda /join <token> buyrug'ini ishlating",
+    "inviteInstruction": "Xodimga bot havolasi va kodni yuboring. Botda: «Boshlash» → «🧰 Men xodimman (taklif bo'yicha)» → kodni bitta xabar bilan yuborish.",
     "addAnother": "Yana qo'shish",
     "done": "Tayyor",
     "expiry1h": "1 soat",

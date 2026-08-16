@@ -206,6 +206,10 @@ ASSIGNMENT: dict[str, dict] = {
                  note="8 дефектов волны 2 (#434); п.1 P2 живой — set_primary падает (raw SQL без text())"),
     "BUG-150": A(pkg="A2", status="decision", method="verified-2026-08-14",
                  note="4 мёртвых хендлера shifts.py + клавиатуры-сироты; ретайр открывает файлу CONVERTED"),
+    "BUG-163": A(pkg="A2", status="actionable", method="verified-2026-08-16",
+                 note="uz-житель получает русские шаги выбора квартиры: language не проброшен в 2 вызова onboarding.py"),
+    "BUG-164": A(pkg="A2", status="decision", method="verified-2026-08-16",
+                 note="applicant-инвайт гасит nonce и не даёт роли; убирать ли роль из клавиатуры выдачи — продуктовое"),
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
