@@ -400,12 +400,16 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data == "add_apartment")
-async def start_add_apartment(callback: CallbackQuery, state: FSMContext):
-    """Начать процесс добавления квартиры"""
+async def start_add_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+    """Начать процесс добавления квартиры.
+
+    BUG-163: ``language`` не было в сигнатуре вовсе — middleware его не
+    прокидывал, и узбекоязычный житель получал русские шаги выбора квартиры.
+    """
     # Используем тот же flow, что и при регистрации
     from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection_for_profile
 
-    await start_apartment_selection_for_profile(callback, state)
+    await start_apartment_selection_for_profile(callback, state, language=language)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

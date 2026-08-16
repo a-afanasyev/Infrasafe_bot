@@ -285,7 +285,7 @@ async def process_contact(message: Message, state: FSMContext, language: str = "
 
             # Переходим к выбору квартиры из справочника
             from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
-            await start_apartment_selection(message, state)
+            await start_apartment_selection(message, state, language=lang)
         else:
             await message.answer(
                 get_text("errors.unknown_error", language=lang),
@@ -355,7 +355,7 @@ async def process_manual_phone(message: Message, state: FSMContext, user_status:
 
             # Переходим к выбору квартиры из справочника
             from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
-            await start_apartment_selection(message, state)
+            await start_apartment_selection(message, state, language=lang)
         else:
             await message.answer(get_text("errors.unknown_error", language=lang))
             await state.clear()
