@@ -1051,7 +1051,8 @@
     "установлен_состояние_waiting_2": "Shtat foydalanuvchi uchun kutish uchun o'rnatiladi",
     "handlers": {
       "specialization_label": "Mutaxassislik"
-    }
+    },
+    "deleted": "🚫 Sizning hisobingiz o'chirilgan. Menejerga murojaat qiling."
   },
   "back": "Asosiy menyu:",
   "buttons": {
