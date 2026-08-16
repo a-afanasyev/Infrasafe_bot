@@ -8,6 +8,7 @@ import {
   useDeclineEmployee,
   useBlockEmployee,
   useUnblockEmployee,
+  useApproveEmployee,
 } from '../hooks/useEmployees'
 import type { EmployeeBrief } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
@@ -70,6 +71,10 @@ export default function EmployeesPage() {
   const declineEmployee = useDeclineEmployee()
   const blockEmployee = useBlockEmployee()
   const unblockEmployee = useUnblockEmployee()
+  // Верификация личности сотрудника (verification_status). Кнопка живёт в
+  // StaffCard и звала `onVerify?.(employee)` — проп сюда не был проброшен, и
+  // опциональная цепочка делала клик пустым: ни запроса, ни ошибки.
+  const approveEmployee = useApproveEmployee()
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; список зависимостей сохранён как есть во избежание пересоздания коллбэка при смене локали
   const handleBlockToggle = useCallback((e: EmployeeBrief) => {
@@ -307,6 +312,7 @@ export default function EmployeesPage() {
               onAssign={(e) => setAssignTarget(e)}
               onBlock={handleBlockToggle}
               onDelete={(e) => setDeleteTarget(e)}
+              onVerify={(e) => approveEmployee.mutate(e.id)}
               isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
             />
           ))}
