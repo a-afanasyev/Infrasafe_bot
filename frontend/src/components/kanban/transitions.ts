@@ -57,4 +57,21 @@ export function inProgressNeedsExecutorModal(sourceStatus: string | undefined, h
   return sourceStatus === 'Новая' && !hasExecutor
 }
 
+/** Источники, возврат из которых — это MANAGER_RETURN_TO_WORK. */
+const RETURN_TO_WORK_SOURCES = new Set(['Выполнена', 'Исполнено', 'Возвращена'])
+
+/**
+ * Нужна ли модалка с причиной возврата.
+ *
+ * Причина стала обязательной в ядре (`payloads.py`): возврат без объяснения
+ * бесполезен исполнителю. Поэтому переход в «В работе» из приёмочных статусов
+ * обязан её собрать — иначе backend отдаст 422. Из «Закуп»/«Уточнение» это
+ * ДРУГИЕ действия (MANAGER_PURCHASE_DONE / CLARIFY_RESOLVED), причина им не
+ * нужна и была бы отвергнута как unexpected field.
+ */
+export function needsReturnReasonModal(sourceStatus: string | undefined, targetStatus: string): boolean {
+  if (targetStatus !== 'В работе') return false
+  return RETURN_TO_WORK_SOURCES.has(sourceStatus ?? '')
+}
+
 export { FROZEN_STATUSES }

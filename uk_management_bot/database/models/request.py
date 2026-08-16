@@ -92,6 +92,7 @@ class Request(Base):
     is_returned = Column(Boolean, default=False, nullable=False)  # Флаг возвращенной заявки
     return_reason = Column(Text, nullable=True)  # Причина возврата от заявителя
     return_media = Column(JSON, default=list)  # Медиафайлы при возврате
+    manager_return_reason = Column(Text, nullable=True)  # Причина возврата МЕНЕДЖЕРОМ (не путать с return_reason жителя)
     returned_at = Column(DateTime(timezone=True), nullable=True)  # Время возврата
     returned_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Кто вернул
 

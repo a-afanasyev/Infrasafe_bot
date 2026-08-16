@@ -145,6 +145,19 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     if request.updated_at:
         message_text += f"{labels['updated']} {request.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
 
+    # Причины возврата — две разные реплики одного диалога, поэтому и подписи
+    # разные: житель объясняет, что не так, менеджер — что переделать. Слипшись,
+    # они бы дезинформировали обе стороны.
+    applicant_reason = getattr(request, 'return_reason', None)
+    if applicant_reason:
+        label = get_text('requests.applicant_return_reason_label', language=language)
+        message_text += f"\n{label} {applicant_reason}\n"
+
+    manager_reason = getattr(request, 'manager_return_reason', None)
+    if manager_reason:
+        label = get_text('requests.manager_return_reason_label', language=language)
+        message_text += f"\n{label} {manager_reason}\n"
+
     # Add executor info if needed
     if show_executor and active_role != "executor" and request.executor_id:
         if db_session:

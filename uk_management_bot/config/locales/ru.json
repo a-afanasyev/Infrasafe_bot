@@ -957,7 +957,10 @@
       "purchase_history_entry_comment": "Комментарий менеджера: {comment}",
       "purchase_history_entry_updated": "Обновлено: {date}",
       "comment_changed_text": "Комментарии к материалам изменены менеджером:\n\nБыло: {old_comment}\n\nСтало: {new_comment}",
-      "comment_absent": "Комментарий отсутствовал"
+      "comment_absent": "Комментарий отсутствовал",
+      "return_to_work_prompt": "↩️ Возврат заявки {request_number} в работу.\n\nНапишите причину — исполнитель увидит её в заявке и в уведомлении.",
+      "return_to_work_reason_empty": "Причина не может быть пустой. Напишите, что нужно переделать.",
+      "return_to_work_cancelled": "↩️ Возврат заявки {request_number} отменён."
     },
     "panel_title": "⚙️ Панель управления"
   },
@@ -6144,7 +6147,9 @@
     "send_photo_or_video": "📎 Отправьте фото или видео (до 5 файлов) или нажмите кнопку для продолжения.",
     "request_created_success": "✅ Заявка успешно создана!",
     "request_creation_cancelled": "❌ Создание заявки отменено.",
-    "return_to_main": "🔙 Возврат в главное меню"
+    "return_to_main": "🔙 Возврат в главное меню",
+    "manager_return_reason_label": "↩️ Причина возврата менеджером:",
+    "applicant_return_reason_label": "🔁 Причина возврата жителем:"
   },
   "role": {
     "not_allowed": "Эта роль вам недоступна",
@@ -8161,7 +8166,8 @@
       "executed": "✅ Работы по заявке #{request_number} выполнены\n\n📍 {address}\n\nПроверьте результат и примите работу или верните на доработку.",
       "ready_for_acceptance": "📋 Заявка #{request_number} готова к приёмке\n\n📍 {address}\n\nОцените качество работы в разделе «Приёмка».",
       "returned_to_work": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}",
-      "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}"
+      "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}",
+      "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}"
     }
   },
   "document_types": {

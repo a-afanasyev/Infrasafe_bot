@@ -4,6 +4,7 @@ import {
   VALID_TRANSITIONS,
   FROZEN_STATUSES,
   inProgressNeedsExecutorModal,
+  needsReturnReasonModal,
 } from './transitions'
 
 // Bug: дроп заявки из «Закуп» в «В работе» давал 422. «В работе» открывал
@@ -48,5 +49,34 @@ describe('KanbanBoard «Возвращена» transitions (PR7)', () => {
   it('«Возвращена» is a known transition source but not frozen', () => {
     expect(VALID_TRANSITIONS['Возвращена']).toBeDefined()
     expect(FROZEN_STATUSES.has('Возвращена')).toBe(false)
+  })
+})
+
+// Волна C: причина возврата стала обязательной в ядре. Переход в «В работе» из
+// «Выполнена»/«Исполнено»/«Возвращена» — это MANAGER_RETURN_TO_WORK, и без
+// причины он теперь отдаёт 422. Значит фронт обязан спросить её модалкой, а не
+// коммитить напрямую, как делал раньше.
+describe('needsReturnReasonModal (возврат в работу требует причину)', () => {
+  it('требует причину при возврате из приёмочных статусов', () => {
+    for (const src of ['Выполнена', 'Исполнено', 'Возвращена']) {
+      expect(needsReturnReasonModal(src, 'В работе')).toBe(true)
+    }
+  })
+
+  it('НЕ требует причину при resume из «Закуп»/«Уточнение»', () => {
+    // Это MANAGER_PURCHASE_DONE / CLARIFY_RESOLVED — другие действия, причина
+    // им не нужна и была бы отвергнута как unexpected field.
+    for (const src of ['Закуп', 'Уточнение']) {
+      expect(needsReturnReasonModal(src, 'В работе')).toBe(false)
+    }
+  })
+
+  it('НЕ требует причину при взятии заявки из «Новая»', () => {
+    expect(needsReturnReasonModal('Новая', 'В работе')).toBe(false)
+  })
+
+  it('не срабатывает для других целевых статусов', () => {
+    expect(needsReturnReasonModal('Выполнена', 'Исполнено')).toBe(false)
+    expect(needsReturnReasonModal('Исполнено', 'Принято')).toBe(false)
   })
 })

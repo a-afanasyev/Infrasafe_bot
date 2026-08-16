@@ -16,6 +16,8 @@ export interface RequestCard {
   completion_report: string | null
   requested_materials: string | null
   return_reason: string | null
+  /** Причина возврата МЕНЕДЖЕРОМ — отдельно от return_reason жителя. */
+  manager_return_reason: string | null
   created_at: string
   updated_at: string | null
   manager_confirmed: boolean

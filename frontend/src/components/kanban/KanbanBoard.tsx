@@ -24,6 +24,7 @@ import {
   resolveTargetStatus,
   isTransitionAllowed,
   inProgressNeedsExecutorModal,
+  needsReturnReasonModal,
 } from './transitions'
 
 // Колонки, где отслеживается «непрочитанное». Остальные не подсвечиваем:
@@ -33,6 +34,8 @@ const UNREAD_TRACKED_STATUSES = new Set(['Уточнение', 'Закуп'])
 interface PendingTransition {
   requestNumber: string
   newStatus: string
+  /** Возврат в работу: модалка спрашивает причину, а не исполнителя. */
+  sourceStatus?: string
 }
 
 interface Props {
@@ -119,6 +122,12 @@ export default function KanbanBoard({ onCardClick }: Props) {
       // «Новая» без исполнителя. Из «Закуп»/«Уточнение»/«Выполнена»/«Исполнено»/
       // «Возвращена» это resume/return — коммитим напрямую (executor_id там → 422).
       if (newStatus === 'В работе') {
+        // Возврат из приёмочных статусов обязан нести причину (ядро иначе даёт
+        // 422), а resume из «Закуп»/«Уточнение» — наоборот, причины не примет.
+        if (needsReturnReasonModal(sourceCol.status, newStatus)) {
+          setPendingTransition({ requestNumber, newStatus, sourceStatus: sourceCol.status })
+          return
+        }
         const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
         if (!inProgressNeedsExecutorModal(sourceCol.status, Boolean(card?.executor_id))) {
           commitTransition(requestNumber, { status: newStatus })
@@ -216,6 +225,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
 
       {pendingTransition && (
         <TransitionModal
+          sourceStatus={pendingTransition.sourceStatus}
           requestNumber={pendingTransition.requestNumber}
           targetStatus={pendingTransition.newStatus}
           onConfirm={handleTransitionConfirm}

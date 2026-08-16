@@ -42,6 +42,11 @@ class RequestCard(BaseModel):
     notes: Optional[str] = None
     requested_materials: Optional[str] = None
     return_reason: Optional[str] = None
+    # Причина возврата МЕНЕДЖЕРОМ — отдельное поле от return_reason (причина
+    # жителя): это две реплики одного диалога, в карточке они с разными
+    # подписями. Только на чтение — на вход причина приходит как return_reason
+    # и переводится роутером в payload `reason`.
+    manager_return_reason: Optional[str] = None
     # INT-120 #3 — Sprint 10 reopen-chain metadata, surfaced on the detail
     # endpoint only (GET /api/v2/requests/{number}). Populated from the
     # accepted webhook_inbox row when the request was created via inbound

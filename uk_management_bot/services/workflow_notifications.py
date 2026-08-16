@@ -69,8 +69,10 @@ _NOTIFY_MATRIX: dict[Action, tuple[tuple[str, ...], str]] = {
     Action.MANAGER_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
     Action.MANAGER_CONFIRM: ((APPLICANT,), "notifications.workflow.ready_for_acceptance"),
     # Возврат менеджером в работу: исполнителю — переделывать, жителю — статус.
+    # Свой ключ (не общий с возвратом жителя): только это сообщение несёт
+    # причину менеджера, и подставлять её в общий шаблон было бы нечем.
     Action.MANAGER_RETURN_TO_WORK: (
-        (APPLICANT, EXECUTOR), "notifications.workflow.returned_to_work"),
+        (APPLICANT, EXECUTOR), "notifications.workflow.returned_to_work_manager"),
     # AUD6-P1-6: возврат ЖИТЕЛЕМ из приёмки — симметрия с возвратом менеджера:
     # исполнитель обязан узнать, что работу переделывать. До этой строки на
     # API/TWA-пути возврат жителя не уведомлял никого (бот слал через легаси).
@@ -129,6 +131,18 @@ def _render_text(
             )),
             address=html.escape(request.address or ""),
             clarification_text=html.escape(clarification_text),
+        )
+    if action is Action.MANAGER_RETURN_TO_WORK:
+        # Причина обязательна на уровне ядра, но уведомление — post-commit
+        # best-effort: пустая строка вместо KeyError, если запись всё же пуста
+        # (легаси-заявка, вернувшаяся до этой ревизии).
+        return get_text(
+            text_key,
+            language=language,
+            request_number=request.request_number,
+            address=html.escape(request.address or ""),
+            category=html.escape(request.category or ""),
+            reason=html.escape(getattr(request, "manager_return_reason", None) or ""),
         )
     return get_text(
         text_key,
