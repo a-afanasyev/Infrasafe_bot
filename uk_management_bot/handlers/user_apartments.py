@@ -134,7 +134,7 @@ def _load_my_apartments(db, telegram_id: int) -> Optional[list]:
 def _set_primary_apartment(db, user_apartment_id: int, telegram_id: int) -> str:
     """-> 'not_found' | 'access_denied' | 'not_approved' | 'ok'."""
     from uk_management_bot.database.models import UserApartment
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     user_apartment = db.execute(
         select(UserApartment).where(UserApartment.id == user_apartment_id)
@@ -149,18 +149,26 @@ def _set_primary_apartment(db, user_apartment_id: int, telegram_id: int) -> str:
     if user_apartment.status != 'approved':
         return "not_approved"
 
-    # Снимаем флаг is_primary со всех квартир пользователя
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт при A2-конвертации):
-    # сырая SQL-строка без text() — SQLAlchemy 2.0 (в проекте 2.0.x) бросает
-    # ArgumentError ещё до запроса, т.е. ветка «Сделать основной» всегда
-    # уходит в except с generic error_update. Кандидат в BUG-пункт.
+    # Снимаем флаг is_primary со всех ОСТАЛЬНЫХ квартир пользователя.
+    # BUG-151 п.1: здесь стояла сырая SQL-строка без text() — SQLAlchemy 2.x
+    # бросает ArgumentError ещё до запроса, поэтому «Сделать основной» всегда
+    # уходила в except с generic error_update.
+    #
+    # Целевая квартира исключена из сброса намеренно. Сырой UPDATE идёт мимо
+    # identity map, а установка True ниже — присваивание ORM-атрибута: если он
+    # в памяти уже был True (повторный клик по уже основной квартире — двойной
+    # тап, пока Telegram не перерисовал клавиатуру), SQLAlchemy не увидел бы
+    # изменения и UPDATE не эмитил, а сырой сброс уже обнулил бы строку —
+    # у пользователя не осталось бы НИ ОДНОЙ основной квартиры при вердикте "ok".
     db.execute(
-        """
+        text(
+            """
         UPDATE user_apartments
         SET is_primary = false
-        WHERE user_id = :user_id
-        """,
-        {"user_id": user_apartment.user_id}
+        WHERE user_id = :user_id AND id != :user_apartment_id
+        """
+        ),
+        {"user_id": user_apartment.user_id, "user_apartment_id": user_apartment.id}
     )
 
     # Устанавливаем новую основную квартиру

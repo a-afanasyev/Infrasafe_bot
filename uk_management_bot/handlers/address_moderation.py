@@ -205,8 +205,13 @@ def _render_user_notification(db, user_telegram_id: int, template_key: str, **fm
     """Фетч языка получателя + рендер текста уведомления (B3).
 
     -> текст | None (пользователь не найден).
+
+    BUG-152 п.1: здесь стоял локальный ``from uk_management_bot.config.localization
+    import get_text`` — такого модуля в репо нет, ModuleNotFoundError гасился
+    broad-except вызывающего, и житель НИКОГДА не получал решение по своей
+    квартире (модератор при этом видел успех). Канон — модульный ``get_text``
+    из ``utils.helpers`` (импортирован в шапке файла).
     """
-    from uk_management_bot.config.localization import get_text
     from uk_management_bot.database.models import User
     from sqlalchemy import select
 

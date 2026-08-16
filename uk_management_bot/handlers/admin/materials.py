@@ -287,12 +287,18 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
                     old_comment=old_comment or get_text("admin.handlers.comment_absent", language=lang),
                     new_comment=new_comment
                 )
+                # BUG-159: здесь стояли три чужих keyword'а — request_id=,
+                # old_status=, comment= при сигнатуре
+                # add_status_change_comment(request_number, user_id,
+                # previous_status, new_status, additional_comment). Вызов падал
+                # TypeError, который гасил except ниже, и изменение комментария
+                # к материалам не попадало в историю заявки никогда.
                 comment_service.add_status_change_comment(
-                    request_id=request_number,
+                    request_number=request_number,
                     user_id=user.id,
-                    old_status=REQUEST_STATUS_PURCHASE,
+                    previous_status=REQUEST_STATUS_PURCHASE,
                     new_status=REQUEST_STATUS_PURCHASE,
-                    comment=comment_text
+                    additional_comment=comment_text
                 )
             except Exception as e:
                 logger.error(f"Ошибка добавления комментария: {e}")

@@ -3,9 +3,8 @@
 AUD3-07/AUD5-ARCH-1: DB-фаза каждого хендлера — цельный sync unit-of-work,
 исполняемый в worker-потоке через ``run_db``; наружу выходят DTO/скаляры, а не
 ORM-строки (у ORM-объекта вне потока нет живой сессии). Рассылка менеджерам
-осталась ВНУТРИ юнита осознанно: ``NotificationService.send_notification_to_user``
-— синхронный вызов без сети (см. ⚠️ ниже), раскраивать «собрать → отправить»
-здесь нечего.
+раскроена по B3 (BUG-155 п.2): юнит собирает адресатов и тексты на языке каждого
+получателя, отправка идёт в async-слое через ``send_to_user``.
 
 Оба хендлера живые: команду ``/reply_{request_number}`` заявителю диктует
 живое уведомление об уточнении (``admin.handlers.notify_user_clarification`` —
@@ -25,7 +24,6 @@ import logging
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
-from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.business_time import fmt_datetime
@@ -46,6 +44,13 @@ class _ClarificationPrompt:
     """Поля заявки для приглашения ввести ответ."""
     category: str
     address: Optional[str]
+
+
+@dataclass(frozen=True)
+class _ManagerNotice:
+    """Готовое уведомление менеджеру: адресат + текст на ЕГО языке (B3)."""
+    telegram_id: int
+    text: str
 
 
 # ==========================================================================
@@ -92,21 +97,22 @@ def _load_reply_gate(db, request_number: str, telegram_id: int) -> str:
     return "ok"
 
 
-def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lang: str) -> str:
-    """-> 'request_not_found' | 'no_permission' | 'ok'. Коммитит примечание.
+def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lang: str) -> tuple:
+    """-> ('request_not_found'|'no_permission', []) | ('ok', [_ManagerNotice, ...]).
 
-    Уведомление менеджерам отправляется здесь же: метод сервиса синхронный и
-    сети не касается (⚠️ см. ниже), поэтому B3-раскрой не нужен.
+    Коммитит примечание и возвращает готовые уведомления менеджерам: тексты
+    рендерятся здесь (нужна сессия — язык каждого получателя), отправка идёт в
+    async-слое (B3-раскрой).
     """
     # Получаем заявку
     request = db.query(Request).filter(Request.request_number == request_number).first()
     if not request:
-        return "request_not_found"
+        return ("request_not_found", [])
 
     # Получаем пользователя
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user or user.id != request.user_id:
-        return "no_permission"
+        return ("no_permission", [])
 
     # Формируем имя заявителя
     applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
@@ -130,18 +136,22 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
     request.updated_at = utc_now()
     db.commit()
 
-    # Отправляем уведомление менеджерам
+    # Собираем адресатов уведомления. BUG-155 п.2: здесь стоял вызов
+    # NotificationService.send_notification_to_user — метода с таким именем у
+    # сервиса нет, AttributeError гасился локальным except'ом, и менеджеры об
+    # ответе заявителя не узнавали НИКОГДА. Отправка вынесена в async-слой
+    # (B3-раскрой): текст на языке КАЖДОГО получателя собирается здесь, в
+    # сессии, сеть — за пределами юнита.
+    notices: list[_ManagerNotice] = []
     try:
-        notification_service = NotificationService(db)
-
-        # Находим всех менеджеров
         managers = db.query(User).filter(
             User.roles.contains('manager') | User.roles.contains('admin')
         ).all()
 
-        # Send notification in each manager's language
         for manager in managers:
             try:
+                if not manager.telegram_id:
+                    continue
                 manager_lang = get_user_language(manager.telegram_id, db)
                 notification_text = get_text("clarification.manager_notification", language=manager_lang).format(
                     request_number=request.request_number,
@@ -149,25 +159,14 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
                     address=request.address,
                     reply_text=reply_text
                 )
-
-                # ⚠️ Предсуществующий дефект (сохранён 1:1): у NotificationService
-                # НЕТ метода send_notification_to_user — вызов падает
-                # AttributeError, который тут же гасится этим except'ом. Менеджеры
-                # об ответе заявителя не узнают никогда; в логах только строка
-                # «Ошибка отправки уведомления менеджеру».
-                notification_service.send_notification_to_user(
-                    user_id=manager.id,
-                    message=notification_text
-                )
+                notices.append(_ManagerNotice(telegram_id=manager.telegram_id, text=notification_text))
             except Exception as e:
-                logger.error(f"Ошибка отправки уведомления менеджеру {manager.id}: {e}")
-
-        logger.info("Уведомления об ответе отправлены менеджерам")
+                logger.error(f"Ошибка подготовки уведомления менеджеру {manager.id}: {e}")
 
     except Exception as e:
-        logger.error(f"Ошибка отправки уведомлений менеджерам: {e}")
+        logger.error(f"Ошибка подготовки уведомлений менеджерам: {e}")
 
-    return "ok"
+    return ("ok", notices)
 
 
 @router.message(F.text.startswith("/reply_"))
@@ -258,7 +257,7 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
             await message.answer(get_text("clarification.reply_text_empty", language=lang))
             return
 
-        verdict = await run_db(
+        verdict, manager_notices = await run_db(
             lambda s: _apply_reply(s, request_number, message.from_user.id, reply_text, lang),
             db=_db,
         )
@@ -272,6 +271,20 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
             await message.answer(get_text("clarification.no_permission_to_reply", language=lang))
             await state.clear()
             return
+
+        # Уведомляем менеджеров (B3: сеть вне сессии, best-effort — сбой
+        # отдельного получателя не должен ронять ответ заявителю).
+        from uk_management_bot.services.notification_service import send_to_user
+
+        for notice in manager_notices:
+            try:
+                await send_to_user(message.bot, notice.telegram_id, notice.text)
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления менеджеру {notice.telegram_id}: {e}")
+
+        logger.info(
+            f"Уведомления об ответе по заявке {request_number} отправлены менеджерам: {len(manager_notices)}"
+        )
 
         # Подтверждаем заявителю
         reply_preview = reply_text[:100] + ('...' if len(reply_text) > 100 else '')

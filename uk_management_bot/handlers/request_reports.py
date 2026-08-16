@@ -187,19 +187,28 @@ def _load_revision_actor(db, request_number: str, telegram_id: int) -> tuple:
 def _add_revision_comment(db, request_number: str, telegram_id: int, revision_reason: str) -> None:
     """Добавляем комментарий о доработке (пишет и коммитит CommentService).
 
-    ⚠️ Предсуществующие дефекты (сохранены 1:1):
-    1. keyword `request_id=` при сигнатуре
-       `add_clarification_comment(request_number, user_id, clarification)` —
-       вызов падает TypeError; переход APPLICANT_RETURN к этому моменту уже
-       закоммичен, поэтому пользователь видит «ошибка», хотя статус сменился.
-    2. `user_id` — Telegram-id, а add_comment ищет `User.id == user_id`.
-    3. RU-хардкод текста комментария (UZ-заявитель получит русский).
+    BUG-153 п.5: вызов шёл с чужим keyword `request_id=` при сигнатуре
+    ``add_clarification_comment(request_number, user_id, clarification)`` и с
+    Telegram-id в `user_id` (``add_comment`` ищет ``User.id``). Первый дефект
+    ронял вызов TypeError ещё до второго, поэтому причина доработки не
+    сохранялась никогда: переход APPLICANT_RETURN к этому моменту уже
+    закоммичен, и заявитель видел «ошибка» при сменившемся статусе.
+
+    ⚠️ Предсуществующий дефект (сохранён): RU-хардкод текста комментария —
+    UZ-заявитель получит русский (BUG-153 п.2, отдельный пункт бэклога).
     """
+    actor = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not actor:
+        logger.warning(
+            f"Комментарий о доработке не сохранён: пользователь telegram_id={telegram_id} не найден"
+        )
+        return
+
     comment_service = CommentService(db)
 
     comment_service.add_clarification_comment(
-        request_id=request_number,
-        user_id=telegram_id,
+        request_number=request_number,
+        user_id=actor.id,
         clarification=f"Запрошена доработка. Причина: {revision_reason}"
     )
 
