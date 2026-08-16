@@ -87,6 +87,26 @@ class TestSetPrimaryApartment:
         assert db.get(UserApartment, 20).is_primary is True
         assert db.get(UserApartment, 10).is_primary is False
 
+    def test_repeated_click_keeps_primary(self, db):
+        """Повторный клик по УЖЕ основной квартире не должен обнулять флаг.
+
+        Сброс `is_primary=false` идёт сырым SQL мимо identity map, а установка
+        `True` — присваиванием атрибута. Если у объекта в памяти он уже был
+        True, ORM не видит изменения и UPDATE не эмитит: сырой сброс остаётся
+        единственным эффектом, и у пользователя НОЛЬ основных квартир при
+        вердикте "ok". Сценарий достижим двойным тапом по кнопке (Telegram не
+        успевает перерисовать клавиатуру между двумя callback'ами).
+        """
+        from uk_management_bot.handlers.user_apartments import _set_primary_apartment
+
+        self._two_apartments(db)
+
+        assert _set_primary_apartment(db, 10, 111) == "ok"
+
+        db.expire_all()
+        assert db.get(UserApartment, 10).is_primary is True
+        assert db.get(UserApartment, 20).is_primary is False
+
     def test_foreign_apartment_is_rejected(self, db):
         from uk_management_bot.handlers.user_apartments import _set_primary_apartment
 
