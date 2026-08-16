@@ -41,6 +41,7 @@ def _make_user(
     active_role: str = "applicant",
     role: str = "applicant",
     language: str = "ru",
+    deleted_at=None,
 ) -> MagicMock:
     user = MagicMock()
     user.telegram_id = telegram_id
@@ -49,6 +50,10 @@ def _make_user(
     user.active_role = active_role
     user.role = role
     user.language = language
+    # У MagicMock существует ЛЮБОЙ атрибут, поэтому deleted_at надо задать явно:
+    # без этого гейт удалённых аккаунтов принимал мок за soft-deleted (у живого
+    # ORM-User колонка всегда None либо дата).
+    user.deleted_at = deleted_at
     return user
 
 

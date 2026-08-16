@@ -75,6 +75,10 @@ async def get_current_user(
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # Удалённый аккаунт: soft-delete сохраняет роли (нужны для истории заявок),
+    # поэтому уже выданный токен продолжал бы открывать дашборд до истечения.
+    if getattr(user, "deleted_at", None) is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deleted")
     if user.status == "blocked":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account blocked")
 

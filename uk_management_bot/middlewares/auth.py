@@ -90,7 +90,14 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
         
 
 
-        if user and user.status == "blocked":
+        # Удалённый аккаунт закрывает доступ так же, как заблокированный.
+        # soft-delete НАМЕРЕННО сохраняет роли (нужны для истории заявок),
+        # поэтому без этой проверки уволенный сотрудник продолжал пользоваться
+        # ботом с прежними правами. Признак — deleted_at, а не строка статуса:
+        # по нему фильтруют все списки, и его не переписывает другая операция.
+        _deleted = user is not None and getattr(user, "deleted_at", None) is not None
+
+        if user and (_deleted or user.status == "blocked"):
             # Мягкая блокировка: локализованное сообщение и ранний выход
             try:
                 language = None
@@ -101,7 +108,10 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
                         language = getattr(event.from_user, "language_code", None)
                 except Exception:
                     language = None
-                text = get_text("auth.blocked", language=language or "ru")
+                text = get_text(
+                    "auth.deleted" if _deleted else "auth.blocked",
+                    language=language or "ru",
+                )
                 if isinstance(event, Message):
                     await event.answer(text)
                 elif isinstance(event, CallbackQuery):
