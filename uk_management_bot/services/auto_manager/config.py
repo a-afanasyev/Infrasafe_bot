@@ -151,6 +151,21 @@ def load_config_sync(db: Session) -> dict:
         return validate_config(DEFAULT_CONFIG)
 
 
+def is_auto_assign_enabled_sync(db: Session) -> bool:
+    """Включено ли автоназначение (флаг `enabled` singleton-конфига).
+
+    Тонкий ридер поверх `load_config_sync` — нужен всем, кто раздаёт заявки
+    автоматически, а не только оркестратору авто-менеджера. Отдельная функция,
+    а не `load_config_sync(db)["enabled"]` по месту: точек вызова несколько, и
+    fail-safe направление обязано быть одинаковым во всех.
+
+    Fail-safe: недоступная таблица/битая строка → `load_config_sync` отдаёт
+    дефолт, а в дефолте `enabled=False`. При сломанном конфиге заявки остаются
+    «Новая» и достаются человеку — молча раздавать их было бы хуже.
+    """
+    return bool(load_config_sync(db)["enabled"])
+
+
 def save_config_sync(db: Session, data: dict, updated_by: int | None = None) -> dict:
     """Валидировать и сохранить конфиг (upsert по id=CONFIG_ROW_ID)."""
     validated = validate_config(data)
@@ -186,6 +201,12 @@ async def load_config(db: AsyncSession) -> dict:
     except ValueError as e:
         logger.warning("auto_manager_config.data не проходит валидацию, отдаю дефолт: %s", e)
         return validate_config(DEFAULT_CONFIG)
+
+
+async def is_auto_assign_enabled(db: AsyncSession) -> bool:
+    """Асинхронный аналог `is_auto_assign_enabled_sync` — тот же fail-safe."""
+    cfg = await load_config(db)
+    return bool(cfg["enabled"])
 
 
 async def save_config(db: AsyncSession, data: dict, updated_by: int | None = None) -> dict:

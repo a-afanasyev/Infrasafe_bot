@@ -8,6 +8,7 @@ import RequestDetailModal from '../components/kanban/RequestDetailModal'
 import { useTopbar } from '../contexts/topbar'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
+import AutoManagerToggle from '../components/shared/AutoManagerToggle'
 
 export default function KanbanPage() {
   const { t } = useTranslation()
@@ -50,13 +51,18 @@ export default function KanbanPage() {
 
   useEffect(() => {
     setActions(
-      <Button
-        onClick={() => setCallCenterOpen(true)}
-        size="sm"
-      >
-        <Phone size={14} />
-        {t('kanban.createByCall')}
-      </Button>
+      <div className="flex items-center gap-3">
+        {/* Выключатель автоназначения — здесь же, где менеджер смотрит на
+            заявки: снятый тумблер оставляет новые заявки в «Новая». */}
+        <AutoManagerToggle />
+        <Button
+          onClick={() => setCallCenterOpen(true)}
+          size="sm"
+        >
+          <Phone size={14} />
+          {t('kanban.createByCall')}
+        </Button>
+      </div>
     )
     return clearActions
     // FE-08: include reactive deps so the button label re-renders on language

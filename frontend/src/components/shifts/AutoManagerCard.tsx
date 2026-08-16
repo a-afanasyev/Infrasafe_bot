@@ -6,6 +6,7 @@ import { safeErrorMessage } from '@/utils/errorMessage'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../shared/LoadingSpinner'
+import AutoManagerToggle from '../shared/AutoManagerToggle'
 import type { AutoManagerConfigData } from '../../types/autoManagerConfig'
 
 // Строгий HH:MM (00-23:00-59) — минимальная client-side проверка формы, ДО
@@ -67,16 +68,6 @@ export default function AutoManagerCard() {
     )
   }
 
-  const handleToggleEnabled = () => {
-    // Патч, не полный объект из (возможно устаревшего) `data` — мутация сама
-    // перезапрашивает актуальное состояние перед записью (см.
-    // useAutoManagerConfig.ts) и мёржит патч поверх него, а не поверх кеша
-    // этого рендера — иначе устаревший `data.enabled` в самом патче не был бы
-    // проблемой (мы шлём только `enabled`), но полный объект из старого
-    // рендера мог бы затереть ДРУГИЕ поля, изменённые ботом тем временем.
-    updateConfig.mutate({ enabled: !data.enabled })
-  }
-
   const handleSaveWindow = () => {
     if (!isValidHHMM(windowStart) || !isValidHHMM(windowEnd)) {
       setWindowError(t('autoManager.windowInvalid'))
@@ -102,18 +93,7 @@ export default function AutoManagerCard() {
         <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
           {t('autoManager.title')}
         </span>
-        <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer">
-          <span className={data.enabled ? 'text-emerald font-semibold' : 'text-text-muted'}>
-            {data.enabled ? t('autoManager.enabledOn') : t('autoManager.enabledOff')}
-          </span>
-          <input
-            type="checkbox"
-            checked={data.enabled}
-            onChange={handleToggleEnabled}
-            disabled={updateConfig.isPending}
-            aria-label={t('autoManager.toggleLabel')}
-          />
-        </label>
+        <AutoManagerToggle />
       </div>
 
       {/* Режим — symmetric с ботом: "по правилу" зафиксирован (единственный

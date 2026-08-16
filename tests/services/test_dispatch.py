@@ -34,6 +34,13 @@ def test_unknown_category_does_not_dispatch(monkeypatch):
 
 
 def test_known_category_dispatches_group_command(monkeypatch):
+    # Автоназначение теперь за выключателем (`auto_manager_config.enabled`), а
+    # дефолт — выключено: без явного включения dispatch корректно молчит. Здесь
+    # проверяется форма команды, поэтому флаг поднимаем явно.
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch._auto_assign_enabled_sync",
+        lambda *a, **k: True,
+    )
     captured = {}
 
     def fake(_sf, num, principal, command, *a, **k):
@@ -56,6 +63,10 @@ def test_best_effort_swallows_dispatch_error(monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("seeded system user missing")
 
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch._auto_assign_enabled_sync",
+        lambda *a, **k: True,
+    )
     monkeypatch.setattr(wr, "run_command_sync", boom)
     # не должно поднять исключение (заявка уже создана)
     auto_dispatch_new_request_sync("260610-001", "Сантехника")
