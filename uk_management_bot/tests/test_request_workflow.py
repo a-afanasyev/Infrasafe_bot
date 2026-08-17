@@ -278,7 +278,7 @@ class TestPlanTransition:
     def test_canon_returned_snapshot_allows_manager_actions(self):
         """Канон-снимок (status=Возвращена напрямую) разрешает менеджеру
         re-open и force-accept — without dual-read encoding."""
-        snap = _snap(STATUS_RETURNED)
+        snap = _snap(STATUS_RETURNED, executor=EXECUTOR_ID)
         acts = allowed_actions(snap, MANAGER)
         assert Action.MANAGER_RETURN_TO_WORK in acts
         assert Action.MANAGER_FORCE_ACCEPT in acts
@@ -304,7 +304,11 @@ class TestPlanTransition:
         assert wh[0].data["new_status"] == REQUEST_STATUS_COMPLETED
 
     def test_manager_return_to_work_from_returned(self):
-        res = _plan(_snap(REQUEST_STATUS_COMPLETED, returned=True),
+        # Исполнитель в снимке обязателен: инвариант «В работе ⟺ есть
+        # исполнитель» не даёт вернуть работу НИКОМУ. У возвращённой заявки он
+        # и есть по построению — её кто-то выполнял.
+        res = _plan(_snap(REQUEST_STATUS_COMPLETED, returned=True,
+                          executor=EXECUTOR_ID),
                     Action.MANAGER_RETURN_TO_WORK, MANAGER, {"reason": "доделать"})
         f = _patch_fields(res)
         assert res.new_canon_status == REQUEST_STATUS_IN_PROGRESS

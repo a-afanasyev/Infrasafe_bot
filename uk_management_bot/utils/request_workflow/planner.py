@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Mapping, Optional
 
-from uk_management_bot.utils.constants import REQUEST_STATUS_COMPLETED
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_COMPLETED,
+    REQUEST_STATUS_IN_PROGRESS,
+)
 
 from .payloads import PAYLOAD_SCHEMAS
 from .projections import normalize_status, project_public_status
@@ -27,6 +30,7 @@ from .types import (
     LegacyStatusIntent,
     NotAuthorized,
     Op,
+    PayloadInvalid,
     PrincipalRef,
     RepeatConflict,
     RepeatPolicy,
@@ -240,6 +244,17 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     action = command.action
     spec = ACTION_TABLE[action]
     PAYLOAD_SCHEMAS[action].validate(action, command.payload)
+    if action is Action.ASSIGN_GROUP:
+        # Группа уходит в поле, по которому решается ДОСТУП к заявке
+        # (`request_access`) и право её взять (`_executor_can_claim`), поэтому
+        # значение обязано быть каноническим, а не «просто непустой строкой».
+        # `universal` здесь недопустим осознанно: «требование = подойдёт кто
+        # угодно» открыло бы взятие любому дежурному (см. `_executor_can_claim`).
+        from uk_management_bot.constants.specializations import is_canonical
+        group = command.payload["group"].strip()
+        if not is_canonical(group):
+            raise PayloadInvalid(
+                f"{action.value}: неизвестная специализация {group!r}")
     # Отдельная проверка «не-оба» здесь больше не нужна и была удалена:
     # инвариант «В работе ⟺ есть исполнитель» развёл назначение на действия с
     # НЕПЕРЕСЕКАЮЩИМИСЯ схемами — у ASSIGN_GROUP только `group`, у
@@ -263,12 +278,46 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
         raise InvalidTransition(f"{action.value}: not allowed from '{canon}'")
 
     patch = _build_patch(action, spec.to_status, actor, command.payload)
+    _enforce_in_progress_has_executor(action, spec.to_status, snap, patch)
     domain_ops = _build_domain_ops(action, snap, command.payload)
     events = _build_events(action, principal, snap.request,
                            spec.to_status, command.payload)
     return TransitionResult(
         old_state=snap.request, new_canon_status=spec.to_status,
         patch=patch, domain_ops=domain_ops, events=events,
+    )
+
+
+def _enforce_in_progress_has_executor(action: Action, to_canon: str,
+                                      snap: WorkflowSnapshot,
+                                      patch: tuple) -> None:
+    """Инвариант «В работе ⟺ есть исполнитель» — ОДНОЙ проверкой на весь канон.
+
+    Решение владельца 2026-08-17. Держать инвариант согласием каждого действия
+    не получается: в «В работе» ведут ШЕСТЬ действий, и три из них — возвраты к
+    работе (`MANAGER_PURCHASE_DONE`, `CLARIFY_RESOLVED`,
+    `MANAGER_RETURN_TO_WORK`) — ставят только статус, потому что исполнитель у
+    заявки «уже есть». Он есть НЕ ВСЕГДА: менеджер может увести в «Закуп» или
+    «Уточнение» прямо из «Новой», а оттуда вернуть — и получить «В работе» без
+    человека, то есть ровно ту ничью заявку, ради которой правился канон.
+
+    Поэтому проверка здесь, в одной точке: если действие приводит в «В работе»,
+    исполнитель обязан либо появиться этим патчем, либо уже быть у заявки.
+    Новое действие с таким переходом пройти мимо не сможет по построению.
+    """
+    if to_canon != REQUEST_STATUS_IN_PROGRESS:
+        return
+    sets_executor = any(
+        field == "executor_id" and op in (Op.SET, Op.SET_ACTOR)
+        for field, op, _ in patch
+    )
+    if sets_executor:
+        return
+    if getattr(snap.request, "executor_id", None) is not None:
+        return
+    raise InvalidTransition(
+        f"{action.value}: «{REQUEST_STATUS_IN_PROGRESS}» без исполнителя — "
+        f"назначьте исполнителя (заявка осталась бы ничьей)"
     )
 
 

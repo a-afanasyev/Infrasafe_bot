@@ -172,12 +172,15 @@ def auto_dispatch_new_request_sync(request_number: str,
         command = _assign_group_command(request_number, spec)
         done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
     try:
-        run_command_sync(SessionLocal, request_number,
-                         _dispatch_principal(), command)
+        outcome = run_command_sync(SessionLocal, request_number,
+                                   _dispatch_principal(), command)
         logger.info("[DISPATCH] Заявка %s %s", request_number, done)
     except Exception as e:  # best-effort — не валим создание заявки
         logger.warning("[DISPATCH] авто-назначение %s ('%s') не выполнено: %s",
                        request_number, spec, e)
+        return
+    if executor_id is not None:
+        _notify_assigned_sync(request_number, outcome)
 
 
 async def auto_dispatch_new_request_async(request_number: str,
@@ -216,11 +219,45 @@ async def auto_dispatch_new_request_async(request_number: str,
         return
     if executor_id is not None:
         await _publish_status_changed(outcome, request_number)
+        from uk_management_bot.services.workflow_notifications import (
+            dispatch_notify_intents_detached,
+        )
+        try:
+            await dispatch_notify_intents_detached(
+                request_number, outcome.post_commit_intents)
+        except Exception as e:  # уведомление не вправе ронять назначение
+            logger.warning("[DISPATCH] уведомление о назначении %s пропущено: %s",
+                           request_number, e)
     else:
         # Статус НЕ менялся — заявка осталась «Новая». Публиковать
         # `status_changed` здесь было бы ложью; канбану нужно обновить карточку
         # из-за появившейся группы.
         await _publish_updated(request_number)
+
+
+def _notify_assigned_sync(request_number: str, outcome) -> None:
+    """Сообщить назначенному дежурному и жителю (best-effort).
+
+    Без этого заявка была бы назначена человеку, который об этом не узнает: из
+    пула свободных она уже ушла (`executor_id` не NULL), а создание заявки само
+    исполнителей не уведомляет. До инварианта уведомлять было некого — группу
+    видели все дежурные сразу.
+    """
+    import asyncio
+
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.services.workflow_notifications import (
+        dispatch_notify_intents_sync,
+    )
+    session = SessionLocal()
+    try:
+        asyncio.run(dispatch_notify_intents_sync(
+            session, request_number, outcome.post_commit_intents))
+    except Exception as e:  # уведомление не вправе ронять назначение
+        logger.warning("[DISPATCH] уведомление о назначении %s пропущено: %s",
+                       request_number, e)
+    finally:
+        session.close()
 
 
 async def _publish_updated(request_number: str) -> None:

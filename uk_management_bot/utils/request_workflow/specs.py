@@ -115,8 +115,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     # from==to==«В работе», как EXECUTOR_CLAIM выше: тот же формальный REJECT-
     # дефолт, недостижимый (check_repeat отдаёт None для same-canon re-entry,
     # реальный гейт — _system_can_promote в plan_transition).
+    # «Новая» в from — по той же причине, что у EXECUTOR_CLAIM: авто-менеджер
+    # повышает group→individual на заявке, которая теперь лежит в «Новой».
+    # Без этого очередь нашла бы заявку, а канон отказал бы в промоуте.
     Action.SYSTEM_AUTO_PROMOTE: ActionSpec(
-        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        REQUEST_STATUS_IN_PROGRESS,
         _system_can_promote, RepeatPolicy.REJECT, system_only=True),
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,

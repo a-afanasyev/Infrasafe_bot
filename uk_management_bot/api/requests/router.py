@@ -389,6 +389,14 @@ async def update_request(
     # категории → fallback на status-only переход (прежнее поведение «менеджер берёт»).
     duty_group_spec = None
     if target_status == C.REQUEST_STATUS_IN_PROGRESS and updates.get("assign_to_duty"):
+        # Роль проверяется ЗДЕСЬ, а не только внутри run_command: эндпоинт открыт
+        # и жителю/исполнителю, а ниже стоят обращения к БД и отказ 409 «нет
+        # дежурного». Без этого гейта житель различал бы по коду ответа
+        # (409/403/404) существование чужой заявки, её специализацию и
+        # укомплектованность смен — оракул на чужие данные.
+        if "manager" not in _parse_user_roles(user):
+            raise HTTPException(
+                status_code=403, detail="Not permitted for this transition")
         from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
         category = await svc.category_of(db, request_number)
         if category:

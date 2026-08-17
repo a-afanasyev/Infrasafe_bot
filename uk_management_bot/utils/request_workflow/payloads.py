@@ -57,6 +57,9 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
         required={"executor_id": int}),
     Action.MANAGER_ASSIGN: PayloadSchema(
         required={"executor_id": int}),
+    # `group` проверяется по канону в `plan_transition`, а не только на непустоту:
+    # значение уходит в предикат доступа к заявке и в гвард взятия, поэтому
+    # произвольная строка здесь — это запись мусора в поле авторизации.
     Action.ASSIGN_GROUP: PayloadSchema(
         required={"group": str}, non_empty=frozenset({"group"})),
     Action.EXECUTOR_PURCHASE: PayloadSchema(

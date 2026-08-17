@@ -76,8 +76,15 @@ def _executor_can_claim(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     from uk_management_bot.utils.specializations import (
         matches_required_specs, parse_specialization_values,
     )
+    # ⚠️ allow_universal=False ОБЯЗАТЕЛЬНО, и это не мелочь: с джокером на
+    # стороне ТРЕБОВАНИЯ `matches_required_specs` возвращает True ещё до
+    # сравнения с навыками актора, то есть заявку с `group="universal"` мог бы
+    # взять ЛЮБОЙ дежурный, включая исполнителя вовсе без специализаций. Здесь
+    # гвард авторизации, и «требование = кто угодно» ему не подходит: токен
+    # нормализуется в пустоту и ниже даёт fail-closed. Джокер на стороне
+    # ИСПОЛНИТЕЛЯ («умею всё») продолжает работать — он в `actor.specializations`.
     required = parse_specialization_values(
-        snap.active_assignment_group, side="need", allow_universal=True)
+        snap.active_assignment_group, side="need")
     if not required:
         return False
     return matches_required_specs(set(actor.specializations), required)

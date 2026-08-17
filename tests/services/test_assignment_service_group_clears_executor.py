@@ -43,13 +43,22 @@ def db():
     Base.metadata.drop_all(bind=engine)
 
 
-def _request_with_individual_assignment(db) -> Request:
+def _request_with_individual_assignment(db, status="Новая") -> Request:
+    """Заявка со СТАРЫМ индивидуальным назначением.
+
+    Статус по умолчанию «Новая», а не «В работе»: с инвариантом
+    «В работе ⟺ есть исполнитель» (решение владельца 2026-08-17)
+    `assign_to_group` на заявке «В работе» ОТКАЗЫВАЕТ — он обнуляет
+    `executor_id` и статус не трогает, то есть оставил бы заявку «В работе»
+    ничьей. Устаревший `executor_id` без «В работе» — как раз тот случай, ради
+    которого обнуление и вводилось.
+    """
     req = Request(
         request_number="260723-001",
         user_id=APPLICANT_ID,
         category="plumbing",
         description="test",
-        status="В работе",
+        status=status,
         executor_id=OLD_EXECUTOR_ID,
         assignment_type="individual",
         assigned_at=datetime.now(timezone.utc),
@@ -92,6 +101,23 @@ def test_assign_to_group_cancels_previous_individual_assignment_row(db):
     assert "individual" not in by_type
     assert by_type["group"].group_specialization == "plumber"
     assert by_type["group"].executor_id is None
+
+
+def test_assign_to_group_refuses_in_progress_with_executor(db):
+    """Инвариант «В работе ⟺ есть исполнитель»: сырое групповое назначение не
+    вправе оставить заявку в работе без человека.
+
+    Метод статус не меняет вообще, поэтому единственный способ не нарушить
+    инвариант — отказать. Менеджер должен сначала переназначить заявку.
+    """
+    _request_with_individual_assignment(db, status="В работе")
+
+    with pytest.raises(ValueError, match="уже в работе"):
+        AssignmentService(db).assign_to_group("260723-001", "plumber", MANAGER_ID)
+
+    req = db.query(Request).filter(Request.request_number == "260723-001").one()
+    assert req.executor_id == OLD_EXECUTOR_ID, "заявка не должна остаться ничьей"
+    assert req.status == "В работе"
 
 
 def test_assign_to_executor_still_sets_executor_id(db):

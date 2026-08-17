@@ -76,7 +76,6 @@ from uk_management_bot.services.workflow_runner import (
 )
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_NEW,
     ROLE_MANAGER,
 )
@@ -144,8 +143,17 @@ def _now_utc() -> datetime:
 
 
 def _main_queue_filter():
+    # «Новая» ОБЯЗАТЕЛЬНА в наборе: с инвариантом «В работе ⟺ есть исполнитель»
+    # групповое назначение больше не двигает статус, и заявка-с-группой-без-
+    # исполнителя лежит именно в «Новой». Оставь здесь один «В работе» —
+    # авто-менеджер перестал бы видеть групповые заявки ВООБЩЕ: residual-очередь
+    # их тоже не берёт (там условие `assignment_type IS NULL`), и заявка выпала
+    # бы из автоматики навсегда. «В работе» сохранено для legacy-строк.
+    from uk_management_bot.utils.workflow_predicates import (
+        pending_or_in_progress_clause,
+    )
     return and_(
-        Request.status == REQUEST_STATUS_IN_PROGRESS,
+        pending_or_in_progress_clause(),
         Request.executor_id.is_(None),
         Request.assignment_type == "group",
     )

@@ -183,3 +183,32 @@ def report_eligible_clause() -> ColumnElement:
         Request.status.in_((REQUEST_STATUS_COMPLETED, REQUEST_STATUS_APPROVED)),
         Request.is_returned.is_(False),
     )
+
+
+# ── Инвариант «В работе ⟺ есть исполнитель» (решение владельца 2026-08-17) ──
+# Пара для одного вопроса: «заявку уже кто-то ведёт» и «заявка ещё может
+# ждать дежурного». Раньше эти два состояния различались сырым сравнением
+# статуса в двух разных файлах, и они разъехались: групповое назначение
+# перестало двигать статус, а очередь авто-менеджера продолжала искать
+# групповые заявки ТОЛЬКО в «В работе» — и не находила ни одной.
+
+def is_in_progress(request) -> bool:
+    """Заявку ведут прямо сейчас (канон-статус «В работе»)."""
+    from uk_management_bot.utils.constants import REQUEST_STATUS_IN_PROGRESS
+    from uk_management_bot.utils.request_workflow import normalize_status
+
+    return normalize_status(request) == REQUEST_STATUS_IN_PROGRESS
+
+
+def pending_or_in_progress_clause() -> ColumnElement:
+    """Статусы, в которых групповая заявка ещё ждёт исполнителя.
+
+    «Новая» — штатное состояние после `ASSIGN_GROUP` (статус не двигается);
+    «В работе» — legacy-строки, накопившиеся до миграции 011.
+    """
+    from uk_management_bot.utils.constants import (
+        REQUEST_STATUS_IN_PROGRESS,
+        REQUEST_STATUS_NEW,
+    )
+
+    return Request.status.in_([REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS])

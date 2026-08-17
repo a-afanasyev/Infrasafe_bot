@@ -19,7 +19,7 @@ from uk_management_bot.utils.constants import (
     ASSIGNMENT_TYPE_INDIVIDUAL,
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_CANCELLED,
-    AUDIT_ACTION_REQUEST_ASSIGNED
+    AUDIT_ACTION_REQUEST_ASSIGNED,
 )
 from uk_management_bot.services.notification_service import NotificationService
 # AUD5-DEAD-4: импорт был под `try/except ImportError` с флагом
@@ -76,7 +76,24 @@ class AssignmentService:
             request = self._get_request_by_number(request_number)
             if not request:
                 raise ValueError(f"Заявка с номером {request_number} не найдена")
-            
+
+            # Инвариант «В работе ⟺ есть исполнитель» (решение владельца
+            # 2026-08-17). Этот метод — СЫРОЙ писатель: он обнуляет
+            # `executor_id` (см. ниже) и статус не трогает вовсе, то есть на
+            # заявке «В работе» с исполнителем оставил бы её «В работе» без
+            # него — ничью, в обход канона. Вызывающий
+            # (`auto_assign_request_by_category`) от этого защищён ранним
+            # выходом по активному назначению, но заявка может нести
+            # `executor_id` БЕЗ строки RequestAssignment (legacy-фолбэк, см.
+            # `get_executor_requests_query`) — тогда защита не срабатывает.
+            from uk_management_bot.utils.workflow_predicates import is_in_progress
+            if request.executor_id is not None and is_in_progress(request):
+                raise ValueError(
+                    f"Заявка {request_number} уже в работе у исполнителя "
+                    f"{request.executor_id}: групповое назначение оставило бы её "
+                    f"в работе без исполнителя. Сначала переназначьте её."
+                )
+
             # Отменяем предыдущие активные назначения
             self._cancel_active_assignments(request_number)
             

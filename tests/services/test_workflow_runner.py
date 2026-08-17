@@ -499,7 +499,11 @@ class TestManagerReturnToWork:
     def test_return_from_completed_clears_confirmed(self, factory):
         # Причина обязательна (волна C): пустой payload здесь раньше проходил,
         # и исполнитель не узнавал, что переделывать.
-        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED, manager_confirmed=True)
+        # executor_id обязателен: инвариант «В работе ⟺ есть исполнитель» не
+        # даёт вернуть работу НИКОМУ. У выполненной заявки исполнитель есть по
+        # построению — её кто-то выполнял.
+        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED,
+                   manager_confirmed=True, executor_id=4)
         out = run_command_sync(
             SF, "260610-001", _mgr(),
             ActionCommand("c", Action.MANAGER_RETURN_TO_WORK,

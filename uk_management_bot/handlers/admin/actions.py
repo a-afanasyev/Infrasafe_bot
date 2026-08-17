@@ -53,31 +53,15 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
 
         request_number = callback.data.replace("accept_", "")
 
-        # Канон-переход Новая→В работе через единый layer (PR2c). Менеджер
-        # «берёт» заявку без выбора исполнителя (пустой payload ⇒ status-only,
-        # без assigned_*/assignment-строки); назначение — отдельным шагом ниже.
-        from uk_management_bot.database.session import SessionLocal
-        from uk_management_bot.services.workflow_runner import (
-            run_command_sync, RequestNotFound)
-        from uk_management_bot.utils.request_workflow import (
-            Action, ActionCommand, PrincipalRef, WorkflowError)
-        try:
-            run_command_sync(
-                SessionLocal, request_number,
-                PrincipalRef(kind="user", user_id=user.id, source="telegram"),
-                ActionCommand(callback.id, Action.MANAGER_ASSIGN, {}),
-            )
-        except RequestNotFound:
-            await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
-            return
-        except WorkflowError as e:
-            logger.info(f"MANAGER_ASSIGN (accept) отклонён для {request_number}: {e}")
-            await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
-            return
-
-        # run_command работал в своей сессии → перечитываем свежей для отрисовки.
+        # Статус здесь НЕ меняется. Раньше стоял канон-переход Новая→В работе с
+        # пустым payload («менеджер взял заявку»), а исполнителя он выбирал уже
+        # следующим шагом — то есть между двумя нажатиями заявка висела
+        # «В работе» без исполнителя, и если менеджер не доводил дело до конца,
+        # оставалась ничьей навсегда. Инвариант «В работе ⟺ есть исполнитель»
+        # (решение владельца 2026-08-17): статус двигает само назначение —
+        # MANAGER_ASSIGN с исполнителем, либо ASSIGN_GROUP, который оставляет
+        # заявку «Новой». Здесь — только выбор типа назначения.
         svc = AdminHandlerService(db)
-        svc.expire_all()
         request = svc.get_request_by_number(request_number)
         if not request:
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)

@@ -173,9 +173,6 @@ class RequestHandlerService:
         для legacy-строк, накопившихся до миграции — сузить набор значило бы
         спрятать от дежурного заявку, которую он ещё может взять.
         """
-        from uk_management_bot.constants.specializations import (
-            UNIVERSAL_SPECIALIZATION,
-        )
         from uk_management_bot.utils.shifts import is_on_shift_now_sync
         from uk_management_bot.utils.specializations import parse_specializations
 
@@ -190,12 +187,15 @@ class RequestHandlerService:
             assignment_alias.assignment_type == "group",
             assignment_alias.executor_id.is_(None),
         ]
-        # BUG-166: `universal` у исполнителя означает «умеет всё», и гвард взятия
-        # (`_executor_can_claim`) это учитывает. Не учти мы того же здесь —
-        # универсал мог бы ВЗЯТЬ заявку, но не УВИДЕЛ бы её в пуле: два ответа
-        # на один вопрос, ровно тот класс, который BUG-166 закрывает.
-        if UNIVERSAL_SPECIALIZATION not in specs:
-            conditions.append(assignment_alias.group_specialization.in_(specs))
+        # ⚠️ Джокер `universal` здесь СОЗНАТЕЛЬНО не применяется, хотя гвард
+        # взятия (`_executor_can_claim`) его учитывает. Причина: видимость
+        # заявки решает предикат доступа (`utils/request_access.access_reason`),
+        # а он сравнивает специализации сырым пересечением — это BUG-168,
+        # расширение видимости требует решения владельца. Добавь джокер только
+        # здесь — универсал увидел бы заявку в пуле и получил «нет доступа» при
+        # открытии карточки. Пул и доступ обязаны отвечать одинаково; сквозная
+        # поддержка универсала включается втроём: доступ + пул + гвард.
+        conditions.append(assignment_alias.group_specialization.in_(specs))
         query = self.db.query(Request).join(
             assignment_alias, Request.request_number == assignment_alias.request_number
         ).filter(*conditions)
