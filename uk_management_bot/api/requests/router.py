@@ -411,10 +411,30 @@ async def update_request(
                 payload={"executor_id": assign_executor_id},
             )
         elif duty_group_spec is not None:
+            # Инвариант «В работе ⟺ есть исполнитель» (решение владельца
+            # 2026-08-17): кнопка «Дежурный» назначает КОНКРЕТНОГО дежурного —
+            # того же, кого выбрал бы авто-менеджер. Раньше она ставила
+            # групповое назначение и уводила заявку в «В работе» без человека:
+            # если никто не брал, заявка висела ничьей.
+            import asyncio
+
+            from uk_management_bot.services.dispatch import pick_duty_executor_id
+
+            duty_executor_id = await asyncio.to_thread(
+                pick_duty_executor_id, duty_group_spec, None)
+            if duty_executor_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Нет дежурного исполнителя со специализацией "
+                        f"'{duty_group_spec}' на смене прямо сейчас. "
+                        "Назначьте конкретного исполнителя или дождитесь смены."
+                    ),
+                )
             command = ActionCommand(
                 command_id=f"api:{request_number}:assign-duty",
                 action=Action.MANAGER_ASSIGN,
-                payload={"group": duty_group_spec},
+                payload={"executor_id": duty_executor_id},
             )
         else:
             command = LegacyStatusIntent(

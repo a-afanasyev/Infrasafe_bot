@@ -190,23 +190,55 @@ async def test_executor_id_only_patch_routes_to_manager_assign(
 
 
 @pytest.mark.asyncio
-async def test_assign_to_duty_routes_to_manager_assign_group(
+async def test_assign_to_duty_assigns_concrete_duty_executor(
     client, db_session, manager_user, applicant_user, monkeypatch
 ):
-    """FEAT-группы (followup #2): дашборд «Назначить дежурному» (status=В работе +
-    assign_to_duty) → MANAGER_ASSIGN {group: spec}, спец резолвится сервером по
-    категории заявки (CATEGORY_TO_SPECIALIZATION[electricity]=electrician)."""
+    """Дашборд «Назначить дежурному» назначает КОНКРЕТНОГО дежурного.
+
+    Инвариант «В работе ⟺ есть исполнитель» (решение владельца 2026-08-17):
+    раньше кнопка ставила MANAGER_ASSIGN {group: spec} и заявка уезжала в
+    «В работе» без человека. Спец по-прежнему резолвит сервер по категории
+    (CATEGORY_TO_SPECIALIZATION[electricity]=electrician), но дальше идёт подбор
+    дежурного — тот же, что у авто-менеджера.
+    """
     from uk_management_bot.utils.request_workflow import Action
     await _seed(db_session, owner_id=applicant_user.id, status="Новая")  # category=electricity
     mock = AsyncMock(return_value=_outcome("Новая", "В работе", "В работе"))
     monkeypatch.setattr(req_router, "run_command_async", mock)
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id",
+        lambda *a, **k: 55,
+    )
 
     r = await client.patch(PATCH_URL.format(number="260101-001"),
                            json={"status": "В работе", "assign_to_duty": True})
     assert r.status_code == 200, r.text
     sent = mock.await_args.args[3]
     assert sent.action == Action.MANAGER_ASSIGN
-    assert dict(sent.payload) == {"group": "electrician"}
+    assert dict(sent.payload) == {"executor_id": 55}
+
+
+@pytest.mark.asyncio
+async def test_assign_to_duty_409_when_no_duty_executor(
+    client, db_session, manager_user, applicant_user, monkeypatch
+):
+    """Дежурного нет — статус не меняется, менеджер получает внятный отказ.
+
+    Инвариант не даёт молча увести заявку в «В работе» ничьей, поэтому здесь
+    честный 409, а не «успешно назначено никому».
+    """
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")
+    mock = AsyncMock(return_value=_outcome("Новая", "В работе", "В работе"))
+    monkeypatch.setattr(req_router, "run_command_async", mock)
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id",
+        lambda *a, **k: None,
+    )
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "В работе", "assign_to_duty": True})
+    assert r.status_code == 409, r.text
+    mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

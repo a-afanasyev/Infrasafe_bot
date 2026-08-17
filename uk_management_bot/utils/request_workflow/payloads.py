@@ -47,10 +47,18 @@ class PayloadSchema:
 
 
 PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
+    # Инвариант «В работе ⟺ есть исполнитель»: оба действия ведут в «В работе»,
+    # поэтому исполнитель ОБЯЗАТЕЛЕН. Раньше оба поля были опциональны, и это
+    # давало два способа завести ничью заявку: `group` (заявка уезжала в
+    # «В работе» на группу, без человека) и пустой payload («менеджер взял
+    # заявку, исполнителя выберет потом»). Группа переехала в ASSIGN_GROUP,
+    # которое статус не меняет; `group` здесь теперь — unexpected field.
     Action.SYSTEM_DISPATCH_ASSIGN: PayloadSchema(
-        optional={"executor_id": int, "group": str}),
+        required={"executor_id": int}),
     Action.MANAGER_ASSIGN: PayloadSchema(
-        optional={"executor_id": int, "group": str}),
+        required={"executor_id": int}),
+    Action.ASSIGN_GROUP: PayloadSchema(
+        required={"group": str}, non_empty=frozenset({"group"})),
     Action.EXECUTOR_PURCHASE: PayloadSchema(
         required={"requested_materials": str}),
     Action.MANAGER_PURCHASE: PayloadSchema(

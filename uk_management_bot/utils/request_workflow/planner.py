@@ -27,7 +27,6 @@ from .types import (
     LegacyStatusIntent,
     NotAuthorized,
     Op,
-    PayloadInvalid,
     PrincipalRef,
     RepeatConflict,
     RepeatPolicy,
@@ -55,15 +54,13 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
     ops: list[tuple[str, Op, object]] = [
         ("status", Op.SET, _storage_status(to_canon)),
     ]
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
-        # PR2c: assigned_*/create_assignment эмитятся ТОЛЬКО при фактическом
-        # назначении (executor_id/group в payload). Пустой payload = чистый
-        # переход Новая→В работе (менеджер «берёт» заявку, исполнителя выбирает
-        # отдельным шагом через assignment_service). Без placeholder-строк.
-        # FEAT-группы: ветки взаимоисключающие (валидатор «не-оба» гарантирует
-        # отсутствие обоих полей) и СИММЕТРИЧНЫЕ — каждая чистит legacy-поля
-        # противоположного типа, чтобы переназначение individual↔group не
-        # оставляло stale executor_id/assigned_group.
+    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
+                  Action.ASSIGN_GROUP):
+        # Ветки взаимоисключающие по построению: у ASSIGN_GROUP в схеме только
+        # `group`, у двух других — только `executor_id`, всё остальное схема
+        # отвергает как unexpected field. Ветки СИММЕТРИЧНЫ — каждая чистит
+        # legacy-поля противоположного типа, чтобы переназначение
+        # individual↔group не оставляло stale executor_id/assigned_group.
         has_executor = payload.get("executor_id") is not None
         has_group = payload.get("group") is not None
         if has_executor:
@@ -168,7 +165,8 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
     if action == Action.SYSTEM_AUTO_PROMOTE:
         return (DomainOp("promote_group_assignment",
                          {"executor_id": payload["executor_id"]}),)
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
+    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
+                  Action.ASSIGN_GROUP):
         # PR2c: строку RequestAssignment создаём только при фактическом
         # назначении исполнителя/группы (см. _build_patch). FEAT-группы:
         # переназначение из «В работе» безопасно для partial-unique —
@@ -242,14 +240,13 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     action = command.action
     spec = ACTION_TABLE[action]
     PAYLOAD_SCHEMAS[action].validate(action, command.payload)
-    # FEAT-группы: назначение «не-оба» — group и executor_id одновременно
-    # бессмысленны (заявка либо группе, либо конкретному). Пустой payload
-    # остаётся валидным (status-only «менеджер берёт заявку» Новая→В работе).
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
-        if (command.payload.get("executor_id") is not None
-                and command.payload.get("group") is not None):
-            raise PayloadInvalid(
-                f"{action.value}: 'executor_id' и 'group' взаимоисключающи")
+    # Отдельная проверка «не-оба» здесь больше не нужна и была удалена:
+    # инвариант «В работе ⟺ есть исполнитель» развёл назначение на действия с
+    # НЕПЕРЕСЕКАЮЩИМИСЯ схемами — у ASSIGN_GROUP только `group`, у
+    # SYSTEM_DISPATCH_ASSIGN/MANAGER_ASSIGN только `executor_id` (обязательный).
+    # Любое второе поле схема отвергает как unexpected field, а пустой payload —
+    # как missing required. Держать здесь недостижимую ветку означало бы
+    # оставить в каноне подсказку, что «оба» когда-то были возможны.
 
     if action not in allowed_actions(snap, actor):
         # различаем «не авторизован» от «не то состояние» для внятных ошибок

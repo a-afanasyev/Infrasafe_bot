@@ -451,23 +451,28 @@ class AutoManagerOrchestrator:
             self._queue_executor_notify(plan, candidate, req)
             return
 
-        # Нет дежурного — резидуальный group-dispatch (тот же канонический
-        # путь, что services/dispatch.py при создании заявки). Best-effort:
-        # пишем cooldown/уведомляем менеджеров независимо от исхода записи —
-        # факт «нет индивидуального дежурного» остаётся верным в обоих случаях.
+        # Нет дежурного — адресуем группе, НЕ меняя статус (тот же канонический
+        # путь, что services/dispatch.py при создании заявки). Инвариант
+        # «В работе ⟺ есть исполнитель»: раньше здесь стоял
+        # SYSTEM_DISPATCH_ASSIGN с группой, и заявка уезжала в «В работе» без
+        # человека — это был второй производитель ничьих заявок после пути
+        # создания. Best-effort: пишем cooldown/уведомляем менеджеров независимо
+        # от исхода записи — факт «нет индивидуального дежурного» верен в обоих
+        # случаях.
         command = ActionCommand(
             command_id=f"auto_manager:{req.request_number}",
-            action=Action.SYSTEM_DISPATCH_ASSIGN,
+            action=Action.ASSIGN_GROUP,
             payload={"group": specialization},
         )
         try:
             run_command_sync(SessionLocal, req.request_number,
                              _AUTO_MANAGER_PRINCIPAL, command, now=now)
         except (WorkflowError, RequestNotFound) as e:
-            logger.debug("[AUTO_MANAGER] SYSTEM_DISPATCH_ASSIGN(group) %s пропущен: %s",
+            logger.debug("[AUTO_MANAGER] ASSIGN_GROUP %s пропущен: %s",
                          req.request_number, e)
         else:
-            # Новая→В работе — genuine public status change, Kanban stale otherwise.
+            # Статус не менялся (заявка осталась «Новая»), но на карточке
+            # появилась группа — канбан без refresh покажет её без специализации.
             plan.kanban_refreshes.append(req.request_number)
 
         self._retry_after[req.request_number] = now + _RETRY_COOLDOWN

@@ -1,10 +1,18 @@
-"""FEAT-группы: авто-dispatch новой заявки на группу-специализацию при создании.
+"""Авто-dispatch новой заявки: подобрать дежурного, иначе адресовать группе.
 
-Заявка создаётся в статусе «Новая»; этот хелпер сразу переводит её
-Новая→В работе с групповым назначением по `CATEGORY_TO_SPECIALIZATION` через
-канонический run_command (`SYSTEM_DISPATCH_ASSIGN`, system-principal
-«dispatcher»). После этого любой дежурный исполнитель группы может «взять»
-заявку (`EXECUTOR_CLAIM`).
+Специализация берётся по категории (`CATEGORY_TO_SPECIALIZATION`), дальше:
+
+* есть дежурный (нужная специализация + активная смена, покрывающая её,
+  наименее загружен — тот же `select_executor`, что у авто-менеджера) →
+  `SYSTEM_DISPATCH_ASSIGN` на конкретного человека, «Новая»→«В работе»;
+* дежурного нет → `ASSIGN_GROUP`: заявка ОСТАЁТСЯ «Новая», проставляется
+  только группа-специализация. Её видят дежурные нужной специализации и может
+  взять любой из них (`EXECUTOR_CLAIM`), а менеджер видит её в «Новых».
+
+Инвариант — решение владельца 2026-08-17: **«В работе» ⟺ у заявки есть
+исполнитель**. Раньше этот хелпер безусловно ставил ГРУППОВОЕ назначение со
+статусом «В работе», `executor_id` оставался пустым, и незабранная заявка
+висела ничьей: на продах так накопилось девять таких, старейшая с 16 июня.
 
 Best-effort: ошибка dispatch (нет seeded system-user, нет маппинга категории,
 гонка статуса и т.п.) НЕ валит уже-созданную заявку — она остаётся «Новая»
@@ -13,8 +21,9 @@ Best-effort: ошибка dispatch (нет seeded system-user, нет маппи
 
 realtime: бот-путь создания realtime не публикует вовсе (только outbox-webhook,
 который run_command тоже эмитит), поэтому sync-хелпер ограничивается dispatch'ем.
-API-путь публикует realtime `request.created` (Новая) → async-хелпер обязан
-до-опубликовать `request.status_changed`, иначе канбан показал бы stale «Новая».
+API-путь публикует `request.created` (Новая), и async-хелпер до-публикует:
+`request.status_changed` — когда дежурный найден и статус реально изменился,
+иначе `request.updated` (изменилась карточка, статус тот же).
 """
 
 from __future__ import annotations
@@ -37,12 +46,52 @@ def _dispatch_principal() -> PrincipalRef:
                         source="dispatcher", system_actor="dispatcher")
 
 
-def _dispatch_command(request_number: str, specialization: str) -> ActionCommand:
+def _assign_executor_command(request_number: str, executor_id: int) -> ActionCommand:
     return ActionCommand(
         command_id=f"dispatch:{request_number}",
         action=Action.SYSTEM_DISPATCH_ASSIGN,
+        payload={"executor_id": executor_id},
+    )
+
+
+def _assign_group_command(request_number: str, specialization: str) -> ActionCommand:
+    return ActionCommand(
+        command_id=f"dispatch:{request_number}",
+        action=Action.ASSIGN_GROUP,
         payload={"group": specialization},
     )
+
+
+def pick_duty_executor_id(specialization: str, db=None) -> Optional[int]:
+    """id дежурного под специализацию — тем же подбором, что у авто-менеджера.
+
+    Возвращается именно id, а не ORM-объект: сессия здесь своя и закрывается
+    сразу, а detached-инстанс дальше всё равно нельзя использовать.
+
+    Best-effort, как и весь dispatch: он идёт ПОСЛЕ commit создания заявки и не
+    вправе её уронить. Ошибка подбора → None → заявка остаётся «Новая» с
+    групповым назначением, то есть достаётся дежурным и менеджеру.
+    """
+    from uk_management_bot.services.auto_manager.rule_engine import select_executor
+    from uk_management_bot.utils.datetime_utils import utc_now
+
+    def _run(session) -> Optional[int]:
+        candidate = select_executor(session, specialization, utc_now())
+        return candidate.id if candidate is not None else None
+
+    try:
+        if db is not None:
+            return _run(db)
+        from uk_management_bot.database.session import SessionLocal
+        session = SessionLocal()
+        try:
+            return _run(session)
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning("[DISPATCH] подбор дежурного под '%s' не выполнен: %s",
+                       specialization, e)
+        return None
 
 
 def _specialization_for(category: Optional[str]) -> Optional[str]:
@@ -91,7 +140,14 @@ async def _auto_assign_enabled_async(db=None) -> bool:
 def auto_dispatch_new_request_sync(request_number: str,
                                    category: Optional[str],
                                    *, _db=None) -> None:
-    """Бот-путь: Новая→В работе + group-назначение (best-effort).
+    """Бот-путь: подобрать дежурного и назначить его (best-effort).
+
+    Дежурный найден → «Новая»→«В работе» с ним. Не найден → заявка ОСТАЁТСЯ
+    «Новая», проставляется только группа-специализация: её видят дежурные
+    нужной специализации и может взять любой из них, а менеджер видит её в
+    «Новых». Инвариант «В работе ⟺ есть исполнитель» (решение владельца
+    2026-08-17): раньше здесь безусловно ставилось групповое назначение со
+    статусом «В работе», и незабранная заявка висела ничьей.
 
     `_db` — seam для тестов; в проде сессия открывается здесь же. Прокинуть
     сессию вызывающего нельзя: точки вызова передают только номер и категорию,
@@ -107,12 +163,18 @@ def auto_dispatch_new_request_sync(request_number: str,
         return
     from uk_management_bot.database.session import SessionLocal
     from uk_management_bot.services.workflow_runner import run_command_sync
+
+    executor_id = pick_duty_executor_id(spec, _db)
+    if executor_id is not None:
+        command = _assign_executor_command(request_number, executor_id)
+        done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
+    else:
+        command = _assign_group_command(request_number, spec)
+        done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
     try:
         run_command_sync(SessionLocal, request_number,
-                         _dispatch_principal(),
-                         _dispatch_command(request_number, spec))
-        logger.info("[DISPATCH] Заявка %s авто-назначена группе '%s'",
-                    request_number, spec)
+                         _dispatch_principal(), command)
+        logger.info("[DISPATCH] Заявка %s %s", request_number, done)
     except Exception as e:  # best-effort — не валим создание заявки
         logger.warning("[DISPATCH] авто-назначение %s ('%s') не выполнено: %s",
                        request_number, spec, e)
@@ -121,7 +183,7 @@ def auto_dispatch_new_request_sync(request_number: str,
 async def auto_dispatch_new_request_async(request_number: str,
                                           category: Optional[str],
                                           *, _db=None) -> None:
-    """API/TWA/обходчик: Новая→В работе + group + realtime status_changed."""
+    """API/TWA/обходчик: то же, что sync-путь, плюс realtime для канбана."""
     spec = _specialization_for(category)
     if not spec:
         return
@@ -129,19 +191,46 @@ async def auto_dispatch_new_request_async(request_number: str,
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return
+    import asyncio
+
     from uk_management_bot.database.session import AsyncSessionLocal
     from uk_management_bot.services.workflow_runner import run_command_async
+
+    # Подбор дежурного — sync-код (`select_executor` ходит через Session), и
+    # здесь мы в event loop'е. Отдельный поток, а не прямой вызов: блокировать
+    # loop синхронными запросами к БД в этом проекте уже было дефектом (BUG-157).
+    executor_id = await asyncio.to_thread(pick_duty_executor_id, spec, None)
+    if executor_id is not None:
+        command = _assign_executor_command(request_number, executor_id)
+        done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
+    else:
+        command = _assign_group_command(request_number, spec)
+        done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
     try:
         outcome = await run_command_async(
-            AsyncSessionLocal, request_number,
-            _dispatch_principal(), _dispatch_command(request_number, spec))
-        logger.info("[DISPATCH] Заявка %s авто-назначена группе '%s'",
-                    request_number, spec)
+            AsyncSessionLocal, request_number, _dispatch_principal(), command)
+        logger.info("[DISPATCH] Заявка %s %s", request_number, done)
     except Exception as e:  # best-effort — не валим создание заявки
         logger.warning("[DISPATCH] авто-назначение %s ('%s') не выполнено: %s",
                        request_number, spec, e)
         return
-    await _publish_status_changed(outcome, request_number)
+    if executor_id is not None:
+        await _publish_status_changed(outcome, request_number)
+    else:
+        # Статус НЕ менялся — заявка осталась «Новая». Публиковать
+        # `status_changed` здесь было бы ложью; канбану нужно обновить карточку
+        # из-за появившейся группы.
+        await _publish_updated(request_number)
+
+
+async def _publish_updated(request_number: str) -> None:
+    """Карточка изменилась без смены статуса (появилась группа)."""
+    from uk_management_bot.services.redis_pubsub import publish_request_event
+    try:
+        await publish_request_event("request.updated", {"number": request_number})
+    except Exception as e:  # realtime best-effort
+        logger.debug("[DISPATCH] realtime publish %s пропущен: %s",
+                     request_number, e)
 
 
 async def _publish_status_changed(outcome, request_number: str) -> None:

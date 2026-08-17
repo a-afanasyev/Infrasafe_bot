@@ -33,7 +33,7 @@ def test_unknown_category_does_not_dispatch(monkeypatch):
     assert called == []
 
 
-def test_known_category_dispatches_group_command(monkeypatch):
+def test_known_category_without_duty_dispatches_group_command(monkeypatch):
     # Автоназначение теперь за выключателем (`auto_manager_config.enabled`), а
     # дефолт — выключено: без явного включения dispatch корректно молчит. Здесь
     # проверяется форма команды, поэтому флаг поднимаем явно.
@@ -51,9 +51,15 @@ def test_known_category_dispatches_group_command(monkeypatch):
         return object()
 
     monkeypatch.setattr(wr, "run_command_sync", fake)
+    # Дежурного нет — инвариант «В работе ⟺ есть исполнитель»: заявка остаётся
+    # «Новая», проставляется только группа (ASSIGN_GROUP статус не двигает).
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id",
+        lambda *a, **k: None,
+    )
     auto_dispatch_new_request_sync("260610-001", "Сантехника")
     assert captured["num"] == "260610-001"
-    assert captured["action"] == Action.SYSTEM_DISPATCH_ASSIGN
+    assert captured["action"] == Action.ASSIGN_GROUP
     assert captured["payload"] == {"group": "plumber"}
     assert captured["principal"].kind == "system"
     assert captured["principal"].system_actor == "dispatcher"
@@ -70,3 +76,31 @@ def test_best_effort_swallows_dispatch_error(monkeypatch):
     monkeypatch.setattr(wr, "run_command_sync", boom)
     # не должно поднять исключение (заявка уже создана)
     auto_dispatch_new_request_sync("260610-001", "Сантехника")
+
+
+def test_duty_executor_found_assigns_person(monkeypatch):
+    """Есть дежурный → SYSTEM_DISPATCH_ASSIGN на него, «Новая»→«В работе».
+
+    Инвариант «В работе ⟺ есть исполнитель» (решение владельца 2026-08-17):
+    раньше путь создания безусловно ставил ГРУППОВОЕ назначение и уводил заявку
+    в «В работе» без человека — незабранная висела ничьей.
+    """
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch._auto_assign_enabled_sync",
+        lambda *a, **k: True,
+    )
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id",
+        lambda *a, **k: 77,
+    )
+    captured = {}
+
+    def fake(_sf, num, principal, command, *a, **k):
+        captured["action"] = command.action
+        captured["payload"] = dict(command.payload)
+        return object()
+
+    monkeypatch.setattr(wr, "run_command_sync", fake)
+    auto_dispatch_new_request_sync("260610-002", "Сантехника")
+    assert captured["action"] == Action.SYSTEM_DISPATCH_ASSIGN
+    assert captured["payload"] == {"executor_id": 77}
