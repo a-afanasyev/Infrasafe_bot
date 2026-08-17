@@ -72,6 +72,7 @@
   --emerald: #10b981;
   --green: #22c55e;
   --teal: #14b8a6;
+  --orange: #f97316;
   --radius: 12px;
   --radius-sm: 8px;
 
@@ -143,6 +144,7 @@ html[data-brand="profk"] body {
   --amber: #f0ad4e;
   --blue: #5bc0de;
   --green: #44c24a;
+  --orange: #ec971f;
 
   /* Табло PROFK — фирменный зелёный вместо тёмно-зелёного InfraSafe. */
   --board-green: #44c24a;

@@ -6,26 +6,32 @@ export const AVATAR_GRADIENTS = [
   'linear-gradient(135deg, #00d4aa, #0099aa)', // brand-allow (categorical avatar palette)
 ]
 
+// Оформление специализаций. Полноту относительно канона держит
+// `employeeUtils.canon.test.ts`: раньше фильтр на странице «Сотрудники»
+// строился из ключей этой карты, и новая специализация в него просто не
+// попадала — сотрудника с ней нельзя было отфильтровать.
 export const SPEC_COLORS: Record<string, string> = {
   'electrician': 'var(--amber)',
   'plumber': 'var(--blue)',
   'heating': 'var(--red)',
+  'ventilation': 'var(--teal)',
+  'elevator': 'var(--cyan)',
   'cleaning': 'var(--emerald)',
   'security': 'var(--violet)',
-  'elevator': 'var(--cyan)',
   'landscaping': 'var(--green)',
-  'ventilation': 'var(--teal)',
+  'repair': 'var(--orange)',
 }
 
-const SPEC_EMOJI: Record<string, string> = {
+export const SPEC_EMOJI: Record<string, string> = {
   'electrician': '⚡',
   'plumber': '🔧',
   'heating': '🔥',
+  'ventilation': '💨',
+  'elevator': '🛗',
   'cleaning': '🧹',
   'security': '🔒',
-  'elevator': '🛗',
   'landscaping': '🌳',
-  'ventilation': '💨',
+  'repair': '🔨',
 }
 
 import type { TFunction } from 'i18next'
