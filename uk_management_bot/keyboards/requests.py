@@ -20,6 +20,7 @@ CATEGORY_KEYS = {
     "landscaping": "categories.landscaping",
     "security": "categories.security",
     "internet": "categories.internet",
+    "repair": "categories.repair",
 }
 
 # Расширенная карта категорий с legacy текстами для обратной совместимости
@@ -73,7 +74,7 @@ CATEGORY_DEFINITIONS = {
     },
 }
 
-# List of internal category keys (bot category-selection keyboard — 8 keys)
+# List of internal category keys (bot category-selection keyboard — 9 keys)
 CATEGORY_INTERNAL_KEYS = list(CATEGORY_KEYS.keys())
 
 # FS-04: полный канонический набор EN-ключей (включает ventilation/other/repair,

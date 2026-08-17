@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { useCreateInvite } from '@/hooks/useEmployees'
 import { getSpecDisplay } from '@/utils/employeeUtils'
 import { cn } from '@/lib/utils'
+import { SPECIALIZATIONS } from '@/constants/specializations'
 import { toast } from 'sonner'
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
   onClose: () => void
 }
 
-const SPEC_KEYS = ['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation']
+const SPEC_KEYS = SPECIALIZATIONS
 
 export default function AddEmployeeModal({ open, onClose }: Props) {
   const { t } = useTranslation()

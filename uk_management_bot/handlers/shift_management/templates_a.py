@@ -258,10 +258,13 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
             # Сохраняем продолжительность в состоянии и переходим к выбору специализаций
             await state.update_data(duration=duration)
         
-            from uk_management_bot.utils.constants import SPECIALIZATIONS
+            # Канон вместо legacy-словаря: иначе менеджер продолжал бы
+            # записывать в шаблон `electric`/`other`, которых нет в форме.
+            from uk_management_bot.constants.specializations import CANONICAL_SPECIALIZATIONS
             keyboard = []
-        
-            for spec_key, spec_name in SPECIALIZATIONS.items():
+
+            for spec_key in CANONICAL_SPECIALIZATIONS:
+                spec_name = get_text(f"specializations.{spec_key}", language=lang)
                 keyboard.append([InlineKeyboardButton(
                     text=f"⭕ {spec_name}",
                     callback_data=f"template_create_spec_{spec_key}"

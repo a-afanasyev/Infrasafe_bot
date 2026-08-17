@@ -31,8 +31,11 @@ def test_employee_spec_toggle_uses_available_specializations():
     ]
     expected = {f"spec_toggle_{s}" for s in SpecializationService.AVAILABLE_SPECIALIZATIONS}
     assert set(toggles) == expected
-    assert "spec_toggle_general" in toggles  # was missing in the old hardcoded list
-    assert len(toggles) == 10
+    # Единый словарь: `general` слился с «Ремонт / разнорабочий», зато
+    # появился `elevator` — раньше он был только ключом категории.
+    assert "spec_toggle_repair" in toggles
+    assert "spec_toggle_elevator" in toggles
+    assert len(toggles) == 9
 
 
 def test_employee_spec_toggle_labels_match_canonical_namespace():

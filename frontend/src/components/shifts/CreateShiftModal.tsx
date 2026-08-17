@@ -19,6 +19,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { SHIFT_TYPES, PRIORITIES } from '../../constants'
+import { SPECIALIZATIONS } from '@/constants/specializations'
 
 interface Props {
   isOpen: boolean
@@ -231,7 +232,7 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.specializationsLabel')}</Label>
               <div className="flex flex-wrap gap-1.5">
-                {(['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation'] as const).map(key => (
+                {SPECIALIZATIONS.map(key => (
                   <button
                     key={key}
                     type="button"

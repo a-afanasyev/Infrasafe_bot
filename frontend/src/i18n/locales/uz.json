@@ -794,7 +794,8 @@
     "hvac": "OIKV",
     "maintenance": "Xizmat ko'rsatish",
     "installation": "O'rnatish",
-    "repair": "Ta'mirlash"
+    "repair": "🔨 Taʼmirlash / usta",
+    "general": "Umumiy ishlar"
   },
   "shiftType": {
     "regular": "Oddiy",

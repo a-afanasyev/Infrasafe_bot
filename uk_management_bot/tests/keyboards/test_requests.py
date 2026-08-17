@@ -46,12 +46,12 @@ class TestGetCategoriesKeyboard:
             result = get_categories_keyboard()
         assert result.resize_keyboard is True
 
-    def test_has_nine_buttons(self):
-        """8 categories (2 per row = 4 rows) + 1 cancel row = 9 buttons total."""
+    def test_has_ten_buttons(self):
+        """9 categories (добавлена «Ремонт») + 1 cancel row = 10 кнопок."""
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.requests import get_categories_keyboard
             result = get_categories_keyboard()
-        assert len(_flat_reply_texts(result)) == 9
+        assert len(_flat_reply_texts(result)) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -65,11 +65,11 @@ class TestGetCategoriesInlineKeyboard:
             result = get_categories_inline_keyboard()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_eight_buttons(self):
+    def test_has_nine_buttons(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.requests import get_categories_inline_keyboard
             result = get_categories_inline_keyboard()
-        assert len(_flat_inline_texts(result)) == 8
+        assert len(_flat_inline_texts(result)) == 9
 
     def test_callbacks_use_category_prefix(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
@@ -90,12 +90,12 @@ class TestGetCategoriesInlineKeyboardWithCancel:
             result = get_categories_inline_keyboard_with_cancel()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_nine_buttons(self):
-        """8 category buttons + 1 cancel = 9 total."""
+    def test_has_ten_buttons(self):
+        """9 category buttons + 1 cancel = 10 total."""
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.requests import get_categories_inline_keyboard_with_cancel
             result = get_categories_inline_keyboard_with_cancel()
-        assert len(_flat_inline_texts(result)) == 9
+        assert len(_flat_inline_texts(result)) == 10
 
     def test_cancel_callback(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):

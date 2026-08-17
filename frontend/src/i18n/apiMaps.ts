@@ -97,20 +97,25 @@ export function tCategory(apiValue: string, t: TFunction): string {
   return t(key)
 }
 
-// === Specializations (8 values — keys already in English) ===
+// === Specializations ===
+// Первые девять — канон (constants/specializations.ts). Ниже legacy-значения:
+// они ещё встречаются в архивных заявках и назначениях до миграции 010, и их
+// надо чем-то рисовать — но в формах они не предлагаются.
 export const SPECIALIZATION_MAP = {
   'electrician':  'specialization.electrician',
   'plumber':      'specialization.plumber',
   'heating':      'specialization.heating',
+  'ventilation':  'specialization.ventilation',
+  'elevator':     'specialization.elevator',
   'cleaning':     'specialization.cleaning',
   'security':     'specialization.security',
-  'elevator':     'specialization.elevator',
   'landscaping':  'specialization.landscaping',
-  'ventilation':  'specialization.ventilation',
+  'repair':       'specialization.repair',
+  // legacy — только для отображения
   'hvac':         'specialization.hvac',
   'maintenance':  'specialization.maintenance',
   'installation': 'specialization.installation',
-  'repair':       'specialization.repair',
+  'general':      'specialization.general',
 } as const
 
 export type ApiSpecialization = keyof typeof SPECIALIZATION_MAP
