@@ -125,13 +125,41 @@ def matches_required_specs(user_specs: set[str], required: set[str]) -> bool:
     return bool(required & user_specs)
 
 
+def matches_raw_requirement(user_specs: set[str], raw_requirement) -> bool:
+    """`matches_required_specs`, но требование берётся СЫРЫМ из БД.
+
+    Единственное место, где решается разница между «требования нет» и
+    «требование указано, но не резолвится в канон». Разница неочевидна и стоит
+    дорого: если сравнивать с пустотой уже РАСПАРСЕННЫЙ набор, смена или
+    шаблон с опечаткой в специализации молча становится «без ограничений» и
+    начинает подходить всем. До перехода на канон сравнение шло по сырому
+    списку, и такая строка не подходила никому.
+
+    Поэтому здесь fail-closed: нераспознанное требование не пропускает никого.
+    Записать его можно — валидатор канона стоит только на create-боди
+    (`api/shifts/schemas.py`), PATCH пишет что дали.
+
+    ⚠️ Миграция 010 для того же состояния данных выбрала ПРОТИВОПОЛОЖНОЕ:
+    нерезолвимый фокус она записала как `NULL`, то есть «универсальная смена
+    вместо не принимающей ничего». Противоречия нет: там разовое приведение
+    существующих строк под присмотром, здесь — рантайм-вердикт по строке,
+    которую менеджер видит в интерфейсе заполненной.
+    """
+    required = parse_specialization_values(
+        raw_requirement, side="need", allow_universal=True)
+    if required:
+        return matches_required_specs(user_specs, required)
+    return not _raw_tokens(raw_requirement)
+
+
 def has_required_specs(user, shift) -> bool:
     """Подходит ли исполнитель под требования смены (`specialization_focus`).
 
     Единый guard для переназначения смены (REG-02): sync-ядро бота и async-зеркало
     веба (`api/shifts`). Семантика — `matches_required_specs`.
     """
-    return matches_required_specs(parse_specializations(user), parse_shift_specs(shift))
+    return matches_raw_requirement(
+        parse_specializations(user), getattr(shift, "specialization_focus", None))
 
 
 def has_required_template_specs(user, template) -> bool:
@@ -141,4 +169,5 @@ def has_required_template_specs(user, template) -> bool:
     называется иначе, и общий парсер читал бы у него пустоту — то есть «нет
     требований» вместо реальных.
     """
-    return matches_required_specs(parse_specializations(user), parse_template_specs(template))
+    return matches_raw_requirement(
+        parse_specializations(user), getattr(template, "required_specializations", None))

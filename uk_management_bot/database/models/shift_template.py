@@ -144,11 +144,10 @@ class ShiftTemplate(Base):
         учитывался только со стороны исполнителя.
         """
         from uk_management_bot.utils.specializations import (
-            matches_required_specs, parse_specialization_values,
-            parse_template_specs,
+            matches_raw_requirement, parse_specialization_values,
         )
-        return matches_required_specs(
+        return matches_raw_requirement(
             parse_specialization_values(specializations, side="have",
                                         allow_universal=True),
-            parse_template_specs(self),
+            self.required_specializations,
         )

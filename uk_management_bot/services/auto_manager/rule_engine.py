@@ -133,8 +133,11 @@ def select_executor(db: Session, specialization: str, now: datetime,
 
     Алгоритм:
         1. Кандидаты — approved-пользователи с ролью executor
-           (`get_user_roles`) и `specialization` среди распарсенных
-           специализаций (`parse_specializations`). Используем
+           (`get_user_roles`), чьи распарсенные специализации покрывают
+           `specialization` по общему предикату `matches_required_specs`
+           (BUG-166): подходит точное совпадение либо джокер `universal`.
+           Голое `in` здесь было расхождением с шагом 2, который джокер
+           учитывал. Используем
            `AdminHandlerService.list_approved_users()` + этот же ручной
            Python-фильтр, а не `list_approved_executors()`: последний матчит
            роль SQL-уровня ("executor" as quoted JSON-токен через

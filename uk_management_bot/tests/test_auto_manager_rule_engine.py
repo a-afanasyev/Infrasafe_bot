@@ -337,3 +337,26 @@ def test_snapshot_load_bump_spreads_burst_within_tick(db):
     pick2 = select_executor(db, SPECIALIZATION, NOW, snapshot=snapshot)
 
     assert {pick1.id, pick2.id} == {first.id, second.id}
+
+
+def test_universal_executor_is_a_candidate(db):
+    """BUG-166: `universal` у исполнителя — джокер и на шаге отбора кандидатов.
+
+    Шаг 1 (`specialization in parse_specializations`) джокера не знал, а шаг 2
+    (`Shift.can_handle_specialization`) знал — одна функция отвечала на вопрос
+    «джокер ли universal» по-разному в зависимости от стороны.
+    """
+    ex = _executor(db, 1, 1001, specialization='["universal"]')
+    _shift(db, 1, ex.id, specs=[SPECIALIZATION])
+
+    result = select_executor(db, SPECIALIZATION, NOW)
+    assert result is not None
+    assert result.id == ex.id
+
+
+def test_unrelated_specialization_still_excluded(db):
+    """…но джокером не становится любая другая специализация."""
+    ex = _executor(db, 1, 1001, specialization='["cleaning"]')
+    _shift(db, 1, ex.id, specs=[SPECIALIZATION])
+
+    assert select_executor(db, SPECIALIZATION, NOW) is None

@@ -6390,7 +6390,7 @@
     "assignment_completed_popup": "✅ Tayinlash bajarildi",
     "assignment_error": "❌ Xatolik yuz berdi",
     "force_assign_impossible": "❌ <b>Tayinlab bo'lmaydi!</b>\n\nIjrochi <b>{executor_name}</b> bu smenaning birorta ham ixtisosligini qamrab olmaydi.\n\nBu cheklovni majburan tayinlash orqali ham chetlab o'tib bo'lmaydi.\n\n<b>Smena qamrab oladi:</b> {required}",
-    "missing_specs_popup": "❌ Kerakli ixtisosliklar yo'q",
+    "missing_specs_popup": "❌ Birorta ham ixtisoslik mos kelmadi",
     "force_assigned_success": "⚠️ <b>Ijrochi majburan tayinlandi</b>\n\n<b>📅 Smena:</b> {date} {start_time}-{end_time}\n<b>👤 Ijrochi:</b> {executor_name}\n\n❗ <b>Diqqat:</b> Boshqa smenalar bilan to'qnashuv bor!\nIjrochining jadvalini tekshirish tavsiya etiladi.",
     "force_assigned_popup": "⚠️ To'qnashuv bilan tayinlandi",
     "force_assign_error": "❌ Xatolik yuz berdi",

@@ -187,16 +187,38 @@ def test_shift_can_handle_specialization(focus, spec, expected, why):
 def test_unresolvable_focus_fails_closed():
     """Смена с опечаткой в фокусе не должна принимать ВСЁ.
 
-    Ловушка перевода на канон: проверять «фокуса нет» надо по СЫРОМУ полю.
+    Ловушка перевода на канон: проверять «требования нет» надо по СЫРОМУ полю.
     Сравнение распарсенного набора с пустотой превращает нераспознанный токен
     в «ограничений нет» — до BUG-166 сравнение шло по сырому списку, и такая
-    смена не принимала ничего.
+    строка не подходила никому.
     """
     shift = _shift(["carpentry", "painting"])
     assert all(
         shift.can_handle_specialization(spec) is False
         for spec in ("electrician", "plumber", "cleaning")
     )
+
+
+# Ту же ловушку надо проверять во ВСЕХ точках, а не только там, где её нашли:
+# первый раз fail-closed поставили только смене, и зеркальная точка (шаблон)
+# осталась fail-open — гвард инвертировался с «не подходит никто» на
+# «подходит любой».
+
+@pytest.mark.parametrize("check", [
+    pytest.param(lambda u, t: has_required_template_specs(u, t), id="has_required_template_specs"),
+    pytest.param(lambda u, t: ShiftPlanningService(MagicMock())._can_executor_work_template(u, t),
+                 id="planning"),
+    pytest.param(lambda u, t: t.matches_specialization(["electrician"]), id="matches_specialization"),
+])
+def test_unresolvable_template_requirement_fails_closed(check):
+    assert check(_user(["electrician"]), _template(["carpentry"])) is False
+
+
+def test_unresolvable_focus_blocks_scoring():
+    """У скоринга «не подходит» выражается отрицательной оценкой."""
+    engine = ScoringEngine(MagicMock(), {})
+    score = engine._calculate_specialization_match(_shift(["carpentry"]), _user(["electrician"]))
+    assert score < 0
 
 
 def test_predicate_returns_real_bool():
@@ -351,6 +373,9 @@ SPEC_CONSUMERS = [
     "api/shifts/service/web_transfers.py",
     "database/models/shift.py",
     "database/models/shift_template.py",
+    "handlers/admin/assignment.py",
+    "handlers/admin/shared.py",
+    "handlers/requests/executor.py",
     "handlers/shift_management/assignment_b.py",
     "services/auto_manager/rule_engine.py",
     "services/shift_assignment_service/scoring.py",
@@ -360,6 +385,7 @@ SPEC_CONSUMERS = [
 
 CANON_PREDICATES = frozenset({
     "matches_required_specs",
+    "matches_raw_requirement",
     "has_required_specs",
     "has_required_template_specs",
 })

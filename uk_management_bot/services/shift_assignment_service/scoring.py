@@ -151,8 +151,11 @@ class ScoringEngine:
         required_specs = parse_shift_specs(shift)
         executor_specs = parse_specializations(executor)
 
-        # Если у смены не указаны специализации - принимаем универсальных исполнителей
         if not required_specs:
+            if shift.specialization_focus:
+                # Фокус указан, но не резолвится в канон. Это НЕ универсальная
+                # смена — см. `matches_raw_requirement`; вердикт fail-closed.
+                return -1.0
             return 0.5  # Нейтральная оценка для универсальных смен
 
         if not matches_required_specs(executor_specs, required_specs):
