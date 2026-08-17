@@ -20,6 +20,7 @@ import EmptyState from '../components/shared/EmptyState'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import AssignRequestModal from '../components/employees/AssignRequestModal'
 import { SPEC_COLORS, getSpecDisplay } from '../utils/employeeUtils'
+import { SPECIALIZATIONS } from '@/constants/specializations'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
@@ -267,7 +268,9 @@ export default function EmployeesPage() {
           >
             {t('employees.filterSpec')}
           </button>
-          {Object.keys(SPEC_COLORS).map((key) => {
+          {/* Источник — канон, а не ключи карты оформления: иначе новая
+              специализация не попадала бы в фильтр. */}
+          {SPECIALIZATIONS.map((key) => {
             const isActive = specFilter === key
             const color = SPEC_COLORS[key] ?? 'var(--text-muted)'
             return (
