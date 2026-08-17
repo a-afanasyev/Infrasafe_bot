@@ -82,6 +82,10 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
   }
 
   const isPending = createInvite.isPending
+  // Инвайт исполнителя без специализации API отклоняет (правило InviteService):
+  // блокируем отправку здесь, иначе менеджер жмёт кнопку и получает ошибку без
+  // объяснения — так и выглядел баг «не работает выдача приглашений».
+  const specsMissing = role === 'executor' && specs.length === 0
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -140,6 +144,11 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
                     </button>
                   ))}
                 </div>
+                {specsMissing && (
+                  <p className="text-xs text-text-muted">
+                    {t('employeeModal.specializationsRequired', 'Выберите хотя бы одну специализацию')}
+                  </p>
+                )}
               </div>
             )}
 
@@ -163,7 +172,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
               </div>
             </div>
 
-            <Button onClick={handleCreate} disabled={isPending} className="mt-1">
+            <Button onClick={handleCreate} disabled={isPending || specsMissing} className="mt-1">
               {isPending ? t('common.creating') : t('employeeModal.inviteAction', 'Создать приглашение')}
             </Button>
           </div>

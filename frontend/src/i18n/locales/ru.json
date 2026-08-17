@@ -1073,6 +1073,7 @@
     "role": "Роль",
     "selectRole": "— Выберите роль —",
     "specializations": "Специализации",
+    "specializationsRequired": "Выберите хотя бы одну специализацию",
     "createAction": "Создать сотрудника",
     "inviteAction": "Создать приглашение",
     "inviteHours": "Время действия (часы)",

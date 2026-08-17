@@ -3,6 +3,7 @@
 Тела перенесены байт-в-байт; порядок регистрации 1:1 с исходником
 (`/employees/pending` — до динамического `/employees/{user_id}`).
 """
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -21,6 +22,18 @@ from uk_management_bot.database.models.user import User
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
 from ._router import router
+
+
+logger = logging.getLogger(__name__)
+
+
+class _InviteInputError(Exception):
+    """Валидация ввода внутри генерации инвайта — отделена от сбоев конфигурации.
+
+    Нужна, чтобы 422 получал только тот ValueError, который бросила проверка
+    входных данных в `InviteService.generate_invite`, а не, скажем, отсутствие
+    `INVITE_SECRET` (это 500).
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -85,10 +98,22 @@ async def create_invite(
     """Generate an invite token for a new employee to join via the Telegram bot."""
     import asyncio
     from uk_management_bot.database.session import SessionLocal
-    from uk_management_bot.services.invite_service import InviteService
+    from uk_management_bot.services.invite_service import InviteService, requires_specialization
     from datetime import timedelta
 
     spec_str = ",".join(body.specializations) if body.specializations else None
+
+    # Ошибка ВВОДА, а не сбой: без этого гварда пустой список специализаций у
+    # executor'а долетал до InviteService, тот бросал ValueError, и менеджер
+    # получал голый 500 без текста («не работает выдача приглашений», profk
+    # 2026-08-17). Проверяем ДО getMe() и БД — незачем ходить в сеть за
+    # заведомо невалидный запрос. Условие берём предикатом из сервиса, а не
+    # переписываем: два экземпляра правила разъехались бы при его смене.
+    if requires_specialization(body.role) and not body.specializations:
+        raise HTTPException(
+            status_code=422,
+            detail="Specialization is required for executor role",
+        )
 
     # Resolve the bot username up front: if it can't be determined we must not
     # generate a token only to hand back a broken https://t.me/None link.
@@ -102,19 +127,34 @@ async def create_invite(
     def _generate():
         sync_db = SessionLocal()
         try:
+            # Конструктор бросает ValueError при незаданном INVITE_SECRET — это
+            # сбой конфигурации, а НЕ ошибка ввода: он должен остаться 500 и не
+            # уехать клиенту вместе с именем переменной окружения. Поэтому в
+            # 422 переводится только валидация самой генерации (ниже).
             svc = InviteService(sync_db)
-            token = svc.generate_invite(
-                role=body.role,
-                created_by=current_user.telegram_id,
-                specialization=spec_str,
-                hours=body.hours,
-            )
-            return token
+            try:
+                return svc.generate_invite(
+                    role=body.role,
+                    created_by=current_user.telegram_id,
+                    specialization=spec_str,
+                    hours=body.hours,
+                )
+            except ValueError as exc:
+                raise _InviteInputError(str(exc)) from exc
         finally:
             sync_db.close()
 
     loop = asyncio.get_running_loop()
-    token = await loop.run_in_executor(None, _generate)
+    try:
+        token = await loop.run_in_executor(None, _generate)
+    except _InviteInputError as exc:
+        # Валидация сервиса — 422, а не 500: иначе любая будущая проверка в
+        # InviteService снова обернётся для менеджера «упало без причины».
+        # Текст исключения НЕ пересылаем клиенту: это generic-перехват, и
+        # будущая проверка может положить в сообщение внутреннее состояние.
+        # Внятная формулировка есть у известного случая — в гварде выше.
+        logger.warning("Инвайт отклонён валидацией сервиса: %s", exc)
+        raise HTTPException(status_code=422, detail="Invalid invite parameters") from exc
 
     expires_at = datetime.now(timezone.utc) + timedelta(hours=body.hours)
 

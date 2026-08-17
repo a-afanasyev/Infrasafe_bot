@@ -26,6 +26,18 @@ class TokenAlreadyUsedError(ValueError):
     POSTs lost the race) rather than 400 (which suggests bad input)."""
 
 
+#: Роли, чей инвайт обязан нести специализацию. Один источник правды: тем же
+#: предикатом пользуется API (`api/shifts/router/employees.py`), чтобы отсеять
+#: заведомо невалидный запрос до похода в сеть и БД. Раньше условие было
+#: написано в двух местах и могло разъехаться при смене правила (BUG-170).
+SPECIALIZATION_REQUIRED_ROLES = frozenset({"executor"})
+
+
+def requires_specialization(role: str) -> bool:
+    """True, если инвайт этой роли без специализации невалиден."""
+    return role in SPECIALIZATION_REQUIRED_ROLES
+
+
 class InviteService:
     """Сервис для создания и валидации токенов приглашений"""
 
@@ -52,7 +64,7 @@ class InviteService:
         if role not in ['applicant', 'executor', 'manager', 'inspector']:
             raise ValueError(f"Invalid role: {role}")
             
-        if role == 'executor' and not specialization:
+        if requires_specialization(role) and not specialization:
             raise ValueError("Specialization is required for executor role")
             
         # Создаем payload
