@@ -384,7 +384,7 @@ async def test_main_queue_no_duty_leaves_assignment_untouched_and_notifies_manag
 
 
 @pytest.mark.asyncio
-async def test_residual_queue_no_duty_falls_back_to_group_dispatch(env, monkeypatch):
+async def test_residual_queue_no_duty_keeps_status_new(env, monkeypatch):
     db, TestSessionLocal = env
     _always_active_config(db)
     monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
@@ -399,8 +399,12 @@ async def test_residual_queue_no_duty_falls_back_to_group_dispatch(env, monkeypa
     await orchestrator.run_once()
 
     req = _refresh_request(TestSessionLocal, "260723-104")
-    # Резидуальный group-dispatch: Новая -> В работе, groupнеустановленным исполнителем.
-    assert req.status == REQUEST_STATUS_IN_PROGRESS
+    # Инвариант «В работе ⟺ есть исполнитель»: дежурного нет, значит заявка
+    # ОСТАЁТСЯ «Новая» — проставляется только группа, чтобы её увидели дежурные
+    # нужной специализации. Раньше здесь был group-dispatch в «В работе», и
+    # незабранная заявка висела ничьей (второй производитель сирот после пути
+    # создания заявки).
+    assert req.status == REQUEST_STATUS_NEW
     assert req.executor_id is None
     assert req.assignment_type == "group"
     assert req.assigned_group == SPECIALIZATION

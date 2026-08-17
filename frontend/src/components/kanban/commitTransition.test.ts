@@ -229,3 +229,35 @@ describe('commitTransition — реконсиляция с сервером', ()
     expect(onSuccess).not.toHaveBeenCalled()
   })
 })
+
+describe('commitTransition: текст отказа от сервера', () => {
+  it('пробрасывает detail в onError', async () => {
+    vi.spyOn(apiClient, 'patch').mockRejectedValueOnce({
+      response: { data: { detail: 'Нет дежурного исполнителя со специализацией plumber' } },
+    })
+    const onError = vi.fn()
+    await commitTransition({
+      queryClient: new QueryClient(),
+      queryKey: ['kanban'],
+      requestNumber: '260817-001',
+      data: { status: 'В работе' },
+      onError,
+    })
+    // Раньше тело ошибки выбрасывалось целиком, и осмысленный отказ
+    // («нет дежурного») превращался в generic-баннер.
+    expect(onError).toHaveBeenCalledWith('Нет дежурного исполнителя со специализацией plumber')
+  })
+
+  it('без detail отдаёт undefined — вызывающий покажет свой текст', async () => {
+    vi.spyOn(apiClient, 'patch').mockRejectedValueOnce(new Error('network'))
+    const onError = vi.fn()
+    await commitTransition({
+      queryClient: new QueryClient(),
+      queryKey: ['kanban'],
+      requestNumber: '260817-002',
+      data: { status: 'В работе' },
+      onError,
+    })
+    expect(onError).toHaveBeenCalledWith(undefined)
+  })
+})

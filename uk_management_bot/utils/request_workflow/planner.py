@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Mapping, Optional
 
-from uk_management_bot.utils.constants import REQUEST_STATUS_COMPLETED
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_COMPLETED,
+    REQUEST_STATUS_IN_PROGRESS,
+)
 
 from .payloads import PAYLOAD_SCHEMAS
 from .projections import normalize_status, project_public_status
@@ -55,15 +58,13 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
     ops: list[tuple[str, Op, object]] = [
         ("status", Op.SET, _storage_status(to_canon)),
     ]
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
-        # PR2c: assigned_*/create_assignment эмитятся ТОЛЬКО при фактическом
-        # назначении (executor_id/group в payload). Пустой payload = чистый
-        # переход Новая→В работе (менеджер «берёт» заявку, исполнителя выбирает
-        # отдельным шагом через assignment_service). Без placeholder-строк.
-        # FEAT-группы: ветки взаимоисключающие (валидатор «не-оба» гарантирует
-        # отсутствие обоих полей) и СИММЕТРИЧНЫЕ — каждая чистит legacy-поля
-        # противоположного типа, чтобы переназначение individual↔group не
-        # оставляло stale executor_id/assigned_group.
+    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
+                  Action.ASSIGN_GROUP):
+        # Ветки взаимоисключающие по построению: у ASSIGN_GROUP в схеме только
+        # `group`, у двух других — только `executor_id`, всё остальное схема
+        # отвергает как unexpected field. Ветки СИММЕТРИЧНЫ — каждая чистит
+        # legacy-поля противоположного типа, чтобы переназначение
+        # individual↔group не оставляло stale executor_id/assigned_group.
         has_executor = payload.get("executor_id") is not None
         has_group = payload.get("group") is not None
         if has_executor:
@@ -168,7 +169,8 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
     if action == Action.SYSTEM_AUTO_PROMOTE:
         return (DomainOp("promote_group_assignment",
                          {"executor_id": payload["executor_id"]}),)
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
+    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
+                  Action.ASSIGN_GROUP):
         # PR2c: строку RequestAssignment создаём только при фактическом
         # назначении исполнителя/группы (см. _build_patch). FEAT-группы:
         # переназначение из «В работе» безопасно для partial-unique —
@@ -242,14 +244,24 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     action = command.action
     spec = ACTION_TABLE[action]
     PAYLOAD_SCHEMAS[action].validate(action, command.payload)
-    # FEAT-группы: назначение «не-оба» — group и executor_id одновременно
-    # бессмысленны (заявка либо группе, либо конкретному). Пустой payload
-    # остаётся валидным (status-only «менеджер берёт заявку» Новая→В работе).
-    if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN):
-        if (command.payload.get("executor_id") is not None
-                and command.payload.get("group") is not None):
+    if action is Action.ASSIGN_GROUP:
+        # Группа уходит в поле, по которому решается ДОСТУП к заявке
+        # (`request_access`) и право её взять (`_executor_can_claim`), поэтому
+        # значение обязано быть каноническим, а не «просто непустой строкой».
+        # `universal` здесь недопустим осознанно: «требование = подойдёт кто
+        # угодно» открыло бы взятие любому дежурному (см. `_executor_can_claim`).
+        from uk_management_bot.constants.specializations import is_canonical
+        group = command.payload["group"].strip()
+        if not is_canonical(group):
             raise PayloadInvalid(
-                f"{action.value}: 'executor_id' и 'group' взаимоисключающи")
+                f"{action.value}: неизвестная специализация {group!r}")
+    # Отдельная проверка «не-оба» здесь больше не нужна и была удалена:
+    # инвариант «В работе ⟺ есть исполнитель» развёл назначение на действия с
+    # НЕПЕРЕСЕКАЮЩИМИСЯ схемами — у ASSIGN_GROUP только `group`, у
+    # SYSTEM_DISPATCH_ASSIGN/MANAGER_ASSIGN только `executor_id` (обязательный).
+    # Любое второе поле схема отвергает как unexpected field, а пустой payload —
+    # как missing required. Держать здесь недостижимую ветку означало бы
+    # оставить в каноне подсказку, что «оба» когда-то были возможны.
 
     if action not in allowed_actions(snap, actor):
         # различаем «не авторизован» от «не то состояние» для внятных ошибок
@@ -266,12 +278,46 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
         raise InvalidTransition(f"{action.value}: not allowed from '{canon}'")
 
     patch = _build_patch(action, spec.to_status, actor, command.payload)
+    _enforce_in_progress_has_executor(action, spec.to_status, snap, patch)
     domain_ops = _build_domain_ops(action, snap, command.payload)
     events = _build_events(action, principal, snap.request,
                            spec.to_status, command.payload)
     return TransitionResult(
         old_state=snap.request, new_canon_status=spec.to_status,
         patch=patch, domain_ops=domain_ops, events=events,
+    )
+
+
+def _enforce_in_progress_has_executor(action: Action, to_canon: str,
+                                      snap: WorkflowSnapshot,
+                                      patch: tuple) -> None:
+    """Инвариант «В работе ⟺ есть исполнитель» — ОДНОЙ проверкой на весь канон.
+
+    Решение владельца 2026-08-17. Держать инвариант согласием каждого действия
+    не получается: в «В работе» ведут ШЕСТЬ действий, и три из них — возвраты к
+    работе (`MANAGER_PURCHASE_DONE`, `CLARIFY_RESOLVED`,
+    `MANAGER_RETURN_TO_WORK`) — ставят только статус, потому что исполнитель у
+    заявки «уже есть». Он есть НЕ ВСЕГДА: менеджер может увести в «Закуп» или
+    «Уточнение» прямо из «Новой», а оттуда вернуть — и получить «В работе» без
+    человека, то есть ровно ту ничью заявку, ради которой правился канон.
+
+    Поэтому проверка здесь, в одной точке: если действие приводит в «В работе»,
+    исполнитель обязан либо появиться этим патчем, либо уже быть у заявки.
+    Новое действие с таким переходом пройти мимо не сможет по построению.
+    """
+    if to_canon != REQUEST_STATUS_IN_PROGRESS:
+        return
+    sets_executor = any(
+        field == "executor_id" and op in (Op.SET, Op.SET_ACTOR)
+        for field, op, _ in patch
+    )
+    if sets_executor:
+        return
+    if getattr(snap.request, "executor_id", None) is not None:
+        return
+    raise InvalidTransition(
+        f"{action.value}: «{REQUEST_STATUS_IN_PROGRESS}» без исполнителя — "
+        f"назначьте исполнителя (заявка осталась бы ничьей)"
     )
 
 

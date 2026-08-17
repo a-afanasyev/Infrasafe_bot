@@ -98,9 +98,17 @@ class TestGroupPoolQuery:
         _group_assignment(session, executor_id=99, assignment_type="individual")
         assert _pool_numbers(session, u) == set()
 
-    def test_wrong_status_excluded(self, session):
+    def test_new_status_included(self, session):
+        """Инвариант «В работе ⟺ есть исполнитель»: свободные групповые заявки
+        теперь лежат в «Новой» — групповое назначение статус не двигает."""
         u = _plumber(session)
         _request(session, status="Новая")
+        _group_assignment(session)
+        assert _pool_numbers(session, u) == {"260610-001"}
+
+    def test_wrong_status_excluded(self, session):
+        u = _plumber(session)
+        _request(session, status="Принято")
         _group_assignment(session)
         assert _pool_numbers(session, u) == set()
 

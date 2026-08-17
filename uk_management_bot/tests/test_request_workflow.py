@@ -169,7 +169,10 @@ class TestPrincipal:
 class TestAllowedActions:
     def test_manager_on_new(self):
         acts = allowed_actions(_snap(REQUEST_STATUS_NEW), MANAGER)
-        assert acts == {Action.MANAGER_ASSIGN, Action.MANAGER_PURCHASE,
+        # ASSIGN_GROUP: адресовать заявку группе, не двигая статус (инвариант
+        # «В работе ⟺ есть исполнитель»).
+        assert acts == {Action.MANAGER_ASSIGN, Action.ASSIGN_GROUP,
+                        Action.MANAGER_PURCHASE,
                         Action.CLARIFY_REQUEST, Action.CANCEL}
 
     def test_owner_applicant_on_new_can_only_cancel(self):
@@ -180,7 +183,7 @@ class TestAllowedActions:
 
     def test_system_dispatcher_on_new(self):
         assert allowed_actions(_snap(REQUEST_STATUS_NEW), DISPATCHER) == \
-            {Action.SYSTEM_DISPATCH_ASSIGN}
+            {Action.SYSTEM_DISPATCH_ASSIGN, Action.ASSIGN_GROUP}
 
     def test_system_capability_separation(self):
         """reconcile НЕ может действие диспетчера (capability-таблица)."""
@@ -275,7 +278,7 @@ class TestPlanTransition:
     def test_canon_returned_snapshot_allows_manager_actions(self):
         """Канон-снимок (status=Возвращена напрямую) разрешает менеджеру
         re-open и force-accept — without dual-read encoding."""
-        snap = _snap(STATUS_RETURNED)
+        snap = _snap(STATUS_RETURNED, executor=EXECUTOR_ID)
         acts = allowed_actions(snap, MANAGER)
         assert Action.MANAGER_RETURN_TO_WORK in acts
         assert Action.MANAGER_FORCE_ACCEPT in acts
@@ -301,7 +304,11 @@ class TestPlanTransition:
         assert wh[0].data["new_status"] == REQUEST_STATUS_COMPLETED
 
     def test_manager_return_to_work_from_returned(self):
-        res = _plan(_snap(REQUEST_STATUS_COMPLETED, returned=True),
+        # Исполнитель в снимке обязателен: инвариант «В работе ⟺ есть
+        # исполнитель» не даёт вернуть работу НИКОМУ. У возвращённой заявки он
+        # и есть по построению — её кто-то выполнял.
+        res = _plan(_snap(REQUEST_STATUS_COMPLETED, returned=True,
+                          executor=EXECUTOR_ID),
                     Action.MANAGER_RETURN_TO_WORK, MANAGER, {"reason": "доделать"})
         f = _patch_fields(res)
         assert res.new_canon_status == REQUEST_STATUS_IN_PROGRESS
@@ -326,15 +333,12 @@ class TestPlanTransition:
         assert audit.data["principal_kind"] == "system"
         assert audit.data["principal_id"] == "dispatcher"
 
-    def test_manager_assign_empty_payload_is_status_only(self):
-        # PR2c: менеджер «берёт» Новую→В работе без выбора исполнителя.
-        # Пустой payload ⇒ только status; ни create_assignment, ни assigned_*.
-        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
-        f = _patch_fields(res)
-        assert f["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
-        assert "assigned_at" not in f and "assigned_by" not in f
-        assert "executor_id" not in f and "assigned_group" not in f
-        assert res.domain_ops == ()
+    def test_manager_assign_empty_payload_rejected(self):
+        # Инвариант «В работе ⟺ есть исполнитель»: «менеджер взял заявку, а
+        # исполнителя выберет потом» — это ровно ничья заявка. Раньше пустой
+        # payload давал чистый переход Новая→В работе без назначения.
+        with pytest.raises(PayloadInvalid):
+            _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
 
     def test_manager_assign_with_executor_creates_assignment(self):
         # С executor_id ⇒ полное назначение (assigned_* + create_assignment).
@@ -578,9 +582,16 @@ class TestExecutorClaim:
         assert Action.EXECUTOR_CLAIM not in allowed_actions(snap, PLUMBER)
 
     def test_claim_denied_wrong_status(self):
-        snap = _snap(REQUEST_STATUS_NEW, shift=True, assignment_type="group",
+        # «Новая» теперь ЛЕГАЛЬНЫЙ исходный статус (групповое назначение не
+        # двигает статус), поэтому «неверный» — терминальный.
+        snap = _snap(REQUEST_STATUS_COMPLETED, shift=True, assignment_type="group",
                      assignment_group="plumber", unclaimed=True)
         assert Action.EXECUTOR_CLAIM not in allowed_actions(snap, PLUMBER)
+
+    def test_claim_allowed_from_new(self):
+        snap = _snap(REQUEST_STATUS_NEW, shift=True, assignment_type="group",
+                     assignment_group="plumber", unclaimed=True)
+        assert Action.EXECUTOR_CLAIM in allowed_actions(snap, PLUMBER)
 
     def test_claim_denied_for_manager(self):
         assert Action.EXECUTOR_CLAIM not in allowed_actions(_group_snap(), MANAGER)
@@ -622,7 +633,7 @@ class TestSystemAutoPromote:
         assert allowed_actions(_group_snap(), AUTO_MANAGER) == \
             {Action.SYSTEM_AUTO_PROMOTE}
         assert allowed_actions(_snap(REQUEST_STATUS_NEW), AUTO_MANAGER) == \
-            {Action.SYSTEM_DISPATCH_ASSIGN}
+            {Action.SYSTEM_DISPATCH_ASSIGN, Action.ASSIGN_GROUP}
 
     def test_dispatcher_cannot_auto_promote(self):
         """capability-разделение: dispatcher НЕ имеет SYSTEM_AUTO_PROMOTE."""
@@ -711,11 +722,10 @@ class TestManagerReassign:
     def test_assign_group_clears_executor(self):
         snap = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID,
                      assignment_type="individual")
-        res = _plan(snap, Action.MANAGER_ASSIGN, MANAGER, {"group": "plumber"})
-        f = _patch_fields(res)
-        assert f["assigned_group"] == (Op.SET, "plumber")
-        assert f["assignment_type"] == (Op.SET, "group")
-        assert f["executor_id"] == (Op.CLEAR, None)
+        # Из «В работе» адресовать группе нельзя: это сняло бы исполнителя и
+        # оставило заявку «В работе» ничьей. ASSIGN_GROUP разрешён из «Новой».
+        with pytest.raises(InvalidTransition):
+            _plan(snap, Action.ASSIGN_GROUP, MANAGER, {"group": "plumber"})
 
     def test_reassign_from_in_progress_emits_create_assignment(self):
         # Инвариант «1 active» обеспечивает раннер (create_assignment сам
@@ -726,12 +736,14 @@ class TestManagerReassign:
                     {"executor_id": EXECUTOR_ID})
         assert [d.kind for d in res.domain_ops] == ["create_assignment"]
 
-    def test_assign_from_new_emits_create_assignment(self):
-        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN,
+    def test_assign_group_from_new_emits_create_assignment(self):
+        res = _plan(_snap(REQUEST_STATUS_NEW), Action.ASSIGN_GROUP,
                     MANAGER, {"group": "plumber"})
         assert [d.kind for d in res.domain_ops] == ["create_assignment"]
 
     def test_assign_both_group_and_executor_invalid(self):
+        # Теперь это ловит сама схема: у MANAGER_ASSIGN `group` — unexpected
+        # field (группа переехала в ASSIGN_GROUP).
         with pytest.raises(PayloadInvalid):
             _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER,
                   {"group": "plumber", "executor_id": EXECUTOR_ID})
@@ -744,11 +756,11 @@ class TestManagerReassign:
                               {"group": "plumber", "executor_id": 7}),
                 DISPATCHER, SYSTEM_PRINCIPAL, NOW)
 
-    def test_assign_empty_payload_still_status_only(self):
-        res = _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
-        f = _patch_fields(res)
-        assert f["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
-        assert res.domain_ops == ()
+    def test_assign_empty_payload_rejected(self):
+        # Дубль по смыслу с TestPlanTransition, оставлен рядом с остальными
+        # тестами переназначения: инвариант «В работе ⟺ есть исполнитель».
+        with pytest.raises(PayloadInvalid):
+            _plan(_snap(REQUEST_STATUS_NEW), Action.MANAGER_ASSIGN, MANAGER)
 
 
 # ===========================================================================

@@ -389,6 +389,14 @@ async def update_request(
     # категории → fallback на status-only переход (прежнее поведение «менеджер берёт»).
     duty_group_spec = None
     if target_status == C.REQUEST_STATUS_IN_PROGRESS and updates.get("assign_to_duty"):
+        # Роль проверяется ЗДЕСЬ, а не только внутри run_command: эндпоинт открыт
+        # и жителю/исполнителю, а ниже стоят обращения к БД и отказ 409 «нет
+        # дежурного». Без этого гейта житель различал бы по коду ответа
+        # (409/403/404) существование чужой заявки, её специализацию и
+        # укомплектованность смен — оракул на чужие данные.
+        if "manager" not in _parse_user_roles(user):
+            raise HTTPException(
+                status_code=403, detail="Not permitted for this transition")
         from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
         category = await svc.category_of(db, request_number)
         if category:
@@ -411,10 +419,30 @@ async def update_request(
                 payload={"executor_id": assign_executor_id},
             )
         elif duty_group_spec is not None:
+            # Инвариант «В работе ⟺ есть исполнитель» (решение владельца
+            # 2026-08-17): кнопка «Дежурный» назначает КОНКРЕТНОГО дежурного —
+            # того же, кого выбрал бы авто-менеджер. Раньше она ставила
+            # групповое назначение и уводила заявку в «В работе» без человека:
+            # если никто не брал, заявка висела ничьей.
+            import asyncio
+
+            from uk_management_bot.services.dispatch import pick_duty_executor_id
+
+            duty_executor_id = await asyncio.to_thread(
+                pick_duty_executor_id, duty_group_spec, None)
+            if duty_executor_id is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Нет дежурного исполнителя со специализацией "
+                        f"'{duty_group_spec}' на смене прямо сейчас. "
+                        "Назначьте конкретного исполнителя или дождитесь смены."
+                    ),
+                )
             command = ActionCommand(
                 command_id=f"api:{request_number}:assign-duty",
                 action=Action.MANAGER_ASSIGN,
-                payload={"group": duty_group_spec},
+                payload={"executor_id": duty_executor_id},
             )
         else:
             command = LegacyStatusIntent(

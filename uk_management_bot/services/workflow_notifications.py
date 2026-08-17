@@ -64,6 +64,13 @@ _NOTIFY_MATRIX: dict[Action, tuple[tuple[str, ...], str]] = {
     Action.CLARIFY_REQUEST: ((APPLICANT,), "notifications.workflow.clarify_request"),
     # Назначение: исполнителю — новая работа, жителю — «работы начались».
     Action.MANAGER_ASSIGN: ((APPLICANT, EXECUTOR), "notifications.workflow.assigned"),
+    # То же для АВТО-назначения дежурному при создании заявки. До инварианта
+    # «В работе ⟺ есть исполнитель» диспетчер назначал ГРУППУ, и заявку видели
+    # все дежурные в «Свободных» — уведомлять было некого. Теперь он назначает
+    # конкретного человека, и без этой строки заявка была бы назначена тому,
+    # кто об этом не узнает: из пула она уже ушла (executor_id не NULL).
+    Action.SYSTEM_DISPATCH_ASSIGN: (
+        (APPLICANT, EXECUTOR), "notifications.workflow.assigned"),
     # Готовность к приёмке — единственное действие, которого ЖДУТ от жителя.
     Action.EXECUTOR_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
     Action.MANAGER_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),

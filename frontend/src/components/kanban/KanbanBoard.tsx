@@ -148,9 +148,11 @@ export default function KanbanBoard({ onCardClick }: Props) {
       queryKey,
       requestNumber,
       data,
-      onError: () => {
-        setTransitionError(t('errors.transitionFailed'))
-        setTimeout(() => setTransitionError(null), 4000)
+      onError: (detail) => {
+        // Текст сервера, если он есть: отказ «нет дежурного на смене» менеджеру
+        // надо прочитать, а не угадывать по generic-баннеру.
+        setTransitionError(detail ?? t('errors.transitionFailed'))
+        setTimeout(() => setTransitionError(null), 6000)
       },
       // `updated_at` бампает onupdate на самой колонке, поэтому собственный
       // drag менеджера в «Уточнение»/«Закуп» иначе сразу зажёг бы точку на

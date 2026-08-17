@@ -24,12 +24,16 @@ from .types import Action, ActorContext, WorkflowSnapshot
 
 # SYSTEM-capabilities: какой системный процесс какие действия может.
 SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
-    "dispatcher": frozenset({Action.SYSTEM_DISPATCH_ASSIGN}),
+    # ASSIGN_GROUP — «показать заявку дежурным нужной специализации», статус не
+    # меняет (инвариант «В работе ⟺ есть исполнитель»).
+    "dispatcher": frozenset({Action.SYSTEM_DISPATCH_ASSIGN,
+                             Action.ASSIGN_GROUP}),
     # auto_manager: авто-менеджер (планировщик ночных заявок) — повышение
     # group→individual своим действием + резидуальный случай «Новая» через
     # уже существующий dispatch-assign (используется отдельной задачей).
     "auto_manager": frozenset({Action.SYSTEM_AUTO_PROMOTE,
-                               Action.SYSTEM_DISPATCH_ASSIGN}),
+                               Action.SYSTEM_DISPATCH_ASSIGN,
+                               Action.ASSIGN_GROUP}),
     # "reconcile": frozenset(),  # появится при необходимости
 }
 
@@ -62,8 +66,28 @@ def _executor_can_claim(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
         return False
     if not snap.active_assignment_unclaimed:
         return False
-    group = snap.active_assignment_group
-    return group is not None and group in actor.specializations
+    # BUG-166 (тот же класс, найден при работе над инвариантом): сравнение шло
+    # сырым membership, поэтому универсал («умеет всё») не мог взять заявку ни
+    # одной группы, а legacy-значение группы не совпало бы с каноном.
+    #
+    # ⚠️ Требование здесь ОБЯЗАТЕЛЬНО, поэтому разбирается явно, а не через
+    # `matches_raw_requirement`: тот считает пустое требование «ограничений нет»
+    # и пустил бы к заявке ЛЮБОГО исполнителя — это гвард авторизации.
+    from uk_management_bot.utils.specializations import (
+        matches_required_specs, parse_specialization_values,
+    )
+    # ⚠️ allow_universal=False ОБЯЗАТЕЛЬНО, и это не мелочь: с джокером на
+    # стороне ТРЕБОВАНИЯ `matches_required_specs` возвращает True ещё до
+    # сравнения с навыками актора, то есть заявку с `group="universal"` мог бы
+    # взять ЛЮБОЙ дежурный, включая исполнителя вовсе без специализаций. Здесь
+    # гвард авторизации, и «требование = кто угодно» ему не подходит: токен
+    # нормализуется в пустоту и ниже даёт fail-closed. Джокер на стороне
+    # ИСПОЛНИТЕЛЯ («умею всё») продолжает работать — он в `actor.specializations`.
+    required = parse_specialization_values(
+        snap.active_assignment_group, side="need")
+    if not required:
+        return False
+    return matches_required_specs(set(actor.specializations), required)
 
 
 def _system_can_promote(snap: WorkflowSnapshot, actor: ActorContext) -> bool:

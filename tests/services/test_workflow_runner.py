@@ -124,8 +124,9 @@ class TestSystemDispatch:
         s.close()
 
     def test_dispatch_to_group_creates_group_assignment(self, factory):
-        """FEAT-группы: SYSTEM_DISPATCH_ASSIGN {group} → group-назначение
-        (executor_id NULL) + Новая→В работе. Это путь авто-dispatch при создании."""
+        """ASSIGN_GROUP {group} → group-назначение (executor_id NULL), статус
+        ОСТАЁТСЯ «Новая». Это путь авто-dispatch при создании, когда дежурного
+        не нашлось (инвариант «В работе ⟺ есть исполнитель»)."""
         from uk_management_bot.config.settings import settings
         SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
         s = SF()
@@ -138,8 +139,8 @@ class TestSystemDispatch:
                             source="dispatcher", system_actor="dispatcher")
         out = run_command_sync(
             SF, "260610-001", sysp,
-            ActionCommand("d", Action.SYSTEM_DISPATCH_ASSIGN, {"group": "plumber"}))
-        assert out.new_status == C.REQUEST_STATUS_IN_PROGRESS
+            ActionCommand("d", Action.ASSIGN_GROUP, {"group": "plumber"}))
+        assert out.new_status == C.REQUEST_STATUS_NEW
         s = SF()
         ra = s.query(RequestAssignment).filter_by(
             request_number="260610-001", status="active").first()
@@ -498,7 +499,11 @@ class TestManagerReturnToWork:
     def test_return_from_completed_clears_confirmed(self, factory):
         # Причина обязательна (волна C): пустой payload здесь раньше проходил,
         # и исполнитель не узнавал, что переделывать.
-        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED, manager_confirmed=True)
+        # executor_id обязателен: инвариант «В работе ⟺ есть исполнитель» не
+        # даёт вернуть работу НИКОМУ. У выполненной заявки исполнитель есть по
+        # построению — её кто-то выполнял.
+        SF = _seed(factory, status=C.REQUEST_STATUS_COMPLETED,
+                   manager_confirmed=True, executor_id=4)
         out = run_command_sync(
             SF, "260610-001", _mgr(),
             ActionCommand("c", Action.MANAGER_RETURN_TO_WORK,

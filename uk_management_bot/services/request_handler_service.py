@@ -161,11 +161,17 @@ class RequestHandlerService:
         )
 
     def get_group_pool_query(self, user: User):
-        """FEAT-группы: пул «свободных» group-заявок для исполнителя.
+        """Пул «свободных» group-заявок для исполнителя.
 
-        Видны ТОЛЬКО дежурному сейчас (on-shift): заявки «В работе» с активным
+        Видны ТОЛЬКО дежурному сейчас (on-shift): заявки с активным
         group-назначением по его специализации и БЕЗ исполнителя (executor_id
         NULL). Не на смене / без специализаций → пустой набор.
+
+        Статусы — «Новая» И «В работе». Инвариант «В работе ⟺ есть исполнитель»
+        (решение владельца 2026-08-17): групповое назначение больше не двигает
+        статус, поэтому свободные заявки лежат в «Новой». «В работе» оставлено
+        для legacy-строк, накопившихся до миграции — сузить набор значило бы
+        спрятать от дежурного заявку, которую он ещё может взять.
         """
         from uk_management_bot.utils.shifts import is_on_shift_now_sync
         from uk_management_bot.utils.specializations import parse_specializations
@@ -175,15 +181,24 @@ class RequestHandlerService:
             return self.db.query(Request).filter(false())
 
         assignment_alias = aliased(RequestAssignment)
-        query = self.db.query(Request).join(
-            assignment_alias, Request.request_number == assignment_alias.request_number
-        ).filter(
-            Request.status.in_(["В работе"]),
+        conditions = [
+            Request.status.in_(["Новая", "В работе"]),
             assignment_alias.status == "active",
             assignment_alias.assignment_type == "group",
             assignment_alias.executor_id.is_(None),
-            assignment_alias.group_specialization.in_(specs),
-        )
+        ]
+        # ⚠️ Джокер `universal` здесь СОЗНАТЕЛЬНО не применяется, хотя гвард
+        # взятия (`_executor_can_claim`) его учитывает. Причина: видимость
+        # заявки решает предикат доступа (`utils/request_access.access_reason`),
+        # а он сравнивает специализации сырым пересечением — это BUG-168,
+        # расширение видимости требует решения владельца. Добавь джокер только
+        # здесь — универсал увидел бы заявку в пуле и получил «нет доступа» при
+        # открытии карточки. Пул и доступ обязаны отвечать одинаково; сквозная
+        # поддержка универсала включается втроём: доступ + пул + гвард.
+        conditions.append(assignment_alias.group_specialization.in_(specs))
+        query = self.db.query(Request).join(
+            assignment_alias, Request.request_number == assignment_alias.request_number
+        ).filter(*conditions)
         request_numbers_subq = query.with_entities(Request.request_number).distinct().subquery()
         return self.db.query(Request).filter(
             Request.request_number.in_(self.db.query(request_numbers_subq.c.request_number))

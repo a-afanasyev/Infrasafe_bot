@@ -59,10 +59,19 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_NEW}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: a.kind == "system",   # capability проверяется отдельно
         RepeatPolicy.NO_OP_IF_SAME, system_only=True),
-    # +В работе (FEAT-группы): после авто-dispatch заявка уже «В работе» с
-    # group-назначением; ручной выбор менеджером конкретного исполнителя или
-    # смена группы = переназначение из «В работе». same-canon В работе→В работе
-    # — легальный re-entry (check_repeat вернёт None, т.к. canon ∈ from).
+    # Адресовать группе, НЕ меняя статус: from==to==«Новая». Формальный REJECT —
+    # тот же недостижимый дефолт, что у EXECUTOR_CLAIM ниже (для same-canon
+    # re-entry check_repeat отдаёт None). Из «В работе» действие намеренно
+    # недоступно: снять исполнителя и вернуть заявку группе — это уже
+    # «разназначение», отдельное решение, и без него отсюда нельзя было бы
+    # получить «В работе» без человека.
+    Action.ASSIGN_GROUP: ActionSpec(
+        frozenset({REQUEST_STATUS_NEW}), REQUEST_STATUS_NEW,
+        lambda s, a: a.kind == "system" or _is_manager(a),
+        RepeatPolicy.REJECT),
+    # +В работе: ручной выбор менеджером другого исполнителя = переназначение из
+    # «В работе». same-canon В работе→В работе — легальный re-entry (check_repeat
+    # вернёт None, т.к. canon ∈ from).
     Action.MANAGER_ASSIGN: ActionSpec(
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
         REQUEST_STATUS_IN_PROGRESS,
@@ -94,14 +103,24 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     # несёт смысла — check_repeat для same-canon с from⊇текущий возвращает None
     # (не повтор), действие всегда доходит до plan_transition и гейтится
     # предикатом _executor_can_claim. REJECT — формальный дефолт, недостижим.
+    # «Новая» в from — с инвариантом «В работе ⟺ есть исполнитель»: групповое
+    # назначение больше не двигает статус, поэтому дежурный берёт заявку именно
+    # из «Новой». «В работе» в from сохранено для legacy-заявок, уже висящих там
+    # с групповым назначением (миграция вернула их в «Новую», но re-entry
+    # безопаснее оставить, чем сузить живое действие).
     Action.EXECUTOR_CLAIM: ActionSpec(
-        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        REQUEST_STATUS_IN_PROGRESS,
         _executor_can_claim, RepeatPolicy.REJECT),
     # from==to==«В работе», как EXECUTOR_CLAIM выше: тот же формальный REJECT-
     # дефолт, недостижимый (check_repeat отдаёт None для same-canon re-entry,
     # реальный гейт — _system_can_promote в plan_transition).
+    # «Новая» в from — по той же причине, что у EXECUTOR_CLAIM: авто-менеджер
+    # повышает group→individual на заявке, которая теперь лежит в «Новой».
+    # Без этого очередь нашла бы заявку, а канон отказал бы в промоуте.
     Action.SYSTEM_AUTO_PROMOTE: ActionSpec(
-        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
+        REQUEST_STATUS_IN_PROGRESS,
         _system_can_promote, RepeatPolicy.REJECT, system_only=True),
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,
