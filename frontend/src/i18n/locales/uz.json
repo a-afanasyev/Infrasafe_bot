@@ -1073,6 +1073,7 @@
     "role": "Rol",
     "selectRole": "— Rolni tanlang —",
     "specializations": "Ixtisosliklar",
+    "specializationsRequired": "Kamida bitta ixtisoslikni tanlang",
     "createAction": "Xodim yaratish",
     "inviteAction": "Taklif yaratish",
     "inviteHours": "Amal qilish vaqti (soat)",
