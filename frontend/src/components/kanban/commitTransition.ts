@@ -52,7 +52,14 @@ interface CommitTransitionArgs {
   queryKey: readonly unknown[]
   requestNumber: string
   data: TransitionData
-  onError: () => void
+  /**
+   * `detail` сервера, если он его прислал. Раньше тело ошибки выбрасывалось
+   * целиком, и осмысленные отказы («нет дежурного исполнителя со
+   * специализацией X на смене прямо сейчас») превращались в generic-баннер.
+   * Такой отказ штатный и частый: кнопку «Дежурный» жмут как раз тогда, когда
+   * на смене никого.
+   */
+  onError: (detail?: string) => void
   /** Карточка из ответа PATCH. Нужна вызывающему, чтобы отметить заявку
    *  прочитанной на той версии, которую он сам же и создал переходом —
    *  `updated_at` бампается любым изменением строки, включая своё. */
@@ -84,8 +91,10 @@ export async function commitTransition({
   try {
     const response = await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
     onSuccess?.(response?.data as RequestCard | undefined)
-  } catch {
-    onError()
+  } catch (err) {
+    const detail = (err as { response?: { data?: { detail?: unknown } } })
+      ?.response?.data?.detail
+    onError(typeof detail === 'string' && detail.trim() ? detail : undefined)
   } finally {
     queryClient.invalidateQueries({ queryKey: KANBAN_QUERY_PREFIX })
   }
