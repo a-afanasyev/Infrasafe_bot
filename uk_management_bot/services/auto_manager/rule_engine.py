@@ -30,7 +30,11 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
     ROLE_EXECUTOR,
 )
-from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specialization_values,
+    parse_specializations,
+)
 
 # «Открытые» статусы заявки для ranking'а нагрузки исполнителя авто-менеджером.
 # Локальный набор именно для этого модуля (least-loaded ranking) — НЕ общий
@@ -130,8 +134,11 @@ def select_executor(db: Session, specialization: str, now: datetime,
 
     Алгоритм:
         1. Кандидаты — approved-пользователи с ролью executor
-           (`get_user_roles`) и `specialization` среди распарсенных
-           специализаций (`parse_specializations`). Используем
+           (`get_user_roles`), чьи распарсенные специализации покрывают
+           `specialization` по общему предикату `matches_required_specs`
+           (BUG-166): подходит точное совпадение либо джокер `universal`.
+           Голое `in` здесь было расхождением с шагом 2, который джокер
+           учитывал. Используем
            `AdminHandlerService.list_approved_users()` + этот же ручной
            Python-фильтр, а не `list_approved_executors()`: последний матчит
            роль SQL-уровня ("executor" as quoted JSON-токен через
@@ -163,11 +170,26 @@ def select_executor(db: Session, specialization: str, now: datetime,
     # сохранена 1:1 для остальных колл-сайтов.
     snap = snapshot if snapshot is not None else build_duty_snapshot(db, now)
 
+    # BUG-166: вердикт — общий предикат. Голое `specialization in ...` не знало
+    # джокера `universal`, а шаг ниже (`can_handle_specialization`) знал: одна
+    # функция отвечала на вопрос «джокер ли universal» по-разному в зависимости
+    # от стороны — ровно тот класс расхождения, который BUG-166 и закрывает.
+    #
+    # ⚠️ Требование здесь ОБЯЗАТЕЛЬНО, поэтому оно разбирается явно, а не через
+    # `matches_raw_requirement`: тот трактует пустое требование как «ограничений
+    # нет» и пропустил бы ВСЕХ. Сюда приходит `requests.assigned_group` — сырой
+    # nullable-столбец, и на NULL прежнее `None in ...` не пропускало никого,
+    # то есть заявка честно эскалировалась менеджеру. Это и сохраняем.
+    required = parse_specialization_values(
+        specialization, side="need", allow_universal=True)
+    if not required:
+        return None
+
     candidates = [
         user
         for user in snap.approved_users
         if ROLE_EXECUTOR in get_user_roles(user)
-        and specialization in parse_specializations(user)
+        and matches_required_specs(parse_specializations(user), required)
     ]
 
     on_duty = [

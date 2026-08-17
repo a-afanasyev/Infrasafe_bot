@@ -116,10 +116,26 @@ class TestCalculateSpecializationMatch:
         executor = _make_executor(specialization=None)
         assert service.scoring_engine._calculate_specialization_match(shift, executor) == -1.0
 
-    def test_missing_required_spec_returns_blocking(self):
+    def test_partial_match_is_allowed_but_scored_lower(self):
+        """BUG-166: одной специализации из фокуса достаточно.
+
+        Раньше здесь стояло `== -1.0`: сантехник не проходил на смену
+        «сантехника + электрика», хотя вести на ней сантехнические заявки
+        может. Решение владельца — семантика ЛЮБАЯ во всех точках подбора;
+        качество соответствия по-прежнему ниже, чем у полного покрытия.
+        """
         service, _ = _make_service()
         shift = _make_shift(specialization_focus=["plumbing", "electric"])
-        executor = _make_executor(specialization=["plumbing"])
+        partial = service.scoring_engine._calculate_specialization_match(
+            shift, _make_executor(specialization=["plumbing"]))
+        full = service.scoring_engine._calculate_specialization_match(
+            shift, _make_executor(specialization=["plumbing", "electric"]))
+        assert 0 <= partial < full
+
+    def test_disjoint_specs_still_blocking(self):
+        service, _ = _make_service()
+        shift = _make_shift(specialization_focus=["plumbing"])
+        executor = _make_executor(specialization=["electric"])
         assert service.scoring_engine._calculate_specialization_match(shift, executor) == -1.0
 
     def test_exact_match_returns_one(self):

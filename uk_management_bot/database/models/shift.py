@@ -113,11 +113,25 @@ class Shift(Base):
         return delta.total_seconds() / 3600.0
     
     def can_handle_specialization(self, required_specialization: str) -> bool:
-        """Проверяет, может ли смена обработать заявку с определенной специализацией"""
-        if not self.specialization_focus:
-            return True  # Универсальная смена
-        
-        return required_specialization in self.specialization_focus or "universal" in self.specialization_focus
+        """Проверяет, может ли смена обработать заявку с определенной специализацией
+
+        BUG-166: сравнение идёт по канону, а не по сырому списку — иначе
+        legacy-токен в фокусе (`electric`) не совпадал бы с тем, что вычисляет
+        диспетчер (`electrician`). Правило `universal` («смена без ограничений»)
+        сохранено и совпадает с общим предикатом `matches_required_specs`.
+
+        Форма вопроса здесь другая, чем у `has_required_specs`: там «подходит ли
+        ИСПОЛНИТЕЛЬ под требования смены», здесь — «покрывает ли СМЕНА одну
+        специализацию заявки». Поэтому предикат переиспользуется зеркально:
+        специализация заявки играет роль «умею», фокус смены — «требуется».
+        """
+        from uk_management_bot.utils.specializations import (
+            matches_raw_requirement, normalize_specialization,
+        )
+        return matches_raw_requirement(
+            normalize_specialization(required_specialization, side="have"),
+            self.specialization_focus,
+        )
     
     def can_handle_area(self, area: str) -> bool:
         """Проверяет, может ли смена обработать заявку в определенной зоне"""

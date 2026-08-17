@@ -9,13 +9,17 @@ from uk_management_bot.keyboards.admin import (
     get_assignment_type_keyboard,
     get_executors_by_category_keyboard,
 )
-from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
+from uk_management_bot.constants.categories import get_specialization_for_category
 
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specializations,
+)
 
 from ._router import router
 
@@ -99,16 +103,17 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Получаем исполнителей с нужной специализацией
-        category_to_spec = CATEGORY_TO_SPECIALIZATION
-
-        spec = category_to_spec.get(request.category, "other")
+        # Получаем исполнителей с нужной специализацией.
+        # BUG-166: дефолт был `"other"` — не канон, он не совпадал ни с чем и
+        # компенсировался джокером `or "other" in specializations` ниже. Джокер
+        # ушёл вместе с переходом на общий предикат, поэтому дефолт обязан быть
+        # тем же, что у диспетчера, — иначе для незнакомой категории менеджер
+        # получал бы пустой список кандидатов.
+        spec = get_specialization_for_category(request.category)
 
         logger.info(f"[SPECIFIC_ASSIGN] Категория '{request.category}' → специализация: '{spec}'")
 
         # Получаем всех исполнителей с данной специализацией
-        import json
-
         # ИСПРАВЛЕНО: проверяем наличие роли "executor" в массиве roles
         # Используем JSONB operator @> для проверки вхождения элемента в массив
         executors = svc.list_approved_executors()
@@ -118,20 +123,22 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
         # Фильтруем по специализации
         filtered_executors = []
         for ex in executors:
-            if ex.specialization:
-                try:
-                    specializations = json.loads(ex.specialization) if isinstance(ex.specialization, str) else ex.specialization
-                    logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}): специализации = {specializations}")
+            # BUG-166: общий предикат вместо своего сравнения. Свой джокер
+            # `"other"` при этом уходит: он никогда не был каноническим
+            # значением, а миграция 010 развернула его в `repair`.
+            #
+            # Ушёл и локальный `json.loads` в try/except: он падал на CSV- и
+            # скалярном хранении (`'plumber,electric'`, `'plumber'`), и такой
+            # исполнитель молча выпадал из списка кандидатов с warning'ом
+            # «ошибка парсинга». `parse_specializations` читает все три формы.
+            executor_specs = parse_specializations(ex)
+            logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}): специализации = {sorted(executor_specs)}")
 
-                    if spec in specializations or "other" in specializations:
-                        filtered_executors.append(ex)
-                        logger.info(f"[SPECIFIC_ASSIGN] ✅ Исполнитель {ex.id} ({ex.first_name}) подходит (есть '{spec}')")
-                    else:
-                        logger.debug(f"[SPECIFIC_ASSIGN] ❌ Исполнитель {ex.id} ({ex.first_name}) НЕ подходит (нет '{spec}')")
-                except Exception as e:
-                    logger.warning(f"[SPECIFIC_ASSIGN] Ошибка парсинга специализаций для исполнителя {ex.id}: {e}")
+            if matches_required_specs(executor_specs, {spec}):
+                filtered_executors.append(ex)
+                logger.info(f"[SPECIFIC_ASSIGN] ✅ Исполнитель {ex.id} ({ex.first_name}) подходит (есть '{spec}')")
             else:
-                logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}) БЕЗ специализаций")
+                logger.debug(f"[SPECIFIC_ASSIGN] ❌ Исполнитель {ex.id} ({ex.first_name}) НЕ подходит (нет '{spec}')")
 
         logger.info(f"[SPECIFIC_ASSIGN] Отфильтровано {len(filtered_executors)} исполнителей с специализацией '{spec}'")
 

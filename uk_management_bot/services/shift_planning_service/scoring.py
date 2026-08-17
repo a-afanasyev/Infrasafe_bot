@@ -118,6 +118,13 @@ class ScoringMixin:
                 all_specializations.update(shift.specialization_focus)
         
         # Считаем, что основных специализаций 5
+        # ⚠️ BUG-167: четыре из пяти токенов — legacy (`electric`, `plumbing`,
+        # `hvac`, `maintenance`), после миграции 010 их нет ни в одной строке
+        # `specialization_focus`. Метрика поэтому не может показать больше 20%
+        # (совпадает только `security`). Оставлено байт-в-байт: это АНАЛИТИКА,
+        # а не предикат подбора; правка меняет цифры в отчёте менеджера и
+        # требует отдельного решения — что теперь считать «основными»
+        # специализациями из девяти канонических.
         main_specializations = {'electric', 'plumbing', 'hvac', 'maintenance', 'security'}
         covered_main = len(all_specializations.intersection(main_specializations))
         

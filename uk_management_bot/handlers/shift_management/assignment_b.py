@@ -16,6 +16,14 @@ from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.datetime_utils import utc_now
+# BUG-166: единый предикат подбора по специализациям. Импорт МОДУЛЬНЫЙ — урок
+# BUG-161: локальный `from ... import` делает имя локальным для всей функции.
+from uk_management_bot.utils.specializations import (
+    has_required_specs,
+    parse_shift_specs,
+    parse_specializations,
+    raw_specialization_tokens,
+)
 
 from ._router import router
 from .shared import _db_scope, translate_specializations
@@ -334,33 +342,15 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
                 if 'executor' in parse_roles_safe(user.roles) or user.active_role == 'executor':
                     available_executors.append(user)
 
-            # Фильтруем по специализации если указана в specialization_focus
-            if shift.specialization_focus and isinstance(shift.specialization_focus, list):
-                import json
-                filtered_executors = []
-                for executor in available_executors:
-                    # Парсим специализации исполнителя из JSON
-                    try:
-                        if executor.specialization:
-                            if isinstance(executor.specialization, str):
-                                executor_specs = json.loads(executor.specialization)
-                            else:
-                                executor_specs = executor.specialization
-
-                            # Проверяем пересечение специализаций
-                            if isinstance(executor_specs, list):
-                                # Если хотя бы одна специализация совпадает - подходит
-                                if any(spec in executor_specs for spec in shift.specialization_focus):
-                                    filtered_executors.append(executor)
-                            else:
-                                # Если не список - пропускаем исполнителя
-                                continue
-                        # Если специализация не указана - не добавляем в фильтрованный список
-                    except (json.JSONDecodeError, TypeError):
-                        # Если не удалось распарсить - пропускаем исполнителя
-                        continue
-
-                available_executors = filtered_executors
+            # Фильтруем по специализации если указана в specialization_focus.
+            # BUG-166: единый предикат вместо своего json.loads — тот не знал ни
+            # про CSV-хранение, ни про алиасы, и (главное) отвечал не так, как
+            # гвард назначения ниже: список предлагал исполнителя, а выбор его
+            # тут же отклонял.
+            available_executors = [
+                executor for executor in available_executors
+                if has_required_specs(executor, shift)
+            ]
 
             end_time_str = fmt_time(shift.end_time) if shift.end_time else "—"
             shift_time = f"{fmt_date(shift.start_time)} {fmt_time(shift.start_time)}-{end_time_str}"
@@ -445,55 +435,47 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             import json
 
             # ========== КРИТИЧЕСКАЯ ПРОВЕРКА: СООТВЕТСТВИЕ СПЕЦИАЛИЗАЦИЙ ==========
-            # Проверяем, что у исполнителя есть ВСЕ требуемые для смены специализации
-            shift_specs = shift.specialization_focus if shift.specialization_focus else []
-            if isinstance(shift_specs, str):
-                try:
-                    shift_specs = json.loads(shift_specs)
-                except Exception:
-                    shift_specs = [shift_specs] if shift_specs else []
+            # BUG-166: тот же предикат, что и у списка кандидатов выше. Раньше
+            # здесь требовались ВСЕ специализации смены, и менеджер получал
+            # отказ по исполнителю, которого система сама же ему предложила.
+            required_specs = parse_shift_specs(shift)
+            executor_specs = sorted(parse_specializations(executor))
+            if not has_required_specs(executor, shift):
+                # BUG-161: здесь стоял `from uk_management_bot.utils.specializations
+                # import translate_specializations` — такой функции в модуле нет
+                # (только parse_specializations/parse_shift_specs/has_required_specs),
+                # то есть ветка падала ImportError. Хуже того, сам факт локального
+                # импорта делал имя ЛОКАЛЬНЫМ для всей функции, поэтому обращение
+                # ниже (строка со spec_text, обычная ветка без конфликта) давало
+                # UnboundLocalError уже ПОСЛЕ коммита назначения. Канон —
+                # модульный импорт из .shared в шапке файла.
+                #
+                # BUG-166: строки «Отсутствует» больше нет. При семантике ЛЮБАЯ
+                # отказ возможен только при ПУСТОМ пересечении, то есть
+                # «отсутствует» всегда равнялось «требуется» — менеджеру это
+                # подсказывало «добавь все», хотя достаточно одной.
+                available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
+                # Отказ бывает и по НЕРАСПОЗНАННОМУ требованию — тогда канон-набор
+                # пуст, и `translate_specializations([])` напечатало бы
+                # «Любая», то есть прямо противоположное причине отказа.
+                # Показываем то, что реально записано в смене.
+                required_text = translate_specializations(
+                    sorted(required_specs)
+                    or raw_specialization_tokens(shift.specialization_focus), lang)
 
-            # Получаем специализации исполнителя
-            executor_specs = []
-            if executor.specialization:
-                if isinstance(executor.specialization, list):
-                    executor_specs = executor.specialization
-                elif isinstance(executor.specialization, str):
-                    try:
-                        executor_specs = json.loads(executor.specialization)
-                    except (json.JSONDecodeError, TypeError):
-                        executor_specs = [executor.specialization]
-
-            # Проверяем наличие всех требуемых специализаций
-            if shift_specs:  # Если у смены указаны специализации
-                missing_specs = set(shift_specs) - set(executor_specs)
-                if missing_specs:
-                    # BUG-161: здесь стоял `from uk_management_bot.utils.specializations
-                    # import translate_specializations` — такой функции в модуле нет
-                    # (только parse_specializations/parse_shift_specs/has_required_specs),
-                    # то есть ветка падала ImportError. Хуже того, сам факт локального
-                    # импорта делал имя ЛОКАЛЬНЫМ для всей функции, поэтому обращение
-                    # ниже (строка со spec_text, обычная ветка без конфликта) давало
-                    # UnboundLocalError уже ПОСЛЕ коммита назначения. Канон —
-                    # модульный импорт из .shared в шапке файла.
-                    missing_text = translate_specializations(list(missing_specs), lang)
-                    available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
-                    required_text = translate_specializations(shift_specs, lang)
-
-                    await callback.message.edit_text(
-                        get_text("shift_management.spec_mismatch", language=lang,
-                                executor_name=f"{executor.first_name} {executor.last_name}",
-                                required=required_text,
-                                available=available_text,
-                                missing=missing_text),
-                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text=get_text("shift_management.select_another_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")],
-                            [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data="back_to_planning")]
-                        ]),
-                        parse_mode="HTML"
-                    )
-                    await callback.answer(get_text("shift_management.spec_mismatch_popup", language=lang), show_alert=True)
-                    return
+                await callback.message.edit_text(
+                    get_text("shift_management.spec_mismatch", language=lang,
+                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            required=required_text,
+                            available=available_text),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text=get_text("shift_management.select_another_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")],
+                        [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data="back_to_planning")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer(get_text("shift_management.spec_mismatch_popup", language=lang), show_alert=True)
+                return
 
             # ========== ПРОВЕРКА КОНФЛИКТОВ ВРЕМЕНИ И СПЕЦИАЛИЗАЦИЙ ==========
             # ИЗМЕНЕНО: Проверяем конфликты специализаций, а не просто времени
@@ -618,46 +600,33 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
                 await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
                 return
 
-            # КРИТИЧЕСКАЯ ПРОВЕРКА: даже при принудительном назначении проверяем специализации
-            import json
-            shift_specs = shift.specialization_focus if shift.specialization_focus else []
-            if isinstance(shift_specs, str):
-                try:
-                    shift_specs = json.loads(shift_specs)
-                except Exception:
-                    shift_specs = [shift_specs] if shift_specs else []
+            # КРИТИЧЕСКАЯ ПРОВЕРКА: даже при принудительном назначении проверяем
+            # специализации. BUG-166: третий сайт того же вопроса в этом файле —
+            # тоже переведён на общий предикат. «Принудительно» здесь про
+            # конфликт РАСПИСАНИЯ, а не про квалификацию: смену нельзя отдать
+            # тому, кто не покрывает ни одной её специализации.
+            required_specs = parse_shift_specs(shift)
+            if not has_required_specs(executor, shift):
+                # BUG-161 (второй сайт того же дефекта, см. комментарий выше).
+                # Отказ бывает и по НЕРАСПОЗНАННОМУ требованию — тогда канон-набор
+                # пуст, и `translate_specializations([])` напечатало бы
+                # «Любая», то есть прямо противоположное причине отказа.
+                # Показываем то, что реально записано в смене.
+                required_text = translate_specializations(
+                    sorted(required_specs)
+                    or raw_specialization_tokens(shift.specialization_focus), lang)
 
-            # Получаем специализации исполнителя
-            executor_specs = []
-            if executor.specialization:
-                if isinstance(executor.specialization, list):
-                    executor_specs = executor.specialization
-                elif isinstance(executor.specialization, str):
-                    try:
-                        executor_specs = json.loads(executor.specialization)
-                    except (json.JSONDecodeError, TypeError):
-                        executor_specs = [executor.specialization]
-
-            # Даже при принудительном назначении НЕЛЬЗЯ назначить исполнителя без нужной специализации
-            if shift_specs:
-                missing_specs = set(shift_specs) - set(executor_specs)
-                if missing_specs:
-                    # BUG-161 (второй сайт того же дефекта, см. комментарий выше).
-                    required_text = translate_specializations(shift_specs, lang)
-                    missing_text = translate_specializations(list(missing_specs), lang)
-
-                    await callback.message.edit_text(
-                        get_text("shift_management.force_assign_impossible", language=lang,
-                                executor_name=f"{executor.first_name} {executor.last_name}",
-                                required=required_text,
-                                missing=missing_text),
-                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
-                        ]),
-                        parse_mode="HTML"
-                    )
-                    await callback.answer(get_text("shift_management.missing_specs_popup", language=lang), show_alert=True)
-                    return
+                await callback.message.edit_text(
+                    get_text("shift_management.force_assign_impossible", language=lang,
+                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            required=required_text),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer(get_text("shift_management.missing_specs_popup", language=lang), show_alert=True)
+                return
 
             # Назначаем исполнителя принудительно
             service.force_assign_executor(
