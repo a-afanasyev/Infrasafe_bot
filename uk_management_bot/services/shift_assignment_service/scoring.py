@@ -137,40 +137,39 @@ class ScoringEngine:
     def _calculate_specialization_match(self, shift: Shift, executor: User) -> float:
         """Рассчитывает соответствие специализации исполнителя требованиям смены
 
-        КРИТИЧЕСКАЯ ПРОВЕРКА: Исполнитель ДОЛЖЕН иметь ВСЕ требуемые специализации
-        Если хотя бы одна специализация отсутствует - возвращаем -1.0 (блокирующая оценка)
+        БЛОКИРУЮЩАЯ ПРОВЕРКА (-1.0) — общий предикат `matches_required_specs`
+        (BUG-166). Раньше здесь требовались ВСЕ специализации смены, из-за чего
+        электрик не проходил на смену «электрика + сантехника», хотя вести на
+        ней электрические заявки может. Возвращаемое число сверх вердикта —
+        КАЧЕСТВО соответствия, оно и ранжирует кандидатов.
         """
-        # Если у смены не указаны специализации - принимаем универсальных исполнителей
-        if not shift.specialization_focus:
-            return 0.5  # Нейтральная оценка для универсальных смен
-
-        # Если у исполнителя нет специализаций - не подходит
-        if not executor.specialization:
-            logger.debug(f"Исполнитель {executor.id} не подходит: нет специализаций")
-            return -1.0  # БЛОКИРУЮЩАЯ оценка
-
         # Единые парсеры: свой json.loads не знал про алиасы, поэтому legacy
         # `electric`/`maintenance` не совпадали с каноном никогда.
         from uk_management_bot.utils.specializations import (
-            parse_shift_specs, parse_specializations,
+            matches_required_specs, parse_shift_specs, parse_specializations,
         )
         required_specs = parse_shift_specs(shift)
         executor_specs = parse_specializations(executor)
 
-        # СТРОГАЯ ПРОВЕРКА: исполнитель ДОЛЖЕН иметь ВСЕ требуемые специализации
-        missing_specs = required_specs - executor_specs
+        # Если у смены не указаны специализации - принимаем универсальных исполнителей
+        if not required_specs:
+            return 0.5  # Нейтральная оценка для универсальных смен
 
-        if missing_specs:
+        if not matches_required_specs(executor_specs, required_specs):
             logger.debug(
                 f"Исполнитель {executor.id} ({executor.first_name} {executor.last_name}) "
-                f"не подходит для смены {shift.id}: отсутствуют специализации {missing_specs}. "
+                f"не подходит для смены {shift.id}: специализации не пересекаются. "
                 f"Требуется: {required_specs}, Есть: {executor_specs}"
             )
             return -1.0  # БЛОКИРУЮЩАЯ оценка - нет нужных специализаций
 
         # Рассчитываем качество соответствия
-        # Если у исполнителя есть ВСЕ требуемые специализации
         intersection = required_specs.intersection(executor_specs)
+        if not intersection:
+            # Прошёл по джокеру `universal` (с любой стороны): подходит, но
+            # заявить «покрывает N% требований» не о чем — нейтральная оценка,
+            # как у смены без фокуса.
+            return 0.5
 
         # Базовая оценка - процент покрытия требований
         base_score = len(intersection) / len(required_specs) if required_specs else 0.0

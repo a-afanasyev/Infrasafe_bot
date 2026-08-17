@@ -65,10 +65,9 @@ def parse_specialization_values(raw, *, side: str = "have",
 def parse_specializations(user) -> set[str]:
     """Множество canonical-специализаций исполнителя (`User.specialization`).
 
-    `universal` пропускаем: в этом проекте он живёт и на стороне ИСПОЛНИТЕЛЯ —
-    `shift_planning_service` считает такого работника подходящим под любой
-    шаблон. Отбросив токен, мы молча лишили бы универсалов работы. Семантику
-    не трогаем (BUG-166), только доносим значение до потребителя.
+    `universal` пропускаем: он живёт и на стороне ИСПОЛНИТЕЛЯ и означает
+    «умеет всё» (`matches_required_specs`). Отбросив токен здесь, мы молча
+    лишили бы универсалов работы.
     """
     return parse_specialization_values(
         getattr(user, "specialization", None), side="have", allow_universal=True)
@@ -92,23 +91,54 @@ def parse_template_specs(template) -> set[str]:
         side="need", allow_universal=True)
 
 
-def has_required_specs(user, shift) -> bool:
-    """True, если у исполнителя есть ВСЕ требуемые сменой специализации.
+def matches_required_specs(user_specs: set[str], required: set[str]) -> bool:
+    """Единственный ответ проекта на «подходит ли исполнитель под требование».
 
-    Единый guard для переназначения смены (REG-02): sync-ядро бота и async-зеркало
-    веба (`api/shifts`). Смена без указанных спецификаций — без ограничений.
+    BUG-166: этот вопрос решался семью разными способами — где-то нужны были
+    ВСЕ специализации требования (`issubset`), где-то ЛЮБАЯ (`intersection`),
+    а токен `universal` трактовался тремя способами сразу. Две проверки жили в
+    одном файле (`handlers/shift_management/assignment_b.py`) и противоречили
+    друг другу: список кандидатов предлагал исполнителя, а гвард назначения
+    отказывал ему «отсутствуют специализации».
 
-    ⚠️ Семантика «ВСЕ» (issubset) сохранена байт-в-байт: в проекте она расходится
-    с ANY-семантикой `shift_planning_service` (BUG-166). Приводить их к одной
-    здесь нельзя — это меняет, кого назначают на смены.
+    Правила (решение владельца 2026-08-17):
 
-    ⚠️ Токен `universal` в требовании смены НЕ трактуется как «подходит любой»,
-    хотя `Shift.can_handle_specialization` и `smart_dispatcher` делают именно
-    так. Расхождение реальное, но чинить его здесь нельзя: тогда перевод смены
-    и авто-подбор разъедутся ещё сильнее — `scoring.py` и `planning.py` остались
-    бы со старым поведением. Пункт BUG-166, чинить всем трём консьюмерам сразу.
+    1. Пустое требование не ограничивает никого.
+    2. `universal` в ТРЕБОВАНИИ = «подойдёт кто угодно».
+    3. `universal` у ИСПОЛНИТЕЛЯ = «умеет всё».
+    4. Иначе достаточно ОДНОГО совпадения: фокус смены — это «что смена
+       покрывает», а не «чем один человек обязан владеть одновременно».
+       Заявка и так попадает на смену, если её специализация ЕСТЬ в фокусе
+       (`Shift.can_handle_specialization`), поэтому электрик на смене
+       «электрика + сантехника» ведёт ровно электрические заявки.
+
+    Оба множества обязаны быть УЖЕ каноническими: нормализация асимметрична по
+    сторонам «умею»/«требуется» (см. `normalize_specialization`), и предикат не
+    может выбрать сторону за вызывающего — для этого есть `parse_*`.
     """
-    required = parse_shift_specs(shift)
     if not required:
         return True
-    return required.issubset(parse_specializations(user))
+    if UNIVERSAL_SPECIALIZATION in required:
+        return True
+    if UNIVERSAL_SPECIALIZATION in user_specs:
+        return True
+    return bool(required & user_specs)
+
+
+def has_required_specs(user, shift) -> bool:
+    """Подходит ли исполнитель под требования смены (`specialization_focus`).
+
+    Единый guard для переназначения смены (REG-02): sync-ядро бота и async-зеркало
+    веба (`api/shifts`). Семантика — `matches_required_specs`.
+    """
+    return matches_required_specs(parse_specializations(user), parse_shift_specs(shift))
+
+
+def has_required_template_specs(user, template) -> bool:
+    """То же для шаблона смены (`required_specializations`).
+
+    Отдельная функция, а не флаг у `has_required_specs`: поле у шаблона
+    называется иначе, и общий парсер читал бы у него пустоту — то есть «нет
+    требований» вместо реальных.
+    """
+    return matches_required_specs(parse_specializations(user), parse_template_specs(template))

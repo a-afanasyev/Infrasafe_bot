@@ -136,15 +136,19 @@ class ShiftTemplate(Base):
         return self.is_day_included(d.weekday() + 1)  # существующий weekday-режим
     
     def matches_specialization(self, specializations: list) -> bool:
-        """Проверяет, соответствует ли шаблон требуемым специализациям"""
-        if not self.required_specializations:
-            return True  # Универсальный шаблон
-        
-        if not specializations:
-            return False
-        
-        # Проверяем пересечение специализаций
-        required_set = set(self.required_specializations)
-        available_set = set(specializations)
-        
-        return bool(required_set.intersection(available_set)) or "universal" in available_set
+        """Проверяет, соответствует ли шаблон набору специализаций.
+
+        BUG-166: вердикт — общий предикат, а сравнение идёт по канону. Раньше
+        сравнивались сырые списки, поэтому legacy-токен (`electric`) не
+        совпадал с каноническим (`electrician`) никогда, а `universal`
+        учитывался только со стороны исполнителя.
+        """
+        from uk_management_bot.utils.specializations import (
+            matches_required_specs, parse_specialization_values,
+            parse_template_specs,
+        )
+        return matches_required_specs(
+            parse_specialization_values(specializations, side="have",
+                                        allow_universal=True),
+            parse_template_specs(self),
+        )

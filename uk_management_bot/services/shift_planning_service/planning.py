@@ -401,19 +401,17 @@ class PlanningMixin:
         """Проверяет, может ли исполнитель работать по данному шаблону"""
         try:
             # Проверяем специализации
-            if template.required_specializations:
-                # Раньше JSON-строка оборачивалась в список из одного элемента и
-                # превращалась в «специализацию» вида '["plumber"]', которая не
-                # совпадала ни с чем. Единые парсеры + нормализация к канону.
-                from uk_management_bot.utils.specializations import (
-                    parse_specializations, parse_template_specs,
-                )
-                required_set = parse_template_specs(template)
-                executor_set = parse_specializations(executor)
-                
-                if not required_set.intersection(executor_set) and "universal" not in executor_set:
-                    return False
-            
+            # Раньше JSON-строка оборачивалась в список из одного элемента и
+            # превращалась в «специализацию» вида '["plumber"]', которая не
+            # совпадала ни с чем. Единые парсеры + нормализация к канону.
+            # BUG-166: сам вердикт — общий предикат, а не своя копия правил
+            # (здесь не хватало трактовки `universal` на стороне ТРЕБОВАНИЯ).
+            from uk_management_bot.utils.specializations import (
+                has_required_template_specs,
+            )
+            if not has_required_template_specs(executor, template):
+                return False
+
             # Проверяем статус исполнителя
             if executor.status != 'approved':
                 return False
