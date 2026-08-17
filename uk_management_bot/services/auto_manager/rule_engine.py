@@ -32,6 +32,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.utils.specializations import (
     matches_required_specs,
+    parse_specialization_values,
     parse_specializations,
 )
 
@@ -173,11 +174,22 @@ def select_executor(db: Session, specialization: str, now: datetime,
     # джокера `universal`, а шаг ниже (`can_handle_specialization`) знал: одна
     # функция отвечала на вопрос «джокер ли universal» по-разному в зависимости
     # от стороны — ровно тот класс расхождения, который BUG-166 и закрывает.
+    #
+    # ⚠️ Требование здесь ОБЯЗАТЕЛЬНО, поэтому оно разбирается явно, а не через
+    # `matches_raw_requirement`: тот трактует пустое требование как «ограничений
+    # нет» и пропустил бы ВСЕХ. Сюда приходит `requests.assigned_group` — сырой
+    # nullable-столбец, и на NULL прежнее `None in ...` не пропускало никого,
+    # то есть заявка честно эскалировалась менеджеру. Это и сохраняем.
+    required = parse_specialization_values(
+        specialization, side="need", allow_universal=True)
+    if not required:
+        return None
+
     candidates = [
         user
         for user in snap.approved_users
         if ROLE_EXECUTOR in get_user_roles(user)
-        and matches_required_specs(parse_specializations(user), {specialization})
+        and matches_required_specs(parse_specializations(user), required)
     ]
 
     on_duty = [

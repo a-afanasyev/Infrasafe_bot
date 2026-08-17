@@ -210,13 +210,15 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
         from uk_management_bot.utils.auth_helpers import get_user_roles
         from uk_management_bot.utils.constants import ROLE_EXECUTOR
         from uk_management_bot.utils.specializations import (
-            matches_required_specs, parse_specializations,
+            matches_required_specs, parse_specialization_values,
+            parse_specializations,
         )
 
         service = RequestHandlerService(db_session)
         assignment = service.get_active_assignment(request_number)
         spec = assignment.group_specialization if assignment else None
-        if not spec:
+        required = parse_specialization_values(spec, side="need", allow_universal=True)
+        if not required:
             return
         bot = _get_shared_bot()
         if bot is None:
@@ -231,8 +233,9 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
             if ROLE_EXECUTOR not in get_user_roles(ex):
                 continue
             # BUG-166: общий предикат — иначе универсал не получал бы
-            # уведомления о заявках, которые он мог бы взять.
-            if not matches_required_specs(parse_specializations(ex), {spec}):
+            # уведомления о заявках, которые он мог бы взять. Требование
+            # разобрано выше явно: пустое означало бы «уведомить всех».
+            if not matches_required_specs(parse_specializations(ex), required):
                 continue
             text = get_text("requests.claimed_by_other_notify",
                             language=(ex.language or "ru")).format(

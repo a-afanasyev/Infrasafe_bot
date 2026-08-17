@@ -20,8 +20,13 @@ from uk_management_bot.constants.specializations import (
 )
 
 
-def _raw_tokens(raw) -> list[str]:
-    """Разложить разнородное хранение в список сырых токенов (без нормализации)."""
+def raw_specialization_tokens(raw) -> list[str]:
+    """Разложить разнородное хранение в список сырых токенов (без нормализации).
+
+    Публичная: по ней отличают «требования нет» от «требование есть, но не
+    резолвится» (`matches_raw_requirement`), и по ней же показывают человеку
+    то, что реально записано, когда канон ничего не узнал.
+    """
     if raw is None:
         return []
     if isinstance(raw, (list, tuple, set)):
@@ -54,7 +59,7 @@ def parse_specialization_values(raw, *, side: str = "have",
             да, исполнитель — нет: это не навык).
     """
     result: set[str] = set()
-    for token in _raw_tokens(raw):
+    for token in raw_specialization_tokens(raw):
         if allow_universal and token.strip().lower() == UNIVERSAL_SPECIALIZATION:
             result.add(UNIVERSAL_SPECIALIZATION)
             continue
@@ -149,7 +154,7 @@ def matches_raw_requirement(user_specs: set[str], raw_requirement) -> bool:
         raw_requirement, side="need", allow_universal=True)
     if required:
         return matches_required_specs(user_specs, required)
-    return not _raw_tokens(raw_requirement)
+    return not raw_specialization_tokens(raw_requirement)
 
 
 def has_required_specs(user, shift) -> bool:

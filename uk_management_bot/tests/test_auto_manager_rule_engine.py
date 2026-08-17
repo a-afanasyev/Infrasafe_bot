@@ -360,3 +360,18 @@ def test_unrelated_specialization_still_excluded(db):
     _shift(db, 1, ex.id, specs=[SPECIALIZATION])
 
     assert select_executor(db, SPECIALIZATION, NOW) is None
+
+
+@pytest.mark.parametrize("spec", [None, "", "   ", "[]"])
+def test_blank_requirement_selects_nobody(db, spec):
+    """Пустое требование НЕ означает «подойдёт любой».
+
+    `requests.assigned_group` — nullable, и на NULL прежнее `specialization in
+    parse_specializations(...)` не пропускало никого: заявка эскалировалась
+    менеджеру. Перевод на общий предикат легко ломает именно это — предикат
+    трактует пустое требование как «ограничений нет».
+    """
+    ex = _executor(db, 1, 1001)
+    _shift(db, 1, ex.id, specs=[SPECIALIZATION])
+
+    assert select_executor(db, spec, NOW) is None

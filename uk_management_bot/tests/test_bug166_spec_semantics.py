@@ -87,12 +87,17 @@ def _user(specs):
     return u
 
 
-def _shift(specs):
+def _shift_raw(raw):
+    """Смена с фокусом ровно в том виде, в каком он лежит в БД."""
     s = MagicMock(spec=Shift)
     s.id = 1
-    s.specialization_focus = list(specs)
+    s.specialization_focus = raw
     s.can_handle_specialization = Shift.can_handle_specialization.__get__(s)
     return s
+
+
+def _shift(specs):
+    return _shift_raw(list(specs))
 
 
 def _template(specs):
@@ -212,6 +217,27 @@ def test_unresolvable_focus_fails_closed():
 ])
 def test_unresolvable_template_requirement_fails_closed(check):
     assert check(_user(["electrician"]), _template(["carpentry"])) is False
+
+
+def test_unresolvable_focus_fails_closed_in_transfer_guard():
+    """Гвард перевода смены (REG-02, бот + `api/shifts`) — самый чувствительный.
+
+    Он единственный из четырёх точек был fail-open и ДО BUG-166, поэтому его
+    легко забыть: откат строки в `has_required_specs` не роняет ни один другой
+    тест и проходит AST-ратчет.
+    """
+    assert has_required_specs(_user(["electrician"]), _shift(["carpentry"])) is False
+
+
+@pytest.mark.parametrize("raw", [None, [], "", "   ", "[]", ",", ["", " "]])
+def test_blank_requirement_is_absence_not_garbage(raw):
+    """Пусто во всех видах — это «требования нет», а не «не резолвится».
+
+    Граница fail-closed проходит по НАЛИЧИЮ токенов: `"[]"` и `","` токенов не
+    дают, поэтому ограничений нет; `"carpentry"` токен даёт, но канон его не
+    знает — вот там и отказ.
+    """
+    assert has_required_specs(_user([]), _shift_raw(raw)) is True
 
 
 def test_unresolvable_focus_blocks_scoring():

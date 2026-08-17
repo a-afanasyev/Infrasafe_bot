@@ -22,6 +22,7 @@ from uk_management_bot.utils.specializations import (
     has_required_specs,
     parse_shift_specs,
     parse_specializations,
+    raw_specialization_tokens,
 )
 
 from ._router import router
@@ -454,7 +455,13 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                 # «отсутствует» всегда равнялось «требуется» — менеджеру это
                 # подсказывало «добавь все», хотя достаточно одной.
                 available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
-                required_text = translate_specializations(sorted(required_specs), lang)
+                # Отказ бывает и по НЕРАСПОЗНАННОМУ требованию — тогда канон-набор
+                # пуст, и `translate_specializations([])` напечатало бы
+                # «Любая», то есть прямо противоположное причине отказа.
+                # Показываем то, что реально записано в смене.
+                required_text = translate_specializations(
+                    sorted(required_specs)
+                    or raw_specialization_tokens(shift.specialization_focus), lang)
 
                 await callback.message.edit_text(
                     get_text("shift_management.spec_mismatch", language=lang,
@@ -601,7 +608,13 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             required_specs = parse_shift_specs(shift)
             if not has_required_specs(executor, shift):
                 # BUG-161 (второй сайт того же дефекта, см. комментарий выше).
-                required_text = translate_specializations(sorted(required_specs), lang)
+                # Отказ бывает и по НЕРАСПОЗНАННОМУ требованию — тогда канон-набор
+                # пуст, и `translate_specializations([])` напечатало бы
+                # «Любая», то есть прямо противоположное причине отказа.
+                # Показываем то, что реально записано в смене.
+                required_text = translate_specializations(
+                    sorted(required_specs)
+                    or raw_specialization_tokens(shift.specialization_focus), lang)
 
                 await callback.message.edit_text(
                     get_text("shift_management.force_assign_impossible", language=lang,

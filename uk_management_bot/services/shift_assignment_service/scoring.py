@@ -146,16 +146,26 @@ class ScoringEngine:
         # Единые парсеры: свой json.loads не знал про алиасы, поэтому legacy
         # `electric`/`maintenance` не совпадали с каноном никогда.
         from uk_management_bot.utils.specializations import (
-            matches_required_specs, parse_shift_specs, parse_specializations,
+            matches_raw_requirement, matches_required_specs, parse_shift_specs,
+            parse_specializations,
         )
         required_specs = parse_shift_specs(shift)
         executor_specs = parse_specializations(executor)
 
+        # Вердикт — тот же хелпер, что у гвардов. Свой критерий пустоты
+        # (`if shift.specialization_focus`) здесь уже стоял и расходился с
+        # `matches_raw_requirement`: тот считает требование отсутствующим по
+        # НАЛИЧИЮ ТОКЕНОВ, а не по truthiness поля, поэтому на значении вида
+        # `[""]` гвард пропускал всех, а скоринг блокировал всех.
+        if not matches_raw_requirement(executor_specs, shift.specialization_focus):
+            logger.debug(
+                f"Исполнитель {executor.id} не подходит для смены {shift.id}: "
+                f"требование {shift.specialization_focus} не покрыто "
+                f"специализациями {executor_specs}"
+            )
+            return -1.0
+
         if not required_specs:
-            if shift.specialization_focus:
-                # Фокус указан, но не резолвится в канон. Это НЕ универсальная
-                # смена — см. `matches_raw_requirement`; вердикт fail-closed.
-                return -1.0
             return 0.5  # Нейтральная оценка для универсальных смен
 
         if not matches_required_specs(executor_specs, required_specs):
