@@ -94,7 +94,7 @@ def parse_template_specs(template) -> set[str]:
 def matches_required_specs(user_specs: set[str], required: set[str]) -> bool:
     """Единственный ответ проекта на «подходит ли исполнитель под требование».
 
-    BUG-166: этот вопрос решался семью разными способами — где-то нужны были
+    BUG-166: этот вопрос решался девятью разными способами — где-то нужны были
     ВСЕ специализации требования (`issubset`), где-то ЛЮБАЯ (`intersection`),
     а токен `universal` трактовался тремя способами сразу. Две проверки жили в
     одном файле (`handlers/shift_management/assignment_b.py`) и противоречили

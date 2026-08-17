@@ -1,7 +1,7 @@
 """BUG-166: одна семантика подбора по специализациям во всех точках.
 
 Проект отвечал на вопрос «подходит ли исполнитель под требование по
-специализациям» СЕМЬЮ разными способами:
+специализациям» ДЕВЯТЬЮ разными способами:
 
 * `has_required_specs` (перевод смены, бот+веб) — ВСЕ (`issubset`);
 * `scoring.py` (авто-подбор на смену) — ВСЕ, блокирующая оценка −1.0;
@@ -9,11 +9,14 @@
 * `ShiftTemplate.matches_specialization` — ЛЮБАЯ, без нормализации;
 * `Shift.can_handle_specialization` — членство + `universal` у СМЕНЫ;
 * `assignment_b.handle_select_shift_for_assignment` — ЛЮБАЯ, сырой json;
-* `assignment_b.handle_assign_executor_to_shift` — ВСЕ, сырой json.
+* `assignment_b.handle_assign_executor_to_shift` — ВСЕ, сырой json;
+* `assignment_b.handle_force_assign` — ВСЕ, сырой json;
+* `auto_manager/rule_engine.select_executor` — членство БЕЗ джокера, и тут же
+  рядом, в той же функции, `can_handle_specialization` джокер учитывал.
 
-Последние два — в одном файле и противоречат друг другу: список кандидатов
-предлагал исполнителя, а гвард назначения тут же отказывал ему «отсутствуют
-специализации».
+Три из них — в одном файле, и первые два противоречили друг другу: список
+кандидатов предлагал исполнителя, а гвард назначения тут же отказывал ему
+«отсутствуют специализации».
 
 Решения владельца (2026-08-17):
 
@@ -53,6 +56,7 @@ CANON_CASES = [
     (["electrician"], ["plumber"], False, "пересечения нет"),
     ([], ["plumber"], False, "у исполнителя нет специализаций"),
     (["electrician"], ["universal"], True, "universal в требовании — джокер"),
+    ([], ["universal"], True, "джокер в требовании принимает и бесспециализированного"),
     (["universal"], ["plumber"], True, "universal у исполнителя — джокер"),
 ]
 
@@ -173,9 +177,32 @@ def test_template_matches_specialization(have, need, expected, why):
     (["universal"], "electrician", True, "universal в фокусе — джокер"),
     (["electric"], "electrician", True, "legacy-алиас в фокусе нормализуется"),
     (["elevator"], "maintenance", True, "legacy-алиас в запросе нормализуется"),
+    (["carpentry"], "electrician", False,
+     "нераспознанный фокус НЕ делает смену универсальной"),
 ])
 def test_shift_can_handle_specialization(focus, spec, expected, why):
     assert _shift(focus).can_handle_specialization(spec) is expected, why
+
+
+def test_unresolvable_focus_fails_closed():
+    """Смена с опечаткой в фокусе не должна принимать ВСЁ.
+
+    Ловушка перевода на канон: проверять «фокуса нет» надо по СЫРОМУ полю.
+    Сравнение распарсенного набора с пустотой превращает нераспознанный токен
+    в «ограничений нет» — до BUG-166 сравнение шло по сырому списку, и такая
+    смена не принимала ничего.
+    """
+    shift = _shift(["carpentry", "painting"])
+    assert all(
+        shift.can_handle_specialization(spec) is False
+        for spec in ("electrician", "plumber", "cleaning")
+    )
+
+
+def test_predicate_returns_real_bool():
+    """Вердикт — настоящий bool: вызывающие сравнивают его через `is`."""
+    assert type(matches_required_specs({"electrician"}, {"electrician"})) is bool
+    assert type(matches_required_specs({"electrician"}, {"plumber"})) is bool
 
 
 # ═══ Точки 6 и 7: список кандидатов и гвард назначения (assignment_b) ═══
@@ -254,6 +281,19 @@ async def test_assignment_guard_accepts_partial_match(monkeypatch):
     service.assign_executor.assert_called_once()
 
 
+def _assert_refused(callback, service_call):
+    """Отказ = назначения не было И менеджер увидел объяснение.
+
+    Одного `assert_not_called` мало: оба хендлера обёрнуты глухим
+    `except Exception`, поэтому ЛЮБОЕ падение в ветке отказа выглядит как
+    корректный отказ. Ровно так BUG-161 (`ImportError` → `UnboundLocalError`)
+    доехал до прода в этом же файле и именно в этих ветках.
+    """
+    service_call.assert_not_called()
+    callback.message.edit_text.assert_awaited_once()
+    callback.answer.assert_awaited()
+
+
 @pytest.mark.asyncio
 async def test_assignment_guard_still_refuses_disjoint(monkeypatch):
     """Совсем несовпадающая специализация по-прежнему отклоняется."""
@@ -266,7 +306,7 @@ async def test_assignment_guard_still_refuses_disjoint(monkeypatch):
         callback, MagicMock(clear=AsyncMock()),
         db=MagicMock(), user=MagicMock(), roles=["manager"])
 
-    service.assign_executor.assert_not_called()
+    _assert_refused(callback, service.assign_executor)
 
 
 # Третий сайт того же вопроса в этом файле — «назначить принудительно».
@@ -298,7 +338,7 @@ async def test_force_assign_still_refuses_disjoint(monkeypatch):
         callback, MagicMock(clear=AsyncMock()),
         db=MagicMock(), user=MagicMock(), roles=["manager"])
 
-    service.force_assign_executor.assert_not_called()
+    _assert_refused(callback, service.force_assign_executor)
 
 
 # ═══ Ратчет: восьмой копии правил быть не должно ═══
@@ -308,31 +348,46 @@ async def test_force_assign_still_refuses_disjoint(monkeypatch):
 # и конфликт «смена ↔ смена» — это другие вопросы, и глушить их `noqa` значило
 # бы приучить гейт к исключениям.
 SPEC_CONSUMERS = [
+    "api/shifts/service/web_transfers.py",
     "database/models/shift.py",
     "database/models/shift_template.py",
     "handlers/shift_management/assignment_b.py",
+    "services/auto_manager/rule_engine.py",
     "services/shift_assignment_service/scoring.py",
     "services/shift_planning_service/planning.py",
+    "services/shift_transfer_service.py",
 ]
 
-CANON_PREDICATES = (
+CANON_PREDICATES = frozenset({
     "matches_required_specs",
     "has_required_specs",
     "has_required_template_specs",
-)
+})
 
 
 @pytest.mark.parametrize("relpath", SPEC_CONSUMERS)
 def test_consumer_uses_canonical_predicate(relpath):
-    """Каждый консьюмер спрашивает канон, а не считает вердикт сам.
+    """Каждый консьюмер ВЫЗЫВАЕТ канон, а не считает вердикт сам.
 
     Расхождение накопилось именно так: каждое место писало своё
     `issubset`/`intersection`/`in`, и копии разъехались незаметно для тестов.
+
+    Проверка по AST, а не поиском подстроки: в `assignment_b.py` имя
+    `has_required_specs` встречается ещё и в комментарии (BUG-161), и
+    подстрочный гейт остался бы зелёным даже после удаления всех вызовов.
     """
+    import ast
     import pathlib
 
-    source = (pathlib.Path(__file__).resolve().parents[1] / relpath).read_text(encoding="utf-8")
-    assert any(name in source for name in CANON_PREDICATES), (
+    tree = ast.parse(
+        (pathlib.Path(__file__).resolve().parents[1] / relpath).read_text(encoding="utf-8"))
+    called = {
+        node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, (ast.Name, ast.Attribute))
+    }
+    assert called & CANON_PREDICATES, (
         f"{relpath}: вердикт по специализациям обязан идти через "
         f"`matches_required_specs` и его обёртки (BUG-166)"
     )

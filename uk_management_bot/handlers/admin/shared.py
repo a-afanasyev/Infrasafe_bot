@@ -102,10 +102,14 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         approved_users = svc.list_approved_users()
         logger.info(f"[AUTO_ASSIGN] Approved-пользователей всего: {len(approved_users)}")
 
+        # BUG-166: общий предикат. `auto_manager/rule_engine.select_executor`
+        # построен как зеркало этой функции — оставить здесь голое `in` значило
+        # бы развести зеркала по трактовке джокера `universal`.
+        from uk_management_bot.utils.specializations import matches_required_specs
         matching_executors = [
             ex for ex in approved_users
             if ROLE_EXECUTOR in get_user_roles(ex)
-            and specialization in parse_specializations(ex)
+            and matches_required_specs(parse_specializations(ex), {specialization})
         ]
 
         logger.info(f"[AUTO_ASSIGN] Найдено {len(matching_executors)} подходящих исполнителей для специализации '{specialization}'")

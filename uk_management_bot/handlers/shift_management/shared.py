@@ -51,6 +51,13 @@ def _format_end_label(start_dt: Optional[datetime], end_dt: Optional[datetime]) 
 
 
 # Словарь локализации специализаций
+# ⚠️ BUG-169: словарь построен на LEGACY-наборе. Шести из девяти канонических
+# позиций (`electrician`, `plumber`, `heating`, `ventilation`, `elevator`,
+# `repair`) здесь нет, а после миграции 010 в БД лежит именно канон — поэтому
+# `translations.get(spec, spec)` отдаёт менеджеру сырой английский токен.
+# Дефект ЖИВОЙ на обоих продах. Оставлен байт-в-байт: он не относится к
+# семантике подбора (BUG-166), а правка требует сверки формулировок с
+# фронтовыми локалями `specialization.*`, чтобы бот и дашборд не разошлись.
 SPECIALIZATION_TRANSLATIONS = {
     "ru": {
         "electric": "Электрика",

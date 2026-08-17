@@ -438,12 +438,12 @@ class PlanningMixin:
                 legacy_role_filter('executor', 'admin', 'manager')
             )
             
-            # Фильтруем по специализации
-            if template.required_specializations:
-                # Это упрощенная проверка, в реальности нужна более сложная логика
-                # для работы с JSON полями в PostgreSQL
-                query = query.filter(User.specialization.isnot(None))
-            
+            # BUG-166: здесь стоял SQL-префильтр `User.specialization.isnot(None)`
+            # «для упрощения». Он отменял правило владельца «`universal` в
+            # требовании = подойдёт кто угодно»: исполнителя без специализаций
+            # отсекало ДО предиката, который его пропускает. Отбор целиком — за
+            # `_can_executor_work_template` ниже, чтобы ответ был один.
+
             all_executors = query.all()
             
             # Фильтруем исполнителей, которые могут работать по шаблону

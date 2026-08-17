@@ -30,7 +30,10 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
     ROLE_EXECUTOR,
 )
-from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specializations,
+)
 
 # «Открытые» статусы заявки для ranking'а нагрузки исполнителя авто-менеджером.
 # Локальный набор именно для этого модуля (least-loaded ranking) — НЕ общий
@@ -163,11 +166,15 @@ def select_executor(db: Session, specialization: str, now: datetime,
     # сохранена 1:1 для остальных колл-сайтов.
     snap = snapshot if snapshot is not None else build_duty_snapshot(db, now)
 
+    # BUG-166: вердикт — общий предикат. Голое `specialization in ...` не знало
+    # джокера `universal`, а шаг ниже (`can_handle_specialization`) знал: одна
+    # функция отвечала на вопрос «джокер ли universal» по-разному в зависимости
+    # от стороны — ровно тот класс расхождения, который BUG-166 и закрывает.
     candidates = [
         user
         for user in snap.approved_users
         if ROLE_EXECUTOR in get_user_roles(user)
-        and specialization in parse_specializations(user)
+        and matches_required_specs(parse_specializations(user), {specialization})
     ]
 
     on_duty = [

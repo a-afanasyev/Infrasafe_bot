@@ -128,9 +128,17 @@ class Shift(Base):
         from uk_management_bot.utils.specializations import (
             matches_required_specs, normalize_specialization, parse_shift_specs,
         )
+        if not self.specialization_focus:
+            return True  # Универсальная смена
+
         focus = parse_shift_specs(self)
         if not focus:
-            return True  # Универсальная смена
+            # ⚠️ Fail-closed, и проверка идёт по СЫРОМУ полю выше не случайно:
+            # «фокус указан, но не резолвится в канон» — это не универсальная
+            # смена. Сравнивай мы распарсенный набор с пустотой, смена с
+            # опечаткой в фокусе начала бы принимать ВСЁ (до BUG-166 сравнение
+            # шло по сырому списку и такая смена не принимала ничего).
+            return False
 
         return matches_required_specs(
             normalize_specialization(required_specialization, side="have"), focus)

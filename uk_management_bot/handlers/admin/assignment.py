@@ -16,6 +16,10 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specializations,
+)
 
 from ._router import router
 
@@ -123,7 +127,11 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
                     specializations = json.loads(ex.specialization) if isinstance(ex.specialization, str) else ex.specialization
                     logger.debug(f"[SPECIFIC_ASSIGN] Исполнитель {ex.id} ({ex.first_name}): специализации = {specializations}")
 
-                    if spec in specializations or "other" in specializations:
+                    # BUG-166: общий предикат вместо своего сравнения. Свой
+                    # джокер `"other"` при этом уходит: он никогда не был
+                    # каноническим значением, а миграция 010 развернула его в
+                    # `repair` — то есть с 2026-08-17 условие мертво в данных.
+                    if matches_required_specs(parse_specializations(ex), {spec}):
                         filtered_executors.append(ex)
                         logger.info(f"[SPECIFIC_ASSIGN] ✅ Исполнитель {ex.id} ({ex.first_name}) подходит (есть '{spec}')")
                     else:

@@ -448,8 +448,11 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                 # ниже (строка со spec_text, обычная ветка без конфликта) давало
                 # UnboundLocalError уже ПОСЛЕ коммита назначения. Канон —
                 # модульный импорт из .shared в шапке файла.
-                missing_text = translate_specializations(
-                    sorted(required_specs - set(executor_specs)), lang)
+                #
+                # BUG-166: строки «Отсутствует» больше нет. При семантике ЛЮБАЯ
+                # отказ возможен только при ПУСТОМ пересечении, то есть
+                # «отсутствует» всегда равнялось «требуется» — менеджеру это
+                # подсказывало «добавь все», хотя достаточно одной.
                 available_text = translate_specializations(executor_specs, lang) if executor_specs else get_text("shift_management.no_specs", language=lang)
                 required_text = translate_specializations(sorted(required_specs), lang)
 
@@ -457,8 +460,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                     get_text("shift_management.spec_mismatch", language=lang,
                             executor_name=f"{executor.first_name} {executor.last_name}",
                             required=required_text,
-                            available=available_text,
-                            missing=missing_text),
+                            available=available_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text=get_text("shift_management.select_another_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")],
                         [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data="back_to_planning")]
@@ -597,18 +599,14 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             # конфликт РАСПИСАНИЯ, а не про квалификацию: смену нельзя отдать
             # тому, кто не покрывает ни одной её специализации.
             required_specs = parse_shift_specs(shift)
-            executor_specs = sorted(parse_specializations(executor))
             if not has_required_specs(executor, shift):
                 # BUG-161 (второй сайт того же дефекта, см. комментарий выше).
                 required_text = translate_specializations(sorted(required_specs), lang)
-                missing_text = translate_specializations(
-                    sorted(required_specs - set(executor_specs)), lang)
 
                 await callback.message.edit_text(
                     get_text("shift_management.force_assign_impossible", language=lang,
                             executor_name=f"{executor.first_name} {executor.last_name}",
-                            required=required_text,
-                            missing=missing_text),
+                            required=required_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
                     ]),
