@@ -4,6 +4,11 @@ from datetime import datetime, date as date_type, timezone
 import json
 
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.constants.specializations import (
+    CANONICAL_SPECIALIZATIONS,
+    UNIVERSAL_SPECIALIZATION,
+    is_canonical,
+)
 
 ShiftStatus = Literal["active", "completed", "cancelled", "planned", "paused"]
 ShiftType = Literal["regular", "emergency", "overtime", "maintenance"]
@@ -36,6 +41,25 @@ def _parse_spec_field(raw) -> list[str]:
         return [str(s).strip() for s in parsed if str(s).strip()] if isinstance(parsed, list) else []
     # CSV / скаляр (напр. из инвайта): как спец берём только словарные токены.
     return [t for t in (p.strip() for p in text.split(",")) if t.isalpha()]
+
+
+def _validate_specializations(values: list[str], *, allow_universal: bool = False) -> list[str]:
+    """Отвергнуть неизвестный токен, а не выбросить молча.
+
+    Молчаливый дроп сузил бы смену/приглашение до пустого набора и дал бы тот же
+    класс бага, что мы чиним: сотрудник без специализации, смена, не принимающая
+    ничего. Пусть лучше 422 на границе.
+    """
+    unknown = [
+        v for v in values
+        if not (is_canonical(v) or (allow_universal and v == UNIVERSAL_SPECIALIZATION))
+    ]
+    if unknown:
+        raise ValueError(
+            "неизвестные специализации: " + ", ".join(sorted(unknown))
+            + ". Допустимые: " + ", ".join(CANONICAL_SPECIALIZATIONS)
+        )
+    return values
 
 
 class EmployeeBrief(BaseModel):
@@ -158,6 +182,11 @@ class CreateShiftBody(BaseModel):
     shift_type: ShiftType = "regular"
     specialization_focus: list[str] = []
     max_requests: int = Field(default=10, ge=1)
+
+    @field_validator("specialization_focus", mode="after")
+    @classmethod
+    def _check_specialization_focus(cls, v):
+        return _validate_specializations(v, allow_universal=True)
     priority_level: int = Field(default=1, ge=1, le=5)
     notes: Optional[str] = None
 
@@ -265,6 +294,11 @@ class CreateTemplateBody(BaseModel):
         return self
 
 
+    @field_validator("required_specializations", mode="after")
+    @classmethod
+    def _check_required_specializations(cls, v):
+        return _validate_specializations(v, allow_universal=True)
+
 class DeleteEmployeeRequest(BaseModel):
     reason: str = Field(min_length=1)
     reassign_to: Optional[int] = None
@@ -278,6 +312,11 @@ class CreateInviteRequest(BaseModel):
     role: Literal["executor", "manager"]
     specializations: list[str] = []
     hours: int = Field(default=24, ge=1, le=168)
+
+    @field_validator("specializations", mode="after")
+    @classmethod
+    def _check_specializations(cls, v):
+        return _validate_specializations(v)
 
 
 class CreateInviteResponse(BaseModel):

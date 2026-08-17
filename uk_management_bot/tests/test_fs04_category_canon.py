@@ -55,9 +55,11 @@ def test_display_localizes_new_keys_not_raw():
 
 
 @pytest.mark.parametrize("key,spec", [
-    ("heating", "hvac"),
-    ("ventilation", "hvac"),
-    ("elevator", "maintenance"),
+    # Единый словарь: категория маппится САМА В СЕБЯ — иначе форма
+    # предлагала одно, а диспетчер вычислял другое.
+    ("heating", "heating"),
+    ("ventilation", "ventilation"),
+    ("elevator", "elevator"),
     ("internet", "electrician"),
     ("plumbing", "plumber"),
     ("electricity", "electrician"),

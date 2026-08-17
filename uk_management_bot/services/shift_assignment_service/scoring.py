@@ -149,20 +149,13 @@ class ScoringEngine:
             logger.debug(f"Исполнитель {executor.id} не подходит: нет специализаций")
             return -1.0  # БЛОКИРУЮЩАЯ оценка
 
-        # Преобразуем специализации в множества для сравнения
-        required_specs = set(shift.specialization_focus)
-
-        # Обрабатываем разные форматы хранения специализаций исполнителя
-        if isinstance(executor.specialization, list):
-            executor_specs = set(executor.specialization)
-        elif isinstance(executor.specialization, str):
-            import json
-            try:
-                executor_specs = set(json.loads(executor.specialization))
-            except (json.JSONDecodeError, TypeError):
-                executor_specs = {executor.specialization}
-        else:
-            executor_specs = set()
+        # Единые парсеры: свой json.loads не знал про алиасы, поэтому legacy
+        # `electric`/`maintenance` не совпадали с каноном никогда.
+        from uk_management_bot.utils.specializations import (
+            parse_shift_specs, parse_specializations,
+        )
+        required_specs = parse_shift_specs(shift)
+        executor_specs = parse_specializations(executor)
 
         # СТРОГАЯ ПРОВЕРКА: исполнитель ДОЛЖЕН иметь ВСЕ требуемые специализации
         missing_specs = required_specs - executor_specs

@@ -1,29 +1,36 @@
-"""
-Single source of truth: category → specialization mapping.
+"""Single source of truth: category → specialization mapping.
+
+Категория маппится САМА В СЕБЯ везде, где канон специализаций это позволяет.
+Так «что выбрал менеджер в форме» и «что вычислил диспетчер» совпадают по
+построению. До единого словаря это было не так: категория `elevator` уезжала
+в `maintenance`, а форма предлагала `elevator` — совпадения не было никогда.
 
 Used by:
-- admin.py: auto_assign_request_by_category, assign specific executor
+- services/dispatch.py (авто-dispatch новой заявки), admin-хендлеры назначения,
+  api/requests/router.py (assign_to_duty), auto_manager/orchestrator.py.
+
+⚠️ Значения ОБЯЗАНЫ входить в `CANONICAL_SPECIALIZATIONS` — это держит ратчет
+`tests/test_specialization_canon.py`. Записи для КАЖДОГО канон-ключа категории
+тоже обязательны: `dispatch.py` зовёт `.get()` напрямую, мимо хелпера, и на
+дырке в карте молча оставляет заявку «Новая».
 """
 
 CATEGORY_TO_SPECIALIZATION: dict[str, str] = {
-    # Internal keys (new format)
-    "plumbing": "plumber",
+    # Канон-ключи категорий (бот-меню + web/API).
     "electricity": "electrician",
-    "landscaping": "landscaping",
+    "plumbing": "plumber",
+    "heating": "heating",
+    "ventilation": "ventilation",
+    "elevator": "elevator",
     "cleaning": "cleaning",
+    "landscaping": "landscaping",
     "security": "security",
-    "hvac": "hvac",
-    "maintenance": "maintenance",
-    "repair": "repair",
-    "installation": "installation",
-    # FS-04: канон-ключи web/бота, которых тут не было (Отопление/Вентиляция→hvac,
-    # Лифт→maintenance, Интернет/ТВ→electrician). Без них dispatch по EN-ключу
-    # после нормализации возвращал None и группа не назначалась.
-    "heating": "hvac",
-    "ventilation": "hvac",
-    "elevator": "maintenance",
     "internet": "electrician",
-    # Legacy Russian names (backward compatibility)
+    "repair": "repair",
+    # «Другое» уходит к разнорабочему: раньше записи не было вовсе, и такие
+    # заявки не назначались никому и никогда.
+    "other": "repair",
+    # Legacy Russian names (backward compatibility).
     "Сантехника": "plumber",
     "Электрика": "electrician",
     "Благоустройство": "landscaping",
@@ -31,16 +38,21 @@ CATEGORY_TO_SPECIALIZATION: dict[str, str] = {
     "Безопасность": "security",
     "Охрана": "security",
     "Ремонт": "repair",
-    "Установка": "installation",
-    "Обслуживание": "maintenance",
-    "HVAC": "hvac",
-    "Отопление": "hvac",
-    "Вентиляция": "hvac",
-    "Лифт": "maintenance",
+    "Установка": "repair",
+    "Обслуживание": "elevator",
+    "HVAC": "heating",
+    "Отопление": "heating",
+    "Вентиляция": "ventilation",
+    "Лифт": "elevator",
     "Интернет/ТВ": "electrician",
+    "Другое": "repair",
 }
 
 
 def get_specialization_for_category(category: str) -> str:
-    """Return specialization for a category key, defaulting to 'other'."""
-    return CATEGORY_TO_SPECIALIZATION.get(category, "other")
+    """Специализация по категории. Неизвестная категория → разнорабочий.
+
+    Дефолт именно `repair`, а не «ничего»: незнакомая категория — это работа,
+    которую всё равно кто-то должен взять, и разнорабочий тут ближе всех.
+    """
+    return CATEGORY_TO_SPECIALIZATION.get(category, "repair")

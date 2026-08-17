@@ -589,7 +589,9 @@ class UserManagementService:
             if 'executor' not in parse_roles_safe(user.roles):
                 return ""
             
-            specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
+            # Единый парсер: split(',') разваливал JSON-список на «["plumber"» и т.п.
+            from uk_management_bot.utils.specializations import parse_specializations
+            specializations = sorted(parse_specializations(user))
             if not specializations:
                 return ""
             

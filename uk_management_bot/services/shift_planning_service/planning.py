@@ -402,12 +402,14 @@ class PlanningMixin:
         try:
             # Проверяем специализации
             if template.required_specializations:
-                executor_specializations = executor.specialization or []
-                if isinstance(executor_specializations, str):
-                    executor_specializations = [executor_specializations]
-                
-                required_set = set(template.required_specializations)
-                executor_set = set(executor_specializations)
+                # Раньше JSON-строка оборачивалась в список из одного элемента и
+                # превращалась в «специализацию» вида '["plumber"]', которая не
+                # совпадала ни с чем. Единые парсеры + нормализация к канону.
+                from uk_management_bot.utils.specializations import (
+                    parse_specializations, parse_template_specs,
+                )
+                required_set = parse_template_specs(template)
+                executor_set = parse_specializations(executor)
                 
                 if not required_set.intersection(executor_set) and "universal" not in executor_set:
                     return False

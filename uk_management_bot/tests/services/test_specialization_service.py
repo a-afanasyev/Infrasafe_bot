@@ -70,8 +70,12 @@ class TestGetAvailableSpecializations:
     def test_contains_expected_specializations(self):
         service = SpecializationService(MagicMock())
         specs = service.get_available_specializations()
-        for expected in ["plumber", "electrician", "general", "cleaning"]:
+        # Единый словарь: `general` (общие работы) слился с «Ремонт /
+        # разнорабочий», а `elevator`/`heating`/`ventilation` стали
+        # полноценными специализациями — раньше это были ключи КАТЕГОРИЙ.
+        for expected in ["plumber", "electrician", "repair", "cleaning", "elevator"]:
             assert expected in specs
+        assert "general" not in specs and "maintenance" not in specs
 
 
 # ---------------------------------------------------------------------------

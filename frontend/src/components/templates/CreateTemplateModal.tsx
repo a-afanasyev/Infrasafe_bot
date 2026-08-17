@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { SHIFT_TYPES, PRIORITIES, CYCLE_PRESETS } from '../../constants'
+import { SPECIALIZATIONS } from '@/constants/specializations'
 
 interface Props {
   isOpen: boolean
@@ -45,7 +46,7 @@ const CREATE_DEFAULTS = {
 
 const START_MINUTES = [0, 15, 30, 45]
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-const SPEC_KEYS = ['electrician', 'plumber', 'heating', 'cleaning', 'security', 'elevator', 'landscaping', 'ventilation'] as const
+const SPEC_KEYS = SPECIALIZATIONS
 
 export default function CreateTemplateModal({ isOpen, onClose, template = null }: Props) {
   const { t } = useTranslation()

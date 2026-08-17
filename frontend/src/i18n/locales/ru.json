@@ -794,7 +794,8 @@
     "hvac": "ОВКВ",
     "maintenance": "Обслуживание",
     "installation": "Монтаж",
-    "repair": "Ремонт"
+    "repair": "🔨 Ремонт / разнорабочий",
+    "general": "Общие работы"
   },
   "shiftType": {
     "regular": "Обычная",

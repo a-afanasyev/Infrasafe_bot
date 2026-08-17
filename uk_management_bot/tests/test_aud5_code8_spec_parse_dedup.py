@@ -96,11 +96,16 @@ async def test_change_spec_json_list_with_spaces(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_change_spec_json_scalar_does_not_crash(monkeypatch):
-    """JSON-скаляр ('123') раньше парсился в int и ронял хендлер на .copy()."""
+    """JSON-скаляр ('123') раньше парсился в int и ронял хендлер на .copy().
+
+    С единым словарём такой токен вдобавок отбрасывается: он не резолвится в
+    канон, а показывать менеджеру мусор в «текущих специализациях» — значит
+    предлагать его сохранить обратно.
+    """
     _cb, state = await _run_change_spec(monkeypatch, _employee("123"))
     state.update_data.assert_awaited_once()
     data = state.update_data.await_args.args[0]
-    assert data["current_specializations"] == ["123"]
+    assert data["current_specializations"] == []
 
 
 @pytest.mark.asyncio

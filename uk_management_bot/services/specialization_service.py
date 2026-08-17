@@ -18,6 +18,7 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.constants.specializations import CANONICAL_SPECIALIZATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +26,9 @@ logger = logging.getLogger(__name__)
 class SpecializationService:
     """Сервис управления специализациями исполнителей"""
     
-    # Доступные специализации исполнителей
-    AVAILABLE_SPECIALIZATIONS = [
-        'plumber',        # Сантехник
-        'electrician',    # Электрик
-        'hvac',           # Отопление/вентиляция
-        'general',        # Общие работы
-        'cleaning',       # Уборка
-        'security',       # Охрана
-        'maintenance',    # Обслуживание
-        'landscaping',    # Благоустройство
-        'repair',         # Ремонт
-        'installation',   # Установка
-    ]
+    # Единый словарь (constants/specializations.py) — свой список здесь был
+    # четвёртым по счёту и разъезжался с формой выдачи приглашений.
+    AVAILABLE_SPECIALIZATIONS = list(CANONICAL_SPECIALIZATIONS)
     
     def __init__(self, db: Session):
         self.db = db
@@ -101,11 +92,9 @@ class SpecializationService:
             if not user or not user.specialization:
                 return []
             
-            # Парсим CSV строку
-            specializations = [s.strip() for s in user.specialization.split(',') if s.strip()]
-            
-            # Валидируем против доступных специализаций
-            return self.validate_specializations(specializations)
+            # Единый парсер: поле хранится и JSON-списком, и CSV, и скаляром,
+            # и нормализует legacy-токены к канону.
+            return sorted(parse_specializations(user))
             
         except Exception as e:
             logger.error(f"Ошибка получения специализаций пользователя {user_id}: {e}")
@@ -142,9 +131,9 @@ class SpecializationService:
             # Валидируем новые специализации
             valid_specializations = self.validate_specializations(specializations)
             
-            # Обновляем специализации пользователя
+            # Пишем JSON-списком — канон хранения после миграции 010.
             if valid_specializations:
-                user.specialization = ','.join(valid_specializations)
+                user.specialization = json.dumps(valid_specializations, ensure_ascii=False)
             else:
                 user.specialization = None
             

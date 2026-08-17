@@ -315,13 +315,16 @@ class TestFormatUserSpecializations:
 
     @patch("uk_management_bot.services.user_management_service.get_text", side_effect=lambda key, **kw: key)
     def test_formats_specializations(self, mock_get_text):
+        # Значения нормализуются к канону: `electricity`/`plumbing` — legacy
+        # (и вовсе ключи категорий), в форме их нет, но в старых строках БД
+        # они встречаются и обязаны резолвиться, а не отбрасываться.
         user = _FakeUser(
             roles='["executor"]',
             specialization="electricity,plumbing"
         )
         result = self.svc._format_user_specializations(user)
-        assert "specializations.electricity" in result
-        assert "specializations.plumbing" in result
+        assert "specializations.electrician" in result
+        assert "specializations.plumber" in result
 
     @patch("uk_management_bot.services.user_management_service.get_text", side_effect=lambda key, **kw: key)
     def test_empty_specialization(self, mock_get_text):
