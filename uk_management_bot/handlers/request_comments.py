@@ -102,7 +102,15 @@ def _load_request_exists(db, request_number: str) -> bool:
 
 
 def _apply_comment(db, request_number: str, author_telegram_id: int, comment_text: str, comment_type: str) -> str:
-    """-> 'request_not_found' | 'author_not_found' | 'ok'. Коммитит CommentService.add_comment.
+    """-> 'request_not_found' | 'author_not_found' | 'no_access' | 'ok'. Коммитит CommentService.add_comment.
+
+    ⚠️ Права проверяются ЗДЕСЬ, в точке записи, а не только на входе в цепочку.
+    Так было: авторизация стояла ровно один раз, в `handle_add_comment_start`, а
+    номер заявки жил в разделяемом ключе состояния — подмена ключа между шагами
+    отправляла комментарий в ЧУЖУЮ заявку (секревью 2026-08-18). Именованный
+    ключ `comment_request_number` эту подмену закрывает, но полагаться на «нас
+    уже авторизовали» в точке записи нельзя: любой новый вход в цепочку снова
+    открыл бы дыру, а этот слой её держит независимо.
 
     Исключения ``add_comment`` (ValueError валидации, ошибки записи) намеренно
     НЕ гасятся: они всплывают наружу через run_db в общий ``except`` хендлера —
@@ -121,6 +129,9 @@ def _apply_comment(db, request_number: str, author_telegram_id: int, comment_tex
     author = db.query(User).filter(User.telegram_id == author_telegram_id).first()
     if not author:
         return "author_not_found"
+
+    if not has_request_access_sync(db, author, request):
+        return "no_access"
 
     # Создаем сервис комментариев
     comment_service = CommentService(db)
@@ -186,12 +197,25 @@ def _load_comments_view(db, request_number: str, telegram_id: int, lang: str) ->
     )
 
 
-def _load_comments_by_type_view(db, request_number: str, comment_type: str, lang: str) -> tuple:
-    """-> ('request_not_found'|'no_comments', None) | ('ok', _CommentsView)."""
+def _load_comments_by_type_view(db, request_number: str, comment_type: str, telegram_id: int, lang: str) -> tuple:
+    """-> ('request_not_found'|'user_not_found'|'no_access'|'no_comments', None) | ('ok', _CommentsView).
+
+    Проверка прав добавлена 2026-08-18: номер заявки приходит из callback_data,
+    и без неё это чтение чужой переписки. Хендлер сейчас недостижим (перекрыт
+    префиксом `view_comments_`, см. ⚠️ у него) — но недостижимость чинится
+    порядком регистрации, а дыра осталась бы.
+    """
     # Проверяем существование заявки
     request = db.query(Request).filter(Request.request_number == request_number).first()
     if not request:
         return ("request_not_found", None)
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return ("user_not_found", None)
+
+    if not has_request_access_sync(db, user, request):
+        return ("no_access", None)
 
     # Получаем комментарии определенного типа
     comment_service = CommentService(db)
@@ -212,16 +236,25 @@ def _load_comments_by_type_view(db, request_number: str, comment_type: str, lang
     )
 
 
-def _load_all_comments_view(db, request_number: str, lang: str) -> tuple:
-    """-> ('request_not_found'|'no_comments', None) | ('ok', _CommentsView).
+def _load_all_comments_view(db, request_number: str, telegram_id: int, lang: str) -> tuple:
+    """-> ('request_not_found'|'user_not_found'|'no_access'|'no_comments', None) | ('ok', _CommentsView).
 
-    Отличается от ``_load_comments_view`` отсутствием проверки прав — так было
-    в возврате к списку комментариев исторически (⚠️ см. хендлер).
+    Проверка прав добавлена 2026-08-18. Раньше её здесь не было «исторически»,
+    и это отличало возврат к списку от входа в него: `back_to_comments_<номер>`
+    отдавал переписку по ЛЮБОЙ заявке — примитив для этого не нужен, номер идёт
+    прямо из callback_data.
     """
     # Получаем заявку
     request = db.query(Request).filter(Request.request_number == request_number).first()
     if not request:
         return ("request_not_found", None)
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return ("user_not_found", None)
+
+    if not has_request_access_sync(db, user, request):
+        return ("no_access", None)
 
     # Получаем все комментарии
     comment_service = CommentService(db)
@@ -269,8 +302,17 @@ async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, l
             return
 
         # Сохраняем данные в состоянии.
+        #
+        # ⚠️ Ключ ИМЕНОВАННЫЙ (`comment_request_number`), а не общий
+        # `request_number`. Общий пишут чужие флоу — в частности живой
+        # `return_request_<любой номер>` (`handlers/request_acceptance.py`), где
+        # номер берётся из клиентского callback_data без проверки владения. Пока
+        # цепочка читала общий ключ, это была подмена цели между шагами:
+        # комментарий уезжал в чужую заявку (секревью 2026-08-18). Родня уже
+        # именованных `edit_materials_request_number`, `return_to_work_number`,
+        # `executor_request_number` — они этим примитивом не поднимаются.
         await state.update_data(
-            request_number=request_number,
+            comment_request_number=request_number,
             user_roles=ctx.user_roles,
         )
 
@@ -291,7 +333,7 @@ async def handle_add_comment_start(callback: CallbackQuery, state: FSMContext, l
         logger.error(f"Ошибка начала добавления комментария: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
-@router.callback_query(F.data.startswith("comment_type_"))
+@router.callback_query(RequestCommentStates.waiting_for_comment_type, F.data.startswith("comment_type_"))
 async def handle_comment_type_selection(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Обработка выбора типа комментария"""
     lang = language
@@ -339,7 +381,7 @@ async def handle_comment_input(message: Message, state: FSMContext, language: st
 
         # Получаем данные из состояния
         data = await state.get_data()
-        request_number = data.get("request_number")
+        request_number = data.get("comment_request_number")
         comment_type = data.get("comment_type")
 
         exists = await run_db(lambda s: _load_request_exists(s, request_number), db=_db)
@@ -365,7 +407,7 @@ async def handle_comment_input(message: Message, state: FSMContext, language: st
         logger.error(f"Ошибка ввода комментария: {e}")
         await message.answer(get_text("common.error_occurred", language=lang).format(error=str(e)))
 
-@router.callback_query(F.data == "confirm_comment")
+@router.callback_query(RequestCommentStates.waiting_for_confirmation, F.data == "confirm_comment")
 async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Подтверждение добавления комментария"""
     lang = language
@@ -373,7 +415,7 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
     try:
         # Получаем данные из состояния
         data = await state.get_data()
-        request_number = data.get("request_number")
+        request_number = data.get("comment_request_number")
         comment_type = data.get("comment_type")
         comment_text = data.get("comment_text")
 
@@ -394,6 +436,10 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
 
         if verdict == "author_not_found":
             await callback.answer(get_text("errors.user_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "no_access":
+            await callback.answer(get_text("comments.no_permission_to_add", language=lang), show_alert=True)
             return
 
         # Показываем сообщение об успехе
@@ -490,12 +536,22 @@ async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContex
         comment_type = "_".join(parts[4:-1])  # Объединяем части типа комментария
 
         verdict, view = await run_db(
-            lambda s: _load_comments_by_type_view(s, request_number, comment_type, lang),
+            lambda s: _load_comments_by_type_view(
+                s, request_number, comment_type, callback.from_user.id, lang
+            ),
             db=_db,
         )
 
         if verdict == "request_not_found":
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "user_not_found":
+            await callback.answer(get_text("comments.user_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "no_access":
+            await callback.answer(get_text("comments.no_permission_to_view", language=lang), show_alert=True)
             return
 
         if verdict == "no_comments":
@@ -525,15 +581,24 @@ async def handle_back_to_comments(callback: CallbackQuery, state: FSMContext, la
         # Получаем ID заявки
         request_number = callback.data.split("_")[-1]
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): возврат к списку НЕ
-        # проверяет права (`has_request_access_sync`), в отличие от входа
-        # `view_comments_`. Кто получил callback_data, тот увидит историю.
+        # Права проверяются так же, как на входе `view_comments_` (2026-08-18).
+        # Раньше их здесь не было: кто прислал callback_data, тот и видел
+        # историю переписки по любой заявке.
         verdict, view = await run_db(
-            lambda s: _load_all_comments_view(s, request_number, lang), db=_db
+            lambda s: _load_all_comments_view(s, request_number, callback.from_user.id, lang),
+            db=_db,
         )
 
         if verdict == "request_not_found":
             await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "user_not_found":
+            await callback.answer(get_text("comments.user_not_found", language=lang), show_alert=True)
+            return
+
+        if verdict == "no_access":
+            await callback.answer(get_text("comments.no_permission_to_view", language=lang), show_alert=True)
             return
 
         if verdict == "no_comments":
