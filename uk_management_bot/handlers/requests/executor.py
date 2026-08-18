@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.request_access import has_request_access_sync
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 
 from uk_management_bot.keyboards.base import get_user_contextual_keyboard
@@ -61,17 +62,26 @@ class ExecutorRequestStates(StatesGroup):
 
 
 @router.callback_query(F.data.startswith("executor_view_media_"))
-async def executor_view_media(callback: CallbackQuery):
+async def executor_view_media(callback: CallbackQuery, *, _db=None):
     """Просмотр медиа-файлов заявки исполнителем"""
     try:
         request_number = callback.data.replace("executor_view_media_", "")
-        with _db_scope(None) as db_session:
+        with _db_scope(_db) as db_session:
             service = RequestHandlerService(db_session)
             lang = get_user_language(callback.from_user.id, db_session)
 
             request = service.get_request_by_number(request_number)
 
             if not request:
+                await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
+                return
+
+            # Права — канон `services/request_access` (как listing.py). Номер заявки
+            # приходит из callback_data (перебираемый формат) — без проверки хендлер
+            # отдавал медиа ЛЮБОЙ заявки. Отказ — ТЕМ ЖЕ текстом, что «не найдено»:
+            # иначе разница ответов — оракул существования заявки.
+            requester = service.get_user_by_telegram_id(callback.from_user.id)
+            if not requester or not has_request_access_sync(db_session, requester, request):
                 await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
                 return
 
