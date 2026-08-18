@@ -37,6 +37,7 @@ class TestBugBot030CancelRegex:
         "cancel_auto_plan_42",
         "cancel_action",
         "cancel_apartment_selection",
+        "addr_cancel_selection",
         # Произвольные опечатки
         "cancel_123",
         "cancel_abc-def",

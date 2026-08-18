@@ -14,6 +14,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
+from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.services.shift_service import ShiftService
 from uk_management_bot.services.notification_service import async_notify_shift_ended
 from uk_management_bot.services.notification_service.channel import (
@@ -167,14 +168,24 @@ def _load_active_shifts_for_end(db, telegram_id: int):
     return lang, "ok", rows
 
 
-def _load_shift_end_view(db, shift_id: int) -> Optional[_ShiftEndView]:
-    """-> _ShiftEndView | None (None — смена не найдена)."""
+def _load_shift_end_view(db, shift_id: int, telegram_id: int) -> Optional[_ShiftEndView]:
+    """-> _ShiftEndView | None (None — смена не найдена ИЛИ не принадлежит telegram_id).
+
+    Владение обязательно: shift_id приходит из callback_data (end_shift_select:),
+    его присылает клиент. Фильтр зеркалит _end_shift_by_id_unit; «чужая смена»
+    и «нет смены» неразличимы снаружи (анти-оракул).
+    """
     from uk_management_bot.database.models.shift import Shift
     from uk_management_bot.database.models.request import Request
     from uk_management_bot.database.models.request_assignment import RequestAssignment
+    from uk_management_bot.database.models.user import User
     from sqlalchemy import and_
 
-    shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    owner = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not owner:
+        return None
+
+    shift = db.query(Shift).filter(Shift.id == shift_id, Shift.user_id == owner.id).first()
     if not shift:
         return None
 
@@ -386,7 +397,7 @@ async def end_shift_confirm(message: Message, *, _db=None):
 
         # Если смена одна - показываем детали сразу
         if len(active_shifts) == 1:
-            await show_shift_end_details(message, active_shifts[0].id, lang, _db=_db)
+            await show_shift_end_details(message, active_shifts[0].id, lang, telegram_id=message.from_user.id, _db=_db)
             return
 
         # Если смен несколько - показываем список для выбора
@@ -441,12 +452,16 @@ async def end_shift_confirm(message: Message, *, _db=None):
         await message.answer(get_text("shifts.error_showing_list", language=lang))
 
 
-async def show_shift_end_details(message: Message, shift_id: int, lang: str = "ru", *, _db=None):
-    """Показать детали смены перед завершением с проверкой активных заявок"""
+async def show_shift_end_details(message: Message, shift_id: int, lang: str = "ru", *, telegram_id: int, _db=None):
+    """Показать детали смены перед завершением с проверкой активных заявок.
+
+    telegram_id — ЯВНЫЙ аргумент: у callback.message `from_user` — это БОТ,
+    выводить владельца из message нельзя.
+    """
     try:
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-        view = await run_db(lambda s: _load_shift_end_view(s, shift_id), db=_db)
+        view = await run_db(lambda s: _load_shift_end_view(s, shift_id, telegram_id), db=_db)
         if view is None:
             await message.answer(get_text("shifts.shift_not_found", language=lang))
             return
@@ -524,7 +539,7 @@ async def handle_shift_selection(callback: CallbackQuery, language: str = "ru", 
     try:
         shift_id = int(callback.data.split(":")[1])
         lang = await run_db(lambda s: _lang_by_tg(s, callback.from_user.id), db=_db)
-        await show_shift_end_details(callback.message, shift_id, lang, _db=_db)
+        await show_shift_end_details(callback.message, shift_id, lang, telegram_id=callback.from_user.id, _db=_db)
         await callback.answer()
     except Exception as e:
         logger.error(f"Ошибка выбора смены: {e}")
@@ -748,8 +763,8 @@ async def shifts_filters_reset(callback: CallbackQuery, state: FSMContext, langu
 
 
 @router.message(F.text.in_(ACTIVE_SHIFTS_BUTTON_TEXTS))
-async def manager_active_shifts(message: Message, state: FSMContext, language: str = "ru"):
-    # Здесь предполагается, что проверка роли происходит отдельно (например, через middleware)
+@require_role(['admin', 'manager'])
+async def manager_active_shifts(message: Message, state: FSMContext, language: str = "ru", roles: list = None, user=None):
     with session_scope() as db:  # ARCH-013
         service = ShiftService(db)
         shifts = service.list_shifts(status="active")

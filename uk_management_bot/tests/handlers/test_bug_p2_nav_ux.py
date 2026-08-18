@@ -194,55 +194,106 @@ class TestBug020CancelInputRereadsUser:
 
 
 class TestBug021CancelApartmentSelectionContext:
-    """cancel_apartment_selection must respect entry-point context."""
+    """A3 (аудит 2026-08-18): отмена разделена по callback_data.
+
+    Раньше оба рукава жили в одном хендлере и различались по entry_from из
+    state (BUG-BOT-021); теперь жительский рукав — cancel_apartment_selection
+    в user_apartment_selection.py (вне гейта), админский — addr_cancel_selection
+    в navigation.py (под RoleGate). Оба сценария остаются покрытыми.
+    """
 
     @pytest.mark.asyncio
     async def test_cancel_from_profile_returns_to_profile_view(self):
-        from uk_management_bot.handlers.address_apartments import (
-            cancel_apartment_action,
+        from uk_management_bot.handlers.user_apartment_selection import (
+            cancel_apartment_selection_user,
         )
 
         callback = _make_callback("cancel_apartment_selection")
         state = _make_state({"entry_from": "profile"})
 
         with patch(
-            "uk_management_bot.handlers.address_apartments.navigation.get_text",
+            "uk_management_bot.handlers.user_apartment_selection.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.address_apartments.navigation._return_to_profile_apartments",
-            new=AsyncMock(return_value=True),
-        ) as profile_return, patch(
-            "uk_management_bot.handlers.address_apartments.navigation._return_to_admin_yards",
-            new=AsyncMock(return_value=True),
-        ) as admin_return:
-            await cancel_apartment_action(callback, state, language="ru")
+            "uk_management_bot.handlers.user_apartments.show_my_apartments",
+            new=AsyncMock(),
+        ) as profile_return:
+            await cancel_apartment_selection_user(callback, state, language="ru")
 
         profile_return.assert_awaited()
-        admin_return.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_cancel_from_admin_returns_to_admin_view(self):
+    async def test_admin_cancel_returns_to_admin_view(self):
         from uk_management_bot.handlers.address_apartments import (
             cancel_apartment_action,
         )
 
-        callback = _make_callback("cancel_apartment_selection")
-        state = _make_state({"entry_from": "admin"})
+        callback = _make_callback("addr_cancel_selection")
+        state = _make_state({})
 
         with patch(
             "uk_management_bot.handlers.address_apartments.navigation.get_text",
             side_effect=lambda key, **kw: key,
         ), patch(
-            "uk_management_bot.handlers.address_apartments.navigation._return_to_profile_apartments",
-            new=AsyncMock(return_value=True),
-        ) as profile_return, patch(
             "uk_management_bot.handlers.address_apartments.navigation._return_to_admin_yards",
             new=AsyncMock(return_value=True),
         ) as admin_return:
             await cancel_apartment_action(callback, state, language="ru")
 
         admin_return.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_resident_cancel_from_onboarding_goes_to_documents(self):
+        """Из онбординга отмена ведёт на шаг документов (как confirm-путь),
+        сохраняя регистрационные данные state."""
+        from uk_management_bot.handlers.user_apartment_selection import (
+            cancel_apartment_selection_user,
+        )
+        from uk_management_bot.states.onboarding import OnboardingStates
+
+        callback = _make_callback("cancel_apartment_selection")
+        state = _make_state({"phone": "+7999", "selected_yard_id": 3})
+        state.get_state = AsyncMock(
+            return_value=OnboardingStates.waiting_for_yard_selection.state
+        )
+        state.set_state = AsyncMock()
+        state.update_data = AsyncMock()
+
+        with patch(
+            "uk_management_bot.handlers.user_apartment_selection.get_text",
+            side_effect=lambda key, **kw: key,
+        ), patch(
+            "uk_management_bot.keyboards.onboarding.get_document_type_keyboard",
+            return_value=None,
+        ):
+            await cancel_apartment_selection_user(callback, state, language="ru")
+
+        state.set_state.assert_awaited_once_with(OnboardingStates.waiting_for_document_type)
+        state.clear.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_resident_cancel_stateless_only_cancels(self):
+        """Просроченная кнопка вне состояния: только «отменено», никаких меню."""
+        from uk_management_bot.handlers.user_apartment_selection import (
+            cancel_apartment_selection_user,
+        )
+
+        callback = _make_callback("cancel_apartment_selection")
+        state = _make_state({})
+        state.get_state = AsyncMock(return_value=None)
+
+        with patch(
+            "uk_management_bot.handlers.user_apartment_selection.get_text",
+            side_effect=lambda key, **kw: key,
+        ), patch(
+            "uk_management_bot.handlers.user_apartments.show_my_apartments",
+            new=AsyncMock(),
+        ) as profile_return:
+            await cancel_apartment_selection_user(callback, state, language="ru")
+
         profile_return.assert_not_awaited()
+        state.clear.assert_awaited()
+        callback.message.answer.assert_not_called()
 
 
 # ─── BUG-BOT-025 ────────────────────────────────────────────────────────────

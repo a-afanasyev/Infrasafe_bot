@@ -19,6 +19,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
 from uk_management_bot.database.session import run_db
+from uk_management_bot.handlers._role_gate import RoleGate
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import YardManagementStates
 from uk_management_bot.keyboards.address_management import (
@@ -38,13 +39,14 @@ from uk_management_bot.utils.button_texts import get_address_directory_texts, ge
 logger = logging.getLogger(__name__)
 
 router = Router()
+# Гейт всего роутера: root-фильтр отрабатывает ДО хендлеров, отказ = UNHANDLED
+# (апдейт уходит дальше по цепочке main.py, транзит не ломается).
+router.callback_query.filter(RoleGate())
+router.message.filter(RoleGate())
 
 ADDRESS_DIRECTORY_TEXTS = get_address_directory_texts()
 CANCEL_TEXTS = get_cancel_texts()
 SKIP_TEXTS = get_skip_texts()
-
-# Примечание: Проверка ролей происходит на уровне глобальных middleware (auth_middleware)
-# Дополнительная проверка в handlers при необходимости
 
 
 # ==========================================================================

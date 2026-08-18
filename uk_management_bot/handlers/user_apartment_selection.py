@@ -668,3 +668,66 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
     except Exception as e:
         logger.error(f"Ошибка начала выбора квартиры из профиля: {e}")
         await callback.answer(get_text("user_apt_selection.handlers.error_loading_data", language=lang), show_alert=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ЖИТЕЛЬСКАЯ ОТМЕНА ВЫБОРА КВАРТИРЫ (A3, аудит 2026-08-18)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Состояния шага выбора (регистрация И профиль используют одни OnboardingStates,
+# профиль дополнительно помечает entry_from="profile" — поэтому порядок веток:
+# сначала profile, потом онбординг).
+_SELECTION_STATES = {
+    OnboardingStates.waiting_for_yard_selection.state,
+    OnboardingStates.waiting_for_building_selection.state,
+    OnboardingStates.waiting_for_apartment_selection.state,
+}
+
+
+@router.callback_query(F.data == "cancel_apartment_selection")
+async def cancel_apartment_selection_user(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+    """Отмена ЖИТЕЛЬСКОГО выбора квартиры.
+
+    A3: отмена разделена по callback_data. Раньше единственный хендлер жил в
+    address_apartments/navigation.py и различал рукава по entry_from из state —
+    но state пишет флоу, а callback присылает клиент, и «иначе»-ветка отдавала
+    жителю АДМИНСКОЕ меню справочника. Теперь:
+      * из профиля (entry_from="profile") → «Мои квартиры»;
+      * из онбординга → шаг документов (тот же переход, что у confirm-пути);
+      * вне состояния (просроченная кнопка) → только «действие отменено».
+    Админский рукав — addr_cancel_selection в navigation.py, под RoleGate.
+    """
+    lang = language
+    data = await state.get_data()
+    entry_from = data.get("entry_from")
+    current_state = await state.get_state()
+
+    await callback.message.edit_text(
+        get_text("address_apartments.handlers.action_cancelled", language=lang)
+    )
+
+    if entry_from == "profile":
+        await state.clear()
+        from uk_management_bot.handlers.user_apartments import show_my_apartments
+        await show_my_apartments(callback, state, language=lang)
+        return
+
+    if current_state in _SELECTION_STATES:
+        # Онбординг: сохраняем регистрационные данные, чистим только выбор —
+        # ровно как confirm-путь выше (переход к документам).
+        await state.update_data(
+            selected_yard_id=None,
+            selected_yard_name=None,
+            selected_building_id=None,
+            selected_building_address=None,
+            selected_apartment_id=None,
+        )
+        await state.set_state(OnboardingStates.waiting_for_document_type)
+        from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
+        await callback.message.answer(
+            get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
+            reply_markup=get_document_type_keyboard(),
+        )
+        return
+
+    await state.clear()

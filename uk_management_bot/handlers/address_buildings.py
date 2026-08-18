@@ -20,6 +20,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
 from uk_management_bot.database.session import run_db
+from uk_management_bot.handlers._role_gate import RoleGate
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import BuildingManagementStates
 from uk_management_bot.keyboards.address_management import (
@@ -40,6 +41,9 @@ from uk_management_bot.utils.button_texts import get_skip_texts, get_cancel_text
 logger = logging.getLogger(__name__)
 
 router = Router()
+# Гейт всего роутера (см. handlers/_role_gate.py): отказ = UNHANDLED, транзит цел.
+router.callback_query.filter(RoleGate())
+router.message.filter(RoleGate())
 
 SKIP_TEXTS = get_skip_texts()
 CANCEL_TEXTS = get_cancel_texts()
@@ -339,7 +343,7 @@ async def start_building_creation(callback: CallbackQuery, state: FSMContext, la
 
         await callback.message.edit_text(
             get_text("address_buildings.handlers.create_building_step1", language=lang),
-            reply_markup=get_user_apartment_selection_keyboard(yards, "yard", "building_create_yard")
+            reply_markup=get_user_apartment_selection_keyboard(yards, "yard", "building_create_yard", cancel_callback="addr_cancel_selection")
         )
 
     except Exception as e:
