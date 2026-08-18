@@ -17,6 +17,7 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.database.session import run_db
+from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.helpers import get_text
 
@@ -631,7 +632,8 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext, *, _db=Non
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("admin_manage_apartments_"))
-async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+@require_role(['admin', 'manager'])
+async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: просмотр и управление квартирами пользователя"""
     await state.clear()
     lang = language
@@ -707,7 +709,8 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("admin_apartment_detail_"))
-async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+@require_role(['admin', 'manager'])
+async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: просмотр деталей квартиры"""
     await state.clear()
     lang = language
@@ -771,7 +774,8 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(F.data.startswith("admin_approve_apartment_"))
-async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+@require_role(['admin', 'manager'])
+async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: одобрить квартиру"""
     lang = language
     try:
@@ -794,7 +798,9 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
         # Возвращаемся к деталям
         # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
         # карточка после одобрения рендерится на "ru".
-        await admin_apartment_detail(callback, state, _db=_db)
+        # roles/user обязательны: require_role читает kwargs, без них менеджер
+        # получил бы отказ сразу после успешного действия.
+        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
 
 
     except Exception as e:
@@ -803,7 +809,8 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
 
 
 @router.callback_query(F.data.startswith("admin_reject_apartment_"))
-async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+@require_role(['admin', 'manager'])
+async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: отклонить квартиру"""
     lang = language
     try:
@@ -826,7 +833,8 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
         # Возвращаемся к деталям
         # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
         # карточка после отклонения рендерится на "ru".
-        await admin_apartment_detail(callback, state, _db=_db)
+        # roles/user обязательны: require_role читает kwargs (см. approve выше).
+        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
 
 
     except Exception as e:
@@ -835,7 +843,8 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(F.data.startswith("admin_toggle_owner_"))
-async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+@require_role(['admin', 'manager'])
+async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: переключить статус владелец/жилец"""
     lang = language
     try:
@@ -853,7 +862,8 @@ async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, 
         # Обновляем детали
         # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
         # карточка после переключения рендерится на "ru".
-        await admin_apartment_detail(callback, state, _db=_db)
+        # roles/user обязательны: require_role читает kwargs (см. approve выше).
+        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
 
 
     except Exception as e:
