@@ -693,7 +693,10 @@ async def delete_yard(callback: CallbackQuery, language: str = "ru", *, _db=None
 # ОТМЕНА ДЕЙСТВИЙ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.callback_query(F.data == "cancel_action")
+# BUG-155 п.3 (закрыто 2026-08-18): до сужения фильтров этот хендлер не получал
+# апдейт НИКОГДА — `address_moderation` с голым `cancel_action` включён раньше
+# (`main.py:391` против `:394`) и забирал отмену создания двора себе.
+@router.callback_query(StateFilter(YardManagementStates), F.data == "cancel_action")
 async def cancel_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена текущего действия"""
     await state.clear()

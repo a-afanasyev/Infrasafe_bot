@@ -428,13 +428,19 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, roles: l
         await callback.answer(get_text('user_mgmt.handlers.error_occurred', language=lang), show_alert=True)
 
 
-# ⚠️ Предсуществующий дефект (сохранён 1:1): фильтр-префикс "view_user_"
-# перехватывает и callback_data "view_user_documents_{id}"
-# (keyboards/user_verification.py), адресованный user_verification/documents.py:
-# роутер user_management включён в main.py раньше (#391 против #393). Разбор
-# int(parts[2]) на "documents" падает ValueError, и менеджер получает
-# «ошибка обработки запроса» вместо списка документов.
-@router.callback_query(F.data.startswith("view_user_"))
+# BUG-155 п.3 (закрыто 2026-08-18): фильтр-префикс "view_user_" перехватывал и
+# "view_user_documents_{id}" (keyboards/user_verification.py), адресованный
+# user_verification/documents.py — роутер user_management включён в main.py
+# раньше. `int("documents")` падал ValueError, и менеджер вместо списка
+# документов получал «ошибка обработки запроса».
+#
+# Строгий регекс вместо открытого префикса (прецедент PR-25/BUG-BOT-034):
+# закрывает не только известный случай, но и любой будущий
+# `view_user_<слово>_<id>`, который иначе снова провалился бы сюда.
+_VIEW_USER_ID_RE = r"^view_user_\d+$"
+
+
+@router.callback_query(F.data.regexp(_VIEW_USER_ID_RE))
 async def handle_view_user_from_notification(callback: CallbackQuery, roles: list = None, language: str = "ru", *, _db=None):
     """Просмотреть профиль пользователя из уведомления о регистрации"""
     lang = language

@@ -572,7 +572,13 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
 # ОТМЕНА ДЕЙСТВИЙ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.callback_query(F.data == "cancel_action")
+# BUG-155 п.3 (закрыто 2026-08-18): фильтр был голым `F.data == "cancel_action"`,
+# а этот роутер включён первым из адресных (`main.py:391`) — «Отмена» ЛЮБОГО
+# чужого флоу приходила сюда. Кнопку рендерит единственный генератор
+# `get_cancel_keyboard_inline`, и только внутри FSM-состояний модерации и
+# дворов, поэтому отмена создания двора чистила состояние и показывала список
+# МОДЕРАЦИИ. Фильтр по собственной группе состояний отдаёт апдейт своему флоу.
+@router.callback_query(StateFilter(ApartmentModerationStates), F.data == "cancel_action")
 async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Отмена действия модерации"""
     current_state = await state.get_state()

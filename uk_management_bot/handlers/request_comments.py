@@ -25,6 +25,7 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.states.request_comments import RequestCommentStates
 from uk_management_bot.services.comment_service import CommentService
 from uk_management_bot.services.request_access import has_request_access_sync
+from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 from uk_management_bot.keyboards.request_comments import (
     get_comment_type_keyboard,
     get_comment_confirmation_keyboard,
@@ -475,7 +476,15 @@ async def handle_comment_cancellation(callback: CallbackQuery, state: FSMContext
         logger.error(f"Ошибка отмены комментария: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
-@router.callback_query(F.data.startswith("view_comments_"))
+# BUG-155 п.3: фильтр был открытым `startswith("view_comments_")` и съедал
+# `view_comments_by_type_{type}_{number}` — оба хендлера в ОДНОМ роутере, и
+# выигрывал зарегистрированный выше. Строгий регекс на общий
+# `REQUEST_NUMBER_CORE` (прецедент PR-25/BUG-BOT-034) закрывает не только
+# известный случай, но и любой будущий `view_comments_<слово>_<номер>`.
+_VIEW_COMMENTS_RE = rf"^view_comments_{REQUEST_NUMBER_CORE}$"
+
+
+@router.callback_query(F.data.regexp(_VIEW_COMMENTS_RE))
 async def handle_view_comments(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Просмотр комментариев заявки"""
     lang = language
@@ -519,11 +528,11 @@ async def handle_view_comments(callback: CallbackQuery, state: FSMContext, langu
         logger.error(f"Ошибка просмотра комментариев: {e}")
         await callback.answer(get_text("common.error_occurred", language=lang).format(error=str(e)), show_alert=True)
 
-# ⚠️ Предсуществующий дефект (сохранён 1:1): этот фильтр перекрыт хендлером
-# `view_comments_` выше — он зарегистрирован в ЭТОМ же роутере раньше, а
-# `view_comments_by_type_...` начинается с `view_comments_`, поэтому aiogram
-# отдаёт апдейт первому. Кнопки типов (keyboards/request_comments.py) в проде
-# показывают всю историю вместо выборки по типу; сам хендлер недостижим.
+# BUG-155 п.3 (закрыто 2026-08-18): хендлер был недостижим — `view_comments_`
+# выше перехватывал префикс, и кнопки типов показывали всю историю. После
+# сужения фильтра-соседа апдейт доходит сюда; проверка прав в загрузчике
+# добавлена раньше (BUG-172), поэтому оживление экрана не открывает чужую
+# переписку.
 @router.callback_query(F.data.startswith("view_comments_by_type_"))
 async def handle_view_comments_by_type(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """Просмотр комментариев определенного типа"""
