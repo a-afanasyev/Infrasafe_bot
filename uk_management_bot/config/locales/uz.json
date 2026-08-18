@@ -6904,7 +6904,8 @@
     "view_stats": "Statistikani ko'rish",
     "heating": "🔥 Isitish",
     "ventilation": "💨 Ventilyatsiya",
-    "elevator": "🛗 Lift"
+    "elevator": "🛗 Lift",
+    "universal": "Universal"
   },
   "status": {
     "approved": "Tasdiqlandi",
