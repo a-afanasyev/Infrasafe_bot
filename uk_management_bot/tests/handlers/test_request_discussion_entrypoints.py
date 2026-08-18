@@ -161,19 +161,23 @@ class TestDiscussionRowsBuilder:
         assert f"view_report_{NUMBER}" in flat(with_report)
 
     def test_callbacks_match_what_the_handlers_listen_for(self):
-        """Префиксы сверяются с фильтрами хендлеров, а не с памятью автора.
+        """Кнопка обязана ДОХОДИТЬ до хендлера — проверяем разрешением роутинга.
 
-        Именно рассинхрон «кнопка шлёт одно, хендлер ждёт другое» дал бы
-        зелёный билдер и мёртвую кнопку.
+        Раньше здесь сверялась подстрока `F.data.startswith("<префикс>")` в
+        исходниках. Намерение она держала лишь косвенно и сломалась, как только
+        фильтр `view_comments_` сузили до строгого регекса (BUG-155 п.3) — хотя
+        кнопка продолжала работать. Прямая проверка сильнее: прогоняем реальный
+        `callback_data` кнопки через реальные роутеры и смотрим, подхватит ли
+        его хоть кто-нибудь.
         """
-        import inspect
+        from uk_management_bot.handlers.request_comments import router as comments_router
+        from uk_management_bot.handlers.request_reports import router as reports_router
+        from uk_management_bot.tests.handlers.routing_probe import resolve
 
-        from uk_management_bot.handlers import request_comments, request_reports
-
-        sources = inspect.getsource(request_comments) + inspect.getsource(request_reports)
-        for prefix in ("view_comments_", "add_comment_", "view_report_"):
-            assert f'F.data.startswith("{prefix}")' in sources, (
-                f"хендлер на префикс {prefix} не найден — кнопка вела бы в никуда"
+        routers = [comments_router, reports_router]
+        for data in (f"view_comments_{NUMBER}", f"add_comment_{NUMBER}", f"view_report_{NUMBER}"):
+            assert resolve(routers, data) is not None, (
+                f"callback_data {data} не доходит ни до одного хендлера — кнопка вела бы в никуда"
             )
 
 

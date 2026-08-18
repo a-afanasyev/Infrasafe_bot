@@ -1,5 +1,6 @@
 import logging
 from aiogram import F
+from aiogram.filters import StateFilter
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
@@ -64,7 +65,13 @@ async def cancel_apartment_action(callback: CallbackQuery, state: FSMContext, la
     await _return_to_admin_yards(callback, state, language=lang)
 
 
-@router.callback_query(F.data == "cancel_action")
+# BUG-155 п.3 (закрыто 2026-08-18): у этого модуля своей группы состояний нет —
+# он и есть универсальный запасной вариант. `StateFilter(None)` оставляет за ним
+# ровно случай «состояния нет»: без этого он, будучи включённым раньше дворов
+# (`main.py:392` против `:394`), перехватывал бы отмену их флоу вместо
+# `address_moderation`. Молчаливый клик хуже неверного экрана, поэтому
+# stateless-ветка сохранена, а не убрана.
+@router.callback_query(StateFilter(None), F.data == "cancel_action")
 async def cancel_generic_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена текущего действия (универсальный обработчик)"""
     lang = language
