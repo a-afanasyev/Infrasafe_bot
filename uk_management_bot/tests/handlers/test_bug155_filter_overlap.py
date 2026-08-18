@@ -110,9 +110,73 @@ def test_cancel_in_rejection_flow_reaches_moderation_handler():
     ) == "cancel_moderation_action"
 
 
+def test_cancel_in_building_flow_stays_in_address_directory():
+    """Создание здания своей отмены не имеет — она обязана остаться в справочнике.
+
+    Находка ревью: первая версия правки покрыла только модерацию и дворы, и
+    отмена создания здания проваливалась до `user_management` — в панель
+    ПОЛЬЗОВАТЕЛЕЙ. До правки её забирала модерация — в список МОДЕРАЦИИ.
+    Оба экрана из чужого раздела.
+    """
+    assert resolve(
+        ADDRESS_ROUTERS, "cancel_action",
+        raw_state="BuildingManagementStates:waiting_for_building_address",
+    ) == "cancel_generic_action"
+
+
+def test_cancel_in_apartment_flow_stays_in_address_directory():
+    assert resolve(
+        ADDRESS_ROUTERS, "cancel_action",
+        raw_state="ApartmentManagementStates:waiting_for_apartment_number",
+    ) == "cancel_generic_action"
+
+
+def test_cancel_in_autofill_flow_stays_in_address_directory():
+    assert resolve(
+        ADDRESS_ROUTERS, "cancel_action",
+        raw_state="ApartmentManagementStates:waiting_for_autofill_range",
+    ) == "cancel_generic_action"
+
+
+def test_cancel_in_yard_rename_flow_reaches_yards_handler():
+    """Второй сайт кнопки в дворах — переименование, не только создание."""
+    assert resolve(
+        ADDRESS_ROUTERS, "cancel_action",
+        raw_state="YardManagementStates:waiting_for_new_yard_name",
+    ) == "cancel_action"
+
+
 def test_stateless_cancel_still_handled():
     """Без состояния кнопка обязана остаться обработанной, а не «проглотиться».
 
     Молчаливый клик хуже неверного экрана: человек не понимает, нажалось ли.
     """
     assert resolve(ADDRESS_ROUTERS, "cancel_action", raw_state=None) is not None
+
+
+def test_every_cancel_render_site_resolves_to_its_own_section():
+    """Ратчет: каждое состояние, в котором показывается кнопка, покрыто.
+
+    Именно неполный инвентарь сайтов рендера и дал находку ревью — кнопку
+    рисуют ДЕСЯТЬ раз в шести модулях, а покрыты были два. Список ниже —
+    по одному состоянию на каждый модуль-генератор.
+    """
+    expected = {
+        "ApartmentModerationStates:waiting_for_approval_comment": "cancel_moderation_action",
+        "ApartmentModerationStates:waiting_for_rejection_comment": "cancel_moderation_action",
+        "YardManagementStates:waiting_for_yard_name": "cancel_action",
+        "YardManagementStates:waiting_for_new_yard_name": "cancel_action",
+        "BuildingManagementStates:waiting_for_yard_selection": "cancel_generic_action",
+        "BuildingManagementStates:waiting_for_building_address": "cancel_generic_action",
+        "ApartmentManagementStates:waiting_for_building_selection": "cancel_generic_action",
+        "ApartmentManagementStates:waiting_for_apartment_number": "cancel_generic_action",
+        "ApartmentManagementStates:waiting_for_autofill_range": "cancel_generic_action",
+        "ApartmentManagementStates:waiting_for_apartment_search": "cancel_generic_action",
+    }
+    wrong = {
+        state: resolve(ADDRESS_ROUTERS, "cancel_action", raw_state=state)
+        for state, want in expected.items()
+        if resolve(ADDRESS_ROUTERS, "cancel_action", raw_state=state) != want
+    }
+
+    assert not wrong, f"отмена уходит не туда: {wrong}"

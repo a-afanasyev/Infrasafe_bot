@@ -175,9 +175,19 @@ class TestDiscussionRowsBuilder:
         from uk_management_bot.tests.handlers.routing_probe import resolve
 
         routers = [comments_router, reports_router]
-        for data in (f"view_comments_{NUMBER}", f"add_comment_{NUMBER}", f"view_report_{NUMBER}"):
-            assert resolve(routers, data) is not None, (
-                f"callback_data {data} не доходит ни до одного хендлера — кнопка вела бы в никуда"
+        # Именно ИМЯ хендлера, а не «хоть кто-то подхватил»: иначе перехват
+        # посторонним фильтром выглядел бы зелёным — ровно тот класс дефекта,
+        # что чинился в BUG-155 п.3.
+        expected = {
+            f"view_comments_{NUMBER}": "handle_view_comments",
+            f"add_comment_{NUMBER}": "handle_add_comment_start",
+            f"view_report_{NUMBER}": "handle_view_report",
+        }
+        for data, want in expected.items():
+            got = resolve(routers, data)
+            assert got == want, (
+                f"callback_data {data} уходит в {got!r} вместо {want!r} — "
+                f"кнопка ведёт не туда"
             )
 
 

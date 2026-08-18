@@ -6,6 +6,10 @@ from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.address_management import get_address_management_menu
+from uk_management_bot.states.address_management import (
+    ApartmentManagementStates,
+    BuildingManagementStates,
+)
 
 from ._router import router
 
@@ -65,13 +69,25 @@ async def cancel_apartment_action(callback: CallbackQuery, state: FSMContext, la
     await _return_to_admin_yards(callback, state, language=lang)
 
 
-# BUG-155 п.3 (закрыто 2026-08-18): у этого модуля своей группы состояний нет —
-# он и есть универсальный запасной вариант. `StateFilter(None)` оставляет за ним
-# ровно случай «состояния нет»: без этого он, будучи включённым раньше дворов
-# (`main.py:392` против `:394`), перехватывал бы отмену их флоу вместо
-# `address_moderation`. Молчаливый клик хуже неверного экрана, поэтому
-# stateless-ветка сохранена, а не убрана.
-@router.callback_query(StateFilter(None), F.data == "cancel_action")
+# BUG-155 п.3 (закрыто 2026-08-18): этот модуль — универсальный обработчик
+# отмены для справочника адресов, и он же держит stateless-случай.
+#
+# Кнопку `cancel_action` рендерит единственный генератор
+# `get_cancel_keyboard_inline`, но ДЕСЯТЬ раз в шести модулях. Своя отмена есть
+# только у модерации и дворов; создание здания, создание квартиры,
+# автозаполнение и поиск квартиры своей — не имеют, и их отмена доставалась
+# первому подошедшему: раньше `address_moderation` (показывал список
+# МОДЕРАЦИИ), а после сужения его фильтра провалилась бы до
+# `user_management/actions` (панель ПОЛЬЗОВАТЕЛЕЙ) — оба экрана из чужого
+# раздела. Поэтому фильтр покрывает обе группы справочника плюс «состояния
+# нет»; меню справочника адресов — общий родитель зданий и квартир.
+#
+# ⚠️ `StateFilter(None)` обязателен в списке: без stateless-ветки клик без
+# состояния не обработается вовсе, а молчаливый клик хуже неверного экрана.
+@router.callback_query(
+    StateFilter(None, ApartmentManagementStates, BuildingManagementStates),
+    F.data == "cancel_action",
+)
 async def cancel_generic_action(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
     """Отмена текущего действия (универсальный обработчик)"""
     lang = language

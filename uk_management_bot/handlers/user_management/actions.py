@@ -800,10 +800,14 @@ async def handle_cancel_document_selection(callback: CallbackQuery, state: FSMCo
 
 
 # ⚠️ Предсуществующий дефект (сохранён 1:1): этот хендлер недостижим —
-# `F.data == "cancel_action"` без состояния уже обрабатывают роутеры,
-# включённые в main.py РАНЬШЕ user_management: address_moderation (#385),
-# address_apartments (#386), address_yards (#388). Первый из них съедает
-# апдейт, до панели пользователей он не доходит.
+# BUG-155 п.3 (2026-08-18): раньше этот хендлер был недостижим — голый
+# `cancel_action` у трёх адресных роутеров, включённых РАНЬШЕ (main.py:391-394),
+# съедал апдейт первым. После сужения их фильтров по группам состояний он стал
+# последним рубежом: сюда доходит `cancel_action` из состояний, которые не
+# покрыл ни один адресный флоу (модерация, дворы, здания, квартиры + stateless).
+# Единственный генератор кнопки (`get_cancel_keyboard_inline`) все эти случаи
+# покрывает, поэтому в проде путь сюда не ожидается — но фильтр оставлен голым
+# осознанно, как страховка: молчаливый клик хуже неверного экрана.
 @router.callback_query(F.data == "cancel_action")
 async def handle_cancel_action(callback: CallbackQuery, state: FSMContext,
                               roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
