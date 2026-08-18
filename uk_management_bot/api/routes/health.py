@@ -22,14 +22,21 @@ router = APIRouter()
 def require_health_token(authorization: str | None = Header(default=None)):
     """SEC-064: gate operational health endpoints (/api/health/outbox,
     /api/health/ratelimit) which expose internal state (outbox lag, Redis
-    reachability). No-op when ``HEALTH_METRICS_TOKEN`` is unset (dev / before
-    ops opts in), so existing scrapers and the OPS-112 curl checks keep
-    working. When the token is set, require ``Authorization: Bearer <token>``
+    reachability). E3 (2026-08-18): when ``HEALTH_METRICS_TOKEN`` is unset,
+    dev (DEBUG=true) stays open; prod fails closed with 503 on first access
+    (lazily — eager validation in settings would kill app/access-api/migrate).
+    When the token is set, require ``Authorization: Bearer <token>``
     with a constant-time compare. Liveness probes (/health, /api/health) are
     intentionally left open."""
     token = settings.HEALTH_METRICS_TOKEN
     if not token:
-        return
+        # E3 (аудит 2026-08-18): прод-режим без токена — fail-closed ЛЕНИВО
+        # (на первом обращении), а не eager в settings: settings импортируют
+        # все четыре сервиса, eager-валидация уронила бы app/access-api/migrate
+        # на старте. Dev (DEBUG=true) остаётся открытым — пробы и curl работают.
+        if settings.DEBUG:
+            return
+        raise HTTPException(status_code=503, detail="health token not configured")
     expected = f"Bearer {token}"
     if not authorization or not hmac.compare_digest(authorization, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")

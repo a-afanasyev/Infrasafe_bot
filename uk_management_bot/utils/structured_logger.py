@@ -87,6 +87,20 @@ class SecurityFilter(logging.Filter):
             msg = pattern.sub(replacement, msg)
         record.msg = msg
         record.args = ()
+        # E1/секревью PR IV: traceback из exc_info форматтер печатает СЫРЬЁМ
+        # (`formatException`), мимо msg-санитизации. Форматируем сами,
+        # чистим и отдаём как exc_text — Formatter использует готовый exc_text.
+        # Паритет с TokenSanitizingFilter media-service.
+        if record.exc_info and record.exc_info[0] is not None:
+            import traceback as _tb
+            formatted = "".join(_tb.format_exception(*record.exc_info))
+            for pattern, replacement in self.REDACT_WHOLE_PATTERNS:
+                formatted = pattern.sub(replacement, formatted)
+            record.exc_text = formatted
+            record.exc_info = None
+        elif record.exc_text:
+            for pattern, replacement in self.REDACT_WHOLE_PATTERNS:
+                record.exc_text = pattern.sub(replacement, record.exc_text)
         return True
 
     @staticmethod
@@ -171,10 +185,10 @@ def setup_structured_logging():
         handler = logging.StreamHandler(sys.stdout)
         formatter = StructuredFormatter()
         
-        # Добавляем фильтр безопасности
-        security_filter = SecurityFilter()
-        handler.addFilter(security_filter)
-    
+    # E2 (аудит 2026-08-18): фильтр безопасности живёт в ОБОИХ режимах —
+    # раньше маскирование существовало только при DEBUG=False.
+    handler.addFilter(SecurityFilter())
+
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
     

@@ -78,6 +78,7 @@ CONFIG_MOUNTS=(
   # эталон расходился бы с CI ровно наоборот обычного: локально красно, в CI зелено.
   -v "${ROOT}/media_service/app/api/v1/media.py:/app/media_service/app/api/v1/media.py:ro"
   -v "${ROOT}/media_service/app/core/config.py:/app/media_service/app/core/config.py:ro"
+  -v "${ROOT}/media_service/app/core/log_sanitize.py:/app/media_service/app/core/log_sanitize.py:ro"
   # Канон специализаций фронт держит своей копией (формы не ходят в API за
   # списком), и парити-тест сверяет её с бэкендом. В образе бота frontend/ нет,
   # в CI-джобе backend-tests — полный чекаут, поэтому там строка не нужна.
