@@ -11,6 +11,11 @@ from typing import Optional
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from uk_management_bot.constants.specializations import (
+    CANONICAL_SPECIALIZATIONS,
+    UNIVERSAL_SPECIALIZATION,
+    normalize_specialization,
+)
 from uk_management_bot.database.session import session_scope
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.business_time import business_date_of, fmt_time
@@ -50,53 +55,74 @@ def _format_end_label(start_dt: Optional[datetime], end_dt: Optional[datetime]) 
     return label
 
 
-# Словарь локализации специализаций
-# ⚠️ BUG-169: словарь построен на LEGACY-наборе. Шести из девяти канонических
-# позиций (`electrician`, `plumber`, `heating`, `ventilation`, `elevator`,
-# `repair`) здесь нет, а после миграции 010 в БД лежит именно канон — поэтому
-# `translations.get(spec, spec)` отдаёт менеджеру сырой английский токен.
-# Дефект ЖИВОЙ на обоих продах. Оставлен байт-в-байт: он не относится к
-# семантике подбора (BUG-166), а правка требует сверки формулировок с
-# фронтовыми локалями `specialization.*`, чтобы бот и дашборд не разошлись.
-SPECIALIZATION_TRANSLATIONS = {
-    "ru": {
-        "electric": "Электрика",
-        "plumbing": "Сантехника",
-        "hvac": "Вентиляция",
-        "security": "Охрана",
-        "cleaning": "Уборка",
-        "universal": "Универсальная",
-        "carpentry": "Плотницкие работы",
-        "painting": "Малярные работы",
-        "landscaping": "Благоустройство",
-        "maintenance": "Обслуживание",
-        "it": "IT поддержка",
-        "reception": "Ресепшн"
-    },
-    "uz": {
-        "electric": "Elektr",
-        "plumbing": "Santexnika",
-        "hvac": "Ventilyatsiya",
-        "security": "Xavfsizlik",
-        "cleaning": "Tozalash",
-        "universal": "Universal",
-        "carpentry": "Duradgorlik",
-        "painting": "Bo'yoqchilik",
-        "landscaping": "Obodonlashtirish",
-        "maintenance": "Texnik xizmat",
-        "it": "IT qo'llab-quvvatlash",
-        "reception": "Qabulxona"
-    }
-}
+# BUG-169: здесь стоял СВОЙ словарь переводов на legacy-наборе (`electric`,
+# `plumbing`, `hvac`, `maintenance`). Шести из девяти канонических позиций в нём
+# не было вовсе, а после миграции 010 в БД лежит именно канон — `get(spec, spec)`
+# отдавал менеджеру сырой `electrician` в списках смен, карточке назначения и
+# аналитике. Дефект был живым на обоих продах.
+#
+# Второй словарь не нужен изначально: локали бота уже несут блок
+# `specializations.*` на весь канон в ru и uz, и он же питает клавиатуры выдачи
+# специализаций. Один источник названий — бот и дашборд расходиться не могут.
+_SPECIALIZATION_ORDER = {spec: idx for idx, spec in enumerate(CANONICAL_SPECIALIZATIONS)}
+
+
+def _specialization_label(token: str, language: str) -> str:
+    """Название позиции по канон-токену.
+
+    ⚠️ `get_text` на отсутствующем ключе возвращает САМ КЛЮЧ, а не пустую
+    строку — без этой проверки менеджер увидел бы `specializations.elevator`,
+    что не лучше сырого токена. Ратчет
+    `tests/test_bug169_specialization_display.py` держит канон переведённым в
+    обоих языках, здесь же — страховка на случай гонки «канон вырос, локаль нет».
+    """
+    key = f"specializations.{token}"
+    label = get_text(key, language=language)
+    return token if label == key else label
+
 
 def translate_specializations(specializations: list, language: str = "ru") -> str:
-    """Переводит список специализаций на указанный язык"""
+    """Человеческие названия специализаций через локали бота.
+
+    Нормализация делает вывод устойчивым к тому, что реально лежит в строках:
+    legacy-токен (`electric`), канон (`electrician`) и мусор с регистром и
+    пробелами приходят из одних и тех же полей. `hvac` разворачивается в две
+    позиции — это сторона «умею», где расширение безопасно (см.
+    `constants/specializations.normalize_specialization`).
+
+    Неизвестный токен показывается КАК ЕСТЬ (прежнее поведение `get(spec, spec)`):
+    подменить его на «Любая» значило бы выдать нераспознанное значение за
+    универсальную смену.
+    """
     if not specializations:
         return get_text("shift_management.any_specialization", language=language)
 
-    translations = SPECIALIZATION_TRANSLATIONS.get(language, SPECIALIZATION_TRANSLATIONS["ru"])
-    translated = [translations.get(spec, spec) for spec in specializations]
-    return ", ".join(translated)
+    labels: list[str] = []
+    seen: set[str] = set()
+
+    for raw in specializations:
+        canon = sorted(
+            normalize_specialization(raw, side="have"),
+            key=_SPECIALIZATION_ORDER.__getitem__,
+        )
+        if canon:
+            for token in canon:
+                if token not in seen:
+                    seen.add(token)
+                    labels.append(_specialization_label(token, language))
+            continue
+
+        # Вне канона: wildcard смены — со своим названием, всё прочее — как есть.
+        token = raw.strip().lower() if isinstance(raw, str) else str(raw)
+        if token == UNIVERSAL_SPECIALIZATION:
+            if token not in seen:
+                seen.add(token)
+                labels.append(_specialization_label(token, language))
+        elif str(raw) not in seen:
+            seen.add(str(raw))
+            labels.append(str(raw))
+
+    return ", ".join(labels)
 
 
 def _get_confirm_keyboard(yes_callback: str, no_callback: str, lang: str) -> InlineKeyboardMarkup:

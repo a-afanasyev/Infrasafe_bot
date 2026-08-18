@@ -8,6 +8,31 @@
 Тела сохранены байт-в-байт до decision владельца (ретайр vs оживление) —
 прецедент BUG-137/148/150.
 
+⚠️⚠️ «МЁРТВЫЙ» ОТНОСИТСЯ К НАШЕЙ КЛАВИАТУРЕ, А НЕ КО ВХОДУ (секревью 2026-08-17).
+callback_data присылает КЛИЕНТ, поэтому отсутствие генератора кнопки не закрывает
+ничего. Пять из восьми хендлеров роль не проверяли вовсе, и рабочая цепочка была
+такой:
+
+1. ``return_request_<любой номер>`` — живой хендлер приёмки
+   (handlers/request_acceptance.py:564) кладёт номер из callback_data в FSM-состояние
+   БЕЗ проверки владения. Для своего потока это безопасно (канонический
+   APPLICANT_RETURN авторизует только владельца), но состояние общее — и снаружи
+   получается примитив «положи в state ЧУЖОЙ номер заявки».
+2. ``specialization_<строка>`` либо ``executor_<id>`` — хендлеры ниже.
+3. ``confirm_assignment`` — AssignmentService.assign_to_group отменяет активные
+   назначения, ставит произвольный assigned_group и обнуляет executor_id, минуя
+   канон plan_transition.
+
+Решение владельца 2026-08-18: guard сейчас, ретайр кластера (BUG-150/154/158) —
+отдельным движением. Проверка роли стоит теперь в КАЖДОМ хендлере и ДО обращения
+к БД; оба инварианта держит ратчет tests/handlers/test_request_assignment_guard.py.
+
+⚠️ Новые guard'ы берут роли из middleware (has_admin_access), а НЕ повторяют
+check_user_role(callback.from_user.id, ...) трёх хендлеров ниже: туда уходит
+telegram-id, а функция сравнивает его с User.id. Это fail-closed и на мёртвом
+пути безвредно, поэтому оставлено байт-в-байт — но копировать нельзя, такой
+вызов отказал бы и настоящему менеджеру.
+
 Доказательство мёртвости (греп генераторов callback_data по всему репозиторию):
 
 * ``assign_request_`` — генератора НЕТ вовсе. Это единственный вход в цепочку,
@@ -48,7 +73,7 @@ from uk_management_bot.keyboards.request_assignment import (
     get_assignment_confirmation_keyboard
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.auth_helpers import check_user_role
+from uk_management_bot.utils.auth_helpers import check_user_role, has_admin_access
 from uk_management_bot.utils.constants import ROLE_MANAGER
 
 router = Router()
@@ -198,11 +223,17 @@ async def handle_individual_assignment(callback: CallbackQuery, state: FSMContex
 
 # ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "specialization_" в живом коде нет.
 @router.callback_query(F.data.startswith("specialization_"))
-async def handle_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_specialization_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", roles=None, user=None):
     """Обработка выбора специализации для группового назначения"""
     lang = language
 
     try:
+        # SEC-guard (секревью 2026-08-17): роль не проверялась вовсе — см.
+        # докстринг модуля. Мёртвой была наша клавиатура, а не вход.
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("request_assignment.no_permission", language=lang), show_alert=True)
+            return
+
         # Получаем специализацию из callback data
         specialization = callback.data.split("_", 1)[1]
 
@@ -242,11 +273,16 @@ async def handle_specialization_selection(callback: CallbackQuery, state: FSMCon
 
 # ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): генератора "executor_" в живом коде нет.
 @router.callback_query(F.data.startswith("executor_"))
-async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", roles=None, user=None):
     """Обработка выбора конкретного исполнителя"""
     lang = language
 
     try:
+        # SEC-guard (секревью 2026-08-17), см. докстринг модуля.
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("request_assignment.no_permission", language=lang), show_alert=True)
+            return
+
         # Получаем ID исполнителя из callback data
         executor_id = int(callback.data.split("_")[1])
 
@@ -289,11 +325,18 @@ async def handle_executor_selection(callback: CallbackQuery, state: FSMContext, 
 # ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "confirm_assignment" генерят только
 # клавиатуры недостижимой цепочки назначения.
 @router.callback_query(F.data == "confirm_assignment")
-async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", roles=None, user=None):
     """Подтверждение назначения заявки"""
     lang = language
 
     try:
+        # SEC-guard (секревью 2026-08-17). Точка записи: ниже
+        # `AssignmentService` отменяет активные назначения, ставит произвольный
+        # `assigned_group` и обнуляет `executor_id` мимо канона.
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("request_assignment.no_permission", language=lang), show_alert=True)
+            return
+
         # Получаем данные из состояния
         data = await state.get_data()
         request_number = data.get("request_number")
@@ -343,11 +386,18 @@ async def handle_assignment_confirmation(callback: CallbackQuery, state: FSMCont
 # ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "cancel_assignment" генерят только
 # клавиатуры недостижимой цепочки назначения.
 @router.callback_query(F.data == "cancel_assignment")
-async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", roles=None, user=None):
     """Отмена процесса назначения"""
     lang = language
 
     try:
+        # SEC-guard (секревью 2026-08-17). Записи здесь нет, но проверка стоит
+        # ради единого правила по файлу: «мёртвый» кластер — менеджерский
+        # целиком, и ратчет держит его таким при будущем ретайре (BUG-154).
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("request_assignment.no_permission", language=lang), show_alert=True)
+            return
+
         # Очищаем состояние
         await state.clear()
 
@@ -361,11 +411,18 @@ async def handle_assignment_cancellation(callback: CallbackQuery, state: FSMCont
 # ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. докстринг модуля): "view_assignments_" генерит только
 # get_report_details_keyboard, у которой нет прод-вызовов.
 @router.callback_query(F.data.startswith("view_assignments_"))
-async def handle_view_assignments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
+async def handle_view_assignments(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru", roles=None, user=None):
     """Просмотр назначений заявки"""
     lang = language
 
     try:
+        # SEC-guard (секревью 2026-08-17): номер заявки берётся прямо из
+        # callback_data, поэтому без проверки это чтение истории назначений
+        # ЛЮБОЙ заявки — утечка, а не только отсутствующая запись.
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("request_assignment.no_permission", language=lang), show_alert=True)
+            return
+
         # Получаем номер заявки
         request_number = callback.data.split("_")[-1]
 

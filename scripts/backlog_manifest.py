@@ -188,8 +188,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
-    "BUG-154": A(pkg="A2", status="decision", method="verified-2026-08-14",
-                 note="request_assignment мёртв целиком (~370 строк) + 3 в panels; решать с BUG-150"),
+    "BUG-154": A(pkg="A2", status="decision", method="verified-2026-08-18",
+                 note="guard раскатан 2026-08-18 (вход был открыт: callback_data шлёт клиент); открыт только ретайр ~370 строк + 3 в panels, решать с BUG-150"),
     "BUG-158": A(pkg="A2", status="decision", method="verified-2026-08-16",
                  note="4 мёртвых хендлера onboarding; решать с BUG-150 и BUG-154 одним движением"),
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
@@ -216,8 +216,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="метрика покрытия специализаций сверяется с legacy-токенами (после 010 максимум 20%); что считать «основными» из девяти — продуктовое"),
     "BUG-168": A(pkg="A2", status="decision", method="verified-2026-08-17",
                  note="предикат доступа сравнивает специализации мимо канона (нет джокера, нет нормализации); расширение видимости — решение владельца"),
-    "BUG-169": A(pkg="A2", status="actionable", method="verified-2026-08-17",
-                 note="ЖИВОЙ: словарь перевода специализаций в боте на legacy-наборе — менеджер видит «electrician» вместо «Электрика»"),
+    # `BUG-169` закрыт 2026-08-18: второй словарь удалён, названия берутся из
+    # локалей бота (`specializations.*`); строки здесь нет — пункт закрыт в бэклоге.
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).

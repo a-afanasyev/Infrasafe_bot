@@ -6904,7 +6904,8 @@
     "view_stats": "Посмотреть статистику",
     "heating": "🔥 Отопление",
     "ventilation": "💨 Вентиляция",
-    "elevator": "🛗 Лифт"
+    "elevator": "🛗 Лифт",
+    "universal": "Универсальная"
   },
   "status": {
     "approved": "Принято",
