@@ -95,7 +95,7 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
 
         await callback.message.edit_text(
             get_text("address_apartments.handlers.create_step1_select_building", language=lang),
-            reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building")
+            reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building", cancel_callback="addr_cancel_selection")
         )
 
     except Exception as e:

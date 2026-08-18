@@ -263,7 +263,9 @@ class TestEndShiftConfirm:
         ) as mock_details:
             await end_shift_confirm(msg, _db=db)
 
-        mock_details.assert_called_once_with(msg, 42, "ru", _db=db)
+        mock_details.assert_called_once_with(
+            msg, 42, "ru", telegram_id=msg.from_user.id, _db=db
+        )
 
     @pytest.mark.asyncio
     async def test_user_not_found_sends_error(self):
@@ -310,7 +312,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=999, lang="ru", _db=db)
+        await show_shift_end_details(msg, shift_id=999, lang="ru", telegram_id=42, _db=db)
 
         msg.answer.assert_called_once()
 
@@ -334,12 +336,15 @@ class TestShowShiftEndDetails:
             q.all.return_value = []
             call_count["n"] += 1
             if call_count["n"] == 1:
+                # owner lookup (D3: владение по telegram_id — первый запрос)
+                q.first.return_value = user
+            elif call_count["n"] == 2:
                 # Shift lookup
                 q.first.return_value = shift
-            elif call_count["n"] == 2:
+            elif call_count["n"] == 3:
                 # group_requests
                 q.first.return_value = None
-            elif call_count["n"] == 3:
+            elif call_count["n"] == 4:
                 # user lookup
                 q.first.return_value = user
             else:
@@ -348,7 +353,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=5, lang="ru", _db=db)
+        await show_shift_end_details(msg, shift_id=5, lang="ru", telegram_id=42, _db=db)
 
         msg.answer.assert_called_once()
         # Keyboard should be passed as reply_markup
@@ -366,7 +371,7 @@ class TestShowShiftEndDetails:
         shift.specialization_focus = []
         user = _make_db_user(db_user_id=10)
 
-        returns_iter = iter([shift, None, user, None])
+        returns_iter = iter([user, shift, None, user, None])
 
         def _query(model):
             q = MagicMock()
@@ -378,7 +383,7 @@ class TestShowShiftEndDetails:
 
         db.query.side_effect = _query
 
-        await show_shift_end_details(msg, shift_id=7, lang="ru", _db=db)
+        await show_shift_end_details(msg, shift_id=7, lang="ru", telegram_id=42, _db=db)
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]

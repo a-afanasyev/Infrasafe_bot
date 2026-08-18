@@ -563,7 +563,8 @@ def get_user_apartment_selection_keyboard(
     items: List,
     item_type: str,
     callback_prefix: str,
-    language: str = "ru"
+    language: str = "ru",
+    cancel_callback: str = "cancel_apartment_selection",
 ) -> InlineKeyboardMarkup:
     """
     Универсальная клавиатура для выбора двора/здания/квартиры пользователем
@@ -600,8 +601,11 @@ def get_user_apartment_selection_keyboard(
             )
         )
 
+    # A3 (аудит 2026-08-18): отмена разделена по callback_data. Жительские флоу
+    # оставляют дефолт (хендлер в user_apartment_selection.py, ВНЕ гейта);
+    # админские передают "addr_cancel_selection" (хендлер под RoleGate).
     builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.cancel", language=language), callback_data="cancel_apartment_selection")
+        InlineKeyboardButton(text=get_text("address.keyboards.cancel", language=language), callback_data=cancel_callback)
     )
 
     return builder.as_markup()

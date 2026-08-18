@@ -53,7 +53,6 @@ from .autofill import (
     format_numbers_preview,
 )
 from .navigation import (
-    _return_to_profile_apartments,
     _return_to_admin_yards,
     cancel_apartment_action,
     cancel_generic_action,
@@ -93,7 +92,6 @@ __all__ = [
     "parse_apartment_range",
     "format_numbers_preview",
     # navigation (BUG-BOT-021 — обратная совместимость импортов)
-    "_return_to_profile_apartments",
     "_return_to_admin_yards",
     "cancel_apartment_action",
     "cancel_generic_action",
