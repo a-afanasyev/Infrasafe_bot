@@ -221,6 +221,8 @@ ASSIGNMENT: dict[str, dict] = {
     # `BUG-172` закрыт 2026-08-18: IDOR комментариев (запись + два чтения).
     "BUG-171": A(pkg="A2", status="decision", method="verified-2026-08-18",
                  note="ЖИВОЙ: кнопка «Общий комментарий» падает всегда — тип general вне COMMENT_TYPES; добавить в канон или убрать кнопку — продуктовое"),
+    "BUG-175": A(pkg="A2", status="actionable", method="verified-2026-08-18",
+                 note="P1 ЖИВОЙ: адресный кластер и модерация квартир — 59 хендлеров, 0 проверок роли; житель одобряет себе квартиру = эскалация доступа к заявкам"),
     "BUG-174": A(pkg="A2", status="actionable", method="verified-2026-08-18",
                  note="ЖИВОЙ: уведомления о комментариях не уходят никому — send_notification у сервиса нет; лечится B3-раскроем, notify_user не годится (нет loop в run_db)"),
     "BUG-173": A(pkg="A2", status="actionable", method="verified-2026-08-18",
