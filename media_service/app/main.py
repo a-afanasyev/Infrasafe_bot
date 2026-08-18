@@ -3,6 +3,7 @@
 """
 
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +23,10 @@ logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# E1 (второй рубеж): маскирование токена бота в message и traceback на root.
+from app.core.log_sanitize import install_root_filter  # noqa: E402
+install_root_filter()
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +154,12 @@ async def api_key_auth(request: Request, call_next):
 
     # Check API key
     api_key = request.headers.get("X-API-Key")
-    if not api_key or api_key not in settings.api_keys_list:
+    # E5: сравнение без ранних выходов по содержимому (timing-safe);
+    # длина у compare_digest не скрывается — это принятое свойство.
+    key_ok = api_key is not None and any(
+        secrets.compare_digest(api_key, known) for known in settings.api_keys_list
+    )
+    if not key_ok:
         return JSONResponse(
             status_code=401,
             content={"error": "unauthorized", "message": "Invalid or missing API key"},

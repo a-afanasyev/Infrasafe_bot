@@ -15,6 +15,7 @@ from jose import jwt, JWTError
 from jose.exceptions import ExpiredSignatureError, JWTClaimsError
 
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.http_errors import describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +316,7 @@ async def send_otp_via_bot(telegram_id: int, code: str) -> bool:
             })
             return resp.status_code == 200
     except Exception as e:
-        logger.error(f"Failed to send OTP via bot: {e}")
+        logger.error("Failed to send OTP via bot: %s", describe_http_error(e))
         return False
 
 

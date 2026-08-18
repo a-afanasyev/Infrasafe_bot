@@ -3,6 +3,7 @@ import logging
 import httpx
 
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.http_errors import describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -23,4 +24,4 @@ async def notify_managers_new_registration(*, telegram_id: int, full_name: str, 
         try:
             await _send(admin_id, text)
         except Exception as e:
-            logger.error(f"Failed to notify admin {admin_id} about registration: {e}")
+            logger.error("Failed to notify admin %s about registration: %s", admin_id, describe_http_error(e))

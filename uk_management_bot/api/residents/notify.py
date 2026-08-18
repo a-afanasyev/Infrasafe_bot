@@ -19,6 +19,7 @@ import logging
 import httpx
 
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
 
@@ -45,7 +46,7 @@ async def _safe_send(resident: User, text: str, reply_markup: dict | None = None
     try:
         await _send(resident.telegram_id, text, reply_markup)
     except Exception as e:  # noqa: BLE001 — best-effort, наружу не поднимаем
-        logger.error("Не удалось уведомить жителя %s: %s", resident.id, e)
+        logger.error("Не удалось уведомить жителя %s: %s", resident.id, describe_http_error(e))
 
 
 def _lang(resident: User) -> str:

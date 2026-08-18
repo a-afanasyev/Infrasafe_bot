@@ -410,6 +410,50 @@ def authenticate(
     return controller
 
 
+# E4 (аудит 2026-08-18): лимит на чтении СЫРОГО тела. Проверка после
+# request.form()/upload.read() бесполезна — authenticate_edge читает тело
+# целиком до входа в эндпоинт (нужно для HMAC-подписи). Лимитов в access_control
+# не было вообще.
+MAX_EDGE_BODY_BYTES = int(os.getenv("ACCESS_MAX_BODY_BYTES", str(10 * 1024 * 1024)))
+
+
+async def _read_body_capped(request: Request, limit: int = None) -> bytes:
+    """Тело с ранней проверкой Content-Length и capped-чтением потока.
+
+    * Content-Length > limit → 413 ДО чтения тела;
+    * фактический размер > limit (chunked/без CL) → 413 обрывом на потоке;
+    * заявленный CL меньше факта → 400, а не тихое усечение;
+    * прочитанное тело кладётся в request._body — Starlette-кэш, из которого
+      последующие request.body()/request.form() (HMAC уже получил байты,
+      multipart-парсер эндпоинта) читают БЕЗ повторного обращения к потоку.
+    """
+    cap = limit if limit is not None else MAX_EDGE_BODY_BYTES
+    declared = request.headers.get("content-length")
+    declared_len = None
+    if declared is not None:
+        try:
+            declared_len = int(declared)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid content-length")
+        if declared_len > cap:
+            raise HTTPException(status_code=413, detail="request body too large")
+
+    chunks = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > cap:
+            raise HTTPException(status_code=413, detail="request body too large")
+        chunks.append(chunk)
+
+    body = b"".join(chunks)
+    if declared_len is not None and total != declared_len:
+        # Поддельный Content-Length (меньше/больше факта) — отказ, не усечение.
+        raise HTTPException(status_code=400, detail="content-length mismatch")
+    request._body = body  # Starlette body-cache: downstream form()/body() читают отсюда
+    return body
+
+
 async def authenticate_edge(
     request: Request, db: Session = Depends(get_db)
 ) -> EdgeController:
@@ -420,7 +464,7 @@ async def authenticate_edge(
     в пути совпадал с аутентифицированным контроллером (чужой путь → 403, §9.1:
     «клиент не может запросить кэш/команды другой зоны»).
     """
-    body = await request.body()
+    body = await _read_body_capped(request)
     # M5: за доверенным прокси берём реальный IP из X-Forwarded-For (иначе allowlist
     # видит только IP прокси). Без доверенных прокси — прямой client.host.
     client_ip = resolve_client_ip(request)

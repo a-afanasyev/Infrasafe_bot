@@ -30,6 +30,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/media", tags=["media"])
 
 
+def _derive_content_type(file_data: bytes, client_ct, *, images_only: bool = False) -> str:
+    """E4 (аудит 2026-08-18): сохранённый MIME выводится ИЗ БАЙТОВ.
+
+    Заявленный клиентом content_type никогда не становится сохранённым типом:
+    * сигнатура распознана → она и есть тип (обязана входить в allowlist;
+      для access-photo — только image/*, видео отказ);
+    * сигнатура НЕ распознана, но клиент заявил image/*|video/* → отказ
+      (spoofed MIME: заявлен медиа-тип, байты его не подтверждают);
+    * не-медиа (документы): падаем на заявленный тип, если он в allowlist —
+      сниффер знает только медиа-сигнатуры.
+    """
+    sniffed = _sniff_image_mime(file_data)
+    if sniffed is not None:
+        if images_only and not sniffed.startswith("image/"):
+            raise HTTPException(status_code=415, detail=f"Тип {sniffed} не разрешён: только изображения")
+        if sniffed not in settings.allowed_file_types:
+            raise HTTPException(status_code=415, detail=f"Тип файла {sniffed} не разрешен")
+        return sniffed
+    claimed = client_ct or ""
+    if claimed.startswith(("image/", "video/")):
+        raise HTTPException(status_code=415, detail="Заявлен медиа-тип, но сигнатура файла его не подтверждает")
+    if images_only:
+        raise HTTPException(status_code=415, detail="Только изображения")
+    if claimed not in settings.allowed_file_types:
+        raise HTTPException(status_code=400, detail=f"Тип файла {claimed} не разрешен")
+    return claimed
+
+
 #: Бренды ISO BMFF, означающие HEIC/HEIF-картинку, а не видео.
 _HEIF_BRANDS = (b"heic", b"heix", b"heim", b"heis", b"mif1", b"msf1")
 
@@ -104,6 +132,7 @@ async def upload_media(
 
         # Читаем содержимое файла
         file_data = await file.read()
+        effective_content_type = _derive_content_type(file_data, file.content_type)
 
         # Обработка тегов
         tags_list = []
@@ -115,7 +144,7 @@ async def upload_media(
             request_number=request_number,
             file_data=file_data,
             filename=file.filename,
-            content_type=file.content_type,
+            content_type=effective_content_type,
             category=category,
             description=description,
             tags=tags_list,
@@ -154,7 +183,18 @@ async def upload_report_media(
         if not file.filename:
             raise HTTPException(status_code=400, detail="Имя файла не указано")
 
+        # E4: у /upload-report не было НИ лимита размера, НИ allowlist'а —
+        # выравниваем с /upload.
+        if file.size and file.size > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+
+        if file.content_type not in settings.allowed_file_types:
+            raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+
         file_data = await file.read()
+        if len(file_data) > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+        effective_content_type = _derive_content_type(file_data, file.content_type)
 
         tags_list = []
         if tags:
@@ -164,7 +204,7 @@ async def upload_report_media(
             request_number=request_number,
             file_data=file_data,
             filename=file.filename,
-            content_type=file.content_type,
+            content_type=effective_content_type,
             report_type=report_type,
             description=description,
             tags=tags_list,
@@ -179,6 +219,10 @@ async def upload_report_media(
             message="Файл отчета успешно загружен"
         )
 
+    except HTTPException:
+        # E4/ревью PR IV (HIGH): валидационные 400/413/415 не маскировать в 500 —
+        # как в соседних /upload и /upload-access.
+        raise
     except Exception as e:
         logger.error(f"Failed to upload report media: {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки файла отчета")
@@ -220,6 +264,7 @@ async def upload_access_media(
             raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
 
         file_data = await file.read()
+        effective_content_type = _derive_content_type(file_data, file.content_type, images_only=True)
 
         media_file = await storage_service.upload_domain_media(
             channel_purpose=TelegramChannels.ACCESS,
@@ -227,7 +272,7 @@ async def upload_access_media(
             ref=ref,
             file_data=file_data,
             filename=file.filename,
-            content_type=file.content_type,
+            content_type=effective_content_type,
             uploaded_by=uploaded_by,
         )
 

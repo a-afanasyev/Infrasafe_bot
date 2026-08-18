@@ -8,6 +8,8 @@ import asyncio
 from types import SimpleNamespace
 
 import httpx
+
+from app.core.log_sanitize import TelegramDownloadError
 import pytest
 
 from app.services.telegram_client import TelegramClientService
@@ -83,9 +85,13 @@ async def test_persistent_failure_raises_after_three_attempts(client, monkeypatc
 
     monkeypatch.setattr(client, "get_file", always_down)
 
-    with pytest.raises(httpx.ConnectError):
+    # E1 (аудит 2026-08-18): наружу летит САНИТИЗИРОВАННОЕ исключение —
+    # исходное несло бы URL с токеном в traceback/debug-ответ.
+    with pytest.raises(TelegramDownloadError) as excinfo:
         await client.download_file("F2")
     assert calls["n"] == 3
+    assert "ConnectError" in str(excinfo.value)
+    assert excinfo.value.__suppress_context__  # from None: цепочка подавлена
 
 
 @pytest.mark.asyncio
@@ -103,6 +109,7 @@ async def test_client_4xx_not_retried(client, monkeypatch):
     monkeypatch.setattr(client, "get_file", ok_get_file)
     monkeypatch.setattr(httpx, "AsyncClient", _NotFoundClient)
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(TelegramDownloadError) as excinfo:
         await client.download_file("F3")
     assert calls["n"] == 1  # 4xx повторами не лечится — одна попытка
+    assert "HTTP 404" in str(excinfo.value)  # диагностика сохранена, URL — нет

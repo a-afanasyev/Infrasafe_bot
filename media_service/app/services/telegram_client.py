@@ -11,6 +11,7 @@ from aiogram.types import InputFile, BufferedInputFile, Message
 from aiogram.exceptions import TelegramAPIError
 
 from app.core.config import settings
+from app.core.log_sanitize import TelegramDownloadError, describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,8 @@ class TelegramClientService:
             return file_url
 
         except Exception as e:
-            logger.error(f"Failed to get file URL for {file_id}: {e}")
+            # E1: сырое исключение несёт URL с токеном — логируем класс+статус.
+            logger.error("Failed to get file URL for %s: %s", file_id, describe_http_error(e))
             return None
 
     async def download_file(self, file_id: str) -> Tuple[bytes, str]:
@@ -175,16 +177,24 @@ class TelegramClientService:
                     return resp.content, content_type
                 except httpx.HTTPStatusError as e:
                     if e.response is not None and 400 <= e.response.status_code < 500:
-                        raise
+                        # E1: `raise` исходного пронёс бы URL с токеном в traceback
+                        # и в debug-ответ глобального хендлера. `from None` —
+                        # осознанно: цепочка причин напечатала бы исходный текст.
+                        raise TelegramDownloadError(
+                            f"download_file {file_id}: {describe_http_error(e)}"
+                        ) from None
                     last_exc = e
                     logger.warning("download_file %s: попытка %d не удалась: %s",
-                                   file_id, attempt, e)
+                                   file_id, attempt, describe_http_error(e))
                 except (httpx.HTTPError, TelegramAPIError) as e:
                     last_exc = e
                     logger.warning("download_file %s: попытка %d не удалась: %s",
-                                   file_id, attempt, e)
+                                   file_id, attempt, describe_http_error(e))
             assert last_exc is not None
-            raise last_exc
+            # E1: доминирующий путь (5xx/сеть после трёх попыток) — тоже без URL.
+            raise TelegramDownloadError(
+                f"download_file {file_id}: {describe_http_error(last_exc)}"
+            ) from None
 
     async def delete_message(
         self,
