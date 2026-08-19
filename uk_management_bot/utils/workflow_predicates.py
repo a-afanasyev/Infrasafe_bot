@@ -212,3 +212,29 @@ def pending_or_in_progress_clause() -> ColumnElement:
     )
 
     return Request.status.in_([REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS])
+
+
+# ---------------------------------------------------------------------------
+# Переназначение исполнителя (кнопка менеджера в боте).
+# Источник истины — САМ канон: `MANAGER_ASSIGN.from_statuses`. Свой frozenset
+# здесь был бы вторым определением того же правила, и при правке `specs.py`
+# они разъехались бы молча — кнопка предлагалась бы там, где команда уже не
+# проходит, или наоборот пряталась там, где проходит.
+# ---------------------------------------------------------------------------
+
+def is_reassignable(request) -> bool:
+    """Канон пускает смену исполнителя из текущего состояния заявки."""
+    from uk_management_bot.utils.request_workflow import normalize_status
+    from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
+    from uk_management_bot.utils.request_workflow.types import Action
+
+    return normalize_status(request) in ACTION_TABLE[Action.MANAGER_ASSIGN].from_statuses
+
+
+def reassignable_clause() -> ColumnElement:
+    """SQL-форма `is_reassignable` (для выборок; nullable-статусов у нас нет)."""
+    from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
+    from uk_management_bot.utils.request_workflow.types import Action
+
+    return Request.status.in_(sorted(ACTION_TABLE[Action.MANAGER_ASSIGN].from_statuses))
+

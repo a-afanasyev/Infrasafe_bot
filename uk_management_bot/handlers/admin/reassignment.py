@@ -45,23 +45,17 @@ from uk_management_bot.keyboards.admin import get_executors_by_category_keyboard
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 from uk_management_bot.utils.auth_helpers import get_user_roles, has_admin_access
-from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_IN_PROGRESS,
-    REQUEST_STATUS_NEW,
-)
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.specializations import (
     matches_required_specs,
     parse_specializations,
 )
 from uk_management_bot.utils.user_names import display_name
+from uk_management_bot.utils.workflow_predicates import is_reassignable
 
 from ._router import router
 
 logger = logging.getLogger(__name__)
-
-# Канон пускает переназначение только отсюда (specs.py: MANAGER_ASSIGN).
-REASSIGNABLE_STATUSES = frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS})
 
 # Префиксы. Взаимно непересекающиеся startswith; коммит-вход — строгий регекс,
 # иначе он подошёл бы под собственный `req_reassign_to_` у чужих данных
@@ -124,7 +118,7 @@ def _assignment_view(db: Session, request_number: str, lang: str) -> Preflight:
     request = svc.get_request_by_number(request_number)
     if not request:
         return Preflight("request_not_found")
-    if request.status not in REASSIGNABLE_STATUSES:
+    if not is_reassignable(request):
         return Preflight("bad_status", request_number=request_number)
 
     kind, current_name, group_label = "none", "", ""
@@ -322,7 +316,7 @@ async def _answer_verdict(callback: CallbackQuery, pre: Preflight, lang: str) ->
         show_alert=True)
 
 
-async def _commit_reassign(callback: CallbackQuery, db: Session, user: User,
+async def _commit_reassign(callback: CallbackQuery, user: User,
                            lang: str, pre: Preflight) -> None:
     """Фазы 2 и 3 + экран успеха. `pre` уже прошёл проверки фазы 1."""
     from uk_management_bot.database.session import SessionLocal
@@ -428,9 +422,9 @@ async def _edit(callback: CallbackQuery, text: str,
 
 
 @router.callback_query(F.data.startswith(MENU_PREFIX))
-async def handle_reassign_menu(callback: CallbackQuery, db: Session = None,
-                               roles: list = None, active_role: str = None,
-                               user: User = None, language: str = "ru"):
+async def handle_reassign_menu(callback: CallbackQuery, roles: list = None,
+                               active_role: str = None, user: User = None,
+                               language: str = "ru"):
     """Меню переназначения: дежурному / конкретному / назад к карточке."""
     lang = language
     try:
@@ -471,9 +465,9 @@ def _menu_keyboard(request_number: str, lang: str) -> InlineKeyboardMarkup:
 
 
 @router.callback_query(F.data.startswith(PICK_PREFIX))
-async def handle_reassign_pick(callback: CallbackQuery, db: Session = None,
-                               roles: list = None, active_role: str = None,
-                               user: User = None, language: str = "ru"):
+async def handle_reassign_pick(callback: CallbackQuery, roles: list = None,
+                               active_role: str = None, user: User = None,
+                               language: str = "ru"):
     """Список кандидатов без текущего исполнителя."""
     lang = language
     try:
@@ -501,9 +495,9 @@ async def handle_reassign_pick(callback: CallbackQuery, db: Session = None,
 
 
 @router.callback_query(F.data.startswith(DUTY_PREFIX))
-async def handle_reassign_duty(callback: CallbackQuery, db: Session = None,
-                               roles: list = None, active_role: str = None,
-                               user: User = None, language: str = "ru"):
+async def handle_reassign_duty(callback: CallbackQuery, roles: list = None,
+                               active_role: str = None, user: User = None,
+                               language: str = "ru"):
     """Переназначение дежурному: резолв конкретного человека, затем канон."""
     lang = language
     try:
@@ -514,7 +508,7 @@ async def handle_reassign_duty(callback: CallbackQuery, db: Session = None,
         if pre.verdict != "ok":
             await _answer_verdict(callback, pre, lang)
             return
-        await _commit_reassign(callback, db, user, lang, pre)
+        await _commit_reassign(callback, user, lang, pre)
     except Exception as e:
         logger.error("Ошибка переназначения дежурному: %s", e, exc_info=True)
         await callback.answer(
@@ -522,9 +516,9 @@ async def handle_reassign_duty(callback: CallbackQuery, db: Session = None,
 
 
 @router.callback_query(F.data.regexp(TO_PATTERN))
-async def handle_reassign_to(callback: CallbackQuery, db: Session = None,
-                             roles: list = None, active_role: str = None,
-                             user: User = None, language: str = "ru"):
+async def handle_reassign_to(callback: CallbackQuery, roles: list = None,
+                             active_role: str = None, user: User = None,
+                             language: str = "ru"):
     """Коммит переназначения на выбранного исполнителя."""
     lang = language
     try:
@@ -539,7 +533,7 @@ async def handle_reassign_to(callback: CallbackQuery, db: Session = None,
         if pre.verdict != "ok":
             await _answer_verdict(callback, pre, lang)
             return
-        await _commit_reassign(callback, db, user, lang, pre)
+        await _commit_reassign(callback, user, lang, pre)
     except Exception as e:
         logger.error("Ошибка переназначения исполнителя: %s", e, exc_info=True)
         await callback.answer(

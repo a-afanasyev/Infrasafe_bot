@@ -331,13 +331,13 @@ class TestAuthorization:
     @pytest.mark.asyncio
     async def test_applicant_is_refused_before_touching_db(self):
         cb = _callback(f"{mod.MENU_PREFIX}{NUMBER}")
-        session = MagicMock()
 
-        await mod.handle_reassign_menu(cb, db=session, roles=["applicant"],
-                                       user=MagicMock(), language="ru")
+        with patch.object(mod, "run_db", new=AsyncMock()) as run_db:
+            await mod.handle_reassign_menu(cb, roles=["applicant"],
+                                           user=MagicMock(), language="ru")
 
         cb.answer.assert_awaited()
-        assert not session.method_calls, "до БД доходить не должно"
+        run_db.assert_not_awaited(), "до БД доходить не должно"
 
     @pytest.mark.asyncio
     async def test_admin_without_manager_role_is_refused(self):
@@ -347,8 +347,9 @@ class TestAuthorization:
         from uk_management_bot.utils.helpers import get_text
 
         cb = _callback(f"{mod.MENU_PREFIX}{NUMBER}")
-        await mod.handle_reassign_menu(cb, db=MagicMock(), roles=["admin"],
-                                       user=MagicMock(), language="ru")
+        with patch.object(mod, "run_db", new=AsyncMock()):
+            await mod.handle_reassign_menu(cb, roles=["admin"],
+                                           user=MagicMock(), language="ru")
 
         cb.answer.assert_awaited_with(
             get_text("admin.handlers.reassign_manager_only", language="ru"),
@@ -357,13 +358,13 @@ class TestAuthorization:
     @pytest.mark.asyncio
     async def test_executor_is_refused(self):
         cb = _callback(f"{mod.DUTY_PREFIX}{NUMBER}")
-        session = MagicMock()
 
-        await mod.handle_reassign_duty(cb, db=session, roles=["executor"],
-                                       user=MagicMock(), language="ru")
+        with patch.object(mod, "run_db", new=AsyncMock()) as run_db:
+            await mod.handle_reassign_duty(cb, roles=["executor"],
+                                           user=MagicMock(), language="ru")
 
         cb.answer.assert_awaited()
-        assert not session.method_calls
+        run_db.assert_not_awaited()
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -549,8 +550,7 @@ class TestCommand:
              patch.object(mod, "run_db", new=AsyncMock(
                  return_value=mod.Aftermath())), \
              patch.object(mod, "_deliver", new=AsyncMock()):
-            await mod._commit_reassign(cb, MagicMock(), SimpleNamespace(id=MANAGER_ID),
-                                       "ru", pre)
+            await mod._commit_reassign(cb, SimpleNamespace(id=MANAGER_ID), "ru", pre)
 
         assert captured["command"].action is Action.MANAGER_ASSIGN
         assert captured["command"].payload == {"executor_id": NEW_ID}
@@ -567,9 +567,8 @@ class TestCommand:
 
         with patch("uk_management_bot.services.workflow_runner.run_command_sync") as run, \
              patch.object(mod, "run_db", new=AsyncMock(
-                 side_effect=lambda unit, db=None: unit(db_session))):
-            db_session = db
-            await mod.handle_reassign_to(cb, db=db, roles=["manager"],
+                 side_effect=lambda unit, db=None: unit(db))):
+            await mod.handle_reassign_to(cb, roles=["manager"],
                                          user=SimpleNamespace(id=MANAGER_ID),
                                          language="ru")
 

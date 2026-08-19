@@ -199,7 +199,7 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 # смену не работало вовсе. Переименовать callback смен нельзя: это убило бы
 # кнопки в уже отрисованных у пользователей клавиатурах.
 @router.callback_query(F.data.regexp(rf"^assign_executor_{REQUEST_NUMBER_CORE}_\d+$"))
-async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Финальное назначение конкретного исполнителя — КАНОНОМ.
 
     Раньше здесь звался `AssignmentService.assign_to_executor`: строка
@@ -216,9 +216,21 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
     """
     lang = language
     try:
-        from .reassignment import _commit_reassign, _guard, _answer_verdict, _preflight
+        from .reassignment import _answer_verdict, _commit_reassign, _preflight
 
-        if not await _guard(callback, roles, user, lang):
+        # Проверка прав — ЗДЕСЬ, а не только внутри общего `_guard`: authz-скан
+        # раскрывает вызовы транзитивно лишь в пределах модуля, и импортированный
+        # guard он не видит. Хендлер, берущий id из callback.data и идущий в БД,
+        # обязан нести признак авторизации на себе (ратчет
+        # tests/services/test_handler_authz_ratchet.py).
+        if not has_admin_access(roles=roles, user=user):
+            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+            return
+        # Канон разрешает MANAGER_ASSIGN только менеджеру (`_is_manager`), а
+        # has_admin_access пропускает и чистого admin — без этой проверки он
+        # дошёл бы до команды и получил NotAuthorized как общую ошибку.
+        if "manager" not in set(roles or []):
+            await callback.answer(get_text("admin.handlers.reassign_manager_only", language=lang), show_alert=True)
             return
 
         # Парсим данные: assign_executor_251013-001_123 (регекс уже гарантировал форму)
@@ -234,7 +246,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Se
             await _answer_verdict(callback, pre, lang)
             return
 
-        await _commit_reassign(callback, db, user, lang, pre)
+        await _commit_reassign(callback, user, lang, pre)
 
     except Exception as e:
         logger.error(f"Ошибка финального назначения исполнителя: {e}", exc_info=True)
