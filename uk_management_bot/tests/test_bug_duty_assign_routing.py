@@ -69,6 +69,41 @@ async def test_admin_router_owns_assign_executor():
 
 
 # ---------------------------------------------------------------------------
+# Обратная сторона того же перекрытия: admin-фильтр `assign_executor_` был
+# открытым startswith и забирал ЧУЖОЙ callback модуля смен
+# `assign_executor_to_shift:{shift_id}:{executor_id}` (assignment_b.py), потому
+# что admin_router включён в main.py раньше роутера смен. Назначение
+# исполнителя на смену не работало: номером заявки становилось "to", int() на
+# "shift:5:12" падал, менеджер получал общую «Ошибка назначения».
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_router_does_not_shadow_assign_executor_to_shift():
+    """admin не имеет права трогать callback назначения на СМЕНУ."""
+    assert await _matching_handlers(
+        admin_router, "assign_executor_to_shift:5:12") == []
+
+
+@pytest.mark.asyncio
+async def test_shift_router_owns_assign_executor_to_shift():
+    from uk_management_bot.handlers.shift_management import router as shift_router
+
+    names = []
+    for sub in [shift_router, *shift_router.sub_routers]:
+        names += await _matching_handlers(sub, "assign_executor_to_shift:5:12")
+    assert names == ["handle_assign_executor_to_shift"]
+
+
+@pytest.mark.asyncio
+async def test_admin_assign_executor_filter_rejects_non_canonical_numbers():
+    """Строгий регекс на REQUEST_NUMBER_CORE, а не «что угодно без подчёркивания»."""
+    for bad in ("assign_executor_abc_1", "assign_executor_250528-001_42_9",
+                "assign_executor_250528-001", "assign_executor__42"):
+        assert await _matching_handlers(admin_router, bad) == [], bad
+
+
+# ---------------------------------------------------------------------------
 # Manager action callbacks: deny_/complete_/delete_ used to be shadowed by the
 # executor/owner handlers in requests.py (registered before admin_router). Moved
 # to mgr_* so admin.py owns them unambiguously, independent of router order.

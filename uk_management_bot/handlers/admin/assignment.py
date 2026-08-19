@@ -10,6 +10,7 @@ from uk_management_bot.keyboards.admin import (
     get_executors_by_category_keyboard,
 )
 from uk_management_bot.constants.categories import get_specialization_for_category
+from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
 import logging
 from uk_management_bot.utils.helpers import get_text
@@ -162,7 +163,14 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
         await callback.answer(get_text("admin.handlers.error_occurred", language=lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("assign_executor_"))
+# Фильтр СТРОГИЙ, а не startswith: открытый префикс перехватывал чужой
+# callback модуля смен `assign_executor_to_shift:{shift_id}:{executor_id}`
+# (handlers/shift_management/assignment_b.py), потому что admin_router включён
+# в main.py РАНЬШЕ роутера смен. Заявка «to_shift:5:12» разбиралась как номер,
+# int() падал — менеджер видел «Ошибка назначения», а назначение исполнителя на
+# смену не работало вовсе. Переименовать callback смен нельзя: это убило бы
+# кнопки в уже отрисованных у пользователей клавиатурах.
+@router.callback_query(F.data.regexp(rf"^assign_executor_{REQUEST_NUMBER_CORE}_\d+$"))
 async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
     """Финальное назначение конкретного исполнителя"""
     try:
