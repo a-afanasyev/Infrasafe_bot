@@ -190,6 +190,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="same_executor вне лока — перенос сравнения в ядро под FOR UPDATE"),
     "BUG-181": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="old-notice при переназначении с дашборда (API-путь)"),
+    "BUG-182": A(pkg="A2", status="actionable", method="verified-2026-08-19",
+                 note="житель уведомляется на каждое переназначение — нужен выбор владельца"),
     "BUG-148": A(pkg="A3", status="actionable", method="decision-2026-08-19",
                  note="решение 2026-08-19: ретайр пути целиком (вариант 2) — по дисциплине ретайров #471 (RED-пин, достижимость, ревью)"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
