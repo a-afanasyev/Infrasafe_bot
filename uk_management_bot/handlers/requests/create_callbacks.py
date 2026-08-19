@@ -18,7 +18,6 @@ from uk_management_bot.utils.helpers import get_text
 from ._router import router
 
 from .shared import (
-    _db_scope,
     _get_user_language,
     _deny_if_pending_callback,
     RequestStates,
@@ -207,7 +206,7 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
 
 @router.callback_query(F.data.in_({"confirm_yes", "confirm_no"}))
-async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None):
+async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None, *, _db=None):
     """Обработка подтверждения заявки через inline клавиатуру"""
     lang = await _get_user_language(callback=callback)
 
@@ -222,11 +221,13 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             # Получаем данные из FSM
             data = await state.get_data()
 
-            # Создаем заявку в базе данных
-            with _db_scope(None) as db_session:
-                request_number = await save_request(
-                    data, callback.from_user.id, db_session, callback.bot, source="bot", role="applicant"
-                )
+            # Создаем заявку в базе данных. BUG-157 (механика): сессию
+            # открывает сам run_db в worker-потоке (seam `_db` в проде None);
+            # раньше _db_scope(None) отдавал живую сессию в тестовый шов, и
+            # sync-ядро save_request исполнялось прямо на event loop.
+            request_number = await save_request(
+                data, callback.from_user.id, _db, callback.bot, source="bot", role="applicant"
+            )
 
             if request_number:
                 # Get localized display values for category and urgency

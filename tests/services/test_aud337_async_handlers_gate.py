@@ -142,19 +142,15 @@ CONVERTED = [
     # (start_onboarding, complete_onboarding, complete_onboarding_without_documents,
     # start_address_input) удалены — параметр db в async def держали ровно они.
     "uk_management_bot/handlers/onboarding.py",
+    # BUG-157 механика (2026-08-19): inspector_confirm перестал открывать
+    # session_scope — сохранение идёт через seam `_db` (в проде None, сессию
+    # открывает run_db в потоке). Блокер был снят раскроем save_request
+    # волной 7.
+    "uk_management_bot/handlers/inspector_requests.py",
+    # BUG-157 механика (2026-08-19): handle_confirmation перестал использовать
+    # тестовый seam как прод-механизм (`_db_scope(None)` → сквозной `_db`).
+    "uk_management_bot/handlers/requests/create_callbacks.py",
 ]
-
-# ЗА пределами списка (кандидаты, ждущие своего условия):
-#
-# handlers/inspector_requests.py — волной 6 конвертирован в БОЛЬШЕЙ части (все
-# сайты выбора двора/дома + три sync-хелпера, которые раньше открывали свой
-# session_scope и звались из async синхронно, блокируя loop), но в ратчет пока
-# НЕ входит: inspector_confirm сохраняет session_scope байт-в-байт.
-# БЛОКЕР СНЯТ волной 7: save_request раскроена на save_request_sync +
-# async-обёртку, третий параметр обёртки — seam ``_db``, так что позиционный
-# вызов из inspector_confirm работает без правок. Осталось механическое:
-# заменить `with session_scope() as db: await save_request(..., db, ...)` на
-# `await save_request(..., None, ...)` и снять параметр db у хендлера.
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
 _FORBIDDEN_ATTR_CALLS = {"query", "commit"}
