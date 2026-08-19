@@ -137,7 +137,14 @@ class TestAftermathUsesOutcome:
         assert after.old_notice is None
 
     def test_no_old_notice_for_group_assignment(self, db):
-        """Групповое назначение — индивидуального исполнителя не было."""
+        """Групповое назначение — индивидуального исполнителя не было.
+
+        Подпись «откуда» здесь НЕ пытается назвать группу: к фазе 3 команда уже
+        перевела старую групповую строку в `cancelled` и вставила новую
+        individual, так что чтение активного назначения вернуло бы её же.
+        """
+        from uk_management_bot.utils.helpers import get_text
+
         _user(db, APPLICANT_ID, 100, roles='["applicant"]')
         _user(db, NEW_ID, 300)
         _request(db, executor_id=NEW_ID, status=REQUEST_STATUS_IN_PROGRESS)
@@ -145,7 +152,8 @@ class TestAftermathUsesOutcome:
 
         after = mod._aftermath(db, NUMBER, _outcome(old_executor_id=None), "ru")
         assert after.old_notice is None
-        assert after.old_label, "подпись «откуда» обязана быть непустой"
+        assert after.old_label == get_text(
+            "admin.handlers.reassign_from_unassigned", language="ru")
 
     def test_old_label_falls_back_to_unassigned(self, db):
         _user(db, APPLICANT_ID, 100, roles='["applicant"]')
@@ -559,6 +567,12 @@ class TestCommand:
 
     @pytest.mark.asyncio
     async def test_same_executor_does_not_reach_the_command(self, db):
+        """Отказ обязан быть ЧЕСТНЫМ: с текстом, а не через проглоченное
+        исключение. Прошлая версия теста подсовывала в run_db None, юнит падал
+        AttributeError внутри общего except — и «команда не вызвана» проходило
+        по совершенно другой причине."""
+        from uk_management_bot.utils.helpers import get_text
+
         _user(db, APPLICANT_ID, 100, roles='["applicant"]')
         _user(db, NEW_ID, 300)
         _request(db, executor_id=NEW_ID, status=REQUEST_STATUS_IN_PROGRESS)
@@ -567,12 +581,15 @@ class TestCommand:
 
         with patch("uk_management_bot.services.workflow_runner.run_command_sync") as run, \
              patch.object(mod, "run_db", new=AsyncMock(
-                 side_effect=lambda unit, db=None: unit(db))):
+                 side_effect=lambda unit, **kw: unit(db))):
             await mod.handle_reassign_to(cb, roles=["manager"],
                                          user=SimpleNamespace(id=MANAGER_ID),
                                          language="ru")
 
         run.assert_not_called()
+        cb.answer.assert_awaited_with(
+            get_text("admin.handlers.reassign_same_executor", language="ru"),
+            show_alert=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -676,4 +693,219 @@ class TestEndToEndRealCommand:
             RequestAssignment.status == "active").all()
         assert len(active) == 1
         assert active[0].executor_id == NEW_ID
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Требование 6: первичное назначение из бота идёт КАНОНОМ
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Это осознанное изменение поведения (статус двигается, житель уведомляется).
+# Без пина оно тихо откатилось бы обратно на AssignmentService, и расхождение
+# «бот пишет мимо канона» вернулось бы незамеченным.
+
+
+@pytest.fixture()
+def e2e_unassigned(monkeypatch):
+    from sqlalchemy.pool import StaticPool
+
+    import uk_management_bot.database.session as session_mod
+
+    engine = create_engine(
+        "sqlite://", echo=False,
+        poolclass=StaticPool, connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    Factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    monkeypatch.setattr(session_mod, "SessionLocal", Factory)
+
+    db = Factory()
+    _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+    _user(db, NEW_ID, 300, language="ru")
+    _user(db, MANAGER_ID, 500, roles='["manager"]')
+    _request(db, executor_id=None, status=REQUEST_STATUS_NEW)   # ещё никому
+    db.commit()
+
+    yield db, Factory
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+class TestPrimaryAssignGoesThroughCanon:
+    @pytest.mark.asyncio
+    async def test_status_moves_and_applicant_is_notified(self, e2e_unassigned):
+        db, _factory = e2e_unassigned
+        cb = _callback(f"assign_executor_{NUMBER}_{NEW_ID}")
+
+        sent = []
+
+        async def _capture(bot, telegram_id, text):
+            sent.append((telegram_id, text))
+            return True
+
+        from uk_management_bot.handlers.admin import assignment as assign_mod
+
+        with patch("uk_management_bot.services.notification_service.send_to_user",
+                   new=_capture), \
+             patch("uk_management_bot.services.notification_service.channel.send_to_user",
+                   new=_capture), \
+             patch("uk_management_bot.services.redis_pubsub.publish_request_event",
+                   new=AsyncMock()):
+            await assign_mod.handle_final_executor_assignment_admin(
+                cb, roles=["manager"], user=SimpleNamespace(id=MANAGER_ID),
+                language="ru")
+
+        db.expire_all()
+        request = db.query(Request).filter(Request.request_number == NUMBER).one()
+        assert request.executor_id == NEW_ID
+        assert request.status == REQUEST_STATUS_IN_PROGRESS, \
+            "канон обязан двигать Новая→В работе (инвариант «В работе ⟺ исполнитель»)"
+
+        targets = {tg for tg, _ in sent}
+        assert 300 in targets, "исполнитель не получил наряд"
+        assert 100 in targets, "житель не уведомлён — это часть изменения поведения"
+
+    def test_assignment_service_is_not_used_anymore(self):
+        """Мимо-канонный писатель должен исчезнуть, а не остаться вторым.
+
+        Проверяются ИМЕНА и ВЫЗОВЫ, а не текст файла: упоминание
+        `AssignmentService` осталось в докстринге как объяснение «как было», и
+        грep по подстроке зеленел бы от него же — ровно та грабля, на которой
+        уже ловились ратчеты по подстроке.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from uk_management_bot.handlers.admin import assignment as assign_mod
+
+        src = textwrap.dedent(
+            inspect.getsource(assign_mod.handle_final_executor_assignment_admin))
+        fn = ast.parse(src).body[0]
+        fn.body = [n for n in fn.body
+                   if not (isinstance(n, ast.Expr)
+                           and isinstance(n.value, ast.Constant))]
+
+        used = set()
+        for node in ast.walk(fn):
+            if isinstance(node, (ast.Name, ast.Attribute)):
+                used.add(ast.unparse(node))
+
+        assert not any("AssignmentService" in n for n in used), sorted(used)
+        assert not any(n.endswith("bot.send_message") for n in used), \
+            "ручное уведомление на языке МЕНЕДЖЕРА удалено"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Требование 7: assign_duty_ больше не врёт «✅ назначена»
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestDutyOutcomeTexts:
+    @pytest.mark.parametrize("outcome,key", [
+        ("already_assigned_individual", "admin.handlers.reassign_already_assigned"),
+        ("already_assigned_group", "admin.handlers.reassign_already_assigned"),
+        ("no_specialization", "admin.handlers.duty_assign_no_specialization"),
+        ("no_executors", "admin.handlers.duty_assign_no_executors"),
+        ("error", "admin.handlers.duty_assign_failed"),
+    ])
+    def test_each_outcome_has_its_own_text(self, outcome, key):
+        from uk_management_bot.handlers.admin.assignment import _duty_outcome_text
+        from uk_management_bot.utils.helpers import get_text
+
+        assert _duty_outcome_text(outcome, "ru") == get_text(key, language="ru")
+
+    def test_admin_is_not_pointed_at_a_button_they_cannot_see(self):
+        """Кнопка «Переназначить» — только менеджеру; советовать её админу
+        значит отправить его в тупик."""
+        from uk_management_bot.handlers.admin.assignment import _duty_outcome_text
+        from uk_management_bot.utils.helpers import get_text
+
+        text = _duty_outcome_text("already_assigned_individual", "ru",
+                                  can_reassign=False)
+        assert text == get_text("admin.handlers.already_assigned_manager_only",
+                                language="ru")
+        assert "Переназначить" not in text
+
+    @pytest.mark.asyncio
+    async def test_already_assigned_does_not_show_success(self, db):
+        """Ложное «✅ назначена» на уже назначенной заявке — исходный дефект."""
+        from uk_management_bot.handlers.admin import assignment as assign_mod
+        from uk_management_bot.utils.helpers import get_text
+
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, OLD_ID, 200)
+        _request(db, executor_id=OLD_ID, status=REQUEST_STATUS_IN_PROGRESS)
+        _assignment(db, kind="individual", executor_id=OLD_ID)
+
+        cb = _callback(f"assign_duty_{NUMBER}")
+        await assign_mod.handle_assign_duty_executor_admin(
+            cb, db=db, roles=["manager"], user=SimpleNamespace(id=MANAGER_ID),
+            language="ru")
+
+        cb.answer.assert_awaited_with(
+            get_text("admin.handlers.reassign_already_assigned", language="ru"),
+            show_alert=True)
+        cb.message.edit_text.assert_not_awaited(), "экран успеха не должен рисоваться"
+
+    def test_outcome_order_puts_request_state_before_people(self):
+        """«Уже назначена» обязана победить «нет исполнителей»: иначе при пустой
+        специализации менеджер получал чужой диагноз."""
+        import inspect
+
+        from uk_management_bot.handlers.admin import shared
+
+        src = inspect.getsource(shared.auto_assign_request_by_category)
+        assert src.index("ASSIGN_ALREADY_INDIVIDUAL") < src.index("ASSIGN_NO_EXECUTORS")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# no_op и пустой список кандидатов
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestNoOpAndEmptyStates:
+    @pytest.mark.asyncio
+    async def test_no_op_outcome_does_not_claim_success(self):
+        """Гонка: пока меню было открыто, того же исполнителя назначил другой
+        менеджер. Канон вернёт no_op без интентов — рисовать «переназначена»
+        значило бы соврать об изменении, которого не было."""
+        from uk_management_bot.utils.helpers import get_text
+
+        cb = _callback("x")
+        outcome = _outcome(old_executor_id=NEW_ID)
+        outcome.no_op = True
+        after = mod.Aftermath(messages=[], old_notice=None, old_label="A",
+                              new_executor_name="B")
+
+        with patch("uk_management_bot.services.workflow_notifications."
+                   "send_notify_messages", new=AsyncMock()), \
+             patch("uk_management_bot.services.redis_pubsub.publish_request_event",
+                   new=AsyncMock()):
+            await mod._deliver(cb, NUMBER, outcome, after, "ru")
+
+        text = cb.message.edit_text.await_args.args[0]
+        assert text == get_text("admin.handlers.reassign_same_executor", language="ru")
+
+    @pytest.mark.asyncio
+    async def test_empty_candidate_list_explains_itself(self, db):
+        """Единственный подходящий исполнитель — текущий: список пуст ВСЕГДА,
+        и без объяснения менеджер не поймёт почему. Кликабельная заглушка
+        `no_executors` при этом не рисуется — хендлера на неё в проекте нет."""
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, OLD_ID, 200)
+        _request(db, executor_id=OLD_ID, status=REQUEST_STATUS_IN_PROGRESS)
+
+        cb = _callback(f"{mod.PICK_PREFIX}{NUMBER}")
+        with patch.object(mod, "run_db", new=AsyncMock(
+                side_effect=lambda unit, **kw: unit(db))):
+            await mod.handle_reassign_pick(cb, roles=["manager"],
+                                           user=SimpleNamespace(id=MANAGER_ID),
+                                           language="ru")
+
+        text = cb.message.edit_text.await_args.args[0]
+        assert "Нет других подходящих" in text
+        markup = cb.message.edit_text.await_args.kwargs["reply_markup"]
+        callbacks = [b.callback_data for row in markup.inline_keyboard for b in row]
+        assert "no_executors" not in callbacks
+        assert f"{mod.MENU_PREFIX}{NUMBER}" in callbacks
 

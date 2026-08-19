@@ -296,7 +296,7 @@ def get_reassign_button_row(
     Условия показа держатся вместе, чтобы кнопка не появлялась там, где канон
     её всё равно не пустит:
 
-    * статус — только «Новая»/«В работе» (`MANAGER_ASSIGN.from_statuses`);
+    * статус — из `MANAGER_ASSIGN.from_statuses` (сегодня «Новая»/«В работе»);
     * назначение должно БЫТЬ: без него это первичное назначение, у него свой
       вход;
     * роль — именно `manager`: `has_admin_access` пропускает и чистого `admin`,
@@ -305,11 +305,12 @@ def get_reassign_button_row(
     Подпись зависит от типа назначения: при групповом индивидуального
     исполнителя нет и снимать некого — это «назначить», а не «переназначить».
     """
-    from uk_management_bot.utils.constants import (
-        REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_NEW,
-    )
+    from uk_management_bot.utils.workflow_predicates import reassignable_statuses
 
-    if status not in (REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS):
+    # Источник — САМ канон (`MANAGER_ASSIGN.from_statuses`), а не свой список:
+    # второе определение того же правила разъехалось бы при правке specs.py
+    # молча — кнопка пряталась бы там, где команда уже проходит.
+    if status not in reassignable_statuses():
         return []
     if assignment_type not in ("individual", "group"):
         return []

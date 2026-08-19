@@ -37,10 +37,17 @@ from .shared import (
 logger = logging.getLogger(__name__)
 
 
-def _duty_outcome_text(outcome: str, lang: str) -> str:
-    """Человеческий текст на каждый неуспешный исход группового назначения."""
+def _duty_outcome_text(outcome: str, lang: str, *, can_reassign: bool = True) -> str:
+    """Человеческий текст на каждый неуспешный исход группового назначения.
+
+    `can_reassign` — видит ли адресат кнопку «Переназначить». Она только для
+    менеджера, а `assign_duty_` доступен и чистому admin: советовать ему кнопку,
+    которой в его интерфейсе нет, значило бы отправить человека в тупик.
+    """
     if outcome in (ASSIGN_ALREADY_INDIVIDUAL, ASSIGN_ALREADY_GROUP):
-        return get_text("admin.handlers.reassign_already_assigned", language=lang)
+        key = ("admin.handlers.reassign_already_assigned" if can_reassign
+               else "admin.handlers.already_assigned_manager_only")
+        return get_text(key, language=lang)
     if outcome == ASSIGN_NO_SPECIALIZATION:
         return get_text("admin.handlers.duty_assign_no_specialization", language=lang)
     if outcome == ASSIGN_NO_EXECUTORS:
@@ -79,7 +86,10 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
 
         if outcome != ASSIGN_OK:
             await callback.answer(
-                _duty_outcome_text(outcome, lang), show_alert=True)
+                _duty_outcome_text(
+                    outcome, lang,
+                    can_reassign=has_manager_role(roles=roles, user=user)),
+                show_alert=True)
             return
 
         # Пытаемся отредактировать сообщение
@@ -180,7 +190,8 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
                 spec=spec,
                 executors_text=executors_text
             ),
-            reply_markup=get_executors_by_category_keyboard(request_number, request.category, filtered_executors),
+            reply_markup=get_executors_by_category_keyboard(
+                request_number, request.category, filtered_executors, language=lang),
             parse_mode="HTML"
         )
 
@@ -278,7 +289,7 @@ async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Sess
                 category=get_category_display(resolve_category_key(request.category), language=lang),
                 address=request.address
             ),
-            reply_markup=get_assignment_type_keyboard(request_number),
+            reply_markup=get_assignment_type_keyboard(request_number, language=lang),
             parse_mode="HTML"
         )
 

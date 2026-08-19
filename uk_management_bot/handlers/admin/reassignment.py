@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from aiogram import F
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.orm import Session
 
@@ -108,7 +108,6 @@ class Candidate:
     first_name: Optional[str]
     last_name: Optional[str]
     username: Optional[str]
-    on_shift: bool = False
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -259,11 +258,13 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
             )
             old_notice = (old_user.telegram_id, text)
     else:
-        assignment = svc.get_active_assignment(request_number)
-        if assignment is not None and assignment.assignment_type == "group":
-            old_label = _spec_label(assignment.group_specialization, lang)
-        if not old_label:
-            old_label = get_text("admin.handlers.reassign_from_unassigned", language=lang)
+        # Читать здесь СТАРОЕ групповое назначение бессмысленно: команда уже
+        # закоммитила create_assignment, который перевёл прошлую активную
+        # строку в "cancelled" и вставил новую individual. get_active_assignment
+        # вернул бы именно её. Подпись «откуда» для этого случая берётся из
+        # факта «исполнителя не было» — экран успеха здесь и так использует
+        # шаблон без {old_label}.
+        old_label = get_text("admin.handlers.reassign_from_unassigned", language=lang)
 
     return Aftermath(messages=messages, old_notice=old_notice,
                      old_label=old_label, new_executor_name=new_name)
@@ -387,6 +388,15 @@ async def _deliver(callback: CallbackQuery, request_number: str, outcome,
         except Exception as e:
             logger.debug("realtime publish для %s пропущен: %s", request_number, e)
 
+    # Канон вернул no_op (RepeatPolicy.NO_OP_IF_SAME): между фазами кто-то уже
+    # назначил того же исполнителя. Ничего не менялось и интентов нет — рисовать
+    # «переназначена» значило бы соврать об изменении, которого не было.
+    if getattr(outcome, "no_op", False):
+        await _edit(callback,
+                    get_text("admin.handlers.reassign_same_executor", language=lang),
+                    _back_to_card_keyboard(request_number, lang))
+        return
+
     # Текст выбирается ПО ФАКТУ, а не по входу: один и тот же юнит обслуживает
     # первичное назначение (снимать было некого) и переназначение.
     if getattr(outcome.old_state, "executor_id", None) is None:
@@ -404,6 +414,13 @@ async def _deliver(callback: CallbackQuery, request_number: str, outcome,
     await _edit(callback, text, _back_to_card_keyboard(request_number, lang))
 
 
+def _menu_back_keyboard(request_number: str, lang: str) -> InlineKeyboardMarkup:
+    """Возврат в меню переназначения (тупиковых экранов быть не должно)."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=get_text("admin.keyboards.back_nav", language=lang),
+        callback_data=f"{MENU_PREFIX}{request_number}")]])
+
+
 def _back_to_card_keyboard(request_number: str, lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=get_text("admin.keyboards.back_to_request", language=lang),
@@ -412,12 +429,28 @@ def _back_to_card_keyboard(request_number: str, lang: str) -> InlineKeyboardMark
 
 async def _edit(callback: CallbackQuery, text: str,
                 markup: Optional[InlineKeyboardMarkup] = None) -> None:
+    """Перерисовка экрана. Ловим весь `TelegramAPIError`, а не только
+    `TelegramBadRequest`: сетевые/серверные ошибки aiogram — его СИБЛИНГИ, не
+    подклассы. Пропущенный `TelegramNetworkError` на этом вызове улетал бы в
+    общий except хендлера и показывал менеджеру «Ошибка» ПОСЛЕ уже
+    закоммиченного переназначения и уже отправленных уведомлений."""
     try:
         await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     except TelegramBadRequest as e:
-        if "message is not modified" not in str(e):
-            await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
-    await callback.answer()
+        if "message is not modified" in str(e):
+            pass
+        else:
+            try:
+                await callback.message.answer(text, reply_markup=markup,
+                                              parse_mode="HTML")
+            except TelegramAPIError as send_error:
+                logger.warning("Экран не перерисован: %s", send_error)
+    except TelegramAPIError as e:
+        logger.warning("Экран не перерисован: %s", e)
+    try:
+        await callback.answer()
+    except TelegramAPIError:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -482,6 +515,20 @@ async def handle_reassign_pick(callback: CallbackQuery, roles: list = None,
             lambda s: _candidates(s, request_number, lang), db=None)
         if view.verdict != "ok":
             await _answer_verdict(callback, view, lang)
+            return
+
+        if not candidates:
+            # Пустой список — не «ошибка», а объяснимое состояние, и чаще всего
+            # оно значит «подходящий был один, и это текущий исполнитель».
+            # Без текста менеджер видел бы «Подходящих исполнителей: 0» и
+            # кликабельную заглушку `no_executors`, у которой хендлера нет
+            # вовсе — то есть вечные «часики».
+            await _edit(
+                callback,
+                get_text("admin.handlers.reassign_no_candidates",
+                         language=lang).format(
+                    request_number=html.escape(request_number)),
+                _menu_back_keyboard(request_number, lang))
             return
 
         text = get_text("admin.handlers.reassign_pick_title", language=lang).format(

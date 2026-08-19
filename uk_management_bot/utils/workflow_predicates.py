@@ -231,10 +231,13 @@ def is_reassignable(request) -> bool:
     return normalize_status(request) in ACTION_TABLE[Action.MANAGER_ASSIGN].from_statuses
 
 
-def reassignable_clause() -> ColumnElement:
-    """SQL-форма `is_reassignable` (для выборок; nullable-статусов у нас нет)."""
+def reassignable_statuses() -> frozenset:
+    """Те же статусы, но как множество — для гейтов, у которых на руках только
+    строка статуса (рендер клавиатуры), а не объект заявки. Пара к
+    `is_reassignable`; SQL-формы нет намеренно — выборок по этому признаку не
+    существует, а неиспользуемый clause был бы мёртвым кодом."""
     from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
     from uk_management_bot.utils.request_workflow.types import Action
 
-    return Request.status.in_(sorted(ACTION_TABLE[Action.MANAGER_ASSIGN].from_statuses))
+    return frozenset(ACTION_TABLE[Action.MANAGER_ASSIGN].from_statuses)
 

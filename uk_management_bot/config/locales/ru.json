@@ -978,7 +978,9 @@
       "duty_assign_no_specialization": "Для категории заявки не определена специализация",
       "duty_assign_no_executors": "Нет подходящих исполнителей по специализации",
       "duty_assign_failed": "Не удалось назначить дежурного, попробуйте ещё раз",
-      "reassign_assigned_success": "✅ <b>Заявка #{request_number} назначена</b>\n\nИсполнитель: {new_executor}"
+      "reassign_assigned_success": "✅ <b>Заявка #{request_number} назначена</b>\n\nИсполнитель: {new_executor}",
+      "already_assigned_manager_only": "Заявка уже назначена. Переназначение доступно менеджеру.",
+      "reassign_no_candidates": "👤 <b>Заявка #{request_number}</b>\n\nНет других подходящих исполнителей по этой специализации.\nТекущий исполнитель в список не входит."
     },
     "panel_title": "⚙️ Панель управления"
   },
