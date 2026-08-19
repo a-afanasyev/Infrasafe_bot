@@ -71,6 +71,26 @@ def has_admin_access(roles: Optional[List[str]] = None, user: Optional[User] = N
 
     return False
 
+def has_manager_role(roles: Optional[List[str]] = None,
+                     user: Optional[User] = None) -> bool:
+    """Именно МЕНЕДЖЕР, без admin.
+
+    `has_admin_access` пропускает обе роли, а канон workflow разрешает
+    `MANAGER_ASSIGN` только менеджеру (`request_workflow.guards._is_manager`).
+    Без отдельной проверки чистый `admin` доходил бы до команды и получал
+    NotAuthorized в виде общей ошибки вместо человеческого отказа.
+
+    Fallback на объект пользователя — зеркало `has_admin_access`: смотреть
+    только в `roles` из middleware значило бы отказать настоящему менеджеру,
+    когда контекст роли не доехал.
+    """
+    if roles and "manager" in roles:
+        return True
+    if user and "manager" in parse_roles_safe(getattr(user, "roles", None)):
+        return True
+    return False
+
+
 def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] = None) -> bool:
     """
     Проверяет, есть ли у пользователя права исполнителя

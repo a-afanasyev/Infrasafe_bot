@@ -44,7 +44,11 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.keyboards.admin import get_executors_by_category_keyboard
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
-from uk_management_bot.utils.auth_helpers import get_user_roles, has_admin_access
+from uk_management_bot.utils.auth_helpers import (
+    get_user_roles,
+    has_admin_access,
+    has_manager_role,
+)
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.specializations import (
     matches_required_specs,
@@ -290,7 +294,7 @@ async def _guard(callback: CallbackQuery, roles, user, lang) -> bool:
             get_text("admin.handlers.no_access_actions", language=lang),
             show_alert=True)
         return False
-    if "manager" not in set(roles or []):
+    if not has_manager_role(roles=roles, user=user):
         await callback.answer(
             get_text("admin.handlers.reassign_manager_only", language=lang),
             show_alert=True)

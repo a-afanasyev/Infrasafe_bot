@@ -314,6 +314,9 @@ def get_reassign_button_row(
     if assignment_type not in ("individual", "group"):
         return []
     if "manager" not in set(roles or []):
+        # Здесь намеренно только `roles`: карточка рисуется хендлером, который
+        # роли из middleware получает всегда. Скрытая кнопка — косметика, а
+        # настоящий гейт стоит в хендлерах (has_manager_role с fallback).
         return []
 
     key = ("admin.keyboards.reassign_request" if assignment_type == "individual"

@@ -17,7 +17,7 @@ import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import has_admin_access
+from uk_management_bot.utils.auth_helpers import has_admin_access, has_manager_role
 from uk_management_bot.utils.specializations import (
     matches_required_specs,
     parse_specializations,
@@ -229,7 +229,7 @@ async def handle_final_executor_assignment_admin(callback: CallbackQuery, roles:
         # Канон разрешает MANAGER_ASSIGN только менеджеру (`_is_manager`), а
         # has_admin_access пропускает и чистого admin — без этой проверки он
         # дошёл бы до команды и получил NotAuthorized как общую ошибку.
-        if "manager" not in set(roles or []):
+        if not has_manager_role(roles=roles, user=user):
             await callback.answer(get_text("admin.handlers.reassign_manager_only", language=lang), show_alert=True)
             return
 
