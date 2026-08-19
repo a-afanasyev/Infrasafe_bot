@@ -113,7 +113,7 @@ def _comment_count(db, request_number: str) -> int:
 
 def test_apply_comment_rejects_foreign_request(db, world):
     """Слой 2: даже с «правильным» номером в состоянии запись запрещена."""
-    verdict = rc._apply_comment(
+    verdict, _notices = rc._apply_comment(
         db, "260818-001", STRANGER_TG, "текст постороннего", "clarification"
     )
 
@@ -122,7 +122,7 @@ def test_apply_comment_rejects_foreign_request(db, world):
 
 
 def test_apply_comment_allows_owner(db, world):
-    verdict = rc._apply_comment(db, "260818-001", OWNER_TG, "текст владельца", "clarification")
+    verdict, _notices = rc._apply_comment(db, "260818-001", OWNER_TG, "текст владельца", "clarification")
 
     assert verdict == "ok"
     assert _comment_count(db, "260818-001") == 1

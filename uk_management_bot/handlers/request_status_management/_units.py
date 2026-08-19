@@ -37,6 +37,8 @@ class _PurchaseOutcome:
     requested_materials: Optional[str] = None
     manager_comment: Optional[str] = None
     active_requests: List[_ActiveRow] = field(default_factory=list)
+    # BUG-174: notices о комментарии закупки — шлёт async-слой хендлера
+    notices: List = field(default_factory=list)
 
 
 def _apply_purchase(db, request_number: str, materials: str, actor_tg: int,
@@ -95,8 +97,9 @@ def _apply_purchase(db, request_number: str, materials: str, actor_tg: int,
         request.manager_materials_comment = restored_comment
     request.purchase_materials = materials  # legacy-зеркало (вне workflow-полей)
 
+    notices = []
     if commenter_id is not None:
-        CommentService(db).add_purchase_comment(
+        _, notices = CommentService(db).add_purchase_comment(
             request_number=request_number,
             user_id=commenter_id,
             materials=materials
@@ -116,6 +119,7 @@ def _apply_purchase(db, request_number: str, materials: str, actor_tg: int,
         "ok",
         requested_materials=request.requested_materials,
         manager_comment=request.manager_materials_comment,
+        notices=notices,
         active_requests=[
             _ActiveRow(
                 request_number=r.request_number,

@@ -213,6 +213,15 @@ class UpdateShiftBody(BaseModel):
     priority_level: Optional[int] = Field(default=None, ge=1, le=5)
     specialization_focus: Optional[list[str]] = None
 
+    @field_validator("specialization_focus", mode="after")
+    @classmethod
+    def _check_specialization_focus(cls, v):
+        # BUG-173: зеркало Create — PATCH пропускал произвольные строки,
+        # и разметка доезжала до HTML-сообщений менеджеру.
+        if v is None:
+            return v
+        return _validate_specializations(v, allow_universal=True)
+
     @field_validator("start_time", "end_time", mode="after")
     @classmethod
     def _coerce_utc(cls, v):

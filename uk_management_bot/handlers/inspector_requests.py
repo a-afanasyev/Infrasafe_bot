@@ -22,7 +22,7 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from uk_management_bot.database.session import run_db, session_scope
+from uk_management_bot.database.session import run_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
@@ -379,18 +379,14 @@ async def inspector_confirm(callback: CallbackQuery, state: FSMContext, *, _db=N
     data = await state.get_data()
     from uk_management_bot.handlers.requests import save_request
 
-    # ⚠️ Сохранение НЕ переведено на run_db осознанно: save_request —
-    # общая с applicant-флоу async-функция (handlers/requests/create.py),
-    # которая внутри одной транзакции мешает sync-SQL с await'ом (загрузка
-    # медиа в Media Service после commit). Разрезать её на sync-ядро + async-
-    # обёртку — работа по её собственному файлу, а не по этому. Поэтому
-    # session_scope здесь сохранён байт-в-байт, а inspector_requests.py НЕ
-    # входит в CONVERTED-ратчет гейта (tests/services/test_aud337_async_handlers_gate.py).
-    with session_scope() as db:
-        request_number = await save_request(
-            data, callback.from_user.id, db, callback.bot,
-            source="inspector", role="inspector",
-        )
+    # BUG-157 (механика, 2026-08-19): сессию открывает сам run_db в
+    # worker-потоке (третий аргумент — seam `_db`, в проде None). Раньше здесь
+    # стоял session_scope, и sync-ядро save_request исполнялось прямо на
+    # event loop; блокер был снят раскроем save_request волной 7.
+    request_number = await save_request(
+        data, callback.from_user.id, _db, callback.bot,
+        source="inspector", role="inspector",
+    )
 
     await state.clear()
     if request_number:

@@ -293,13 +293,26 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
                 # previous_status, new_status, additional_comment). Вызов падал
                 # TypeError, который гасил except ниже, и изменение комментария
                 # к материалам не попадало в историю заявки никогда.
-                comment_service.add_status_change_comment(
+                _, notices = comment_service.add_status_change_comment(
                     request_number=request_number,
                     user_id=user.id,
                     previous_status=REQUEST_STATUS_PURCHASE,
                     new_status=REQUEST_STATUS_PURCHASE,
                     additional_comment=comment_text
                 )
+
+                # Доставка — на языке КАЖДОГО получателя (BUG-174). Хендлер
+                # не конвертирован на run_db (middleware-db), поэтому шлём
+                # прямо здесь, best-effort как и запись самого комментария.
+                from uk_management_bot.services.notification_service import send_to_user
+
+                for notice in notices:
+                    try:
+                        await send_to_user(message.bot, notice.telegram_id, notice.text)
+                    except Exception as notify_error:
+                        logger.warning(
+                            f"Уведомление о комментарии не доставлено tg={notice.telegram_id}: {notify_error}"
+                        )
             except Exception as e:
                 logger.error(f"Ошибка добавления комментария: {e}")
                 # Не критично, продолжаем

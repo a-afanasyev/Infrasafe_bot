@@ -1184,11 +1184,13 @@
     "select_type": "💬 Izoh turini tanlang:",
     "success": "✅ Izoh #{request_id} arizasiga muvaffaqiyatli qo'shildi!\n\n💬 Turi: {comment_type}",
     "title": "💬 Izohlarni boshqarish",
+    "notification": "💬 #{request_number} arizaga yangi izoh\n\n📋 Turi: {type_label}\n\n{comment_text}",
     "type_clarification": "aniqlashtirish",
     "type_comment": "izoh",
     "type_general": "umumiy izoh",
     "type_purchase": "materiallarni sotib olish",
     "type_report": "bajarish hisoboti",
+    "type_status_change": "holat o'zgarishi",
     "user_not_found": "❌ Foydalanuvchi topilmadi",
     "view_comments": "📋 Izohlarni ko'rish"
   },

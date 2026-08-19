@@ -102,8 +102,11 @@ def _load_request_exists(db, request_number: str) -> bool:
     return request is not None
 
 
-def _apply_comment(db, request_number: str, author_telegram_id: int, comment_text: str, comment_type: str) -> str:
-    """-> 'request_not_found' | 'author_not_found' | 'no_access' | 'ok'. Коммитит CommentService.add_comment.
+def _apply_comment(db, request_number: str, author_telegram_id: int, comment_text: str, comment_type: str) -> tuple:
+    """-> ('request_not_found'|'author_not_found'|'no_access'|'ok', notices).
+
+    notices — list[CommentNotice] для отправки async-слоем (BUG-174: из
+    worker-потока run_db слать нечем, доставку делает хендлер).
 
     ⚠️ Права проверяются ЗДЕСЬ, в точке записи, а не только на входе в цепочку.
     Так было: авторизация стояла ровно один раз, в `handle_add_comment_start`, а
@@ -125,27 +128,27 @@ def _apply_comment(db, request_number: str, author_telegram_id: int, comment_tex
     # Получаем заявку для получения ID
     request = db.query(Request).filter(Request.request_number == request_number).first()
     if not request:
-        return "request_not_found"
+        return ("request_not_found", [])
 
     author = db.query(User).filter(User.telegram_id == author_telegram_id).first()
     if not author:
-        return "author_not_found"
+        return ("author_not_found", [])
 
     if not has_request_access_sync(db, author, request):
-        return "no_access"
+        return ("no_access", [])
 
     # Создаем сервис комментариев
     comment_service = CommentService(db)
 
-    # Добавляем комментарий
-    comment_service.add_comment(
+    # Добавляем комментарий; notices отправит async-слой (BUG-174)
+    _, notices = comment_service.add_comment(
         request_id=request.request_number,
         user_id=author.id,
         comment_text=comment_text,
         comment_type=comment_type
     )
 
-    return "ok"
+    return ("ok", notices)
 
 
 def _load_comments_view(db, request_number: str, telegram_id: int, lang: str) -> tuple:
@@ -424,7 +427,7 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
             await callback.answer(get_text("comments.comment_data_not_found", language=lang), show_alert=True)
             return
 
-        verdict = await run_db(
+        verdict, notices = await run_db(
             lambda s: _apply_comment(
                 s, request_number, callback.from_user.id, comment_text, comment_type
             ),
@@ -442,6 +445,18 @@ async def handle_comment_confirmation(callback: CallbackQuery, state: FSMContext
         if verdict == "no_access":
             await callback.answer(get_text("comments.no_permission_to_add", language=lang), show_alert=True)
             return
+
+        # Доставка уведомлений — вне сессии, на языке КАЖДОГО получателя
+        # (BUG-174; образец clarification_replies.handle_reply_text)
+        from uk_management_bot.services.notification_service import send_to_user
+
+        for notice in notices:
+            try:
+                await send_to_user(callback.bot, notice.telegram_id, notice.text)
+            except Exception as notify_error:
+                logger.warning(
+                    f"Уведомление о комментарии не доставлено tg={notice.telegram_id}: {notify_error}"
+                )
 
         # Показываем сообщение об успехе
         success_text = get_text("comments.success", language=lang).format(

@@ -175,8 +175,11 @@ def _load_revision_actor(db, request_number: str, telegram_id: int) -> tuple:
     return ("ok", actor.id)
 
 
-def _add_revision_comment(db, request_number: str, telegram_id: int, revision_reason: str) -> None:
+def _add_revision_comment(db, request_number: str, telegram_id: int, revision_reason: str) -> list:
     """Добавляем комментарий о доработке (пишет и коммитит CommentService).
+
+    -> list[CommentNotice] для отправки async-слоем (BUG-174: из worker-потока
+    run_db слать нечем, доставку делает хендлер).
 
     BUG-153 п.5: вызов шёл с чужим keyword `request_id=` при сигнатуре
     ``add_clarification_comment(request_number, user_id, clarification)`` и с
@@ -193,15 +196,16 @@ def _add_revision_comment(db, request_number: str, telegram_id: int, revision_re
         logger.warning(
             f"Комментарий о доработке не сохранён: пользователь telegram_id={telegram_id} не найден"
         )
-        return
+        return []
 
     comment_service = CommentService(db)
 
-    comment_service.add_clarification_comment(
+    _, notices = comment_service.add_clarification_comment(
         request_number=request_number,
         user_id=actor.id,
         clarification=f"Запрошена доработка. Причина: {revision_reason}"
     )
+    return notices
 
 
 @router.callback_query(F.data.startswith("view_report_"))
@@ -453,9 +457,20 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, lang
             return
 
         # Добавляем комментарий о доработке
-        await run_db(
+        notices = await run_db(
             lambda s: _add_revision_comment(s, request_number, message.from_user.id, revision_reason), db=_db
         )
+
+        # Доставка — вне сессии, на языке КАЖДОГО получателя (BUG-174)
+        from uk_management_bot.services.notification_service import send_to_user
+
+        for notice in notices:
+            try:
+                await send_to_user(message.bot, notice.telegram_id, notice.text)
+            except Exception as notify_error:
+                logger.warning(
+                    f"Уведомление о комментарии не доставлено tg={notice.telegram_id}: {notify_error}"
+                )
 
         # Показываем подтверждение
         lang = language
