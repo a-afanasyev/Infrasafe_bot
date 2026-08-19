@@ -188,10 +188,9 @@ ASSIGNMENT: dict[str, dict] = {
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
-    "BUG-154": A(pkg="A2", status="decision", method="verified-2026-08-18",
-                 note="guard раскатан 2026-08-18 (вход был открыт: callback_data шлёт клиент); открыт только ретайр ~370 строк + 3 в panels, решать с BUG-150"),
-    "BUG-158": A(pkg="A2", status="decision", method="verified-2026-08-16",
-                 note="4 мёртвых хендлера onboarding; решать с BUG-150 и BUG-154 одним движением"),
+    # BUG-154 и BUG-158 закрыты 2026-08-19 ретайром одним движением с BUG-150
+    # (решение владельца, вариант «а»); строки удалены — `--check` падает на ID
+    # закрытого пункта.
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
                  note="8 дефектов волны 6; мёртвая пагинация чинится вместе с BUG-151 п.6"),
     "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-15",
@@ -204,8 +203,9 @@ ASSIGNMENT: dict[str, dict] = {
                  note="п.1 (битый импорт локализации) ЗАКРЫТ #446 — открыты пп.2-5 (P3-класс: язык при перерисовке и пр.)"),
     "BUG-151": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="8 дефектов волны 2 (#434); п.1 ЗАКРЫТ #446 — открыты пп.2-8 (P3-класс: язык, falsy-0, RU-хардкод, мёртвая пагинация)"),
-    "BUG-150": A(pkg="A2", status="decision", method="verified-2026-08-14",
-                 note="4 мёртвых хендлера shifts.py + клавиатуры-сироты; ретайр открывает файлу CONVERTED"),
+    # BUG-150 закрыт 2026-08-19 ретайром (вместе с BUG-154/BUG-158); его
+    # дополнение — handle_back_to_report — оказалось дырой P1, а не мёртвым
+    # кодом: вход был живой, генератора не было только у кнопки.
     "BUG-165": A(pkg="A2", status="actionable", method="verified-2026-08-16",
                  note="класс «потерянного языка» ещё на 26 сайтах (19 однострочных + 7 с протяжкой); AST-инвентарь снят"),
     "BUG-164": A(pkg="A2", status="decision", method="verified-2026-08-16",
