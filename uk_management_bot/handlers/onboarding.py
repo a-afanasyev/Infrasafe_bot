@@ -16,18 +16,13 @@ sync unit-of-work, исполняемый в worker-потоке через ``ru
 handlers/user_apartment_selection.py: ставит OnboardingStates.waiting_for_document_type
 и показывает get_document_type_keyboard()).
 
-⚠️ МЁРТВЫЕ (сохранены байт-в-байт до decision владельца, прецедент BUG-137/148/150 —
-поэтому файл НЕ входит в ратчет tests/services/test_aud337_async_handlers_gate.py:
-все четыре продолжают объявлять ``db``):
-  • ``start_onboarding`` — ``F.text == "/start"`` перекрыт ``base.cmd_start``
-    на ``start_router``, который main.py включает ПЕРВЫМ («/start FIRST»);
-    aiogram останавливает propagation на первом совпавшем роутере.
-  • ``complete_onboarding`` — вызывающих нет ни одного во всём репозитории.
-  • ``complete_onboarding_without_documents`` — единственный генератор его
-    триггера «✅ Завершить без документов» живёт внутри мёртвого
-    ``complete_onboarding``.
-  • ``start_address_input`` — генератора текста «🏠 Указать адрес» нет в репо
-    вовсе (сам помечен LEGACY HANDLER).
+BUG-158 (ретайр 2026-08-19): четыре мёртвых хендлера удалены —
+``start_onboarding`` (``F.text == "/start"`` был перекрыт ``base.cmd_start``:
+``start_router`` включается ПЕРВЫМ), ``complete_onboarding`` (ноль вызывающих),
+``complete_onboarding_without_documents`` (генератор триггера жил внутри
+мёртвой ``complete_onboarding``) и ``start_address_input`` (текста
+«🏠 Указать адрес» не рождал никто). Что на их триггеры больше никто не
+отвечает, пиннит ``tests/handlers/test_dead_handlers_retired.py``.
 """
 import logging
 from typing import Optional
@@ -35,14 +30,10 @@ from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
-from uk_management_bot.services.auth_service import AuthService
-from uk_management_bot.services.profile_service import ProfileService
 from uk_management_bot.services.user_verification_service import UserVerificationService
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.language_helpers import get_language_for_user
 from uk_management_bot.utils.validators import Validator
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.keyboards.onboarding import (
@@ -173,70 +164,6 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
     return user.status, documents_summary
 
 
-# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): ``F.text == "/start"`` перекрыт
-# ``base.cmd_start`` на ``start_router``, который main.py включает ПЕРВЫМ
-# (строка «dp.include_router(start_router)  # /start FIRST»); aiogram
-# останавливает propagation на первом совпавшем роутере, а onboarding_router
-# идёт много позже. Сохранён байт-в-байт до decision владельца.
-@router.message(F.text == "/start")
-async def start_onboarding(message: Message, state: FSMContext, db: Session, language: str = "ru"):
-    """Начинает процесс онбординга для нового пользователя"""
-    lang = language
-    
-    try:
-        # Проверяем, существует ли пользователь
-        auth_service = AuthService(db)
-        user = await auth_service.get_or_create_user(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name
-        )
-        
-        # Если пользователь уже одобрен, показываем главное меню
-        if user.status == "approved":
-            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
-            from uk_management_bot.utils.auth_helpers import legacy_primary_role
-            await message.answer(
-                get_text("welcome", language=lang),
-                reply_markup=get_main_keyboard_for_role(user.active_role or legacy_primary_role(user), user.roles or [legacy_primary_role(user)], user.status, language=lang)
-            )
-            return
-
-        # Если профиль не заполнен, начинаем онбординг
-        # ОБНОВЛЕНО: Проверяем наличие телефона и одобренных квартир (вместо устаревшего home_address)
-        has_approved_apartment = any(ua.status == 'approved' for ua in user.user_apartments) if user.user_apartments else False
-        if not user.phone or not has_approved_apartment:
-            await message.answer(
-                get_text("onboarding.welcome_new_user", language=lang) + "\n\n" + 
-                get_text("onboarding.profile_incomplete", language=lang)
-            )
-            
-            # Создаем клавиатуру для начала онбординга
-            from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-            onboarding_keyboard = ReplyKeyboardMarkup(
-                keyboard=[
-                    [KeyboardButton(text=get_text("onboarding.handlers.btn_specify_phone", language=lang))]
-                ],
-                resize_keyboard=True
-            )
-            
-            await message.answer(
-                get_text("onboarding.phone_request", language=lang),
-                reply_markup=onboarding_keyboard
-            )
-            await state.set_state(OnboardingStates.waiting_for_phone)
-            logger.info(f"Начат онбординг для пользователя {message.from_user.id}")
-        else:
-            # Профиль заполнен, но статус pending - показываем ожидание
-            await message.answer(
-                get_text("auth.pending", language=lang)
-            )
-            
-    except Exception as e:
-        logger.error(f"Ошибка начала онбординга для {message.from_user.id}: {e}")
-        await message.answer(get_text("errors.unknown_error", language=lang))
-
 @router.message(F.text.in_(SPECIFY_PHONE_TEXTS))
 async def start_phone_input(message: Message, state: FSMContext, language: str = "ru"):
     """Начинает процесс ввода телефона"""
@@ -365,88 +292,6 @@ async def process_manual_phone(message: Message, state: FSMContext, user_status:
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-# ⚠️ МЁРТВАЯ ФУНКЦИЯ (A2-хвост, волна 7): вызывающих нет ни одного во всём
-# репозитории (grep `complete_onboarding(` = 0 вызовов). Вместе с ней мертва и
-# единственная точка рождения кнопок «📄 Загрузить документы» /
-# «✅ Завершить без документов». Сохранена байт-в-байт до decision владельца.
-async def complete_onboarding(message: Message, state: FSMContext, db: Session, user, user_status: str = None, language: str = "ru"):
-    """Завершает процесс онбординга"""
-    lang = language
-    
-    # Показываем сводку онбординга
-    profile_service = ProfileService(db)
-    profile_data = profile_service.get_user_profile_data(message.from_user.id)
-    
-    completion_text = get_text("onboarding.completed", language=lang)
-    
-    if profile_data:
-        phone = profile_data.get('phone', get_text("profile.phone_not_set", language=lang))
-
-        # ОБНОВЛЕНО: Используем новую систему квартир вместо home_address
-        apartments = profile_data.get('apartments', [])
-        if apartments:
-            primary_apt = next((a for a in apartments if a.get('is_primary')), apartments[0] if apartments else None)
-            home_addr = primary_apt['address'] if primary_apt else get_text("profile.address_not_set", language=lang)
-        else:
-            home_addr = get_text("profile.address_not_set", language=lang)
-
-        completion_text += f"\n\n📱 {get_text('profile.phone', language=lang)} {phone}"
-        completion_text += f"\n🏠 {get_text('profile.home_address', language=lang)} {home_addr}"
-    
-    # Предлагаем загрузить документы
-    completion_text += f"\n\n📄 {get_text('onboarding.documents.title', language=lang)}"
-    completion_text += f"\n{get_text('onboarding.documents.description', language=lang)}"
-    
-    # Создаем клавиатуру с опцией загрузки документов
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    completion_keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=get_text("onboarding.handlers.btn_upload_documents", language=lang))],
-            [KeyboardButton(text=get_text("onboarding.handlers.btn_complete_without_docs", language=lang))]
-        ],
-        resize_keyboard=True
-    )
-    
-    await message.answer(
-        completion_text,
-        reply_markup=completion_keyboard
-    )
-    
-    await state.clear()
-    logger.info(f"Онбординг завершен для пользователя {message.from_user.id}")
-
-# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): единственный генератор его триггера
-# «✅ Завершить без документов» — клавиатура внутри мёртвой ``complete_onboarding``
-# (см. выше), больше этот текст в репозитории не рождается нигде.
-# Сохранён байт-в-байт до decision владельца.
-@router.message(F.text.in_(COMPLETE_WITHOUT_DOCS_TEXTS))
-async def complete_onboarding_without_documents(message: Message, state: FSMContext, db: Session, language: str = "ru"):
-    """Завершает онбординг без документов"""
-    lang = language
-    
-    try:
-        # Получаем пользователя
-        auth_service = AuthService(db)
-        user = await auth_service.get_user_by_telegram_id(message.from_user.id)
-        
-        if not user:
-            await message.answer(get_text("errors.unknown_error", language=lang))
-            return
-        
-        completion_text = get_text("onboarding.completed", language=lang)
-        completion_text += f"\n\n{get_text('onboarding.pending_approval', language=lang)}"
-        
-        await message.answer(
-            completion_text,
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user.status, language=lang)
-        )
-
-        logger.info(f"Онбординг без документов завершен для пользователя {message.from_user.id}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка завершения онбординга без документов для {message.from_user.id}: {e}")
-        await message.answer(get_text("errors.unknown_error", language=lang))
-
 async def cancel_onboarding(message: Message, state: FSMContext, user_status: str = None, language: str = "ru"):
     """Отменяет процесс онбординга"""
     lang = language
@@ -458,36 +303,6 @@ async def cancel_onboarding(message: Message, state: FSMContext, user_status: st
 
     await state.clear()
     logger.info(f"Онбординг отменен для пользователя {message.from_user.id}")
-
-# ⚠️ МЁРТВЫЙ ХЕНДЛЕР (A2-хвост, волна 7): текст «🏠 Указать адрес»
-# (SPECIFY_ADDRESS_TEXTS) не рождается в репозитории НИ РАЗУ — генератора нет
-# вовсе, сам хендлер помечен LEGACY. Сохранён байт-в-байт до decision владельца
-# (объявленный `db` он не использует, но правка мёртвого кода вне канона волны).
-@router.message(F.text.in_(SPECIFY_ADDRESS_TEXTS))
-async def start_address_input(message: Message, state: FSMContext, db: Session, language: str = "ru"):
-    """
-    LEGACY HANDLER: Обработка устаревшего ручного ввода адреса
-
-    TASK 17: Локализованная версия - адреса управляются через систему квартир.
-    """
-    lang = await get_language_for_user(message.from_user.id)
-
-    await state.clear()
-
-    message_text = (
-        f"{get_text('requests.address_system_updated_title', language=lang)}\n\n"
-        f"{get_text('requests.address_system_updated_message', language=lang)}"
-    )
-
-    await message.answer(
-        message_text,
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved", language=lang)
-    )
-
-    logger.warning(
-        f"{get_text('requests.legacy_address_handler_warning', language=lang)} "
-        f"(user_id={message.from_user.id})"
-    )
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
