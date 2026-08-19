@@ -8173,7 +8173,9 @@
       "ready_for_acceptance": "📋 Заявка #{request_number} готова к приёмке\n\n📍 {address}\n\nОцените качество работы в разделе «Приёмка».",
       "returned_to_work": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}",
       "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}",
-      "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}"
+      "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}",
+      "assigned_executor": "📋 <b>Вам назначена заявка #{request_number}</b>\n\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению.",
+      "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю"
     }
   },
   "document_types": {

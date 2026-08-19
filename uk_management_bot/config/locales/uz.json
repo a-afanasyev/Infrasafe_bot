@@ -8174,7 +8174,9 @@
       "ready_for_acceptance": "📋 #{request_number} arizasi qabul qilishga tayyor\n\n📍 {address}\n\n«Qabul qilish» bo‘limida ish sifatini baholang.",
       "returned_to_work": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}",
       "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}",
-      "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}"
+      "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}",
+      "assigned_executor": "📋 <b>Sizga #{request_number} arizasi tayinlandi</b>\n\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, bajarishga kirishing.",
+      "reassigned_away": "ℹ️ #{request_number} arizasi boshqa ijrochiga o'tkazildi"
     }
   },
   "document_types": {

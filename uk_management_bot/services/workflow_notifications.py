@@ -59,18 +59,35 @@ EXECUTOR = "executor"
 # Осознанно НЕ уведомляем: EXECUTOR_CLAIM (исполнитель сам взял — он и так
 # знает), SYSTEM_AUTO_PROMOTE и прочие служебные, CLARIFY_RESOLVED (ответ на
 # уточнение приходит тем же диалогом), APPLICANT_ACCEPT (житель сам принял).
-_NOTIFY_MATRIX: dict[Action, tuple[tuple[str, ...], str]] = {
+# Значение — ЛИБО одна спецификация `(роли, ключ)`, ЛИБО кортеж спецификаций,
+# когда разным ролям нужен разный текст. Второе появилось из-за назначения:
+# ключ `assigned` написан ДЛЯ ЖИТЕЛЯ («заявка принята в работу»), и исполнителю
+# он приходил как чужая статусная строка вместо наряда. Просто положить сюда
+# словарь роль→ключ нельзя: `_wanted_user_ids` схлопывает роли в множество
+# пользователей и теряет, по какой роли выбран конкретный человек, — поэтому
+# спецификации разворачиваются в ОТДЕЛЬНЫЕ задания рассылки (`_plan`).
+_NOTIFY_MATRIX: dict[Action, object] = {
     # Уточнение — исходная жалоба: житель ждёт ответа и должен узнать вопрос.
     Action.CLARIFY_REQUEST: ((APPLICANT,), "notifications.workflow.clarify_request"),
-    # Назначение: исполнителю — новая работа, жителю — «работы начались».
-    Action.MANAGER_ASSIGN: ((APPLICANT, EXECUTOR), "notifications.workflow.assigned"),
+    # Назначение: исполнителю — наряд с категорией/адресом/описанием, жителю —
+    # «работы начались». Исполнительская спецификация идёт ПЕРВОЙ: при дедупе
+    # (житель назначен исполнителем собственной заявки) выигрывает она, а её
+    # текст содержит всё, что есть в жительском, плюс детали работы.
+    Action.MANAGER_ASSIGN: (
+        ((EXECUTOR,), "notifications.workflow.assigned_executor"),
+        ((APPLICANT,), "notifications.workflow.assigned"),
+    ),
     # То же для АВТО-назначения дежурному при создании заявки. До инварианта
     # «В работе ⟺ есть исполнитель» диспетчер назначал ГРУППУ, и заявку видели
     # все дежурные в «Свободных» — уведомлять было некого. Теперь он назначает
     # конкретного человека, и без этой строки заявка была бы назначена тому,
     # кто об этом не узнает: из пула она уже ушла (executor_id не NULL).
+    # Тот же ролевой раскрой: авто-назначенный дежурный получал жительский
+    # текст ровно так же, как назначенный менеджером.
     Action.SYSTEM_DISPATCH_ASSIGN: (
-        (APPLICANT, EXECUTOR), "notifications.workflow.assigned"),
+        ((EXECUTOR,), "notifications.workflow.assigned_executor"),
+        ((APPLICANT,), "notifications.workflow.assigned"),
+    ),
     # Готовность к приёмке — единственное действие, которого ЖДУТ от жителя.
     Action.EXECUTOR_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
     Action.MANAGER_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
@@ -92,9 +109,39 @@ _NOTIFY_MATRIX: dict[Action, tuple[tuple[str, ...], str]] = {
 # менеджера обязан доехать до жителя независимо от поверхности, где его задали.
 _CLARIFY_RICH_KEY = "admin.handlers.notify_user_clarification"
 
+# Наряд исполнителю: свой ключ, потому что `assigned` написан для ЖИТЕЛЯ.
+_ASSIGNED_EXECUTOR_KEY = "notifications.workflow.assigned_executor"
+
+# Лимиты подстановок наряда (перенесены из удалённого ручного уведомления).
+# Telegram режет сообщение на 4096; запас взят с большим коэффициентом.
+_MAX_ADDRESS = 150
+_MAX_DESCRIPTION = 300
+
+
+def _clip(value: Optional[str], limit: int) -> str:
+    """Обрезка ДО экранирования: после escape резать нельзя — рвёт entity."""
+    text = value or ""
+    return text if len(text) <= limit else text[:limit] + "..."
+
+
+def _specs(value) -> tuple[tuple[tuple[str, ...], str], ...]:
+    """Нормализовать значение матрицы к кортежу спецификаций `(роли, ключ)`.
+
+    Историческая форма — одна спецификация `((role, ...), "key")`; новая —
+    кортеж таких. Различаем по второму элементу: у одиночной это строка-ключ.
+    """
+    if len(value) == 2 and isinstance(value[1], str):
+        return (value,)
+    return tuple(value)
+
 
 def _plan(intents: Iterable) -> list[tuple[Action, tuple[str, ...], str]]:
-    """Отфильтровать интенты до плана рассылки (чистая часть, общая обоим путям)."""
+    """Отфильтровать интенты до плана рассылки (чистая часть, общая обоим путям).
+
+    Спецификации с разными текстами по ролям разворачиваются в ОТДЕЛЬНЫЕ
+    задания: получатели резолвятся по ролям каждого задания в отдельности,
+    иначе роль, по которой выбран человек, теряется и текст выбрать нечем.
+    """
     plan: list[tuple[Action, tuple[str, ...], str]] = []
     for intent in intents:
         if getattr(intent, "kind", None) != "notify":
@@ -108,8 +155,30 @@ def _plan(intents: Iterable) -> list[tuple[Action, tuple[str, ...], str]]:
         if spec is None:
             # Служебный переход — молчим (см. docstring модуля).
             continue
-        plan.append((action, spec[0], spec[1]))
+        for roles, text_key in _specs(spec):
+            plan.append((action, roles, text_key))
     return plan
+
+
+def _resolve_targets(
+    request: Request, plan: list[tuple[Action, tuple[str, ...], str]]
+) -> list[tuple[Action, str, set[int]]]:
+    """`(действие, ключ, id получателей)` с дедупом В ПРЕДЕЛАХ ДЕЙСТВИЯ.
+
+    Житель может быть назначен исполнителем собственной заявки. У действий с
+    ролевыми ключами он попал бы в оба задания и получил два сообщения об одном
+    событии. Побеждает ПЕРВОЕ задание — матрица ставит исполнительское раньше.
+    Дедуп именно по действию, а не глобальный: два разных перехода в одной
+    пачке интентов — законный повод написать человеку дважды.
+    """
+    targets: list[tuple[Action, str, set[int]]] = []
+    seen: dict[Action, set[int]] = {}
+    for action, roles, text_key in plan:
+        already = seen.setdefault(action, set())
+        wanted = _wanted_user_ids(request, roles) - already
+        already |= wanted
+        targets.append((action, text_key, wanted))
+    return targets
 
 
 def _render_text(
@@ -138,6 +207,28 @@ def _render_text(
             )),
             address=html.escape(request.address or ""),
             clarification_text=html.escape(clarification_text),
+        )
+    if text_key == _ASSIGNED_EXECUTOR_KEY:
+        # Наряд исполнителю: категория локализуется тем же хелпером, что и в
+        # ветке уточнения, и так же экранируется — `get_category_display` для
+        # НЕИЗВЕСТНОГО ключа возвращает сырое значение из БД как есть.
+        # Описание и адрес обрезаются ДО escape: резать после — значит рвать
+        # entity пополам и получить Telegram-400 на собственном же тексте.
+        # Лимиты перенесены из ручного уведомления, которое этот ключ заменил
+        # (handlers/admin/assignment.py): без них длинное описание давало
+        # MESSAGE_TOO_LONG, и наряд не доезжал вовсе.
+        from uk_management_bot.keyboards.requests import (
+            get_category_display, resolve_category_key,
+        )
+        return get_text(
+            text_key,
+            language=language,
+            request_number=request.request_number,
+            category=html.escape(get_category_display(
+                resolve_category_key(request.category), language=language
+            )),
+            address=html.escape(_clip(request.address, _MAX_ADDRESS)),
+            description=html.escape(_clip(request.description, _MAX_DESCRIPTION)),
         )
     if action is Action.MANAGER_RETURN_TO_WORK:
         # Причина обязательна на уровне ядра, но уведомление — post-commit
@@ -237,9 +328,9 @@ async def dispatch_notify_intents(
     if request is None:
         return 0
     sent = 0
-    for action, roles, text_key in plan:
+    for action, text_key, wanted_ids in _resolve_targets(request, plan):
         try:
-            recipients = await _load_users(db, _wanted_user_ids(request, roles))
+            recipients = await _load_users(db, wanted_ids)
             if not recipients:
                 continue
             sent += await _send_to_recipients(
@@ -308,9 +399,9 @@ async def dispatch_notify_intents_sync(
     if request is None:
         return 0
     sent = 0
-    for action, roles, text_key in plan:
+    for action, text_key, wanted_ids in _resolve_targets(request, plan):
         try:
-            recipients = _load_users_sync(db, _wanted_user_ids(request, roles))
+            recipients = _load_users_sync(db, wanted_ids)
             if not recipients:
                 continue
             sent += await _send_to_recipients(
@@ -348,9 +439,9 @@ def collect_notify_messages_sync(
     if request is None:
         return []
     messages: list[tuple[int, str]] = []
-    for action, roles, text_key in plan:
+    for action, text_key, wanted_ids in _resolve_targets(request, plan):
         try:
-            for user in _load_users_sync(db, _wanted_user_ids(request, roles)):
+            for user in _load_users_sync(db, wanted_ids):
                 messages.append((
                     user.telegram_id,
                     _render_text(action, text_key, user.language or "ru",
