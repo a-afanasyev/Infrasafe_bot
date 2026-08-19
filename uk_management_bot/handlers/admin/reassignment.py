@@ -134,6 +134,14 @@ def _assignment_view(db: Session, request_number: str, lang: str) -> Preflight:
         elif assignment.assignment_type == "group":
             kind = "group"
             group_label = _spec_label(assignment.group_specialization, lang)
+    if kind == "none" and request.executor_id is not None:
+        # Заявка назначена до миграции 011: активной строки RequestAssignment
+        # нет, но исполнитель у заявки есть. Без этого фолбэка меню сказало бы
+        # «не был назначен» о человеке, который заявку ведёт, и переназначение
+        # выглядело бы первичным назначением.
+        kind = "individual"
+        executor = svc.get_user_by_id(request.executor_id)
+        current_name = display_name(executor) or "" if executor else ""
 
     return Preflight(
         "ok",

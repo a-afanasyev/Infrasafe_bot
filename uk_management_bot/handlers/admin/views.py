@@ -191,6 +191,9 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                 assignment_type=(active_assignment.assignment_type
                                  if active_assignment else None),
                 status=request.status,
+                # Легаси до миграции 011: строки назначения нет, а исполнитель
+                # у заявки есть — канон её переназначить пускает.
+                has_executor=request.executor_id is not None,
                 roles=roles,
                 language=lang,
             )
