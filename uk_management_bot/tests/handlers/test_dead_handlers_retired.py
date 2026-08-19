@@ -37,8 +37,16 @@ from uk_management_bot.tests.handlers.routing_probe import (
     resolve_ctx,
 )
 from uk_management_bot.utils.button_texts import (
-    get_active_shifts_button_texts,
+    get_button_texts_for_all_languages,
     get_specify_address_texts,
+)
+
+# Тексты ретайренной кнопки «Активные смены» читаем прямо из локалей: свой
+# геттер в button_texts удалён вместе с хендлером (потребителей в проде не
+# осталось), а держать его ради теста — тот самый шаблон «мёртвый код живёт
+# ради теста», который этот PR и вычищает.
+ACTIVE_SHIFTS_TEXTS = get_button_texts_for_all_languages(
+    "shifts.keyboards.active_shifts_button", fallback_text="🟢 Активные смены"
 )
 
 # Порядок роутеров — из САМОГО main.py (SSOT), не копия: удаление
@@ -100,7 +108,7 @@ def test_retired_callback_resolves_nowhere(data, ctx, who):
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.parametrize("text", sorted(get_active_shifts_button_texts()))
+@pytest.mark.parametrize("text", sorted(ACTIVE_SHIFTS_TEXTS))
 @pytest.mark.parametrize("ctx,who", [(APPLICANT, "applicant"), (MANAGER, "manager")])
 def test_retired_active_shifts_button_resolves_nowhere(text, ctx, who):
     """BUG-150 `manager_active_shifts`: текст кнопки не рендерила ни одна
