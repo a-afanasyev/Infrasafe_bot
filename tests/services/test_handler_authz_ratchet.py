@@ -10,7 +10,9 @@ id из callback.data И идёт в БД И не имеет признака а
   * вызов has_admin_access / has_executor_access / check_user_role[_sync] /
     has_request_access_sync / request_access_reason_sync — С ИСПОЛЬЗОВАНИЕМ
     результата в условии (голый вызов не считается);
-  * канон run_command_sync/async (авторизует внутри по PrincipalRef);
+  * канон run_command_sync/async (авторизует внутри по PrincipalRef) — как
+    прямым вызовом, так и ПЕРЕДАННЫЙ АРГУМЕНТОМ в asyncio.to_thread /
+    run_in_executor (канон уезжает в поток целиком, см. _canon_passed_to_runner);
   * роутер модуля несёт RoleGate (module-level идиома волны A/D).
 
 НЕ признаки: StateFilter (даёт ложную гарантию); ownership-сравнение — оно
@@ -18,10 +20,18 @@ id из callback.data И идёт в БД И не имеет признака а
 `User.telegram_id == tid` сходил бы за guard и прятал реальную дыру.
 
 Категории BASELINE: OWNER-CHECK@юнит (владение фильтруется в SQL/юните),
-SERVICE-CHECK@сервис (роль проверяет сервис), SELF (выборка от from_user.id),
-REVIEW→BUG-176 (кандидат не разобран — рабочий список, НЕ оправдание).
-Записи REVIEW разбираются отдельной волной; их исчезновение из кандидатов
-(например, после гейта их модуля) тоже красное — двунаправленность.
+SERVICE-CHECK@сервис (роль/владение проверяет сервис), FSM-ENTRY@гейт (вход в
+цепочку гейтован, и вход доказан), SELF (выборка от from_user.id).
+
+BUG-176 закрыт 2026-08-19: все 18 записей REVIEW разобраны построчно чтением
+хендлеров И сервисов, в которые они ходят. 17 оказались защищёнными и получили
+честные категории ниже; единственная дыра (`request_reports.handle_back_to_report`
+— отчёт ЛЮБОЙ заявки любому по перебираемому номеру) закрыта ретайром вместе с
+остальным мёртвым кодом BUG-150. Категории REVIEW в BASELINE больше нет: запись
+без разбора — это отложенный долг, а не обоснование.
+
+Двунаправленность: исчезновение записи из кандидатов (защитили или удалили
+хендлер) тоже красное — запись обязана уйти вместе с причиной.
 """
 from __future__ import annotations
 
@@ -36,6 +46,8 @@ AUTH_CALLS = {
 }
 CANON_CALLS = {"run_command_sync", "run_command_async"}
 DATA_CALLS = {"query", "run_db", "session_scope", "execute", "add", "commit", "delete"}
+# Раннеры, которым канон передаётся ПЕРВЫМ АРГУМЕНТОМ, а не вызывается на месте.
+THREAD_RUNNERS = {"to_thread", "run_in_executor"}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # BASELINE — каждый кандидат обязан быть здесь; новый кандидат = красный тест.
@@ -46,7 +58,6 @@ BASELINE = {
     ("user_apartments.py", "view_apartment_details"): "OWNER-CHECK@handler (user_telegram_id != from_user.id → отказ)",
     ("shifts.py", "handle_shift_selection"): "OWNER-CHECK@_load_shift_end_view (D3: Shift.user_id == owner.id)",
     ("shifts.py", "end_shift_yes_with_id"): "OWNER-CHECK@_end_shift_by_id_unit (Shift.user_id == user.id)",
-    ("shifts.py", "force_end_shift"): "SERVICE-CHECK@ShiftService.force_end_shift (роль менеджера в сервисе, результат используется)",
     ("shifts.py", "shifts_history_page"): "SELF (история своих смен от from_user.id; id страницы из callback — не объект)",
     ("shifts.py", "shifts_filter_period"): "SELF (фильтр собственной истории)",
     ("shifts.py", "shifts_filter_status"): "SELF (фильтр собственной истории)",
@@ -54,31 +65,34 @@ BASELINE = {
     # user_management/user_verification выпали из кандидатов: у них рукописный
     # ролевой guard в условии (any(role in ['admin','manager'])), секревью
     # подтвердило пять самых опасных построчно — VERIFIED-SAFE.
-    # Кандидаты волны-2 (BUG-176): происхождение id из callback подтверждено,
-    # авторизация НЕ подтверждена чтением — рабочий список, не оправдание.
-    ("access_control.py", "ac_vehicle_relation"): "REVIEW→BUG-176",
-    ("access_control.py", "ac_vehicle_apartment"): "REVIEW→BUG-176",
-    ("access_control.py", "ac_pass_duration"): "REVIEW→BUG-176",
-    ("access_control.py", "ac_pass_apartment"): "REVIEW→BUG-176",
-    ("access_control.py", "ac_cancel_pass"): "REVIEW→BUG-176",
-    ("access_control.py", "ac_dispute_response"): "REVIEW→BUG-176",
-    ("inspector_requests.py", "inspector_yard_page"): "REVIEW→BUG-176",
-    ("inspector_requests.py", "inspector_yard_selected"): "REVIEW→BUG-176",
-    ("inspector_requests.py", "inspector_building_page"): "REVIEW→BUG-176",
-    ("inspector_requests.py", "inspector_building_selected"): "REVIEW→BUG-176",
+    # ── BUG-176, разбор 2026-08-19 (было REVIEW, стало доказано чтением) ──
+    # Все шесть access_control-хендлеров: _resolve_resident пускает только
+    # applicant, а владение квартирой/пропуском/въездом проверяет ОБЩИЙ сервис
+    # access_control/services/resident.py и отбивает чужое исключением.
+    ("access_control.py", "ac_vehicle_relation"): "SERVICE-CHECK@resident._ensure_owns_apartment (ApartmentNotOwned при чужой квартире)",
+    ("access_control.py", "ac_vehicle_apartment"): "SERVICE-CHECK@resident._ensure_owns_apartment (apartment_id из callback проверяется сервисом)",
+    ("access_control.py", "ac_pass_duration"): "SERVICE-CHECK@resident._ensure_owns_apartment (через _finalize_pass)",
+    ("access_control.py", "ac_pass_apartment"): "SERVICE-CHECK@resident._ensure_owns_apartment (apartment_id из callback проверяется сервисом)",
+    ("access_control.py", "ac_cancel_pass"): "SERVICE-CHECK@resident._owns_pass (PassNotOwned при чужом пропуске)",
+    ("access_control.py", "ac_dispute_response"): "SERVICE-CHECK@resident.confirm_disputed_entry (EntryNotOwned: въезд сверяется с approved-квартирами)",
+    # Обходчик: все четыре под StateFilter, а единственный вход в цепочку
+    # (start_inspector_request) и сохранение (inspector_confirm) гейтованы
+    # _approved_inspector; сами id — публичный справочник дворов/домов.
+    ("inspector_requests.py", "inspector_yard_page"): "FSM-ENTRY@_approved_inspector (гейт на входе И на сохранении; id — номер страницы)",
+    ("inspector_requests.py", "inspector_yard_selected"): "FSM-ENTRY@_approved_inspector (двор из общего справочника, принадлежность обходчику не требуется)",
+    ("inspector_requests.py", "inspector_building_page"): "FSM-ENTRY@_approved_inspector (id — номер страницы)",
+    ("inspector_requests.py", "inspector_building_selected"): "FSM-ENTRY@_approved_inspector (дом из общего справочника)",
     ("profile_editing.py", "handle_language_choice"): "SELF (смена СВОЕГО языка; значение из callback — не id объекта)",
-    ("request_acceptance.py", "view_completed_request"): "REVIEW→BUG-176",
-    ("request_acceptance.py", "save_rating"): "REVIEW→BUG-176",
-    ("request_reports.py", "handle_back_to_report"): "REVIEW→BUG-176",
+    ("request_acceptance.py", "view_completed_request"): "OWNER-CHECK@_load_completed_view→can_accept (владелец ИЛИ одобренный сосед, иначе forbidden)",
     ("requests/create.py", "handle_address_selection"): "SELF (выбор адреса в СВОЁМ черновике заявки)",
     ("user_apartment_selection.py", "process_yard_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку; итог — pending, одобряет менеджер)",
     ("user_apartment_selection.py", "process_building_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку)",
     ("user_apartment_selection.py", "process_apartment_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку)",
-    ("requests/listing.py", "handle_back_to_list"): "REVIEW→BUG-176",
-    ("shift_transfer.py", "handle_shift_selection"): "REVIEW→BUG-176",
-    ("shift_transfer.py", "handle_reason_selection"): "REVIEW→BUG-176",
-    ("shift_transfer.py", "handle_urgency_selection"): "REVIEW→BUG-176",
-    ("shift_transfer.py", "handle_transfer_confirmation"): "REVIEW→BUG-176",
+    ("requests/listing.py", "handle_back_to_list"): "SELF (из callback только номер СТРАНИЦЫ; заявки берутся по роли текущего пользователя)",
+    ("shift_transfer.py", "handle_shift_selection"): "OWNER-CHECK@_check_shift_selectable (Shift.user_id == current.id в SQL)",
+    ("shift_transfer.py", "handle_reason_selection"): "SELF (ключ причины в СВОЙ FSM; БД только за языком)",
+    ("shift_transfer.py", "handle_urgency_selection"): "SELF (ключ срочности в СВОЙ FSM; БД только за языком)",
+    ("shift_transfer.py", "handle_transfer_confirmation"): "SERVICE-CHECK@ShiftTransferService.create_transfer (перепроверяет shift.user_id → not_your_shift)",
 }
 
 
@@ -123,6 +137,32 @@ def _auth_call_used_in_condition(fns) -> bool:
                 if isinstance(node, (ast.If, ast.While)) and any(
                     v in ast.unparse(node.test) for v in assigned
                 ):
+                    return True
+    return False
+
+
+def _canon_passed_to_runner(fns) -> bool:
+    """Канон, ПЕРЕДАННЫЙ аргументом в to_thread/run_in_executor, а не вызванный.
+
+    `asyncio.to_thread(run_command_sync, ...)` уводит канонический writer в
+    поток целиком; `_calls_in` видит там только `to_thread`, поэтому без этого
+    предиката авторизованный хендлер выглядел бы беззащитным (так в BASELINE
+    попал `request_acceptance.save_rating`).
+
+    ⚠️ Предикат отдельный НАМЕРЕННО: расширять `_calls_in` до всех `ast.Name`
+    нельзя — она же строит транзитивное замыкание вызовов, и имена-не-вызовы
+    затянули бы в замыкание посторонние функции, чей guard спрятал бы реальную
+    дыру. Здесь смотрим ровно аргументы раннера.
+    """
+    for fn in fns:
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if name not in THREAD_RUNNERS:
+                continue
+            for arg in node.args:
+                if isinstance(arg, ast.Name) and arg.id in CANON_CALLS:
                     return True
     return False
 
@@ -187,6 +227,8 @@ def _candidates():
             if not (all_calls & DATA_CALLS):
                 continue
             if all_calls & CANON_CALLS:
+                continue
+            if _canon_passed_to_runner(closure):
                 continue
             if (all_calls & AUTH_CALLS) and _auth_call_used_in_condition(closure):
                 continue
@@ -262,6 +304,25 @@ async def guarded(callback, state, roles=None, user=None):
         db.query(Thing).filter(Thing.id == thing_id).first()
 '''
 
+# Канон уезжает в поток целиком — авторизует run_command_sync по PrincipalRef.
+_CANON_VIA_THREAD = '''
+@router.callback_query(F.data.startswith("rate_"))
+async def canon_via_thread(callback, state):
+    thing_id = int(callback.data.split("_")[-1])
+    user_id = await run_db(lambda s: _user_id_by_tg(s, callback.from_user.id))
+    await asyncio.to_thread(run_command_sync, SessionLocal, thing_id, user_id)
+'''
+
+# Контроль: в поток уехал НЕ канон — признаком авторизации это не является.
+_THREAD_NON_CANON = '''
+@router.callback_query(F.data.startswith("thing_"))
+async def thread_non_canon(callback, state):
+    thing_id = int(callback.data.split("_")[-1])
+    await asyncio.to_thread(some_helper, thing_id)
+    with session_scope() as db:
+        db.query(Thing).filter(Thing.id == thing_id).first()
+'''
+
 
 def _scan_snippet(code: str):
     tree = ast.parse(code)
@@ -274,7 +335,8 @@ def _scan_snippet(code: str):
     all_calls = _calls_in(fn)
     touches_db = bool(all_calls & DATA_CALLS)
     auth = bool(all_calls & AUTH_CALLS) and _auth_call_used_in_condition([fn])
-    return takes_id and touches_db and not auth
+    canon = bool(all_calls & CANON_CALLS) or _canon_passed_to_runner([fn])
+    return takes_id and touches_db and not auth and not canon
 
 
 def test_scanner_detects_synthetic_offender():
@@ -293,3 +355,15 @@ def test_scanner_does_not_count_where_clause_as_guard():
 
 def test_scanner_accepts_condition_guarded_handler():
     assert not _scan_snippet(_GUARDED)
+
+
+def test_scanner_accepts_canon_passed_into_thread():
+    """`asyncio.to_thread(run_command_sync, …)` — тот же канон, что и прямой
+    вызов: авторизация внутри по PrincipalRef. Без этого признака скан считал
+    кандидатом защищённый `request_acceptance.save_rating`."""
+    assert not _scan_snippet(_CANON_VIA_THREAD)
+
+
+def test_scanner_does_not_count_arbitrary_thread_call_as_canon():
+    """В поток уехала обычная функция — признаком авторизации это не является."""
+    assert _scan_snippet(_THREAD_NON_CANON)
