@@ -96,6 +96,25 @@ class TestCollectNotices:
 
         assert notices == []
 
+    def test_comment_text_is_html_escaped(self, db):
+        """send_to_user наследует parse_mode=HTML бота — сырой текст комментатора
+        в уведомлении контрагенту = инъекция разметки (секревью 2026-08-19)."""
+        from uk_management_bot.services.comment_service import CommentService
+
+        _user(db, 1, 111)
+        _user(db, 3, 333, roles='["manager"]')
+        _request(db, "260819-009", 1)
+
+        _, notices = CommentService(db).add_comment(
+            request_id="260819-009", user_id=3,
+            comment_text='<a href="https://evil.example">жми</a>',
+            comment_type="clarification",
+        )
+
+        assert len(notices) == 1
+        assert "<a href=" not in notices[0].text
+        assert "&lt;a href=" in notices[0].text
+
     def test_recipient_without_telegram_id_is_skipped(self, db):
         """telegram_id=0 — реальный кейс: системный аккаунт InfraSafe (tg=0)."""
         from uk_management_bot.services.comment_service import CommentService

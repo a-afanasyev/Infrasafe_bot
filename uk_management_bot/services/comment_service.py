@@ -21,6 +21,7 @@ from uk_management_bot.utils.constants import (
 )
 from uk_management_bot.utils.helpers import get_text
 from dataclasses import dataclass
+import html
 
 logger = logging.getLogger(__name__)
 
@@ -361,10 +362,14 @@ class CommentService:
                     if type_label == type_key:
                         # ключа локали нет — показываем сырой тип, а не ключ
                         type_label = comment.comment_type
+                    # send_to_user наследует parse_mode=HTML бота (build_bot,
+                    # telegram_client.py) — пользовательский текст обязан быть
+                    # экранирован, иначе комментатор инъецирует разметку в
+                    # «авторитетное» уведомление контрагенту (секревью 2026-08-19).
                     text = get_text("comments.notification", language=lang).format(
                         request_number=request.request_number,
-                        type_label=type_label,
-                        comment_text=comment.comment_text,
+                        type_label=html.escape(str(type_label)),
+                        comment_text=html.escape(comment.comment_text or ""),
                     )
                     notices.append(CommentNotice(telegram_id=user.telegram_id, text=text))
                 except Exception as e:
