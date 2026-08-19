@@ -375,3 +375,41 @@ def test_blank_requirement_selects_nobody(db, spec):
     _shift(db, 1, ex.id, specs=[SPECIALIZATION])
 
     assert select_executor(db, spec, NOW) is None
+
+
+# ──────────────────── exclude_user_ids (переназначение) ────────────────────
+#
+# Отсев обязан идти ДО ranking'а: select_executor отдаёт только top-1, и
+# отбросить его снаружи значило бы остаться без фолбэка на следующего. Поэтому
+# тест проверяет именно ФОЛБЭК на №2, а не просто «первого нет в ответе».
+
+
+def test_exclude_user_ids_falls_back_to_next_by_load(db):
+    idle = _executor(db, 2, 1002)      # выиграл бы по нагрузке
+    busier = _executor(db, 7, 1007)
+    _shift(db, 1, idle.id)
+    _shift(db, 2, busier.id)
+    _request(db, "260723-010", busier.id, status=REQUEST_STATUS_IN_PROGRESS)
+
+    assert select_executor(db, SPECIALIZATION, NOW).id == idle.id
+
+    result = select_executor(db, SPECIALIZATION, NOW,
+                             exclude_user_ids=frozenset({idle.id}))
+    assert result is not None, "исключение победителя не должно обнулять подбор"
+    assert result.id == busier.id
+
+
+def test_exclude_user_ids_all_candidates_returns_none(db):
+    only = _executor(db, 4, 1004)
+    _shift(db, 1, only.id)
+
+    assert select_executor(db, SPECIALIZATION, NOW,
+                           exclude_user_ids=frozenset({only.id})) is None
+
+
+def test_exclude_user_ids_default_empty_keeps_background_callers_intact(db):
+    ex = _executor(db, 6, 1006)
+    _shift(db, 1, ex.id)
+
+    assert select_executor(db, SPECIALIZATION, NOW).id == ex.id
+

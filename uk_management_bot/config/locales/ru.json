@@ -800,7 +800,10 @@
       "accept_for_applicant": "✅ Принять за заявителя",
       "back_to_unaccepted_list": "🔙 К списку непринятых",
       "back_nav": "🔙 Назад",
-      "test_middleware": "🧪 Тест middleware"
+      "test_middleware": "🧪 Тест middleware",
+      "reassign_request": "🔄 Переназначить",
+      "assign_executor_to_request": "👤 Назначить исполнителя",
+      "back_to_request": "← К заявке"
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Новая заявка для дежурных {specialization}</b>\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}\nСрочность: {urgency}\n\nОписание: {description}",
@@ -960,7 +963,24 @@
       "comment_absent": "Комментарий отсутствовал",
       "return_to_work_prompt": "↩️ Возврат заявки {request_number} в работу.\n\nНапишите причину — исполнитель увидит её в заявке и в уведомлении.",
       "return_to_work_reason_empty": "Причина не может быть пустой. Напишите, что нужно переделать.",
-      "return_to_work_cancelled": "↩️ Возврат заявки {request_number} отменён."
+      "return_to_work_cancelled": "↩️ Возврат заявки {request_number} отменён.",
+      "reassign_menu_title": "🔄 <b>Переназначение заявки #{request_number}</b>\n\nСейчас назначено: {current}\n\nВыберите, кому передать заявку.",
+      "reassign_pick_title": "👤 <b>Выбор исполнителя для заявки #{request_number}</b>\n\nПодходящих исполнителей: {count}",
+      "reassign_success": "✅ <b>Заявка #{request_number} переназначена</b>\n\nБыло: {old_label}\nСтало: {new_executor}",
+      "reassign_same_executor": "Эта заявка уже назначена выбранному исполнителю",
+      "reassign_no_duty": "Нет дежурного по специализации «{spec}»",
+      "reassign_duty_lookup_failed": "Не удалось подобрать дежурного, попробуйте ещё раз",
+      "reassign_bad_status": "Переназначение доступно только для заявок в статусе «Новая» или «В работе»",
+      "reassign_rejected": "Переназначение отклонено: заявка изменилась, откройте карточку заново",
+      "reassign_from_unassigned": "не был назначен",
+      "reassign_manager_only": "Переназначение доступно менеджеру",
+      "reassign_already_assigned": "Заявка уже назначена — используйте «🔄 Переназначить»",
+      "duty_assign_no_specialization": "Для категории заявки не определена специализация",
+      "duty_assign_no_executors": "Нет подходящих исполнителей по специализации",
+      "duty_assign_failed": "Не удалось назначить дежурного, попробуйте ещё раз",
+      "reassign_assigned_success": "✅ <b>Заявка #{request_number} назначена</b>\n\nИсполнитель: {new_executor}",
+      "already_assigned_manager_only": "Заявка уже назначена. Переназначение доступно менеджеру.",
+      "reassign_no_candidates": "👤 <b>Заявка #{request_number}</b>\n\nНет других подходящих исполнителей по этой специализации.\nТекущий исполнитель в список не входит."
     },
     "panel_title": "⚙️ Панель управления"
   },
@@ -8173,7 +8193,9 @@
       "ready_for_acceptance": "📋 Заявка #{request_number} готова к приёмке\n\n📍 {address}\n\nОцените качество работы в разделе «Приёмка».",
       "returned_to_work": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}",
       "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}",
-      "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}"
+      "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}",
+      "assigned_executor": "📋 <b>Вам назначена заявка #{request_number}</b>\n\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению.",
+      "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю"
     }
   },
   "document_types": {

@@ -124,13 +124,21 @@ def _has_matching_active_shift(snapshot: DutySnapshot, executor_id: int,
 
 
 def select_executor(db: Session, specialization: str, now: datetime,
-                    snapshot: Optional[DutySnapshot] = None) -> Optional[User]:
+                    snapshot: Optional[DutySnapshot] = None,
+                    exclude_user_ids: frozenset[int] = frozenset()) -> Optional[User]:
     """Выбрать наименее загруженного дежурного исполнителя под `specialization`.
 
     Args:
         db: sync-сессия (тот же sync-мир, что и AdminHandlerService/шедулер).
         specialization: искомая специализация (напр. "plumber").
         now: момент времени для проверки активности смены.
+        exclude_user_ids: кого НЕ предлагать. Пусто по умолчанию — фоновые
+            колл-сайты (диспетчер, авто-менеджер) не меняются. Нужен
+            интерактивному переназначению: текущий исполнитель обычно и ЕСТЬ
+            дежурный (его туда поставил авто-диспетчер), и без исключения
+            «переназначить дежурному» возвращало бы того же человека. Отсев
+            обязан идти ДО ranking'а: функция отдаёт только top-1, и отбросить
+            его снаружи значило бы остаться без фолбэка на следующего.
 
     Алгоритм:
         1. Кандидаты — approved-пользователи с ролью executor
@@ -188,7 +196,8 @@ def select_executor(db: Session, specialization: str, now: datetime,
     candidates = [
         user
         for user in snap.approved_users
-        if ROLE_EXECUTOR in get_user_roles(user)
+        if user.id not in exclude_user_ids
+        and ROLE_EXECUTOR in get_user_roles(user)
         and matches_required_specs(parse_specializations(user), required)
     ]
 

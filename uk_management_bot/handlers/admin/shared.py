@@ -66,7 +66,21 @@ class ManagerStates(StatesGroup):
 
 # ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 
-async def auto_assign_request_by_category(request: Request, db: Session, manager: User):
+# Исходы группового назначения. Раньше функция на ВСЕХ ветках просто
+# возвращала None, и хендлер печатал «✅ назначена» одинаково — в том числе
+# когда не сделал ничего: заявка уже назначена, специализации у категории нет,
+# исполнителей нет. Молчащий флоу выглядел работающим, менеджер уходил с
+# ложным подтверждением. Исход возвращается наружу, чтобы каждая ветка имела
+# свой текст.
+ASSIGN_OK = "assigned"
+ASSIGN_ALREADY_INDIVIDUAL = "already_assigned_individual"
+ASSIGN_ALREADY_GROUP = "already_assigned_group"
+ASSIGN_NO_SPECIALIZATION = "no_specialization"
+ASSIGN_NO_EXECUTORS = "no_executors"
+ASSIGN_ERROR = "error"
+
+
+async def auto_assign_request_by_category(request: Request, db: Session, manager: User) -> str:
     """
     Автоматически назначает заявку исполнителям по категории/специализации
 
@@ -74,6 +88,10 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         request: Заявка для назначения
         db: Сессия базы данных
         manager: Менеджер, который назначает заявку
+
+    Returns:
+        Один из ASSIGN_* — что именно произошло. Вызывающий обязан различать
+        исходы: «уже назначена» и «нет исполнителей» — не успех.
     """
     try:
         logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
@@ -86,7 +104,7 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
 
         if not specialization:
             logger.warning(f"[AUTO_ASSIGN] Неизвестная категория заявки: {request.category}, доступные: {list(category_to_specialization.keys())}")
-            return
+            return ASSIGN_NO_SPECIALIZATION
         
         # Находим исполнителей с нужной специализацией
         logger.info("[AUTO_ASSIGN] Выполнение запроса к таблице users...")
@@ -99,6 +117,23 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         from uk_management_bot.utils.specializations import parse_specializations
 
         svc = AdminHandlerService(db)
+
+        # Состояние заявки первично по отношению к наличию людей: если заявка
+        # уже назначена, менеджеру надо сказать именно это, а не «нет
+        # подходящих исполнителей» — иначе при пустой специализации он получал
+        # чужой диагноз и не понимал, что делать.
+        existing_assignment = svc.get_active_assignment(request.request_number)
+        if existing_assignment:
+            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена (ID: {existing_assignment.id}), пропускаем")
+            return ASSIGN_ALREADY_INDIVIDUAL
+
+        existing_group_assignment = svc.get_active_group_assignment(
+            request.request_number, specialization
+        )
+        if existing_group_assignment:
+            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
+            return ASSIGN_ALREADY_GROUP
+
         approved_users = svc.list_approved_users()
         logger.info(f"[AUTO_ASSIGN] Approved-пользователей всего: {len(approved_users)}")
 
@@ -116,24 +151,8 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
 
         if not matching_executors:
             logger.warning(f"[AUTO_ASSIGN] Не найдено исполнителей для специализации {specialization}")
-            return
+            return ASSIGN_NO_EXECUTORS
         
-        # Проверяем, есть ли уже назначение для этой заявки
-        existing_assignment = svc.get_active_assignment(request.request_number)
-
-        if existing_assignment:
-            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена (ID: {existing_assignment.id}), пропускаем")
-            return
-
-        # Дополнительная проверка на групповые назначения для той же специализации
-        existing_group_assignment = svc.get_active_group_assignment(
-            request.request_number, specialization
-        )
-
-        if existing_group_assignment:
-            logger.info(f"[AUTO_ASSIGN] Заявка {request.request_number} уже назначена группе {specialization}, пропускаем")
-            return
-
         logger.info(f"[AUTO_ASSIGN] Назначений для заявки {request.request_number} не найдено, создаем новое групповое назначение")
 
         # SSOT-кластер #1, PR2d: запись назначения (RequestAssignment +
@@ -177,8 +196,11 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
                     logger.info(f"Уведомление о групповом назначении отправлено исполнителю {executor.id} (смена {active_shift.id})")
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления исполнителю {executor.id}: {e}")
-        
+
+        return ASSIGN_OK
+
     except Exception as e:
         logger.error(f"Ошибка автоматического назначения заявки {request.request_number}: {e}")
+        return ASSIGN_ERROR
 
 

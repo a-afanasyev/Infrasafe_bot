@@ -1,3 +1,5 @@
+from typing import Optional
+
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
@@ -281,8 +283,67 @@ def get_assignment_type_keyboard(request_number: str, language: str = "ru") -> I
     return builder.as_markup()
 
 
-def get_executors_by_category_keyboard(request_number: str, category: str, executors: list, language: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура со списком исполнителей для данной категории"""
+def get_reassign_button_row(
+    request_number: str,
+    *,
+    assignment_type: Optional[str],
+    status: Optional[str],
+    roles: Optional[list] = None,
+    language: str = "ru",
+) -> list:
+    """Строка «Переназначить» для карточки менеджера — или пустой список.
+
+    Условия показа держатся вместе, чтобы кнопка не появлялась там, где канон
+    её всё равно не пустит:
+
+    * статус — из `MANAGER_ASSIGN.from_statuses` (сегодня «Новая»/«В работе»);
+    * назначение должно БЫТЬ: без него это первичное назначение, у него свой
+      вход;
+    * роль — именно `manager`: `has_admin_access` пропускает и чистого `admin`,
+      а канон требует менеджера, и такая кнопка вела бы админа в отказ.
+
+    Подпись зависит от типа назначения: при групповом индивидуального
+    исполнителя нет и снимать некого — это «назначить», а не «переназначить».
+    """
+    from uk_management_bot.utils.workflow_predicates import reassignable_statuses
+
+    # Источник — САМ канон (`MANAGER_ASSIGN.from_statuses`), а не свой список:
+    # второе определение того же правила разъехалось бы при правке specs.py
+    # молча — кнопка пряталась бы там, где команда уже проходит.
+    if status not in reassignable_statuses():
+        return []
+    if assignment_type not in ("individual", "group"):
+        return []
+    if "manager" not in set(roles or []):
+        # Здесь намеренно только `roles`: карточка рисуется хендлером, который
+        # роли из middleware получает всегда. Скрытая кнопка — косметика, а
+        # настоящий гейт стоит в хендлерах (has_manager_role с fallback).
+        return []
+
+    key = ("admin.keyboards.reassign_request" if assignment_type == "individual"
+           else "admin.keyboards.assign_executor_to_request")
+    return [InlineKeyboardButton(
+        text=get_text(key, language=language),
+        callback_data=f"req_reassign_menu_{request_number}",
+    )]
+
+
+def get_executors_by_category_keyboard(
+    request_number: str,
+    category: str,
+    executors: list,
+    language: str = "ru",
+    callback_prefix: str = "assign_executor_",
+    back_callback_data: Optional[str] = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура со списком исполнителей для данной категории.
+
+    `callback_prefix` и `back_callback_data` параметризованы, потому что этот
+    же список нужен переназначению, а зашитые значения увели бы его в чужой
+    флоу: кнопки вели бы на первичное назначение, а «Назад» — на выбор типа
+    назначения вместо меню переназначения. Дефолты равны прежним константам,
+    поэтому существующие вызовы не меняются.
+    """
     builder = InlineKeyboardBuilder()
 
     if not executors:
@@ -302,12 +363,12 @@ def get_executors_by_category_keyboard(request_number: str, category: str, execu
 
             builder.row(InlineKeyboardButton(
                 text=button_text,
-                callback_data=f"assign_executor_{request_number}_{executor.id}"
+                callback_data=f"{callback_prefix}{request_number}_{executor.id}"
             ))
 
     builder.row(InlineKeyboardButton(
         text=get_text("admin.keyboards.back_nav", language=language),
-        callback_data=f"back_to_assignment_type_{request_number}"
+        callback_data=back_callback_data or f"back_to_assignment_type_{request_number}"
     ))
 
     return builder.as_markup()

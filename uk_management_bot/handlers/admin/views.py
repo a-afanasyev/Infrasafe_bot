@@ -120,6 +120,7 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         from uk_management_bot.keyboards.admin import (
             get_manager_request_actions_keyboard,
             get_manager_completed_request_actions_keyboard,
+            get_reassign_button_row,
             get_unaccepted_request_actions_keyboard
         )
 
@@ -182,6 +183,19 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
             # Добавляем кнопку "Назад к списку"
             rows = list(actions_kb.inline_keyboard)
+            # Переназначение — только при активном назначении и подходящем
+            # статусе. active_assignment уже прочитан выше для ТЕКСТА карточки,
+            # второй запрос не нужен.
+            reassign_row = get_reassign_button_row(
+                request.request_number,
+                assignment_type=(active_assignment.assignment_type
+                                 if active_assignment else None),
+                status=request.status,
+                roles=roles,
+                language=lang,
+            )
+            if reassign_row:
+                rows.append(reassign_row)
             rows.extend(get_discussion_rows(
                 request.request_number,
                 has_report=bool(request.completion_report),

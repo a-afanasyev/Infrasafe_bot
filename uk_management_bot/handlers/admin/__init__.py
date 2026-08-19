@@ -5,7 +5,7 @@
 порядок регистрации хендлеров (сохранён из исходного файла).
 """
 from ._router import router
-from . import views, lists, invites, actions, materials, assignment  # noqa: F401 — регистрация по порядку
+from . import views, lists, invites, actions, materials, assignment, reassignment  # noqa: F401 — регистрация по порядку
 from .lists import list_archive_requests
 from .actions import handle_clarify_request
 
