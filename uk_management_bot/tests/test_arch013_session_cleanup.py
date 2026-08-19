@@ -103,35 +103,10 @@ class TestPatternA_RequestsCategoryFilter:
         assert len(closed) == 1
 
 
-# --------------------------------------------------------------------------
-# Pattern A — shifts.py:end_shift_yes (converted to `with session_scope()`).
-# --------------------------------------------------------------------------
-@pytest.mark.asyncio
-async def test_pattern_a_shifts_end_shift_yes_uses_session_scope_and_closes():
-    from uk_management_bot.handlers import shifts as mod
-    from contextlib import contextmanager
-
-    cb = _callback()
-    db = MagicMock()
-    closed = {"v": False}
-
-    @contextmanager
-    def fake_scope():
-        try:
-            yield db
-        finally:
-            closed["v"] = True
-
-    service = MagicMock()
-    service.end_shift.return_value = {"success": False, "message": "nope"}
-
-    with patch.object(mod, "session_scope", fake_scope), \
-         patch.object(mod, "ShiftService", return_value=service), \
-         patch.object(mod, "get_user_language", return_value="ru"), \
-         patch.object(mod, "get_text", side_effect=lambda key, language="ru", **kw: key):
-        await mod.end_shift_yes(cb, user_status=None, language="ru")
-
-    assert closed["v"] is True  # session_scope exited → session closed (even on early return)
+# Второй кейс Pattern A (shifts.py:end_shift_yes) снят вместе с хендлером:
+# BUG-150 ретайр 2026-08-19 — мёртвый триггер `shift_end_confirm_yes` без id.
+# Паттерн остаётся покрыт основным кейсом TestPatternA_RequestsCategoryFilter
+# выше (happy path И exception path), поэтому инвариант не потерян.
 
 
 # --------------------------------------------------------------------------

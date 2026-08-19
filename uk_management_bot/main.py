@@ -35,7 +35,6 @@ from uk_management_bot.handlers.my_shifts import router as my_shifts_router
 from uk_management_bot.handlers.auto_manager import router as auto_manager_router  # Бот-UI автоменеджера
 
 # Обработчики назначения заявок
-from uk_management_bot.handlers.request_assignment import router as request_assignment_router
 from uk_management_bot.handlers.request_status_management import router as request_status_management_router
 from uk_management_bot.handlers.request_comments import router as request_comments_router
 from uk_management_bot.handlers.request_reports import router as request_reports_router
@@ -381,7 +380,6 @@ async def main():
     dp.include_router(shifts_router)  # старый роутер смен
 
     # Система назначения заявок
-    dp.include_router(request_assignment_router)
     dp.include_router(request_status_management_router)
     dp.include_router(request_comments_router)
     dp.include_router(request_reports_router)

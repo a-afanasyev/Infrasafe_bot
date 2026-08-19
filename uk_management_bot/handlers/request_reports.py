@@ -2,18 +2,10 @@
 Обработчики для управления отчетами о выполнении заявок
 Обеспечивает функциональность просмотра и принятия отчетов
 
-AUD3-07/AUD5-ARCH-1: DB-фаза ЖИВЫХ хендлеров — цельный sync unit-of-work в
+AUD3-07/AUD5-ARCH-1: DB-фаза хендлеров — цельный sync unit-of-work в
 worker-потоке (``run_db``), наружу DTO/скаляры. Канонический переход
 ``run_command_sync`` (своя сессия из SessionLocal) уходит в поток целиком
 через ``asyncio.to_thread``. Сеть — в async-слое, вне сессии.
-
-ВНИМАНИЕ: ``handle_back_to_report`` (префикс ``back_to_report_``) НЕ
-конвертирован — он мёртв: единственный генератор его callback_data,
-``keyboards/request_reports.get_report_details_keyboard``, не вызывается ниоткуда
-(0 вызовов вне тестов; зафиксирован и в docs/audit/2026-05-20-backlog.md как
-мёртвая клавиатура). Хендлер сохранён байт-в-байт до decision владельца
-(прецедент BUG-137/148/150). Из-за него файл НЕ входит в ратчет CONVERTED
-(tests/services/test_aud337_async_handlers_gate.py).
 """
 
 import asyncio
@@ -22,7 +14,6 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from dataclasses import dataclass
-from sqlalchemy.orm import Session
 from typing import Optional
 
 from uk_management_bot.database.models.request import Request
@@ -481,46 +472,6 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, lang
     except Exception as e:
         logger.error(f"Ошибка сохранения причины доработки: {e}")
         await message.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)))
-
-@router.callback_query(F.data.startswith("back_to_report_"))
-async def handle_back_to_report(callback: CallbackQuery, state: FSMContext, db: Session, language: str = "ru"):
-    """Возврат к отчету
-
-    ⚠️ МЁРТВЫЙ ХЕНДЛЕР (см. docstring модуля): генератор `back_to_report_` —
-    `get_report_details_keyboard` — не вызывается ниоткуда. Тело сохранено
-    байт-в-байт до decision владельца: НЕ конвертировать, НЕ удалять.
-    """
-    try:
-        # Получаем ID заявки
-        request_number = callback.data.split("_")[-1]
-
-        # Получаем заявку
-        request = db.query(Request).filter(Request.request_number == request_number).first()
-        if not request:
-            await callback.answer(get_text("request_reports.handlers.request_not_found", language=language), show_alert=True)
-            return
-
-        # Получаем комментарии с отчетами
-        comment_service = CommentService(db)
-        report_comments = comment_service.get_comments_by_type(request.request_number, "report")
-
-        # Формируем текст отчета
-        lang = language
-        report_text = format_report_for_display(request, report_comments, lang)
-
-        # Показываем отчет
-        keyboard = get_report_actions_keyboard(request.request_number, request.status, lang)
-
-        await callback.message.edit_text(
-            report_text,
-            reply_markup=keyboard
-        )
-
-        await callback.answer()
-
-    except Exception as e:
-        logger.error(f"Ошибка возврата к отчету: {e}")
-        await callback.answer(get_text("request_reports.handlers.error_occurred", language=language).format(error=str(e)), show_alert=True)
 
 # Вспомогательные функции
 

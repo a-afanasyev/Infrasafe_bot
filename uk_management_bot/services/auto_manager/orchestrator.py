@@ -13,8 +13,8 @@
     promote_group_assignment) и services/assignment_service.py (второй
     канонический писатель, используемый handlers/admin/assignment.py,
     handlers/admin/shared.py::auto_assign_request_by_category,
-    handlers/request_assignment.py, smart_dispatcher.py,
-    shift_transfer_service.py). ⚠️ `assign_to_group` до этой фичи НЕ обнулял
+    smart_dispatcher.py, shift_transfer_service.py). ⚠️ `assign_to_group`
+    до этой фичи НЕ обнулял
     `Request.executor_id` при переходе в group (асимметрично с
     `assign_to_executor`, который его ставит) — устаревший individual
     executor_id пережил бы переход в group, и main-очередь (executor_id IS

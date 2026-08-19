@@ -18,7 +18,6 @@ HANDLER_MODULES = [
     "uk_management_bot.handlers.health",
     "uk_management_bot.handlers.employee_management",
     "uk_management_bot.handlers.request_acceptance",
-    "uk_management_bot.handlers.request_assignment",
     "uk_management_bot.handlers.request_comments",
     "uk_management_bot.handlers.request_reports",
     "uk_management_bot.handlers.request_status_management",

@@ -11,7 +11,6 @@ from .profile_editing import router as profile_editing_router
 from .shifts import router as shift_management_router
  
 # Новые обработчики для системы передачи заявок на исполнение
-from .request_assignment import router as request_assignment_router
 from .request_status_management import router as request_status_management_router
 from .request_comments import router as request_comments_router
 from .request_reports import router as request_reports_router
@@ -38,7 +37,6 @@ __all__ = [
     "profile_editing_router",
     "shift_management_router",
     # Новые роутеры
-    "request_assignment_router",
     "request_status_management_router",
     "request_comments_router",
     "request_reports_router",

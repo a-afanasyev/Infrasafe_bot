@@ -58,13 +58,12 @@ CONVERTED = [
     # availability) ретайрен — в охвате остались живые файлы пакета.
     "uk_management_bot/handlers/request_status_management/_units.py",
     "uk_management_bot/handlers/request_status_management/executor_actions.py",
-    # A2-хвост волна 1: address_yards сконвертирован целиком. shifts.py
-    # сконвертирован в живой части, но в ратчет НЕ входит: 4 мёртвых хендлера
-    # (end_shift_yes, end_shift_no, manager_active_shifts, force_end_shift —
-    # генераторов их триггеров в проде нет) сохранены байт-в-байт до decision
-    # владельца (прецедент BUG-137/148) и трое из них зовут session_scope в
-    # async def. После ретайра/оживления — добавить сюда.
+    # A2-хвост волна 1: address_yards сконвертирован целиком. shifts.py вошёл
+    # после BUG-150 (ретайр 2026-08-19): четыре мёртвых хендлера — end_shift_yes,
+    # end_shift_no, manager_active_shifts, force_end_shift — удалены, а
+    # session_scope в async def держали ровно они.
     "uk_management_bot/handlers/address_yards.py",
+    "uk_management_bot/handlers/shifts.py",
     # A2-хвост волна 2: лидеры остатка. Все хендлеры трёх файлов живые
     # (инвентарь генераторов callback_data: keyboards/profile.py,
     # keyboards/user_management.py, keyboards/address_management.py + in-file).
@@ -80,12 +79,10 @@ CONVERTED = [
     # A2-хвост волна 4: непринятые заявки менеджера. Все четыре хендлера
     # живые (триггеры генерит keyboards/admin.py).
     "uk_management_bot/handlers/unaccepted_requests.py",
-    # handlers/request_reports.py в волне 4 конвертирован в ЖИВОЙ части, но в
-    # ратчет не входит: мёртвый handle_back_to_report (единственный генератор
-    # префикса back_to_report_ — keyboards/request_reports.get_report_details_keyboard
-    # — вызывается только в тестах) сохранён байт-в-байт до decision владельца
-    # (прецедент BUG-137/148/150) и держит .query( в async def. После
-    # ретайра/оживления — добавить сюда.
+    # BUG-150 (ретайр 2026-08-19): мёртвый handle_back_to_report удалён вместе
+    # с клавиатурой-сиротой get_report_details_keyboard — он единственный
+    # держал .query( в async def, файл входит в ратчет.
+    "uk_management_bot/handlers/request_reports.py",
     # A2-хвост волна 5: комментарии к заявкам. Все восемь хендлеров имеют
     # живые генераторы триггеров (keyboards/requests.get_discussion_rows,
     # keyboards/request_comments.*, keyboards/request_reports.py + FSM-цепочка
@@ -95,18 +92,15 @@ CONVERTED = [
     # имеют живые генераторы триггеров (keyboards/user_management.py,
     # keyboards/user_verification.py).
     "uk_management_bot/handlers/user_management/actions.py",
-    # handlers/user_management/panels.py в волне 5 конвертирован в ЖИВОЙ части
-    # (6 хендлеров), но в ратчет не входит: три хендлера мертвы — генераторов
-    # "user_mgmt_stats_with_verification", "quick_verify_", "quick_reject_" в
-    # репозитории нет вовсе — и сохранены байт-в-байт до decision владельца
-    # (прецедент BUG-137/148/150), продолжая держать db/.query( в async def.
-    # После ретайра/оживления — добавить сюда.
-    # handlers/request_assignment.py волной 5 НЕ конвертирован: инвентарь
-    # показал мёртвый кластер целиком — входа "assign_request_" не генерит
-    # никто, остальные семь триггеров рождаются только внутри самой цепочки
-    # (или в get_report_details_keyboard без прод-вызовов). Живое назначение
-    # заявки идёт через assign_duty_/assign_specific_/assign_executor_ из
-    # keyboards/admin.py. Файл сохранён байт-в-байт до decision владельца.
+    # BUG-154 (ретайр 2026-08-19): три мёртвых хендлера panels.py
+    # ("user_mgmt_stats_with_verification", "quick_verify_", "quick_reject_")
+    # удалены — они держали db в async def; остались шесть живых.
+    "uk_management_bot/handlers/user_management/panels.py",
+    # handlers/request_assignment.py удалён целиком тем же ретайром BUG-154
+    # (мёртвый кластер: входа "assign_request_" не генерил никто, остальные
+    # семь триггеров рождались внутри самой цепочки). Живое назначение заявки
+    # идёт через assign_duty_/assign_specific_/assign_executor_ из
+    # keyboards/admin.py и не затронуто.
     # A2-хвост волна 5: ответ заявителя на уточнение. Оба хендлера живые —
     # команду /reply_{номер} диктует живое уведомление об уточнении
     # (admin.handlers.notify_user_clarification), второй ловит FSM-состояние.
@@ -144,6 +138,10 @@ CONVERTED = [
     # обе ветки делегируют в base.send_onboarding_screen и
     # auth.start_invite_registration, которые уже под run_db.
     "uk_management_bot/handlers/start_role_choice.py",
+    # BUG-158 (ретайр 2026-08-19): четыре мёртвых хендлера onboarding
+    # (start_onboarding, complete_onboarding, complete_onboarding_without_documents,
+    # start_address_input) удалены — параметр db в async def держали ровно они.
+    "uk_management_bot/handlers/onboarding.py",
 ]
 
 # ЗА пределами списка (кандидаты, ждущие своего условия):

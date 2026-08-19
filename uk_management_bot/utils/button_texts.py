@@ -262,11 +262,6 @@ def _init_button_texts() -> dict:
         "buttons.skip",
         fallback_text="⏭ Пропустить"
     )
-    button_texts['active_shifts_button'] = get_button_texts_for_all_languages(
-        "shifts.keyboards.active_shifts_button",
-        fallback_text="🟢 Активные смены"
-    )
-
     # Admin panel
     button_texts['test_middleware'] = get_button_texts_for_all_languages(
         "admin.keyboards.test_middleware",
@@ -593,10 +588,6 @@ def get_address_directory_texts() -> List[str]:
 
 def get_skip_texts() -> List[str]:
     return BUTTON_TEXTS.get('skip', ["⏭ Пропустить"])
-
-
-def get_active_shifts_button_texts() -> List[str]:
-    return BUTTON_TEXTS.get('active_shifts_button', ["🟢 Активные смены"])
 
 
 def get_test_middleware_texts() -> List[str]:

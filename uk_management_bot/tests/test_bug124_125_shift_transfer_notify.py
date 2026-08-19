@@ -30,17 +30,41 @@ def _callback(user_id=7, data=""):
 # --------------------------------------------------------------------------
 # BUG-125 — the notification name resolves (no ImportError path).
 # --------------------------------------------------------------------------
-def test_shifts_module_exposes_async_notify_shift_ended():
-    """`async_notify_shift_ended` must be importable from the handler module
-    (module-level import), so `end_shift_yes_with_id` no longer hits the broken
-    `from services.shift_service import ...` and silently skips notifications."""
+def test_end_shift_notification_is_actually_sent():
+    """Регрессия BUG-125 по СУЩЕСТВУ: завершение смены не должно молча терять
+    уведомление из-за неразрешимого имени.
+
+    Изначально пин требовал module-level ``async_notify_shift_ended``. С тех
+    пор путь уведомления переписан (AUD3-07/B3-раскрой): sync-юнит
+    ``_end_shift_by_id_unit`` собирает payload["notify"], а хендлер шлёт его
+    сам через ``send_to_user``/``send_to_channel`` — уже после коммита и вне
+    сессии. Символ ``async_notify_shift_ended`` в handlers/ не использует
+    больше никто (его module-level импорт держал только ретайренный
+    ``end_shift_yes``, BUG-150), поэтому пин переведён на фактических
+    отправителей — иначе он охранял бы инструмент, а не свойство.
+    """
+    import ast
+    import inspect
+    import textwrap
+
     import uk_management_bot.handlers.shifts as shifts_mod
 
-    assert hasattr(shifts_mod, "async_notify_shift_ended")
-    # and the wrong-module local import is gone from the source
-    import inspect
+    # Отправители разрешаются на уровне модуля — ImportError-путь исключён.
+    assert hasattr(shifts_mod, "send_to_user")
+    assert hasattr(shifts_mod, "send_to_channel")
 
-    src = inspect.getsource(shifts_mod.end_shift_yes_with_id)
+    src = textwrap.dedent(inspect.getsource(shifts_mod.end_shift_yes_with_id))
+    # По AST, а НЕ по подстроке: закомментированный `# await send_to_user(...)`
+    # оставляет подстроку в исходнике, и пин по тексту остался бы зелёным при
+    # выключенной отправке (мутация проверена).
+    called = {
+        getattr(n.func, "id", None) or getattr(n.func, "attr", None)
+        for n in ast.walk(ast.parse(src))
+        if isinstance(n, ast.Call)
+    }
+    assert "send_to_user" in called, "живой хендлер перестал ОТПРАВЛЯТЬ уведомление пользователю"
+    assert "send_to_channel" in called, "живой хендлер перестал ОТПРАВЛЯТЬ уведомление в канал"
+    # И битый локальный импорт из НЕВЕРНОГО модуля не вернулся.
     assert "from uk_management_bot.services.shift_service import async_notify_shift_ended" not in src
 
 
