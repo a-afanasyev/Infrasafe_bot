@@ -62,21 +62,31 @@ def _assign_group_command(request_number: str, specialization: str) -> ActionCom
     )
 
 
-def pick_duty_executor_id(specialization: str, db=None) -> Optional[int]:
+def pick_duty_executor_id(specialization: str, db=None,
+                          exclude_user_ids: frozenset[int] = frozenset(),
+                          strict: bool = False) -> Optional[int]:
     """id дежурного под специализацию — тем же подбором, что у авто-менеджера.
 
     Возвращается именно id, а не ORM-объект: сессия здесь своя и закрывается
     сразу, а detached-инстанс дальше всё равно нельзя использовать.
 
-    Best-effort, как и весь dispatch: он идёт ПОСЛЕ commit создания заявки и не
-    вправе её уронить. Ошибка подбора → None → заявка остаётся «Новая» с
-    групповым назначением, то есть достаётся дежурным и менеджеру.
+    `exclude_user_ids` — кого не предлагать (переназначение исключает текущего
+    исполнителя, иначе резолвится тот же человек).
+
+    `strict` — режим вызывающего. По умолчанию False: best-effort, как и весь
+    dispatch, который идёт ПОСЛЕ commit создания заявки и не вправе её уронить
+    (ошибка → None → заявка остаётся «Новая» с групповым назначением, то есть
+    достаётся дежурным и менеджеру). Для ИНТЕРАКТИВНОГО действия это неверно:
+    там `None` означает «нет дежурного» и так и печатается человеку, поэтому
+    авария БД показалась бы как пустой результат. `strict=True` поднимает
+    исключение, чтобы вызывающий отличил «никого нет» от «не смогли посмотреть».
     """
     from uk_management_bot.services.auto_manager.rule_engine import select_executor
     from uk_management_bot.utils.datetime_utils import utc_now
 
     def _run(session) -> Optional[int]:
-        candidate = select_executor(session, specialization, utc_now())
+        candidate = select_executor(session, specialization, utc_now(),
+                                    exclude_user_ids=exclude_user_ids)
         return candidate.id if candidate is not None else None
 
     try:
@@ -89,6 +99,8 @@ def pick_duty_executor_id(specialization: str, db=None) -> Optional[int]:
         finally:
             session.close()
     except Exception as e:
+        if strict:
+            raise
         logger.warning("[DISPATCH] подбор дежурного под '%s' не выполнен: %s",
                        specialization, e)
         return None

@@ -276,6 +276,53 @@ def test_dispatch_assigns_duty_executor_when_found(monkeypatch):
     assert captured["cmd"].payload == {"executor_id": 42}
 
 
+# ─────────────────── pick_duty_executor_id: strict-режим ───────────────────
+#
+# Фоновый диспетчер идёт ПОСЛЕ commit создания заявки и не вправе её уронить,
+# поэтому по умолчанию ошибка подбора гасится в None. Интерактивному
+# переназначению это врёт: None там печатается как «нет дежурного», и авария БД
+# выглядела бы как пустой результат.
+
+
+def test_pick_duty_swallows_errors_by_default(monkeypatch):
+    from uk_management_bot.services import dispatch as mod
+    import uk_management_bot.services.auto_manager.rule_engine as engine
+
+    def _boom(*a, **kw):
+        raise RuntimeError("БД недоступна")
+
+    monkeypatch.setattr(engine, "select_executor", _boom)
+    assert mod.pick_duty_executor_id("plumber", db=MagicMock()) is None
+
+
+def test_pick_duty_strict_reraises(monkeypatch):
+    from uk_management_bot.services import dispatch as mod
+    import uk_management_bot.services.auto_manager.rule_engine as engine
+
+    def _boom(*a, **kw):
+        raise RuntimeError("БД недоступна")
+
+    monkeypatch.setattr(engine, "select_executor", _boom)
+    with pytest.raises(RuntimeError):
+        mod.pick_duty_executor_id("plumber", db=MagicMock(), strict=True)
+
+
+def test_pick_duty_forwards_exclude_to_select_executor(monkeypatch):
+    from uk_management_bot.services import dispatch as mod
+    import uk_management_bot.services.auto_manager.rule_engine as engine
+
+    seen = {}
+
+    def _spy(session, spec, now, snapshot=None, exclude_user_ids=frozenset()):
+        seen["exclude"] = exclude_user_ids
+        return None
+
+    monkeypatch.setattr(engine, "select_executor", _spy)
+    mod.pick_duty_executor_id("plumber", db=MagicMock(),
+                              exclude_user_ids=frozenset({7}))
+    assert seen["exclude"] == frozenset({7})
+
+
 def test_dispatch_falls_back_to_group_without_moving_status(monkeypatch):
     """Дежурного нет → группа, статус не двигается (ASSIGN_GROUP)."""
     from uk_management_bot.services import dispatch as mod
