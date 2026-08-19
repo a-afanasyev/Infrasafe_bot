@@ -123,11 +123,11 @@ ASSIGNMENT: dict[str, dict] = {
     # помечены закрытыми в бэклоге, поэтому строк здесь больше нет (`--check`
     # держит равенство ASSIGNMENT ↔ открытые пункты в обе стороны).
     # ── П2
-    "PENT-F17": A(pkg="П2a", status="actionable", method="plan-2026-07-26",
-                  note="/uk/health отдаёт SPA index.html — мониторинг ложно зелёный"),
-    "PENT-F14": A(pkg="П2b", status="actionable", method="verified-2026-07-26",
+    "PENT-F17": A(pkg="П2a", status="actionable", method="verified-2026-08-19",
+                  note="/uk/health уже 404 (наш фикс жив); корень /health → proxy_pass app:3000 (сделал владелец); остаток: allowlist /uk/api/health + монитор"),
+    "PENT-F14": A(pkg="П2b", status="actionable", method="verified-2026-08-19",
                   services="edge владельца (оба домена)",
-                  note="артефакт+инструкция готовы; ждёт публикации, .105 за ssh-блокером"),
+                  note="артефакт+инструкция готовы; ждёт публикации; ssh-блокер .105 испарился — второй хост инспектируем"),
     # П2c (`PENT-F10`) закрыт 2026-07-27: оба хоста 600/700. `.105` доступен с
     # `ssh -o IdentitiesOnly=no` — вывод «хост заблокирован» от 26.07 был неверным.
     # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +
@@ -166,25 +166,27 @@ ASSIGNMENT: dict[str, dict] = {
     # (AUD3-37 + AUD5-CODE-6: волны B1–B4 + финал F1/F2, PR #362..#368 + F2)
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
-    "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="plan-2026-07-26",
-                     note="локальные venv/db/png — только пофайлово с подтверждения"),
+    "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="verified-2026-08-19",
+                     note="локальные venv/db/png — только пофайлово с подтверждения; venv вырос 148→164 МБ"),
     # П8 закрыт целиком 2026-07-27: `AUD5-CODE-12` (язык каждого админа),
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
     # ── П9
     # ── П10: security-программа
-    "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="doc-2026-07-21"),
+    "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="verified-2026-08-19"),
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
-    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-02",
+    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-19",
                   note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
-    "AUD3-25": A(pkg="П11", status="actionable", method="doc-2026-07-14"),
+    "AUD3-25": A(pkg="П11", status="actionable", method="verified-2026-08-19"),
     # ── Программа A: архитектура
-    "AUD3-07": A(pkg="A2", status="actionable", method="plan-2026-07-26",
-                 note="168 .query( = 159 db.query + 9 db_local.query"),
-    "AUD5-ARCH-1": A(pkg="A2", status="actionable", method="plan-2026-07-26"),
-    "BUG-148": A(pkg="A3", status="decision", method="verified-2026-08-13",
+    "AUD3-07": A(pkg="A2", status="decision", method="verified-2026-08-19",
+                 note=".query( в async def = 0 (волны закрыты), но цель не достигнута: sync-сессия в loop ещё в 26 файлах / ~170 хендлерах (метрика гейта aud337) — программа A2-2 или деферрал класса, решение владельца"),
+    # `AUD5-ARCH-1` закрыт 2026-08-19 консолидацией в `AUD3-07` (остаток обоих
+    # совпадал побуквенно, прогресс с 2026-08-14 и так вёлся единым) — строка
+    # удалена, `--check` падает на ID закрытого пункта.
+    "BUG-148": A(pkg="A3", status="decision", method="verified-2026-08-19",
                  note="мёртвый auto-assign путь планировщика; оживление=продуктовое решение (2 мины) vs ретайр"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
@@ -193,8 +195,8 @@ ASSIGNMENT: dict[str, dict] = {
     # закрытого пункта.
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
                  note="8 дефектов волны 6; мёртвая пагинация чинится вместе с BUG-151 п.6"),
-    "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-15",
-                 note="_get_user_language блокирует loop; дыра в метрике гейта AUD3-07 — нужна транзитивная проверка"),
+    "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-19",
+                 note="_get_user_language блокирует loop; транзитивная проверка гейта + механика inspector_requests:389; инвентарь класса целиком — в AUD3-07 (2026-08-19)"),
     "BUG-155": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="8 дефектов волны 5; пп.1-2 ЗАКРЫТЫ #446, п.3 (перекрытие фильтров ×3) ЗАКРЫТ 2026-08-18 — открыты пп.4-7"),
     "BUG-153": A(pkg="A2", status="actionable", method="verified-2026-08-14",
@@ -207,7 +209,7 @@ ASSIGNMENT: dict[str, dict] = {
     # дополнение — handle_back_to_report — оказалось дырой P1, а не мёртвым
     # кодом: вход был живой, генератора не было только у кнопки.
     "BUG-165": A(pkg="A2", status="actionable", method="verified-2026-08-16",
-                 note="класс «потерянного языка» ещё на 26 сайтах (19 однострочных + 7 с протяжкой); AST-инвентарь снят"),
+                 note="класс «потерянного языка», ≤26 сайтов; инвентарь протух после ретайра #471 (7 сайтов в onboarding/panels) — перед волной пересъёмка AST-сканом"),
     "BUG-164": A(pkg="A2", status="decision", method="verified-2026-08-16",
                  note="applicant-инвайт гасит nonce и не даёт роли; убирать ли роль из клавиатуры выдачи — продуктовое"),
     # `BUG-166` закрыт 2026-08-17: единая семантика ЛЮБАЯ + `universal`-джокер
@@ -219,15 +221,18 @@ ASSIGNMENT: dict[str, dict] = {
     # `BUG-169` закрыт 2026-08-18: второй словарь удалён, названия берутся из
     # локалей бота (`specializations.*`); строки здесь нет — пункт закрыт в бэклоге.
     # `BUG-172` закрыт 2026-08-18: IDOR комментариев (запись + два чтения).
-    "BUG-171": A(pkg="A2", status="decision", method="verified-2026-08-18",
+    "BUG-171": A(pkg="A2", status="decision", method="verified-2026-08-19",
                  note="ЖИВОЙ: кнопка «Общий комментарий» падает всегда — тип general вне COMMENT_TYPES; добавить в канон или убрать кнопку — продуктовое"),
-    "BUG-175": A(pkg="A2", status="actionable", method="verified-2026-08-18",
-                 note="P1 ЖИВОЙ: адресный кластер и модерация квартир — 59 хендлеров, 0 проверок роли; житель одобряет себе квартиру = эскалация доступа к заявкам"),
-    "BUG-174": A(pkg="A2", status="actionable", method="verified-2026-08-18",
+    # `BUG-175` закрыт 2026-08-19 (аудит бэклога): предписанный Fix был выполнен
+    # кодом PR #468 (RoleGate на всех 4 адресных роутерах) на следующий день
+    # после заведения — маркер отставал. Осознанный остаток (перепроверка роли
+    # в юните записи модерации) зафиксирован в закрытой записи.
+    "BUG-174": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="ЖИВОЙ: уведомления о комментариях не уходят никому — send_notification у сервиса нет; лечится B3-раскроем, notify_user не годится (нет loop в run_db)"),
-    "BUG-173": A(pkg="A2", status="actionable", method="verified-2026-08-18",
+    "BUG-173": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="UpdateShiftBody не валидирует specialization_focus (в отличие от Create) — разметка из PATCH доезжает до HTML-сообщений менеджеру"),
-    "AUD5-CODE-10": A(pkg="A5", status="actionable", method="doc-2026-07-21"),
+    "AUD5-CODE-10": A(pkg="A5", status="actionable", method="verified-2026-08-19",
+                      note="счёт растёт: 44 → 48 функций >100 строк; «при касании» класс не сдерживает — кандидат на ratchet"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
     "AUD5-ARCH-4": A(pkg="A7", status="deferred", method="gate-2026-08-09",
@@ -261,12 +266,12 @@ ASSIGNMENT: dict[str, dict] = {
     "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-07-27",
                  services="edge владельца (profk.uz)",
                  note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
-    "PENT-F15": A(pkg="—", status="actionable", method="verified-2026-07-27",
+    "PENT-F15": A(pkg="—", status="actionable", method="verified-2026-08-19",
                  services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
-    "PENT-F16": A(pkg="—", status="actionable", method="verified-2026-07-27",
+                 note="чек-лист отправлен 27.07, не применён: проба 19.08 — Server: nginx/1.31.2 на :80"),
+    "PENT-F16": A(pkg="—", status="actionable", method="verified-2026-08-19",
                  services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
+                 note="чек-лист отправлен 27.07, не применён: проба 19.08 — два HSTS + X-Frame-Options DENY и SAMEORIGIN"),
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
     "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-07-27",
                  note="возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
@@ -331,7 +336,7 @@ def render(items: list[Item]) -> str:
     out.append(f"- закрыто маркером: **{closed}**")
     out.append(f"- открыто маркером: **{len(open_items)}**")
     out.append("")
-    for st in ("actionable", "decision", "calendar", "no-pr", "doc-closed", "UNASSIGNED"):
+    for st in ("actionable", "decision", "calendar", "no-pr", "deferred", "doc-closed", "UNASSIGNED"):
         if st in by_status:
             out.append(f"  - `{st}` — **{len(by_status[st])}**")
     out.append("")
@@ -346,6 +351,7 @@ def render(items: list[Item]) -> str:
     out.append("| `decision` | ждёт решения владельца; до решения кодовой работы нет |")
     out.append("| `calendar` | работа определена, ждёт календарного срока |")
     out.append("| `no-pr` | работа вне PR (локальные файлы, потенциально деструктивно) |")
+    out.append("| `deferred` | решение принято — «не делать сейчас»; трекер, работы не ждём (в отличие от `decision`, где решения ещё нет) |")
     out.append("| `doc-closed` | по коду закрыт, открыт только в документе |")
     out.append("")
     out.append("Значения `method` — **чем** установлен статус. `doc-<дата>` означает: взято")
