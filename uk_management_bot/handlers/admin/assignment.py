@@ -10,6 +10,7 @@ from uk_management_bot.keyboards.admin import (
     get_executors_by_category_keyboard,
 )
 from uk_management_bot.constants.categories import get_specialization_for_category
+from uk_management_bot.database.session import run_db
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
 import logging
@@ -24,9 +25,27 @@ from uk_management_bot.utils.specializations import (
 
 from ._router import router
 
-from .shared import auto_assign_request_by_category
+from .shared import (
+    ASSIGN_ALREADY_GROUP,
+    ASSIGN_ALREADY_INDIVIDUAL,
+    ASSIGN_NO_EXECUTORS,
+    ASSIGN_NO_SPECIALIZATION,
+    ASSIGN_OK,
+    auto_assign_request_by_category,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _duty_outcome_text(outcome: str, lang: str) -> str:
+    """Человеческий текст на каждый неуспешный исход группового назначения."""
+    if outcome in (ASSIGN_ALREADY_INDIVIDUAL, ASSIGN_ALREADY_GROUP):
+        return get_text("admin.handlers.reassign_already_assigned", language=lang)
+    if outcome == ASSIGN_NO_SPECIALIZATION:
+        return get_text("admin.handlers.duty_assign_no_specialization", language=lang)
+    if outcome == ASSIGN_NO_EXECUTORS:
+        return get_text("admin.handlers.duty_assign_no_executors", language=lang)
+    return get_text("admin.handlers.duty_assign_failed", language=lang)
 
 
 # ===== ОБРАБОТЧИКИ НАЗНАЧЕНИЯ ИСПОЛНИТЕЛЕЙ =====
@@ -51,8 +70,17 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
-        # Используем существующую логику auto_assign
-        await auto_assign_request_by_category(request, db, user)
+        # Используем существующую логику auto_assign. Исход РАЗЛИЧИМ: раньше
+        # функция на всех ветках возвращала None, и «✅ назначена» печаталось
+        # даже когда она не сделала ничего — заявка уже назначена, у категории
+        # нет специализации, исполнителей нет. Менеджер уходил с ложным
+        # подтверждением, а заявка оставалась как была.
+        outcome = await auto_assign_request_by_category(request, db, user)
+
+        if outcome != ASSIGN_OK:
+            await callback.answer(
+                _duty_outcome_text(outcome, lang), show_alert=True)
+            return
 
         # Пытаемся отредактировать сообщение
         success_message = get_text("admin.handlers.duty_assigned_success", language=lang).format(request_number=request_number)
@@ -171,118 +199,45 @@ async def handle_assign_specific_executor_admin(callback: CallbackQuery, db: Ses
 # смену не работало вовсе. Переименовать callback смен нельзя: это убило бы
 # кнопки в уже отрисованных у пользователей клавиатурах.
 @router.callback_query(F.data.regexp(rf"^assign_executor_{REQUEST_NUMBER_CORE}_\d+$"))
-async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
-    """Финальное назначение конкретного исполнителя"""
-    try:
-        lang = language
+async def handle_final_executor_assignment_admin(callback: CallbackQuery, db: Session = None, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):
+    """Финальное назначение конкретного исполнителя — КАНОНОМ.
 
-        # Проверяем права доступа
-        if not has_admin_access(roles=roles, user=user):
-            await callback.answer(get_text("admin.handlers.no_access_actions", language=lang), show_alert=True)
+    Раньше здесь звался `AssignmentService.assign_to_executor`: строка
+    назначения появлялась, а статус оставался «Новой», audit писался не в
+    формате workflow, outbox/webhook/realtime не выпускались вовсе, и
+    уведомление исполнителю уходило вручную на языке МЕНЕДЖЕРА. Дашборд тем
+    временем назначал через `MANAGER_ASSIGN`, то есть у одной операции было два
+    писателя с разным результатом.
+
+    Теперь вход общий с переназначением (`handlers/admin/reassignment.py`):
+    те же три фазы вокруг `run_command_sync`, те же интенты, тот же текст
+    исполнителю на ЕГО языке. Осознанное следствие: назначение из бота теперь
+    двигает «Новая»→«В работе» и уведомляет жителя — ровно как с дашборда.
+    """
+    lang = language
+    try:
+        from .reassignment import _commit_reassign, _guard, _answer_verdict, _preflight
+
+        if not await _guard(callback, roles, user, lang):
             return
 
-        # Парсим данные: assign_executor_251013-001_123
-        parts = callback.data.replace("assign_executor_", "").split("_")
-        request_number = parts[0]
-        executor_id = int(parts[1])
+        # Парсим данные: assign_executor_251013-001_123 (регекс уже гарантировал форму)
+        payload = callback.data[len("assign_executor_"):]
+        request_number, _, raw_id = payload.rpartition("_")
+        executor_id = int(raw_id)
 
         logger.info(f"Финальное назначение исполнителя {executor_id} на заявку {request_number}")
 
-        svc = AdminHandlerService(db)
-        # Получаем заявку и исполнителя
-        request = svc.get_request_by_number(request_number)
-        executor = svc.get_user_by_id(executor_id)
-
-        if not request or not executor:
-            await callback.answer(get_text("admin.handlers.request_or_executor_not_found", language=lang), show_alert=True)
+        pre = await run_db(
+            lambda s: _preflight(s, request_number, executor_id, lang), db=None)
+        if pre.verdict != "ok":
+            await _answer_verdict(callback, pre, lang)
             return
 
-        # Получаем менеджера (текущий пользователь)
-        if not user:
-            user = svc.get_user_by_telegram_id(callback.from_user.id)
-            if not user:
-                await callback.answer(get_text("admin.handlers.error_user_not_found", language=lang), show_alert=True)
-                return
-
-        # Назначаем исполнителя через новую систему AssignmentService
-        from uk_management_bot.services.assignment_service import AssignmentService
-        assignment_service = AssignmentService(db)
-
-        try:
-            # Используем индивидуальное назначение с user.id вместо telegram_id
-            assignment_service.assign_to_executor(
-                request_number=request_number,
-                executor_id=executor_id,
-                assigned_by=user.id  # ИСПРАВЛЕНО: используем id из таблицы users
-            )
-            logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} через AssignmentService (менеджер: {user.id})")
-        except Exception as e:
-            logger.error(f"Ошибка назначения заявки: {e}", exc_info=True)
-            await callback.answer(get_text("admin.handlers.error_assignment_detail", language=lang).format(error=str(e)), show_alert=True)
-            return
-
-        executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-        if not executor_name:
-            executor_name = f"@{executor.username}" if executor.username else f"ID{executor.id}"
-
-        # Ограничиваем длину адреса в сообщении менеджеру
-        MAX_ADDRESS_DISPLAY = 150
-        address_display = request.address[:MAX_ADDRESS_DISPLAY] + "..." if len(request.address) > MAX_ADDRESS_DISPLAY else request.address
-
-        success_message = get_text("admin.handlers.executor_assigned_success", language=lang).format(
-            request_number=request_number,
-            executor_name=executor_name,
-            category=get_category_display(resolve_category_key(request.category), language=lang),
-            address=address_display
-        )
-
-        try:
-            await callback.message.edit_text(success_message, parse_mode="HTML")
-        except TelegramBadRequest as e:
-            if "message is not modified" in str(e):
-                await callback.answer(get_text("admin.handlers.assignment_done_success", language=lang), show_alert=False)
-                logger.info(f"Сообщение не изменилось для заявки {request_number}")
-            else:
-                # Отправляем новое сообщение
-                await callback.message.answer(success_message, parse_mode="HTML")
-                await callback.answer()
-
-        # Отправляем уведомление исполнителю
-        try:
-            bot = callback.bot
-
-            # Ограничиваем длину текста для предотвращения MESSAGE_TOO_LONG
-            # Telegram лимит: 4096 символов
-            # Уменьшаем лимиты ещё больше для безопасности
-            MAX_ADDRESS_LENGTH = 150
-            MAX_DESCRIPTION_LENGTH = 300
-
-            address = request.address[:MAX_ADDRESS_LENGTH] + "..." if len(request.address) > MAX_ADDRESS_LENGTH else request.address
-            description = request.description[:MAX_DESCRIPTION_LENGTH] + "..." if len(request.description) > MAX_DESCRIPTION_LENGTH else request.description
-
-            notification_text = get_text("admin.handlers.notify_executor_assigned", language=lang).format(
-                request_number=request.format_number_for_display(),
-                category=get_category_display(resolve_category_key(request.category), language=lang),
-                address=address,
-                description=description
-            )
-
-            # Дополнительная проверка на общую длину (лимит Telegram - 4096 символов)
-            # Обрезаем с запасом до 3500 символов
-            if len(notification_text) > 3500:
-                notification_text = notification_text[:3497] + "..."
-                logger.warning(f"Уведомление для исполнителя было обрезано до 3500 символов (было {len(notification_text)} символов)")
-
-            logger.info(f"Отправка уведомления исполнителю {executor.telegram_id} (длина: {len(notification_text)} символов)")
-            await bot.send_message(executor.telegram_id, notification_text, parse_mode="HTML")
-            logger.info(f"Уведомление о назначении отправлено исполнителю {executor.telegram_id}")
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления исполнителю: {e}", exc_info=True)
-
-        logger.info(f"Заявка {request_number} назначена исполнителю {executor_id}")
+        await _commit_reassign(callback, db, user, lang, pre)
 
     except Exception as e:
-        logger.error(f"Ошибка финального назначения исполнителя: {e}")
+        logger.error(f"Ошибка финального назначения исполнителя: {e}", exc_info=True)
         await callback.answer(get_text("admin.handlers.error_assigning", language=lang), show_alert=True)
 
 
