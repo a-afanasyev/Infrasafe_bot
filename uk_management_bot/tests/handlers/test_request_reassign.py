@@ -573,3 +573,107 @@ class TestCommand:
                                          language="ru")
 
         run.assert_not_called()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# End-to-end: НАСТОЯЩИЙ run_command_sync, без двойников
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Мок `CommandOutcome` не может увидеть главный класс дефектов этой фичи: при
+# нём БД не меняется, значит stale-инстанс внешней сессии неотличим от свежего,
+# и «уведомление уехало снятому» выглядит как успех. Здесь команда исполняется
+# по-настоящему — своей сессией, с реальным патчем заявки и реальными
+# интентами, а фаза 3 читает результат уже после коммита.
+
+
+@pytest.fixture()
+def e2e(monkeypatch):
+    """sqlite на StaticPool: команда уходит в worker-поток через to_thread, и
+    дефолтный per-thread пул in-memory отдал бы туда ПУСТУЮ базу."""
+    from sqlalchemy.pool import StaticPool
+
+    import uk_management_bot.database.session as session_mod
+
+    engine = create_engine(
+        "sqlite://", echo=False,
+        poolclass=StaticPool, connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    Factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    monkeypatch.setattr(session_mod, "SessionLocal", Factory)
+
+    db = Factory()
+    _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+    _user(db, OLD_ID, 200, language="ru")
+    _user(db, NEW_ID, 300, language="uz")
+    _user(db, MANAGER_ID, 500, roles='["manager"]')
+    _request(db, executor_id=OLD_ID, status=REQUEST_STATUS_IN_PROGRESS)
+    _assignment(db, kind="individual", executor_id=OLD_ID)
+    db.commit()
+
+    yield db, Factory
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+class TestEndToEndRealCommand:
+    @pytest.mark.asyncio
+    async def test_real_reassign_notifies_new_executor_and_the_replaced_one(self, e2e):
+        db, _factory = e2e
+        cb = _callback(f"req_reassign_to_{NUMBER}_{NEW_ID}")
+        pre = mod.Preflight("ok", request_number=NUMBER, new_executor_id=NEW_ID)
+
+        sent = []
+
+        async def _capture(bot, telegram_id, text):
+            sent.append((telegram_id, text))
+            return True
+
+        with patch("uk_management_bot.services.notification_service.send_to_user",
+                   new=_capture), \
+             patch("uk_management_bot.services.notification_service.channel.send_to_user",
+                   new=_capture), \
+             patch("uk_management_bot.services.redis_pubsub.publish_request_event",
+                   new=AsyncMock()):
+            await mod._commit_reassign(cb, SimpleNamespace(id=MANAGER_ID), "ru", pre)
+
+        db.expire_all()
+        request = db.query(Request).filter(Request.request_number == NUMBER).one()
+        assert request.executor_id == NEW_ID, "команда обязана была переназначить"
+        assert request.status == REQUEST_STATUS_IN_PROGRESS
+
+        targets = {tg for tg, _ in sent}
+        assert 300 in targets, "новый исполнитель не получил наряд"
+        assert 200 in targets, "снятый не получил уведомление"
+        assert 100 in targets, "житель не получил уведомление"
+
+        # Наряд новому — на ЕГО языке (uz), а не на языке менеджера (ru).
+        new_text = next(t for tg, t in sent if tg == 300)
+        assert "Sizga" in new_text, f"наряд не на языке получателя: {new_text!r}"
+
+        # Снятому — именно «передана другому», а не «вам назначена».
+        old_text = next(t for tg, t in sent if tg == 200)
+        assert "передана другому" in old_text, old_text
+
+    @pytest.mark.asyncio
+    async def test_real_reassign_leaves_exactly_one_active_assignment(self, e2e):
+        """partial-unique uq_request_assignments_active: раннер гасит старое
+        active-назначение перед вставкой нового."""
+        db, _factory = e2e
+        cb = _callback(f"req_reassign_to_{NUMBER}_{NEW_ID}")
+        pre = mod.Preflight("ok", request_number=NUMBER, new_executor_id=NEW_ID)
+
+        with patch("uk_management_bot.services.notification_service.channel.send_to_user",
+                   new=AsyncMock(return_value=True)), \
+             patch("uk_management_bot.services.redis_pubsub.publish_request_event",
+                   new=AsyncMock()):
+            await mod._commit_reassign(cb, SimpleNamespace(id=MANAGER_ID), "ru", pre)
+
+        db.expire_all()
+        active = db.query(RequestAssignment).filter(
+            RequestAssignment.request_number == NUMBER,
+            RequestAssignment.status == "active").all()
+        assert len(active) == 1
+        assert active[0].executor_id == NEW_ID
+
