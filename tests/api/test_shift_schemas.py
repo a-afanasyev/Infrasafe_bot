@@ -256,6 +256,17 @@ class TestCreateShiftBody:
             CreateShiftBody(user_id=1, start_time=start, end_time=end)
         assert "end_time must be after start_time" in str(exc_info.value)
 
+    def test_unknown_specialization_raises(self):
+        """BUG-173 (попутно): валидатор Create не был покрыт ни одним тестом."""
+        start = datetime.now()
+        end = start + timedelta(hours=8)
+        with pytest.raises(ValidationError) as exc_info:
+            CreateShiftBody(
+                user_id=1, start_time=start, end_time=end,
+                specialization_focus=["<b>мусор</b>"],
+            )
+        assert "неизвестные специализации" in str(exc_info.value)
+
     def test_end_equals_start_raises(self):
         now = datetime.now()
         with pytest.raises(ValidationError):
@@ -388,6 +399,19 @@ class TestUpdateShiftBody:
         )
         assert body.start_time == datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc)
         assert body.specialization_focus == ["electrician", "plumber"]
+
+    def test_unknown_specialization_raises(self):
+        """BUG-173: PATCH пропускал произвольные строки в specialization_focus —
+        разметка доезжала до HTML-сообщений менеджеру. Update обязан валидировать
+        зеркально Create."""
+        with pytest.raises(ValidationError) as exc_info:
+            UpdateShiftBody(specialization_focus=["<b>мусор</b>"])
+        assert "неизвестные специализации" in str(exc_info.value)
+
+    def test_universal_specialization_accepted(self):
+        """Зеркало Create: канон + universal-джокер проходят."""
+        body = UpdateShiftBody(specialization_focus=["electrician", "universal"])
+        assert body.specialization_focus == ["electrician", "universal"]
 
     @pytest.mark.parametrize("level", [0, 6])
     def test_priority_level_out_of_range_raises(self, level: int):
