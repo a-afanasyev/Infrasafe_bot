@@ -13,7 +13,7 @@ Covers:
 - get_latest_comment
 - _get_comment_type_emoji
 - _create_audit_log
-- _notify_comment_added
+- _collect_notices (B3, BUG-174)
 """
 import pytest
 from datetime import datetime
@@ -52,12 +52,13 @@ class _FakeUser:
         self.id = kwargs.get("id", 10)
         self.first_name = kwargs.get("first_name", "Тест")
         self.last_name = kwargs.get("last_name", "Юзер")
+        self.telegram_id = kwargs.get("telegram_id", 100)
+        self.language = kwargs.get("language", "ru")
 
 
 def _build_service(db_mock):
-    with patch("uk_management_bot.services.comment_service.NotificationService"):
-        from uk_management_bot.services.comment_service import CommentService
-        return CommentService(db_mock)
+    from uk_management_bot.services.comment_service import CommentService
+    return CommentService(db_mock)
 
 
 # ===== add_comment =====
@@ -75,7 +76,7 @@ class TestAddComment:
         self.db.query.return_value.filter.return_value.first.side_effect = [req, user]
 
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_comment(
                 request_id="260412-001",
                 user_id=10,
@@ -206,7 +207,7 @@ class TestAddStatusChangeComment:
             req, req, user
         ]
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_status_change_comment(
                 "260412-001", 10, "Новая", "В работе", "доп инфо"
             )
@@ -219,7 +220,7 @@ class TestAddStatusChangeComment:
             req, req, user
         ]
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_status_change_comment("260412-001", 10, "Новая", "В работе")
             self.db.add.assert_called()
 
@@ -236,7 +237,7 @@ class TestAddPurchaseComment:
         user = _FakeUser()
         self.db.query.return_value.filter.return_value.first.side_effect = [req, user]
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_purchase_comment("260412-001", 10, "Трубы, фитинги")
             self.db.add.assert_called()
 
@@ -253,7 +254,7 @@ class TestAddClarificationComment:
         user = _FakeUser()
         self.db.query.return_value.filter.return_value.first.side_effect = [req, user]
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_clarification_comment("260412-001", 10, "Уточните адрес")
             self.db.add.assert_called()
 
@@ -270,7 +271,7 @@ class TestAddCompletionReportComment:
         user = _FakeUser()
         self.db.query.return_value.filter.return_value.first.side_effect = [req, user]
         with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_notify_comment_added"):
+             patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_completion_report_comment("260412-001", 10, "Работа завершена")
             self.db.add.assert_called()
 
@@ -360,35 +361,54 @@ class TestCreateAuditLog:
         assert self.db.add.called
 
 
-# ===== _notify_comment_added =====
+# ===== _collect_notices (B3, BUG-174) =====
 
-class TestNotifyCommentAdded:
+class TestCollectNotices:
+    """Mock-уровень: адресаты и устойчивость. Локализация и доставка запинены
+    sqlite/handler-тестами в
+    `uk_management_bot/tests/handlers/test_bug174_comment_notifications.py`.
+
+    Прежний TestNotifyCommentAdded был вакуумным: сервис патчился MagicMock'ом,
+    атрибут `send_notification` создавался автоматически — тесты были зелёными,
+    когда прод ронял AttributeError и не уведомлял никого (BUG-174).
+    """
+
     def setup_method(self):
         self.db = MagicMock()
         self.svc = _build_service(self.db)
 
-    def test_notifies_owner_when_comment_by_other(self):
+    def _recipients(self, *users):
+        self.db.query.return_value.filter.return_value.all.return_value = list(users)
+
+    def test_owner_gets_notice_when_comment_by_executor(self):
         req = _FakeRequest(user_id=10, executor_id=20)
         comment = _FakeComment(user_id=20)  # comment by executor
-        self.svc._notify_comment_added(req, comment)
-        self.svc.notification_service.send_notification.assert_called()
+        self._recipients(_FakeUser(id=10, telegram_id=111, language="ru"))
 
-    def test_notifies_executor_when_comment_by_owner(self):
+        notices = self.svc._collect_notices(req, comment)
+
+        assert [n.telegram_id for n in notices] == [111]
+        assert "260412-001" in notices[0].text
+
+    def test_executor_gets_notice_when_comment_by_owner(self):
         req = _FakeRequest(user_id=10, executor_id=20)
         comment = _FakeComment(user_id=10)  # comment by owner
-        self.svc._notify_comment_added(req, comment)
-        self.svc.notification_service.send_notification.assert_called()
+        self._recipients(_FakeUser(id=20, telegram_id=222, language="uz"))
 
-    def test_no_notification_when_only_owner(self):
+        notices = self.svc._collect_notices(req, comment)
+
+        assert [n.telegram_id for n in notices] == [222]
+
+    def test_no_notice_when_only_owner(self):
         req = _FakeRequest(user_id=10, executor_id=None)
         comment = _FakeComment(user_id=10)
-        self.svc._notify_comment_added(req, comment)
-        self.svc.notification_service.send_notification.assert_not_called()
+
+        assert self.svc._collect_notices(req, comment) == []
 
     def test_handles_exception(self):
         req = _FakeRequest(user_id=10, executor_id=20)
         comment = _FakeComment(user_id=20)
-        self.svc.notification_service.send_notification.side_effect = Exception("fail")
-        # Не бросает — и до исключения честно ДОШЁЛ до отправки (AUD6-P2-26).
-        self.svc._notify_comment_added(req, comment)
-        assert self.svc.notification_service.send_notification.called
+        self.db.query.side_effect = Exception("fail")
+        # Не бросает — и до исключения честно ДОШЁЛ до запроса (AUD6-P2-26).
+        assert self.svc._collect_notices(req, comment) == []
+        assert self.db.query.called

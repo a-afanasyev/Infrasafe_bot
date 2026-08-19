@@ -19,23 +19,37 @@ from uk_management_bot.utils.constants import (
     COMMENT_TYPE_REPORT,
     AUDIT_ACTION_REQUEST_STATUS_CHANGED
 )
-from uk_management_bot.services.notification_service import NotificationService
+from uk_management_bot.utils.helpers import get_text
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass(frozen=True)
+class CommentNotice:
+    """Адресат уведомления о комментарии + текст на ЕГО языке (B3).
+
+    Собирается sync-фазой внутри сессии; отправляет async-слой вызывающего
+    хендлера через `send_to_user` — в worker-потоке `run_db` нет event loop,
+    слать оттуда нечем (BUG-174).
+    """
+
+    telegram_id: int
+    text: str
+
+
 class CommentService:
     """Сервис для управления комментариями к заявкам"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-        self.notification_service = NotificationService(db)
     
-    def add_comment(self, request_id: str, user_id: int, comment_text: str, 
-                   comment_type: str, previous_status: str = None, 
-                   new_status: str = None) -> RequestComment:
+    def add_comment(self, request_id: str, user_id: int, comment_text: str,
+                   comment_type: str, previous_status: str = None,
+                   new_status: str = None) -> tuple[RequestComment, list[CommentNotice]]:
         """
         Добавление комментария к заявке
-        
+
         Args:
             request_id: Номер заявки (request_number)
             user_id: ID пользователя
@@ -43,10 +57,12 @@ class CommentService:
             comment_type: Тип комментария
             previous_status: Предыдущий статус (для изменений статуса)
             new_status: Новый статус (для изменений статуса)
-            
+
         Returns:
-            RequestComment: Созданный комментарий
-            
+            (созданный комментарий, notices для отправки async-слоем).
+            Возврат кортежем НАМЕРЕННО: вызывающий, забывший про доставку,
+            ломается на распаковке, а не молчит (класс BUG-174/BUG-155 п.2).
+
         Raises:
             ValueError: При неверных данных
         """
@@ -83,13 +99,13 @@ class CommentService:
             
             # Создаем запись в аудите
             self._create_audit_log(request_id, user_id, f"Добавлен комментарий: {comment_type}")
-            
-            # Отправляем уведомления
-            self._notify_comment_added(request, comment)
-            
+
+            # Собираем notices; шлёт async-слой вызывающего (B3, BUG-174)
+            notices = self._collect_notices(request, comment)
+
             logger.info(f"Добавлен комментарий к заявке {request_id} пользователем {user_id}")
-            return comment
-            
+            return comment, notices
+
         except Exception as e:
             self.db.rollback()
             logger.error(f"Ошибка добавления комментария: {e}")
@@ -173,7 +189,7 @@ class CommentService:
     
     def add_status_change_comment(self, request_number: str, user_id: int, 
                                 previous_status: str, new_status: str, 
-                                additional_comment: str = None) -> RequestComment:
+                                additional_comment: str = None) -> tuple[RequestComment, list[CommentNotice]]:
         """
         Добавление комментария при изменении статуса
         
@@ -185,7 +201,7 @@ class CommentService:
             additional_comment: Дополнительный комментарий
             
         Returns:
-            RequestComment: Созданный комментарий
+            (созданный комментарий, notices — шлёт async-слой вызывающего)
         """
         # Получаем заявку по номеру
         request = self.db.query(Request).filter(Request.request_number == request_number).first()
@@ -206,7 +222,7 @@ class CommentService:
             new_status=new_status
         )
     
-    def add_purchase_comment(self, request_number: str, user_id: int, materials: str) -> RequestComment:
+    def add_purchase_comment(self, request_number: str, user_id: int, materials: str) -> tuple[RequestComment, list[CommentNotice]]:
         """
         Добавление комментария о закупке материалов
         
@@ -227,7 +243,7 @@ class CommentService:
             comment_type=COMMENT_TYPE_PURCHASE
         )
     
-    def add_clarification_comment(self, request_number: str, user_id: int, clarification: str) -> RequestComment:
+    def add_clarification_comment(self, request_number: str, user_id: int, clarification: str) -> tuple[RequestComment, list[CommentNotice]]:
         """
         Добавление комментария с уточнением
         
@@ -246,7 +262,7 @@ class CommentService:
             comment_type=COMMENT_TYPE_CLARIFICATION
         )
     
-    def add_completion_report_comment(self, request_number: str, user_id: int, report: str) -> RequestComment:
+    def add_completion_report_comment(self, request_number: str, user_id: int, report: str) -> tuple[RequestComment, list[CommentNotice]]:
         """
         Добавление комментария с отчетом о выполнении
         
@@ -308,43 +324,54 @@ class CommentService:
         except Exception as e:
             logger.warning(f"Не удалось создать запись в аудите: {e}")
     
-    def _notify_comment_added(self, request: Request, comment: RequestComment):
-        """Уведомление о добавлении комментария.
+    def _collect_notices(self, request: Request, comment: RequestComment) -> list[CommentNotice]:
+        """Адресаты уведомления о комментарии + текст на языке КАЖДОГО (B3).
 
-        ⚠️ ЖИВОЙ ДЕФЕКТ (BUG-174, найден 2026-08-18 живой пробой на проде,
-        сохранён байт-в-байт до отдельной работы): `NotificationService` НЕ
-        имеет метода `send_notification` — `AttributeError` гасится except'ом
-        ниже, в лог уходит «Не удалось отправить уведомления о комментарии».
-        Ни заявитель, ни исполнитель о новом комментарии не узнают НИКОГДА, по
-        всем четырём обёрткам `add_comment`. Тот же класс, что BUG-148/152/155
-        п.2 — молчащий флоу выглядит работающим.
-
-        ⚠️ Прямая замена на существующий `notify_user` НЕ годится: он планирует
-        отправку на running loop, а `add_comment` исполняется в worker-потоке
-        `run_db`, где loop'а нет. Лечение — B3-раскрой, как в
-        `clarification_replies._apply_reply`: юнит собирает адресатов и текст на
-        языке КАЖДОГО получателя, async-слой шлёт через `send_to_user`.
+        Закрытие BUG-174: раньше здесь стоял вызов несуществующего
+        `NotificationService.send_notification` — `AttributeError` гасился
+        except'ом, и ни заявитель, ни исполнитель не узнавали о комментарии
+        никогда. Отправка из sync-фазы невозможна в принципе (worker-поток
+        `run_db` без event loop), поэтому метод только СОБИРАЕТ; шлёт
+        async-слой вызывающего через `send_to_user` — образец
+        `clarification_replies._apply_reply`.
         """
+        notices: list[CommentNotice] = []
         try:
-            # Определяем получателей уведомления
-            recipients = []
-            
+            recipient_ids = []
+
             # Заявитель
             if request.user_id != comment.user_id:
-                recipients.append(request.user_id)
-            
+                recipient_ids.append(request.user_id)
+
             # Исполнитель (если есть)
             if request.executor_id and request.executor_id != comment.user_id:
-                recipients.append(request.executor_id)
-            
-            # Отправляем уведомления
-            for recipient_id in recipients:
-                self.notification_service.send_notification(
-                    user_id=recipient_id,
-                    notification_type="comment_added",
-                    title="Новый комментарий к заявке",
-                    message=f"Добавлен новый комментарий к заявке #{request.request_number}",
-                    data={"request_number": request.request_number, "comment_id": comment.id}
-                )
+                recipient_ids.append(request.executor_id)
+
+            if not recipient_ids:
+                return notices
+
+            users = self.db.query(User).filter(User.id.in_(recipient_ids)).all()
+            for user in users:
+                try:
+                    if not user.telegram_id:
+                        continue
+                    lang = user.language or "ru"
+                    type_key = f"comments.type_{comment.comment_type}"
+                    type_label = get_text(type_key, language=lang)
+                    if type_label == type_key:
+                        # ключа локали нет — показываем сырой тип, а не ключ
+                        type_label = comment.comment_type
+                    text = get_text("comments.notification", language=lang).format(
+                        request_number=request.request_number,
+                        type_label=type_label,
+                        comment_text=comment.comment_text,
+                    )
+                    notices.append(CommentNotice(telegram_id=user.telegram_id, text=text))
+                except Exception as e:
+                    # Сбой подготовки одного получателя не лишает остальных
+                    logger.warning(
+                        f"Не удалось подготовить уведомление о комментарии для user_id={user.id}: {e}"
+                    )
         except Exception as e:
-            logger.warning(f"Не удалось отправить уведомления о комментарии: {e}")
+            logger.warning(f"Не удалось собрать уведомления о комментарии: {e}")
+        return notices

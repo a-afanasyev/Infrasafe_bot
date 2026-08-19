@@ -1184,11 +1184,13 @@
     "select_type": "💬 Выберите тип комментария:",
     "success": "✅ Комментарий успешно добавлен к заявке #{request_id}!\n\n💬 Тип: {comment_type}",
     "title": "💬 Управление комментариями",
+    "notification": "💬 Новый комментарий к заявке #{request_number}\n\n📋 Тип: {type_label}\n\n{comment_text}",
     "type_clarification": "уточнение",
     "type_comment": "комментарий",
     "type_general": "общий комментарий",
     "type_purchase": "закупка материалов",
     "type_report": "отчет о выполнении",
+    "type_status_change": "изменение статуса",
     "user_not_found": "❌ Пользователь не найден",
     "view_comments": "📋 Просмотр комментариев"
   },

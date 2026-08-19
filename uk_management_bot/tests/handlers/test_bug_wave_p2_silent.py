@@ -194,7 +194,7 @@ class TestApplyComment:
         _user(db, 7, 777)
         _request(db, "260816-002", 7)
 
-        verdict = _apply_comment(db, "260816-002", 777, "Нужен доступ в подвал", "clarification")
+        verdict, _notices = _apply_comment(db, "260816-002", 777, "Нужен доступ в подвал", "clarification")
 
         assert verdict == "ok"
         comment = db.query(RequestComment).one()
@@ -206,7 +206,7 @@ class TestApplyComment:
 
         _user(db, 7, 777)
 
-        assert _apply_comment(db, "нет-такой", 777, "текст", "clarification") == "request_not_found"
+        assert _apply_comment(db, "нет-такой", 777, "текст", "clarification") == ("request_not_found", [])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

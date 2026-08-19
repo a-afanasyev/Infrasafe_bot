@@ -56,6 +56,18 @@ async def handle_materials_input(message: Message, state: FSMContext, language: 
             await state.clear()
             return
 
+        # Доставка уведомлений о комментарии закупки — вне сессии, на языке
+        # КАЖДОГО получателя (BUG-174)
+        from uk_management_bot.services.notification_service import send_to_user
+
+        for notice in res.notices:
+            try:
+                await send_to_user(message.bot, notice.telegram_id, notice.text)
+            except Exception as notify_error:
+                logger.warning(
+                    f"Уведомление о комментарии не доставлено tg={notice.telegram_id}: {notify_error}"
+                )
+
         # Показываем подтверждение с текущими данными
         confirmation_text = get_text("request_status_mgmt.handlers.purchase_status_set", language=lang).format(request_number=request_number)
 
