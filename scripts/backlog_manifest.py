@@ -233,6 +233,8 @@ ASSIGNMENT: dict[str, dict] = {
     # `BUG-174` закрыт 2026-08-19 (волна живых дефектов): B3-раскрой, все
     # четыре прод-сайта шлют; близнец в assignment_service уходит с ретайром
     # BUG-148 — проверить оба сайта при ретайре.
+    "BUG-178": A(pkg="A2", status="actionable", method="verified-2026-08-19",
+                 note="секревью 2026-08-19: reply_text заявителя без html.escape уходит менеджерам при parse_mode=HTML (clarification_replies:160); фикс S по образцу BUG-174"),
     # `BUG-173` закрыт 2026-08-19 (волна живых дефектов): валидатор-зеркало
     # Create; сырые join-сайты рендера — класс BUG-149/169, остаются там.
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="verified-2026-08-19",
