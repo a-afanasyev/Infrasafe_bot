@@ -127,10 +127,16 @@ def test_executor_assignment_back_still_reaches_shift_management():
     )
 
 
-def test_executor_assignment_from_executor_is_silent_not_swallowed():
-    """До ретайра исполнитель проваливался в мёртвый `handle_executor_selection`
-    (RoleGate пакета смен отказывает, апдейт идёт дальше). После — тишина."""
-    assert _cb("executor_assignment", **EXECUTOR) is None
+def test_executor_assignment_from_executor_gets_explicit_denial():
+    """До ретайра исполнитель проваливался в мёртвый `handle_executor_selection`:
+    RoleGate пакета смен ему отказывает, апдейт шёл дальше по цепочке и его
+    забирал мёртвый `startswith("executor_")` в роутере ниже (там `int()` от
+    «assignment» падал в общий except). После ретайра апдейт доходит до
+    deny-роутера смен и исполнитель получает ЯВНЫЙ отказ — тот самый
+    ShiftPackageWouldHandle-фолбэк волны D, ради которого он и заводился."""
+    assert _cb("executor_assignment", **EXECUTOR) == (
+        f"{H}._role_gate", "deny_shift_callback"
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

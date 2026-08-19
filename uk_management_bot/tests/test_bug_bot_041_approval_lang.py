@@ -6,9 +6,14 @@ process_approval_comment — built the "approved, restart the bot" notification
 with a hardcoded ``target_lang = 'ru'`` (despite the comment "Определяем язык
 целевого пользователя"). The parallel handler in user_verification.py does it
 correctly via ``target_user.language or "ru"``. A uz user got the approval in
-Russian. These tests drive the success path with a uz target user and assert
-BOTH the message text AND the inline button use the uz translation — they FAIL
-against the hardcoded-'ru' code and pass after the fix.
+Russian. The test drives the success path with a uz target user and asserts
+BOTH the message text AND the inline button use the uz translation — it FAILS
+against the hardcoded-'ru' code and passes after the fix.
+
+Кейс ``quick_verify_user`` снят вместе с хендлером (BUG-154 ретайр
+2026-08-19): генератора префикса ``quick_verify_`` не было ни в одной
+клавиатуре, а единственным его вызывающим был этот тест. Регрессия остаётся
+покрыта живым ``process_approval_comment`` ниже — путь тот же.
 """
 from unittest.mock import AsyncMock, MagicMock
 
@@ -40,41 +45,6 @@ def _assert_uz(send_message_mock):
     assert button_text == um.panels.get_text(_BTN_KEY, language="uz"), (
         "restart button must use the user's language (uz), not hardcoded ru"
     )
-
-
-@pytest.mark.asyncio
-async def test_quick_verify_user_notifies_in_user_language(monkeypatch):
-    target_user = _uz_target_user()
-
-    # approve_verification / notification services are imported inside the func
-    fake_verif = MagicMock()
-    fake_verif.approve_verification = AsyncMock(return_value=True)
-    monkeypatch.setattr(
-        "uk_management_bot.services.user_verification_service.UserVerificationService",
-        MagicMock(return_value=fake_verif),
-    )
-    fake_notif = MagicMock()
-    fake_notif.send_verification_approved_notification = AsyncMock()
-    monkeypatch.setattr(
-        "uk_management_bot.services.notification_service.NotificationService",
-        MagicMock(return_value=fake_notif),
-    )
-    monkeypatch.setattr(um.panels, "has_admin_access", lambda **kw: True)
-
-    db = MagicMock()
-    db.query.return_value.filter.return_value.first.return_value = target_user
-
-    callback = MagicMock()
-    callback.data = "quick_verify_5"
-    callback.from_user.id = 1
-    callback.answer = AsyncMock()
-    callback.bot.send_message = AsyncMock()
-
-    await um.panels.quick_verify_user(
-        callback, db=db, roles=["manager"], user=MagicMock(), language="ru"
-    )
-
-    _assert_uz(callback.bot.send_message)
 
 
 @pytest.mark.asyncio
