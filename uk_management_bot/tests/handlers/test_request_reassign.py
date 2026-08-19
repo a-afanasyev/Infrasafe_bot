@@ -909,3 +909,57 @@ class TestNoOpAndEmptyStates:
         assert "no_executors" not in callbacks
         assert f"{mod.MENU_PREFIX}{NUMBER}" in callbacks
 
+
+# ══════════════════════════════════════════════════════════════════════════
+# Легаси-назначения (до миграции 011): исполнитель есть, строки назначения нет
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Найдено ПРОД-ПРОБОЙ после раскатки: на profk все заявки «В работе» оказались
+# именно такими, то есть завязка кнопки на активную строку RequestAssignment
+# прятала фичу практически везде. Канон такие заявки переназначить пускает —
+# `is_reassignable` смотрит на статус, а не на строку назначения.
+
+
+class TestLegacyAssignmentWithoutAssignmentRow:
+    def test_button_shows_for_request_with_executor_but_no_assignment_row(self):
+        from uk_management_bot.keyboards.admin import get_reassign_button_row
+        from uk_management_bot.utils.helpers import get_text
+
+        row = get_reassign_button_row(
+            NUMBER, assignment_type=None, status=REQUEST_STATUS_IN_PROGRESS,
+            has_executor=True, roles=["manager"])
+
+        assert row, "канон такую заявку пускает — кнопка обязана быть"
+        assert row[0].text == get_text("admin.keyboards.reassign_request",
+                                       language="ru")
+
+    def test_button_still_hidden_without_any_assignment(self):
+        from uk_management_bot.keyboards.admin import get_reassign_button_row
+
+        assert get_reassign_button_row(
+            NUMBER, assignment_type=None, status=REQUEST_STATUS_NEW,
+            has_executor=False, roles=["manager"]) == []
+
+    def test_menu_names_the_current_executor_without_assignment_row(self, db):
+        """Иначе меню сказало бы «не был назначен» о человеке, который ведёт
+        заявку, и переназначение выглядело бы первичным назначением."""
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, OLD_ID, 200, first_name="Легаси")
+        _request(db, executor_id=OLD_ID, status=REQUEST_STATUS_IN_PROGRESS)
+        # активной строки RequestAssignment намеренно НЕТ
+
+        view = mod._assignment_view(db, NUMBER, "ru")
+
+        assert view.verdict == "ok"
+        assert view.assignment_kind == "individual"
+        assert "Легаси" in view.current_executor_name
+
+    def test_legacy_executor_is_excluded_from_candidates(self, db):
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, OLD_ID, 200)
+        _user(db, NEW_ID, 300)
+        _request(db, executor_id=OLD_ID, status=REQUEST_STATUS_IN_PROGRESS)
+
+        _, candidates = mod._candidates(db, NUMBER, "ru")
+        assert OLD_ID not in {c.id for c in candidates}
+

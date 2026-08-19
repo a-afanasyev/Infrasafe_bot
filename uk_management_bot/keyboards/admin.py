@@ -288,6 +288,7 @@ def get_reassign_button_row(
     *,
     assignment_type: Optional[str],
     status: Optional[str],
+    has_executor: bool = False,
     roles: Optional[list] = None,
     language: str = "ru",
 ) -> list:
@@ -297,13 +298,17 @@ def get_reassign_button_row(
     её всё равно не пустит:
 
     * статус — из `MANAGER_ASSIGN.from_statuses` (сегодня «Новая»/«В работе»);
-    * назначение должно БЫТЬ: без него это первичное назначение, у него свой
-      вход;
+    * назначение должно БЫТЬ — но «есть назначение» это НЕ то же самое, что
+      «есть активная строка RequestAssignment»: у заявок, назначенных до
+      миграции 011, строки нет, а `request.executor_id` заполнен, и канон
+      переназначение таких пускает. На проде это не редкость — на profk на
+      момент раскатки ВСЕ заявки «В работе» были именно такими, то есть завязка
+      только на строку прятала кнопку почти везде;
     * роль — именно `manager`: `has_admin_access` пропускает и чистого `admin`,
       а канон требует менеджера, и такая кнопка вела бы админа в отказ.
 
-    Подпись зависит от типа назначения: при групповом индивидуального
-    исполнителя нет и снимать некого — это «назначить», а не «переназначить».
+    Подпись зависит от того, есть ли КОНКРЕТНЫЙ исполнитель: при чисто
+    групповом назначении снимать некого — это «назначить», а не «переназначить».
     """
     from uk_management_bot.utils.workflow_predicates import reassignable_statuses
 
@@ -312,7 +317,8 @@ def get_reassign_button_row(
     # молча — кнопка пряталась бы там, где команда уже проходит.
     if status not in reassignable_statuses():
         return []
-    if assignment_type not in ("individual", "group"):
+    individual = has_executor or assignment_type == "individual"
+    if not individual and assignment_type != "group":
         return []
     if "manager" not in set(roles or []):
         # Здесь намеренно только `roles`: карточка рисуется хендлером, который
@@ -320,7 +326,7 @@ def get_reassign_button_row(
         # настоящий гейт стоит в хендлерах (has_manager_role с fallback).
         return []
 
-    key = ("admin.keyboards.reassign_request" if assignment_type == "individual"
+    key = ("admin.keyboards.reassign_request" if individual
            else "admin.keyboards.assign_executor_to_request")
     return [InlineKeyboardButton(
         text=get_text(key, language=language),
