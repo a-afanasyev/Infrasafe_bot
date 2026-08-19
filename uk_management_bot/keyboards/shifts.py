@@ -29,14 +29,6 @@ def get_shifts_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
 
-def get_end_shift_confirm_inline(language: str = "ru") -> InlineKeyboardMarkup:
-    rows = [[
-        InlineKeyboardButton(text=get_text("shifts.keyboards.confirm_yes", language=language), callback_data="shift_end_confirm_yes"),
-        InlineKeyboardButton(text=get_text("shifts.keyboards.confirm_no", language=language), callback_data="shift_end_confirm_no"),
-    ]]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
 def get_shifts_filters_inline(period: Optional[str] = None, status: Optional[str] = None, language: str = "ru") -> InlineKeyboardMarkup:
     period_rows: List[List[InlineKeyboardButton]] = []
     periods = [
@@ -75,11 +67,5 @@ def get_pagination_inline(current_page: int, total_pages: int, language: str = "
         row.append(InlineKeyboardButton(text=get_text("shifts.keyboards.page_next", language=language), callback_data=f"shifts_page_{current_page+1}"))
     buttons.append(row)
     return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_manager_active_shifts_row(telegram_id: int, language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=get_text("shifts.keyboards.force_end_shift", language=language), callback_data=f"force_end_shift_{telegram_id}")]]
-    )
 
 

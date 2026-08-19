@@ -78,32 +78,6 @@ class TestGetShiftsMainKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_end_shift_confirm_inline
-# ---------------------------------------------------------------------------
-
-class TestGetEndShiftConfirmInline:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_end_shift_confirm_inline
-            result = get_end_shift_confirm_inline()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_two_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_end_shift_confirm_inline
-            result = get_end_shift_confirm_inline()
-        assert len(_flat_inline(result)) == 2
-
-    def test_callback_data_values(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_end_shift_confirm_inline
-            result = get_end_shift_confirm_inline()
-        cbs = _flat_inline_cbs(result)
-        assert "shift_end_confirm_yes" in cbs
-        assert "shift_end_confirm_no" in cbs
-
-
-# ---------------------------------------------------------------------------
 # get_shifts_filters_inline
 # ---------------------------------------------------------------------------
 
@@ -204,28 +178,3 @@ class TestGetPaginationInline:
             from uk_management_bot.keyboards.shifts import get_pagination_inline
             result = get_pagination_inline(current_page=1, total_pages=1)
         assert len(_flat_inline(result)) == 1
-
-
-# ---------------------------------------------------------------------------
-# get_manager_active_shifts_row
-# ---------------------------------------------------------------------------
-
-class TestGetManagerActiveShiftsRow:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_manager_active_shifts_row
-            result = get_manager_active_shifts_row(telegram_id=12345)
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_one_button(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_manager_active_shifts_row
-            result = get_manager_active_shifts_row(telegram_id=12345)
-        assert len(_flat_inline(result)) == 1
-
-    def test_callback_data_contains_telegram_id(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo_get_text):
-            from uk_management_bot.keyboards.shifts import get_manager_active_shifts_row
-            result = get_manager_active_shifts_row(telegram_id=99999)
-        cbs = _flat_inline_cbs(result)
-        assert cbs[0] == "force_end_shift_99999"

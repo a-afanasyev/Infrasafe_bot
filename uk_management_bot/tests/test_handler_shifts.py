@@ -2,7 +2,7 @@
 Unit tests for uk_management_bot/handlers/shifts.py
 
 Covers: start_shift, end_shift_confirm, show_shift_end_details, my_shift,
-shifts_history, handle_end_shift_cancel, end_shift_no, suggest_executor_skip.
+shifts_history, handle_end_shift_cancel, suggest_executor_skip.
 """
 
 import pytest
@@ -461,25 +461,6 @@ class TestHandleEndShiftCancel:
         cb.message.edit_text = AsyncMock()
 
         await handle_end_shift_cancel(cb)
-
-        cb.message.edit_text.assert_called_once()
-        cb.answer.assert_called_once()
-
-
-# ─── end_shift_no ─────────────────────────────────────────────────────────────
-
-class TestEndShiftNo:
-    """Tests for end_shift_no callback."""
-
-    @pytest.mark.asyncio
-    async def test_end_shift_no_edits_message(self):
-        """end_shift_no edits the message and answers the callback."""
-        from uk_management_bot.handlers.shifts import end_shift_no
-
-        cb = _make_callback(data="shift_end_confirm_no")
-        cb.message.edit_text = AsyncMock()
-
-        await end_shift_no(cb)
 
         cb.message.edit_text.assert_called_once()
         cb.answer.assert_called_once()

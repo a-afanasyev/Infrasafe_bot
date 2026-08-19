@@ -13,10 +13,9 @@ D3 (находка 8): `end_shift_select:<id>` показывал детали �
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.types import Message
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -26,8 +25,6 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.handlers import shifts as sh
 from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.helpers import get_text
-
-NO_ACCESS_TEXT = get_text("auth.no_access", language="ru")
 
 
 @pytest.fixture()
@@ -57,44 +54,10 @@ def _shift(db, sid, user_id):
     return s
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# D2: manager_active_shifts — только admin|manager
-# ══════════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.asyncio
-async def test_active_shifts_button_denies_applicant():
-    msg = MagicMock(spec=Message)
-    msg.from_user = MagicMock()
-    msg.from_user.id = 777
-    msg.from_user.language_code = "ru"
-    msg.answer = AsyncMock()
-
-    with patch.object(sh, "session_scope",
-                      side_effect=AssertionError("guard пропустил жителя к БД")):
-        await sh.manager_active_shifts(
-            msg, MagicMock(), language="ru", roles=["applicant"], user=None
-        )
-
-    msg.answer.assert_awaited_once_with(NO_ACCESS_TEXT)
-
-
-@pytest.mark.asyncio
-async def test_active_shifts_button_denies_executor():
-    """Список всех активных смен (кто где дежурит) — менеджерская сводка,
-    исполнителю недоступна."""
-    msg = MagicMock(spec=Message)
-    msg.from_user = MagicMock()
-    msg.from_user.id = 778
-    msg.from_user.language_code = "ru"
-    msg.answer = AsyncMock()
-
-    with patch.object(sh, "session_scope",
-                      side_effect=AssertionError("guard пропустил исполнителя к БД")):
-        await sh.manager_active_shifts(
-            msg, MagicMock(), language="ru", roles=["executor"], user=None
-        )
-
-    msg.answer.assert_awaited_once_with(NO_ACCESS_TEXT)
+# D2 (`manager_active_shifts` под `@require_role`) снят вместе с хендлером:
+# BUG-150 ретайр 2026-08-19 — текст кнопки «🟢 Активные смены» не рендерила ни
+# одна клавиатура, вход закрыт целиком. Что теперь на него никто не отвечает —
+# пиннит `tests/handlers/test_dead_handlers_retired.py` (обе локали, обе роли).
 
 
 # ══════════════════════════════════════════════════════════════════════════════
