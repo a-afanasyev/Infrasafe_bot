@@ -182,7 +182,7 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD3-25": A(pkg="П11", status="actionable", method="verified-2026-08-19"),
     # ── Программа A: архитектура
     "AUD3-07": A(pkg="A2", status="actionable", method="decision-2026-08-19",
-                 note="решение 2026-08-19: деферрал класса + ратчет на не-рост (per-file baseline, 26 файлов / ~170 хендлеров по метрике aud337); после ратчета пункт остаётся deferred-трекером"),
+                 note="решение 2026-08-19: деферрал класса + ратчет на не-рост (per-file baseline по метрике aud337); последний механический сайт закрыт волной 2026-08-19, после ратчета пункт остаётся deferred-трекером"),
     # `AUD5-ARCH-1` закрыт 2026-08-19 консолидацией в `AUD3-07` (остаток обоих
     # совпадал побуквенно, прогресс с 2026-08-14 и так вёлся единым) — строка
     # удалена, `--check` падает на ID закрытого пункта.
@@ -196,7 +196,7 @@ ASSIGNMENT: dict[str, dict] = {
     "BUG-156": A(pkg="A2", status="actionable", method="verified-2026-08-15",
                  note="8 дефектов волны 6; мёртвая пагинация чинится вместе с BUG-151 п.6"),
     "BUG-157": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="_get_user_language блокирует loop; транзитивная проверка гейта + механика inspector_requests:389; инвентарь класса целиком — в AUD3-07 (2026-08-19)"),
+                 note="механика сделана 2026-08-19 (inspector_requests и create_callbacks в CONVERTED); остаток — _get_user_language + транзитивная проверка гейта, едут с ратчетом AUD3-07"),
     "BUG-155": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="8 дефектов волны 5; пп.1-2 ЗАКРЫТЫ #446, п.3 (перекрытие фильтров ×3) ЗАКРЫТ 2026-08-18 — открыты пп.4-7"),
     "BUG-153": A(pkg="A2", status="actionable", method="verified-2026-08-14",
@@ -230,10 +230,11 @@ ASSIGNMENT: dict[str, dict] = {
     # 2026-08-19 — строка ниже.
     "BUG-177": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="остаток BUG-175 (решение 2026-08-19): перепроверка роли в юните записи модерации (канон BUG-172); при ближайшем касании address_moderation"),
-    "BUG-174": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="ЖИВОЙ: уведомления о комментариях не уходят никому — send_notification у сервиса нет; лечится B3-раскроем, notify_user не годится (нет loop в run_db)"),
-    "BUG-173": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="UpdateShiftBody не валидирует specialization_focus (в отличие от Create) — разметка из PATCH доезжает до HTML-сообщений менеджеру"),
+    # `BUG-174` закрыт 2026-08-19 (волна живых дефектов): B3-раскрой, все
+    # четыре прод-сайта шлют; близнец в assignment_service уходит с ретайром
+    # BUG-148 — проверить оба сайта при ретайре.
+    # `BUG-173` закрыт 2026-08-19 (волна живых дефектов): валидатор-зеркало
+    # Create; сырые join-сайты рендера — класс BUG-149/169, остаются там.
     "AUD5-CODE-10": A(pkg="A5", status="actionable", method="verified-2026-08-19",
                       note="счёт растёт: 44 → 48 функций >100 строк; «при касании» класс не сдерживает — кандидат на ratchet"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
