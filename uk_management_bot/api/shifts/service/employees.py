@@ -8,6 +8,7 @@ from typing import Optional
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -311,13 +312,17 @@ async def get_employee_with_stats(
     )
     total_completed = completed_result.scalar() or 0
 
+    # Средний балл заявок исполнителя: оценки жителей (1–5) при приёмке.
+    # Джойн через requests.executor_id, а не RequestAssignment — поле пишет
+    # канонический движок, и оно есть у легаси-заявок без строк assignment.
+    # (Раньше тут был avg(Shift.quality_rating) — колонку не пишет никто,
+    # карточка всегда показывала «—».)
     rating_result = await db.execute(
-        select(func.avg(Shift.quality_rating)).where(
-            Shift.user_id == user_id,
-            Shift.status == "completed",
-            Shift.quality_rating.isnot(None),
-        )
+        select(func.avg(Rating.rating))
+        .join(Request, Request.request_number == Rating.request_number)
+        .where(Request.executor_id == user_id)
     )
     rating = rating_result.scalar()
+    rating = float(rating) if rating is not None else None
 
     return emp, active_shift_obj, total_shifts, total_completed, rating
