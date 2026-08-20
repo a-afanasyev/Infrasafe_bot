@@ -192,6 +192,8 @@ ASSIGNMENT: dict[str, dict] = {
                  note="old-notice при переназначении с дашборда (API-путь)"),
     "BUG-182": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="житель уведомляется на каждое переназначение — нужен выбор владельца"),
+    "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",
+                 note="раздел «Жители» дашборда 404 на edge infrasafe.uz — нужен запрос в InfraSafe на allowlist префикса residents"),
     "BUG-148": A(pkg="A3", status="actionable", method="decision-2026-08-19",
                  note="решение 2026-08-19: ретайр пути целиком (вариант 2) — по дисциплине ретайров #471 (RED-пин, достижимость, ревью)"),
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
