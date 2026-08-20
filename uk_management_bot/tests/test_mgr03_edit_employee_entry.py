@@ -2,6 +2,11 @@
 no-op — leaf handlers (edit_employee_name_/edit_employee_phone_) existed but no
 entry handler. Added `edit_employee_entry` bound to a strict `^edit_employee_\\d+$`
 regex (does not shadow the leaf handlers) with an admin guard.
+
+Правка ФИО с тех пор уехала в общий флоу `handlers/user_rename.py` (одно поле —
+один писатель), поэтому листовой остался только телефон, а строгость regex'а
+стала важнее прежнего: он обязан НЕ перехватывать legacy-вход
+`edit_employee_name_<id>`, который теперь обслуживает другой роутер.
 """
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,18 +37,25 @@ async def _matching_handlers(router, data: str) -> list[str]:
 async def test_entry_owns_edit_employee_id():
     matched = await _matching_handlers(employee_router, "edit_employee_5")
     assert "edit_employee_entry" in matched
-    assert "edit_employee_name" not in matched
     assert "edit_employee_phone" not in matched
 
 
 @pytest.mark.asyncio
 async def test_entry_does_not_shadow_leaf_handlers():
-    name_matched = await _matching_handlers(employee_router, "edit_employee_name_5")
     phone_matched = await _matching_handlers(employee_router, "edit_employee_phone_5")
-    assert "edit_employee_entry" not in name_matched
     assert "edit_employee_entry" not in phone_matched
-    assert "edit_employee_name" in name_matched
     assert "edit_employee_phone" in phone_matched
+
+
+@pytest.mark.asyncio
+async def test_legacy_name_callback_left_this_router():
+    """ФИО уехало в общий флоу — здесь его не должен ловить НИКТО.
+
+    Проверка именно на пустоту: если бы `edit_employee_entry` расширили до
+    startswith, он перехватил бы legacy-вход и тот молча открывал бы меню
+    вместо формы.
+    """
+    assert await _matching_handlers(employee_router, "edit_employee_name_5") == []
 
 
 @pytest.mark.asyncio
@@ -71,7 +83,8 @@ async def test_entry_opens_edit_menu(monkeypatch):
     # The edit-field keyboard is shown (name/phone leaf callbacks present).
     kb = callback.message.edit_text.await_args.kwargs["reply_markup"]
     callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "edit_employee_name_5" in callbacks
+    # ФИО — общий канон (rename_user_emp_*), телефон остался локальным.
+    assert "rename_user_emp_5" in callbacks
     assert "edit_employee_phone_5" in callbacks
     callback.answer.assert_awaited_once_with()
 

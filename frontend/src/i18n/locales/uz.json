@@ -2080,7 +2080,9 @@
     "shiftFromTemplate": "Smena shablondan yaratildi",
     "shiftFromTemplateFailed": "Shablondan smena yaratib bo'lmadi",
     "shiftReassigned": "Smena qayta tayinlandi",
-    "shiftReassignFailed": "Smenani qayta tayinlab bo'lmadi"
+    "shiftReassignFailed": "Smenani qayta tayinlab bo'lmadi",
+    "nameUpdated": "F.I.Sh. yangilandi",
+    "nameUpdateFailed": "F.I.Sh. ni yangilab bo‘lmadi"
   },
   "feedback": {
     "title": "Qayta aloqa",
@@ -2308,6 +2310,19 @@
       "receiptCreated": "Kirim o'tkazildi",
       "issueCreated": "Chiqim o'tkazildi",
       "adjustmentCreated": "Tuzatish o'tkazildi"
+    }
+  },
+  "editName": {
+    "title": "F.I.Sh. ni tuzatish",
+    "description": "F.I.Sh. ni bitta qatorda kiriting — foydalanuvchining o‘zi kiritgani kabi.",
+    "label": "F.I.Sh.",
+    "open": "F.I.Sh. ni tuzatish",
+    "saving": "Saqlanmoqda…",
+    "notSet": "F.I.Sh. ko‘rsatilmagan",
+    "error": {
+      "empty": "F.I.Sh. bo‘sh bo‘lishi mumkin emas",
+      "noLetters": "F.I.Sh. da kamida bitta harf bo‘lishi kerak",
+      "tooLong": "F.I.Sh. ko‘pi bilan {{max}} belgi"
     }
   }
 }

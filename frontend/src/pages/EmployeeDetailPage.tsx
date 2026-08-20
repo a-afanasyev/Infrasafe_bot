@@ -1,8 +1,10 @@
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { useEmployee, useToggleMeterEntry } from '../hooks/useEmployees'
+import { useState } from 'react'
+import { useEmployee, useRenameEmployee, useToggleMeterEntry } from '../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../utils/employeeUtils'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
+import EditFullNameModal from '../components/shared/EditFullNameModal'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 
@@ -12,6 +14,8 @@ export default function EmployeeDetailPage() {
   const navigate = useNavigate()
   const { data: emp, isLoading, isError } = useEmployee(id ? Number(id) : null)
   const toggleMeterEntry = useToggleMeterEntry(id ? Number(id) : null)
+  const rename = useRenameEmployee(id ? Number(id) : null)
+  const [renameOpen, setRenameOpen] = useState(false)
   const empName = emp ? [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName') : t('employees.noName')
   usePageTitle(empName)
 
@@ -57,13 +61,25 @@ export default function EmployeeDetailPage() {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="font-[family-name:var(--font-display)] font-bold text-lg text-text-primary mb-1">
-            {name}
-            {isBlocked && (
-              <span className="ml-2.5 text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red align-middle">
-                {t('employees.blocked')}
-              </span>
-            )}
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <div className="font-[family-name:var(--font-display)] font-bold text-lg text-text-primary">
+              {name}
+              {isBlocked && (
+                <span className="ml-2.5 text-[11px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red align-middle">
+                  {t('employees.blocked')}
+                </span>
+              )}
+            </div>
+            {/* ФИО сотрудник вводит сам при регистрации по приглашению —
+                исправляет его менеджер отсюда. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-text-muted"
+              onClick={() => setRenameOpen(true)}
+            >
+              {t('editName.open')}
+            </Button>
           </div>
 
           {emp.phone && (
@@ -142,6 +158,15 @@ export default function EmployeeDetailPage() {
           </div>
         )
       })()}
+
+      {renameOpen && (
+        <EditFullNameModal
+          currentName={[emp.first_name, emp.last_name].filter(Boolean).join(' ')}
+          isPending={rename.isPending}
+          onSubmit={value => rename.mutate(value, { onSuccess: () => setRenameOpen(false) })}
+          onClose={() => setRenameOpen(false)}
+        />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

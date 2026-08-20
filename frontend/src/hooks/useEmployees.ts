@@ -87,6 +87,31 @@ export function useToggleMeterEntry(employeeId: number | null) {
   })
 }
 
+/** Исправить ФИО сотрудника, введённое с ошибкой при регистрации. */
+export function useRenameEmployee(employeeId: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (fullName: string) =>
+      apiClient
+        .patch(`/api/v2/shifts/employees/${employeeId}/name`, { full_name: fullName })
+        .then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.nameUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      // Имя видно и в очереди активации, и в карточках заявок.
+      queryClient.invalidateQueries({ queryKey: ['pending-staff'] })
+      queryClient.invalidateQueries({ queryKey: ['requests'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Rename employee failed:', error)
+      toast.error(i18n.t('toast.nameUpdateFailed'), {
+        description: safeErrorMessage(error, 'An error occurred'),
+      })
+    },
+  })
+}
+
 export function useBlockEmployee() {
   const queryClient = useQueryClient()
   return useMutation({

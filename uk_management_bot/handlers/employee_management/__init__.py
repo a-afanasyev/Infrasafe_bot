@@ -19,7 +19,6 @@ from ._units import (
     _moderate_employee,
     _return_to_employee_info,
     _search_employees,
-    _update_employee_name,
     _update_employee_phone,
 )
 from .panels import (
@@ -44,9 +43,7 @@ from .moderation import (
 )
 from .editing import (
     edit_employee_entry,
-    edit_employee_name,
     edit_employee_phone,
-    process_employee_name_edit,
     process_employee_phone_edit,
 )
 from .roles_specs import (
@@ -78,7 +75,6 @@ __all__ = [
     "_moderate_employee",
     "_return_to_employee_info",
     "_search_employees",
-    "_update_employee_name",
     "_update_employee_phone",
     # panels
     "back_to_admin_panel",
@@ -99,9 +95,7 @@ __all__ = [
     "unblock_employee",
     # editing
     "edit_employee_entry",
-    "edit_employee_name",
     "edit_employee_phone",
-    "process_employee_name_edit",
     "process_employee_phone_edit",
     # roles_specs
     "cancel_roles_editing",
