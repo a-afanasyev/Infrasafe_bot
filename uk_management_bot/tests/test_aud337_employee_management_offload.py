@@ -112,19 +112,6 @@ def test_search_employees_returns_dtos(db):
 
 # ─────────────────────────── мутационные юниты ───────────────────────────
 
-def test_update_employee_name_splits_and_commits(db):
-    _user(db, db_id=5, tg_id=555)
-    assert emp._update_employee_name(db, 5, "Анна Каренина Облонская") is True
-    fresh = db.get(User, 5)
-    assert (fresh.first_name, fresh.last_name) == ("Анна", "Каренина Облонская")
-
-    assert emp._update_employee_name(db, 5, "Мононим") is True
-    fresh = db.get(User, 5)
-    assert (fresh.first_name, fresh.last_name) == ("Мононим", None)
-
-    assert emp._update_employee_name(db, 999, "Никто") is False
-
-
 def test_update_employee_phone(db):
     _user(db, db_id=5, tg_id=555)
     assert emp._update_employee_phone(db, 5, "+998900000000") is True

@@ -8417,5 +8417,16 @@
     "token_not_recognized": "❌ Bu taklif kodiga o'xshamaydi.\nKod invite_v1: bilan boshlanadi — uni to'liq yuboring.",
     "applicant_token": "⚠️ Bu kod xodim rolini bermaydi — u rezident uchun.\nRezident sifatida davom etamiz, xodim kodi uchun menejerga murojaat qiling.",
     "token_expect_text": "📋 Kodni matn ko'rinishida yuboring — rasm va fayl bo'lmaydi."
+  },
+  "user_rename": {
+    "button": "✏️ F.I.Sh. ni tuzatish",
+    "prompt": "✏️ <b>F.I.Sh. ni tuzatish</b>\n\nFoydalanuvchi: <b>{user_label}</b>\nJoriy F.I.Sh.: <b>{current_name}</b>\n\nYangi F.I.Sh. ni bitta qatorda yuboring.",
+    "saved": "✅ F.I.Sh. yangilandi.\n\nEdi: <b>{old_name}</b>\nBo‘ldi: <b>{new_name}</b>",
+    "unchanged": "ℹ️ F.I.Sh. o‘zgarmadi: <b>{new_name}</b>",
+    "no_name": "ko‘rsatilmagan",
+    "forbidden_privileged": "Menejer yoki administrator F.I.Sh. ini o‘zgartirib bo‘lmaydi — u o‘z profilini o‘zi tahrirlaydi.",
+    "error_empty": "❌ F.I.Sh. bo‘sh bo‘lishi mumkin emas. F.I.Sh. ni matn bilan yuboring.",
+    "error_no_letters": "❌ F.I.Sh. da kamida bitta harf bo‘lishi kerak.",
+    "error_too_long": "❌ F.I.Sh. juda uzun (ko‘pi bilan {max_len} belgi)."
   }
 }

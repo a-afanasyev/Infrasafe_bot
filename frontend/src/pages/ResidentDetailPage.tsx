@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { useResident, useResidentsWebSocket } from '../hooks/useResidents'
+import { useResident, useRenameResident, useResidentsWebSocket } from '../hooks/useResidents'
 import ResidentApartmentsList from '../components/residents/ResidentApartmentsList'
 import ResidentAccountActions from '../components/residents/ResidentAccountActions'
 import AttachApartmentModal from '../components/residents/AttachApartmentModal'
 import ResidentDocuments from '../components/residents/ResidentDocuments'
+import EditFullNameModal from '../components/shared/EditFullNameModal'
 import ResidentVerificationActions from '../components/residents/ResidentVerificationActions'
 import { ResidentAccountBadge, ResidentVerificationBadge } from '../components/residents/ResidentStatusBadge'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
@@ -29,6 +30,8 @@ export default function ResidentDetailPage() {
   const navigate = useNavigate()
   const { data: resident, isLoading, isError } = useResident(id ? Number(id) : null)
   const [attachOpen, setAttachOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const rename = useRenameResident(id ? Number(id) : 0)
   useResidentsWebSocket()
 
   const name = resident
@@ -67,8 +70,20 @@ export default function ResidentDetailPage() {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="font-[family-name:var(--font-display)] font-bold text-lg text-text-primary mb-1">
-            {name}
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <div className="font-[family-name:var(--font-display)] font-bold text-lg text-text-primary">
+              {name}
+            </div>
+            {/* ФИО житель вводит сам при регистрации — опечатка видна именно
+                здесь, поэтому и правится отсюда. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-text-muted"
+              onClick={() => setRenameOpen(true)}
+            >
+              {t('editName.open')}
+            </Button>
           </div>
           {resident.phone && (
             <div className="text-[13px] text-text-muted font-[family-name:var(--font-mono)] mb-1">
@@ -105,6 +120,15 @@ export default function ResidentDetailPage() {
         </div>
         <ResidentApartmentsList residentId={resident.id} apartments={resident.apartments} />
       </Section>
+
+      {renameOpen && (
+        <EditFullNameModal
+          currentName={[resident.first_name, resident.last_name].filter(Boolean).join(' ')}
+          isPending={rename.isPending}
+          onSubmit={value => rename.mutate(value, { onSuccess: () => setRenameOpen(false) })}
+          onClose={() => setRenameOpen(false)}
+        />
+      )}
 
       {attachOpen && (
         <AttachApartmentModal
