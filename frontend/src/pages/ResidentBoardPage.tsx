@@ -115,10 +115,12 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     ? board.avg_resolution_hours.toFixed(1)
     : '—'
 
-  const effScore = board?.avg_efficiency ?? null
-  const satisfactionVal = effScore != null ? (effScore / 20).toFixed(1) : '4.2'
-  const satisfactionPct = effScore != null ? Math.round(effScore) : 84
-  const starFill = Math.min(5, Math.round(Number(satisfactionVal)))
+  // Среднее арифметическое оценок жителей (1–5) при приёмке заявок.
+  // Без оценок честно показываем «—», а не выдуманное число.
+  const avgRating = board?.avg_rating ?? null
+  const satisfactionVal = avgRating != null ? avgRating.toFixed(1) : '—'
+  const satisfactionPct = avgRating != null ? Math.round((avgRating / 5) * 100) : 0
+  const starFill = avgRating != null ? Math.min(5, Math.round(avgRating)) : 0
 
   // ── Editable content from board config ──────────────────────────────────────
   const dispatchText = `${loc(config.contacts.dispatch_label)}: ${config.contacts.dispatch_phone}`
@@ -233,7 +235,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       <div style={{ padding: '20px 28px', textAlign: 'center' }}>
         <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 800, fontSize: '3.5rem', color: 'var(--board-green)', letterSpacing: '-0.04em', lineHeight: 1 }}>{satisfactionVal}</div>
         <div style={{ fontSize: '1.5rem', margin: '8px 0', letterSpacing: 4 }}>{'★'.repeat(starFill)}{'☆'.repeat(5 - starFill)}</div>
-        <div style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: 600 }}>{t('board.sections.efficiencyPeriod')}</div>
+        <div style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: 600 }}>{t('board.sections.avgAcceptanceRating')}</div>
         <div style={{ width: '80%', margin: '16px auto 0', height: 8, background: '#f0ede6', borderRadius: 4, overflow: 'hidden' }}>
           <div style={{ height: '100%', borderRadius: 4, background: 'linear-gradient(90deg,var(--board-green),#059669)', width: `${satisfactionPct}%` }} />
         </div>

@@ -9,6 +9,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request as RequestModel
 
 
@@ -39,7 +40,7 @@ async def test_public_board_no_auth_required(client):
     body = resp.json()
     assert set(body.keys()) == {
         "status_counts", "active_requests", "active_executors",
-        "avg_resolution_hours", "avg_efficiency",
+        "avg_resolution_hours", "avg_rating",
     }
 
 
@@ -51,6 +52,7 @@ async def test_public_board_empty_db(client):
     assert body["status_counts"]["Новая"] == 0
     assert body["active_requests"] == []
     assert body["active_executors"] == 0
+    assert body["avg_rating"] is None
 
 
 @pytest.mark.asyncio
@@ -78,3 +80,19 @@ async def test_public_board_payload_is_anonymized(client, seeded_requests):
     raw = resp.text
     assert "260516-001" not in raw
     assert "d1" not in raw
+
+
+@pytest.mark.asyncio
+async def test_public_board_avg_rating_is_arithmetic_mean(
+    client, db_session: AsyncSession, seeded_requests, manager_user
+):
+    """avg_rating = arithmetic mean of resident acceptance stars (1-5)."""
+    db_session.add(Rating(request_number="260516-001",
+                          user_id=manager_user.id, rating=5))
+    db_session.add(Rating(request_number="260516-004",
+                          user_id=manager_user.id, rating=2))
+    await db_session.commit()
+
+    resp = await client.get("/api/v2/public/board")
+    body = resp.json()
+    assert body["avg_rating"] == pytest.approx(3.5)

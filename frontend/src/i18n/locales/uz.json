@@ -1636,7 +1636,7 @@
       "important": "Muhim",
       "published": "Nashr etildi:",
       "residentRating": "Aholilar bahosi",
-      "efficiencyPeriod": "Davr uchun ish samaradorligi",
+      "avgAcceptanceRating": "Qabul qilingan arizalar bo'yicha o'rtacha baho",
       "workingHours": "Ish vaqti",
       "emergencyService": "Favqulodda xizmat: kunduzi-kechasi",
       "workReports": "Ishlar hisobotlari"
