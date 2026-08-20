@@ -3427,7 +3427,7 @@
             "title": "Active Requests",
             "type": "array"
           },
-          "avg_efficiency": {
+          "avg_rating": {
             "anyOf": [
               {
                 "type": "number"
@@ -3436,7 +3436,7 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Efficiency"
+            "title": "Avg Rating"
           },
           "avg_resolution_hours": {
             "anyOf": [
@@ -3462,7 +3462,7 @@
           "active_requests",
           "active_executors",
           "avg_resolution_hours",
-          "avg_efficiency"
+          "avg_rating"
         ],
         "title": "PublicBoardOut",
         "type": "object"
