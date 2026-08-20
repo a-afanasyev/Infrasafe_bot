@@ -333,6 +333,15 @@ async def category_of(db: AsyncSession, request_number: str) -> Optional[str]:
     )
 
 
+async def executor_id_of(db: AsyncSession, request_number: str) -> Optional[int]:
+    """Текущий исполнитель — для исключения из подбора при переназначении."""
+    return await db.scalar(
+        select(RequestModel.executor_id).where(
+            RequestModel.request_number == request_number
+        )
+    )
+
+
 async def request_for_update(
     db: AsyncSession, request_number: str
 ) -> Optional[RequestModel]:

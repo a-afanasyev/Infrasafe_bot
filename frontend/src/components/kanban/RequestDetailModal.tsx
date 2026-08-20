@@ -29,6 +29,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import TransitionModal, { type TransitionData } from './TransitionModal'
+import ReassignExecutorModal from './ReassignExecutorModal'
+import { REASSIGNABLE_STATUSES } from './transitions'
 import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
 import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal, needsReturnReasonModal } from './transitions'
 import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
@@ -86,6 +88,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [forceAcceptNote, setForceAcceptNote] = useState('')
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
+  const [reassignOpen, setReassignOpen] = useState(false)
 
   // FE-07: reset per-request form state when a *different* request opens.
   // Done at render time («adjust state when input changes») rather than in an
@@ -130,6 +133,10 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   }, [requestNumber, requestUpdatedAt, markSeen])
 
   const isManager = useHasRole('manager')
+
+  // Канон MANAGER_ASSIGN пускает смену исполнителя только из этих статусов —
+  // список берётся из общего места, а не объявляется здесь второй раз.
+  const canReassign = isManager && REASSIGNABLE_STATUSES.has(request?.status ?? '')
 
   const updateRequest = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -412,9 +419,32 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 <div className="text-xs text-text-secondary">
                   {t('kanban.createdAt')} {formatDate(request.created_at)}
                 </div>
-                {request.executor_name && (
-                  <div className="text-xs text-text-secondary">
-                    {t('kanban.executor')} <span className="font-semibold text-text-primary">{request.executor_name}</span>
+                {(request.executor_name || canReassign) && (
+                  <div className="text-xs text-text-secondary flex items-center gap-2 flex-wrap">
+                    {request.executor_name ? (
+                      <span>
+                        {t('kanban.executor')}{' '}
+                        <span className="font-semibold text-text-primary">{request.executor_name}</span>
+                      </span>
+                    ) : (
+                      <span>{t('kanban.executorNotAssigned')}</span>
+                    )}
+                    {/* Смена исполнителя из САМОЙ заявки. Раньше это было
+                        возможно только «от сотрудника» (Сотрудники →
+                        «Назначить заявку»), то есть менеджеру приходилось
+                        уходить из карточки в другой раздел. Статусы — те же,
+                        что пускает канон MANAGER_ASSIGN. */}
+                    {canReassign && (
+                      <button
+                        type="button"
+                        onClick={() => setReassignOpen(true)}
+                        className="text-accent hover:underline font-medium"
+                      >
+                        {request.executor_id
+                          ? t('kanban.reassignExecutorShort')
+                          : t('kanban.assignExecutorShort')}
+                      </button>
+                    )}
                   </div>
                 )}
                 {request.address && (
@@ -658,6 +688,15 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
         sourceStatus={request?.status}
         onConfirm={handleTransitionConfirm}
         onCancel={() => setPendingTargetStatus(null)}
+      />
+    )}
+
+    {reassignOpen && request && (
+      <ReassignExecutorModal
+        requestNumber={requestNumber}
+        currentExecutorId={request.executor_id ?? null}
+        currentExecutorName={request.executor_name ?? null}
+        onClose={() => setReassignOpen(false)}
       />
     )}
     </>

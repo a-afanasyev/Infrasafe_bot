@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useEmployees } from '../../hooks/useEmployees'
+import ExecutorPicker, { type ExecutorChoice } from './ExecutorPicker'
 import { tStatus } from '../../i18n/apiMaps'
 import { needsReturnReasonModal } from './transitions'
-import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -41,9 +40,8 @@ interface Props {
 
 export default function TransitionModal({ targetStatus, sourceStatus, onConfirm, onCancel }: Props) {
   const { t } = useTranslation()
-  const [executorId, setExecutorId] = useState<number | 'duty' | ''>('')
+  const [executorId, setExecutorId] = useState<ExecutorChoice>('')
   const [text, setText] = useState('')
-  const { data: employees = [] } = useEmployees({ verification_status: 'verified' })
   const isReturnToWork = needsReturnReasonModal(sourceStatus, targetStatus)
 
   useEffect(() => {
@@ -117,44 +115,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, onConfirm,
         )}
 
         {!isReturnToWork && targetStatus === 'В работе' && (
-          <div className="space-y-2">
-            <Label className="text-text-secondary">{t('kanban.selectExecutorLabel')}</Label>
-            <button
-              onClick={() => setExecutorId('duty')}
-              className={cn(
-                'w-full text-left border rounded-default p-3 text-sm transition-colors',
-                executorId === 'duty'
-                  ? 'border-accent bg-accent-dim text-accent'
-                  : 'border-border-default hover:bg-bg-surface text-text-primary'
-              )}
-            >
-              <span className="font-medium">{t('kanban.dutyOfficer')}</span>
-              <span className="text-text-muted text-xs ml-2">{t('kanban.assignToDuty')}</span>
-            </button>
-            <div className="text-xs text-text-muted text-center py-1">{t('kanban.orSpecificSpecialist')}</div>
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {employees.map(emp => {
-                const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || `#${emp.id}`
-                return (
-                  <button
-                    key={emp.id}
-                    onClick={() => setExecutorId(emp.id)}
-                    className={cn(
-                      'w-full text-left border rounded-default p-3 text-sm transition-colors',
-                      executorId === emp.id
-                        ? 'border-accent bg-accent-dim text-accent'
-                        : 'border-border-default hover:bg-bg-surface text-text-primary'
-                    )}
-                  >
-                    <span className="font-medium">{name}</span>
-                    {emp.active_shift_id !== null && (
-                      <span className="ml-2 text-xs text-emerald">● {t('kanban.onShift')}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <ExecutorPicker value={executorId} onChange={setExecutorId} />
         )}
 
         {targetStatus === 'Закуп' && (

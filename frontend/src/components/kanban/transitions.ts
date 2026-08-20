@@ -75,3 +75,11 @@ export function needsReturnReasonModal(sourceStatus: string | undefined, targetS
 }
 
 export { FROZEN_STATUSES }
+
+/**
+ * Статусы, из которых канон (`MANAGER_ASSIGN.from_statuses`) пускает смену
+ * исполнителя. Держится здесь, а не в компоненте: то же правило нужно и
+ * карточке заявки, и модалке, и второй копией они разъехались бы молча.
+ */
+export const REASSIGNABLE_STATUSES: ReadonlySet<string> = new Set(['Новая', 'В работе'])
+

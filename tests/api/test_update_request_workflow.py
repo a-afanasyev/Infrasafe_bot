@@ -219,6 +219,42 @@ async def test_assign_to_duty_assigns_concrete_duty_executor(
 
 
 @pytest.mark.asyncio
+async def test_assign_to_duty_excludes_current_executor(
+    client, db_session, manager_user, applicant_user, monkeypatch
+):
+    """Переназначение «дежурному» не смеет резолвить ТЕКУЩЕГО исполнителя.
+
+    Его туда и поставил авто-диспетчер, поэтому без исключения кнопка вернула
+    бы того же человека и не сделала бы ничего. Паритет с бот-путём
+    (handlers/admin/reassignment._resolve_duty).
+    """
+    from uk_management_bot.database.models.request import Request as R
+    from sqlalchemy import update as sa_update
+
+    await _seed(db_session, owner_id=applicant_user.id, status="В работе")
+    await db_session.execute(
+        sa_update(R).where(R.request_number == "260101-001").values(executor_id=42))
+    await db_session.commit()
+
+    seen = {}
+
+    def _spy(spec, db=None, exclude_user_ids=frozenset(), strict=False):
+        seen["exclude"] = exclude_user_ids
+        return 55
+
+    monkeypatch.setattr(req_router, "run_command_async",
+                        AsyncMock(return_value=_outcome("В работе", "В работе", "В работе")))
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id", _spy)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "В работе", "assign_to_duty": True})
+    assert r.status_code == 200, r.text
+    assert seen["exclude"] == frozenset({42}), (
+        "текущий исполнитель обязан быть исключён из подбора")
+
+
+@pytest.mark.asyncio
 async def test_assign_to_duty_409_when_no_duty_executor(
     client, db_session, manager_user, applicant_user, monkeypatch
 ):
