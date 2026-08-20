@@ -236,3 +236,56 @@ describe('RequestDetailModal — FE-07 per-request state reset', () => {
     )
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────────
+// Смена исполнителя из карточки
+// ──────────────────────────────────────────────────────────────────────────
+//
+// До этого исполнитель в карточке был read-only текстом, и сменить его можно
+// было только «от сотрудника» (Сотрудники → «Назначить заявку»). Статусы —
+// те же, что пускает канон MANAGER_ASSIGN.
+
+describe('смена исполнителя из карточки', () => {
+  it('менеджер видит «Сменить» рядом с исполнителем в «В работе»', async () => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({
+      status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    expect(screen.getByRole('button', { name: 'Сменить' })).toBeInTheDocument()
+  })
+
+  it('без исполнителя предлагает «Назначить», а не «Сменить»', async () => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({
+      status: 'Новая', executor_id: null, executor_name: null,
+    }))
+
+    expect(screen.getByRole('button', { name: 'Назначить' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сменить' })).not.toBeInTheDocument()
+  })
+
+  it.each(['Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Отменена'])(
+    'в статусе %s контрола нет — канон оттуда не пускает',
+    async (status) => {
+      mockHasRole.mockReturnValue(true)
+      await renderModal(makeRequest({
+        status, executor_id: 5, executor_name: 'Иван Иванов',
+      }))
+
+      expect(screen.queryByRole('button', { name: 'Сменить' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Назначить' })).not.toBeInTheDocument()
+    })
+
+  it('не-менеджеру контрол не показывается', async () => {
+    mockHasRole.mockReturnValue(false)
+    await renderModal(makeRequest({
+      status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    expect(screen.queryByRole('button', { name: 'Сменить' })).not.toBeInTheDocument()
+    // сам исполнитель при этом виден
+    expect(screen.getByText('Иван Иванов')).toBeInTheDocument()
+  })
+})
+

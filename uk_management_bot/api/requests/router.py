@@ -428,8 +428,14 @@ async def update_request(
 
             from uk_management_bot.services.dispatch import pick_duty_executor_id
 
+            # Исключаем ТЕКУЩЕГО исполнителя: при переназначении «дежурному»
+            # подбор иначе резолвит того же человека — его туда и поставил
+            # авто-диспетчер, — и кнопка не делает ничего. Паритет с бот-путём
+            # (handlers/admin/reassignment._resolve_duty).
+            current_executor_id = await svc.executor_id_of(db, request_number)
             duty_executor_id = await asyncio.to_thread(
-                pick_duty_executor_id, duty_group_spec, None)
+                pick_duty_executor_id, duty_group_spec, None,
+                frozenset({current_executor_id}) if current_executor_id else frozenset())
             if duty_executor_id is None:
                 raise HTTPException(
                     status_code=409,

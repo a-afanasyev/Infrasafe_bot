@@ -974,7 +974,16 @@
     "unreadReply": "новый ответ",
     "returnToWorkTitle": "Вернуть в работу",
     "returnReasonPlaceholder": "Что нужно переделать? Исполнитель увидит этот текст",
-    "managerReturnReason": "↩️ Причина возврата менеджером:"
+    "managerReturnReason": "↩️ Причина возврата менеджером:",
+    "reassignExecutor": "Сменить исполнителя",
+    "reassignExecutorShort": "Сменить",
+    "assignExecutorShort": "Назначить",
+    "currentExecutor": "Сейчас: {{name}}",
+    "executorNotAssigned": "Исполнитель не назначен",
+    "noOtherExecutors": "Других подходящих исполнителей нет — текущий в список не входит",
+    "noExecutorsAvailable": "Нет доступных исполнителей",
+    "reassignConfirm": "Переназначить",
+    "assignConfirm": "Назначить"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",

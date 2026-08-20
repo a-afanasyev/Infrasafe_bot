@@ -974,7 +974,16 @@
     "unreadReply": "yangi javob",
     "returnToWorkTitle": "Ishga qaytarish",
     "returnReasonPlaceholder": "Nimani qayta qilish kerak? Ijrochi shu matnni koʻradi",
-    "managerReturnReason": "↩️ Menejer qaytarish sababi:"
+    "managerReturnReason": "↩️ Menejer qaytarish sababi:",
+    "reassignExecutor": "Ijrochini almashtirish",
+    "reassignExecutorShort": "Almashtirish",
+    "assignExecutorShort": "Tayinlash",
+    "currentExecutor": "Hozir: {{name}}",
+    "executorNotAssigned": "Ijrochi tayinlanmagan",
+    "noOtherExecutors": "Boshqa mos ijrochilar yo‘q — joriy ijrochi ro‘yxatga kirmaydi",
+    "noExecutorsAvailable": "Mavjud ijrochilar yo‘q",
+    "reassignConfirm": "Qayta tayinlash",
+    "assignConfirm": "Tayinlash"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",
