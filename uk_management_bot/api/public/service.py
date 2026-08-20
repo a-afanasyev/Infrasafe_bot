@@ -11,6 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.shift import Shift
 
@@ -73,13 +74,12 @@ async def avg_resolution_hours(
         return None
 
 
-async def avg_efficiency(db: AsyncSession, *, since: datetime) -> Optional[float]:
-    """Средний efficiency_score смен, начатых с `since`."""
-    eff_result = await db.execute(
-        select(func.avg(Shift.efficiency_score)).where(
-            Shift.start_time >= since,
-            Shift.efficiency_score.isnot(None),
-        )
-    )
-    eff_scalar = eff_result.scalar()
-    return float(eff_scalar) if eff_scalar is not None else None
+async def avg_rating(db: AsyncSession) -> Optional[float]:
+    """Среднее арифметическое оценок жителей (1–5), выставленных при приёмке.
+
+    За всё время, без окна: оценки появляются только при APPLICANT_ACCEPT,
+    их мало — недельное/месячное окно на малом трафике почти всегда пусто.
+    """
+    result = await db.execute(select(func.avg(Rating.rating)))
+    scalar = result.scalar()
+    return float(scalar) if scalar is not None else None

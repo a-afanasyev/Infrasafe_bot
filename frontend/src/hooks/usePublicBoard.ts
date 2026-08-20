@@ -13,7 +13,8 @@ export interface PublicBoardData {
   active_requests: PublicBoardRequest[]
   active_executors: number
   avg_resolution_hours: number | null
-  avg_efficiency: number | null
+  // Среднее арифметическое оценок жителей при приёмке (1–5), null — оценок нет.
+  avg_rating: number | null
 }
 
 // Public board data via polling — no WebSocket, no auth.

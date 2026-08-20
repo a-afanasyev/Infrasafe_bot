@@ -1638,7 +1638,7 @@
       "important": "Важное",
       "published": "Опубликовано:",
       "residentRating": "Оценка жителей",
-      "efficiencyPeriod": "Эффективность работы за период",
+      "avgAcceptanceRating": "Средняя оценка по принятым заявкам",
       "workingHours": "Часы работы",
       "emergencyService": "Аварийная служба: круглосуточно",
       "workReports": "Отчёты о работах"

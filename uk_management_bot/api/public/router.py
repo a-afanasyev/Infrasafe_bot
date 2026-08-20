@@ -58,7 +58,7 @@ class PublicBoardOut(BaseModel):
     active_requests: list[PublicBoardRequest]
     active_executors: int
     avg_resolution_hours: Optional[float]
-    avg_efficiency: Optional[float]
+    avg_rating: Optional[float]
 
 
 # ---------------------------------------------------------------------------
@@ -113,16 +113,15 @@ async def get_public_board(
         db, closed_statuses=CLOSED_STATUSES, period_start=period_start
     )
 
-    # --- avg_efficiency: shift efficiency over last 7 days ---
-    eff_start = datetime.now(timezone.utc) - timedelta(days=7)
-    avg_efficiency = await service.avg_efficiency(db, since=eff_start)
+    # --- avg_rating: arithmetic mean of resident acceptance stars (1-5) ---
+    avg_rating = await service.avg_rating(db)
 
     board = PublicBoardOut(
         status_counts=status_counts,
         active_requests=active_requests,
         active_executors=active_executors,
         avg_resolution_hours=avg_resolution_hours,
-        avg_efficiency=avg_efficiency,
+        avg_rating=avg_rating,
     )
     _board_cache = (board, now + _CACHE_TTL_SECONDS)
     return board
