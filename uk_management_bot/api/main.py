@@ -48,6 +48,7 @@ from uk_management_bot.api.auto_manager.router import router as auto_manager_rou
 from uk_management_bot.api.webhooks.router import router as webhooks_router
 from uk_management_bot.api.registration.router import router as registration_router
 from uk_management_bot.api.feedback.router import router as feedback_router
+from uk_management_bot.api.group_intake.router import router as monitored_groups_router
 from uk_management_bot.api.materials.router import router as materials_router
 from uk_management_bot.api.resource_accounting.router import router as resource_accounting_router
 from uk_management_bot.api.routes.health import router as health_router
@@ -148,6 +149,8 @@ app.include_router(auto_manager_router, prefix="/api/v2", tags=["auto-manager"])
 app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"])
 app.include_router(registration_router, prefix="/api/v2/registration", tags=["registration"])
 app.include_router(feedback_router, prefix="/api/v2/feedback", tags=["feedback"])
+# ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist.
+app.include_router(monitored_groups_router, prefix="/api/v2/monitored-groups", tags=["group-intake"])
 app.include_router(materials_router, prefix="/api/v2/materials", tags=["materials"])
 app.include_router(work_reports_router, prefix="/api/v2/work-reports", tags=["work-reports"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint, Index
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -47,6 +47,12 @@ class Request(Base):
     apartment = Column(String(20), nullable=True)  # Legacy: заменено на apartment_id
     urgency = Column(String(20), default="low", nullable=False)  # канон-ключ (TASK 17)
     source = Column(String(20), default='bot', nullable=True)
+
+    # Group Intake: происхождение заявки, созданной из ТГ-группы (транзакционно,
+    # в той же вставке, что и заявка — audit-строка лишь дублирует best-effort).
+    # NULL для всех остальных путей создания.
+    source_chat_id = Column(BigInteger, nullable=True)
+    source_message_id = Column(BigInteger, nullable=True)
 
     # Новая система адресов: связь с квартирой из справочника
     apartment_id = Column(Integer, ForeignKey("apartments.id", ondelete="SET NULL"), nullable=True, index=True)

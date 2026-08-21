@@ -49,6 +49,9 @@ from .work_report import WorkReport
 from .request_comment import RequestComment
 from .request_assignment import RequestAssignment
 
+# Group Intake: реестр мониторимых ТГ-групп
+from .monitored_group import MonitoredGroup
+
 __all__ = [
     'User',
     'Request',
@@ -86,4 +89,5 @@ __all__ = [
     'WorkReport',
     'RequestComment',
     'RequestAssignment',
+    'MonitoredGroup',
 ]
