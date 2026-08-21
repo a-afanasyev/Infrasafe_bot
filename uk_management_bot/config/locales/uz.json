@@ -8436,7 +8436,9 @@
     "invite_no_role": "Akkauntingiz yashovchi sifatida ulanmagan. Shaxsiy botni ochib, sozlashni yakunlang: {link}\nSo'ng xabarni guruhda qayta yuboring.",
     "invite_no_phone": "Ariza yaratish uchun telefon raqami kerak. Uni shaxsiy botda qo'shing: {link}\nSo'ng xabarni guruhda qayta yuboring.",
     "invite_address": "Sizda tasdiqlangan kvartira yo'q. Manzilni shaxsiy botda ko'rsating: {link}\nTasdiqlangach, xabarni guruhda qayta yuboring.",
-    "error": "Ariza yaratib bo'lmadi. Uni shaxsiy botda yaratib ko'ring: {link}"
+    "error": "Ariza yaratib bo'lmadi. Uni shaxsiy botda yaratib ko'ring: {link}",
+    "staff_pick_address": "🛠 Bu ariza kabi ko'rinadi: {category}, shoshilinchlik — {urgency}.\nManzilni tanlang:",
+    "staff_no_address": "Manzilni aniqlab bo'lmadi. Xabar matnida uy yoki hovlini ko'rsating va uni qayta yuboring."
   },
   "user_rename": {
     "button": "✏️ F.I.Sh. ni tuzatish",

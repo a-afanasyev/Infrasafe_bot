@@ -17,7 +17,9 @@
   * applicant — свои дворы (через approved-квартиры ∪ UserYard), свои дома и
     квартиры (через approved-квартиры); вся цепочка квартира→дом→двор активна;
   * inspector — любой активный дом (двор активен), принадлежность не требуется;
-    уровни yard/apartment запрещены (building-only).
+    уровни yard/apartment запрещены (building-only);
+  * staff_group — staff-репорт из группы (Group Intake фаза 2): любой активный
+    дом или двор справочника, принадлежность не требуется; квартиры запрещены.
 """
 from __future__ import annotations
 
@@ -41,10 +43,17 @@ from uk_management_bot.database.models import (
 # ───────────────────────── policy-core (без I/O) ─────────────────────────
 
 # Уровни, доступные роли для создания заявки.
+# staff_group — контекст staff-группы Group Intake (фаза 2): сотрудник заводит
+# репорт на дом или двор из справочника; квартирный уровень запрещён схемой.
 ROLE_ALLOWED_LEVELS: dict[str, tuple[str, ...]] = {
     "applicant": ("yard", "building", "apartment"),
     "inspector": ("building",),
+    "staff_group": ("yard", "building"),
 }
+
+# Роли без требования принадлежности: судим по активной сущности справочника
+# (403 «чужой» для них не существует — есть только 422 «нет/неактивен»).
+UNSCOPED_ROLES = frozenset({"inspector", "staff_group"})
 
 ADDRESS_TYPES = ("yard", "building", "apartment")
 
@@ -248,8 +257,9 @@ def _build_resolved(address_type: str, obj) -> ResolvedAddress:
 
 def _decide(role: str, address_type: str, *, member_obj, exists_obj) -> ResolvedAddress:
     """Чистое решение по уже загруженным сущностям (403/422/ok)."""
-    if role == "inspector":
-        # building-only, принадлежность не требуется — судим по активной сущности.
+    if role in UNSCOPED_ROLES:
+        # Принадлежность не требуется — судим по активной сущности; допустимые
+        # уровни каждой роли уже отсечены _check_level_allowed.
         if exists_obj is None:
             raise AddressResolutionError("address not found or inactive", 422)
         return _build_resolved(address_type, exists_obj)
