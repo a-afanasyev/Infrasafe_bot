@@ -77,7 +77,8 @@
     "materials": "Ombor",
     "resourceAccounting": "Resurs hisobi",
     "workReports": "Ishlar hisobotlari",
-    "residents": "Aholi"
+    "residents": "Aholi",
+    "groups": "Guruhlar"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -2309,5 +2310,34 @@
       "issueCreated": "Chiqim o'tkazildi",
       "adjustmentCreated": "Tuzatish o'tkazildi"
     }
+  },
+  "groups": {
+    "title": "Telegram guruhlari",
+    "subtitle": "Bot ushbu guruhlardagi xabarlarni kuzatadi va yashovchilarga ariza yaratishni taklif qiladi. Xodimlar guruhlari hozircha qayta ishlanmaydi.",
+    "addTitle": "Guruh qo'shish",
+    "chatId": "Chat ID",
+    "chatIdHint": "Telegram superguruh ID — −100XXXXXXXXXX ko'rinishidagi manfiy son. Aniqlash: botni guruhga qo'shib, loglarda chat_id ni ko'ring yoki guruhdagi xabarni @getidsbot botiga yuboring.",
+    "groupTitle": "Nomi",
+    "groupTitlePlaceholder": "Masalan: 12-uy, 1-kirish",
+    "kind": "Turi",
+    "kind_residents": "Yashovchilar",
+    "kind_staff": "Xodimlar",
+    "kindStaffNote": "qayta ishlash keyinroq qo'shiladi",
+    "add": "Qo'shish",
+    "added": "Guruh qo'shildi",
+    "addFailed": "Guruhni qo'shib bo'lmadi",
+    "duplicate": "Bu guruh allaqachon ro'yxatda",
+    "statusLabel": "Holati",
+    "active": "Faol",
+    "inactive": "O'chirilgan",
+    "activate": "Guruhni yoqish",
+    "deactivate": "Guruhni o'chirish",
+    "updated": "Guruh yangilandi",
+    "updateFailed": "Guruhni yangilab bo'lmadi",
+    "delete": "Guruhni o'chirish",
+    "confirmDelete": "O'chirilsinmi?",
+    "deleted": "Guruh o'chirildi",
+    "deleteFailed": "Guruhni o'chirib bo'lmadi",
+    "empty": "Guruhlar hali qo'shilmagan"
   }
 }

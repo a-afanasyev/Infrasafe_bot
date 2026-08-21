@@ -41,6 +41,7 @@ import {
   ChevronDown,
   Package,
   Gauge,
+  MessagesSquare,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -92,6 +93,9 @@ const NAV_ENTRIES: NavEntry[] = [
   // API раздела гейтит require_roles('manager'), и вести admin-без-manager
   // на гарантированный 403 незачем.
   { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, allowedRoles: ['manager'] },
+  // Group Intake: реестр мониторимых ТГ-групп. Как residents — API гейтит
+  // require_roles('manager'), пункт скрыт от admin-без-manager.
+  { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, allowedRoles: ['manager'] },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
   // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
   // пункт появляется только когда фича включена билд-аргом.
