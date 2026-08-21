@@ -45,8 +45,9 @@ Derived from actual code, not assumptions:
 - `/api/v2/addresses/`
 - `/api/v2/feedback/`
 - `/api/v2/media/` (upload + `request/{n}` + `{id}/file`)
-- `/api/v2/work-reports/` — manager API for visual work reports (⏳ requested 2026-08-22, вместе с monitored-groups; PROFK edge is a plain passthrough and unaffected)
-- `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Префикс БЕЗ завершающего слэша — роуты `""` и `/{id}` (⏳ requested 2026-08-22)
+- `/api/v2/work-reports` — manager API for visual work reports (⏳ requested 2026-08-22, вместе с monitored-groups; InfraSafe отчитались «раскатано», наша проверка 2026-08-22 НЕ подтвердила — см. Verification ниже. На profk.uz запись стоит с 25.07 и работает)
+- `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (⏳ requested 2026-08-22; раскатка InfraSafe нашей проверкой НЕ подтверждена, ждём повторную)
+- `/api/v2/residents` — раздел «Жители» дашборда (manager-only). На profk.uz стоит с 28.07 и работает; на infrasafe.uz ОТСУТСТВУЕТ — раздел там сейчас сломан (⏳ requested 2026-08-22 по встречному вопросу InfraSafe)
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -64,6 +65,22 @@ Everything else → **404 at the edge.**
 - `/docs`, `/redoc`, `/openapi.json` — already disabled in-app when `DEBUG=False` (SEC-092); also not proxied (defense-in-depth).
 - No separate `/admin` HTTP surface exists: manager/admin operations live inside `requests/shifts/addresses/callcenter` and are gated per-endpoint by `require_role`.
 
+## Форма записи на edge (уточнение 2026-08-22)
+
+InfraSafe держит allowlist РЕГЕКСАМИ с явной границей, а не голыми префиксами:
+`~^/uk/api/v2/<prefix>(/|$)`. Следствия для нас:
+
+- запись покрывает голый путь коллекции И под-пути (`""` и `/{id}`) — поэтому
+  «слэш-форма» из ранних версий этого дока (`/api/v2/work-reports/`) на edge
+  НЕ используется: она бы отдавала 404 на голом POST коллекции (тот же класс
+  дефекта, что ломал profile/requests/shifts 08.06);
+- граница `(/|$)` значит: СОСЕДНИЙ ресурс с тем же началом и дефисом
+  (условный `/api/v2/monitored-groups-admin`) молча НЕ пройдёт — его нужно
+  заявлять отдельным запросом;
+- **обе площадки**: allowlist действует и на infrasafe.uz, и на profk.uz
+  (ранняя пометка «PROFK edge is a plain passthrough» устарела как минимум с
+  25.07.2026 — новый префикс заявлять сразу для обоих хостов).
+
 ## Edge controls
 
 - **Rate-limit:** ~120 r/min/IP general + 20 r/min/IP on `/api/v2/auth/` and `/api/v2/registration/`. Kept **not below** the UK app-level limits (SEC-019/020: auth 10/min, twa 20/min, set-password 5/min, resend-otp 3/min) so the edge never rejects legitimate traffic before the app.
@@ -73,8 +90,27 @@ Everything else → **404 at the edge.**
 
 Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix consumed by the SPA/TWA through the public edge will return 404 until InfraSafe adds it to the allowlist.** When adding such an endpoint, ping InfraSafe with the prefix ahead of release (minute-level change on their side). Internal-only endpoints (bot→API) are unaffected.
 
-- `/api/v2/work-reports/` (visual work reports, manager API) — added to this doc 2026-07-25; **requested from InfraSafe 2026-08-22** (одним запросом с monitored-groups). Фича на infrasafe.uz пока DARK (`WORK_REPORTS_ENABLED=false`) — префикс добавляется впрок, до rollout'а.
-- `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **requested from InfraSafe 2026-08-22**; блокер для страницы «Группы» дашборда на infrasafe.uz (до добавления — 404 от edge).
+- `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **requested 2026-08-22**. По письму InfraSafe запись на profk.uz стояла с 25.07 (наша проверка подтверждает — 401 JSON), на infrasafe.uz был реальный пробел. Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
+- `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **requested 2026-08-22**; блокер для страницы «Группы» дашборда (до добавления — 404 от edge на ОБОИХ хостах).
+- `/api/v2/residents` (раздел «Жители», manager-only) — **requested 2026-08-22** по встречному вопросу InfraSafe: на profk.uz стоит с 28.07, на infrasafe.uz отсутствует и раздел там сломан.
+
+## Verification (2026-08-22) — раскатка новых префиксов НЕ подтверждена
+
+Методика: проксированный ответ приложения — всегда JSON от FastAPI
+(`{"detail": ...}`), отказ edge — HTML-страница nginx. Перехвата
+проксированных ошибок нет (контроль: `/api/v2/public/no-such-endpoint` →
+404 JSON, `/api/v2/requests/` → 401 JSON на обоих хостах).
+
+Замеры (GET без токена):
+- `monitored-groups`, `monitored-groups/1` → 404 **HTML nginx** на ОБОИХ хостах (edge режет);
+- `work-reports`: profk.uz → 401 JSON ✅ (старая запись 25.07), infrasafe.uz → 404 HTML nginx;
+- `residents`: profk.uz → 401 JSON ✅, infrasafe.uz → 404 HTML nginx.
+
+Вывод отправлен InfraSafe 2026-08-22: изменение не применилось (конфиг не
+перезагружен либо правка не в том файле) — ждём повторную раскатку. Ожидаемое
+после неё: `monitored-groups` → 404 **JSON** до нашего деплоя фичи (401 —
+после), `work-reports` на infrasafe → 404 JSON (DARK-флаг), `residents` на
+infrasafe → 401 JSON.
 
 ## Verification (2026-06-07)
 
