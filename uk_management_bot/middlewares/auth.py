@@ -98,6 +98,21 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
         _deleted = user is not None and getattr(user, "deleted_at", None) is not None
 
         if user and (_deleted or user.status == "blocked"):
+            # Group Intake (PR-3): для СООБЩЕНИЯ в группе — полная тишина.
+            # Публичный ответ «вы заблокированы» ушёл бы в общий чат и раскрыл
+            # статус пользователя всем участникам. Callback-alert ниже приватен
+            # (видит только нажавший) — его не трогаем.
+            # Доступ к chat строго через getattr: исключение здесь улетело бы
+            # в общий except ниже и ПРОПУСТИЛО заблокированного к хендлеру.
+            _msg = None
+            from aiogram.types import Update as _Update
+            if isinstance(event, _Update):
+                _msg = event.message
+            elif isinstance(event, Message):
+                _msg = event
+            _chat = getattr(_msg, "chat", None) if _msg is not None else None
+            if getattr(_chat, "type", None) in ("group", "supergroup"):
+                return None
             # Мягкая блокировка: локализованное сообщение и ранний выход
             try:
                 language = None

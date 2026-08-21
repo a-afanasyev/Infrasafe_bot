@@ -75,6 +75,12 @@ BASELINE = {
     ("access_control.py", "ac_pass_apartment"): "SERVICE-CHECK@resident._ensure_owns_apartment (apartment_id из callback проверяется сервисом)",
     ("access_control.py", "ac_cancel_pass"): "SERVICE-CHECK@resident._owns_pass (PassNotOwned при чужом пропуске)",
     ("access_control.py", "ac_dispute_response"): "SERVICE-CHECK@resident.confirm_disputed_entry (EntryNotOwned: въезд сверяется с approved-квартирами)",
+    # Group Intake (PR-3): callback не несёт id вовсе (gint:yes|no|other —
+    # константы); объект берётся по (chat_id, message_id) НАЖАТОГО промпта из
+    # Redis-pending, авторство сверяется с candidate.author_id, а «Да»
+    # проходит ре-гейт _regate_sync (группа активна+residents, автор approved
+    # applicant с телефоном) и re-резолв адреса внутри save_request_sync.
+    ("group_intake.py", "group_intake_callback"): "OWNER-CHECK@candidate.author_id (+ re-гейт _regate_sync при создании)",
     # Обходчик: все четыре под StateFilter, а единственный вход в цепочку
     # (start_inspector_request) и сохранение (inspector_confirm) гейтованы
     # _approved_inspector; сами id — публичный справочник дворов/домов.

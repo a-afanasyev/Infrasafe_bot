@@ -190,6 +190,34 @@ doppler run --project uk-management --config <cfg> -- sh -c '
 '
 ```
 
+### group-intake-bot — выделенный бот Group Intake (за compose-профилем)
+
+Заявки из ТГ-групп обслуживает ОТДЕЛЬНЫЙ бот (свой токен `GROUP_INTAKE_BOT_TOKEN`,
+свой polling-процесс `group_intake_main.py`; прецедент asset-bot — один polling на
+токен). Сервис за профилем `group-intake` — в рутинный `up` НЕ входит и без
+`COMPOSE_PROFILES=group-intake` compose его не видит вовсе.
+
+Первое включение на хосте:
+1. BotFather: создать бота, `/setprivacy → Disable` (нужно читать все сообщения групп).
+2. Doppler (оба конфига по необходимости): `GROUP_INTAKE_BOT_TOKEN`, `ANTHROPIC_API_KEY`,
+   `GROUP_INTAKE_ENABLED=true` — через web-dashboard.
+3. Несекретное в `.env` хоста: `COMPOSE_PROFILES=group-intake` (или передавать
+   `--profile group-intake` в каждую команду).
+
+Рутинное обновление (тот же образ, что у app — build app пересобирает и его базу):
+
+```bash
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose <оба -f> --profile group-intake build group-intake-bot
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose <оба -f> --profile group-intake up -d --no-deps --wait --wait-timeout 120 group-intake-bot
+```
+
+Проверка: `docker logs uk-group-intake-bot --tail 20` — строка `Group Intake bot: @<username>`.
+Fail-fast настроек: флаг без токена/ключа/Redis валит старт; токен == BOT_TOKEN — тоже
+(два поллера на одном токене дерутся за getUpdates). Уведомления по созданным заявкам
+уходят от ОСНОВНОГО бота (send-only инстанс внутри процесса) — это штатно.
+
 ## Ротация партнёрских webhook-секретов (dual-secret, `*_NEXT`)
 
 Секреты `INFRASAFE_WEBHOOK_SECRET` (исходящий, мы подписываем) и `UK_WEBHOOK_SECRET` (входящий, мы проверяем) разделены с InfraSafe — односторонняя смена рвёт живую интеграцию. Поэтому в коде есть grace-window механизм (`settings.py` §4.4/R-18): верификатор принимает OLD || NEW, подписант переключается флагом. Переменные проброшены только сервису `api` (там живут и `process_outbox`, и inbound-роутер).

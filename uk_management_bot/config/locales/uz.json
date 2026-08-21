@@ -8418,6 +8418,24 @@
     "applicant_token": "⚠️ Bu kod xodim rolini bermaydi — u rezident uchun.\nRezident sifatida davom etamiz, xodim kodi uchun menejerga murojaat qiling.",
     "token_expect_text": "📋 Kodni matn ko'rinishida yuboring — rasm va fayl bo'lmaydi."
   },
+  "group_intake": {
+    "confirm_prompt": "🛠 Bu ariza kabi ko'rinadi: {category}, shoshilinchlik — {urgency}.\nManzil: {address}.\nAriza yaratilsinmi?",
+    "truncated_note": "\n⚠️ Matn 2000 belgidan uzun — ariza tavsifi qisqartiriladi.",
+    "address_public_apartment": "{building}, sizning kvartirangiz",
+    "btn_yes": "✅ Ha",
+    "btn_no": "❌ Yo'q",
+    "btn_other": "📍 Boshqa manzil",
+    "not_author": "Faqat xabar muallifi javob bera oladi",
+    "expired": "Taklif eskirdi. Xabarni qayta yuboring yoki shaxsiy botda ariza yarating.",
+    "cancelled": "Yaxshi, ariza yaratilmadi.",
+    "other_address": "Kerakli manzil bilan arizani shaxsiy botda yarating: {link}",
+    "created": "✅ №{number} ariza yaratildi. Bajarilishini shaxsiy botda kuzating: {link}",
+    "invite_register": "Bot guruhdan ariza yaratishi uchun shaxsiy botda ro'yxatdan o'ting: {link}\nRo'yxatdan o'tgach, xabarni guruhda qayta yuboring.",
+    "invite_no_role": "Akkauntingiz yashovchi sifatida ulanmagan. Shaxsiy botni ochib, sozlashni yakunlang: {link}\nSo'ng xabarni guruhda qayta yuboring.",
+    "invite_no_phone": "Ariza yaratish uchun telefon raqami kerak. Uni shaxsiy botda qo'shing: {link}\nSo'ng xabarni guruhda qayta yuboring.",
+    "invite_address": "Sizda tasdiqlangan kvartira yo'q. Manzilni shaxsiy botda ko'rsating: {link}\nTasdiqlangach, xabarni guruhda qayta yuboring.",
+    "error": "Ariza yaratib bo'lmadi. Uni shaxsiy botda yaratib ko'ring: {link}"
+  },
   "user_rename": {
     "button": "✏️ F.I.Sh. ni tuzatish",
     "prompt": "✏️ <b>F.I.Sh. ni tuzatish</b>\n\nFoydalanuvchi: <b>{user_label}</b>\nJoriy F.I.Sh.: <b>{current_name}</b>\n\nYangi F.I.Sh. ni bitta qatorda yuboring.",

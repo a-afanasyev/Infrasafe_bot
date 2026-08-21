@@ -505,8 +505,10 @@ def save_request_sync(
     """
     try:
         logger.info(f"[SAVE_REQUEST] Начало сохранения заявки для пользователя {user_id}")
+        # Group Intake (PR-3): полный дамп data убран даже из debug — description
+        # несёт пользовательский текст (для группового источника — чужие
+        # сообщения), ему не место в логах. Ключей достаточно для диагностики.
         logger.info(f"[SAVE_REQUEST] Данные FSM: {data.keys()}")
-        logger.debug(f"[SAVE_REQUEST] Полные данные: {data}")
 
         # Валидация обязательных полей (адрес считает сервер из address_type+id).
         # `is None` (а не truthiness) — address_id=0 теоретически валиден.
@@ -568,6 +570,10 @@ def save_request_sync(
             user_id=user.id,  # Используем id пользователя из базы данных
             source=source,
             status='Новая',
+            # Provenance группового источника (Group Intake): транзакционно,
+            # в той же INSERT-строке. Для остальных источников — None.
+            source_chat_id=data.get('source_chat_id'),
+            source_message_id=data.get('source_message_id'),
         )
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
