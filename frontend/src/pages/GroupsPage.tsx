@@ -80,7 +80,6 @@ function AddGroupForm() {
             {KINDS.map((k) => (
               <option key={k} value={k}>
                 {t(`groups.kind_${k}`)}
-                {k === 'staff' ? ` — ${t('groups.kindStaffNote')}` : ''}
               </option>
             ))}
           </select>
@@ -117,11 +116,6 @@ function GroupRow({ group }: { group: MonitoredGroup }) {
       <td className="px-3 py-2 max-w-[280px] truncate text-text-primary">{group.title || '—'}</td>
       <td className="px-3 py-2 whitespace-nowrap text-text-secondary">
         {t(`groups.kind_${group.kind}`)}
-        {group.kind === 'staff' && (
-          <span className="ml-1.5 text-[11px] text-text-secondary">
-            ({t('groups.kindStaffNote')})
-          </span>
-        )}
       </td>
       <td className="px-3 py-2">
         <button

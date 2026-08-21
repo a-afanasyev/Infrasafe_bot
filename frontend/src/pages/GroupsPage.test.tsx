@@ -18,8 +18,8 @@ describe('Dashboard GroupsPage', () => {
     render(<GroupsPage />)
     expect(await screen.findByText('Дом 12')).toBeInTheDocument()
     expect(screen.getByText('Бригада')).toBeInTheDocument()
-    // staff помечен «обработка появится позже» (в селекте формы и в строке таблицы)
-    expect(screen.getAllByText(/обработка появится позже/).length).toBeGreaterThan(0)
+    // Фаза 2: staff-группы обрабатываются — пометки «появится позже» больше нет
+    expect(screen.queryByText(/обработка появится позже/)).toBeNull()
     expect(screen.getByText('Активна')).toBeInTheDocument()
     expect(screen.getByText('Выключена')).toBeInTheDocument()
   })
