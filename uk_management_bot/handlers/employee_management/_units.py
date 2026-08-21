@@ -148,22 +148,6 @@ def _load_detailed_spec_stats(db: Session) -> dict:
     }
 
 
-def _update_employee_name(db: Session, target_employee_id: int, new_name: str) -> bool:
-    user = db.query(User).filter(User.id == target_employee_id).first()
-    if not user:
-        return False
-    # Разделяем ФИО на имя и фамилию
-    name_parts = new_name.split()
-    if len(name_parts) >= 2:
-        user.first_name = name_parts[0]
-        user.last_name = ' '.join(name_parts[1:])
-    else:
-        user.first_name = new_name
-        user.last_name = None
-    db.commit()
-    return True
-
-
 def _update_employee_phone(db: Session, target_employee_id: int, new_phone: str) -> bool:
     user = db.query(User).filter(User.id == target_employee_id).first()
     if not user:

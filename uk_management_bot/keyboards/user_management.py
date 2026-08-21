@@ -176,6 +176,13 @@ def get_user_actions_keyboard(user, language: str = 'ru') -> InlineKeyboardMarku
             callback_data=f"user_action_unblock_{user.id}"
         )])
     
+    # Исправление ФИО (всегда доступно): житель вводит его сам при
+    # регистрации, и опечатка видна именно здесь — в карточке.
+    buttons.append([InlineKeyboardButton(
+        text=get_text('user_rename.button', language=language),
+        callback_data=f"rename_user_res_{user.id}"
+    )])
+
     # Управление ролями (всегда доступно)
     buttons.append([InlineKeyboardButton(
         text=f"👥 {get_text('moderation.manage_roles', language)}",

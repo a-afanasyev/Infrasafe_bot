@@ -14,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents import notify
+from uk_management_bot.api.users.rename import (
+    FullNameIn,
+    FullNameOut,
+    lock_user_for_rename,
+    rename_user_http,
+)
 from uk_management_bot.api.residents.schemas import (
     ResidentApartmentOut,
     ResidentAttachApartment,
@@ -24,6 +30,7 @@ from uk_management_bot.api.residents.schemas import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.residents import core, queries
+from uk_management_bot.services.residents.exceptions import ResidentNotFound
 
 router = APIRouter()
 
@@ -113,6 +120,35 @@ async def unblock_account(
 ):
     resident = await core.unblock_account(db, resident_id=resident_id, actor_id=user.id)
     return {"id": resident.id, "status": resident.status}
+
+
+@router.patch("/{resident_id}/name", response_model=FullNameOut)
+@limiter.limit(_WRITE_LIMIT)
+async def rename_resident(
+    request: Request,
+    resident_id: int,
+    body: FullNameIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+):
+    """Исправить ФИО жителя."""
+    # Докстринг однострочный намеренно: он уезжает в `description` публичного
+    # OpenAPI-контракта, а внутренним обоснованиям там не место.
+    #
+    # Guard `_ensure_pure_applicant` здесь НЕ применяется, в отличие от
+    # approve/block/unblock: те трогают `users.status` и `active_role`, общие на
+    # все роли пользователя, и половинчатая операция ломает стафф-доступ. ФИО же
+    # одно на все роли — запрет означал бы, что опечатку мультиролевого жителя
+    # нельзя исправить из карточки, где её видно. Привилегированные аккаунты
+    # отсекает общий guard в `services/users/rename.py`.
+    # Сначала scope раздела (житель, не soft-deleted) — иначе эндпоинт
+    # переименовывал бы любого пользователя по id; затем строка под локом.
+    if await queries.get_resident(db, resident_id) is None:
+        raise ResidentNotFound("Житель не найден")
+    resident = await lock_user_for_rename(db, resident_id)
+    if resident is None:
+        raise ResidentNotFound("Житель не найден")
+    return await rename_user_http(db, resident, body.full_name, actor_id=user.id)
 
 
 # ───────────────────────── привязки ─────────────────────────
