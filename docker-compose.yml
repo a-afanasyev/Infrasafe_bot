@@ -100,6 +100,11 @@ services:
     container_name: uk-group-intake-bot
     restart: unless-stopped
     profiles: ["group-intake"]
+    # Образ (общий с app) несёт HEALTHCHECK на :8000/health — health-сервер
+    # поднимает только основной бот. Без disable контейнер вечно unhealthy,
+    # и `up --wait` падает (поймано на первой раскатке profk 2026-08-22).
+    healthcheck:
+      disable: true
     # IPv4-only — та же причина, что у app (UZ без IPv6-egress).
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=1

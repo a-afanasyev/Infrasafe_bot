@@ -37,6 +37,15 @@ services:
     networks: !override
       - uk-internal
 
+  # Group Intake — выделенный бот: тот же перевод на uk-internal/uk-redis,
+  # что и у app (базовая uk-network на profk пуста — DNS до uk-postgres из
+  # неё не работает; поймано на первой раскатке 2026-08-22).
+  group-intake-bot:
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+    networks: !override
+      - uk-internal
+
   api:
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
