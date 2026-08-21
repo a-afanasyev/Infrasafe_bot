@@ -15,6 +15,7 @@ if settings.SENTRY_DSN:
     )
 from uk_management_bot.database.session import engine, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
+from uk_management_bot.handlers.group_intake import router as group_intake_router
 from uk_management_bot.handlers.start_role_choice import router as start_role_choice_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
@@ -211,9 +212,150 @@ async def send_startup_notification(bot: Bot):
     except Exception as e:
         logger.error(f"Ошибка при отправке уведомления о запуске: {e}")
 
+def setup_middlewares(dp: Dispatcher) -> None:
+    """Регистрация middleware — вынесено из main() (Group Intake PR-3), чтобы
+    интеграционные тесты собирали ТОТ ЖЕ пайплайн, что и прод."""
+
+    # Middleware для внедрения сессии БД (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
+    # AUD3-37 (финал): сессия ленивая — открывается первым реальным обращением.
+    # Update конвертированных на run_db хендлеров проходит без неё вовсе
+    # (auth грузит user своей thread-сессией), интерим «2 соединения на update»
+    # для них снят. commit/close — только если сессия фактически открывалась:
+    # вызов через прокси вслепую открыл бы её ради закрытия.
+    @dp.update.middleware()
+    async def db_middleware(handler, event, data):
+        db = LazySession()
+        data["db"] = db
+        try:
+            result = await handler(event, data)
+            # Коммитим только если не было исключений
+            if db.opened and db.in_transaction():
+                db.commit()
+            return result
+        except Exception as e:
+            # Откатываем транзакцию при ошибке
+            try:
+                if db.opened and db.in_transaction():
+                    db.rollback()
+            except Exception:
+                pass
+            logger.error(f"Ошибка в middleware: {e}")
+            raise
+        finally:
+            # Закрываем сессию, если она открывалась
+            if db.opened:
+                try:
+                    db.close()
+                except Exception as close_err:
+                    logger.warning(f"Ошибка закрытия сессии БД: {close_err}")
+
+    # Подключаем auth-middleware глобально (должен быть вторым)
+    @dp.update.middleware()
+    async def _auth_middleware(handler, event, data):
+        result = await auth_middleware(handler, event, data)
+        return result
+
+    # Подключаем role-mode-middleware глобально (должен быть после auth)
+    @dp.update.middleware()
+    async def _role_mode_middleware(handler, event, data):
+        result = await role_mode_middleware(handler, event, data)
+        return result
+
+    # Localization middleware: injects `language` into handler data
+    from uk_management_bot.middlewares.localization import localization_middleware
+
+    @dp.update.middleware()
+    async def _localization_middleware(handler, event, data):
+        return await localization_middleware(handler, event, data)
+
+    # AUD3-37 (финал): shift-middleware удалён — data["shift_context"] не читал
+    # ни один хендлер/клавиатура/сервис (grep по репо = 0 потребителей), а его
+    # get_active_shift() стоил лишний sync-запрос БД на КАЖДЫЙ update.
+
+    # Throttling middleware: max 2 messages/sec per user
+    from uk_management_bot.middlewares.throttling import ThrottlingMiddleware
+    dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
+
+
+def setup_routers(dp: Dispatcher) -> None:
+    """Регистрация роутеров. Порядок = приоритет («первый подошедший забирает»)."""
+    # Group Intake — СТРОГО ПЕРВЫМ: root-фильтр chat.type + catch-all поглощает
+    # ЛЮБОЕ групповое сообщение, чтобы групповые тексты/команды не проваливались
+    # в приватные хендлеры (и их FSM). Осознанное следствие: бот не отвечает на
+    # команды в группах. Приватные апдейты root-фильтр не проходят.
+    dp.include_router(group_intake_router)
+    dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
+    # Развилка «житель/сотрудник» — часть воронки /start. Строго ПОСЛЕ
+    # start_router (чтобы /start оставался выходом из ожидания токена) и ДО
+    # auth_router: шаг ввода токена обязан выигрывать у Command("join"), иначе
+    # один и тот же ввод пойдёт двумя разными путями.
+    dp.include_router(start_role_choice_router)
+    dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
+    dp.include_router(auth_router)
+
+    # ВАЖНО: profile_editing_router должен быть раньше requests_router для правильной работы смены языка
+    # Это обеспечивает, что handlers редактирования профиля срабатывают до handlers заявок
+    dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше для смены языка)
+
+    # ВАЖНО: requests_router должен быть раньше onboarding_router для правильной работы Entry Handler
+    # Это обеспечивает, что handler создания заявки срабатывает до handlers онбординга
+    # inspector_requests_router — ПЕРЕД requests_router: его insp_* + StateFilter не
+    # пересекаются с глобальными (не-стейт-фильтрованными) category_*/confirm_* applicant-flow.
+    dp.include_router(inspector_requests_router)  # обходчик: заявка с обхода (building-level)
+    dp.include_router(requests_router)  # requests раньше для Entry Handler (создание заявки)
+
+    dp.include_router(onboarding_router)
+    dp.include_router(admin_router)  # admin раньше для перехвата действий менеджеров
+
+    # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ других handlers заявок!)
+    dp.include_router(request_acceptance_router)  # Приёмка заявок - перехватывает accept_request_* и rate_*
+    dp.include_router(unaccepted_requests_router)  # Непринятые заявки для менеджеров
+
+    # Система управления сменами
+    dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
+    dp.include_router(auto_manager_router)  # Бот-UI автоменеджера (вкл/выкл, окно) для менеджеров
+    dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
+    dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
+    dp.include_router(shifts_router)  # старый роутер смен
+
+    # Система назначения заявок
+    dp.include_router(request_status_management_router)
+    dp.include_router(request_comments_router)
+    dp.include_router(request_reports_router)
+
+    # Справочник адресов (порядок важен: пользовательский выбор → модерация → управление → квартиры → здания → дворы)
+    dp.include_router(user_apartment_selection_router)  # Пользовательский выбор квартиры при регистрации
+    dp.include_router(user_apartments_router)  # NEW: Управление квартирами из профиля
+    dp.include_router(address_moderation_router)
+    dp.include_router(address_apartments_router)
+    dp.include_router(address_buildings_router)
+    dp.include_router(address_yards_router)
+
+    dp.include_router(user_yards_router)  # Управление дворами пользователей (ПЕРЕД user_management!)
+    dp.include_router(user_management_router)  # включаем обратно
+    dp.include_router(employee_management_router)  # Роутер управления сотрудниками
+    dp.include_router(user_verification_router)  # Новый роутер верификации
+    dp.include_router(clarification_replies_router)  # Роутер ответов на уточнения
+    dp.include_router(feedback_router)  # Обратная связь (перед base_router)
+    dp.include_router(access_control_router)  # Контроль доступа жителя (ТЗ §6.4, перед base_router)
+    dp.include_router(address_deny_router)  # Отказ по адресным callback, не взятым гейтованными роутерами
+    dp.include_router(base_router)  # base в конце как fallback для общих команд
+
+
+def setup_dispatcher(dp: Dispatcher) -> None:
+    """Боевой пайплайн диспетчера целиком: middleware + роутеры + error-handler.
+
+    Единая точка для main() и интеграционных тестов (test_group_intake_routing):
+    тест, собирающий диспетчер этой функцией, проверяет РЕАЛЬНЫЙ порядок
+    регистрации, а не свою копию."""
+    setup_middlewares(dp)
+    setup_routers(dp)
+    dp.errors.register(global_error_handler)
+
+
 async def main():
     """Главная функция запуска бота"""
-    
+
     # BOT_TOKEN is validated in settings.py at import time
     # DB schema is managed by Alembic migrations (run from API entrypoint)
     import uk_management_bot.database.models  # noqa: F401 — ensure models are registered
@@ -281,127 +423,16 @@ async def main():
         storage = MemoryStorage()
         logger.info("FSM storage: MemoryStorage")
     dp = Dispatcher(storage=storage)
-    
-    # Middleware для внедрения сессии БД (ДОЛЖЕН БЫТЬ ПЕРВЫМ!)
-    # AUD3-37 (финал): сессия ленивая — открывается первым реальным обращением.
-    # Update конвертированных на run_db хендлеров проходит без неё вовсе
-    # (auth грузит user своей thread-сессией), интерим «2 соединения на update»
-    # для них снят. commit/close — только если сессия фактически открывалась:
-    # вызов через прокси вслепую открыл бы её ради закрытия.
-    @dp.update.middleware()
-    async def db_middleware(handler, event, data):
-        db = LazySession()
-        data["db"] = db
-        try:
-            result = await handler(event, data)
-            # Коммитим только если не было исключений
-            if db.opened and db.in_transaction():
-                db.commit()
-            return result
-        except Exception as e:
-            # Откатываем транзакцию при ошибке
-            try:
-                if db.opened and db.in_transaction():
-                    db.rollback()
-            except Exception:
-                pass
-            logger.error(f"Ошибка в middleware: {e}")
-            raise
-        finally:
-            # Закрываем сессию, если она открывалась
-            if db.opened:
-                try:
-                    db.close()
-                except Exception as close_err:
-                    logger.warning(f"Ошибка закрытия сессии БД: {close_err}")
 
-    # Подключаем auth-middleware глобально (должен быть вторым)
-    @dp.update.middleware()
-    async def _auth_middleware(handler, event, data):
-        result = await auth_middleware(handler, event, data)
-        return result
-    
-    # Подключаем role-mode-middleware глобально (должен быть после auth)
-    @dp.update.middleware()
-    async def _role_mode_middleware(handler, event, data):
-        result = await role_mode_middleware(handler, event, data)
-        return result
+    # Middleware + роутеры + error-handler — единой функцией (см. setup_dispatcher)
+    setup_dispatcher(dp)
 
-    # Localization middleware: injects `language` into handler data
-    from uk_management_bot.middlewares.localization import localization_middleware
-    @dp.update.middleware()
-    async def _localization_middleware(handler, event, data):
-        return await localization_middleware(handler, event, data)
+    # Group Intake: startup PING выделенного Redis-клиента (best-effort —
+    # при недоступности фича молча деградирует, бот продолжает работать).
+    if settings.GROUP_INTAKE_ENABLED:
+        from uk_management_bot.services.group_intake import pending as group_intake_pending
+        await group_intake_pending.startup_ping()
 
-    # AUD3-37 (финал): shift-middleware удалён — data["shift_context"] не читал
-    # ни один хендлер/клавиатура/сервис (grep по репо = 0 потребителей), а его
-    # get_active_shift() стоил лишний sync-запрос БД на КАЖДЫЙ update.
-
-    # Throttling middleware: max 2 messages/sec per user
-    from uk_management_bot.middlewares.throttling import ThrottlingMiddleware
-    dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
-
-    # Глобальный обработчик ошибок (module-level: см. global_error_handler)
-    dp.errors.register(global_error_handler)
-
-    # Регистрируем роутеры
-    dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
-    # Развилка «житель/сотрудник» — часть воронки /start. Строго ПОСЛЕ
-    # start_router (чтобы /start оставался выходом из ожидания токена) и ДО
-    # auth_router: шаг ввода токена обязан выигрывать у Command("join"), иначе
-    # один и тот же ввод пойдёт двумя разными путями.
-    dp.include_router(start_role_choice_router)
-    dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
-    dp.include_router(auth_router)
-    
-    # ВАЖНО: profile_editing_router должен быть раньше requests_router для правильной работы смены языка
-    # Это обеспечивает, что handlers редактирования профиля срабатывают до handlers заявок
-    dp.include_router(profile_editing_router)  # Роутер редактирования профиля (раньше для смены языка)
-    
-    # ВАЖНО: requests_router должен быть раньше onboarding_router для правильной работы Entry Handler
-    # Это обеспечивает, что handler создания заявки срабатывает до handlers онбординга
-    # inspector_requests_router — ПЕРЕД requests_router: его insp_* + StateFilter не
-    # пересекаются с глобальными (не-стейт-фильтрованными) category_*/confirm_* applicant-flow.
-    dp.include_router(inspector_requests_router)  # обходчик: заявка с обхода (building-level)
-    dp.include_router(requests_router)  # requests раньше для Entry Handler (создание заявки)
-    
-    dp.include_router(onboarding_router)
-    dp.include_router(admin_router)  # admin раньше для перехвата действий менеджеров
-
-    # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ других handlers заявок!)
-    dp.include_router(request_acceptance_router)  # Приёмка заявок - перехватывает accept_request_* и rate_*
-    dp.include_router(unaccepted_requests_router)  # Непринятые заявки для менеджеров
-
-    # Система управления сменами
-    dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
-    dp.include_router(auto_manager_router)  # Бот-UI автоменеджера (вкл/выкл, окно) для менеджеров
-    dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
-    dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
-    dp.include_router(shifts_router)  # старый роутер смен
-
-    # Система назначения заявок
-    dp.include_router(request_status_management_router)
-    dp.include_router(request_comments_router)
-    dp.include_router(request_reports_router)
-
-    # Справочник адресов (порядок важен: пользовательский выбор → модерация → управление → квартиры → здания → дворы)
-    dp.include_router(user_apartment_selection_router)  # Пользовательский выбор квартиры при регистрации
-    dp.include_router(user_apartments_router)  # NEW: Управление квартирами из профиля
-    dp.include_router(address_moderation_router)
-    dp.include_router(address_apartments_router)
-    dp.include_router(address_buildings_router)
-    dp.include_router(address_yards_router)
-
-    dp.include_router(user_yards_router)  # Управление дворами пользователей (ПЕРЕД user_management!)
-    dp.include_router(user_management_router)  # включаем обратно
-    dp.include_router(employee_management_router)  # Роутер управления сотрудниками
-    dp.include_router(user_verification_router)  # Новый роутер верификации
-    dp.include_router(clarification_replies_router)  # Роутер ответов на уточнения
-    dp.include_router(feedback_router)  # Обратная связь (перед base_router)
-    dp.include_router(access_control_router)  # Контроль доступа жителя (ТЗ §6.4, перед base_router)
-    dp.include_router(address_deny_router)  # Отказ по адресным callback, не взятым гейтованными роутерами
-    dp.include_router(base_router)  # base в конце как fallback для общих команд
-    
     logger.info("Бот запускается...")
     
     # Запускаем HTTP health check сервер
@@ -462,6 +493,12 @@ async def main():
             await close_media_client()
         except Exception as e:
             logger.error(f"Ошибка закрытия Media Service клиента: {e}")
+
+        # Закрываем выделенный Redis-клиент Group Intake (no-op, если не
+        # создавался; ошибки закрытия aclose глотает сам — ратчет AUD5-ARCH-5
+        # не даёт заворачивать в ещё один broad-except).
+        from uk_management_bot.services.group_intake import pending as group_intake_pending
+        await group_intake_pending.aclose()
 
         # Останавливаем health сервер
         stop_health_server()

@@ -82,9 +82,14 @@ class RequestHandlerService:
         user_id: int,
         source: str,
         status: str = "Новая",
+        source_chat_id=None,
+        source_message_id=None,
     ) -> Request:
         """Создать строку заявки и положить в сессию (без commit — коммитит
-        вызывающий после emit, как в исходном коде)."""
+        вызывающий после emit, как в исходном коде).
+
+        source_chat_id/source_message_id — provenance группового источника
+        (Group Intake); для остальных путей остаются None."""
         request = Request(
             request_number=request_number,
             category=category,
@@ -99,6 +104,8 @@ class RequestHandlerService:
             user_id=user_id,
             source=source,
             status=status,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
         )
         self.db.add(request)
         return request
