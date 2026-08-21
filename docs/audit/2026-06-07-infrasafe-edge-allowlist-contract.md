@@ -45,9 +45,9 @@ Derived from actual code, not assumptions:
 - `/api/v2/addresses/`
 - `/api/v2/feedback/`
 - `/api/v2/media/` (upload + `request/{n}` + `{id}/file`)
-- `/api/v2/work-reports` — manager API for visual work reports (⏳ requested 2026-08-22, вместе с monitored-groups; InfraSafe отчитались «раскатано», наша проверка 2026-08-22 НЕ подтвердила — см. Verification ниже. На profk.uz запись стоит с 25.07 и работает)
-- `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (⏳ requested 2026-08-22; раскатка InfraSafe нашей проверкой НЕ подтверждена, ждём повторную)
-- `/api/v2/residents` — раздел «Жители» дашборда (manager-only). На profk.uz стоит с 28.07 и работает; на infrasafe.uz ОТСУТСТВУЕТ — раздел там сейчас сломан (⏳ requested 2026-08-22 по встречному вопросу InfraSafe)
+- `/api/v2/work-reports` — manager API for visual work reports (✅ live на ОБОИХ хостах, verified 2026-08-22; на infrasafe.uz фича DARK — приложение отвечает 404 JSON до включения флага)
+- `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (✅ live на ОБОИХ хостах, verified 2026-08-22; до деплоя фичи приложение отвечает 404 JSON — после деплоя ждём 401)
+- `/api/v2/residents` — раздел «Жители» дашборда (manager-only) (✅ live на ОБОИХ хостах, verified 2026-08-22 — пробел на infrasafe.uz закрыт, раздел «Жители» там снова работает)
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -90,11 +90,22 @@ InfraSafe держит allowlist РЕГЕКСАМИ с явной границе
 
 Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix consumed by the SPA/TWA through the public edge will return 404 until InfraSafe adds it to the allowlist.** When adding such an endpoint, ping InfraSafe with the prefix ahead of release (minute-level change on their side). Internal-only endpoints (bot→API) are unaffected.
 
-- `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **requested 2026-08-22**. По письму InfraSafe запись на profk.uz стояла с 25.07 (наша проверка подтверждает — 401 JSON), на infrasafe.uz был реальный пробел. Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
-- `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **requested 2026-08-22**; блокер для страницы «Группы» дашборда (до добавления — 404 от edge на ОБОИХ хостах).
-- `/api/v2/residents` (раздел «Жители», manager-only) — **requested 2026-08-22** по встречному вопросу InfraSafe: на profk.uz стоит с 28.07, на infrasafe.uz отсутствует и раздел там сломан.
+- `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **✅ live на обеих площадках, verified 2026-08-22** (на profk стоял с 25.07; на infrasafe был реальный пробел — закрыт). Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
+- `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **✅ live на обеих площадках, verified 2026-08-22**.
+- `/api/v2/residents` (раздел «Жители», manager-only) — **✅ live на обеих площадках, verified 2026-08-22** (пробел infrasafe.uz закрыт по встречному вопросу InfraSafe; наборы префиксов площадок сверены ими и идентичны, у них добавлена сборочная проверка на оба конфига).
 
-## Verification (2026-08-22) — раскатка новых префиксов НЕ подтверждена
+## Verification (2026-08-22, финал) — ✅ подтверждено на обеих площадках
+
+Вторая раскатка InfraSafe (после не подтвердившейся первой, см. ниже) проверена
+теми же пробами: `monitored-groups` (+`/{id}`) → 404 JSON от приложения на обоих
+хостах; `work-reports` → infrasafe 404 JSON (DARK-флаг) / profk 401 JSON;
+`residents` → 401 JSON на обоих (пробел infrasafe закрыт). Негативные контроли
+(`monitored-groups-admin`, `residents-export`, `/api/health/outbox`, произвольный
+путь) → HTML-404 nginx на обоих: граница `(/|$)` работает, внутренние пути
+закрыты. По письму InfraSafe наборы префиксов обеих площадок теперь идентичны, и
+у них появилась сборочная проверка, сторожащая ОБА конфига.
+
+## Verification (2026-08-22, первый прогон) — раскатка не подтвердилась (история)
 
 Методика: проксированный ответ приложения — всегда JSON от FastAPI
 (`{"detail": ...}`), отказ edge — HTML-страница nginx. Перехвата
