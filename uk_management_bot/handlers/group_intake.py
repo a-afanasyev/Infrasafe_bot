@@ -246,6 +246,39 @@ def _staff_author_lang_sync(db, telegram_id: int) -> Optional[str]:
     return user.language or "ru"
 
 
+# Кириллица → латиница для адресного хинта: справочник может быть латинским
+# («Yangi Olmazor, 14V»), а сотрудник пишет кириллицей («14в», «Янги Олмазор»).
+# Транслит детерминированный (узбекская латиница: х→x, ж→j), НЕ полагаемся на
+# LLM: address_hint извлекается дословно из сообщения.
+_CYR_TO_LAT = str.maketrans({
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
+    "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "x", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ъ": "", "ы": "i", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+})
+
+
+def _hint_variants(needle: str) -> list[str]:
+    """Хинт + его транслит-вариант (если отличается). Кириллический «14в»
+    обязан находить латинский «14V» без участия человека."""
+    variants = [needle]
+    translit = needle.lower().translate(_CYR_TO_LAT)
+    if translit != needle.lower():
+        variants.append(translit)
+    return variants
+
+
+def _hint_predicate(column, needle: str, *, pg: bool):
+    """OR по ci_contains для всех транслит-вариантов хинта."""
+    from sqlalchemy import or_
+
+    return or_(*(
+        ci_contains(column, f"%{escape_like(variant)}%", is_postgres=pg)
+        for variant in _hint_variants(needle)
+    ))
+
+
 def _match_staff_address_sync(db, scope: str, hint: Optional[str]) -> list[dict]:
     """Адрес staff-репорта — по СПРАВОЧНИКУ, не по квартирам автора.
 
@@ -253,19 +286,19 @@ def _match_staff_address_sync(db, scope: str, hint: Optional[str]) -> list[dict]
     (сотрудник не заводит заявку в чужую квартиру — apartment трактуем как
     building). Без hint или без совпадений — пусто (промпт «укажите дом»).
     Поиск через ci_contains (единственный кириллице-безопасный путь при
-    C-локали БД) по уже экранированному шаблону (escape_like).
+    C-локали БД) по уже экранированному шаблону (escape_like); кириллический
+    хинт дополнительно пробуется в транслите (_hint_variants).
     """
     needle = (hint or "").strip()
     if not needle:
         return []
-    pattern = f"%{escape_like(needle)}%"
     pg = is_postgres(db)
     if scope == "yard":
         rows = db.execute(
             select(Yard)
             .where(
                 Yard.is_active.is_(True),
-                ci_contains(Yard.name, pattern, is_postgres=pg),
+                _hint_predicate(Yard.name, needle, pg=pg),
             )
             .order_by(Yard.name)
             .limit(_STAFF_MATCH_LIMIT)
@@ -286,7 +319,7 @@ def _match_staff_address_sync(db, scope: str, hint: Optional[str]) -> list[dict]
         .where(
             Building.is_active.is_(True),
             Yard.is_active.is_(True),
-            ci_contains(Building.address, pattern, is_postgres=pg),
+            _hint_predicate(Building.address, needle, pg=pg),
         )
         .order_by(Building.address)
         .limit(_STAFF_MATCH_LIMIT)

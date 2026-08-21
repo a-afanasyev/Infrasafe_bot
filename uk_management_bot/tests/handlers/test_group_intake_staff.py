@@ -286,6 +286,37 @@ def test_matcher_treats_apartment_scope_as_building(db):
     assert options[0]["id"] == buildings[0].id
 
 
+def test_matcher_transliterates_cyrillic_hint_to_latin(db):
+    """Живой кейс smoke на profk: справочник латинский («Yangi Olmazor, 14V»),
+    сотрудник пишет «14в» кириллицей — матчер обязан найти дом сам."""
+    _yards, buildings = seed_directory(
+        db, addresses=("Yangi Olmazor, 14V", "Yangi Olmazor, 15V")
+    )
+    options = gi._match_staff_address_sync(db, "building", "14в")
+    assert [o["id"] for o in options] == [buildings[0].id]
+
+
+def test_matcher_transliterates_cyrillic_words(db):
+    """«Янги Олмазор» → yangi olmazor: оба дома в выбор."""
+    seed_directory(
+        db, addresses=("Yangi Olmazor, 14V", "Yangi Olmazor, 15V")
+    )
+    options = gi._match_staff_address_sync(db, "building", "Янги Олмазор")
+    assert len(options) == 2
+
+
+def test_matcher_latin_hint_still_matches(db):
+    _yards, buildings = seed_directory(db, addresses=("Yangi Olmazor, 14V",))
+    options = gi._match_staff_address_sync(db, "building", "14v")
+    assert [o["id"] for o in options] == [buildings[0].id]
+
+
+def test_matcher_translit_yard_scope(db):
+    yards, _b = seed_directory(db, yard_names=("Olmazor City Phase 1",))
+    options = gi._match_staff_address_sync(db, "yard", "Олмазор")
+    assert [o["id"] for o in options] == [yards[0].id]
+
+
 # ───────────────────── callback-фаза ─────────────────────
 
 
