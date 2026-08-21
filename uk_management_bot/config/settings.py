@@ -274,9 +274,13 @@ class Settings:
     PUBLIC_MEDIA_MAX_BYTES = int(os.getenv("PUBLIC_MEDIA_MAX_BYTES", str(8 * 1024 * 1024)))
 
     # Group Intake: мониторинг ТГ-групп жителей → заявки (план rev.3).
-    # Классификация «заявка/нет» — Anthropic API (structured outputs), модель —
-    # pinned snapshot для воспроизводимости. Ключ — ТОЛЬКО из Doppler.
+    # Живёт в ВЫДЕЛЕННОМ боте (свой токен, свой polling-процесс
+    # group_intake_main.py) — основной бот в группы не добавляется и privacy
+    # mode не отключает. Классификация «заявка/нет» — Anthropic API
+    # (structured outputs), модель — pinned snapshot для воспроизводимости.
+    # Ключ и токен — ТОЛЬКО из Doppler.
     GROUP_INTAKE_ENABLED = os.getenv("GROUP_INTAKE_ENABLED", "false").lower() == "true"
+    GROUP_INTAKE_BOT_TOKEN = os.getenv("GROUP_INTAKE_BOT_TOKEN", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
     GROUP_INTAKE_MODEL = os.getenv("GROUP_INTAKE_MODEL", "claude-haiku-4-5-20251001")
     GROUP_INTAKE_LLM_TIMEOUT = float(os.getenv("GROUP_INTAKE_LLM_TIMEOUT", "8.0"))
@@ -326,8 +330,17 @@ class Settings:
             raise ValueError("JWT_SECRET_NEXT must differ from JWT_SECRET (rotation would be a no-op)")
         if not REDIS_URL or "redis://" not in REDIS_URL:
             raise ValueError("Valid REDIS_URL required in production")
-        # Group Intake: включённый флаг без ключа/Redis — конфигурационная
+        # Group Intake: включённый флаг без токена/ключа/Redis — конфигурационная
         # ошибка, а не рабочее состояние (pending-кандидаты живут в Redis).
+        # Флаг приходит ТОЛЬКО сервису group-intake-bot — app/api/migrate его
+        # не видят и этих требований не несут.
+        if GROUP_INTAKE_ENABLED and not GROUP_INTAKE_BOT_TOKEN:
+            raise ValueError("GROUP_INTAKE_ENABLED requires GROUP_INTAKE_BOT_TOKEN (Doppler)")
+        if GROUP_INTAKE_ENABLED and GROUP_INTAKE_BOT_TOKEN == BOT_TOKEN:
+            raise ValueError(
+                "GROUP_INTAKE_BOT_TOKEN must differ from BOT_TOKEN — "
+                "two pollers on one token fight over getUpdates"
+            )
         if GROUP_INTAKE_ENABLED and not ANTHROPIC_API_KEY:
             raise ValueError("GROUP_INTAKE_ENABLED requires ANTHROPIC_API_KEY (Doppler)")
         if GROUP_INTAKE_ENABLED and not REDIS_URL:

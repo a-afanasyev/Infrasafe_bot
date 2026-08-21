@@ -68,15 +68,6 @@ services:
       # (settings.py: os.getenv(..., "")), fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
-      # Group Intake (заявки из ТГ-групп): флаг по умолчанию ВЫКЛЮЧЕН; ключ —
-      # секрет из Doppler, опционален на уровне compose (settings.py fail-fast
-      # ловит «флаг включён без ключа»). Ключ нужен ТОЛЬКО боту (app).
-      - GROUP_INTAKE_ENABLED=${GROUP_INTAKE_ENABLED:-false}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GROUP_INTAKE_MODEL=${GROUP_INTAKE_MODEL:-claude-haiku-4-5-20251001}
-      - GROUP_INTAKE_LLM_TIMEOUT=${GROUP_INTAKE_LLM_TIMEOUT:-8.0}
-      - GROUP_INTAKE_MIN_CONFIDENCE=${GROUP_INTAKE_MIN_CONFIDENCE:-0.6}
-      - GROUP_INTAKE_LLM_PER_MINUTE=${GROUP_INTAKE_LLM_PER_MINUTE:-6}
 
     # Зависимости от других сервисов
     # Приложение запустится только после готовности БД и Redis
@@ -97,6 +88,63 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Group Intake — ВЫДЕЛЕННЫЙ бот для заявок из ТГ-групп (свой токен, свой
+  # polling; прецедент asset-bot — один polling на токен). Основной бот в
+  # группы не добавляется и privacy mode не отключает.
+  # Сервис за compose-профилем: в рутинный `up` не входит, поднимается
+  # осознанно при включении фичи (COMPOSE_PROFILES=group-intake или
+  # `--profile group-intake`).
+  group-intake-bot:
+    build: .
+    container_name: uk-group-intake-bot
+    restart: unless-stopped
+    profiles: ["group-intake"]
+    # IPv4-only — та же причина, что у app (UZ без IPv6-egress).
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    command: python -m uk_management_bot.group_intake_main
+    # Тот же PR-7 role-файл, что у app: DATABASE_URL под uk_bot_runtime.
+    env_file:
+      - .env
+      - ./.secrets/roles/.env.bot
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      # Общий settings.py несёт eager prod-валидацию — core-секреты обязательны
+      # и здесь (ARCH-106: приходят из Doppler через `doppler run --`).
+      # BOT_TOKEN нужен и функционально: send-only бот notification-путей
+      # шлёт уведомления от лица ОСНОВНОГО бота.
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required — set it in Doppler (project uk-management)}
+      - INVITE_SECRET=${INVITE_SECRET:?INVITE_SECRET is required — set it in Doppler (project uk-management)}
+      - OUTBOX_SOURCE_INSTANCE=${OUTBOX_SOURCE_INSTANCE:?OUTBOX_SOURCE_INSTANCE is required — profk|infrasafe (Doppler), dev локально}
+      - DISPLAY_TZ=${DISPLAY_TZ:-Asia/Tashkent}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      # Фото из группы грузятся в media-service ЭТИМ ботом (file_id привязан
+      # к боту-получателю) — клиентские ключи media нужны и здесь.
+      - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
+      - MEDIA_API_KEY=${MEDIA_API_KEY:-}
+      # Group Intake: флаг и секреты фичи. Токен/ключ — Doppler; опциональны на
+      # уровне compose (:-) — «флаг включён без токена/ключа» ловит fail-fast
+      # settings.py, а сам сервис без флага сознательно не стартует.
+      - GROUP_INTAKE_ENABLED=${GROUP_INTAKE_ENABLED:-false}
+      - GROUP_INTAKE_BOT_TOKEN=${GROUP_INTAKE_BOT_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROUP_INTAKE_MODEL=${GROUP_INTAKE_MODEL:-claude-haiku-4-5-20251001}
+      - GROUP_INTAKE_LLM_TIMEOUT=${GROUP_INTAKE_LLM_TIMEOUT:-8.0}
+      - GROUP_INTAKE_MIN_CONFIDENCE=${GROUP_INTAKE_MIN_CONFIDENCE:-0.6}
+      - GROUP_INTAKE_LLM_PER_MINUTE=${GROUP_INTAKE_LLM_PER_MINUTE:-6}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - uk-network
 
   # API сервис (FastAPI + uvicorn)
   api:
