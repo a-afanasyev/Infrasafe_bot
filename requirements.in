@@ -56,6 +56,10 @@ prometheus-client>=0.20.0
 # Error Tracking
 sentry-sdk[fastapi]>=2.0.0
 
+# Group Intake: LLM-классификация сообщений групп (structured outputs —
+# output_config.format появился в SDK 0.77.0; верхняя граница до осознанного апгрейда)
+anthropic>=0.77,<1.0
+
 # Testing
 pytest-cov>=4.1.0
 

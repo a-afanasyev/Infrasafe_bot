@@ -68,6 +68,15 @@ services:
       # (settings.py: os.getenv(..., "")), fallback MEDIA_SERVICE_API_KEY || MEDIA_API_KEY:
       - MEDIA_SERVICE_API_KEY=${MEDIA_SERVICE_API_KEY:-}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
+      # Group Intake (заявки из ТГ-групп): флаг по умолчанию ВЫКЛЮЧЕН; ключ —
+      # секрет из Doppler, опционален на уровне compose (settings.py fail-fast
+      # ловит «флаг включён без ключа»). Ключ нужен ТОЛЬКО боту (app).
+      - GROUP_INTAKE_ENABLED=${GROUP_INTAKE_ENABLED:-false}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROUP_INTAKE_MODEL=${GROUP_INTAKE_MODEL:-claude-haiku-4-5-20251001}
+      - GROUP_INTAKE_LLM_TIMEOUT=${GROUP_INTAKE_LLM_TIMEOUT:-8.0}
+      - GROUP_INTAKE_MIN_CONFIDENCE=${GROUP_INTAKE_MIN_CONFIDENCE:-0.6}
+      - GROUP_INTAKE_LLM_PER_MINUTE=${GROUP_INTAKE_LLM_PER_MINUTE:-6}
 
     # Зависимости от других сервисов
     # Приложение запустится только после готовности БД и Redis
