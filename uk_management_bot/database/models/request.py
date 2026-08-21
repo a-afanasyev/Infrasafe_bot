@@ -27,6 +27,14 @@ class Request(Base):
         # Парный функциональный idx_requests_date_prefix (expr substring) — НЕ в
         # модели (postgres-only, ломает sqlite create_all): создаётся миграцией 037
         # и исключён из alembic check в migration_include.py.
+        # Group Intake фаза 2: режим приёмки строго из двух значений — опечатка
+        # в новом пути создания дала бы заявку, которую канон трактует как
+        # resident (дефолт-ветка), и менеджерское подтверждение перестало бы
+        # быть терминальным молча.
+        CheckConstraint(
+            "acceptance_mode IN ('resident', 'manager')",
+            name="ck_requests_acceptance_mode",
+        ),
         Index("idx_requests_category", "category"),
     )
 
@@ -53,6 +61,20 @@ class Request(Base):
     # NULL для всех остальных путей создания.
     source_chat_id = Column(BigInteger, nullable=True)
     source_message_id = Column(BigInteger, nullable=True)
+
+    # Group Intake фаза 2 (staff-группы, менеджерская приёмка):
+    # reported_by_user_id — КТО доложил (сотрудник-автор staff-репорта);
+    # фиксируется независимо от владельца user_id, чтобы провенанс пережил
+    # возможное будущее перевешивание владельца. NULL для остальных путей.
+    # acceptance_mode — кто принимает результат: 'resident' (житель, дефолт,
+    # весь существующий поток) | 'manager' (staff-репорт: подтверждение
+    # менеджера терминально, жительской приёмки/оценки нет).
+    reported_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    acceptance_mode = Column(
+        String(20), nullable=False, server_default="resident", default="resident"
+    )
 
     # Новая система адресов: связь с квартирой из справочника
     apartment_id = Column(Integer, ForeignKey("apartments.id", ondelete="SET NULL"), nullable=True, index=True)

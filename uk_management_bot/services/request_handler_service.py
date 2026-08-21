@@ -26,6 +26,7 @@ from sqlalchemy import case, false, or_
 from sqlalchemy.orm import Session, aliased
 
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -84,12 +85,16 @@ class RequestHandlerService:
         status: str = "Новая",
         source_chat_id=None,
         source_message_id=None,
+        reported_by_user_id=None,
+        acceptance_mode: str = ACCEPTANCE_MODE_RESIDENT,
     ) -> Request:
         """Создать строку заявки и положить в сессию (без commit — коммитит
         вызывающий после emit, как в исходном коде).
 
         source_chat_id/source_message_id — provenance группового источника
-        (Group Intake); для остальных путей остаются None."""
+        (Group Intake); для остальных путей остаются None.
+        reported_by_user_id/acceptance_mode — staff-репорт с менеджерской
+        приёмкой (фаза 2); дефолты сохраняют поведение прочих путей."""
         request = Request(
             request_number=request_number,
             category=category,
@@ -106,6 +111,8 @@ class RequestHandlerService:
             status=status,
             source_chat_id=source_chat_id,
             source_message_id=source_message_id,
+            reported_by_user_id=reported_by_user_id,
+            acceptance_mode=acceptance_mode,
         )
         self.db.add(request)
         return request

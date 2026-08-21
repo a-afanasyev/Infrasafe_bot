@@ -104,6 +104,17 @@ _NOTIFY_MATRIX: dict[Action, object] = {
     Action.CANCEL: ((APPLICANT,), "notifications.workflow.cancelled"),
 }
 
+# Менеджерская приёмка (Group Intake фаза 2): владелец staff-репорта принять
+# или вернуть работу НЕ может (гарды канона), поэтому тексты с призывом
+# «примите работу» для таких заявок подменяются на констатирующие. Подмена — в
+# `_resolve_targets` (единственная точка, общая API- и бот-пути).
+_MANAGER_ACCEPTANCE_KEYS = {
+    "notifications.workflow.executed":
+        "notifications.workflow.executed_staff",
+    "notifications.workflow.ready_for_acceptance":
+        "notifications.workflow.accepted_by_manager",
+}
+
 # Богатый шаблон уточнения: несёт сам текст вопроса и команду ответа. Ключ
 # исторически ботовский, но с AUD6-P1-6 им пользуются оба пути — вопрос
 # менеджера обязан доехать до жителя независимо от поверхности, где его задали.
@@ -177,8 +188,17 @@ def _resolve_targets(
         already = seen.setdefault(action, set())
         wanted = _wanted_user_ids(request, roles) - already
         already |= wanted
-        targets.append((action, text_key, wanted))
+        targets.append((action, _effective_text_key(request, text_key), wanted))
     return targets
+
+
+def _effective_text_key(request: Request, text_key: str) -> str:
+    """Подмена текста для заявок с менеджерской приёмкой (см. карту выше)."""
+    from uk_management_bot.utils.constants import ACCEPTANCE_MODE_MANAGER
+
+    if getattr(request, "acceptance_mode", None) == ACCEPTANCE_MODE_MANAGER:
+        return _MANAGER_ACCEPTANCE_KEYS.get(text_key, text_key)
+    return text_key
 
 
 def _render_text(

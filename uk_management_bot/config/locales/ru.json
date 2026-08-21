@@ -8191,6 +8191,8 @@
       "assigned": "🔧 Заявка #{request_number} принята в работу\n\n📍 {address}",
       "executed": "✅ Работы по заявке #{request_number} выполнены\n\n📍 {address}\n\nПроверьте результат и примите работу или верните на доработку.",
       "ready_for_acceptance": "📋 Заявка #{request_number} готова к приёмке\n\n📍 {address}\n\nОцените качество работы в разделе «Приёмка».",
+      "executed_staff": "✅ Работы по заявке #{request_number} выполнены\n\n📍 {address}\n\nОжидается подтверждение менеджера.",
+      "accepted_by_manager": "✅ Заявка #{request_number} завершена\n\n📍 {address}\n\nРезультат подтверждён менеджером.",
       "returned_to_work": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}",
       "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}",
       "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}",

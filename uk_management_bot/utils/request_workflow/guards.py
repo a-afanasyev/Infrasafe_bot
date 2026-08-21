@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Mapping
 
 from uk_management_bot.utils.constants import (
+    ACCEPTANCE_MODE_MANAGER,
     REQUEST_STATUS_NEW,
     ROLE_APPLICANT,
     ROLE_EXECUTOR,
@@ -108,13 +109,30 @@ def _is_owner(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
 
 
 def _can_accept(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
-    """owner ИЛИ одобренный сосед — семантика HF-0 can_accept."""
+    """owner ИЛИ одобренный сосед — семантика HF-0 can_accept.
+
+    Менеджерская приёмка (Group Intake фаза 2): у staff-репорта жительского
+    шага приёмки нет ВООБЩЕ — результат принимает менеджер (MANAGER_CONFIRM
+    терминален). Закрыто здесь, на уровне канона, а не в UI: владелец-сотрудник
+    не должен уметь принять собственную работу ни с одной поверхности.
+    """
+    if snap.request.acceptance_mode == ACCEPTANCE_MODE_MANAGER:
+        return False
     if actor.kind != "user":
         return False
     if _is_owner(snap, actor):
         return True
     apt = snap.request.apartment_id
     return apt is not None and apt in actor.approved_apartment_ids
+
+
+def _owner_can_return(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
+    """APPLICANT_RETURN: владелец, но НЕ при менеджерской приёмке — судьбу
+    staff-репорта решает менеджер (MANAGER_RETURN_TO_WORK ему доступен),
+    автор-сотрудник вернуть/оспорить собственную работу не может."""
+    if snap.request.acceptance_mode == ACCEPTANCE_MODE_MANAGER:
+        return False
+    return _is_owner(snap, actor)
 
 
 def _can_cancel(snap: WorkflowSnapshot, actor: ActorContext) -> bool:

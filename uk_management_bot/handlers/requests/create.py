@@ -31,6 +31,7 @@ from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.request_handler_service import RequestHandlerService
+from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 
 from uk_management_bot.keyboards.requests import (
     get_cancel_keyboard,
@@ -574,6 +575,10 @@ def save_request_sync(
             # в той же INSERT-строке. Для остальных источников — None.
             source_chat_id=data.get('source_chat_id'),
             source_message_id=data.get('source_message_id'),
+            # Staff-репорт (фаза 2): кто доложил + менеджерская приёмка.
+            # Для остальных путей data этих ключей не несёт — дефолты.
+            reported_by_user_id=data.get('reported_by_user_id'),
+            acceptance_mode=data.get('acceptance_mode') or ACCEPTANCE_MODE_RESIDENT,
         )
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan

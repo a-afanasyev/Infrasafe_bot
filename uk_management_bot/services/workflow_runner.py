@@ -43,7 +43,10 @@ from uk_management_bot.services.webhook_payloads import (
 )
 from uk_management_bot.services.webhook_sender import EventIdentity
 from uk_management_bot.utils.auth_helpers import get_active_role, get_user_roles
-from uk_management_bot.utils.constants import ROLE_EXECUTOR
+from uk_management_bot.utils.constants import (
+    ACCEPTANCE_MODE_RESIDENT,
+    ROLE_EXECUTOR,
+)
 from uk_management_bot.utils.shifts import (
     is_on_shift_now_async,
     is_on_shift_now_sync,
@@ -131,6 +134,7 @@ def _new_state_from(req: Request) -> RequestState:
         is_returned=bool(req.is_returned),
         apartment_id=req.apartment_id,
         executor_id=req.executor_id,
+        acceptance_mode=req.acceptance_mode or ACCEPTANCE_MODE_RESIDENT,
     )
 
 
