@@ -70,6 +70,14 @@ REQUEST_STATUSES = [
     REQUEST_STATUS_CANCELLED,
 ]
 
+# Режим приёмки заявки (Group Intake фаза 2, решение владельца 2026-08-22).
+# resident — обычный цикл: подтверждение менеджера → приёмка/оценка жителем.
+# manager — staff-репорт: подтверждение менеджера сразу завершает заявку
+# («Принято»), жительского шага приёмки и оценки нет.
+ACCEPTANCE_MODE_RESIDENT = "resident"
+ACCEPTANCE_MODE_MANAGER = "manager"
+ACCEPTANCE_MODES = (ACCEPTANCE_MODE_RESIDENT, ACCEPTANCE_MODE_MANAGER)
+
 # Типы назначений заявок
 ASSIGNMENT_TYPE_GROUP = "group"
 ASSIGNMENT_TYPE_INDIVIDUAL = "individual"

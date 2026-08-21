@@ -8192,6 +8192,8 @@
       "assigned": "🔧 #{request_number} arizasi ishga qabul qilindi\n\n📍 {address}",
       "executed": "✅ #{request_number} arizasi bo‘yicha ishlar bajarildi\n\n📍 {address}\n\nNatijani tekshiring va ishni qabul qiling yoki qayta ishlashga qaytaring.",
       "ready_for_acceptance": "📋 #{request_number} arizasi qabul qilishga tayyor\n\n📍 {address}\n\n«Qabul qilish» bo‘limida ish sifatini baholang.",
+      "executed_staff": "✅ #{request_number} arizasi bo‘yicha ishlar bajarildi\n\n📍 {address}\n\nMenejer tasdig‘i kutilmoqda.",
+      "accepted_by_manager": "✅ #{request_number} arizasi yakunlandi\n\n📍 {address}\n\nNatija menejer tomonidan tasdiqlandi.",
       "returned_to_work": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}",
       "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}",
       "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}",

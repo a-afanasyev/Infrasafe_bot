@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import Mapping, Optional
 
 from uk_management_bot.utils.constants import (
+    ACCEPTANCE_MODE_MANAGER,
+    REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_IN_PROGRESS,
 )
@@ -124,6 +126,10 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
                 ("manager_confirmed_by", Op.SET_ACTOR, None),
                 ("manager_confirmed_at", Op.SET_NOW, None),
                 ("is_returned", Op.SET, False)]
+        if to_canon == REQUEST_STATUS_APPROVED:
+            # Менеджерская приёмка: подтверждение терминально («Принято») —
+            # фиксируем момент завершения, как APPLICANT_ACCEPT/FORCE_ACCEPT.
+            ops += [("completed_at", Op.SET_NOW, None)]
         if payload.get("confirmation_notes") is not None:
             ops += [("manager_confirmation_notes", Op.SET,
                      payload["confirmation_notes"])]
@@ -277,15 +283,34 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
         # только при canon == to_status (повтор) для авторизованного актора
         raise InvalidTransition(f"{action.value}: not allowed from '{canon}'")
 
-    patch = _build_patch(action, spec.to_status, actor, command.payload)
-    _enforce_in_progress_has_executor(action, spec.to_status, snap, patch)
+    to_status = _effective_to_status(action, spec.to_status, snap)
+    patch = _build_patch(action, to_status, actor, command.payload)
+    _enforce_in_progress_has_executor(action, to_status, snap, patch)
     domain_ops = _build_domain_ops(action, snap, command.payload)
     events = _build_events(action, principal, snap.request,
-                           spec.to_status, command.payload)
+                           to_status, command.payload)
     return TransitionResult(
-        old_state=snap.request, new_canon_status=spec.to_status,
+        old_state=snap.request, new_canon_status=to_status,
         patch=patch, domain_ops=domain_ops, events=events,
     )
+
+
+def _effective_to_status(action: Action, to_canon: str,
+                         snap: WorkflowSnapshot) -> str:
+    """Менеджерская приёмка (Group Intake фаза 2) — ОДНОЙ веткой на весь канон.
+
+    У staff-репорта (`acceptance_mode='manager'`) жительского шага приёмки нет:
+    подтверждение менеджера сразу завершает заявку — MANAGER_CONFIRM ведёт в
+    «Принято», а не в «Исполнено». Один честный переход «менеджер подтвердил и
+    принял» вместо auto-chain двух команд (два audit-события врали бы, что
+    кто-то отдельно принимал). Жительские APPLICANT_ACCEPT/APPLICANT_RETURN
+    для таких заявок закрыты гардами (guards._can_accept/_owner_can_return);
+    MANAGER_FORCE_ACCEPT/MANAGER_RETURN_TO_WORK работают как есть.
+    """
+    if (action is Action.MANAGER_CONFIRM
+            and snap.request.acceptance_mode == ACCEPTANCE_MODE_MANAGER):
+        return REQUEST_STATUS_APPROVED
+    return to_canon
 
 
 def _enforce_in_progress_has_executor(action: Action, to_canon: str,

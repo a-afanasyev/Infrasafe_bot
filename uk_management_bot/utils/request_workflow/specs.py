@@ -27,7 +27,7 @@ from .guards import (
     _executor_can_claim,
     _executor_can_work,
     _is_manager,
-    _is_owner,
+    _owner_can_return,
     _system_can_promote,
 )
 from .projections import normalize_status
@@ -144,9 +144,11 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.APPLICANT_ACCEPT: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED}), REQUEST_STATUS_APPROVED,
         _can_accept, RepeatPolicy.REJECT),
+    # _owner_can_return (не голый _is_owner): при менеджерской приёмке
+    # владелец-сотрудник вернуть работу не может (см. guards).
     Action.APPLICANT_RETURN: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED}), STATUS_RETURNED,
-        _is_owner, RepeatPolicy.REJECT),
+        _owner_can_return, RepeatPolicy.REJECT),
     Action.MANAGER_FORCE_ACCEPT: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED, STATUS_RETURNED}),
         REQUEST_STATUS_APPROVED,

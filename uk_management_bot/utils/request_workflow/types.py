@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Literal, Mapping, Optional
 
 from uk_management_bot.utils.constants import (
+    ACCEPTANCE_MODE_RESIDENT,
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_CANCELLED,
     REQUEST_STATUS_CLARIFICATION,
@@ -194,6 +195,11 @@ class RequestState:
     is_returned: bool = False
     apartment_id: Optional[int] = None
     executor_id: Optional[int] = None
+    # Group Intake фаза 2: 'resident' (обычный цикл с приёмкой жителем) |
+    # 'manager' (staff-репорт: подтверждение менеджера терминально, жительская
+    # приёмка/возврат закрыты гардами). Дефолт покрывает все существующие
+    # места сборки и тест-фикстуры.
+    acceptance_mode: str = ACCEPTANCE_MODE_RESIDENT
 
 
 @dataclass(frozen=True)
