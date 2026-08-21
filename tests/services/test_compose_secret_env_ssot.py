@@ -39,10 +39,16 @@ CORE_REQUIRED = (
 )
 
 EXPECTED = {
-    # ANTHROPIC_API_KEY (Group Intake, LLM-классификация) нужен только боту;
-    # опционален на уровне compose (:-) — «флаг включён без ключа» ловит
-    # eager-валидация settings.py.
-    "app": CORE_REQUIRED + ("ANTHROPIC_API_KEY",),
+    "app": CORE_REQUIRED,
+    # Group Intake — выделенный бот (свой polling-процесс за compose-профилем).
+    # Секреты фичи опциональны на уровне compose (:-) — «флаг включён без
+    # токена/ключа» ловит eager-валидация settings.py; сам сервис без флага
+    # сознательно не стартует.
+    "group-intake-bot": CORE_REQUIRED + (
+        "GROUP_INTAKE_BOT_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "MEDIA_API_KEY",
+    ),
     "api": CORE_REQUIRED + (
         "HEALTH_METRICS_TOKEN",
         "INFRASAFE_INVENTORY_TOKEN",

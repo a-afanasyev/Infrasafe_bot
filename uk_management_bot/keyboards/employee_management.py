@@ -334,7 +334,11 @@ def get_employee_edit_keyboard(employee_id: int, language: str = 'ru') -> Inline
     buttons = [
         [InlineKeyboardButton(
             text=f"📝 {get_text('employee_management.full_name', language)}",
-            callback_data=f"edit_employee_name_{employee_id}"
+            # Канон исправления ФИО — общий с карточкой жителя
+            # (handlers/user_rename.py). Прежний `edit_employee_name_<id>`
+            # остаётся живым входом там же: callback_data шлёт клиент, и
+            # клавиатуры, уже отрисованные в чатах, никуда не делись.
+            callback_data=f"rename_user_emp_{employee_id}"
         )],
         [InlineKeyboardButton(
             text=f"📱 {get_text('employee_management.phone', language)}",

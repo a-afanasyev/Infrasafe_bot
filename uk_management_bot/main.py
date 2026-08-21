@@ -15,7 +15,7 @@ if settings.SENTRY_DSN:
     )
 from uk_management_bot.database.session import engine, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
-from uk_management_bot.handlers.group_intake import router as group_intake_router
+from uk_management_bot.handlers.group_silence import router as group_silence_router
 from uk_management_bot.handlers.start_role_choice import router as start_role_choice_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
@@ -24,6 +24,7 @@ from uk_management_bot.handlers.admin import router as admin_router
 from uk_management_bot.handlers.auth import router as auth_router
 from uk_management_bot.handlers.onboarding import router as onboarding_router
 from uk_management_bot.handlers.user_management import router as user_management_router
+from uk_management_bot.handlers.user_rename import router as user_rename_router
 from uk_management_bot.handlers.employee_management import router as employee_management_router
 from uk_management_bot.handlers.user_verification import router as user_verification_router
 from uk_management_bot.handlers.clarification_replies import router as clarification_replies_router
@@ -279,11 +280,11 @@ def setup_middlewares(dp: Dispatcher) -> None:
 
 def setup_routers(dp: Dispatcher) -> None:
     """Регистрация роутеров. Порядок = приоритет («первый подошедший забирает»)."""
-    # Group Intake — СТРОГО ПЕРВЫМ: root-фильтр chat.type + catch-all поглощает
-    # ЛЮБОЕ групповое сообщение, чтобы групповые тексты/команды не проваливались
-    # в приватные хендлеры (и их FSM). Осознанное следствие: бот не отвечает на
-    # команды в группах. Приватные апдейты root-фильтр не проходят.
-    dp.include_router(group_intake_router)
+    # Тишина в группах — СТРОГО ПЕРВЫМ: Group Intake живёт в выделенном боте
+    # (group_intake_main.py), а этот catch-all — страховка, чтобы групповые
+    # тексты/команды не проваливались в приватные хендлеры и их FSM, если
+    # основного бота всё же добавят в группу.
+    dp.include_router(group_silence_router)
     dp.include_router(start_router)  # /start FIRST — catches /start from any FSM state
     # Развилка «житель/сотрудник» — часть воронки /start. Строго ПОСЛЕ
     # start_router (чтобы /start оставался выходом из ожидания токена) и ДО
@@ -332,6 +333,9 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(address_yards_router)
 
     dp.include_router(user_yards_router)  # Управление дворами пользователей (ПЕРЕД user_management!)
+    # ПЕРЕД обоими разделами: общий флоу исправления ФИО владеет и своим
+    # `rename_user_*`, и legacy-входом `edit_employee_name_*`.
+    dp.include_router(user_rename_router)
     dp.include_router(user_management_router)  # включаем обратно
     dp.include_router(employee_management_router)  # Роутер управления сотрудниками
     dp.include_router(user_verification_router)  # Новый роутер верификации
@@ -427,12 +431,6 @@ async def main():
     # Middleware + роутеры + error-handler — единой функцией (см. setup_dispatcher)
     setup_dispatcher(dp)
 
-    # Group Intake: startup PING выделенного Redis-клиента (best-effort —
-    # при недоступности фича молча деградирует, бот продолжает работать).
-    if settings.GROUP_INTAKE_ENABLED:
-        from uk_management_bot.services.group_intake import pending as group_intake_pending
-        await group_intake_pending.startup_ping()
-
     logger.info("Бот запускается...")
     
     # Запускаем HTTP health check сервер
@@ -493,12 +491,6 @@ async def main():
             await close_media_client()
         except Exception as e:
             logger.error(f"Ошибка закрытия Media Service клиента: {e}")
-
-        # Закрываем выделенный Redis-клиент Group Intake (no-op, если не
-        # создавался; ошибки закрытия aclose глотает сам — ратчет AUD5-ARCH-5
-        # не даёт заворачивать в ещё один broad-except).
-        from uk_management_bot.services.group_intake import pending as group_intake_pending
-        await group_intake_pending.aclose()
 
         # Останавливаем health сервер
         stop_health_server()

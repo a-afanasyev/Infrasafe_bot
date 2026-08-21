@@ -1,12 +1,14 @@
-"""Интеграционный роутинг Group Intake: боевой пайплайн, а не копия.
+"""Интеграционный роутинг Group Intake: боевые пайплайны ДВУХ ботов.
 
-Две поверхности:
-  * resolve_ctx по РЕАЛЬНОМУ порядку include_router из main.py — кто заберёт
-    групповое/приватное сообщение и gint-callback (класс дефектов BUG-155:
-    юнит-тест хендлера не видит, доходит ли до него апдейт);
-  * настоящий Dispatcher, собранный БОЕВЫМ setup_dispatcher(), + feed_update
-    с записывающей Bot-сессией — middleware-цепочка целиком: blocked в группе
-    молчит, немониторимая группа молчит, и ни одного вызова Bot API.
+Group Intake живёт в выделенном боте (group_intake_main.py). Проверяются обе
+стороны:
+  * основной бот: group_intake-роутера в нём НЕТ; первым стоит страховочный
+    group_silence — групповые тексты/команды не проваливаются в приватные
+    хендлеры (класс дефектов BUG-155);
+  * групповой бот: собран БОЕВЫМ setup_group_intake_dispatcher() — catch-all
+    забирает групповые сообщения, приватные мимо, gint-callback'и наши;
+    feed_update с записывающей Bot-сессией: blocked в группе молчит,
+    немониторимая группа молчит, и ни одного вызова Bot API.
 """
 from __future__ import annotations
 
@@ -25,27 +27,24 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import uk_management_bot.group_intake_main as gi_main
 import uk_management_bot.handlers.group_intake as gi
 import uk_management_bot.main as main_mod
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.session import Base
 from uk_management_bot.database.models.user import User
+from uk_management_bot.handlers.group_intake import router as group_intake_router
 from uk_management_bot.tests.handlers.routing_probe import resolve_ctx
 
 _ORDER = re.findall(r"dp\.include_router\((\w+)\)", Path(main_mod.__file__).read_text())
-ROUTERS = [getattr(main_mod, name) for name in _ORDER]
+MAIN_ROUTERS = [getattr(main_mod, name) for name in _ORDER]
+GROUP_BOT_ROUTERS = [group_intake_router]
 
 GROUP_INTAKE_MODULE = "uk_management_bot.handlers.group_intake"
+GROUP_SILENCE_MODULE = "uk_management_bot.handlers.group_silence"
 APPLICANT = {"roles": ["applicant"], "user": None}
 
 REQUEST_TEXT = "В подъезде не горит свет уже второй день, почините пожалуйста"
-
-
-def test_group_intake_router_is_registered_first():
-    assert _ORDER[0] == "group_intake_router", (
-        "group_intake_router обязан быть ПЕРВЫМ: catch-all групповых сообщений "
-        "не работает, если перед ним стоит другой роутер"
-    )
 
 
 def make_group_message(text: str, from_id: int = 1) -> Message:
@@ -78,52 +77,86 @@ def make_group_callback(data: str, from_id: int = 1) -> CallbackQuery:
     )
 
 
-# ─────────────────── resolve_ctx: кто забирает апдейт ───────────────────
+# ─────────────────── основной бот: group_intake ИЗЪЯТ ───────────────────
+
+
+def test_main_bot_has_no_group_intake_router():
+    assert "group_intake_router" not in _ORDER, (
+        "group_intake живёт в выделенном боте — в основном ему делать нечего"
+    )
+
+
+def test_main_bot_group_silence_is_first():
+    assert _ORDER[0] == "group_silence_router", (
+        "страховочный group_silence обязан быть ПЕРВЫМ: без него групповые "
+        "тексты проваливаются в приватные хендлеры (BUG-155)"
+    )
 
 
 @pytest.mark.parametrize("text", [
     REQUEST_TEXT,
-    "/start",                 # групповой /start молчит (не start_router)
+    "/start",
     "/help",
-    "📝 Создать заявку",       # кнопочный текст не запускает приватный FSM
+    "📝 Создать заявку",   # кнопочный текст не запускает приватный FSM
     "✅ Подтвердить",
 ])
-def test_any_group_message_is_taken_by_group_intake(text):
+def test_main_bot_swallows_any_group_message(text):
     winner = resolve_ctx(
-        ROUTERS, make_group_message(text), "message", **APPLICANT
+        MAIN_ROUTERS, make_group_message(text), "message", **APPLICANT
     )
-    assert winner == (GROUP_INTAKE_MODULE, "group_message_entry"), (
+    assert winner == (GROUP_SILENCE_MODULE, "swallow_group_message"), (
         f"групповое сообщение {text!r} ушло в {winner} — просочилось мимо "
-        f"catch-all в приватные хендлеры"
+        f"страховки в приватные хендлеры"
     )
 
 
 @pytest.mark.parametrize("text", [REQUEST_TEXT, "/start", "📝 Создать заявку"])
-def test_private_message_never_hits_group_intake(text):
+def test_main_bot_private_messages_bypass_group_silence(text):
     winner = resolve_ctx(
-        ROUTERS, make_private_message(text), "message", **APPLICANT
+        MAIN_ROUTERS, make_private_message(text), "message", **APPLICANT
     )
-    assert winner is None or winner[0] != GROUP_INTAKE_MODULE, (
-        f"приватное сообщение {text!r} попало в group_intake: {winner}"
+    # Свободный приватный текст без FSM-состояния может остаться без хендлера
+    # (None) — важно лишь, что группо-страховка приватные апдейты не трогает.
+    assert winner is None or winner[0] not in (
+        GROUP_SILENCE_MODULE, GROUP_INTAKE_MODULE,
     )
+
+
+# ─────────────────── групповой бот: resolve_ctx ───────────────────
+
+
+@pytest.mark.parametrize("text", [REQUEST_TEXT, "/start", "болтовня"])
+def test_group_bot_takes_any_group_message(text):
+    winner = resolve_ctx(
+        GROUP_BOT_ROUTERS, make_group_message(text), "message", **APPLICANT
+    )
+    assert winner == (GROUP_INTAKE_MODULE, "group_message_entry")
+
+
+def test_group_bot_ignores_private_messages():
+    winner = resolve_ctx(
+        GROUP_BOT_ROUTERS, make_private_message(REQUEST_TEXT), "message", **APPLICANT
+    )
+    assert winner is None, "у группового бота нет приватных хендлеров"
 
 
 @pytest.mark.parametrize("data", ["gint:yes", "gint:no", "gint:other"])
-def test_gint_callbacks_taken_by_group_intake(data):
+def test_group_bot_takes_gint_callbacks(data):
     winner = resolve_ctx(
-        ROUTERS, make_group_callback(data), "callback_query", **APPLICANT
+        GROUP_BOT_ROUTERS, make_group_callback(data), "callback_query", **APPLICANT
     )
     assert winner == (GROUP_INTAKE_MODULE, "group_intake_callback")
 
 
-def test_foreign_callback_not_taken_by_group_intake():
+def test_group_bot_ignores_foreign_callbacks():
     winner = resolve_ctx(
-        ROUTERS, make_group_callback("accept_request_1"), "callback_query", **APPLICANT
+        GROUP_BOT_ROUTERS, make_group_callback("accept_request_1"),
+        "callback_query", **APPLICANT,
     )
-    assert winner is None or winner[0] != GROUP_INTAKE_MODULE
+    assert winner is None
 
 
-# ─────────────── feed_update: боевой Dispatcher + middleware ───────────────
+# ─────────────── feed_update: боевые Dispatcher'ы + middleware ───────────────
 
 
 class RecordingSession(BaseSession):
@@ -149,8 +182,10 @@ class RecordingSession(BaseSession):
 
 @pytest.fixture(scope="module")
 def _live_env():
-    """Единый боевой Dispatcher на модуль: роутеры — синглтоны, второй
-    include_router на новом Dispatcher падает «router is already attached».
+    """ОБА боевых Dispatcher'а на модуль (роутеры — синглтоны, второй
+    include_router на новом Dispatcher падает «router is already attached»):
+      * dp_main — setup_dispatcher() основного бота;
+      * dp_group — setup_group_intake_dispatcher() группового.
     Подмена фабрики сессий — на межпоточный sqlite (run_db/LazySession берут
     SessionLocal module-global lookup'ом)."""
     mp = pytest.MonkeyPatch()
@@ -168,13 +203,17 @@ def _live_env():
     classify = AsyncMock()
     mp.setattr(gi, "classify_message", classify)
 
-    dp = Dispatcher(storage=MemoryStorage())
-    main_mod.setup_dispatcher(dp)  # БОЕВОЙ пайплайн: middleware + роутеры
+    dp_main = Dispatcher(storage=MemoryStorage())
+    main_mod.setup_dispatcher(dp_main)
+    dp_group = Dispatcher(storage=MemoryStorage())
+    gi_main.setup_group_intake_dispatcher(dp_group)
+
     session = RecordingSession()
     bot = Bot(token="42:TEST", session=session)
     try:
         yield SimpleNamespace(
-            dp=dp, bot=bot, session=session, classify=classify, db_factory=factory
+            dp_main=dp_main, dp_group=dp_group, bot=bot, session=session,
+            classify=classify, db_factory=factory,
         )
     finally:
         mp.undo()
@@ -182,47 +221,55 @@ def _live_env():
 
 
 @pytest.fixture()
-def live_dispatcher(_live_env):
-    """Сброс записей между тестами; сам пайплайн общий на модуль."""
+def live(_live_env):
+    """Сброс записей между тестами; сами пайплайны общие на модуль."""
     _live_env.session.calls.clear()
     _live_env.classify.reset_mock()
     return _live_env
 
 
-async def test_blocked_user_in_group_is_fully_silent(live_dispatcher):
+async def test_group_bot_blocked_user_is_fully_silent(live):
     """Blocked в группе: ни публичного ответа auth-middleware, ни обработки."""
-    db = live_dispatcher.db_factory()
+    db = live.db_factory()
     db.add(User(telegram_id=111, roles='["applicant"]', active_role="applicant",
                 status="blocked", language="ru"))
     db.commit()
     db.close()
 
     update = Update(update_id=1, message=make_group_message(REQUEST_TEXT, from_id=111))
-    await live_dispatcher.dp.feed_update(live_dispatcher.bot, update)
+    await live.dp_group.feed_update(live.bot, update)
 
-    assert live_dispatcher.session.calls == [], (
-        f"бот ответил в группу заблокированному: {live_dispatcher.session.calls}"
+    assert live.session.calls == [], (
+        f"групповой бот ответил заблокированному: {live.session.calls}"
     )
-    live_dispatcher.classify.assert_not_awaited()
+    live.classify.assert_not_awaited()
 
 
-async def test_unmonitored_group_is_fully_silent(live_dispatcher):
+async def test_group_bot_unmonitored_group_is_fully_silent(live):
     """Approved-житель в группе НЕ из реестра: тишина, LLM не вызывается."""
-    db = live_dispatcher.db_factory()
+    db = live.db_factory()
     db.add(User(telegram_id=222, roles='["applicant"]', active_role="applicant",
                 status="approved", phone="+998901112233", language="ru"))
     db.commit()
     db.close()
 
     update = Update(update_id=2, message=make_group_message(REQUEST_TEXT, from_id=222))
-    await live_dispatcher.dp.feed_update(live_dispatcher.bot, update)
+    await live.dp_group.feed_update(live.bot, update)
 
-    assert live_dispatcher.session.calls == []
-    live_dispatcher.classify.assert_not_awaited()
+    assert live.session.calls == []
+    live.classify.assert_not_awaited()
 
 
-async def test_group_start_produces_no_api_calls(live_dispatcher):
-    """Групповой /start проглатывается catch-all'ом: бот не отвечает."""
-    update = Update(update_id=3, message=make_group_message("/start", from_id=333))
-    await live_dispatcher.dp.feed_update(live_dispatcher.bot, update)
-    assert live_dispatcher.session.calls == []
+async def test_main_bot_group_message_produces_no_api_calls(live):
+    """Основной бот в группе (нештатно добавлен): страховка молчит и не
+    пускает текст в приватные хендлеры — ноль вызовов Bot API."""
+    update = Update(update_id=3, message=make_group_message(REQUEST_TEXT, from_id=333))
+    await live.dp_main.feed_update(live.bot, update)
+    assert live.session.calls == []
+    live.classify.assert_not_awaited()
+
+
+async def test_main_bot_group_start_produces_no_api_calls(live):
+    update = Update(update_id=4, message=make_group_message("/start", from_id=444))
+    await live.dp_main.feed_update(live.bot, update)
+    assert live.session.calls == []

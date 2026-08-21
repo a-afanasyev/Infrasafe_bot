@@ -132,6 +132,14 @@ export function useUnblockResident(id: number) {
   )
 }
 
+/** Исправить ФИО жителя, введённое им с ошибкой при регистрации. */
+export function useRenameResident(id: number) {
+  return useResidentMutation<string>(
+    fullName => apiClient.patch(`/api/v2/residents/${id}/name`, { full_name: fullName }).then(r => r.data),
+    { successKey: 'toast.nameUpdated', errorKey: 'toast.nameUpdateFailed', residentId: id },
+  )
+}
+
 export function useAttachApartment(id: number) {
   return useResidentMutation<{ apartment_id: number; is_owner: boolean; is_primary: boolean }>(
     body => apiClient.post(`/api/v2/residents/${id}/apartments`, body).then(r => r.data),

@@ -83,6 +83,9 @@ CONFIG_MOUNTS=(
   # списком), и парити-тест сверяет её с бэкендом. В образе бота frontend/ нет,
   # в CI-джобе backend-tests — полный чекаут, поэтому там строка не нужна.
   -v "${ROOT}/frontend/src/constants/specializations.ts:/app/frontend/src/constants/specializations.ts:ro"
+  # Тот же случай: лимит длины ФИО живёт в двух языках (валидация бэкенда и
+  # клиентская проверка формы), и гейт сверяет их числами.
+  -v "${ROOT}/frontend/src/utils/personName.ts:/app/frontend/src/utils/personName.ts:ro"
 )
 
 cleanup() {

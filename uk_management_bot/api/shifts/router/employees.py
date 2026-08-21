@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.shifts import service
+from uk_management_bot.api.users.rename import (
+    FullNameIn,
+    FullNameOut,
+    lock_user_for_rename,
+    rename_user_http,
+)
 from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     DeleteEmployeeRequest, ActiveRequestsCount,
@@ -251,6 +257,26 @@ async def decline_staff(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="User is not pending")
     await service.decline_employee(db, user)
     return {"id": user.id, "status": user.status}
+
+
+@router.patch("/employees/{user_id}/name", response_model=FullNameOut)
+async def rename_employee(
+    user_id: int,
+    body: FullNameIn,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_roles("manager")),
+):
+    """Исправить ФИО сотрудника."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    #
+    # `_ensure_not_privileged` здесь не вызывается напрямую: тот же запрет на
+    # менеджеров и админов живёт в `services/users/rename.py` — иначе его
+    # пришлось бы дублировать во второй точке входа (карточка жителя), и они бы
+    # разошлись.
+    user = await lock_user_for_rename(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await rename_user_http(db, user, body.full_name, actor_id=actor.id)
 
 
 @router.patch("/employees/{user_id}/meter-entry", dependencies=[Depends(require_roles("manager"))])

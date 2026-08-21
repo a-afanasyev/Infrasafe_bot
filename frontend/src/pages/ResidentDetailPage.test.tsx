@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { render, screen } from '../test/test-utils'
 import ResidentDetailPage from './ResidentDetailPage'
 import type { ResidentProfile } from '../types/api'
 
-const { detailQuery } = vi.hoisted(() => ({
+const { detailQuery, renameSpy } = vi.hoisted(() => ({
   detailQuery: {
     data: undefined as ResidentProfile | undefined,
     isLoading: false,
     isError: false,
   },
+  renameSpy: vi.fn(),
 }))
 
 // vi.mock поднимается наверх файла, поэтому фабрика не имеет права ссылаться
@@ -17,6 +19,7 @@ vi.mock('../hooks/useResidents', () => {
   const noop = () => ({ mutate: vi.fn(), isPending: false })
   return {
     useResident: () => detailQuery,
+    useRenameResident: () => ({ mutate: renameSpy, isPending: false }),
     useApproveResident: noop,
     useBlockResident: noop,
     useUnblockResident: noop,
@@ -74,6 +77,7 @@ function makeProfile(over: Partial<ResidentProfile> = {}): ResidentProfile {
 }
 
 beforeEach(() => {
+  renameSpy.mockClear()
   detailQuery.data = makeProfile()
   detailQuery.isLoading = false
   detailQuery.isError = false
@@ -124,5 +128,49 @@ describe('ResidentDetailPage', () => {
     detailQuery.data = undefined
     render(<ResidentDetailPage />)
     expect(screen.getByText(/Жители не найдены/)).toBeInTheDocument()
+  })
+})
+
+describe('ResidentDetailPage — исправление ФИО', () => {
+  it('открывает форму, предзаполненную текущим ФИО', async () => {
+    const user = userEvent.setup()
+    render(<ResidentDetailPage />)
+    await user.click(screen.getByRole('button', { name: 'Исправить ФИО' }))
+    expect(screen.getByLabelText('ФИО')).toHaveValue('Иван Иванов')
+  })
+
+  it('шлёт нормализованное ФИО одной строкой', async () => {
+    const user = userEvent.setup()
+    render(<ResidentDetailPage />)
+    await user.click(screen.getByRole('button', { name: 'Исправить ФИО' }))
+
+    const field = screen.getByLabelText('ФИО')
+    await user.clear(field)
+    await user.type(field, '  Иванов   Иван Иванович ')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(renameSpy).toHaveBeenCalledTimes(1)
+    expect(renameSpy.mock.calls[0][0]).toBe('Иванов Иван Иванович')
+  })
+
+  it('не шлёт запрос, если ФИО не изменилось', async () => {
+    const user = userEvent.setup()
+    render(<ResidentDetailPage />)
+    await user.click(screen.getByRole('button', { name: 'Исправить ФИО' }))
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(renameSpy).not.toHaveBeenCalled()
+  })
+
+  it('житель без имени тоже правится — форма пустая, кнопка живая', async () => {
+    detailQuery.data = makeProfile({ first_name: null, last_name: null })
+    const user = userEvent.setup()
+    render(<ResidentDetailPage />)
+    await user.click(screen.getByRole('button', { name: 'Исправить ФИО' }))
+
+    const field = screen.getByLabelText('ФИО')
+    expect(field).toHaveValue('')
+    await user.type(field, 'Новый Житель')
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(renameSpy.mock.calls[0][0]).toBe('Новый Житель')
   })
 })

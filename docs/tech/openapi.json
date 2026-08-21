@@ -2326,6 +2326,61 @@
         "title": "FileCategories",
         "type": "string"
       },
+      "FullNameIn": {
+        "description": "Новое ФИО одной строкой.",
+        "properties": {
+          "full_name": {
+            "maxLength": 800,
+            "title": "Full Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "full_name"
+        ],
+        "title": "FullNameIn",
+        "type": "object"
+      },
+      "FullNameOut": {
+        "properties": {
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          }
+        },
+        "required": [
+          "id",
+          "full_name"
+        ],
+        "title": "FullNameOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -13440,6 +13495,64 @@
         ]
       }
     },
+    "/api/v2/residents/{resident_id}/name": {
+      "patch": {
+        "description": "Исправить ФИО жителя.",
+        "operationId": "rename_resident_api_v2_residents__resident_id__name_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullNameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullNameOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rename Resident",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
     "/api/v2/residents/{resident_id}/unblock": {
       "post": {
         "operationId": "unblock_account_api_v2_residents__resident_id__unblock_post",
@@ -14517,6 +14630,64 @@
           }
         ],
         "summary": "Toggle Meter Entry",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/name": {
+      "patch": {
+        "description": "Исправить ФИО сотрудника.",
+        "operationId": "rename_employee_api_v2_shifts_employees__user_id__name_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullNameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullNameOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rename Employee",
         "tags": [
           "shifts"
         ]
