@@ -10,7 +10,6 @@ import pytest
 
 from uk_management_bot.services.group_intake import classifier
 from uk_management_bot.services.group_intake.classifier import (
-    ClassificationResult,
     Outcome,
     classify_message,
 )
