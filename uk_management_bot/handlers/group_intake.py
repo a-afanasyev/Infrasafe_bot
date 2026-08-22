@@ -20,6 +20,7 @@ Staff-группы (фаза 2, решение владельца 2026-08-22 —
 AUD3-37: хендлеры не объявляют db — БД только через run_db-юниты;
 ``_db`` — keyword-only тестовый seam.
 """
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -94,6 +95,11 @@ _STAFF_ROLES = frozenset({ROLE_EXECUTOR, ROLE_INSPECTOR, ROLE_MANAGER})
 
 # Кандидатов адреса в выборе — не больше, чем влезает кнопками.
 _STAFF_MATCH_LIMIT = 4
+# Капы матчера (security-review 2026-08-22): без них сообщение, набитое
+# digit-токенами («потоп 1a 2b 3c …»), порождало до сотен последовательных
+# SELECT'ов с ICU-collation на одно сообщение — тихий DoS БД от инсайдера.
+_MAX_MATCH_ATTEMPTS = 8
+_MAX_TEXT_DIGIT_TOKENS = 5
 # Telegram ограничивает текст кнопки; длинные адреса режем с многоточием.
 _BTN_LABEL_LIMIT = 60
 
@@ -318,7 +324,7 @@ def _digit_tokens(text: str) -> list[str]:
         if token.lower() not in seen:
             seen.add(token.lower())
             unique.append(token)
-    return unique
+    return unique[:_MAX_TEXT_DIGIT_TOKENS]
 
 
 def _match_staff_address_sync(db, scope: str, hint: Optional[str],
@@ -347,6 +353,8 @@ def _match_staff_address_sync(db, scope: str, hint: Optional[str],
     for token in _digit_tokens(text or ""):
         needles.append(token)
     for candidate_needle in needles:
+        if len(tried) >= _MAX_MATCH_ATTEMPTS:
+            break
         if candidate_needle.lower() in tried:
             continue
         tried.add(candidate_needle.lower())
@@ -518,10 +526,13 @@ def _address_options_keyboard(options: list[dict]) -> InlineKeyboardMarkup:
 
 def _staff_confirm_prompt(candidate_like: dict, address_label: str, lang: str,
                           truncated: bool) -> str:
+    # html.escape: боты работают с parse_mode=HTML, адрес — свободный текст
+    # справочника; `&`/`<` без экранирования = Telegram-400 и потерянный промпт
+    # (security-review 2026-08-22, тот же класс, что A6-P2-07 в notifications).
     prompt = get_text("group_intake.confirm_prompt", language=lang).format(
         category=_category_display(candidate_like.get("category"), lang),
         urgency=_urgency_display(candidate_like.get("urgency"), lang),
-        address=address_label,
+        address=html.escape(address_label),
     )
     if truncated:
         prompt += get_text("group_intake.truncated_note", language=lang)
@@ -658,10 +669,11 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         return
 
     lang = gate.lang
+    # html.escape адреса — см. _staff_confirm_prompt (security-review 2026-08-22).
     prompt = get_text("group_intake.confirm_prompt", language=lang).format(
         category=_category_display(result.category, lang),
         urgency=_urgency_display(result.urgency, lang),
-        address=gate.address["label_public"],
+        address=html.escape(gate.address["label_public"]),
     )
     if truncated:
         prompt += get_text("group_intake.truncated_note", language=lang)
@@ -699,13 +711,16 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
 def _category_display(category: Optional[str], lang: str) -> str:
     from uk_management_bot.keyboards.requests import get_category_display
 
-    return get_category_display(category or "other", lang)
+    # escape: для НЕИЗВЕСТНОГО ключа хелпер возвращает сырое значение как
+    # есть; категория здесь из канона классификатора, но экранирование
+    # нейтрально для словарных подписей (паттерн workflow_notifications).
+    return html.escape(get_category_display(category or "other", lang))
 
 
 def _urgency_display(urgency: Optional[str], lang: str) -> str:
     from uk_management_bot.keyboards.requests import get_urgency_display
 
-    return get_urgency_display(urgency or "low", lang)
+    return html.escape(get_urgency_display(urgency or "low", lang))
 
 
 # ───────────────────────── callback-фаза ─────────────────────────
