@@ -210,15 +210,20 @@ async def test_multiple_matches_offer_pick_buttons(env, db):
     assert "selected_address" not in payload
 
 
+# Текст без цифр: иначе фолбэк по токенам текста (фикс smoke №3) найдёт дом
+# и тест «адрес не найден» проверял бы не ту ветку.
+NO_ADDRESS_TEXT = "У подъезда отвалилась плитка и висит провод, это опасно"
+
+
 async def test_no_match_asks_for_address_with_cooldown(env, db):
     seed_staff_group(db)
     seed_staff_user(db)
-    seed_directory(db)  # справочник есть, но hint не матчится
+    seed_directory(db)  # справочник есть, но ни hint, ни текст не матчатся
     env.classify.return_value = ClassificationResult(
         outcome=Outcome.REQUEST, category="other", urgency="low",
         confidence=0.8, location_scope="building", address_hint="Несуществующая",
     )
-    message = make_message()
+    message = make_message(text=NO_ADDRESS_TEXT)
     await run_entry(message, db)
     text = message.reply.await_args.args[0]
     assert "дом" in text.lower()
@@ -226,7 +231,7 @@ async def test_no_match_asks_for_address_with_cooldown(env, db):
 
     # cooldown исчерпан → тишина
     env.invite_allowed.return_value = False
-    message2 = make_message()
+    message2 = make_message(text=NO_ADDRESS_TEXT)
     await run_entry(message2, db)
     message2.reply.assert_not_awaited()
 
@@ -239,10 +244,25 @@ async def test_no_hint_asks_for_address(env, db):
         outcome=Outcome.REQUEST, category="other", urgency="low",
         confidence=0.8, location_scope="unknown", address_hint=None,
     )
-    message = make_message()
+    message = make_message(text=NO_ADDRESS_TEXT)
     await run_entry(message, db)
     env.store_candidate.assert_not_awaited()
     assert message.reply.await_count == 1
+
+
+async def test_house_number_only_in_text_still_matches(env, db):
+    """Номер дома есть только в тексте (LLM-хинт пуст) → дом находится."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    _yards, buildings = seed_directory(db)
+    env.classify.return_value = ClassificationResult(
+        outcome=Outcome.REQUEST, category="other", urgency="low",
+        confidence=0.8, location_scope="building", address_hint=None,
+    )
+    message = make_message(text=REQUEST_TEXT)  # «…дома 12…»
+    await run_entry(message, db)
+    payload = env.store_candidate.await_args.args[2]
+    assert payload["selected_address"]["id"] == buildings[0].id
 
 
 async def test_yard_scope_searches_yards(env, db):
@@ -340,6 +360,42 @@ def test_hint_needles_order_prefers_digit_tokens():
     needles = gi._hint_needles("у дома 14в")
     assert needles[0] == "у дома 14в"
     assert needles[1] == "14в"  # токен с цифрой раньше слов длиннее
+
+
+def test_matcher_falls_back_to_message_text(db):
+    """Живой smoke №3: LLM выбросил номер дома из хинта («dom 2 podyezd»
+    при тексте «21v dom 2 podyezd…») — номер достаётся из ПОЛНОГО текста."""
+    _yards, buildings = seed_directory(
+        db, addresses=("Yangi Olmazor, 21V", "Yangi Olmazor, 14V")
+    )
+    options = gi._match_staff_address_sync(
+        db, "building", "dom 2 podyezd",
+        "21v dom 2 podyezd eshik tagidagi skameykalar podvalga tushirilgan",
+    )
+    assert [o["id"] for o in options] == [buildings[0].id]
+
+
+def test_matcher_hint_wins_over_text_fallback(db):
+    """Хинт, нашедший дом, выигрывает — текст не пробуется."""
+    _yards, buildings = seed_directory(
+        db, addresses=("Yangi Olmazor, 21V", "Yangi Olmazor, 14V")
+    )
+    options = gi._match_staff_address_sync(
+        db, "building", "14в", "болтовня про 21v в тексте"
+    )
+    assert [o["id"] for o in options] == [buildings[1].id]
+
+
+def test_matcher_no_hint_no_digits_in_text_is_empty(db):
+    seed_directory(db)
+    assert gi._match_staff_address_sync(
+        db, "building", None, "просто болтовня без адреса"
+    ) == []
+
+
+def test_digit_tokens_filters_and_orders():
+    tokens = gi._digit_tokens("21v dom 2 podyezd 14в skameyka")
+    assert tokens == ["21v", "14в"]  # «2» короче двух символов — отсев
 
 
 # ───────────────────── callback-фаза ─────────────────────

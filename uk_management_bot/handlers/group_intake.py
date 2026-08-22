@@ -302,23 +302,54 @@ def _hint_predicate(column, needle: str, *, pg: bool):
     ))
 
 
-def _match_staff_address_sync(db, scope: str, hint: Optional[str]) -> list[dict]:
+def _digit_tokens(text: str) -> list[str]:
+    """Токены с цифрой из произвольного текста (номер дома — «21v», «14в»),
+    длиной ≥2, по убыванию длины. Чисто-числовые короткие («2 подъезд»)
+    отсеиваются длиной, болтовня — требованием цифры."""
+    import re
+
+    tokens = [
+        t for t in re.split(r"\W+", text, flags=re.UNICODE)
+        if len(t) >= 2 and any(ch.isdigit() for ch in t)
+    ]
+    seen: set[str] = set()
+    unique = []
+    for token in sorted(tokens, key=len, reverse=True):
+        if token.lower() not in seen:
+            seen.add(token.lower())
+            unique.append(token)
+    return unique
+
+
+def _match_staff_address_sync(db, scope: str, hint: Optional[str],
+                              text: Optional[str] = None) -> list[dict]:
     """Адрес staff-репорта — по СПРАВОЧНИКУ, не по квартирам автора.
 
     scope=yard → поиск по дворам; building|apartment|unknown → по домам
     (сотрудник не заводит заявку в чужую квартиру — apartment трактуем как
-    building). Без hint или без совпадений — пусто (промпт «укажите дом»).
-    Поиск через ci_contains (единственный кириллице-безопасный путь при
-    C-локали БД) по уже экранированному шаблону (escape_like); кириллический
-    хинт дополнительно пробуется в транслите (_hint_variants), а полный хинт,
-    не нашедший ничего, распадается на токены-запасные варианты
-    (_hint_needles) — до первого непустого результата.
+    building). Поиск через ci_contains (единственный кириллице-безопасный
+    путь при C-локали БД) по уже экранированному шаблону (escape_like);
+    кириллица дополнительно пробуется в транслите (_hint_variants).
+
+    Три эшелона, до первого непустого результата:
+    1) полный LLM-хинт; 2) его токены (_hint_needles, цифра — приоритет);
+    3) токены с цифрой из ПОЛНОГО текста сообщения — живой smoke показал,
+       что LLM может выбросить номер дома из хинта («dom 2 podyezd» при
+       «21v dom 2 podyezd…»), а в тексте номер есть всегда, если автор
+       его назвал. Без хинта и без совпадений — пусто («укажите дом»).
     """
-    needle = (hint or "").strip()
-    if not needle:
-        return []
     pg = is_postgres(db)
-    for candidate_needle in _hint_needles(needle):
+    tried: set[str] = set()
+    needles: list[str] = []
+    hint_needle = (hint or "").strip()
+    if hint_needle:
+        needles.extend(_hint_needles(hint_needle))
+    for token in _digit_tokens(text or ""):
+        needles.append(token)
+    for candidate_needle in needles:
+        if candidate_needle.lower() in tried:
+            continue
+        tried.add(candidate_needle.lower())
         options = _query_staff_addresses(db, scope, candidate_needle, pg)
         if options:
             return options
@@ -503,7 +534,7 @@ async def _handle_staff_request(message: Message, result: ClassificationResult,
     """Staff-ветка после LLM: адрес по справочнику → промпт/выбор/просьба."""
     options = await run_db(
         lambda s: _match_staff_address_sync(
-            s, result.location_scope, result.address_hint
+            s, result.location_scope, result.address_hint, text
         ),
         db=_db,
     )
