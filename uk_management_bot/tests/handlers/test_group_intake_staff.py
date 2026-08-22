@@ -398,6 +398,46 @@ def test_digit_tokens_filters_and_orders():
     assert tokens == ["21v", "14в"]  # «2» короче двух символов — отсев
 
 
+def test_digit_tokens_capped(db):
+    """Security-review: текст, набитый digit-токенами, не порождает
+    неограниченный список кандидатов."""
+    text = " ".join(f"{i}x" for i in range(10, 40))
+    assert len(gi._digit_tokens(text)) == gi._MAX_TEXT_DIGIT_TOKENS
+
+
+def test_matcher_caps_query_attempts(db, monkeypatch):
+    """Security-review: одно сообщение не может породить больше
+    _MAX_MATCH_ATTEMPTS SQL-запросов матчера."""
+    seed_directory(db)
+    calls = []
+    monkeypatch.setattr(
+        gi, "_query_staff_addresses",
+        lambda *a, **k: (calls.append(1), [])[1],
+    )
+    gi._match_staff_address_sync(
+        db, "building", "штука одна другая третья четвёртая пятая",
+        " ".join(f"{i}x" for i in range(10, 40)),
+    )
+    assert len(calls) <= gi._MAX_MATCH_ATTEMPTS
+
+
+async def test_prompt_escapes_address_html(env, db):
+    """Security-review: адрес справочника — свободный текст; `&`/`<` без
+    экранирования = Telegram-400 (parse_mode=HTML) и потерянный промпт."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    seed_directory(db, addresses=('Дом <Ё> & К, 12',))
+    env.classify.return_value = ClassificationResult(
+        outcome=Outcome.REQUEST, category="other", urgency="low",
+        confidence=0.9, location_scope="building", address_hint="12",
+    )
+    message = make_message(text="У дома 12 отвалилась плитка, опасно")
+    await run_entry(message, db)
+    prompt = message.reply.await_args.args[0]
+    assert "&lt;Ё&gt; &amp; К" in prompt
+    assert "<Ё>" not in prompt
+
+
 # ───────────────────── callback-фаза ─────────────────────
 
 

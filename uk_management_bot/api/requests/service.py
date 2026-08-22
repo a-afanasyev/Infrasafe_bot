@@ -29,6 +29,7 @@ from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.request_address import ResolvedAddress
@@ -240,6 +241,12 @@ async def acceptance_rows(db: AsyncSession, *, user: User) -> list:
         .where(
             or_(*conditions),
             RequestModel.status == "Исполнено",
+            # Defense-in-depth (security-review 2026-08-22): staff-заявка с
+            # менеджерской приёмкой в «Исполнено» не попадает по построению
+            # (MANAGER_CONFIRM для неё терминален), но список приёмки не
+            # должен показывать её и легаси/ручным строкам — принять её
+            # всё равно нельзя (гарды канона).
+            RequestModel.acceptance_mode == ACCEPTANCE_MODE_RESIDENT,
         )
         .order_by(RequestModel.updated_at.desc())
         .limit(20)
