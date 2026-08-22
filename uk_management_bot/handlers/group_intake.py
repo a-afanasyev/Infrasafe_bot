@@ -269,6 +269,29 @@ def _hint_variants(needle: str) -> list[str]:
     return variants
 
 
+def _hint_needles(hint: str) -> list[str]:
+    """Полный хинт + токены-запасные варианты (живой smoke: LLM отдал
+    «у дома 14в», и подстрочный поиск целиком не нашёл «Yangi Olmazor, 14V»).
+
+    Порядок: сначала весь хинт, затем токены с цифрой (номер дома — самый
+    селективный признак), затем прочие слова по убыванию длины. Матчер идёт
+    по списку до первого непустого результата, так что мусорные слова
+    («дома», «подъезд») в дело вступают, только если ничего лучше нет.
+    """
+    import re
+
+    needle = hint.strip()
+    tokens = [t for t in re.split(r"\W+", needle, flags=re.UNICODE) if len(t) >= 2]
+    tokens.sort(key=lambda t: (not any(ch.isdigit() for ch in t), -len(t)))
+    seen = {needle.lower()}
+    needles = [needle]
+    for token in tokens:
+        if token.lower() not in seen:
+            seen.add(token.lower())
+            needles.append(token)
+    return needles
+
+
 def _hint_predicate(column, needle: str, *, pg: bool):
     """OR по ci_contains для всех транслит-вариантов хинта."""
     from sqlalchemy import or_
@@ -287,12 +310,22 @@ def _match_staff_address_sync(db, scope: str, hint: Optional[str]) -> list[dict]
     building). Без hint или без совпадений — пусто (промпт «укажите дом»).
     Поиск через ci_contains (единственный кириллице-безопасный путь при
     C-локали БД) по уже экранированному шаблону (escape_like); кириллический
-    хинт дополнительно пробуется в транслите (_hint_variants).
+    хинт дополнительно пробуется в транслите (_hint_variants), а полный хинт,
+    не нашедший ничего, распадается на токены-запасные варианты
+    (_hint_needles) — до первого непустого результата.
     """
     needle = (hint or "").strip()
     if not needle:
         return []
     pg = is_postgres(db)
+    for candidate_needle in _hint_needles(needle):
+        options = _query_staff_addresses(db, scope, candidate_needle, pg)
+        if options:
+            return options
+    return []
+
+
+def _query_staff_addresses(db, scope: str, needle: str, pg: bool) -> list[dict]:
     if scope == "yard":
         rows = db.execute(
             select(Yard)
@@ -473,6 +506,12 @@ async def _handle_staff_request(message: Message, result: ClassificationResult,
             s, result.location_scope, result.address_hint
         ),
         db=_db,
+    )
+    # Диагностика smoke/прод без PII: длина хинта вместо текста.
+    logger.info(
+        "group_intake.staff_match: chat_id=%s scope=%s hint_len=%s matches=%s",
+        message.chat.id, result.location_scope,
+        len(result.address_hint or ""), len(options),
     )
     if not options:
         # Тот же cooldown, что у приглашений: просьба «назовите дом» не должна

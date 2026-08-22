@@ -317,6 +317,31 @@ def test_matcher_translit_yard_scope(db):
     assert [o["id"] for o in options] == [yards[0].id]
 
 
+def test_matcher_token_fallback_for_verbose_hint(db):
+    """Живой кейс smoke №2: LLM отдал «у дома 14в» — целиком не подстрока,
+    но токен с цифрой обязан найти дом."""
+    _yards, buildings = seed_directory(
+        db, addresses=("Yangi Olmazor, 14V", "Yangi Olmazor, 15V")
+    )
+    options = gi._match_staff_address_sync(db, "building", "у дома 14в")
+    assert [o["id"] for o in options] == [buildings[0].id]
+
+
+def test_matcher_prefers_full_hint_over_tokens(db):
+    """Полный хинт нашёлся → токены не пробуются (не расширяем выбор зря)."""
+    _yards, buildings = seed_directory(
+        db, addresses=("Yangi Olmazor, 14V", "Boshqa 99")
+    )
+    options = gi._match_staff_address_sync(db, "building", "Olmazor, 14V")
+    assert [o["id"] for o in options] == [buildings[0].id]
+
+
+def test_hint_needles_order_prefers_digit_tokens():
+    needles = gi._hint_needles("у дома 14в")
+    assert needles[0] == "у дома 14в"
+    assert needles[1] == "14в"  # токен с цифрой раньше слов длиннее
+
+
 # ───────────────────── callback-фаза ─────────────────────
 
 
