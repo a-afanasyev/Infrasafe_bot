@@ -94,9 +94,9 @@ def make_message(text=REQUEST_TEXT, *, from_id=STAFF_ID, photo=None):
     )
 
 
-def seed_staff_group(db, *, is_active=True):
+def seed_staff_group(db, *, is_active=True, require_tag=False):
     db.add(MonitoredGroup(chat_id=CHAT_ID, title="Бригада", kind="staff",
-                          is_active=is_active))
+                          is_active=is_active, require_tag=require_tag))
     db.commit()
 
 
@@ -391,6 +391,65 @@ def test_matcher_no_hint_no_digits_in_text_is_empty(db):
     assert gi._match_staff_address_sync(
         db, "building", None, "просто болтовня без адреса"
     ) == []
+
+
+# ───────────────────── тег-режим (require_tag) ─────────────────────
+
+
+async def test_require_tag_without_tag_is_full_silence(env, db):
+    """Тег-режим: сообщение без #заявка/#ariza не обрабатывается ВООБЩЕ —
+    ни staff-гейта, ни dedup, ни LLM (приватность/стоимость)."""
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(text="У дома 14в отвалилась плитка, опасно")
+    await run_entry(message, db)
+    message.reply.assert_not_awaited()
+    env.classify.assert_not_awaited()
+    env.mark_seen.assert_not_awaited()
+
+
+@pytest.mark.parametrize("tag", ["#заявка", "#Заявка", "#ariza", "#ARIZA"])
+async def test_require_tag_with_tag_runs_pipeline(env, db, tag):
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(text=f"{tag} у дома 12 отвалилась плитка, опасно")
+    await run_entry(message, db)
+    env.classify.assert_awaited_once()
+    message.reply.assert_awaited_once()
+    # тег вырезан: его нет ни в LLM-входе, ни в тексте кандидата
+    assert "#" not in env.classify.await_args.args[0]
+    payload = env.store_candidate.await_args.args[2]
+    assert "#" not in payload["text"]
+
+
+async def test_require_tag_tag_only_message_is_silent(env, db):
+    """Тег без текста — заявки из пустоты не бывает (текст из одних тегов
+    достаточно длинный, чтобы пройти префильтр, — иначе ветку не достать)."""
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    message = make_message(text="#заявка #ariza #заявка #ariza")
+    await run_entry(message, db)
+    env.classify.assert_not_awaited()
+    message.reply.assert_not_awaited()
+
+
+async def test_no_require_tag_unchanged(env, db):
+    """Флаг выключен (дефолт) — прежнее поведение, тег не нужен."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(text="У дома 12 отвалилась плитка, опасно")
+    await run_entry(message, db)
+    env.classify.assert_awaited_once()
+
+
+def test_strip_request_tag_variants():
+    assert gi.strip_request_tag("нет тега") is None
+    assert gi.strip_request_tag("#заявка свет не горит") == "свет не горит"
+    assert gi.strip_request_tag("свет #ARIZA не горит") == "свет не горит"
+    assert gi.strip_request_tag("#заявка") == ""
 
 
 def test_digit_tokens_filters_and_orders():

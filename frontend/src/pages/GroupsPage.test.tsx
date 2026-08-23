@@ -6,8 +6,8 @@ import { server } from '../test/msw/server'
 import GroupsPage from './GroupsPage'
 
 const ITEMS = [
-  { id: 1, chat_id: -1001234567890, title: 'Дом 12', kind: 'residents', is_active: true, created_at: null, updated_at: null },
-  { id: 2, chat_id: -1009876543210, title: 'Бригада', kind: 'staff', is_active: false, created_at: null, updated_at: null },
+  { id: 1, chat_id: -1001234567890, title: 'Дом 12', kind: 'residents', is_active: true, require_tag: false, created_at: null, updated_at: null },
+  { id: 2, chat_id: -1009876543210, title: 'Бригада', kind: 'staff', is_active: false, require_tag: true, created_at: null, updated_at: null },
 ]
 
 describe('Dashboard GroupsPage', () => {
@@ -59,6 +59,23 @@ describe('Dashboard GroupsPage', () => {
     expect(button).toBeDisabled()
     await user.type(screen.getByPlaceholderText('-1001234567890'), 'abc')
     expect(button).toBeDisabled()
+  })
+
+  it('renders tag mode per group and toggles it (PATCH body)', async () => {
+    let patched: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/monitored-groups', () => HttpResponse.json({ items: ITEMS, total: 2 })),
+      http.patch('*/api/v2/monitored-groups/1', async ({ request }) => {
+        patched = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ ...ITEMS[0], require_tag: true })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<GroupsPage />)
+    // группа 2 в тег-режиме, группа 1 — нет
+    expect(await screen.findByText('По тегу')).toBeInTheDocument()
+    await user.click(screen.getByText('Все сообщения'))
+    await waitFor(() => expect(patched).toEqual({ require_tag: true }))
   })
 
   it('toggles is_active (PATCH body)', async () => {

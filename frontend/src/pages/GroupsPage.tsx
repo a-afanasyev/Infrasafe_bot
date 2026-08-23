@@ -20,6 +20,7 @@ function AddGroupForm() {
   const [chatId, setChatId] = useState('')
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<MonitoredGroupKind>('residents')
+  const [requireTag, setRequireTag] = useState(false)
 
   // Telegram supergroup id — отрицательное число вида -100XXXXXXXXXX
   const parsed = Number.parseInt(chatId.trim(), 10)
@@ -33,12 +34,14 @@ function AddGroupForm() {
         chat_id: parsed,
         ...(title.trim() ? { title: title.trim() } : {}),
         kind,
+        ...(requireTag ? { require_tag: true } : {}),
       },
       {
         onSuccess: () => {
           setChatId('')
           setTitle('')
           setKind('residents')
+          setRequireTag(false)
         },
       },
     )
@@ -84,6 +87,15 @@ function AddGroupForm() {
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-2 text-[13px] text-text-secondary whitespace-nowrap pb-2">
+          <input
+            type="checkbox"
+            checked={requireTag}
+            onChange={(e) => setRequireTag(e.target.checked)}
+            className="accent-[var(--accent)]"
+          />
+          {t('groups.requireTag')}
+        </label>
         <button
           type="submit"
           disabled={!chatIdValid || create.isPending}
@@ -116,6 +128,23 @@ function GroupRow({ group }: { group: MonitoredGroup }) {
       <td className="px-3 py-2 max-w-[280px] truncate text-text-primary">{group.title || '—'}</td>
       <td className="px-3 py-2 whitespace-nowrap text-text-secondary">
         {t(`groups.kind_${group.kind}`)}
+      </td>
+      <td className="px-3 py-2">
+        <button
+          onClick={() =>
+            update.mutate({ id: group.id, body: { require_tag: !group.require_tag } })
+          }
+          disabled={update.isPending}
+          aria-label={t('groups.requireTagToggle')}
+          className={cn(
+            'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+            group.require_tag
+              ? 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800'
+              : 'bg-bg-surface text-text-secondary border-border-default',
+          )}
+        >
+          {t(group.require_tag ? 'groups.requireTagOn' : 'groups.requireTagOff')}
+        </button>
       </td>
       <td className="px-3 py-2">
         <button
@@ -190,6 +219,7 @@ export default function GroupsPage() {
                 <th className="text-left font-medium px-3 py-2">{t('groups.chatId')}</th>
                 <th className="text-left font-medium px-3 py-2">{t('groups.groupTitle')}</th>
                 <th className="text-left font-medium px-3 py-2">{t('groups.kind')}</th>
+                <th className="text-left font-medium px-3 py-2">{t('groups.requireTagLabel')}</th>
                 <th className="text-left font-medium px-3 py-2">{t('groups.statusLabel')}</th>
                 <th className="px-3 py-2" />
               </tr>
