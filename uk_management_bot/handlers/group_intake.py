@@ -699,9 +699,26 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
 
     result: ClassificationResult = await classify_message(text)
     if result.outcome is not Outcome.REQUEST:
-        # NOT_REQUEST и PROCESSING_ERROR в группе неразличимы (тишина);
-        # различие живёт в логах classifier'а.
-        return
+        if not (group.get("require_tag")
+                and result.outcome is Outcome.NOT_REQUEST):
+            # NOT_REQUEST и PROCESSING_ERROR в группе неразличимы (тишина);
+            # различие живёт в логах classifier'а.
+            return
+        # Тег-режим: тег — явное намерение автора, LLM не гейткипер (живой
+        # smoke: «#заявка когда будет свет 23 дом» LLM счёл вопросом →
+        # тишина на помеченную заявку). Вердикт «не заявка»/низкая
+        # уверенность переопределяется; извлечённых полей у NOT_REQUEST нет —
+        # категория/срочность дефолтные (автор увидит их в промпте), адрес
+        # достаёт токен-фолбэк по полному тексту. PROCESSING_ERROR остаётся
+        # тишиной: сломанный классификатор не заменить дефолтами честно.
+        result = ClassificationResult(
+            outcome=Outcome.REQUEST,
+            category=result.category or "other",
+            urgency=result.urgency or "low",
+            confidence=result.confidence,
+            location_scope=result.location_scope or "unknown",
+            address_hint=result.address_hint,
+        )
 
     if has_unsupported_media(message):
         # Заявка распознана, но приложено видео/кружочек — просим фото.

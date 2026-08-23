@@ -537,6 +537,51 @@ async def test_photo_attachment_still_works(env, db):
     assert payload["photo_file_id"] == "big"
 
 
+async def test_tagged_not_request_verdict_is_overridden(env, db):
+    """Живой smoke: «#заявка когда будет свет 23 дом» LLM счёл вопросом →
+    тишина на помеченную заявку. В тег-режиме тег — гейткипер, не LLM."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db, addresses=("Yangi Olmazor, 23V",))
+    env.classify.return_value = CR(outcome=O.NOT_REQUEST)
+    message = make_message(text="#заявка когда будет свет 23 дом")
+    await run_entry(message, db)
+    message.reply.assert_awaited_once()
+    payload = env.store_candidate.await_args.args[2]
+    assert payload["category"] == "other"
+    assert payload["urgency"] == "low"
+    assert payload["selected_address"]["label_public"].startswith("Yangi Olmazor, 23V")
+
+
+async def test_tagged_processing_error_stays_silent(env, db):
+    """PROCESSING_ERROR даже в тег-режиме — тишина (дефолтами не заменить)."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    env.classify.return_value = CR(outcome=O.PROCESSING_ERROR)
+    message = make_message(text="#заявка когда будет свет 23 дом")
+    await run_entry(message, db)
+    message.reply.assert_not_awaited()
+
+
+async def test_untagged_group_not_request_still_silent(env, db):
+    """Регресс: без тег-режима вердикт LLM решает как раньше."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db)
+    seed_staff_user(db)
+    env.classify.return_value = CR(outcome=O.NOT_REQUEST)
+    message = make_message()
+    await run_entry(message, db)
+    message.reply.assert_not_awaited()
+
+
 def test_strip_request_tag_variants():
     assert gi.strip_request_tag("нет тега") is None
     assert gi.strip_request_tag("#заявка свет не горит") == "свет не горит"
