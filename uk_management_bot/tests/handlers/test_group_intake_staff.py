@@ -78,7 +78,8 @@ def env(monkeypatch):
     return mocks
 
 
-def make_message(text=REQUEST_TEXT, *, from_id=STAFF_ID, photo=None):
+def make_message(text=REQUEST_TEXT, *, from_id=STAFF_ID, photo=None,
+                 video=None, video_note=None, caption=None):
     sent = SimpleNamespace(message_id=PROMPT_ID, edit_reply_markup=AsyncMock())
     reply = AsyncMock(return_value=sent)
     return SimpleNamespace(
@@ -86,8 +87,10 @@ def make_message(text=REQUEST_TEXT, *, from_id=STAFF_ID, photo=None):
         from_user=SimpleNamespace(id=from_id, is_bot=False, language_code="ru"),
         via_bot=None,
         text=text,
-        caption=None,
+        caption=caption,
         photo=photo,
+        video=video,
+        video_note=video_note,
         message_id=42,
         reply=reply,
         _sent=sent,
@@ -443,6 +446,69 @@ async def test_no_require_tag_unchanged(env, db):
     message = make_message(text="У дома 12 отвалилась плитка, опасно")
     await run_entry(message, db)
     env.classify.assert_awaited_once()
+
+
+# ───────────────────── фото-only вложения ─────────────────────
+
+
+async def test_tagged_video_asks_for_photo_without_llm(env, db):
+    """Тег-режим: тег = явное намерение, видео → просьба фото БЕЗ LLM."""
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    message = make_message(
+        text=None, caption="#заявка у дома 12 прорвало трубу, вода хлещет",
+        video=SimpleNamespace(file_id="vid1"),
+    )
+    await run_entry(message, db)
+    env.classify.assert_not_awaited()
+    reply_text = message.reply.await_args.args[0]
+    assert "фото" in reply_text.lower()
+    env.store_candidate.assert_not_awaited()
+
+
+async def test_request_with_video_asks_for_photo(env, db):
+    """Обычный режим: заявка распознана, но приложено видео → просьба фото."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(
+        text=None, caption="У дома 12 отвалилась плитка, опасно",
+        video=SimpleNamespace(file_id="vid1"),
+    )
+    await run_entry(message, db)
+    reply_text = message.reply.await_args.args[0]
+    assert "фото" in reply_text.lower()
+    env.store_candidate.assert_not_awaited()
+
+
+async def test_chatter_with_video_stays_silent(env, db):
+    """Болтовня с видео — тишина: проверка вложения ПОСЛЕ классификации."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db)
+    seed_staff_user(db)
+    env.classify.return_value = CR(outcome=O.NOT_REQUEST)
+    message = make_message(
+        text=None, caption="посмотрите какое видео с планёрки, отличная бригада",
+        video=SimpleNamespace(file_id="vid1"),
+    )
+    await run_entry(message, db)
+    message.reply.assert_not_awaited()
+
+
+async def test_photo_attachment_still_works(env, db):
+    """Регресс: фото прикрепляется как раньше."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(
+        text=None, caption="У дома 12 отвалилась плитка, опасно",
+        photo=[SimpleNamespace(file_id="small"), SimpleNamespace(file_id="big")],
+    )
+    await run_entry(message, db)
+    payload = env.store_candidate.await_args.args[2]
+    assert payload["photo_file_id"] == "big"
 
 
 def test_strip_request_tag_variants():

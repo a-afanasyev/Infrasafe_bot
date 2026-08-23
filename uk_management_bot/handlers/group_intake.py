@@ -464,6 +464,16 @@ def candidate_text(message: Message) -> tuple[str, bool]:
     return raw[:MAX_TEXT_LEN], len(raw) > MAX_TEXT_LEN
 
 
+def has_unsupported_media(message: Message) -> bool:
+    """Видео/кружочек вместо фото (решение владельца 2026-08-23): в заявку
+    такое медиа не прикрепляется — автору отвечаем просьбой прислать фото.
+    Кружочек не несёт подписи, поэтому фактически срабатывает на видео с
+    подписью-жалобой; сам по себе кружочек без текста остаётся тишиной."""
+    return bool(
+        getattr(message, "video", None) or getattr(message, "video_note", None)
+    )
+
+
 def strip_request_tag(text: str) -> Optional[str]:
     """Тег-режим (require_tag): найден ли тег #заявка/#ariza (casefold).
 
@@ -651,6 +661,13 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         if not stripped:
             return  # тег без текста — заявки из пустоты не бывает
         text = stripped
+        if has_unsupported_media(message):
+            # Тег = явное намерение, LLM не нужен: сразу просим фото.
+            lang = message.from_user.language_code or "ru"
+            await message.reply(
+                get_text("group_intake.photo_only", language=lang)
+            )
+            return
 
     staff_lang: Optional[str] = None
     if kind == GROUP_KIND_STAFF:
@@ -672,6 +689,13 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     if result.outcome is not Outcome.REQUEST:
         # NOT_REQUEST и PROCESSING_ERROR в группе неразличимы (тишина);
         # различие живёт в логах classifier'а.
+        return
+
+    if has_unsupported_media(message):
+        # Заявка распознана, но приложено видео/кружочек — просим фото.
+        # Проверка ПОСЛЕ классификации: болтовня с видео остаётся тишиной.
+        lang = message.from_user.language_code or "ru"
+        await message.reply(get_text("group_intake.photo_only", language=lang))
         return
 
     if kind == GROUP_KIND_STAFF:
