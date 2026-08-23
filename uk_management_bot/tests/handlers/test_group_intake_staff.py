@@ -466,6 +466,32 @@ async def test_tagged_video_asks_for_photo_without_llm(env, db):
     env.store_candidate.assert_not_awaited()
 
 
+async def test_short_tagged_video_caption_bypasses_prefilter(env, db):
+    """Живой smoke: короткая подпись к видео («#заявка 21v uy») без словарных
+    маркеров резалась ПРЕФИЛЬТРОМ до тег-гейта — полная тишина вместо просьбы
+    прислать фото. Тег обязан обходить префильтр."""
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    message = make_message(
+        text=None, caption="#заявка 21v uy",
+        video=SimpleNamespace(file_id="vid1"),
+    )
+    await run_entry(message, db)
+    reply_text = message.reply.await_args.args[0]
+    assert "фото" in reply_text.lower()
+    env.classify.assert_not_awaited()
+
+
+async def test_short_tagged_text_reaches_llm(env, db):
+    """Короткий текст с тегом (без медиа) тоже не отсеивается префильтром."""
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db)
+    message = make_message(text="#заявка 12 uy")
+    await run_entry(message, db)
+    env.classify.assert_awaited_once()
+
+
 async def test_request_with_video_asks_for_photo(env, db):
     """Обычный режим: заявка распознана, но приложено видео → просьба фото."""
     seed_staff_group(db)
