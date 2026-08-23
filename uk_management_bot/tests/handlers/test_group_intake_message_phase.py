@@ -368,6 +368,40 @@ async def test_address_hint_picks_matching_apartment(env, db):
     assert payload["selected_address"]["id"] == building2.id
 
 
+def _fake_row(apt_id, address, *, primary=False, ua_id=1):
+    apt = SimpleNamespace(id=apt_id, building=SimpleNamespace(address=address))
+    ua = SimpleNamespace(is_primary=primary, requested_at=None, id=ua_id)
+    return (apt, ua)
+
+
+class TestPickApartmentHint:
+    """Хинт-матчинг выбора квартиры = эшелоны staff-матчера (владелец
+    2026-08-23): «14 дом»/«14в» находят дом «…14V» из профиля жителя."""
+
+    ROWS = [
+        _fake_row(1, "Yangi Olmazor, 14V", primary=False, ua_id=1),
+        _fake_row(2, "Yangi Olmazor, 15V", primary=True, ua_id=2),
+    ]
+
+    def test_digit_token_picks_building(self):
+        assert gi._pick_apartment(self.ROWS, "14 дом").id == 1
+
+    def test_cyrillic_translit_picks_building(self):
+        assert gi._pick_apartment(self.ROWS, "14в").id == 1
+
+    def test_ambiguous_hint_falls_back_to_primary(self):
+        # «Olmazor» матчит оба дома → не однозначно → primary (id=2)
+        assert gi._pick_apartment(self.ROWS, "Olmazor").id == 2
+
+    def test_no_hint_prefers_primary(self):
+        assert gi._pick_apartment(self.ROWS, None).id == 2
+
+    def test_single_home_resident_wins_on_bare_number(self):
+        # Живёт только в 14V — «14» решается профилем.
+        rows = [_fake_row(1, "Yangi Olmazor, 14V", primary=True)]
+        assert gi._pick_apartment(rows, "14 дом").id == 1
+
+
 async def test_yard_scope_resolves_to_yard(env, db):
     seed_group(db)
     _user, apartment = seed_resident(db)
