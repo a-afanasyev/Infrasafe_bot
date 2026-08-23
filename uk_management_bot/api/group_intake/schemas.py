@@ -11,6 +11,8 @@ class MonitoredGroupCreate(BaseModel):
     chat_id: int
     title: Optional[str] = None
     kind: str = "residents"
+    # Тег-режим: обрабатывать только сообщения с #заявка/#ariza.
+    require_tag: bool = False
 
     @field_validator("kind")
     @classmethod
@@ -31,6 +33,7 @@ class MonitoredGroupUpdate(BaseModel):
     is_active: Optional[bool] = None
     title: Optional[str] = None
     kind: Optional[str] = None
+    require_tag: Optional[bool] = None
 
     @field_validator("kind")
     @classmethod
@@ -53,6 +56,7 @@ class MonitoredGroupOut(BaseModel):
     title: Optional[str] = None
     kind: str
     is_active: bool
+    require_tag: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

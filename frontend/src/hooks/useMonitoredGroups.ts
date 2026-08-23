@@ -13,6 +13,8 @@ export interface MonitoredGroup {
   title?: string | null
   kind: MonitoredGroupKind
   is_active: boolean
+  /** Тег-режим: бот обрабатывает только сообщения с #заявка/#ariza */
+  require_tag: boolean
   created_at?: string | null
   updated_at?: string | null
 }
@@ -26,12 +28,14 @@ export interface MonitoredGroupCreateBody {
   chat_id: number
   title?: string
   kind: MonitoredGroupKind
+  require_tag?: boolean
 }
 
 export interface MonitoredGroupUpdateBody {
   is_active?: boolean
   title?: string
   kind?: MonitoredGroupKind
+  require_tag?: boolean
 }
 
 const QUERY_KEY = ['monitored-groups']

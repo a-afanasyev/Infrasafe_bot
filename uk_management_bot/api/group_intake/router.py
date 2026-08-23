@@ -70,6 +70,7 @@ async def create_group(
         title=body.title,
         kind=body.kind,
         is_active=True,
+        require_tag=body.require_tag,
         created_by=user.id,
         updated_by=user.id,
     )
@@ -113,6 +114,9 @@ async def update_group(
     if body.kind is not None and body.kind != group.kind:
         changes["kind"] = {"old": group.kind, "new": body.kind}
         group.kind = body.kind
+    if body.require_tag is not None and body.require_tag != group.require_tag:
+        changes["require_tag"] = {"old": group.require_tag, "new": body.require_tag}
+        group.require_tag = body.require_tag
 
     if changes:
         group.updated_by = user.id

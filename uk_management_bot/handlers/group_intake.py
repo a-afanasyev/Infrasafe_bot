@@ -47,6 +47,7 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.monitored_group import (
     GROUP_KIND_RESIDENTS,
     GROUP_KIND_STAFF,
+    REQUEST_TAGS,
 )
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -132,7 +133,11 @@ def _load_group_sync(db, chat_id: int) -> Optional[dict]:
     )
     if group is None:
         return None
-    return {"kind": group.kind, "is_active": bool(group.is_active)}
+    return {
+        "kind": group.kind,
+        "is_active": bool(group.is_active),
+        "require_tag": bool(group.require_tag),
+    }
 
 
 @dataclass(frozen=True)
@@ -459,6 +464,22 @@ def candidate_text(message: Message) -> tuple[str, bool]:
     return raw[:MAX_TEXT_LEN], len(raw) > MAX_TEXT_LEN
 
 
+def strip_request_tag(text: str) -> Optional[str]:
+    """Тег-режим (require_tag): найден ли тег #заявка/#ariza (casefold).
+
+    Возвращает текст БЕЗ тега (тег — служебный маркер, ему не место ни в LLM,
+    ни в описании заявки) либо None — тега нет, сообщение не обрабатывается.
+    """
+    import re
+
+    folded = text.casefold()
+    if not any(tag in folded for tag in REQUEST_TAGS):
+        return None
+    pattern = "|".join(re.escape(tag) for tag in REQUEST_TAGS)
+    cleaned = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    return " ".join(cleaned.split())
+
+
 async def _send_invite(message: Message, key: str, lang: str) -> None:
     """Приглашение в личный бот — не чаще 1/час на пользователя (cooldown)."""
     if not await pending.invite_allowed(message.from_user.id):
@@ -620,6 +641,16 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     kind = group["kind"]
     if kind not in (GROUP_KIND_RESIDENTS, GROUP_KIND_STAFF):
         return
+
+    if group.get("require_tag"):
+        # Тег-режим: без #заявка/#ariza сообщение не обрабатывается ВООБЩЕ —
+        # ни гейтов по БД, ни dedup, ни LLM (приватность и стоимость).
+        stripped = strip_request_tag(text)
+        if stripped is None:
+            return
+        if not stripped:
+            return  # тег без текста — заявки из пустоты не бывает
+        text = stripped
 
     staff_lang: Optional[str] = None
     if kind == GROUP_KIND_STAFF:

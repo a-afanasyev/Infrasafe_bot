@@ -3058,6 +3058,11 @@
             "title": "Kind",
             "type": "string"
           },
+          "require_tag": {
+            "default": false,
+            "title": "Require Tag",
+            "type": "boolean"
+          },
           "title": {
             "anyOf": [
               {
@@ -3127,6 +3132,11 @@
             "title": "Kind",
             "type": "string"
           },
+          "require_tag": {
+            "default": false,
+            "title": "Require Tag",
+            "type": "boolean"
+          },
           "title": {
             "anyOf": [
               {
@@ -3183,6 +3193,17 @@
               }
             ],
             "title": "Kind"
+          },
+          "require_tag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Tag"
           },
           "title": {
             "anyOf": [
