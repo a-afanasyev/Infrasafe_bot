@@ -641,8 +641,13 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     text, truncated = candidate_text(message)
     if not text or text.startswith("/"):
         return
-    has_photo = bool(message.photo)
-    if not prefilter(text, has_photo=has_photo):
+    # Тег #заявка/#ariza — явный маркер намерения: такое сообщение префильтр
+    # не отсеивает (живой smoke: короткая подпись к видео без словарных
+    # маркеров резалась ДО тег-гейта). Видео/кружочек считаются медиа-сигналом
+    # наравне с фото — фото-гейт ниже сам попросит прислать фото.
+    tagged_text = strip_request_tag(text)
+    has_media = bool(message.photo) or has_unsupported_media(message)
+    if tagged_text is None and not prefilter(text, has_photo=has_media):
         return
 
     group = await run_db(lambda s: _load_group_sync(s, message.chat.id), db=_db)
@@ -655,12 +660,11 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     if group.get("require_tag"):
         # Тег-режим: без #заявка/#ariza сообщение не обрабатывается ВООБЩЕ —
         # ни гейтов по БД, ни dedup, ни LLM (приватность и стоимость).
-        stripped = strip_request_tag(text)
-        if stripped is None:
+        if tagged_text is None:
             return
-        if not stripped:
+        if not tagged_text:
             return  # тег без текста — заявки из пустоты не бывает
-        text = stripped
+        text = tagged_text
         if has_unsupported_media(message):
             # Тег = явное намерение, LLM не нужен: сразу просим фото.
             lang = message.from_user.language_code or "ru"
