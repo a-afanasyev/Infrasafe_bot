@@ -152,17 +152,25 @@ class _Gate:
 def _pick_apartment(rows: list, hint: Optional[str]):
     """Выбор квартиры из approved-цепочек: hint однозначно матчится → она;
     иначе is_primary; далее requested_at DESC, id DESC (продуктовое
-    ограничение — адрес виден в промпте, автор жмёт «Нет»/«Другой адрес»)."""
-    if hint:
-        needle = hint.strip().lower()
-        if needle:
-            matched = [
-                (apt, ua)
-                for apt, ua in rows
-                if apt.building and needle in (apt.building.address or "").lower()
-            ]
-            if len({apt.id for apt, _ua in matched}) == 1:
-                return matched[0][0]
+    ограничение — адрес виден в промпте, автор жмёт «Нет»/«Другой адрес»).
+
+    Хинт матчится теми же эшелонами, что staff-матчер (решение владельца
+    2026-08-23): целиком → токены (цифра в приоритете), каждый — с
+    транслит-вариантом. «14 дом»/«14в» находят дом «…14V» из профиля;
+    неоднозначный «14» при единственном своём доме тоже решается профилем.
+    """
+    for needle in _hint_needles(hint.strip()) if hint and hint.strip() else []:
+        variants = [v.lower() for v in _hint_variants(needle)]
+        matched = [
+            (apt, ua)
+            for apt, ua in rows
+            if apt.building and any(
+                variant in (apt.building.address or "").lower()
+                for variant in variants
+            )
+        ]
+        if len({apt.id for apt, _ua in matched}) == 1:
+            return matched[0][0]
 
     def _recency(pair):
         _apt, ua = pair
