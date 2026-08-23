@@ -785,6 +785,52 @@ async def test_yes_creates_staff_request_with_manager_acceptance(cb_env, db):
     assert "260822-005" in edited
 
 
+COLLEAGUE_ID = 333
+
+
+async def test_colleague_staff_can_confirm_for_author(cb_env, db):
+    """Решение владельца 2026-08-23: в staff-группе подтверждает ЛЮБОЙ
+    сотрудник, но владелец и reported_by — АВТОР исходного сообщения."""
+    seed_staff_group(db)
+    author = seed_staff_user(db)  # STAFF_ID — автор
+    seed_staff_user(db, telegram_id=COLLEAGUE_ID, roles='["manager"]')
+    callback = make_callback("yes", from_id=COLLEAGUE_ID)
+    await run_cb(callback, db)
+
+    callback.answer.assert_awaited_once_with()
+    cb_env.save_request.assert_awaited_once()
+    data, owner_tg_id = cb_env.save_request.await_args.args[:2]
+    assert owner_tg_id == STAFF_ID, "владелец — автор, не нажавший"
+    assert data["reported_by_user_id"] == author.id
+
+
+async def test_non_staff_presser_gets_alert_and_candidate_survives(cb_env, db):
+    """Посторонний (не сотрудник) жмёт кнопку staff-промпта: приватный алерт,
+    кандидат НЕ снят, заявка не создана."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    callback = make_callback("yes", from_id=999)
+    await run_cb(callback, db)
+
+    callback.answer.assert_awaited_once()
+    assert callback.answer.await_args.kwargs.get("show_alert") is True
+    cb_env.pop_candidate.assert_not_awaited()
+    cb_env.save_request.assert_not_awaited()
+
+
+async def test_colleague_can_pick_address_too(cb_env, db):
+    """Выбор адреса коллегой тоже разрешён (бригада работает совместно)."""
+    seed_staff_group(db)
+    seed_staff_user(db)
+    seed_staff_user(db, telegram_id=COLLEAGUE_ID)
+    cb_env.get_candidate.return_value = make_staff_candidate(
+        selected_address=None, address_options=OPTIONS
+    )
+    callback = make_callback("addr:0", from_id=COLLEAGUE_ID)
+    await run_cb(callback, db)
+    cb_env.store_candidate.assert_awaited_once()
+
+
 async def test_regate_rejects_non_staff_presser(cb_env, db):
     """За жизнь кандидата у автора отняли staff-роль → expired, не создаём."""
     seed_staff_group(db)

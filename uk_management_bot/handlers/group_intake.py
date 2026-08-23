@@ -422,10 +422,14 @@ def _query_staff_addresses(db, scope: str, needle: str, pg: bool) -> list[dict]:
 
 def _regate_sync(db, chat_id: int, telegram_id: int, candidate: dict) -> Optional[dict]:
     """Ре-гейт при «Да»: группа всё ещё активна, kind не менялся за жизнь
-    кандидата, автор всё ещё проходит гейт своего kind (residents — approved
-    applicant с телефоном; staff — approved сотрудник). Адрес ре-валидируется
-    дальше внутри save_request_sync. Возвращает {'user_id': internal id}
-    (нужен staff-пути как reported_by) либо None — отказ."""
+    кандидата, и АВТОР исходного сообщения всё ещё проходит гейт своего kind
+    (residents — approved applicant с телефоном; staff — approved сотрудник).
+
+    Для staff проверяется именно АВТОР (candidate.author_id), а не нажавший:
+    подтвердить может любой сотрудник (гейт нажавшего — в callback до pop),
+    но владельцем и reported_by заявки становится доложивший. Адрес
+    ре-валидируется дальше внутри save_request_sync. Возвращает
+    {'user_id': internal id автора} либо None — отказ."""
     group = db.query(MonitoredGroup).filter(MonitoredGroup.chat_id == chat_id).first()
     if group is None or not group.is_active:
         return None
@@ -433,7 +437,10 @@ def _regate_sync(db, chat_id: int, telegram_id: int, candidate: dict) -> Optiona
         return None
     if candidate.get("kind") != group.kind:
         return None
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    subject_tg_id = (
+        candidate.get("author_id") if group.kind == GROUP_KIND_STAFF else telegram_id
+    )
+    user = db.query(User).filter(User.telegram_id == subject_tg_id).first()
     if user is None or user.status != "approved" or user.deleted_at is not None:
         return None
     roles = set(get_user_roles(user))
@@ -868,16 +875,32 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
         return
 
     lang = candidate.get("lang") or lang_fallback
-    if callback.from_user.id != candidate.get("author_id"):
+    is_staff = candidate.get("kind") == GROUP_KIND_STAFF
+    if is_staff:
+        # Staff-группа: кнопки жмёт ЛЮБОЙ approved-сотрудник (решение владельца
+        # 2026-08-23 — бригада подтверждает репорты совместно, менеджер может
+        # подтвердить за автора). Проверка ДО пустого answer и ДО pop:
+        # посторонний не должен ни снять кандидата, ни остаться без алерта.
+        if callback.from_user.id != candidate.get("author_id"):
+            presser_ok = await run_db(
+                lambda s: _staff_author_lang_sync(s, callback.from_user.id),
+                db=_db,
+            )
+            if presser_ok is None:
+                await callback.answer(
+                    get_text("group_intake.staff_only", language=lang),
+                    show_alert=True,
+                )
+                return
+    elif callback.from_user.id != candidate.get("author_id"):
+        # Residents: решает только автор (адрес — его квартира).
         await callback.answer(
             get_text("group_intake.not_author", language=lang), show_alert=True
         )
         return
 
-    # Автор: пустой answer сразу, дальше работа (редактирование промпта).
+    # Право подтверждено: пустой answer сразу, дальше работа.
     await callback.answer()
-
-    is_staff = candidate.get("kind") == GROUP_KIND_STAFF
     action = (callback.data or "").split(":", 1)[-1]
     if action.startswith("addr:"):
         await _handle_address_pick(callback, candidate, action, lang)
@@ -935,8 +958,11 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
         # прокидка через create_request_record).
         data["acceptance_mode"] = ACCEPTANCE_MODE_MANAGER
         data["reported_by_user_id"] = allowed["user_id"]
+    # Владелец заявки — АВТОР исходного сообщения (для staff подтвердить мог
+    # коллега, но заявка принадлежит доложившему; кто подтвердил — в audit).
+    owner_tg_id = candidate.get("author_id") if is_staff else callback.from_user.id
     request_number = await save_request(
-        data, callback.from_user.id, _db, bot, source="group",
+        data, owner_tg_id, _db, bot, source="group",
         role="staff_group" if is_staff else "applicant",
     )
     if not request_number:
