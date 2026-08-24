@@ -12,6 +12,10 @@ interface Props {
   /** Кого не показывать. Нужен переназначению: текущий исполнитель в списке —
    *  это выбор «оставить как есть», который сервер отклонит как повтор. */
   excludeId?: number | null
+  /** Категория заявки: сервер оставит только исполнителей, чья специализация
+   *  её покрывает (канон-предикат бота, джокер `universal`). Без неё список —
+   *  все verified-исполнители. */
+  forCategory?: string | null
   /** Показывать ли вариант «дежурному». */
   showDuty?: boolean
   label?: string
@@ -31,12 +35,16 @@ export default function ExecutorPicker({
   value,
   onChange,
   excludeId = null,
+  forCategory = null,
   showDuty = true,
   label,
   emptyText,
 }: Props) {
   const { t } = useTranslation()
-  const { data: employees = [] } = useEmployees({ verification_status: 'verified' })
+  const { data: employees = [] } = useEmployees({
+    verification_status: 'verified',
+    ...(forCategory ? { for_category: forCategory } : {}),
+  })
 
   const candidates = employees.filter(emp => emp.id !== excludeId)
 

@@ -686,6 +686,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
         requestNumber={requestNumber}
         targetStatus={pendingTargetStatus}
         sourceStatus={request?.status}
+        category={request?.category ?? null}
         onConfirm={handleTransitionConfirm}
         onCancel={() => setPendingTargetStatus(null)}
       />
@@ -694,6 +695,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     {reassignOpen && request && (
       <ReassignExecutorModal
         requestNumber={requestNumber}
+        category={request.category ?? null}
         currentExecutorId={request.executor_id ?? null}
         currentExecutorName={request.executor_name ?? null}
         onClose={() => setReassignOpen(false)}

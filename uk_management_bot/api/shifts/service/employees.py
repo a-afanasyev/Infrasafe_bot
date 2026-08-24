@@ -8,11 +8,16 @@ from typing import Optional
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.constants.categories import get_specialization_for_category
 from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specializations,
+)
 from uk_management_bot.utils.sql_search import (
     ci_contains_any,
     escape_like as _escape_like,
@@ -48,6 +53,7 @@ async def list_employees(
     search: Optional[str],
     role: Optional[str],
     verification_status: Optional[str],
+    for_category: Optional[str] = None,
     limit: int,
     offset: int,
 ) -> tuple[list[User], dict[int, int]]:
@@ -58,6 +64,13 @@ async def list_employees(
     scope (страница «Сотрудники» так показывает менеджеров/обходчиков по фильтру),
     а НЕ добавляется поверх executor — иначе ``role='manager'`` давал бы «executor
     И manager» и чистые менеджеры (без роли executor) никогда бы не находились.
+
+    ``for_category`` — категория ЗАЯВКИ: оставить только исполнителей, чья
+    специализация покрывает её (канон-предикат `matches_required_specs`, джокер
+    `universal`, неизвестная категория → `repair`). Это те же правила, которыми
+    бот строит кандидатов назначения/переназначения — семантика одна на оба
+    интерфейса. Не путать с ``specialization`` — тот сырой LIKE по полю и
+    универсалов не находит.
     """
     scoped_role = role or "executor"
     query = select(User).where(
@@ -95,8 +108,18 @@ async def list_employees(
         )
         query = query.where(User.id.not_in(active_shift_subq))
 
-    result = await db.execute(query.offset(offset).limit(limit))
-    users = result.scalars().all()
+    if for_category:
+        # Предикат не выражается в SQL (JSON/CSV/скаляр-хранение + нормализация
+        # + джокер), поэтому пагинация здесь режется ПОСЛЕ питон-фильтра: SQL-ный
+        # offset/limit выкидывал бы подходящих, пропустив страницу неподходящих.
+        result = await db.execute(query)
+        required = {get_specialization_for_category(for_category)}
+        matched = [u for u in result.scalars().all()
+                   if matches_required_specs(parse_specializations(u), required)]
+        users = matched[offset:offset + limit]
+    else:
+        result = await db.execute(query.offset(offset).limit(limit))
+        users = result.scalars().all()
 
     user_ids = [u.id for u in users]
     active_shifts: dict[int, int] = {}

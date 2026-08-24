@@ -34,11 +34,13 @@ interface Props {
   /** Колонка, из которой тащат. Нужна, чтобы отличить возврат в работу
    *  (спрашиваем причину) от взятия заявки (спрашиваем исполнителя). */
   sourceStatus?: string
+  /** Категория заявки — пикер исполнителя покажет только подходящих. */
+  category?: string | null
   onConfirm: (data: TransitionData) => void
   onCancel: () => void
 }
 
-export default function TransitionModal({ targetStatus, sourceStatus, onConfirm, onCancel }: Props) {
+export default function TransitionModal({ targetStatus, sourceStatus, category = null, onConfirm, onCancel }: Props) {
   const { t } = useTranslation()
   const [executorId, setExecutorId] = useState<ExecutorChoice>('')
   const [text, setText] = useState('')
@@ -115,7 +117,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, onConfirm,
         )}
 
         {!isReturnToWork && targetStatus === 'В работе' && (
-          <ExecutorPicker value={executorId} onChange={setExecutorId} />
+          <ExecutorPicker value={executorId} onChange={setExecutorId} forCategory={category} />
         )}
 
         {targetStatus === 'Закуп' && (

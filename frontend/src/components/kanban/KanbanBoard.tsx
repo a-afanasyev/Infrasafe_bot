@@ -36,6 +36,8 @@ interface PendingTransition {
   newStatus: string
   /** Возврат в работу: модалка спрашивает причину, а не исполнителя. */
   sourceStatus?: string
+  /** Категория заявки — пикер исполнителя покажет только подходящих. */
+  category?: string
 }
 
 interface Props {
@@ -118,6 +120,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
     if (!isTransitionAllowed(sourceCol.status, newStatus)) return
 
     if (MODAL_STATUSES.has(newStatus)) {
+      const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
       // 'В работе': модалка выбора исполнителя нужна только при назначении из
       // «Новая» без исполнителя. Из «Закуп»/«Уточнение»/«Выполнена»/«Исполнено»/
       // «Возвращена» это resume/return — коммитим напрямую (executor_id там → 422).
@@ -128,13 +131,12 @@ export default function KanbanBoard({ onCardClick }: Props) {
           setPendingTransition({ requestNumber, newStatus, sourceStatus: sourceCol.status })
           return
         }
-        const card = columns.flatMap(c => c.requests).find(r => r.request_number === requestNumber)
         if (!inProgressNeedsExecutorModal(sourceCol.status, Boolean(card?.executor_id))) {
           commitTransition(requestNumber, { status: newStatus })
           return
         }
       }
-      setPendingTransition({ requestNumber, newStatus })
+      setPendingTransition({ requestNumber, newStatus, category: card?.category })
     } else {
       commitTransition(requestNumber, { status: newStatus })
     }
@@ -230,6 +232,7 @@ export default function KanbanBoard({ onCardClick }: Props) {
           sourceStatus={pendingTransition.sourceStatus}
           requestNumber={pendingTransition.requestNumber}
           targetStatus={pendingTransition.newStatus}
+          category={pendingTransition.category ?? null}
           onConfirm={handleTransitionConfirm}
           onCancel={() => setPendingTransition(null)}
         />

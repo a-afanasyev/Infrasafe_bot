@@ -14128,6 +14128,24 @@
             }
           },
           {
+            "description": "Категория заявки: оставить только исполнителей, чья специализация её покрывает (джокер universal проходит).",
+            "in": "query",
+            "name": "for_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Категория заявки: оставить только исполнителей, чья специализация её покрывает (джокер universal проходит).",
+              "title": "For Category"
+            }
+          },
+          {
             "in": "query",
             "name": "limit",
             "required": false,
