@@ -83,13 +83,38 @@ class ShiftService:
             # if self.is_user_in_active_shift(telegram_id):
             #     return {"success": False, "message": "У вас уже есть активная смена", "shift": None}
 
-            shift = Shift(
-                user_id=user.id,
-                start_time=datetime.now(timezone.utc),
-                status=SHIFT_STATUS_ACTIVE,
-                notes=notes,
+            # Расписание — источник истины (решение владельца 2026-08-24):
+            # если у сотрудника есть ЗАПЛАНИРОВАННАЯ смена, чьё окно уже идёт,
+            # кнопка активирует ЕЁ, а не создаёт ad-hoc-дубль поверх. Тот же
+            # переход делает джоба авто-активации (shift_scheduler) — кнопка
+            # остаётся для нетерпеливых и как явный «я вышел».
+            now = datetime.now(timezone.utc)
+            planned = (
+                self.db.query(Shift)
+                .filter(
+                    Shift.user_id == user.id,
+                    Shift.status == "planned",
+                    Shift.start_time <= now,
+                    Shift.end_time > now,
+                )
+                .order_by(Shift.start_time)
+                .first()
             )
-            self.db.add(shift)
+            if planned is not None:
+                planned.status = SHIFT_STATUS_ACTIVE
+                if notes:
+                    planned.notes = (planned.notes or "") + (
+                        f"\n{notes}" if planned.notes else notes
+                    )
+                shift = planned
+            else:
+                shift = Shift(
+                    user_id=user.id,
+                    start_time=now,
+                    status=SHIFT_STATUS_ACTIVE,
+                    notes=notes,
+                )
+                self.db.add(shift)
             self.db.commit()
             self.db.refresh(shift)
 
