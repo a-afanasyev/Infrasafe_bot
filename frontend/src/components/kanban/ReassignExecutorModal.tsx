@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 
 interface Props {
   requestNumber: string
+  /** Категория заявки — сервер сузит список до подходящих специалистов. */
+  category: string | null
   /** Текущий исполнитель — исключается из списка и определяет заголовок. */
   currentExecutorId: number | null
   currentExecutorName: string | null
@@ -38,6 +40,7 @@ interface Props {
  */
 export default function ReassignExecutorModal({
   requestNumber,
+  category,
   currentExecutorId,
   currentExecutorName,
   onClose,
@@ -93,6 +96,7 @@ export default function ReassignExecutorModal({
           value={choice}
           onChange={value => { setChoice(value); setError(null) }}
           excludeId={currentExecutorId}
+          forCategory={category}
           emptyText={t('kanban.noOtherExecutors')}
         />
 

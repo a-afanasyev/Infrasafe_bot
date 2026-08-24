@@ -24,7 +24,12 @@ const EMPLOYEES = [
 ]
 
 function mockEmployees(list = EMPLOYEES) {
-  server.use(http.get('*/api/v2/shifts/employees', () => HttpResponse.json(list)))
+  const seenUrls: string[] = []
+  server.use(http.get('*/api/v2/shifts/employees', ({ request }) => {
+    seenUrls.push(request.url)
+    return HttpResponse.json(list)
+  }))
+  return seenUrls
 }
 
 function noop() {}
@@ -34,10 +39,11 @@ beforeEach(() => {
 })
 
 async function renderModal(over: Record<string, unknown> = {}) {
-  mockEmployees()
+  const seenUrls = mockEmployees()
   render(
     <ReassignExecutorModal
       requestNumber="260101-001"
+      category="plumbing"
       currentExecutorId={5}
       currentExecutorName="Иван Иванов"
       onClose={noop}
@@ -45,6 +51,7 @@ async function renderModal(over: Record<string, unknown> = {}) {
     />
   )
   await screen.findByText('Пётр Петров')
+  return seenUrls
 }
 
 describe('ReassignExecutorModal', () => {
@@ -57,12 +64,20 @@ describe('ReassignExecutorModal', () => {
     expect(screen.queryByText('Иван Иванов')).not.toBeInTheDocument()
   })
 
+  it('запрашивает кандидатов ПОД КАТЕГОРИЮ заявки (for_category)', async () => {
+    // Фильтр «подходит ли специалист» живёт на сервере (канон-предикат бота);
+    // забытый параметр вернул бы весь список — регресс исходного дефекта.
+    const seenUrls = await renderModal()
+    expect(seenUrls.length).toBeGreaterThan(0)
+    expect(new URL(seenUrls[0]).searchParams.get('for_category')).toBe('plumbing')
+  })
+
   it('показывает, кто на смене', async () => {
     mockEmployees([
       { ...EMPLOYEES[1], active_shift_id: 99 },
     ])
     render(
-      <ReassignExecutorModal requestNumber="260101-001" currentExecutorId={5}
+      <ReassignExecutorModal requestNumber="260101-001" category="plumbing" currentExecutorId={5}
         currentExecutorName="Иван" onClose={noop} />
     )
     expect(await screen.findByText(/На смене/)).toBeInTheDocument()
@@ -101,7 +116,7 @@ describe('ReassignExecutorModal', () => {
   it('без текущего исполнителя это НАЗНАЧЕНИЕ, а не переназначение', async () => {
     mockEmployees()
     render(
-      <ReassignExecutorModal requestNumber="260101-001" currentExecutorId={null}
+      <ReassignExecutorModal requestNumber="260101-001" category="plumbing" currentExecutorId={null}
         currentExecutorName={null} onClose={noop} />
     )
     await screen.findByText('Пётр Петров')
@@ -134,7 +149,7 @@ describe('ReassignExecutorModal', () => {
     // Единственный подходящий — текущий исполнитель: список пуст ВСЕГДА.
     mockEmployees([EMPLOYEES[0]])
     render(
-      <ReassignExecutorModal requestNumber="260101-001" currentExecutorId={5}
+      <ReassignExecutorModal requestNumber="260101-001" category="plumbing" currentExecutorId={5}
         currentExecutorName="Иван" onClose={noop} />
     )
     expect(await screen.findByText(/Других подходящих исполнителей нет/)).toBeInTheDocument()

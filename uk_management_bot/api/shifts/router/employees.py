@@ -53,6 +53,11 @@ async def list_employees(
     search: Optional[str] = Query(None),
     role: Optional[str] = Query(None),
     verification_status: Optional[str] = Query(None),
+    for_category: Optional[str] = Query(
+        None,
+        description="Категория заявки: оставить только исполнителей, чья "
+                    "специализация её покрывает (джокер universal проходит).",
+    ),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -65,6 +70,7 @@ async def list_employees(
         search=search,
         role=role,
         verification_status=verification_status,
+        for_category=for_category,
         limit=limit,
         offset=offset,
     )
