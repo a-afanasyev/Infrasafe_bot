@@ -178,6 +178,11 @@ class TestStartShift:
                 q.filter.return_value.first.return_value = user
             else:
                 q.filter.return_value.first.return_value = None
+                # Поиск запланированной смены идёт цепочкой
+                # .filter(...).order_by(...).first() (активация по расписанию,
+                # 2026-08-24) — «смены нет» обязано быть None и здесь, иначе
+                # MagicMock truthy и код уйдёт в ветку активации.
+                q.filter.return_value.order_by.return_value.first.return_value = None
             return q
 
         db.query.side_effect = _query

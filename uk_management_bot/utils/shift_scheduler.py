@@ -54,6 +54,7 @@ class ShiftScheduler:
 
         # Статистика выполнения задач
         self.task_stats = {
+            'activate_scheduled': {'success': 0, 'failed': 0, 'last_run': None},
             'auto_create_shifts': {'success': 0, 'failed': 0, 'last_run': None},
             'rebalance_assignments': {'success': 0, 'failed': 0, 'last_run': None},
             'process_transfers': {'success': 0, 'failed': 0, 'last_run': None},
@@ -99,6 +100,22 @@ class ShiftScheduler:
     def setup_jobs(self):
         """Настройка всех задач планировщика"""
         try:
+            # 0. Жизненный цикл смен по РАСПИСАНИЮ (решение владельца 2026-08-24):
+            #    planned с исполнителем в наступившем окне → active;
+            #    active с истёкшим end_time → completed. Без этой джобы
+            #    расписание было декоративным: все потребители «кто на смене»
+            #    (_on_shift_filter, select_executor, профиль) требуют active,
+            #    а planned→active не переводил никто — сотрудники из
+            #    расписания не получали заявок («в профиле без смены»).
+            self.scheduler.add_job(
+                self._activate_scheduled_shifts,
+                IntervalTrigger(minutes=3),
+                id='activate_scheduled',
+                name='Активация смен по расписанию',
+                max_instances=1,
+                coalesce=True
+            )
+
             # 1. Автоматическое создание смен (каждый день в 00:30)
             self.scheduler.add_job(
                 self._auto_create_shifts,
@@ -500,6 +517,65 @@ class ShiftScheduler:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.error(f"Ошибка отправки уведомлений: {e}")
+
+    def _activate_scheduled_shifts_sync(self) -> tuple:
+        """DB-фаза активации по расписанию. Идемпотентные bulk-update'ы:
+
+        - planned + есть исполнитель + окно наступило → active. Смены без
+          исполнителя не активируются (нечего активировать — их заполняет
+          автоназначение), у planned end_time задан всегда (NULL > now = NULL
+          отфильтрует сам SQL).
+        - active + end_time истёк → completed. Ad-hoc смены («Начать смену»
+          без расписания) имеют end_time NULL и НЕ трогаются — их завершает
+          человек кнопкой, как раньше.
+        """
+        db = SessionLocal()
+        try:
+            from uk_management_bot.database.models.shift import Shift
+
+            now = utc_now()
+            activated = (
+                db.query(Shift)
+                .filter(
+                    Shift.status == 'planned',
+                    Shift.user_id.isnot(None),
+                    Shift.start_time <= now,
+                    Shift.end_time > now,
+                )
+                .update({Shift.status: 'active'}, synchronize_session=False)
+            )
+            completed = (
+                db.query(Shift)
+                .filter(
+                    Shift.status == 'active',
+                    Shift.end_time.isnot(None),
+                    Shift.end_time <= now,
+                )
+                .update({Shift.status: 'completed'}, synchronize_session=False)
+            )
+            db.commit()
+            return activated, completed
+        finally:
+            db.close()
+
+    async def _activate_scheduled_shifts(self):
+        """Активация смен по расписанию (см. setup_jobs, джоба №0)."""
+        task_name = 'activate_scheduled'
+        try:
+            activated, completed = await asyncio.to_thread(
+                self._activate_scheduled_shifts_sync
+            )
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            if activated or completed:
+                logger.info(
+                    "Смены по расписанию: активировано %s, завершено %s",
+                    activated, completed,
+                )
+        except Exception as e:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            logger.error(f"Ошибка активации смен по расписанию: {e}")
 
     def _auto_assign_empty_shifts_sync(self) -> int:
         db = SessionLocal()
