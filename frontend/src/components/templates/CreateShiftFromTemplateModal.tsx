@@ -138,16 +138,20 @@ export default function CreateShiftFromTemplateModal({
                       checked={selected.includes(e.id)}
                       onChange={() => toggle(e.id)}
                     />
-                    <span className="flex-1 text-[13px] text-text-primary">
+                    <span className="flex-1 min-w-0 text-[13px] text-text-primary">
                       {employeeName(e)}
                       {e.active_shift_id !== null && (
-                        <span className="ml-2 text-xs text-emerald">
+                        <span className="ml-2 text-xs text-emerald whitespace-nowrap">
                           ● {t('kanban.onShift')}
                         </span>
                       )}
                     </span>
                     {e.specialization.length > 0 && (
-                      <span className="text-[11px] text-text-muted text-right shrink-0 max-w-[45%] truncate">
+                      // min-w-0 обязателен: с nowrap-эллипсисом без него
+                      // min-content строки = полная ширина списка специализаций,
+                      // и auto-колонка грида DialogContent распирается шире
+                      // панели (вёрстка «уезжала» на длинных наборах).
+                      <span className="text-[11px] text-text-muted text-right min-w-0 max-w-[45%] truncate">
                         {e.specialization.map((s) => tSpecialization(s, t)).join(', ')}
                       </span>
                     )}
