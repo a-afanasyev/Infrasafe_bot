@@ -1617,6 +1617,8 @@
     "shiftDate": "Дата смены",
     "selectExecutors": "Исполнители",
     "noExecutors": "Нет доступных исполнителей",
+    "selectedCount": "Выбрано: {{count}}",
+    "executorsFilteredBySpecs": "Показаны только специалисты: {{specs}}",
     "createShift": "Создать смену",
     "editTemplateTitle": "Редактировать шаблон",
     "saveAction": "Сохранить"

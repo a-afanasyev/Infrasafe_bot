@@ -63,7 +63,7 @@ export default function TemplatesPage() {
   const { setActions, clearActions } = useTopbar()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTemplate, setEditTemplate] = useState<TemplateBrief | null>(null)
-  const [shiftModal, setShiftModal] = useState<{ id: number; name: string } | null>(null)
+  const [shiftModal, setShiftModal] = useState<{ id: number; name: string; specializations: string[] } | null>(null)
 
   const { data: templates = [], isLoading, isError } = useTemplates()
   const updateTemplate = useUpdateTemplate()
@@ -129,7 +129,11 @@ export default function TemplatesPage() {
 
   const handleCreateFromTemplate = (id: number) => {
     const tmpl = templates.find((x) => x.id === id)
-    setShiftModal({ id, name: tmpl?.name ?? '' })
+    setShiftModal({
+      id,
+      name: tmpl?.name ?? '',
+      specializations: tmpl?.required_specializations ?? [],
+    })
   }
 
   const handleEdit = useCallback((tmpl: TemplateBrief) => {
@@ -262,6 +266,7 @@ export default function TemplatesPage() {
         onClose={() => setShiftModal(null)}
         templateId={shiftModal?.id ?? null}
         templateName={shiftModal?.name}
+        requiredSpecializations={shiftModal?.specializations ?? []}
       />
 
       <ConfirmDialog

@@ -14146,6 +14146,24 @@
             }
           },
           {
+            "description": "CSV специализаций шаблона смены: оставить только исполнителей, покрывающих хотя бы одну (universal — джокер; нерезолвимое требование не пропускает никого).",
+            "in": "query",
+            "name": "for_specializations",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV специализаций шаблона смены: оставить только исполнителей, покрывающих хотя бы одну (universal — джокер; нерезолвимое требование не пропускает никого).",
+              "title": "For Specializations"
+            }
+          },
+          {
             "in": "query",
             "name": "limit",
             "required": false,

@@ -1606,6 +1606,8 @@
     "shiftDate": "Smena sanasi",
     "selectExecutors": "Ijrochilar",
     "noExecutors": "Mavjud ijrochilar yoʻq",
+    "selectedCount": "Tanlandi: {{count}}",
+    "executorsFilteredBySpecs": "Faqat mos mutaxassislar koʻrsatilgan: {{specs}}",
     "createShift": "Smena yaratish",
     "editTemplateTitle": "Shablonni tahrirlash",
     "saveAction": "Saqlash"

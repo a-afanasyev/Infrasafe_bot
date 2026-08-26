@@ -1,6 +1,6 @@
 # Домен «Смены и движок назначения» — техническая документация
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-08-25_
 
 > **Статус:** актуальная тех-версия. Отражает код на момент написания (после ARC-03 декомпозиции движка и ARC-04 удаления кластера оптимизации).
 > **Истина — код.** Все утверждения проверяемы по `file:line`. Где поведение неочевидно из кода — помечено «проверить вручную».
@@ -81,9 +81,9 @@ completed → (терминал)
 ```mermaid
 stateDiagram-v2
     [*] --> planned: create_from_template (API)\nauto-planning (бот)
-    [*] --> active: create_shift (API, сразу активна)\nstart_shift (бот, по факту выхода)
+    [*] --> active: create_shift (API, сразу активна)\nstart_shift (бот, ad-hoc «я вышел»)
 
-    planned --> active: PATCH status (API)\nисполнитель начинает
+    planned --> active: АВТО-АКТИВАЦИЯ (джоба shift_scheduler, 3 мин)\nstart_shift (бот — активирует запланированную)\nPATCH status (API)
     planned --> cancelled: PATCH status (API)
     planned --> [*]: DELETE (только planned)
 
@@ -118,7 +118,24 @@ stateDiagram-v2
 | API, из шаблона на дату | `planned` | `service.create_shifts_from_template` (`api/shifts/service.py:500-530`) |
 | Бот, автопланирование (неделя/месяц/завтра) | `planned` | `handlers/shift_management/auto_planning.py` → `ShiftPlanningService` |
 
-**Старт смены в боте** (`services/shift_service.py:70-118`): проверка роли (`executor` или `manager`, `shift_service.py:75-77`), создание `Shift(status=active, start_time=now)`, аудит `SHIFT_STARTED`, уведомление `notify_shift_started`. **Важно:** проверка «одна активная смена на пользователя» намеренно снята — один сотрудник может вести несколько смен разных специализаций одновременно (`shift_service.py:79-83`).
+**Авто-активация расписания (PR #504, 2026-08-24 — расписание стало
+источником истины).** До этого переход `planned → active` не делал никто, а
+все потребители «кто на смене» (`utils/shifts._on_shift_filter`,
+`auto_manager.rule_engine.select_executor`, профиль, пул заявок) требуют
+`status='active'` — сотрудники стояли в расписании, но заявки не получали.
+Теперь джоба №0 планировщика (`utils/shift_scheduler`, каждые 3 мин,
+идемпотентные bulk-update):
+- `planned` + есть исполнитель + `start_time <= now < end_time` → `active`;
+- `active` + `end_time <= now` → `completed` (ad-hoc смены с `end_time NULL`
+  не трогаются — их завершает человек).
+
+**Старт смены в боте** (`services/shift_service.start_shift`): проверка роли
+(`executor` или `manager`); если у сотрудника есть **запланированная** смена в
+уже наступившем окне — кнопка активирует ЕЁ (заметки дописываются), а не
+создаёт ad-hoc-дубль; иначе создаётся `Shift(status=active, start_time=now,
+end_time=NULL)`. Аудит `SHIFT_STARTED`, уведомление `notify_shift_started`.
+**Важно:** проверка «одна активная смена на пользователя» намеренно снята —
+один сотрудник может вести несколько смен разных специализаций одновременно.
 
 **Завершение** (`services/shift_service.py:120-159` — своя смена; `161-207` — `force_end_shift` менеджером): проставляется `end_time=now`, `status=completed`, аудит `SHIFT_ENDED`, уведомление.
 
@@ -393,7 +410,7 @@ total = Σ(factor_i * weight_i) − conflict_penalties
 
 | Метод | Путь | Действие |
 |-------|------|----------|
-| GET | `/employees`, `/employees/{id}` | Список/карточка сотрудника со сменами |
+| GET | `/employees`, `/employees/{id}` | Список/карточка сотрудника со сменами; `?for_category=` — только исполнители под категорию заявки; `?for_specializations=` — только подходящие под CSV-требование шаблона смены (оба — канон-предикат, джокер `universal`) — ими кормятся дропдауны назначения и модалка «Создать смену из шаблона» |
 | POST | `/employees`, `/employees/invite` | Создание сотрудника / инвайт-токен |
 | PATCH | `/employees/{id}/{approve,reject,block,unblock,delete}` | Управление статусом/верификацией/soft-delete |
 | GET | `` (list), `/{id}`, `/schedule`, `/stats` | Смены: список/карточка/расписание (overlap-фильтр)/дашборд-статистика |

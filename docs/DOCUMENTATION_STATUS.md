@@ -1,6 +1,27 @@
 # Статус документации проекта UK Management
 
-> _Последнее редактирование: 2026-07-26_
+> _Последнее редактирование: 2026-08-25_
+
+> **Волна 3 (2026-08-25) — продуктовое ТЗ, бизнес-процессы и актуализация
+> канона под состояние кода августа** (Group Intake, менеджерская приёмка,
+> инвариант «В работе ⟺ исполнитель», авто-активация смен, переназначение):
+> 1. ✅ Создан **`product/PRD.md`** — полноценное продуктовое ТЗ (персоны,
+>    сценарии, FR/NFR по 16 модулям, метрики, риски).
+> 2. ✅ Создан **`product/BUSINESS_PROCESSES.md`** — сквозные бизнес-процессы:
+>    онбординг жителя и сотрудника, путь заявки по уровням (житель → система →
+>    менеджер → исполнитель → приёмка), смены, Group Intake, доступ, счётчики.
+> 3. ✅ Создан **`tech/ARCHITECTURE_DIAGRAMS.md`** — контейнерная схема (включая
+>    `uk-group-intake-bot`), модульные схемы, ER всех четырёх хранилищ
+>    (основная БД, access-домен, `uk_media`, ресурсы), Redis-контракт.
+> 4. ✅ Актуализированы: `tech/REQUESTS.md` (пакет workflow, ASSIGN_GROUP,
+>    acceptance_mode, источники создания, переназначение),
+>    `tech/SHIFTS_AND_ASSIGNMENT.md` (авто-активация planned→active),
+>    `tech/ARCHITECTURE.md` (+group-intake-bot), `tech/DATA_MODEL.md` (head 014,
+>    удалённые quarterly-таблицы, новые сущности), `tech/API_REFERENCE.md`
+>    (+monitored-groups, +for_category, +employees-эндпоинты),
+>    `tech/ROLES_AND_ACCESS.md` (+resource_meter_entry, +staff_group),
+>    `product/OVERVIEW.md` (актуальный жизненный цикл, канал групп),
+>    гайды APPLICANT/EXECUTOR/MANAGER (группы, авто-смены, staff-приёмка).
 
 > **AUD5-PRAC-7 (2026-07-26): все 🔴 и ⚫ из корня `docs/` физически перенесены** в
 > [`Archive/2026-07-26-stale-docs/`](Archive/2026-07-26-stale-docs/README.md) —

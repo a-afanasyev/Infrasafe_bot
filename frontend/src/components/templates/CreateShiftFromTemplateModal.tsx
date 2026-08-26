@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
 import { useEmployees } from '../../hooks/useEmployees'
+import { tSpecialization } from '../../i18n/apiMaps'
 import type { EmployeeBrief } from '../../types/api'
 import { todayInDisplayTz } from '../../utils/timezone'
 import {
@@ -14,13 +15,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
   templateId: number | null
   templateName?: string
+  /** Требуемые специализации шаблона: сервер вернёт только подходящих
+   *  исполнителей (семантика guard'а шаблонов, джокер `universal`). Пустой
+   *  список = шаблон без ограничений — показываются все. */
+  requiredSpecializations?: string[]
 }
 
 function employeeName(e: EmployeeBrief): string {
@@ -34,10 +38,20 @@ function today(): string {
   return todayInDisplayTz()
 }
 
-export default function CreateShiftFromTemplateModal({ isOpen, onClose, templateId, templateName }: Props) {
+export default function CreateShiftFromTemplateModal({
+  isOpen,
+  onClose,
+  templateId,
+  templateName,
+  requiredSpecializations = [],
+}: Props) {
   const { t } = useTranslation()
   const createFromTemplate = useCreateShiftFromTemplate()
-  const { data: employees = [], isLoading } = useEmployees()
+  const { data: employees = [], isLoading } = useEmployees({
+    ...(requiredSpecializations.length > 0
+      ? { for_specializations: requiredSpecializations.join(',') }
+      : {}),
+  })
 
   const [date, setDate] = useState(today)
   const [selected, setSelected] = useState<number[]>([])
@@ -91,27 +105,53 @@ export default function CreateShiftFromTemplateModal({ isOpen, onClose, template
           </div>
 
           <div className="space-y-1.5">
-            <Label>{t('templates.selectExecutors')}</Label>
+            <div className="flex items-baseline justify-between">
+              <Label>{t('templates.selectExecutors')}</Label>
+              {selected.length > 0 && (
+                <span className="text-xs text-text-muted">
+                  {t('templates.selectedCount', { count: selected.length })}
+                </span>
+              )}
+            </div>
+            {requiredSpecializations.length > 0 && (
+              <p className="text-xs text-text-muted m-0">
+                {t('templates.executorsFilteredBySpecs', {
+                  specs: requiredSpecializations
+                    .map((s) => tSpecialization(s, t))
+                    .join(', '),
+                })}
+              </p>
+            )}
             {isLoading ? (
               <p className="text-[13px] text-muted-foreground">{t('common.loading')}</p>
             ) : employees.length === 0 ? (
               <p className="text-[13px] text-muted-foreground">{t('templates.noExecutors')}</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="max-h-64 overflow-y-auto border border-border-default rounded-sm divide-y divide-border-default">
                 {employees.map((e) => (
-                  <button
+                  <label
                     key={e.id}
-                    type="button"
-                    onClick={() => toggle(e.id)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-sm border text-[13px] transition-colors',
-                      selected.includes(e.id)
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-transparent border-border-default hover:bg-accent',
-                    )}
+                    className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-bg-surface transition-colors"
                   >
-                    {employeeName(e)}
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(e.id)}
+                      onChange={() => toggle(e.id)}
+                    />
+                    <span className="flex-1 text-[13px] text-text-primary">
+                      {employeeName(e)}
+                      {e.active_shift_id !== null && (
+                        <span className="ml-2 text-xs text-emerald">
+                          ● {t('kanban.onShift')}
+                        </span>
+                      )}
+                    </span>
+                    {e.specialization.length > 0 && (
+                      <span className="text-[11px] text-text-muted text-right shrink-0 max-w-[45%] truncate">
+                        {e.specialization.map((s) => tSpecialization(s, t)).join(', ')}
+                      </span>
+                    )}
+                  </label>
                 ))}
               </div>
             )}

@@ -1,11 +1,11 @@
 # UK Management — справочник REST/WS API
 
-> _Последнее редактирование: 2026-07-31_
+> _Последнее редактирование: 2026-08-25_
 
 **Приложение:** FastAPI `UK Management API` v2.0.0 (`uk_management_bot/api/main.py`), контейнер `uk-management-api`.
 **Префиксы:** `/api/v2/*` (REST), `/ws/v2/*` (WebSocket); часть служебных путей смонтирована по абсолютным путям.
 **Источник истины:** роутеры `uk_management_bot/api/**/router.py` + `api/main.py` + `api/dependencies.py`; машинно-точный контракт — снапшот [`openapi.json`](openapi.json).
-**Дата:** 2026-07-31.
+**Дата:** 2026-08-25.
 
 > В прод interactive-docs выключены (`docs_url/redoc_url/openapi_url = None` при `DEBUG=False`) — публичная схема увеличивает поверхность для скрейпа.
 > Взамен схема лежит в репозитории: [`openapi.json`](openapi.json) (AUD5-PRAC-8). Генерируется `python3 scripts/dump_openapi.py`, сверяется CI-шагом `OpenAPI snapshot gate` — изменение публичного контракта обязано быть видно в диффе PR, а не обнаруживаться потребителем в проде.
@@ -87,10 +87,14 @@
 
 | Метод | Путь | Назначение |
 |-------|------|-----------|
-| GET | `/employees` | Список сотрудников |
+| GET | `/employees` | Список сотрудников; фильтры `role`, `verification_status`, `has_active_shift`, `search`, `specialization` (сырой LIKE), **`for_category`** (только исполнители, чья специализация покрывает категорию заявки — канон-предикат с джокером `universal`; кормит дропдауны назначения/переназначения), **`for_specializations`** (CSV-требование шаблона смены — семантика guard'а шаблонов, fail-closed на нерезолвимых токенах; кормит модалку «Создать смену из шаблона») |
+| GET | `/employees/pending` | Очередь активации pending-стаффа (инвайт-модель) |
 | POST | `/employees` | Создать сотрудника |
-| POST | `/employees/invite` | Создать инвайт |
+| POST | `/employees/invite` | Создать инвайт (роль + специализации + срок) |
 | PATCH | `/employees/{user_id}/approve` \| `/reject` \| `/block` \| `/unblock` \| `/delete` | Модерация сотрудника |
+| PATCH | `/employees/{user_id}/activate` \| `/decline` | Активация/отклонение pending-стаффа (status → approved/blocked) |
+| PATCH | `/employees/{user_id}/name` | Правка ФИО (одной строкой) |
+| PATCH | `/employees/{user_id}/meter-entry` | Выдать/снять капабилити контролёра показаний (`resource_meter_entry`) |
 | GET | `/employees/{user_id}` | Карточка сотрудника |
 | GET | `/employees/{user_id}/active-requests-count` | Число активных заявок |
 | GET | `` | Список смен |
@@ -273,6 +277,18 @@ S2s-минтинг одноразовых launch-tickets для сервиса �
 |-------|------|------|-----------|
 | POST | `/ticket` | `require_roles(manager, system_admin, admin)`, 30/min | Тикет для встраиваемого раздела дашборда |
 | POST | `/twa-ticket` | Telegram initData, 30/min | Тикет контролёру (роль `resource_meter_entry`) из Mini App |
+
+### 2.20. Monitored groups (Group Intake) — `/api/v2/monitored-groups` (`group_intake/router.py`)
+
+Реестр Telegram-групп автоматического приёма заявок; все эндпоинты —
+`require_roles("manager")`, PATCH/DELETE пишут `updated_by` + audit.
+
+| Метод | Путь | Назначение |
+|-------|------|-----------|
+| GET | `` | Список групп (chat_id, title, kind `residents\|staff`, `is_active`, `require_tag`) |
+| POST | `` | Регистрация группы (дубль chat_id → 409) |
+| PATCH | `/{group_id}` | Правка: активность, тип, тег-режим `require_tag` (аудит с diff) |
+| DELETE | `/{group_id}` | Снятие группы с мониторинга |
 
 ---
 

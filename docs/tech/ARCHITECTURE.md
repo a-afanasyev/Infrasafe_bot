@@ -1,6 +1,6 @@
 # UK Management — техническая архитектура
 
-> _Последнее редактирование: 2026-07-31_
+> _Последнее редактирование: 2026-08-25_
 
 > Техническое описание системы: компоненты монорепо, развёртывание, потоки
 > данных, аутентификация и локализация. Продуктовый обзор — в
@@ -14,6 +14,7 @@
 | Компонент | Каталог | Стек | Назначение |
 |---|---|---|---|
 | Telegram-бот | `uk_management_bot/` | aiogram 3, Python 3.11 | Основной канал жителей/исполнителей; точка сборки `main.py` |
+| Group-Intake-бот | тот же образ, `group_intake_main.py` | aiogram 3 + Anthropic SDK | Отдельный контейнер `uk-group-intake-bot` (compose-профиль `group-intake`, свой токен): LLM-приём заявок из Telegram-групп; уведомления шлёт от лица основного бота |
 | REST + WS API | `uk_management_bot/api/` | FastAPI, SQLAlchemy async | Бэкенд дашборда и Mini App; собирается в `Dockerfile.api` |
 | Frontend SPA | `frontend/` | Vite + TS, React, shadcn/ui, TanStack Query, Zustand, i18next | Дашборд `/dashboard`, табло `/resident-board`, Mini App `/twa`, регистрация `/register`; base-path `/uk/` |
 | Контроль доступа | `access_control/` | FastAPI, отдельный образ `Dockerfile.access` | ANPR/пропуска/проезды; собственный API, общая БД/Redis |
@@ -55,7 +56,8 @@ edge/InfraSafe). Все host-порты биндятся на `127.0.0.1` — н
 доступна только через edge InfraSafe (`infrasafe.uz`) по prefix-allowlist
 (SEC-22).
 
-Долгоживущие сервисы compose: `app`, `api`, `access-api`, `frontend`,
+Долгоживущие сервисы compose: `app`, `group-intake-bot` (профиль
+`group-intake`; включён на profk), `api`, `access-api`, `frontend`,
 `postgres`, `redis`, `media-service`, `resource-postgres`, `resource-api`,
 `resource-worker`. One-shot'ы (профиль `tools` / `run --rm`): `provision-roles`
 → `migrate` (основная схема), `media-migrate` (схема `uk_media`),
@@ -72,6 +74,7 @@ flowchart TB
 
     subgraph host[Прод-хост • сеть docker uk-network]
         bot["uk-management-bot (app)\naiogram 3, 1 воркер"]
+        gib["uk-group-intake-bot\nсвой токен, polling групп\nLLM-приём заявок (Anthropic)"]
         api["uk-management-api (api)\nFastAPI REST+WS\n127.0.0.1:8085→8080\nread-only preflight схемы при старте"]
         access["uk-access-api\nFastAPI, контроль доступа\n127.0.0.1:8087→8080"]
         front["uk-frontend\nnginx + React build\n127.0.0.1:3002→80"]
@@ -93,6 +96,10 @@ flowchart TB
     bot --> pg
     bot --> redis
     bot -->|media API-key| media
+    tg <-->|long-poll, свой токен| gib
+    gib --> pg
+    gib --> redis
+    gib -->|фото групп| media
     api --> pg
     api --> redis
     api -->|media proxy| media
@@ -134,11 +141,18 @@ IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.tele
   через SQLAlchemy (`uk_management_bot/main.py`, `database/session.py`), шлёт
   уведомления пользователям.
 - **API** (`uk_management_bot/api/main.py`) обслуживает дашборд и Mini App:
-  роутеры под `/api/v2/*` (auth, requests, shifts, addresses, residents,
-  feedback, materials, profile, callcenter, public, board-config, auto-manager,
-  webhooks, registration, work-reports, resource-accounting)
+  роутеры под `/api/v2/*` (auth, requests, shifts, executor-shifts, addresses,
+  residents, feedback, materials, profile, callcenter, public, board-config,
+  auto-manager, webhooks, registration, work-reports, monitored-groups,
+  resource-accounting, announcements, media-proxy)
   и WebSocket `/ws/v2/*` для live-обновлений
-  (`api/main.py:134-157`). Пишет ту же БД `uk_management`.
+  (`api/main.py:135-160`). Пишет ту же БД `uk_management`.
+- **Group-Intake-бот** (`uk_management_bot/group_intake_main.py`) — отдельный
+  процесс с собственным Telegram-токеном: слушает только зарегистрированные
+  группы (`monitored_groups`), классифицирует сообщения (Anthropic structured
+  outputs), держит pending-кандидатов/дедуп/rate-limit в Redis (`gint:*`),
+  создаёт заявки тем же `save_request` и грузит фото в media-service. Флаг
+  `GROUP_INTAKE_ENABLED`; включён на profk.
 - **Дашборд** (`uk-frontend`) — статическая сборка React, ходит в API через
   edge по `/uk/api/*`; live-события получает по WebSocket. Роуты и гарды —
   `frontend/src/App.tsx`.
@@ -273,7 +287,8 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 
 | Домен | Где код | Документация |
 |---|---|---|
-| Заявки | `handlers/requests/`, `services/request_service.py`, `services/request_handler_service.py`, `api/requests/` | `docs/requests.md`, `docs/REQUEST_ASSIGNMENT_SYSTEM.md`, `../product/OVERVIEW.md` §6 |
+| Заявки | `handlers/requests/`, `utils/request_workflow/`, `services/workflow_runner.py`, `api/requests/` | [REQUESTS.md](REQUESTS.md), `../product/BUSINESS_PROCESSES.md` §3 |
+| Group Intake | `handlers/group_intake.py`, `services/group_intake/`, `group_intake_main.py`, `api/group_intake/`, `frontend/src/pages/GroupsPage.tsx` | `../product/PRD.md` M2, `../product/BUSINESS_PROCESSES.md` §5 |
 | Назначение / SmartDispatcher | `services/smart_dispatcher.py`, `services/assignment_service.py`, `handlers/request_assignment.py` | `docs/TECHNICAL_GUIDE_REQUEST_ASSIGNMENT.md` |
 | Смены | `services/shift_*`, `handlers/shift_management/`, `api/shifts/` | `docs/РАЗДЕЛ_3_СИСТЕМА_СМЕН_СВОДКА.md` |
 | Контроль доступа | `access_control/` (api/domain/services/repositories), `handlers/access_control.py`, `frontend/src/pages/access/` | `access_control/` (in-code), **проверить** сводный док |
@@ -288,6 +303,10 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 
 ## 7. Связанные документы
 
+- [ARCHITECTURE_DIAGRAMS.md](ARCHITECTURE_DIAGRAMS.md) — диаграммный компаньон:
+  полная контейнерная схема (включая `group-intake-bot`), модульные схемы,
+  ER всех четырёх хранилищ, сквозные потоки.
+- [../product/PRD.md](../product/PRD.md) — продуктовое ТЗ.
 - [../product/OVERVIEW.md](../product/OVERVIEW.md) — продуктовый обзор.
 - [../MATERIALS_MODULE.md](../MATERIALS_MODULE.md) — модуль «Склад материалов».
 - [../../README.md](../../README.md) — быстрый старт, тесты, конвенции.

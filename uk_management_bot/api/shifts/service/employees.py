@@ -15,6 +15,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import (
+    matches_raw_requirement,
     matches_required_specs,
     parse_specializations,
 )
@@ -54,6 +55,7 @@ async def list_employees(
     role: Optional[str],
     verification_status: Optional[str],
     for_category: Optional[str] = None,
+    for_specializations: Optional[str] = None,
     limit: int,
     offset: int,
 ) -> tuple[list[User], dict[int, int]]:
@@ -71,6 +73,11 @@ async def list_employees(
     бот строит кандидатов назначения/переназначения — семантика одна на оба
     интерфейса. Не путать с ``specialization`` — тот сырой LIKE по полю и
     универсалов не находит.
+
+    ``for_specializations`` — CSV-требование ШАБЛОНА СМЕНЫ
+    (`required_specializations`): семантика guard'а шаблонов
+    (`matches_raw_requirement`) — одного совпадения достаточно, `universal`
+    с обеих сторон — джокер, нерезолвимое требование fail-closed (никого).
     """
     scoped_role = role or "executor"
     query = select(User).where(
@@ -108,14 +115,20 @@ async def list_employees(
         )
         query = query.where(User.id.not_in(active_shift_subq))
 
-    if for_category:
+    if for_category or for_specializations:
         # Предикат не выражается в SQL (JSON/CSV/скаляр-хранение + нормализация
         # + джокер), поэтому пагинация здесь режется ПОСЛЕ питон-фильтра: SQL-ный
         # offset/limit выкидывал бы подходящих, пропустив страницу неподходящих.
         result = await db.execute(query)
-        required = {get_specialization_for_category(for_category)}
-        matched = [u for u in result.scalars().all()
-                   if matches_required_specs(parse_specializations(u), required)]
+        matched = list(result.scalars().all())
+        if for_category:
+            required = {get_specialization_for_category(for_category)}
+            matched = [u for u in matched
+                       if matches_required_specs(parse_specializations(u), required)]
+        if for_specializations:
+            matched = [u for u in matched
+                       if matches_raw_requirement(parse_specializations(u),
+                                                  for_specializations)]
         users = matched[offset:offset + limit]
     else:
         result = await db.execute(query.offset(offset).limit(limit))

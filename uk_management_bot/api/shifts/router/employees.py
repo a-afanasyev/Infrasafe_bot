@@ -58,6 +58,12 @@ async def list_employees(
         description="Категория заявки: оставить только исполнителей, чья "
                     "специализация её покрывает (джокер universal проходит).",
     ),
+    for_specializations: Optional[str] = Query(
+        None,
+        description="CSV специализаций шаблона смены: оставить только "
+                    "исполнителей, покрывающих хотя бы одну (universal — "
+                    "джокер; нерезолвимое требование не пропускает никого).",
+    ),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -71,6 +77,7 @@ async def list_employees(
         role=role,
         verification_status=verification_status,
         for_category=for_category,
+        for_specializations=for_specializations,
         limit=limit,
         offset=offset,
     )
