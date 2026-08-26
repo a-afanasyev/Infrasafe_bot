@@ -98,7 +98,11 @@ export default function CreateShiftFromTemplateModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {/* min-w-0 обязателен: DialogContent — grid, и intrinsic-ширина
+            nowrap-бейджей специализаций иначе распирает auto-колонку шире
+            панели (grid blowout) — min-w-0 на вложенных span'ах сжимает их
+            при layout, но НЕ уменьшает min-content-вклад грид-итема. */}
+        <div className="space-y-4 min-w-0">
           <div className="space-y-1.5">
             <Label>{t('templates.shiftDate')}</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
