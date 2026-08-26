@@ -1,11 +1,20 @@
 # UK Management — модель данных
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-08-25_
 
 **Назначение:** обзор доменов данных, ERD по доменам, ключевые связи и инварианты.
-**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (head = `036`).
-**Полный дамп колонок:** см. [DATABASE_SCHEMA_ACTUAL.md](../Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md).
-**Дата:** 2026-07-06.
+**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (история сжата в baseline PRC-05; **head = `014`**).
+**Актуальные ER-диаграммы всех четырёх хранилищ** (основная БД + access-домен + `uk_media` + ресурсы) — [ARCHITECTURE_DIAGRAMS.md §3](ARCHITECTURE_DIAGRAMS.md).
+
+⚠️ Изменения после 2026-07-06, ещё не влитые в диаграммы ниже:
+- **Удалены** таблицы квартального планирования (`quarterly_plans`,
+  `quarterly_shift_schedules`, `planning_conflicts`) — миграция 008 (AUD6-P2-31).
+- **Добавлены**: `monitored_groups` (Group Intake, 012/014), `work_reports`
+  (витрина «до/после»), причина возврата у заявки (009).
+- **`requests` расширена**: `source_chat_id`/`source_message_id` (происхождение
+  из группы, 012), `reported_by_user_id` + `acceptance_mode`
+  (CHECK resident|manager — менеджерская приёмка staff-репортов, 013).
+- Схемы новых сущностей — в [ARCHITECTURE_DIAGRAMS.md §3.2, §3.4](ARCHITECTURE_DIAGRAMS.md).
 
 ---
 
@@ -360,6 +369,8 @@ erDiagram
 
 ## 9. Alembic
 
-- **Head:** `036_materials_inventory`.
-- Миграции прогоняет **только контейнер `uk-management-api`** (у образа бота нет `alembic`). Форс: `docker exec uk-management-api alembic upgrade head`.
+- **Head:** `014` (история сжата: baseline `001` + seed `002` — PRC-05).
+- Миграции применяет **только one-shot сервис `migrate`** под ролью-владельцем
+  схемы (PR-7); api/access-api на старте делают read-only preflight
+  (drift ⇒ отказ старта). Рутина — `.claude/skills/uk-deploy/SKILL.md`.
 - `alembic_version` может опережать реальную схему при частичном апгрейде — сверять через `information_schema`.

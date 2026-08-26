@@ -1,6 +1,6 @@
 # Роли и модель доступа (RBAC)
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-08-25_
 
 > Источник истины: бот — `uk_management_bot/utils/constants.py` (`USER_ROLES`),
 > `config/settings.py`, `utils/enums.py` (`UserRole`), parity-тест
@@ -47,6 +47,17 @@ enum UserRole` (`tests/test_roles_parity.py:23-32`) и зеркалятся во
 > `system_admin` в authz-сайтах, либо оставить как есть) — за владельцем. Здесь
 > зафиксирована фактическая картина; код не менялся.
 
+## 2.1 Капабилити и псевдо-роли (вне реестра, но действующие)
+
+- **`resource_meter_entry`** — капабилити контролёра показаний (лежит в
+  `users.roles` рядом с ролями): открывает ввод показаний счётчиков из
+  Mini App («Учёт ресурсов»). Выдаётся/снимается менеджером в карточке
+  сотрудника (`PATCH /employees/{id}/meter-entry`).
+- **`staff_group`** — псевдо-роль адресного резолвера для staff-репортов
+  Group Intake (в `users.roles` НЕ хранится): задаёт разрешённые уровни
+  адреса (`yard`, `building`) без требования принадлежности. См.
+  [REQUESTS.md §2, §5](REQUESTS.md).
+
 ## 3. RBAC модуля «Контроль доступа»
 
 Access-control (`access_control/api/registry.py`) гейтится тремя наборами —
@@ -75,6 +86,8 @@ Access-control (`access_control/api/registry.py`) гейтится тремя н
 | `/dashboard/access` (обзор) | `ACCESS_MODULE_ROLES` | ❌ | ✅ | ✅ | ✅ |
 | `/dashboard/access/{history,database,equipment}` | `ACCESS_MANAGER_ROLES` | ❌ | ✅ | ✅ | ❌ |
 | `/dashboard/materials` (Склад) | `MATERIALS_MODULE_ROLES` | ❌ | ✅ | ✅ | ❌ |
+| `/dashboard/resource-accounting` (Учёт ресурсов, build-флаг) | `RESOURCE_MODULE_ROLES` | ❌ | ✅ | ✅ | ❌ |
+| `/dashboard/groups` (Group Intake, в составе основного дашборда) | `['admin','manager']` | ✅ | ✅ | ❌ | ❌ |
 
 > Асимметрия `admin`↔`system_admin` (первый — основной дашборд, второй — access/склад)
 > — прямое следствие §2. Если нужен единый «супер-админ», роль требует консолидации.
