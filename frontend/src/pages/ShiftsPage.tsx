@@ -30,6 +30,7 @@ import {
   addDays,
   endOfMonth,
   endOfWeek,
+  shiftMatchesSpec,
   startOfDay,
   startOfMonth,
   startOfWeek,
@@ -53,8 +54,8 @@ export default function ShiftsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null)
   const [editShift, setEditShift] = useState<ShiftDetail | null>(null)
-  // Spec filter is "month view only" but lifted to the page so switching views
-  // keeps the selection sticky if the user toggles month → week → month.
+  // Фильтр специализации общий для ВСЕХ видов (день/неделя/месяц) — полоса
+  // рендерится на уровне страницы, выбор переживает переключение вида.
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null)
 
   // Compute the [dateFrom, dateTo) range to fetch based on view mode.
@@ -80,6 +81,13 @@ export default function ShiftsPage() {
   const { data: stats } = useShiftStats()
   const { data: transfers = [] } = useShiftTransfers()
   const { data: templates = [] } = useShiftTemplates()
+
+  // Вниз (в любой из трёх видов) уходит отфильтрованный набор; полоса-фильтр
+  // считает счётчики по полному.
+  const visibleShifts = useMemo(
+    () => shifts.filter(s => shiftMatchesSpec(s, selectedSpec)),
+    [shifts, selectedSpec],
+  )
 
   const goToday = () => setSelectedDate(nowInDisplayTz())
   const goPrev = () =>
@@ -241,21 +249,28 @@ export default function ShiftsPage() {
           не требует своей страницы: домен дежурств, роут уже admin|manager. */}
       <AutoManagerCard />
 
+      {/* Полоса специализаций — над ЛЮБЫМ видом (день/неделя/месяц): фильтр
+          и счётчики единые (решение владельца 2026-08-27). Счётчики — по
+          полному набору смен периода, вниз уходит отфильтрованный. */}
+      <SpecializationFilterBar
+        shifts={shifts}
+        selectedSpec={selectedSpec}
+        onSelectSpec={setSelectedSpec}
+      />
+
       {/* View body */}
       {viewMode === 'day' ? (
-        <DayView shifts={shifts} date={selectedDate} onShiftClick={s => setSelectedShiftId(s.id)} />
+        <DayView shifts={visibleShifts} date={selectedDate} onShiftClick={s => setSelectedShiftId(s.id)} />
       ) : viewMode === 'week' ? (
         <WeekView
-          shifts={shifts}
+          shifts={visibleShifts}
           weekAnchor={selectedDate}
           onShiftClick={s => setSelectedShiftId(s.id)}
         />
       ) : (
         <MonthView
-          shifts={shifts}
+          shifts={visibleShifts}
           monthAnchor={selectedDate}
-          selectedSpec={selectedSpec}
-          onSelectSpec={setSelectedSpec}
           onShiftClick={s => setSelectedShiftId(s.id)}
           onDayClick={day => {
             setSelectedDate(day)
@@ -383,8 +398,6 @@ function WeekView({ shifts, weekAnchor, onShiftClick }: ViewBodyProps & { weekAn
 interface MonthViewProps {
   shifts: import('../hooks/useShifts').ShiftBrief[]
   monthAnchor: Date
-  selectedSpec: string | null
-  onSelectSpec: (spec: string | null) => void
   onShiftClick: (s: import('../hooks/useShifts').ShiftBrief) => void
   onDayClick: (day: Date) => void
 }
@@ -392,21 +405,12 @@ interface MonthViewProps {
 function MonthView({
   shifts,
   monthAnchor,
-  selectedSpec,
-  onSelectSpec,
   onShiftClick,
   onDayClick,
 }: MonthViewProps) {
   const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-4">
-      {/* Полоса специализаций НАД расписанием (решение владельца 2026-08-27):
-          вертикальный сайдбар слева отнимал ширину у таблицы месяца. */}
-      <SpecializationFilterBar
-        shifts={shifts}
-        selectedSpec={selectedSpec}
-        onSelectSpec={onSelectSpec}
-      />
       <div className="min-w-0 flex flex-col gap-4">
         <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
           <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
@@ -415,7 +419,6 @@ function MonthView({
           <MonthResourceGrid
             shifts={shifts}
             monthAnchor={monthAnchor}
-            selectedSpec={selectedSpec}
             onShiftClick={onShiftClick}
           />
         </div>

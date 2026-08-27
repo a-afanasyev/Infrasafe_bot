@@ -11,30 +11,15 @@ import {
   isWeekend,
   shiftTypeColor,
   specColor,
-  UNSPECIFIED_SPEC_KEY,
 } from '../../utils/shiftWeek'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
 
 interface Props {
+  /** Смены УЖЕ отфильтрованы полосой специализаций на уровне страницы. */
   shifts: ShiftBrief[]
   monthAnchor: Date
-  /**
-   * Selected sidebar entry. `null` = "Все" (no filter), empty string `""`
-   * = "Универсалы" (specialization_focus is null or empty), any other
-   * string = match that specialization.
-   */
-  selectedSpec: string | null
   onShiftClick: (shift: ShiftBrief) => void
-}
-
-function shiftMatchesSpec(shift: ShiftBrief, selected: string | null): boolean {
-  if (selected === null) return true
-  const specs = shift.specialization_focus ?? []
-  if (selected === UNSPECIFIED_SPEC_KEY) {
-    return specs.length === 0
-  }
-  return specs.includes(selected)
 }
 
 interface ExecutorRow {
@@ -55,19 +40,25 @@ function shiftHours(shift: ShiftBrief): number {
 export default function MonthResourceGrid({
   shifts,
   monthAnchor,
-  selectedSpec,
   onShiftClick,
 }: Props) {
   const { t } = useTranslation()
   const days = useMemo(() => daysInMonth(monthAnchor), [monthAnchor])
   const today = new Date()
+  // Автоподбор под самое длинное ФИО (жалоба владельца: дефолт снова резал
+  // имена). ~6.9px/символ для 12px semibold-капса + точка/бейдж/отступы.
+  const autoNameW = useMemo(() => {
+    const longest = shifts.reduce(
+      (acc, s) => Math.max(acc, (s.executor_name ?? '').length), 0)
+    return Math.round(longest * 6.9) + 118
+  }, [shifts])
   // Один storageKey с недельным видом — ширина колонки ФИО общая для обоих.
-  const { width: nameColW, handleProps } = useResizableColumn('uk.shifts.nameColW', 220)
+  const { width: nameColW, handleProps } = useResizableColumn(
+    'uk.shifts.nameColW', 220, 140, 440, autoNameW)
 
   const executors = useMemo(() => {
-    const filtered = shifts.filter(s => shiftMatchesSpec(s, selectedSpec))
     const map = new Map<string, ExecutorRow>()
-    for (const shift of filtered) {
+    for (const shift of shifts) {
       const key = executorKey(shift)
       let row = map.get(key)
       if (!row) {
@@ -101,7 +92,7 @@ export default function MonthResourceGrid({
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [shifts, selectedSpec, monthAnchor])
+  }, [shifts, monthAnchor])
 
   if (executors.length === 0) {
     return (

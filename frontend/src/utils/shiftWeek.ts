@@ -132,6 +132,21 @@ export function specColor(label: string): string {
 export const UNSPECIFIED_SPEC_KEY = '__unspecified__'
 
 /**
+ * Единый предикат «смена подходит выбранной специализации» для полосы-фильтра
+ * над всеми видами (день/неделя/месяц). `null` = «Все»,
+ * `UNSPECIFIED_SPEC_KEY` = «Универсалы» (пустой specialization_focus).
+ */
+export function shiftMatchesSpec(
+  shift: { specialization_focus?: string[] | null },
+  selected: string | null,
+): boolean {
+  if (selected === null) return true
+  const specs = shift.specialization_focus ?? []
+  if (selected === UNSPECIFIED_SPEC_KEY) return specs.length === 0
+  return specs.includes(selected)
+}
+
+/**
  * Stable per-shift executor key. We try `user_id` first because two
  * different executors may share the same display name. The shift-id
  * fallback exists only for legacy rows where neither identifier is
