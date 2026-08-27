@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toDisplayTz } from '../../utils/timezone'
+import { coverageCellColor, COVERAGE_LEGEND } from './coverageScale'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -29,20 +30,6 @@ function isShiftActiveInHour(shift: ShiftBrief, hour: number): boolean {
   return hour >= startH || hour <= effectiveEnd
 }
 
-function getCellColor(count: number): string {
-  if (count === 0) return 'rgba(239,68,68,0.3)'
-  if (count <= 2) return 'rgba(245,158,11,0.4)'
-  if (count <= 4) return 'rgba(var(--accent-rgb),0.35)'
-  return 'rgba(var(--accent-rgb),0.65)'
-}
-
-const LEGEND = [
-  { label: '0', color: 'rgba(239,68,68,0.3)' },
-  { label: '1-2', color: 'rgba(245,158,11,0.4)' },
-  { label: '3-4', color: 'rgba(var(--accent-rgb),0.35)' },
-  { label: '5+', color: 'rgba(var(--accent-rgb),0.65)' },
-]
-
 export default function ShiftCoverageHeatmap({ shifts }: Props) {
   const { t } = useTranslation()
   const [hoveredHour, setHoveredHour] = useState<number | null>(null)
@@ -62,7 +49,7 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
               'h-10 rounded cursor-default relative transition-opacity duration-150 flex items-center justify-center',
               hoveredHour !== null && hoveredHour !== h && 'opacity-50'
             )}
-            style={{ background: getCellColor(count) }}
+            style={{ background: coverageCellColor(count) }}
             onMouseEnter={() => setHoveredHour(h)}
             onMouseLeave={() => setHoveredHour(null)}
           >
@@ -98,7 +85,7 @@ export default function ShiftCoverageHeatmap({ shifts }: Props) {
 
       {/* Legend */}
       <div className="flex gap-3 items-center">
-        {LEGEND.map(item => (
+        {COVERAGE_LEGEND.map(item => (
           <div
             key={item.label}
             className="flex items-center gap-1.5"
