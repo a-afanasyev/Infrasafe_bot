@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { toDisplayTz } from '../../utils/timezone'
 import { addDays, isSameDay, isWeekend, startOfWeek, weekDays } from '../../utils/shiftWeek'
-import { coverageCellColor, COVERAGE_LEGEND } from './ShiftCoverageHeatmap'
+import { coverageCellColor, COVERAGE_LEGEND } from './coverageScale'
 import { cn } from '@/lib/utils'
 
 /**
