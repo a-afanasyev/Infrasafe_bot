@@ -104,7 +104,7 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: st
               className="inline-block w-1.5 h-1.5 rounded-full bg-red shrink-0"
             />
           )}
-          <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted tracking-wide">
+          <span className="font-[family-name:var(--font-mono)] text-[12px] font-semibold text-text-primary tracking-wide">
             {card.request_number}
           </span>
         </span>
