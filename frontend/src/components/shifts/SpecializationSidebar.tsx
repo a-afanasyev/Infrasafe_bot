@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
+import { tSpecialization } from '../../i18n/apiMaps'
 import { executorKey, specColor, UNSPECIFIED_SPEC_KEY } from '../../utils/shiftWeek'
 import { cn } from '@/lib/utils'
 
@@ -69,7 +70,9 @@ export default function SpecializationSidebar({
         continue
       }
       for (const spec of specs) {
-        const bucket = ensure(spec, spec, false)
+        // Метка — локализованная (RU/UZ), ключ и ЦВЕТ — от сырого канон-токена:
+        // грид красит точки по сырому ключу, и хэш-палитра обязана совпадать.
+        const bucket = ensure(spec, tSpecialization(spec, t), false)
         bucket.executors.add(execKey)
         bucket.shiftCount += 1
         bucket.totalHours += hours
@@ -132,7 +135,7 @@ export default function SpecializationSidebar({
         <SidebarItem
           key={row.key}
           active={selectedSpec === row.key}
-          color={row.isUnspecified ? 'var(--text-muted)' : specColor(row.label)}
+          color={row.isUnspecified ? 'var(--text-muted)' : specColor(row.key)}
           label={row.label}
           count={row.executorCount}
           onClick={() => onSelectSpec(row.key)}

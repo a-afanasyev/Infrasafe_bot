@@ -1490,6 +1490,8 @@
     "noShifts": "Smenalar yo'q",
     "noShiftsDesc": "Birinchi smenani yarating",
     "executorLabel": "Ijrochi",
+    "resizeColumn": "Ustun kengligini oʻzgartirish uchun torting",
+    "rowTotalTitle": "Oy davomida jami: {{shifts}} smena, {{hours}} soat",
     "shiftStart": "Smena boshi",
     "shiftEnd": "Smena oxiri",
     "shiftType": "Smena turi",

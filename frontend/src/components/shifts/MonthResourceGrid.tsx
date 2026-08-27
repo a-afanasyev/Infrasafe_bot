@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
+import { useResizableColumn } from '../../hooks/useResizableColumn'
 import { formatTime, toDisplayTz, dayOffset } from '../../utils/timezone'
 import {
   daysInMonth,
@@ -60,6 +61,8 @@ export default function MonthResourceGrid({
   const { t } = useTranslation()
   const days = useMemo(() => daysInMonth(monthAnchor), [monthAnchor])
   const today = new Date()
+  // Один storageKey с недельным видом — ширина колонки ФИО общая для обоих.
+  const { width: nameColW, handleProps } = useResizableColumn('uk.shifts.nameColW', 220)
 
   const executors = useMemo(() => {
     const filtered = shifts.filter(s => shiftMatchesSpec(s, selectedSpec))
@@ -113,16 +116,25 @@ export default function MonthResourceGrid({
   return (
     <div className="overflow-x-auto">
       <div
-        // Sticky 180px name column + N day cells of ≥28px (squareish).
+        // Sticky (растягиваемая) колонка ФИО + N day cells of ≥28px (squareish).
         className="grid"
         style={{
-          gridTemplateColumns: `180px repeat(${days.length}, minmax(28px, 1fr)) 96px`,
-          minWidth: `${180 + days.length * 28 + 96}px`,
+          gridTemplateColumns: `${nameColW}px repeat(${days.length}, minmax(28px, 1fr))`,
+          minWidth: `${nameColW + days.length * 28}px`,
         }}
       >
-        {/* Header row: name | 1..30 | total */}
-        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center">
+        {/* Header row: name | 1..30 */}
+        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center relative">
           {t('shifts.executorLabel')}
+          {/* Ручка ресайза: тянется мышью/пальцем, ширина сохраняется. */}
+          <div
+            {...handleProps}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('shifts.resizeColumn')}
+            title={t('shifts.resizeColumn')}
+            className="absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none hover:bg-accent/40 active:bg-accent/60"
+          />
         </div>
         {days.map((day, idx) => {
           const isToday = isSameDay(day, today)
@@ -140,11 +152,6 @@ export default function MonthResourceGrid({
             </div>
           )
         })}
-        <div className="sticky right-0 z-[3] bg-bg-card border-b border-border-default border-l border-l-border-default px-2 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider text-right">
-          {/* compact "Σ" header — translation handled inside label */}
-          {'Σ'}
-        </div>
-
         {/* Body rows */}
         {executors.map(row => (
           <div key={row.key} className="contents">
@@ -154,8 +161,16 @@ export default function MonthResourceGrid({
                 className="w-2 h-2 rounded-full shrink-0"
                 style={{ background: row.primarySpec ? specColor(row.primarySpec) : 'var(--text-muted)' }}
               />
-              <span className="text-xs font-semibold text-text-primary truncate">
+              <span className="text-xs font-semibold text-text-primary truncate" title={row.name}>
                 {row.name}
+              </span>
+              {/* Итог смен/часов — рядом с ФИО (решение владельца 2026-08-27):
+                  раньше жил в далёкой sticky Σ-колонке справа и не читался. */}
+              <span
+                className="ml-auto shrink-0 text-[10px] text-text-muted font-[var(--font-mono)]"
+                title={t('shifts.rowTotalTitle', { shifts: row.totalShifts, hours: Math.round(row.totalHours) })}
+              >
+                {row.totalShifts}&thinsp;·&thinsp;{Math.round(row.totalHours)}{t('analytics.h')}
               </span>
             </div>
             {days.map((day, idx) => {
@@ -172,10 +187,6 @@ export default function MonthResourceGrid({
                 />
               )
             })}
-            <div className="sticky right-0 z-[2] bg-bg-card border-b border-border-default border-l border-l-border-default px-2 py-1.5 text-right text-[10px] text-text-muted font-[var(--font-mono)]">
-              <div className="text-text-primary font-semibold">{row.totalShifts}</div>
-              <div>{Math.round(row.totalHours)}{t('analytics.h')}</div>
-            </div>
           </div>
         ))}
       </div>
