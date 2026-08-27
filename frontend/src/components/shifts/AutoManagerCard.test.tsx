@@ -36,6 +36,9 @@ const CONFIG = {
 }
 
 beforeEach(() => {
+  // Карточка по умолчанию СВЁРНУТА (localStorage) — тесты полей окна работают
+  // с развёрнутым состоянием; сворачивание проверяется отдельным тестом.
+  localStorage.setItem('uk.shifts.autoManagerCollapsed', '0')
   server.use(http.get('*/api/v2/auto-manager-config', () => HttpResponse.json(CONFIG)))
 })
 
@@ -187,5 +190,21 @@ describe('AutoManagerCard', () => {
     render(<AutoManagerCard />)
     await screen.findByText('🤖 Автоматический менеджер')
     expect(screen.getByText('Не удалось загрузить конфиг авто-менеджера')).toBeInTheDocument()
+  })
+
+  it('по умолчанию свёрнут в одну строку: окно видно текстом, поля скрыты; «+» раскрывает', async () => {
+    localStorage.removeItem('uk.shifts.autoManagerCollapsed')
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    await screen.findByText('🤖 Автоматический менеджер')
+
+    // Свёрнуто: полей редактирования нет, окно показано строкой.
+    expect(screen.queryByLabelText('С')).not.toBeInTheDocument()
+    expect(screen.getByText('20:00–08:00')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Автоматический менеджер/ }))
+    expect(await screen.findByLabelText('С')).toBeInTheDocument()
+    // Выбор запомнен.
+    expect(localStorage.getItem('uk.shifts.autoManagerCollapsed')).toBe('0')
   })
 })

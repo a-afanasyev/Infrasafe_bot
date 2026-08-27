@@ -16,7 +16,7 @@ import ShiftTimeline from '../components/shifts/ShiftTimeline'
 import ShiftCoverageHeatmap from '../components/shifts/ShiftCoverageHeatmap'
 import WeekResourceGrid from '../components/shifts/WeekResourceGrid'
 import MonthResourceGrid from '../components/shifts/MonthResourceGrid'
-import SpecializationSidebar from '../components/shifts/SpecializationSidebar'
+import SpecializationFilterBar from '../components/shifts/SpecializationFilterBar'
 import CalendarHeatmap from '../components/shifts/CalendarHeatmap'
 import ShiftViewToggle, { type ShiftViewMode } from '../components/shifts/ShiftViewToggle'
 import CreateShiftModal from '../components/shifts/CreateShiftModal'
@@ -399,13 +399,15 @@ function MonthView({
 }: MonthViewProps) {
   const { t } = useTranslation()
   return (
-    <div className="flex gap-4 items-start">
-      <SpecializationSidebar
+    <div className="flex flex-col gap-4">
+      {/* Полоса специализаций НАД расписанием (решение владельца 2026-08-27):
+          вертикальный сайдбар слева отнимал ширину у таблицы месяца. */}
+      <SpecializationFilterBar
         shifts={shifts}
         selectedSpec={selectedSpec}
         onSelectSpec={onSelectSpec}
       />
-      <div className="flex-1 min-w-0 flex flex-col gap-4">
+      <div className="min-w-0 flex flex-col gap-4">
         <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
           <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
             {t('shifts.shiftSchedule')}
