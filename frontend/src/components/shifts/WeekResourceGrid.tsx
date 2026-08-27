@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
+import { useResizableColumn } from '../../hooks/useResizableColumn'
+import { tSpecialization } from '../../i18n/apiMaps'
 import { toDisplayTz, formatTime, dayOffset } from '../../utils/timezone'
 import {
   executorKey,
@@ -142,6 +144,9 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
     )
   }, [shifts])
 
+  // Тот же storageKey, что у месячного вида: ширина колонки ФИО общая.
+  const { width: nameColW, handleProps } = useResizableColumn('uk.shifts.nameColW', 220)
+
   // Early return AFTER all hooks — a conditional return above useMemo broke
   // the Rules of Hooks (hook count changed between empty/non-empty renders).
   if (shifts.length === 0) {
@@ -160,17 +165,25 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
   return (
     <div className="overflow-x-auto">
       <div
-        // 180px sticky name col + 7 equal day cols. minWidth picks ~1000px so
-        // each day fits ≥110px before forcing horizontal scroll on small screens.
+        // Растягиваемая sticky name col + 7 equal day cols. minWidth picks ~1000px
+        // so each day fits ≥110px before forcing horizontal scroll on small screens.
         className="grid"
         style={{
-          gridTemplateColumns: '180px repeat(7, minmax(110px, 1fr))',
-          minWidth: '900px',
+          gridTemplateColumns: `${nameColW}px repeat(7, minmax(110px, 1fr))`,
+          minWidth: `${nameColW + 720}px`,
         }}
       >
         {/* Header: name | Mon..Sun */}
-        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center">
+        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center relative">
           {t('shifts.executorLabel')}
+          <div
+            {...handleProps}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('shifts.resizeColumn')}
+            title={t('shifts.resizeColumn')}
+            className="absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none hover:bg-accent/40 active:bg-accent/60"
+          />
         </div>
         {days.map((day, idx) => {
           const isToday = isSameDay(day, today)
@@ -210,7 +223,7 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
                 </span>
                 {row.primarySpec && (
                   <span className="text-[10px] text-text-muted truncate">
-                    {row.primarySpec}
+                    {tSpecialization(row.primarySpec, t)}
                   </span>
                 )}
               </div>

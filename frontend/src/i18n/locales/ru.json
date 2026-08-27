@@ -1501,6 +1501,8 @@
     "noShifts": "Нет смен",
     "noShiftsDesc": "Создайте первую смену",
     "executorLabel": "Исполнитель",
+    "resizeColumn": "Потяните, чтобы изменить ширину колонки",
+    "rowTotalTitle": "Всего за месяц: {{shifts}} смен, {{hours}} ч",
     "shiftStart": "Начало смены",
     "shiftEnd": "Конец смены",
     "shiftType": "Тип смены",
