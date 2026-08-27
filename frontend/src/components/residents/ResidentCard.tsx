@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { useRequestResidentPhone } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import { ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
@@ -11,6 +12,7 @@ interface Props {
 export default function ResidentCard({ resident }: Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const requestPhone = useRequestResidentPhone(resident.id)
 
   const name = [resident.first_name, resident.last_name].filter(Boolean).join(' ') || t('residents.noName')
   const isBlocked = resident.status === 'blocked'
@@ -34,10 +36,26 @@ export default function ResidentCard({ resident }: Props) {
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary truncate">
             {name}
           </div>
-          {resident.phone && (
+          {resident.phone ? (
             <div className="text-xs text-text-muted font-[family-name:var(--font-mono)] mt-0.5">
               {resident.phone}
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={e => {
+                // Карточка целиком кликабельна (открывает жителя) — кнопка
+                // не должна вести туда же.
+                e.stopPropagation()
+                requestPhone.mutate()
+              }}
+              disabled={requestPhone.isPending || requestPhone.isSuccess}
+              className="text-xs text-accent hover:underline mt-0.5 block disabled:opacity-60 disabled:no-underline"
+            >
+              {requestPhone.isSuccess
+                ? t('employees.phoneRequestSent')
+                : `📱 ${t('employees.requestPhone')}`}
+            </button>
           )}
         </div>
       </div>

@@ -41,6 +41,7 @@ vi.mock('../hooks/useEmployees', () => ({
   useDeclineEmployee: () => ({ mutate: vi.fn() }),
   useCreateInvite: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteEmployee: () => ({ mutate: vi.fn() }),
+  useRequestEmployeePhone: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false }),
 }))
 
 beforeEach(() => approveSpy.mockClear())

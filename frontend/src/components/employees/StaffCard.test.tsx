@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '../../test/test-utils'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '../../test/test-utils'
 import StaffCard from './StaffCard'
 import { displayFullName } from '../../utils/employeeUtils'
+import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 
 /**
@@ -50,5 +51,26 @@ describe('StaffCard', () => {
   it('заблокированный: бейдж «Заблокирован» рядом с верификацией, оба в потоке', () => {
     render(<StaffCard employee={makeEmployee({ status: 'blocked' })} />)
     expect(screen.getByText(/Заблокирован/)).toBeInTheDocument()
+  })
+})
+
+describe('StaffCard — запрос номера телефона', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('без телефона — кнопка «Запросить номер», клик шлёт запрос в API', async () => {
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { sent: true } })
+    render(<StaffCard employee={makeEmployee({ phone: null })} />)
+
+    const btn = screen.getByRole('button', { name: /Запросить номер/ })
+    fireEvent.click(btn)
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v2/shifts/employees/1/request-phone'))
+  })
+
+  it('с телефоном кнопки нет — показан сам номер', () => {
+    render(<StaffCard employee={makeEmployee()} />)
+    expect(screen.getByText('+998901234567')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Запросить номер/ })).not.toBeInTheDocument()
   })
 })

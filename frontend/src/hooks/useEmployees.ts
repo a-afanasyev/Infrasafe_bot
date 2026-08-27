@@ -66,6 +66,23 @@ export function useApproveEmployee() {
   })
 }
 
+/** Отправить сотруднику в Telegram запрос поделиться номером телефона.
+ *  Инвалидации нет намеренно: номер появится позже, когда пользователь
+ *  поделится контактом в боте. */
+export function useRequestEmployeePhone() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.post(`/api/v2/shifts/employees/${id}/request-phone`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.phoneRequested'))
+    },
+    onError: (error: unknown) => {
+      console.error('Request phone failed:', error)
+      toast.error(i18n.t('toast.phoneRequestFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
 /** Выдать/снять роль контролёра показаний (resource_meter_entry) — капабилити
  *  для Mini App «Ввод показаний» в «Учёте ресурсов». */
 export function useToggleMeterEntry(employeeId: number | null) {

@@ -8452,5 +8452,9 @@
     "error_empty": "❌ F.I.Sh. bo‘sh bo‘lishi mumkin emas. F.I.Sh. ni matn bilan yuboring.",
     "error_no_letters": "❌ F.I.Sh. da kamida bitta harf bo‘lishi kerak.",
     "error_too_long": "❌ F.I.Sh. juda uzun (ko‘pi bilan {max_len} belgi)."
+  },
+  "phone_request_flow": {
+    "prompt": "📱 Boshqaruv kompaniyasi menejeri telefon raqamingizni so'ramoqda. Kontaktni ulashish uchun quyidagi tugmani bosing.",
+    "foreign_contact": "Iltimos, o'zingizning kontaktingizni yuboring — «Kontakt ulashish» tugmasini bosing."
   }
 }

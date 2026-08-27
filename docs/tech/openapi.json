@@ -13574,6 +13574,52 @@
         ]
       }
     },
+    "/api/v2/residents/{resident_id}/request-phone": {
+      "post": {
+        "description": "Отправить жителю в Telegram запрос поделиться контактом (номером).",
+        "operationId": "request_resident_phone_api_v2_residents__resident_id__request_phone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Resident Phone",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
     "/api/v2/residents/{resident_id}/unblock": {
       "post": {
         "operationId": "unblock_account_api_v2_residents__resident_id__unblock_post",
@@ -14791,6 +14837,52 @@
           }
         ],
         "summary": "Reject Employee",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/request-phone": {
+      "post": {
+        "description": "Отправить сотруднику в Telegram запрос поделиться контактом (номером).",
+        "operationId": "request_employee_phone_api_v2_shifts_employees__user_id__request_phone_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Employee Phone",
         "tags": [
           "shifts"
         ]

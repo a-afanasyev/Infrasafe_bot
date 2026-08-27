@@ -132,6 +132,25 @@ export function useUnblockResident(id: number) {
   )
 }
 
+/** Отправить жителю в Telegram запрос поделиться номером телефона.
+ *  Мимо useResidentMutation намеренно: инвалидация не нужна — номер появится
+ *  позже, когда житель поделится контактом в боте. */
+export function useRequestResidentPhone(id: number) {
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post(`/api/v2/residents/${id}/request-phone`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.phoneRequested'))
+    },
+    onError: (error: unknown) => {
+      console.error('Request resident phone failed:', error)
+      toast.error(i18n.t('toast.phoneRequestFailed'), {
+        description: safeErrorMessage(error, i18n.t('common.error')),
+      })
+    },
+  })
+}
+
 /** Исправить ФИО жителя, введённое им с ошибкой при регистрации. */
 export function useRenameResident(id: number) {
   return useResidentMutation<string>(
