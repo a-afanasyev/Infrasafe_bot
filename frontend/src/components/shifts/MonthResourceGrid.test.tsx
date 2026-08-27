@@ -35,7 +35,6 @@ describe('MonthResourceGrid', () => {
       <MonthResourceGrid
         shifts={[makeShift({ id: 1 }), makeShift({ id: 2, start_time: '2026-06-11T09:00:00+05:00', end_time: '2026-06-11T17:00:00+05:00' })]}
         monthAnchor={monthAnchor}
-        selectedSpec={null}
         onShiftClick={vi.fn()}
       />,
     )
@@ -51,7 +50,6 @@ describe('MonthResourceGrid', () => {
       <MonthResourceGrid
         shifts={[makeShift()]}
         monthAnchor={monthAnchor}
-        selectedSpec={null}
         onShiftClick={vi.fn()}
       />,
     )
@@ -64,7 +62,6 @@ describe('SpecializationFilterBar локализация', () => {
     render(
       <SpecializationFilterBar
         shifts={[makeShift(), makeShift({ id: 3, specialization_focus: [] })]}
-        selectedSpec={null}
         onSelectSpec={vi.fn()}
       />,
     )

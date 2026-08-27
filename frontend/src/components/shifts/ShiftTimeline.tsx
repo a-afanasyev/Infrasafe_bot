@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ShiftBrief } from '../../hooks/useShifts'
+import { useResizableColumn } from '../../hooks/useResizableColumn'
 import { formatTime } from '../../utils/timezone'
 import { computeBlocks, type ShiftBlock } from './shiftTimelineBlocks'
 import EmptyState from '../shared/EmptyState'
@@ -51,6 +52,16 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
     return () => clearInterval(interval)
   }, [])
 
+  // Единообразие с неделей/месяцем: тот же storageKey и автоподбор ширины
+  // колонки ФИО под самое длинное имя (аватар — как в недельном виде).
+  const autoNameW = useMemo(() => {
+    const longest = shifts.reduce(
+      (acc, s) => Math.max(acc, (s.executor_name ?? '').length), 0)
+    return Math.round(longest * 6.9) + 92
+  }, [shifts])
+  const { width: nameColW, handleProps } = useResizableColumn(
+    'uk.shifts.nameColW', 220, 140, 440, autoNameW)
+
   if (shifts.length === 0) {
     return (
       <EmptyState
@@ -81,10 +92,18 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
       className="overflow-x-auto overflow-y-visible relative"
     >
       {/* Grid uses dynamic gridTemplateColumns -- must remain inline */}
-      <div style={{ display: 'grid', gridTemplateColumns: '180px repeat(24, minmax(44px, 1fr))', minWidth: '1200px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `${nameColW}px repeat(24, minmax(44px, 1fr))`, minWidth: `${nameColW + 1056}px` }}>
         {/* Header row */}
-        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center">
+        <div className="sticky left-0 z-[3] bg-bg-card border-b border-border-default border-r border-r-border-default px-3 py-2.5 text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center relative">
           {t('shifts.executorLabel')}
+          <div
+            {...handleProps}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('shifts.resizeColumn')}
+            title={t('shifts.resizeColumn')}
+            className="absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none hover:bg-accent/40 active:bg-accent/60"
+          />
         </div>
         {hours.map(h => (
           <div
@@ -162,8 +181,8 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                       className="absolute cursor-pointer rounded-[6px] px-1.5 py-1 overflow-hidden flex flex-col justify-center gap-px transition-colors duration-150"
                       style={{
                         top: '-52px',
-                        left: `calc(180px + (100% - 180px) * ${block.colStart - 2} / 24)`,
-                        width: `calc((100% - 180px) * ${block.colSpan} / 24)`,
+                        left: `calc(${nameColW}px + (100% - ${nameColW}px) * ${block.colStart - 2} / 24)`,
+                        width: `calc((100% - ${nameColW}px) * ${block.colSpan} / 24)`,
                         height: '36px',
                         marginTop: '8px',
                         background: `${color}22`,

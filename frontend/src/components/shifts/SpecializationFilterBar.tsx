@@ -100,12 +100,15 @@ export default function SpecializationFilterBar({
   }, [shifts, t])
 
   return (
+    // Строго одна строка: при нехватке ширины чипы уходят в горизонтальный
+    // скролл, а не переносятся («убегали» на вторую-третью строку и ломали
+    // компактность — репорт владельца 2026-08-27).
     <div
-      className="bg-bg-card border border-border-default rounded-default px-3 py-2 flex items-center gap-2 flex-wrap"
+      className="bg-bg-card border border-border-default rounded-default px-3 py-2 flex items-center gap-2 overflow-x-auto"
       role="toolbar"
       aria-label={t('shifts.specSidebar.title')}
     >
-      <span className="font-[var(--font-display)] font-semibold text-[11px] text-text-muted uppercase tracking-wider px-1">
+      <span className="font-[var(--font-display)] font-semibold text-[11px] text-text-muted uppercase tracking-wider px-1 shrink-0">
         {t('shifts.specSidebar.title')}
       </span>
 
@@ -128,7 +131,7 @@ export default function SpecializationFilterBar({
         />
       ))}
 
-      <span className="ml-auto text-[11px] text-text-muted whitespace-nowrap pl-2">
+      <span className="ml-auto shrink-0 text-[11px] text-text-muted whitespace-nowrap pl-2">
         {t('shifts.specSidebar.summary', { shifts: totals.shiftCount, hours: totals.totalHours })}
       </span>
     </div>
@@ -150,7 +153,7 @@ function FilterChip({ active, color, label, count, onClick }: FilterChipProps) {
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors',
+        'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors shrink-0 whitespace-nowrap',
         active
           ? 'bg-accent-dim text-accent border border-border-active'
           : 'text-text-secondary hover:bg-bg-card-hover hover:text-text-primary border border-border-default',

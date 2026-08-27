@@ -144,8 +144,16 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
     )
   }, [shifts])
 
+  // Автоподбор под самое длинное ФИО (см. MonthResourceGrid): аватар шире
+  // точки, поэтому константа отступов больше.
+  const autoNameW = useMemo(() => {
+    const longest = shifts.reduce(
+      (acc, s) => Math.max(acc, (s.executor_name ?? '').length), 0)
+    return Math.round(longest * 6.9) + 92
+  }, [shifts])
   // Тот же storageKey, что у месячного вида: ширина колонки ФИО общая.
-  const { width: nameColW, handleProps } = useResizableColumn('uk.shifts.nameColW', 220)
+  const { width: nameColW, handleProps } = useResizableColumn(
+    'uk.shifts.nameColW', 220, 140, 440, autoNameW)
 
   // Early return AFTER all hooks — a conditional return above useMemo broke
   // the Rules of Hooks (hook count changed between empty/non-empty renders).
