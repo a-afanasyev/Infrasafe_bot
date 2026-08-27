@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
+import { AVATAR_GRADIENTS, SPEC_COLORS, displayFullName, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
 
@@ -101,7 +101,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-[var(--font-display)] font-semibold text-xs text-text-primary truncate">
-                          {name}
+                          {displayFullName(name)}
                         </span>
                         {staffRole && (
                           <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">

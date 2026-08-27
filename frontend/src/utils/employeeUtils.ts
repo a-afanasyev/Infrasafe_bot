@@ -43,6 +43,25 @@ export function getSpecDisplay(key: string, t: TFunction): string {
   return emoji ? `${emoji} ${label}` : label
 }
 
+/**
+ * КАПС-ФИО из БД → «Вид Имени» для плиток. Правила: трогаем только слова,
+ * записанные целиком капсом (нормальный регистр — уже осознанный ввод);
+ * капитализация после дефиса — да, после апострофа — НЕТ: в узбекской
+ * латинице o'/g' — единые буквы (O'g'li, Qo'chqor), «O'G'Li» — ошибка.
+ */
+export function displayFullName(raw: string): string {
+  return raw
+    .split(/\s+/)
+    .map(w =>
+      w.length > 1 && w === w.toUpperCase() && w !== w.toLowerCase()
+        ? w
+            .toLowerCase()
+            .replace(/(^|-)(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase())
+        : w,
+    )
+    .join(' ')
+}
+
 export function getInitials(firstName: string | null, lastName: string | null): string {
   const f = firstName ? firstName[0] : ''
   const l = lastName ? lastName[0] : ''
