@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
+import { AVATAR_GRADIENTS, SPEC_COLORS, displayFullName, getInitials } from '../../utils/employeeUtils'
 import { tSpecialization } from '../../i18n/apiMaps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -40,8 +40,9 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
         hovered && 'shadow-[0_12px_40px_rgba(0,0,0,0.3)] -translate-y-0.5'
       )}
     >
-      {/* Card header */}
-      <div className="p-5 pb-4 flex items-start gap-3.5 relative">
+      {/* Card header. Всё в потоке — до 2026-08-27 бейдж верификации был
+          absolute top-right и наезжал на длинные ФИО. */}
+      <div className="p-5 pb-4 flex items-start gap-3.5">
         {/* Avatar */}
         <div className="relative shrink-0">
           <div
@@ -59,58 +60,51 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
           />
         </div>
 
-        {/* Name + phone */}
+        {/* Name + phone + badges */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="font-[var(--font-display)] font-semibold text-[15px] text-text-primary truncate">
-              {name}
-            </div>
-            {staffRole && (
-              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">
-                {t(`role.${staffRole}`)}
-              </span>
-            )}
+          {/* КАПС-ФИО из БД → Вид Имени; до двух строк вместо truncate. */}
+          <div className="font-[var(--font-display)] font-semibold text-[15px] leading-snug text-text-primary break-words line-clamp-2">
+            {displayFullName(name)}
           </div>
           {employee.phone && (
             <div className="text-xs text-text-muted mt-0.5 font-[var(--font-mono)]">
               {employee.phone}
             </div>
           )}
-          {/* Spec tags */}
-          {employee.specialization.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {employee.specialization.map(spec => (
-                <span
-                  key={spec}
-                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] tracking-wide"
-                  style={{
-                    background: `color-mix(in srgb, ${SPEC_COLORS[spec] ?? 'var(--text-muted)'} 13%, transparent)`,
-                    color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
-                  }}
-                >
-                  {tSpecialization(spec, t)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Verification / blocked badge */}
-        <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
-          {isBlocked && (
-            <div className="text-[10px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red">
-              {t('employees.blocked')}
-            </div>
-          )}
-          <div
-            className={cn(
-              'text-[10px] font-semibold px-2 py-0.5 rounded-[10px]',
-              isVerified
-                ? 'bg-emerald/15 text-emerald'
-                : 'bg-amber/15 text-amber'
+          {/* Единый ряд бейджей: блокировка, верификация, роль, специализации */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {isBlocked && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red">
+                {t('employees.blocked')}
+              </span>
             )}
-          >
-            {isVerified ? `✓ ${t('employees.verified')}` : `⏳ ${t('employees.pendingVerification')}`}
+            <span
+              className={cn(
+                'text-[10px] font-semibold px-2 py-0.5 rounded-[10px]',
+                isVerified
+                  ? 'bg-emerald/15 text-emerald'
+                  : 'bg-amber/15 text-amber'
+              )}
+            >
+              {isVerified ? `✓ ${t('employees.verified')}` : `⏳ ${t('employees.pendingVerification')}`}
+            </span>
+            {staffRole && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">
+                {t(`role.${staffRole}`)}
+              </span>
+            )}
+            {employee.specialization.map(spec => (
+              <span
+                key={spec}
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[10px] tracking-wide"
+                style={{
+                  background: `color-mix(in srgb, ${SPEC_COLORS[spec] ?? 'var(--text-muted)'} 13%, transparent)`,
+                  color: SPEC_COLORS[spec] ?? 'var(--text-muted)',
+                }}
+              >
+                {tSpecialization(spec, t)}
+              </span>
+            ))}
           </div>
         </div>
       </div>
