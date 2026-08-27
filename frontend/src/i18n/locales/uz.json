@@ -1536,6 +1536,8 @@
   },
   "autoManager": {
     "title": "🤖 Avtomatik menejer",
+    "expand": "Sozlamalarni ochish",
+    "collapse": "Yigʻish",
     "enabledOn": "🟢 Yoqilgan",
     "enabledOff": "🔴 O'chirilgan",
     "toggleLabel": "Avtomenejerni yoqish/o'chirish",

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import AutoManagerToggle from '../shared/AutoManagerToggle'
+import { cn } from '@/lib/utils'
 import type { AutoManagerConfigData } from '../../types/autoManagerConfig'
 
 // Строгий HH:MM (00-23:00-59) — минимальная client-side проверка формы, ДО
@@ -24,10 +25,25 @@ function isValidHHMM(value: string): boolean {
 // enabled + окно работы; mode зафиксирован на "rule" — кнопка "ИИ" кликабельна
 // и показывает пояснение, но не пишет в конфиг (заглушка до Фазы 2);
 // timezone/max_requests_per_run — только просмотр.
+const COLLAPSED_KEY = 'uk.shifts.autoManagerCollapsed'
+
 export default function AutoManagerCard() {
   const { t } = useTranslation()
   const { data, isLoading, isError, error } = useAutoManagerConfig()
   const updateConfig = useUpdateAutoManagerConfig()
+
+  // Свёрнут по умолчанию (решение владельца 2026-08-27: карточка съедала
+  // много места над расписанием). Выбор запоминается в localStorage.
+  const [collapsed, setCollapsed] = useState<boolean>(
+    () => localStorage.getItem(COLLAPSED_KEY) !== '0',
+  )
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0')
+      return next
+    })
+  }
 
   // Черновик окна редактируется отдельно от enabled-тумблера (который шлёт
   // мутацию сразу) — пользователь правит оба поля времени и жмёт "Сохранить".
@@ -88,14 +104,41 @@ export default function AutoManagerCard() {
   }
 
   return (
-    <div className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
-          {t('autoManager.title')}
-        </span>
-        <AutoManagerToggle />
+    <div className={cn(
+      'bg-bg-card border border-border-default rounded-default flex flex-col',
+      collapsed ? 'px-5 py-3' : 'p-5 gap-4',
+    )}>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          title={collapsed ? t('autoManager.expand') : t('autoManager.collapse')}
+          className="flex items-center gap-2 text-left group"
+        >
+          <span
+            aria-hidden
+            className="w-5 h-5 rounded-sm border border-border-default flex items-center justify-center text-[13px] leading-none font-bold text-text-muted group-hover:text-text-primary group-hover:border-border-active transition-colors"
+          >
+            {collapsed ? '+' : '−'}
+          </span>
+          <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary">
+            {t('autoManager.title')}
+          </span>
+        </button>
+        {/* В свёрнутом виде показываем окно работы одной строкой — главный
+            факт, который менеджер проверяет чаще всего. */}
+        <div className="flex items-center gap-4 min-w-0">
+          {collapsed && (
+            <span className="text-[11px] text-text-muted whitespace-nowrap truncate">
+              {t('autoManager.window')}: <span className="text-text-primary font-[var(--font-mono)]">{data.window_start}–{data.window_end}</span>
+            </span>
+          )}
+          <AutoManagerToggle />
+        </div>
       </div>
 
+      {collapsed ? null : (<>
       {/* Режим — symmetric с ботом: "по правилу" зафиксирован (единственный
           рабочий в Phase 1), "ИИ" КЛИКАБЕЛЕН — но клик только показывает
           пояснение (toast), НИКОГДА не пишет mode="ai" в конфиг. Раньше кнопка
@@ -161,6 +204,7 @@ export default function AutoManagerCard() {
         <span>{t('autoManager.timezone')}: <span className="text-text-primary">{data.timezone}</span></span>
         <span>{t('autoManager.maxRequests')}: <span className="text-text-primary">{data.max_requests_per_run}</span></span>
       </div>
+      </>)}
     </div>
   )
 }

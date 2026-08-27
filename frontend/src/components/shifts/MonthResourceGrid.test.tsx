@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '../../test/test-utils'
 import MonthResourceGrid from './MonthResourceGrid'
-import SpecializationSidebar from './SpecializationSidebar'
+import SpecializationFilterBar from './SpecializationFilterBar'
 import type { ShiftBrief } from '../../hooks/useShifts'
 
 /**
@@ -59,10 +59,10 @@ describe('MonthResourceGrid', () => {
   })
 })
 
-describe('SpecializationSidebar локализация', () => {
+describe('SpecializationFilterBar локализация', () => {
   it('канон-ключ специализации показывается по-русски, «Все» и «Универсалы» на месте', () => {
     render(
-      <SpecializationSidebar
+      <SpecializationFilterBar
         shifts={[makeShift(), makeShift({ id: 3, specialization_focus: [] })]}
         selectedSpec={null}
         onSelectSpec={vi.fn()}

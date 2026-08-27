@@ -7,12 +7,12 @@ import { executorKey, specColor, UNSPECIFIED_SPEC_KEY } from '../../utils/shiftW
 import { cn } from '@/lib/utils'
 
 /**
- * Sidebar that groups the month's shifts by `specialization_focus`.
- * Selection is single (or null = "Все"); selecting a spec drives the
- * `MonthResourceGrid` filter and updates the sidebar totals.
+ * Горизонтальная полоса-фильтр по `specialization_focus` над расписанием
+ * месяца (решение владельца 2026-08-27: прежний вертикальный сайдбар слева
+ * съедал ширину у таблицы). Выбор одиночный (null = «Все»); выбранная
+ * специализация управляет фильтром `MonthResourceGrid`.
  *
- * Implementation note: the sidebar is the source of truth for which spec is
- * selected — `MonthResourceGrid` is purely controlled by `selectedSpec`.
+ * Полоса — source of truth выбранной специализации, грид ею управляется.
  */
 interface Props {
   shifts: ShiftBrief[]
@@ -25,8 +25,6 @@ interface SpecRow {
   label: string
   isUnspecified: boolean
   executorCount: number
-  shiftCount: number
-  totalHours: number
 }
 
 function shiftDurationHours(shift: ShiftBrief): number {
@@ -37,7 +35,7 @@ function shiftDurationHours(shift: ShiftBrief): number {
   return (endMs - startMs) / 3_600_000
 }
 
-export default function SpecializationSidebar({
+export default function SpecializationFilterBar({
   shifts,
   selectedSpec,
   onSelectSpec,
@@ -45,37 +43,29 @@ export default function SpecializationSidebar({
   const { t } = useTranslation()
 
   const { rows, totals } = useMemo(() => {
-    // Group shifts by spec. A shift with multiple specs counts in each;
-    // a shift with no spec lands in `__unspecified__`. Executors are
-    // deduped per spec via a Set.
-    const buckets = new Map<string, { executors: Set<string>; shiftCount: number; totalHours: number; label: string; isUnspecified: boolean }>()
+    // Группировка смен по специализации. Смена с несколькими — в каждой;
+    // без специализации — в «Универсалы». Исполнители дедупятся Set-ом.
+    const buckets = new Map<string, { executors: Set<string>; label: string; isUnspecified: boolean }>()
 
     const ensure = (key: string, label: string, isUnspecified: boolean) => {
       const existing = buckets.get(key)
       if (existing) return existing
-      const created = { executors: new Set<string>(), shiftCount: 0, totalHours: 0, label, isUnspecified }
+      const created = { executors: new Set<string>(), label, isUnspecified }
       buckets.set(key, created)
       return created
     }
 
     for (const shift of shifts) {
       const execKey = executorKey(shift)
-      const hours = shiftDurationHours(shift)
       const specs = (shift.specialization_focus ?? []).filter(Boolean)
       if (specs.length === 0) {
-        const bucket = ensure(UNSPECIFIED_SPEC_KEY, t('shifts.specSidebar.unspecified'), true)
-        bucket.executors.add(execKey)
-        bucket.shiftCount += 1
-        bucket.totalHours += hours
+        ensure(UNSPECIFIED_SPEC_KEY, t('shifts.specSidebar.unspecified'), true).executors.add(execKey)
         continue
       }
       for (const spec of specs) {
         // Метка — локализованная (RU/UZ), ключ и ЦВЕТ — от сырого канон-токена:
         // грид красит точки по сырому ключу, и хэш-палитра обязана совпадать.
-        const bucket = ensure(spec, tSpecialization(spec, t), false)
-        bucket.executors.add(execKey)
-        bucket.shiftCount += 1
-        bucket.totalHours += hours
+        ensure(spec, tSpecialization(spec, t), false).executors.add(execKey)
       }
     }
 
@@ -84,23 +74,18 @@ export default function SpecializationSidebar({
       label: b.label,
       isUnspecified: b.isUnspecified,
       executorCount: b.executors.size,
-      shiftCount: b.shiftCount,
-      totalHours: Math.round(b.totalHours),
     }))
-    // Sort: specified specs (alpha), then "Универсалы" at bottom.
+    // Сортировка: именованные специализации по алфавиту, «Универсалы» в конце.
     rowList.sort((a, b) => {
       if (a.isUnspecified !== b.isUnspecified) return a.isUnspecified ? 1 : -1
       return a.label.localeCompare(b.label)
     })
 
-    // "All" totals (dedup executors globally — same person on different specs
-    // still counts once).
+    // Итоги «Все» (исполнители дедупятся глобально).
     const allExecutors = new Set<string>()
-    let allShifts = 0
     let allHours = 0
     for (const shift of shifts) {
       allExecutors.add(executorKey(shift))
-      allShifts += 1
       allHours += shiftDurationHours(shift)
     }
 
@@ -108,22 +93,23 @@ export default function SpecializationSidebar({
       rows: rowList,
       totals: {
         executorCount: allExecutors.size,
-        shiftCount: allShifts,
+        shiftCount: shifts.length,
         totalHours: Math.round(allHours),
       },
     }
   }, [shifts, t])
 
   return (
-    <aside
-      className="w-[220px] shrink-0 bg-bg-card border border-border-default rounded-default p-3 flex flex-col gap-2"
+    <div
+      className="bg-bg-card border border-border-default rounded-default px-3 py-2 flex items-center gap-2 flex-wrap"
+      role="toolbar"
       aria-label={t('shifts.specSidebar.title')}
     >
-      <div className="px-2 py-1 font-[var(--font-display)] font-semibold text-xs text-text-muted uppercase tracking-wider">
+      <span className="font-[var(--font-display)] font-semibold text-[11px] text-text-muted uppercase tracking-wider px-1">
         {t('shifts.specSidebar.title')}
-      </div>
+      </span>
 
-      <SidebarItem
+      <FilterChip
         active={selectedSpec === null}
         color="var(--accent)"
         label={t('shifts.specSidebar.all')}
@@ -132,7 +118,7 @@ export default function SpecializationSidebar({
       />
 
       {rows.map(row => (
-        <SidebarItem
+        <FilterChip
           key={row.key}
           active={selectedSpec === row.key}
           color={row.isUnspecified ? 'var(--text-muted)' : specColor(row.key)}
@@ -142,14 +128,14 @@ export default function SpecializationSidebar({
         />
       ))}
 
-      <div className="mt-2 pt-2 border-t border-border-default px-2 text-[11px] text-text-muted leading-relaxed">
+      <span className="ml-auto text-[11px] text-text-muted whitespace-nowrap pl-2">
         {t('shifts.specSidebar.summary', { shifts: totals.shiftCount, hours: totals.totalHours })}
-      </div>
-    </aside>
+      </span>
+    </div>
   )
 }
 
-interface SidebarItemProps {
+interface FilterChipProps {
   active: boolean
   color: string
   label: string
@@ -157,29 +143,22 @@ interface SidebarItemProps {
   onClick: () => void
 }
 
-function SidebarItem({ active, color, label, count, onClick }: SidebarItemProps) {
+function FilterChip({ active, color, label, count, onClick }: FilterChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'flex items-center gap-2 px-2 py-1.5 rounded-sm text-xs text-left transition-colors',
+        'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors',
         active
           ? 'bg-accent-dim text-accent border border-border-active'
-          : 'text-text-secondary hover:bg-bg-card-hover hover:text-text-primary border border-transparent',
+          : 'text-text-secondary hover:bg-bg-card-hover hover:text-text-primary border border-border-default',
       )}
     >
-      <span
-        aria-hidden
-        className="w-2.5 h-2.5 rounded-full shrink-0"
-        style={{ background: color }}
-      />
-      <span className="flex-1 truncate font-semibold">{label}</span>
-      <span className="font-[var(--font-mono)] text-[11px] text-text-muted">
-        {count}
-      </span>
+      <span aria-hidden className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+      <span className="font-semibold">{label}</span>
+      <span className="font-[var(--font-mono)] text-[11px] text-text-muted">{count}</span>
     </button>
   )
 }
-
