@@ -151,6 +151,28 @@ async def rename_resident(
     return await rename_user_http(db, resident, body.full_name, actor_id=user.id)
 
 
+@router.post("/{resident_id}/request-phone")
+@limiter.limit(_WRITE_LIMIT)
+async def request_resident_phone(
+    request: Request,
+    resident_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+):
+    """Отправить жителю в Telegram запрос поделиться контактом (номером)."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    from fastapi import HTTPException
+
+    from uk_management_bot.api.users.phone_request import send_phone_request
+
+    resident = await queries.get_resident(db, resident_id)
+    if resident is None:
+        raise ResidentNotFound("Житель не найден")
+    if not await send_phone_request(resident):
+        raise HTTPException(status_code=502, detail="Telegram delivery failed")
+    return {"sent": True}
+
+
 # ───────────────────────── привязки ─────────────────────────
 
 @router.post("/{resident_id}/apartments", response_model=ResidentApartmentOut, status_code=201)

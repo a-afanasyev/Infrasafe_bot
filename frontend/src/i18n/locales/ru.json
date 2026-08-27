@@ -1002,6 +1002,8 @@
   },
   "employees": {
     "title": "Сотрудники",
+    "requestPhone": "Запросить номер",
+    "phoneRequestSent": "✓ Запрос отправлен",
     "addEmployee": "Добавить",
     "viewTile": "Плитка",
     "viewTable": "Таблица",
@@ -2038,6 +2040,8 @@
     "employeeApproveFailed": "Не удалось одобрить сотрудника",
     "meterEntryUpdated": "Доступ к вводу показаний обновлён",
     "meterEntryFailed": "Не удалось изменить доступ к вводу показаний",
+    "phoneRequested": "Запрос номера отправлен пользователю в Telegram",
+    "phoneRequestFailed": "Не удалось отправить запрос номера",
     "employeeRejected": "Сотрудник отклонён",
     "employeeRejectFailed": "Не удалось отклонить сотрудника",
     "employeeBlocked": "Сотрудник заблокирован",

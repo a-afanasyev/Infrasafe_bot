@@ -1001,6 +1001,8 @@
     "submit": "Ariza yaratish"
   },
   "employees": {
+    "requestPhone": "Raqamni so'rash",
+    "phoneRequestSent": "✓ So'rov yuborildi",
     "title": "Xodimlar",
     "addEmployee": "Qo'shish",
     "viewTile": "Plitka",
@@ -2027,6 +2029,8 @@
     "employeeApproveFailed": "Xodimni tasdiqlab bo'lmadi",
     "meterEntryUpdated": "Ko'rsatkich kiritish huquqi yangilandi",
     "meterEntryFailed": "Ko'rsatkich kiritish huquqini o'zgartirib bo'lmadi",
+    "phoneRequested": "Raqam so'rovi foydalanuvchiga Telegramga yuborildi",
+    "phoneRequestFailed": "Raqam so'rovini yuborib bo'lmadi",
     "employeeRejected": "Xodim rad etildi",
     "employeeRejectFailed": "Xodimni rad etib bo'lmadi",
     "employeeBlocked": "Xodim bloklandi",

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { useRequestEmployeePhone } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, displayFullName, getInitials } from '../../utils/employeeUtils'
 import { tSpecialization } from '../../i18n/apiMaps'
@@ -20,6 +21,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
   const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const navigate = useNavigate()
+  const requestPhone = useRequestEmployeePhone()
 
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
@@ -66,10 +68,21 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
           <div className="font-[var(--font-display)] font-semibold text-[15px] leading-snug text-text-primary break-words line-clamp-2">
             {displayFullName(name)}
           </div>
-          {employee.phone && (
+          {employee.phone ? (
             <div className="text-xs text-text-muted mt-0.5 font-[var(--font-mono)]">
               {employee.phone}
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => requestPhone.mutate(employee.id)}
+              disabled={requestPhone.isPending || requestPhone.isSuccess}
+              className="text-xs text-accent hover:underline mt-0.5 block disabled:opacity-60 disabled:no-underline"
+            >
+              {requestPhone.isSuccess
+                ? t('employees.phoneRequestSent')
+                : `📱 ${t('employees.requestPhone')}`}
+            </button>
           )}
           {/* Единый ряд бейджей: блокировка, верификация, роль, специализации */}
           <div className="flex flex-wrap gap-1 mt-2">
