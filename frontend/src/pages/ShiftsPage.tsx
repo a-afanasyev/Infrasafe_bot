@@ -14,6 +14,7 @@ import {
 import type { ShiftDetail } from '../types/api'
 import ShiftTimeline from '../components/shifts/ShiftTimeline'
 import ShiftCoverageHeatmap from '../components/shifts/ShiftCoverageHeatmap'
+import WeekCoverageHeatmap from '../components/shifts/WeekCoverageHeatmap'
 import WeekResourceGrid from '../components/shifts/WeekResourceGrid'
 import MonthResourceGrid from '../components/shifts/MonthResourceGrid'
 import SpecializationFilterBar from '../components/shifts/SpecializationFilterBar'
@@ -382,15 +383,25 @@ function DayView({ shifts, date, onShiftClick }: ViewBodyProps & { date: Date })
 function WeekView({ shifts, weekAnchor, onShiftClick }: ViewBodyProps & { weekAnchor: Date }) {
   const { t } = useTranslation()
   return (
-    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-      <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
-        {t('shifts.shiftSchedule')}
+    <div className="flex flex-col gap-4">
+      <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+        <div className="px-5 pt-4 pb-3 border-b border-border-default font-[var(--font-display)] font-semibold text-sm text-text-primary">
+          {t('shifts.shiftSchedule')}
+        </div>
+        <WeekResourceGrid
+          shifts={shifts}
+          weekAnchor={weekAnchor}
+          onShiftClick={onShiftClick}
+        />
       </div>
-      <WeekResourceGrid
-        shifts={shifts}
-        weekAnchor={weekAnchor}
-        onShiftClick={onShiftClick}
-      />
+      {/* Тепловая карта недели — под расписанием, как CalendarHeatmap у месяца
+          (до 2026-08-27 неделя была единственным видом без карты покрытия). */}
+      <div className="bg-bg-card border border-border-default rounded-default p-5">
+        <div className="font-[var(--font-display)] font-semibold text-sm text-text-primary mb-4">
+          {t('shifts.weekHeatmapTitle')}
+        </div>
+        <WeekCoverageHeatmap shifts={shifts} weekAnchor={weekAnchor} />
+      </div>
     </div>
   )
 }
