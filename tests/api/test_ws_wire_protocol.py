@@ -190,6 +190,15 @@ class TestPreUpgradeRejection:
         assert exc.value.response.status_code == 403
 
     @pytest.mark.asyncio
+    async def test_query_token_is_http_403(self, ws_server, manager_auth):
+        """SEC-03: `?token=` снят после 2026-09-01 — отказ ДО апгрейда, даже
+        если сам токен валиден (он уже утёк в access-логи по дороге)."""
+        with pytest.raises(websockets.InvalidStatus) as exc:
+            async with websockets.connect(f"{ws_server}/ws/v2/kanban?token=good"):
+                pass  # pragma: no cover
+        assert exc.value.response.status_code == 403
+
+    @pytest.mark.asyncio
     async def test_manager_cookie_upgrades_successfully(self, ws_server, manager_auth):
         """Контроль: без него 403-тесты были бы зелёными и на сломанном роутере."""
         async with websockets.connect(

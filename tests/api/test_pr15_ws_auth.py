@@ -1,8 +1,11 @@
 """PR-15 — SEC-03: WS-токен из query-string.
 
-`authenticate_ws_manager` поддерживает 4 источника токена с приоритетом
-cookie → ?token= (DEPRECATED + warning) → первое WS-сообщение (secure-путь
-для cookieless-клиентов). Проверяем каждый путь + role-gate + accept/close.
+`authenticate_ws_manager` поддерживает 2 источника токена с приоритетом
+cookie → первое WS-сообщение (secure-путь для cookieless-клиентов).
+Query-путь (`?token=`) снят после срока депрекации 2026-09-01: токен-подобный
+query-параметр отклоняется ДО accept, зеркально панели охраны
+(`access_control/api/ws_security._has_query_token`). Проверяем каждый путь +
+role-gate + accept/close.
 
 F-04 (аудит 2026-07-11): токен обязан нести числовой exp, стрим живёт не дольше
 exp и закрывается выделенным кодом 4001 (клиент обновляет сессию и возвращается).
@@ -25,12 +28,14 @@ from uk_management_bot.api.ws import router as ws
 
 
 class FakeWS:
-    def __init__(self, cookies=None, messages=None, hang=False):
+    def __init__(self, cookies=None, messages=None, hang=False, query_params=None):
         # PENT-F05: у настоящего WebSocket заголовки есть ВСЕГДА. Дубль без
         # `headers` ронял Origin-гейт на AttributeError, то есть моделировал
         # объект, которого не бывает. Пустые заголовки = не-браузерный
-        # клиент — валидный сценарий, гейт его пропускает.
+        # клиент — валидный сценарий, гейт его пропускает. То же про
+        # `query_params` — у настоящего WebSocket они есть всегда.
         self.headers: dict = {}
+        self.query_params: dict = query_params or {}
         self.cookies = cookies or {}
         self._messages = list(messages or [])
         self._hang = hang
@@ -106,7 +111,7 @@ class TestCookiePath:
     @pytest.mark.asyncio
     async def test_uk_access_cookie_manager_ok(self, manager_token, caplog):
         wsk = FakeWS(cookies={"uk_access": "good"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload and "manager" in payload["roles"]
         assert wsk.accepted is True
         assert wsk.closed_code == "NOT_CLOSED"
@@ -116,41 +121,51 @@ class TestCookiePath:
     @pytest.mark.asyncio
     async def test_legacy_access_token_cookie_ok(self, manager_token):
         wsk = FakeWS(cookies={"access_token": "good"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is not None
         assert wsk.accepted is True
 
     @pytest.mark.asyncio
     async def test_non_manager_cookie_rejected_pre_accept(self, manager_token):
         wsk = FakeWS(cookies={"uk_access": "applicant"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is False  # отклоняем ДО accept → на проводе HTTP 403
         assert wsk.closed_code == 1008  # намерение хендлера; клиент увидит 1006
 
 
 # ---------------------------------------------------------------------------
-# query path (DEPRECATED)
+# query path (REMOVED after 2026-09-01)
 # ---------------------------------------------------------------------------
 
 class TestQueryPath:
-    @pytest.mark.asyncio
-    async def test_query_token_works_but_warns(self, manager_token, caplog):
-        import logging
-        wsk = FakeWS()  # no cookies
-        with caplog.at_level(logging.WARNING):
-            payload = await ws.authenticate_ws_manager(wsk, "good")
-        assert payload is not None
-        assert wsk.accepted is True
-        assert "SEC-03" in caplog.text and "DEPRECATED" in caplog.text
+    """Само ПРИСУТСТВИЕ токен-подобного ключа в query фатально, даже с валидным
+    значением или валидной кукой рядом: токен уже утёк в access-логи, и клиенту
+    нужен внятный отказ, а не 10-секундное зависание на first-message-таймауте.
+    """
 
     @pytest.mark.asyncio
-    async def test_invalid_query_token_rejected_pre_accept(self, manager_token):
-        wsk = FakeWS()
-        payload = await ws.authenticate_ws_manager(wsk, "bad")
+    @pytest.mark.parametrize("key", ["token", "access_token", "jwt"])
+    async def test_query_token_rejected_pre_accept(self, manager_token, key):
+        wsk = FakeWS(query_params={key: "good"})  # токен валиден — не важно
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is False  # → на проводе HTTP 403, не close-кадр
         assert wsk.closed_code == 1008
+
+    @pytest.mark.asyncio
+    async def test_query_token_rejected_even_with_valid_cookie(self, manager_token):
+        wsk = FakeWS(cookies={"uk_access": "good"}, query_params={"token": "good"})
+        payload = await ws.authenticate_ws_manager(wsk)
+        assert payload is None
+        assert wsk.accepted is False
+
+    @pytest.mark.asyncio
+    async def test_unrelated_query_params_ignored(self, manager_token):
+        wsk = FakeWS(cookies={"uk_access": "good"}, query_params={"v": "2"})
+        payload = await ws.authenticate_ws_manager(wsk)
+        assert payload is not None
+        assert wsk.accepted is True
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +176,7 @@ class TestFirstMessagePath:
     @pytest.mark.asyncio
     async def test_first_message_token_ok(self, manager_token, caplog):
         wsk = FakeWS(messages=['{"token": "good"}'])
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is not None
         assert wsk.accepted is True  # accept до получения сообщения
         assert wsk.closed_code == "NOT_CLOSED"
@@ -170,7 +185,7 @@ class TestFirstMessagePath:
     @pytest.mark.asyncio
     async def test_first_message_non_manager_closed(self, manager_token):
         wsk = FakeWS(messages=['{"token": "applicant"}'])
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is True
         assert wsk.closed_code == 1008
@@ -178,7 +193,7 @@ class TestFirstMessagePath:
     @pytest.mark.asyncio
     async def test_first_message_disconnect_returns_none(self, manager_token):
         wsk = FakeWS(messages=[])  # receive_text → WebSocketDisconnect
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is True
         assert wsk.closed_code == 1008
@@ -187,7 +202,7 @@ class TestFirstMessagePath:
     async def test_first_message_timeout_returns_none(self, manager_token, monkeypatch):
         monkeypatch.setattr(ws, "_WS_AUTH_MESSAGE_TIMEOUT", 0.05)
         wsk = FakeWS(hang=True)
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is True
         assert wsk.closed_code == 1008
@@ -214,7 +229,7 @@ class TestExpClaim:
             ws, "verify_access_token", lambda tok: {"sub": "1", "roles": ["manager"]}
         )
         wsk = FakeWS(cookies={"uk_access": "noexp"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.accepted is False  # cookie-путь отклоняет ДО accept → HTTP 403
         assert wsk.closed_code == 1008
@@ -227,14 +242,14 @@ class TestExpClaim:
             lambda tok: {"sub": "1", "roles": ["manager"], "exp": "tomorrow"},
         )
         wsk = FakeWS(cookies={"uk_access": "badexp"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is None
         assert wsk.closed_code == 1008
 
     @pytest.mark.asyncio
     async def test_valid_exp_payload_returned(self, manager_token):
         wsk = FakeWS(cookies={"uk_access": "good"})
-        payload = await ws.authenticate_ws_manager(wsk, None)
+        payload = await ws.authenticate_ws_manager(wsk)
         assert payload is not None and payload["exp"] > time.time()
 
 

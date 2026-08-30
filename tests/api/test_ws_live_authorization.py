@@ -36,8 +36,10 @@ class FakeWS:
         # PENT-F05: у настоящего WebSocket заголовки есть ВСЕГДА. Дубль без
         # `headers` ронял Origin-гейт на AttributeError, то есть моделировал
         # объект, которого не бывает. Пустые заголовки = не-браузерный
-        # клиент — валидный сценарий, гейт его пропускает.
+        # клиент — валидный сценарий, гейт его пропускает. То же про
+        # `query_params` (SEC-03: пустые = токена в query нет).
         self.headers: dict = {}
+        self.query_params: dict = {}
         self.accepted = False
         self.closed_code = "NOT_CLOSED"
         self.sent: list[str] = []
@@ -107,7 +109,7 @@ async def test_blocked_user_rejected_despite_valid_token(token_ok, monkeypatch):
     _identity(monkeypatch, False)
     sock = FakeWS(cookies={"uk_access": "good"})
 
-    assert await ws.authenticate_ws_manager(sock, None) is None
+    assert await ws.authenticate_ws_manager(sock) is None
     assert sock.accepted is False
 
 
@@ -123,7 +125,7 @@ async def test_roles_come_from_db_not_from_token(monkeypatch):
     _identity(monkeypatch, True)
     sock = FakeWS(cookies={"uk_access": "stale-but-signed"})
 
-    assert await ws.authenticate_ws_manager(sock, None) is not None
+    assert await ws.authenticate_ws_manager(sock) is not None
     assert sock.accepted is True
 
 
@@ -132,7 +134,7 @@ async def test_role_revoked_in_db_rejected(token_ok, monkeypatch):
     _identity(monkeypatch, False)
     sock = FakeWS(cookies={"uk_access": "good"})
 
-    assert await ws.authenticate_ws_manager(sock, None) is None
+    assert await ws.authenticate_ws_manager(sock) is None
 
 
 @pytest.mark.asyncio
@@ -144,7 +146,7 @@ async def test_token_without_usable_sub_rejected(monkeypatch):
     _identity(monkeypatch, True, called)
     sock = FakeWS(cookies={"uk_access": "good"})
 
-    assert await ws.authenticate_ws_manager(sock, None) is None
+    assert await ws.authenticate_ws_manager(sock) is None
     assert called == [], "до БД дойти не должны — нечего искать"
 
 
@@ -157,7 +159,7 @@ async def test_db_unavailable_fails_closed(token_ok, monkeypatch):
     monkeypatch.setattr(ws, "_ws_identity_ok", _boom)
     sock = FakeWS(cookies={"uk_access": "good"})
 
-    assert await ws.authenticate_ws_manager(sock, None) is None
+    assert await ws.authenticate_ws_manager(sock) is None
 
 
 # ── Сама _ws_identity_ok, без подмены ────────────────────────────────────
