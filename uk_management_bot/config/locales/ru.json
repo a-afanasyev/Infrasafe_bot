@@ -7671,6 +7671,8 @@
     "admin_detail_comment": "💬 <b>Комментарий:</b> {comment}",
     "apartment_approved": "✅ Квартира одобрена",
     "apartment_rejected": "❌ Квартира отклонена",
+    "admin_comment_approved": "Одобрено администратором {name}",
+    "admin_comment_rejected": "Отклонено администратором {name}",
     "toggle_to_owner": "владельцем",
     "toggle_to_resident": "жильцом",
     "status_changed_to": "✅ Статус изменен на: {status}",

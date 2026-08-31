@@ -265,13 +265,18 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
     if not admin:
         return "admin_not_found"
 
-    # Одобряем квартиру
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): admin_comment —
-    # русский хардкод, не проходит через локализацию (класс BUG-147).
+    # Одобряем квартиру. BUG-151 п.3: комментарий хранится строкой и читает
+    # его ЖИТЕЛЬ (reason в списке квартир) — рендерим на языке владельца.
+    owner = db.execute(
+        select(User).where(User.id == user_apartment.user_id)
+    ).scalar_one_or_none()
+    owner_lang = (owner.language if owner else None) or "ru"
     user_apartment.status = 'approved'
     user_apartment.reviewed_at = datetime.now(timezone.utc)
     user_apartment.reviewed_by = admin.id
-    user_apartment.admin_comment = f"Одобрено администратором {admin.first_name or admin_telegram_id}"
+    user_apartment.admin_comment = get_text(
+        "user_apartments.admin_comment_approved", language=owner_lang
+    ).format(name=admin.first_name or admin_telegram_id)
 
     db.commit()
     return "ok"
@@ -298,13 +303,17 @@ def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) 
     if not admin:
         return "admin_not_found"
 
-    # Отклоняем квартиру
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): admin_comment —
-    # русский хардкод, не проходит через локализацию (класс BUG-147).
+    # Отклоняем квартиру. BUG-151 п.3: язык владельца — как в approve выше.
+    owner = db.execute(
+        select(User).where(User.id == user_apartment.user_id)
+    ).scalar_one_or_none()
+    owner_lang = (owner.language if owner else None) or "ru"
     user_apartment.status = 'rejected'
     user_apartment.reviewed_at = datetime.now(timezone.utc)
     user_apartment.reviewed_by = admin.id
-    user_apartment.admin_comment = f"Отклонено администратором {admin.first_name or admin_telegram_id}"
+    user_apartment.admin_comment = get_text(
+        "user_apartments.admin_comment_rejected", language=owner_lang
+    ).format(name=admin.first_name or admin_telegram_id)
 
     db.commit()
     return "ok"
@@ -512,12 +521,11 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
             if user_apartment.area:
                 text += get_text("user_apartments.area_label", language=lang).format(value=user_apartment.area) + "\n"
 
-        # История модерации
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): requested_at.strftime без
-        # guard'а на NULL (класс BUG-144) — NULL уронит хендлер в except.
+        # История модерации. BUG-151 п.2: NULL-guard на requested_at (BUG-144).
         text += "\n" + get_text("user_apartments.history_header", language=lang) + "\n"
         text += get_text("user_apartments.requested_at_label", language=lang).format(
             date=user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')
+            if user_apartment.requested_at else "—"
         ) + "\n"
 
         if user_apartment.reviewed_at:

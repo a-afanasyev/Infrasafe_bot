@@ -112,13 +112,15 @@ def _building_row_from(building) -> _BuildingRow:
 
 
 def _load_buildings_overview(db) -> list:
-    """-> [_BuildingRow] для списка/страницы зданий."""
+    """-> [_BuildingRow] для списка/страницы зданий.
+
+    BUG-151 п.5: без фильтра is_active (паттерн списка дворов, only_active=False)
+    — неактивные здания видны с ❌, заголовок «всего/активных» различает их."""
     from uk_management_bot.database.models import Building
     from sqlalchemy import select
 
     result = db.execute(
         select(Building)
-        .where(Building.is_active.is_(True))
         .order_by(Building.address)
     )
     buildings = result.scalars().all()
@@ -187,10 +189,6 @@ async def show_buildings_list(callback: CallbackQuery, state: Optional[FSMContex
             return
 
         lang = language
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): выборка уже отфильтрована
-        # по is_active, поэтому active_count всегда == len(buildings) — заголовок
-        # «всего/активных» не различает неактивные здания (они в список не попадают,
-        # в отличие от списка дворов, где only_active=False).
         active_count = sum(1 for b in buildings if b.is_active)
         text = get_text("address_buildings.handlers.buildings_list_title", language=lang).format(
             total=len(buildings), active=active_count
@@ -252,9 +250,6 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru", 
         if not buildings:
             text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): пагинация этого списка
-        # генерит callback `addr_buildings_by_yard_page:<id>`, хендлера для
-        # которого нет — кнопки страниц по двору мертвы (silent click).
         await callback.message.edit_text(
             text,
             reply_markup=get_buildings_list_keyboard(buildings, page=0, yard_id=yard_id)
@@ -262,6 +257,37 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru", 
 
     except Exception as e:
         logger.error(f"Ошибка при загрузке зданий двора {yard_id}: {e}")
+        await callback.answer(get_text("address_buildings.handlers.error_loading_data", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("addr_buildings_by_yard_page:"))
+async def show_buildings_by_yard_page(callback: CallbackQuery, language: str = "ru", *, _db=None):
+    """Страница списка зданий двора (BUG-151 п.6).
+
+    Клавиатура генерила `addr_buildings_by_yard_page:<yard_id>:<page>` всегда,
+    а хендлера не было — кнопки страниц по двору были мертвы (silent click).
+    Зеркало пары show_buildings_by_yard / show_buildings_page."""
+    _, raw_yard_id, raw_page = callback.data.split(":")
+    yard_id, page = int(raw_yard_id), int(raw_page)
+
+    lang = "ru"  # WR-06: дефолт ДО try (см. show_buildings_by_yard)
+    try:
+        loaded = await run_db(lambda s: _load_yard_buildings(s, yard_id), db=_db)
+        lang = language
+        if loaded is None:
+            await callback.answer(get_text("address_buildings.handlers.yard_not_found", language=lang), show_alert=True)
+            return
+
+        yard_name, buildings = loaded
+        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard_name, total=len(buildings))
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_buildings_list_keyboard(buildings, page=page, yard_id=yard_id)
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке страницы зданий двора {yard_id}: {e}")
         await callback.answer(get_text("address_buildings.handlers.error_loading_data", language=lang), show_alert=True)
 
 
@@ -287,9 +313,8 @@ async def show_building_details(callback: CallbackQuery, language: str = "ru", *
             return
 
         status = get_text("address_buildings.handlers.status_active", language=lang) if building.is_active else get_text("address_buildings.handlers.status_inactive", language=lang)
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): координата 0.0 falsy —
-        # легитимный GPS "0.0, X" показался бы как «не задан».
-        gps = f"📍 {building.gps_latitude}, {building.gps_longitude}" if building.gps_latitude and building.gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
+        # BUG-151 п.7: координата 0.0 легитимна — сравнение по is not None.
+        gps = f"📍 {building.gps_latitude}, {building.gps_longitude}" if building.gps_latitude is not None and building.gps_longitude is not None else get_text("address_buildings.handlers.gps_not_set", language=lang)
         apartments_count = building.apartments_count
         yard_name = building.yard_name if building.yard_name else get_text("address_buildings.handlers.not_specified", language=lang)
 
@@ -539,9 +564,8 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
             await state.clear()
             return
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): координата 0.0 falsy —
-        # легитимный GPS "0.0, X" показался бы как «не задан».
-        gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude and gps_longitude else get_text("address_buildings.handlers.gps_not_set", language=lang)
+        # BUG-151 п.7: координата 0.0 легитимна — сравнение по is not None.
+        gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude is not None and gps_longitude is not None else get_text("address_buildings.handlers.gps_not_set", language=lang)
 
         await message.answer(
             get_text("address_buildings.handlers.building_created_success", language=lang).format(

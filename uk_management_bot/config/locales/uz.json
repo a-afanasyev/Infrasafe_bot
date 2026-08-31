@@ -7672,6 +7672,8 @@
     "admin_detail_comment": "💬 <b>Izoh:</b> {comment}",
     "apartment_approved": "✅ Kvartira tasdiqlandi",
     "apartment_rejected": "❌ Kvartira rad etildi",
+    "admin_comment_approved": "Administrator {name} tomonidan tasdiqlangan",
+    "admin_comment_rejected": "Administrator {name} tomonidan rad etilgan",
     "toggle_to_owner": "mulkdor",
     "toggle_to_resident": "ijarachi",
     "status_changed_to": "✅ Holat o'zgartirildi: {status}",

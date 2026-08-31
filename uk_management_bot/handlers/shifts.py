@@ -100,6 +100,16 @@ def _lang_by_tg(db, telegram_id: int) -> str:
     return get_user_language(telegram_id, db)
 
 
+def _loc_spec(s: str, lang: str) -> str:
+    """FS-10: локализация ключа специализации (plumber→«Сантехник»).
+
+    Неизвестный ключ get_text возвращает как есть → fallback на сырое значение.
+    Общая для списка смен (end_shift_confirm) и деталей (show_shift_end_details)
+    — BUG-149 п.4: список рендерил сырые ключи, детали локализовали."""
+    t = get_text(f"specializations.{s}", language=lang)
+    return s if t == f"specializations.{s}" else t
+
+
 def _start_shift_unit(db, telegram_id: int) -> dict:
     """-> {lang, success, message?, notify: (user_tg, user_text, channel_text) | None}.
 
@@ -417,9 +427,7 @@ async def end_shift_confirm(message: Message, *, _db=None):
                 except Exception:
                     specializations = [specializations] if specializations else []
 
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): сырые ключи специализаций
-            # без локализации — в show_shift_end_details тот же список идёт через _loc_spec.
-            spec_text = ", ".join(specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
+            spec_text = ", ".join(_loc_spec(s, lang) for s in specializations) if specializations else (get_text("shifts.universal", language=lang) or "Универсальная")
 
             text += f"{idx}. 🔵 <b>{get_text('shifts.shift', language=lang)} #{shift.id}</b>\n"
             text += f"   📅 {get_text('shifts.start_time', language=lang)}: {fmt_datetime(shift.start_time)}\n"
@@ -469,13 +477,7 @@ async def show_shift_end_details(message: Message, shift_id: int, lang: str = "r
 
         specializations = view.specializations
 
-        # FS-10: локализуем ключи спец-ций (plumber→«Сантехник»); неизвестный
-        # ключ get_text вернёт как есть → fallback на сырое значение.
-        def _loc_spec(s):
-            t = get_text(f"specializations.{s}", language=lang)
-            return s if t == f"specializations.{s}" else t
-
-        spec_text = ", ".join(_loc_spec(s) for s in specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
+        spec_text = ", ".join(_loc_spec(s, lang) for s in specializations) if specializations else get_text("shifts.handlers.universal", language=lang)
 
         # Формируем текст
         text = f"⚠️ <b>{get_text('shifts.handlers.end_shift_confirmation', language=lang)}</b>\n\n"
