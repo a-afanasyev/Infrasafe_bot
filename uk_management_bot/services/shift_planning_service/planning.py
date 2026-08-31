@@ -99,12 +99,26 @@ class PlanningMixin:
 
                 # Применяем умное автоназначение исполнителей
                 if created_shifts:
+                    # Смены персистятся ДО автоназначения. Это не стилистика:
+                    # CAS-guard автоназначения перечитывает строку по Shift.id
+                    # под FOR UPDATE, а у pending-объекта id ещё None — guard
+                    # видел «строка исчезла», делал rollback() и молча выбрасывал
+                    # все pending-вставки. Джоба при этом рапортовала «создано N»
+                    # по списку питоновских объектов (прод-инцидент 2026-08-31:
+                    # «Создано 26 смен», в БД — ноль строк). Неназначенная
+                    # planned-смена — валидное состояние: сбой подбора не должен
+                    # уничтожать сами смены.
+                    self.db.commit()
                     try:
                         assignment_results = self.assignment_service.auto_assign_executors_to_shifts(
                             shifts=created_shifts,
                             force_reassign=False
                         )
-                        logger.info(f"Автоназначение завершено: {assignment_results['stats']}")
+                        logger.info(
+                            "Автоназначение завершено: %s/%s успешно",
+                            assignment_results.get('successful_assignments', 0),
+                            assignment_results.get('total_shifts', len(created_shifts)),
+                        )
                     except Exception as e:
                         logger.error(f"Ошибка автоназначения для смен по шаблону {template.name}: {e}")
                         # Fallback к старой логике если автоназначение не сработало
