@@ -38,6 +38,7 @@ from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.business_time import fmt_datetime
 from uk_management_bot.utils.datetime_utils import utc_now
 
+import html
 import logging
 
 router = Router()
@@ -437,7 +438,8 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
                         request_number=request_number,
                         category=ctx.category,
                         address=ctx.address or get_text("unaccepted.handlers.not_specified", language=targets.applicant_language),
-                        comment=comment
+                        # Секревью A2: свободный текст менеджера в parse_mode=HTML.
+                        comment=html.escape(comment)
                     ),
                     parse_mode="HTML"
                 )

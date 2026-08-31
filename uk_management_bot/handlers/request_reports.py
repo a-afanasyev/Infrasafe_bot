@@ -9,6 +9,7 @@ worker-потоке (``run_db``), наружу DTO/скаляры. Канони�
 """
 
 import asyncio
+import html
 import logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -510,7 +511,9 @@ def format_report_for_display(request: Request, report_comments: list, language:
         )
         report_text += f"🏷️ **{get_text('request_reports.handlers.category', language=language)}**: {category_display}\n"
         report_text += f"📍 **{get_text('request_reports.handlers.address', language=language)}**: {localize_address(request.address, language)}\n"
-        report_text += f"📝 **{get_text('request_reports.handlers.description', language=language)}**: {request.description}\n"
+        # Секревью A2: свободный текст пользователей — бот шлёт с parse_mode=
+        # HTML по умолчанию (класс BUG-174), экранируем все такие подстановки.
+        report_text += f"📝 **{get_text('request_reports.handlers.description', language=language)}**: {html.escape(request.description or '')}\n"
         report_text += f"📊 **{get_text('request_reports.handlers.status', language=language)}**: {get_status_display(request.status, language=language)}\n"
 
         # Информация о выполнении (BUG-153 п.6: канон бизнес-зоны ARCH-116)
@@ -520,11 +523,11 @@ def format_report_for_display(request: Request, report_comments: list, language:
 
         # Отчет о выполнении
         if request.completion_report:
-            report_text += f"\n📋 **{get_text('request_reports.handlers.completion_report', language=language)}**:\n{request.completion_report}\n"
+            report_text += f"\n📋 **{get_text('request_reports.handlers.completion_report', language=language)}**:\n{html.escape(request.completion_report)}\n"
 
         # Материалы для закупки (если были)
         if request.purchase_materials:
-            report_text += f"\n🛒 **{get_text('request_reports.handlers.purchase_materials', language=language)}**:\n{request.purchase_materials}\n"
+            report_text += f"\n🛒 **{get_text('request_reports.handlers.purchase_materials', language=language)}**:\n{html.escape(request.purchase_materials)}\n"
 
         # Комментарии с отчетами
         if report_comments:
@@ -532,7 +535,7 @@ def format_report_for_display(request: Request, report_comments: list, language:
             for comment in report_comments[:3]:  # Показываем только последние 3
                 user = comment.user.full_name if comment.user else get_text("request_reports.handlers.user_label", language=language).format(user_id=comment.user_id)
                 date_str = comment.created_at.strftime('%d.%m.%Y %H:%M') if comment.created_at else get_text("request_reports.handlers.unknown_date", language=language)
-                report_text += f"👤 **{user}** ({date_str}):\n{comment.comment_text}\n\n"
+                report_text += f"👤 **{html.escape(user)}** ({date_str}):\n{html.escape(comment.comment_text or '')}\n\n"
 
         return report_text
 
