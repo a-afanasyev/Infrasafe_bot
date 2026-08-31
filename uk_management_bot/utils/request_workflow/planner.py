@@ -38,6 +38,7 @@ from .types import (
     RepeatPolicy,
     RepeatRejected,
     RequestState,
+    SameExecutor,
     TransitionResult,
     WorkflowSnapshot,
     is_terminal,
@@ -282,6 +283,17 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
         # allowed_actions уже отфильтровал from-состояния; сюда попадаем
         # только при canon == to_status (повтор) для авторизованного актора
         raise InvalidTransition(f"{action.value}: not allowed from '{canon}'")
+
+    # BUG-180: переназначение на текущего исполнителя — честный отказ ЗДЕСЬ,
+    # под тем же FOR UPDATE, где строился снимок (преflight адаптера гонку не
+    # закрывает). Только при canon == to_status: из «Новой» назначение того же
+    # legacy-executor_id двигает статус — это реальное изменение, не повтор.
+    if (action is Action.MANAGER_ASSIGN
+            and canon == spec.to_status
+            and snap.request.executor_id is not None
+            and command.payload.get("executor_id") == snap.request.executor_id):
+        raise SameExecutor(
+            f"{action.value}: заявка уже назначена этому исполнителю")
 
     to_status = _effective_to_status(action, spec.to_status, snap)
     patch = _build_patch(action, to_status, actor, command.payload)

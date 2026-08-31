@@ -20,8 +20,9 @@
 фактически сняли, — снимок под FOR UPDATE внутри самой команды,
 ``outcome.old_state.executor_id``.
 
-Отсюда же следует, что ``same_executor`` из преflight'а — только UX-защита:
-гарантированный отказ потребовал бы переноса проверки в ядро, под тот же лок.
+Отсюда же следует, что ``same_executor`` из преflight'а — только UX-защита.
+Гарантированный отказ живёт в ядре (BUG-180): ``plan_transition`` под тем же
+локом бросает ``SameExecutor``, и хендлер показывает тот же честный текст.
 Корректность уведомлений от этого не зависит: решение шлём/не шлём принимается
 по факту из ``old_state``.
 """
@@ -239,6 +240,7 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
     """Фаза 3 на СВЕЖЕЙ сессии: получатели и подписи считаются от факта."""
     from uk_management_bot.services.workflow_notifications import (
         collect_notify_messages_sync,
+        collect_reassigned_away_sync,
     )
 
     messages = collect_notify_messages_sync(
@@ -256,15 +258,10 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
     if old_id is not None:
         old_user = svc.get_user_by_id(old_id)
         old_label = (display_name(old_user) or f"ID{old_id}") if old_user else f"ID{old_id}"
-        # Тот же человек остался исполнителем — снимать было некого.
-        if request is not None and request.executor_id != old_id and old_user \
-                and old_user.telegram_id:
-            text = get_text(
-                "notifications.workflow.reassigned_away",
-                language=old_user.language or "ru",
-                request_number=html.escape(request_number),
-            )
-            old_notice = (old_user.telegram_id, text)
+        # Тот же человек остался исполнителем — снимать было некого. Сборка
+        # текста общая с API-путём (BUG-181): workflow_notifications.
+        if request is not None and request.executor_id != old_id:
+            old_notice = collect_reassigned_away_sync(db, request_number, old_id)
     else:
         # Читать здесь СТАРОЕ групповое назначение бессмысленно: команда уже
         # закоммитила create_assignment, который перевёл прошлую активную
@@ -337,7 +334,7 @@ async def _commit_reassign(callback: CallbackQuery, user: User,
         RequestNotFound, run_command_sync,
     )
     from uk_management_bot.utils.request_workflow import (
-        Action, ActionCommand, PrincipalRef, WorkflowError,
+        Action, ActionCommand, PrincipalRef, SameExecutor, WorkflowError,
     )
 
     request_number = pre.request_number
@@ -354,6 +351,14 @@ async def _commit_reassign(callback: CallbackQuery, user: User,
     except RequestNotFound:
         await callback.answer(
             get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
+        return
+    except SameExecutor:
+        # BUG-180: гонку преflight не закрывает — между фазами другой менеджер
+        # успел назначить того же человека. Ядро отказало под локом; текст —
+        # тот же, что у UX-отказа фазы 1.
+        await callback.answer(
+            get_text("admin.handlers.reassign_same_executor", language=lang),
+            show_alert=True)
         return
     except WorkflowError as e:
         logger.info("MANAGER_ASSIGN отклонён для %s: %s", request_number, e)
@@ -396,9 +401,10 @@ async def _deliver(callback: CallbackQuery, request_number: str, outcome,
         except Exception as e:
             logger.debug("realtime publish для %s пропущен: %s", request_number, e)
 
-    # Канон вернул no_op (RepeatPolicy.NO_OP_IF_SAME): между фазами кто-то уже
-    # назначил того же исполнителя. Ничего не менялось и интентов нет — рисовать
-    # «переназначена» значило бы соврать об изменении, которого не было.
+    # Канон вернул no_op. Для MANAGER_ASSIGN этот случай теперь закрыт раньше
+    # (гонка «тот же исполнитель» бросает SameExecutor из ядра — BUG-180),
+    # ветка оставлена защитной: no_op значит «ничего не менялось и интентов
+    # нет», и рисовать «переназначена» значило бы соврать об изменении.
     if getattr(outcome, "no_op", False):
         await _edit(callback,
                     get_text("admin.handlers.reassign_same_executor", language=lang),

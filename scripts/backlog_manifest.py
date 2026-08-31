@@ -186,10 +186,10 @@ ASSIGNMENT: dict[str, dict] = {
     # `AUD5-ARCH-1` закрыт 2026-08-19 консолидацией в `AUD3-07` (остаток обоих
     # совпадал побуквенно, прогресс с 2026-08-14 и так вёлся единым) — строка
     # удалена, `--check` падает на ID закрытого пункта.
-    "BUG-180": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="same_executor вне лока — перенос сравнения в ядро под FOR UPDATE"),
-    "BUG-181": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="old-notice при переназначении с дашборда (API-путь)"),
+    # `BUG-180` закрыт 2026-09-01: SameExecutor из plan_transition под FOR UPDATE,
+    # бот — тот же честный текст, API — 409.
+    # `BUG-181` закрыт 2026-09-01: old-notice в workflow_notifications
+    # (collect_reassigned_away_sync + notify_reassigned_away_detached), API-путь шлёт.
     "BUG-182": A(pkg="A2", status="actionable", method="verified-2026-08-19",
                  note="житель уведомляется на каждое переназначение — нужен выбор владельца"),
     "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",

@@ -566,6 +566,28 @@ class TestCommand:
         assert captured["principal"].user_id == MANAGER_ID
 
     @pytest.mark.asyncio
+    async def test_core_same_executor_race_gives_honest_refusal(self):
+        """BUG-180: преflight прошёл, но между фазами другой менеджер назначил
+        того же человека. Ядро бросает SameExecutor под своим локом; менеджер
+        обязан увидеть тот же честный текст, что и при UX-отказе фазы 1, а не
+        общее «отклонено», и фаза 3 (aftermath) не запускается."""
+        from uk_management_bot.utils.helpers import get_text
+        from uk_management_bot.utils.request_workflow import SameExecutor
+
+        cb = _callback(f"req_reassign_to_{NUMBER}_{NEW_ID}")
+        pre = mod.Preflight("ok", request_number=NUMBER, new_executor_id=NEW_ID)
+
+        with patch("uk_management_bot.services.workflow_runner.run_command_sync",
+                   side_effect=SameExecutor("x")), \
+             patch.object(mod, "run_db", new=AsyncMock()) as run_db_mock:
+            await mod._commit_reassign(cb, SimpleNamespace(id=MANAGER_ID), "ru", pre)
+
+        cb.answer.assert_awaited_with(
+            get_text("admin.handlers.reassign_same_executor", language="ru"),
+            show_alert=True)
+        run_db_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_same_executor_does_not_reach_the_command(self, db):
         """Отказ обязан быть ЧЕСТНЫМ: с текстом, а не через проглоченное
         исключение. Прошлая версия теста подсовывала в run_db None, юнит падал
