@@ -15,7 +15,6 @@ from ._types import (
 from .scoring import ScoringEngine
 from .balancer import WorkloadBalancer
 from .conflicts import ConflictDetector
-from .request_engine import RequestAssignmentEngine
 from .service import ShiftAssignmentService
 
 __all__ = [
@@ -25,6 +24,5 @@ __all__ = [
     "ScoringEngine",
     "WorkloadBalancer",
     "ConflictDetector",
-    "RequestAssignmentEngine",
     "ShiftAssignmentService",
 ]

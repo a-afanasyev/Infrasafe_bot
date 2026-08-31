@@ -55,11 +55,15 @@ class TestShiftSchedulerInit:
 
     def test_task_stats_initialized(self):
         sched = _make_scheduler()
+        # auto_assign_requests / sync_assignments ретайрены (BUG-148) —
+        # мёртвый путь снят вместе с ключами статистики.
         expected_tasks = {
             'auto_create_shifts', 'rebalance_assignments', 'process_transfers',
-            'cleanup_expired', 'notify_upcoming', 'auto_assign_requests', 'sync_assignments'
+            'cleanup_expired', 'notify_upcoming',
         }
         assert expected_tasks.issubset(set(sched.task_stats.keys()))
+        assert 'auto_assign_requests' not in sched.task_stats
+        assert 'sync_assignments' not in sched.task_stats
 
     def test_each_stat_has_required_fields(self):
         sched = _make_scheduler()

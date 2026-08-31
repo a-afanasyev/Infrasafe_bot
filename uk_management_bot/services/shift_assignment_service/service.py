@@ -19,7 +19,6 @@ from ._types import ExecutorScore, AssignmentConflict
 from .scoring import ScoringEngine
 from .balancer import WorkloadBalancer
 from .conflicts import ConflictDetector
-from .request_engine import RequestAssignmentEngine
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,6 @@ class ShiftAssignmentService:
         self.scoring_engine = ScoringEngine(db, self.weights)
         self.workload_balancer = WorkloadBalancer(db, self.scoring_engine)
         self.conflict_detector = ConflictDetector(db, self.scoring_engine)
-        self.request_engine = RequestAssignmentEngine(db)
 
     # ========== ОСНОВНЫЕ МЕТОДЫ АВТОНАЗНАЧЕНИЯ ==========
 
@@ -591,16 +589,6 @@ class ShiftAssignmentService:
             'message': 'Система предпочтений планируется к реализации'
         }
 
-    # ========== ИНТЕГРАЦИЯ С СИСТЕМОЙ ЗАЯВОК ==========
-
-    def auto_assign_requests_to_shift_executors(
-        self,
-        target_date: Optional[date] = None,
-        assigned_by: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        return self.request_engine.auto_assign_requests_to_shift_executors(
-            target_date, assigned_by=assigned_by
-        )
-
-    def sync_request_assignments_with_shifts(self, target_date: Optional[date] = None) -> Dict[str, Any]:
-        return self.request_engine.sync_request_assignments_with_shifts(target_date)
+    # Прокси «интеграции с системой заявок» ретайрены (BUG-148): их путь
+    # (RequestAssignmentEngine → smart_assign_request → SmartDispatcher) был
+    # мёртв с рождения — планировочные джобы №8/№9 сняты вместе с ним.

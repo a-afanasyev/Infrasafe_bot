@@ -275,13 +275,4 @@ class TestRequestServiceDbErrorsPropagate:
         db.rollback.assert_called()
 
 
-class TestAssignmentServiceDbErrors:
-    def test_smart_assign_request_db_error_propagates_not_none(self):
-        """smart_assign_request: раньше except Exception → None — DB-ошибка
-        неотличима от «диспетчер не нашёл исполнителя»."""
-        db = MagicMock()
-        svc = AssignmentService(db)
-        db.query.side_effect = _db_err()
-
-        with pytest.raises(SQLAlchemyError):
-            svc.smart_assign_request("260814-001", assigned_by=1)
+# TestAssignmentServiceDbErrors удалён вместе со smart_assign_request (BUG-148).

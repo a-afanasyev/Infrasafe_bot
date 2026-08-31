@@ -94,7 +94,6 @@ SWEPT_FILES: tuple[str, ...] = (
     "services/shift_assignment_service/scoring.py",
     "services/shift_assignment_service/balancer.py",
     "services/shift_assignment_service/conflicts.py",
-    "services/shift_assignment_service/request_engine.py",
     "services/shift_assignment_service/service.py",
     "services/recommendation_engine.py",
     "services/shift_analytics.py",

@@ -26,7 +26,6 @@ from uk_management_bot.services.notification_service import NotificationService
 # ADVANCED_ASSIGNMENT_AVAILABLE. Модуль свой, его зависимости — stdlib,
 # SQLAlchemy и модели проекта: при их отсутствии не поднимется вообще ничего.
 # Флаг всегда был True, ветка «недоступно» — недостижимой.
-from uk_management_bot.services.smart_dispatcher import SmartDispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -396,48 +395,9 @@ class AssignmentService:
         except Exception:
             logger.exception("Не удалось отправить уведомление исполнителю")
     
-    # Методы интеграции с ЭТАПОМ 3
-    
-    def smart_assign_request(self, request_number: str, assigned_by: int) -> Optional[RequestAssignment]:
-        """
-        Умное назначение заявки с использованием ИИ
-        
-        Args:
-            request_number: Номер заявки
-            assigned_by: ID пользователя, который назначает
-            
-        Returns:
-            Optional[RequestAssignment]: Созданное назначение или None
-        """
-        try:
-            request = self._get_request_by_number(request_number)
-            if not request:
-                raise ValueError(f"Заявка с номером {request_number} не найдена")
-            
-            # Используем SmartDispatcher для поиска лучшего исполнителя
-            dispatcher = SmartDispatcher(self.db)
-            assignment_result = dispatcher.auto_assign_request(request_number)
-            
-            if assignment_result and assignment_result.success:
-                logger.info(f"Заявка {request_number} успешно назначена через SmartDispatcher")
-                return self.get_active_assignment(request_number)
-            else:
-                logger.warning(f"SmartDispatcher не смог назначить заявку {request_number}")
-                return None
-                
-        except SQLAlchemyError:
-            # A4/AUD5-CODE-13: DB-ошибка не маскируется под «диспетчер не
-            # нашёл исполнителя» (None).
-            logger.exception(f"Ошибка БД умного назначения заявки {request_number}")
-            raise
-        except Exception:
-            # BUG-148 (decision pending): путь фактически мёртв — SmartDispatcher
-            # не имеет auto_assign_request, AttributeError гасится здесь.
-            # Поведение для не-DB ошибок сохранено байт-в-байт до решения
-            # владельца; сменился только формат лога (полный трейсбек).
-            logger.exception(f"Ошибка умного назначения заявки {request_number}")
-            return None
-    
+    # smart_assign_request ретайрен (BUG-148): звал несуществующий
+    # SmartDispatcher.auto_assign_request и всегда возвращал None.
+
     def _get_request_by_number(self, request_number: str) -> Optional[Request]:
         """Возвращает заявку по её номеру."""
         if not request_number:

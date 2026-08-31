@@ -194,8 +194,10 @@ ASSIGNMENT: dict[str, dict] = {
                  note="житель уведомляется на каждое переназначение — нужен выбор владельца"),
     "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",
                  note="раздел «Жители» дашборда 404 на edge infrasafe.uz — нужен запрос в InfraSafe на allowlist префикса residents"),
-    "BUG-148": A(pkg="A3", status="actionable", method="decision-2026-08-19",
-                 note="решение 2026-08-19: ретайр пути целиком (вариант 2) — по дисциплине ретайров #471 (RED-пин, достижимость, ревью)"),
+    # `BUG-148` закрыт 2026-09-01: путь ретайрен целиком (джобы №8/№9,
+    # RequestAssignmentEngine, smart_assign_request, SmartDispatcher).
+    # Найденный живой остаток близнеца BUG-174 (_notify_group_assignment
+    # молчит на живом assign_to_group) — на решении владельца.
     "BUG-149": A(pkg="A2", status="actionable", method="verified-2026-08-14",
                  note="4 дефекта address_yards/shifts, байт-в-байт при A2-конвертации волны 1 (#432)"),
     # BUG-154 и BUG-158 закрыты 2026-08-19 ретайром одним движением с BUG-150
