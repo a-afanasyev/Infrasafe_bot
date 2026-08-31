@@ -567,7 +567,8 @@ async def _review_apartment_request(
     reviewer = await db.get(User, reviewer_id)
     if reviewer is None or not ({"manager", "admin"} & set(get_user_roles(reviewer) or [])):
         raise AddressPermissionError(
-            "Недостаточно прав для модерации заявок на квартиры")
+            "Недостаточно прав для модерации заявок на квартиры",
+            code="moderation_no_permission")
 
     ua = await _get_user_apartment_or_raise(db, user_apartment_id)
     if ua.status != "pending":

@@ -332,7 +332,8 @@ def get_apartments_list_keyboard(
     page: int = 0,
     page_size: int = 10,
     building_id: Optional[int] = None,
-    language: str = "ru"
+    language: str = "ru",
+    show_pagination: bool = True,
 ) -> InlineKeyboardMarkup:
     """
     Клавиатура со списком квартир (с пагинацией)
@@ -370,15 +371,17 @@ def get_apartments_list_keyboard(
             )
         )
 
-    # Пагинация
+    # Пагинация. BUG-156 п.2: поиск передаёт show_pagination=False — у
+    # `addr_apartments_page:<n>` нет хендлера (запрос не сохраняется), и
+    # кнопки страниц там были мертвы.
     pagination_buttons = []
     callback_prefix = f"addr_apartments_by_building_page:{building_id}" if building_id else "addr_apartments_page"
 
-    if page > 0:
+    if show_pagination and page > 0:
         pagination_buttons.append(
             InlineKeyboardButton(text=get_text("address.keyboards.page_back", language=language), callback_data=f"{callback_prefix}:{page - 1}")
         )
-    if end_idx < len(apartments):
+    if show_pagination and end_idx < len(apartments):
         pagination_buttons.append(
             InlineKeyboardButton(text=get_text("address.keyboards.page_forward", language=language), callback_data=f"{callback_prefix}:{page + 1}")
         )
@@ -573,6 +576,9 @@ def get_user_apartment_selection_keyboard(
     callback_prefix: str,
     language: str = "ru",
     cancel_callback: str = "cancel_apartment_selection",
+    page: Optional[int] = None,
+    page_size: int = 10,
+    page_prefix: Optional[str] = None,
 ) -> InlineKeyboardMarkup:
     """
     Универсальная клавиатура для выбора двора/здания/квартиры пользователем
@@ -582,10 +588,19 @@ def get_user_apartment_selection_keyboard(
         item_type: Тип объекта ("yard", "building", "apartment")
         callback_prefix: Префикс для callback_data
         language: Язык интерфейса
+        page/page_prefix: BUG-156 п.5 — постраничный режим (page задан И
+            page_prefix задан): показывается срез страницы + кнопки навигации
+            `{page_prefix}:<n>`. По умолчанию — прежний плоский список.
     """
     builder = InlineKeyboardBuilder()
 
-    for item in items:
+    paginated = page is not None and page_prefix is not None
+    page_items = items
+    if paginated:
+        start_idx = page * page_size
+        page_items = items[start_idx:start_idx + page_size]
+
+    for item in page_items:
         if item_type == "yard":
             text = item.name
             value = item.id
@@ -608,6 +623,19 @@ def get_user_apartment_selection_keyboard(
                 callback_data=f"{callback_prefix}:{value}"
             )
         )
+
+    if paginated:
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(
+                text=get_text("address.keyboards.page_back", language=language),
+                callback_data=f"{page_prefix}:{page - 1}"))
+        if (page + 1) * page_size < len(items):
+            nav.append(InlineKeyboardButton(
+                text=get_text("address.keyboards.page_forward", language=language),
+                callback_data=f"{page_prefix}:{page + 1}"))
+        if nav:
+            builder.row(*nav)
 
     # A3 (аудит 2026-08-18): отмена разделена по callback_data. Жительские флоу
     # оставляют дефолт (хендлер в user_apartment_selection.py, ВНЕ гейта);

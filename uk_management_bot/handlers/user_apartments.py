@@ -266,6 +266,16 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
     if not admin:
         return "admin_not_found"
 
+    # BUG-177 (второй рубеж, канон BUG-172): роль перепроверяется В ЮНИТЕ
+    # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
+    # состояния: решение принимается только по pending-заявке (паритет с
+    # канон-путём _review_apartment_request).
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+        return "admin_not_found"
+    if user_apartment.status != "pending":
+        return "not_pending"
+
     # Одобряем квартиру. BUG-151 п.3: комментарий хранится строкой и читает
     # его ЖИТЕЛЬ (reason в списке квартир) — рендерим на языке владельца.
     owner = db.execute(
@@ -303,6 +313,16 @@ def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) 
 
     if not admin:
         return "admin_not_found"
+
+    # BUG-177 (второй рубеж, канон BUG-172): роль перепроверяется В ЮНИТЕ
+    # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
+    # состояния: решение принимается только по pending-заявке (паритет с
+    # канон-путём _review_apartment_request).
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+        return "admin_not_found"
+    if user_apartment.status != "pending":
+        return "not_pending"
 
     # Отклоняем квартиру. BUG-151 п.3: язык владельца — как в approve выше.
     owner = db.execute(
@@ -661,9 +681,11 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
 
         # Формируем текст
         text = get_text("user_apartments.admin_manage_title", language=lang) + "\n\n"
+        # Секревью A2: имя из Telegram-профиля жителя — свободный текст,
+        # обзор уходит с parse_mode=HTML (класс BUG-174).
         text += get_text("user_apartments.admin_user_info", language=lang).format(
-            first_name=overview.user_first_name or '',
-            last_name=overview.user_last_name or ''
+            first_name=html.escape(overview.user_first_name or ''),
+            last_name=html.escape(overview.user_last_name or '')
         ) + "\n"
         text += get_text("user_apartments.admin_telegram_id", language=lang).format(telegram_id=user_telegram_id) + "\n\n"
 
@@ -803,6 +825,11 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
             await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
             return
 
+        if result == "not_pending":
+            # Стейл-клавиатура/чужой callback: решение уже принято.
+            await callback.answer(get_text("user_apartments.already_processed", language=lang), show_alert=True)
+            return
+
         await callback.answer(get_text("user_apartments.apartment_approved", language=lang), show_alert=True)
 
         # Возвращаемся к деталям (BUG-165: язык пробрасывается).
@@ -835,6 +862,11 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
         if result == "admin_not_found":
             await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
+            return
+
+        if result == "not_pending":
+            # Стейл-клавиатура/чужой callback: решение уже принято.
+            await callback.answer(get_text("user_apartments.already_processed", language=lang), show_alert=True)
             return
 
         await callback.answer(get_text("user_apartments.apartment_rejected", language=lang), show_alert=True)

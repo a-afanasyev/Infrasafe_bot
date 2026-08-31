@@ -104,12 +104,16 @@ class TestLanguageReachesKeyboards:
         assert 'cancel_callback="user_apartment_cancel",\n                language=lang' in src
 
     def test_moderation_keyboards_carry_language(self):
+        """Каждый ВЫЗОВ клавиатуры модерации несёт language (импорт — нет)."""
+        import re
+
         from uk_management_bot.handlers import address_moderation as mod
 
         src = inspect.getsource(mod)
-        assert src.count("get_moderation_requests_keyboard(") == \
-            src.count("language=lang)") or \
-            "get_moderation_requests_keyboard([], page=0, language=lang)" in src
+        calls = re.findall(r"get_moderation_requests_keyboard\([^)]*\)", src)
+        assert calls, "вызовы клавиатуры не найдены"
+        for call in calls:
+            assert "language=" in call, call
 
     def test_floor_and_entrance_zero_are_shown(self):
         from uk_management_bot.handlers import user_apartment_selection as mod

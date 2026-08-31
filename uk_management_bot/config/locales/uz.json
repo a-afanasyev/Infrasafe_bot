@@ -7672,6 +7672,7 @@
     "admin_detail_comment": "💬 <b>Izoh:</b> {comment}",
     "apartment_approved": "✅ Kvartira tasdiqlandi",
     "apartment_rejected": "❌ Kvartira rad etildi",
+    "already_processed": "⚠️ Ariza allaqachon ko'rib chiqilgan",
     "admin_comment_approved": "Administrator {name} tomonidan tasdiqlangan",
     "admin_comment_rejected": "Administrator {name} tomonidan rad etilgan",
     "toggle_to_owner": "mulkdor",
@@ -8246,6 +8247,7 @@
   },
   "address_errors": {
     "yard_not_found": "Hovli topilmadi",
+    "moderation_no_permission": "Kvartira arizalarini moderatsiya qilish uchun huquq yetarli emas",
     "building_not_found": "Bino topilmadi",
     "apartment_not_found": "Xonadon topilmadi",
     "request_not_found": "Ariza topilmadi",

@@ -144,16 +144,14 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru", 
 
         text += f"<b>{get_text('apartment.status_label', language=lang)}</b> {status_text}\n\n"
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): falsy-0 — подъезд/этаж/
-        # комнаты/площадь со значением 0 не показываются вовсе (ветка `if`
-        # проверяет истинность, а не «поле задано»).
-        if apartment.entrance:
+        # BUG-156 п.3: значение 0 легитимно — сравнение по is not None.
+        if apartment.entrance is not None:
             text += f"<b>{get_text('apartment.entrance_label', language=lang)}</b> {apartment.entrance}\n"
-        if apartment.floor:
+        if apartment.floor is not None:
             text += f"<b>{get_text('apartment.floor_label', language=lang)}</b> {apartment.floor}\n"
-        if apartment.rooms_count:
+        if apartment.rooms_count is not None:
             text += f"<b>{get_text('apartment.rooms_label', language=lang)}</b> {apartment.rooms_count}\n"
-        if apartment.area:
+        if apartment.area is not None:
             text += f"<b>{get_text('apartment.area_label', language=lang)}</b> {apartment.area} {get_text('address_apartments.handlers.sqm', language=lang)}\n"
 
         text += f"\n<b>{get_text('apartment.residents_label', language=lang)}</b> {residents_count}\n"
@@ -167,11 +165,9 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru", 
         if apartment.created_at:
             text += f"\n<b>{get_text('apartment.created_label', language=lang)}</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается
-        # в клавиатуру карточки — её подписи всегда на ru.
         await callback.message.edit_text(
             text,
-            reply_markup=get_apartment_details_keyboard(apartment_id)
+            reply_markup=get_apartment_details_keyboard(apartment_id, language=lang)
         )
 
     except Exception as e:

@@ -270,7 +270,10 @@ async def show_buildings_by_yard_page(callback: CallbackQuery, language: str = "
     # callback_data шлёт клиент (урок BUG-169): кривая форма — молчаливый
     # answer, а не необработанный ValueError до try.
     parts = callback.data.split(":")
-    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+    # isascii: unicode-цифры («²») проходят isdigit, но роняют int().
+    if (len(parts) != 3
+            or not (parts[1].isascii() and parts[1].isdigit())
+            or not (parts[2].isascii() and parts[2].isdigit())):
         await callback.answer()
         return
     yard_id, page = int(parts[1]), int(parts[2])

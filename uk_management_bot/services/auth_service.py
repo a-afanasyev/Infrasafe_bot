@@ -387,7 +387,8 @@ class AuthService:
             self.db.rollback()
             return False
     
-    def assign_role(self, user_id: int, role: str, assigned_by: int, comment: str = "") -> bool:
+    def assign_role(self, user_id: int, role: str, assigned_by: int, comment: str = "",
+                    commit: bool = True) -> bool:
         """
         Назначить роль пользователю
         
@@ -396,6 +397,8 @@ class AuthService:
             role: Роль для назначения (applicant, executor, manager)
             assigned_by: ID менеджера, который назначает роль
             comment: Комментарий к назначению
+            commit: BUG-156 п.7 — False, когда транзакцией владеет вызывающий
+                (пакетное применение набора ролей одним коммитом)
             
         Returns:
             True если операция успешна
@@ -447,7 +450,8 @@ class AuthService:
                 })
             )
             self.db.add(audit)
-            self.db.commit()
+            if commit:
+                self.db.commit()
             
             logger.info(f"Роль {role} назначена пользователю {user_id} менеджером {assigned_by}")
             return True
@@ -457,7 +461,8 @@ class AuthService:
             self.db.rollback()
             return False
     
-    def remove_role(self, user_id: int, role: str, removed_by: int, comment: str = "") -> bool:
+    def remove_role(self, user_id: int, role: str, removed_by: int, comment: str = "",
+                    commit: bool = True) -> bool:
         """
         Удалить роль у пользователя
         
@@ -513,7 +518,8 @@ class AuthService:
                 })
             )
             self.db.add(audit)
-            self.db.commit()
+            if commit:
+                self.db.commit()
             
             logger.info(f"Роль {role} удалена у пользователя {user_id} менеджером {removed_by}")
             return True

@@ -7671,6 +7671,7 @@
     "admin_detail_comment": "💬 <b>Комментарий:</b> {comment}",
     "apartment_approved": "✅ Квартира одобрена",
     "apartment_rejected": "❌ Квартира отклонена",
+    "already_processed": "⚠️ Заявка уже обработана",
     "admin_comment_approved": "Одобрено администратором {name}",
     "admin_comment_rejected": "Отклонено администратором {name}",
     "toggle_to_owner": "владельцем",
@@ -8245,6 +8246,7 @@
   },
   "address_errors": {
     "yard_not_found": "Двор не найден",
+    "moderation_no_permission": "Недостаточно прав для модерации заявок на квартиры",
     "building_not_found": "Здание не найдено",
     "apartment_not_found": "Квартира не найдена",
     "request_not_found": "Заявка не найдена",

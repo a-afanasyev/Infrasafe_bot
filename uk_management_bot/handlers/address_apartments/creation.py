@@ -9,6 +9,7 @@ from aiogram.filters import StateFilter
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
+from uk_management_bot.utils.address_helpers import localize_address_error
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.address_management import (
     get_user_apartment_selection_keyboard,
@@ -43,7 +44,10 @@ class _BuildingOption:
 # ==========================================================================
 
 def _load_active_buildings(db) -> list:
-    """-> [_BuildingOption] для шага выбора здания."""
+    """-> [_BuildingOption] для шага выбора здания.
+
+    BUG-156 п.5: без limit(50) — список листается пагинацией клавиатуры,
+    здания дальше пятидесятого больше не пропадают из выбора."""
     from uk_management_bot.database.models import Building
     from sqlalchemy import select
 
@@ -51,7 +55,6 @@ def _load_active_buildings(db) -> list:
         select(Building)
         .where(Building.is_active.is_(True))
         .order_by(Building.address)
-        .limit(50)
     )
     buildings = result.scalars().all()
     return [_BuildingOption(id=b.id, address=b.address) for b in buildings]
@@ -80,8 +83,6 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
     lang = language
 
     try:
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): limit(50) без пагинации —
-        # при большем числе активных зданий остальные недоступны для выбора.
         buildings = await run_db(_load_active_buildings, db=_db)
 
         if not buildings:
@@ -95,11 +96,44 @@ async def start_apartment_creation(callback: CallbackQuery, state: FSMContext, l
 
         await callback.message.edit_text(
             get_text("address_apartments.handlers.create_step1_select_building", language=lang),
-            reply_markup=get_user_apartment_selection_keyboard(buildings, "building", "apartment_create_building", cancel_callback="addr_cancel_selection")
+            reply_markup=get_user_apartment_selection_keyboard(
+                buildings, "building", "apartment_create_building",
+                language=lang, cancel_callback="addr_cancel_selection",
+                page=0, page_prefix="apartment_create_bpage")
         )
 
     except Exception as e:
         logger.error(f"Ошибка при начале создания квартиры: {e}")
+        await callback.answer(get_text("address_apartments.handlers.error_generic", language=lang), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("apartment_create_bpage:"),
+                       StateFilter(ApartmentManagementStates.waiting_for_building_selection))
+async def show_create_buildings_page(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+    """Страница списка зданий на шаге выбора (BUG-156 п.5).
+
+    Раньше выборка обрезалась limit(50) без пагинации — здания дальше
+    пятидесятого были недоступны для создания квартиры. StateFilter держит
+    хендлер строго внутри своего шага."""
+    lang = language
+    parts = callback.data.split(":")
+    # callback_data шлёт клиент; isascii — unicode-цифры роняют int().
+    if len(parts) != 2 or not (parts[1].isascii() and parts[1].isdigit()):
+        await callback.answer()
+        return
+    page = int(parts[1])
+
+    try:
+        buildings = await run_db(_load_active_buildings, db=_db)
+        await callback.message.edit_text(
+            get_text("address_apartments.handlers.create_step1_select_building", language=lang),
+            reply_markup=get_user_apartment_selection_keyboard(
+                buildings, "building", "apartment_create_building",
+                language=lang, cancel_callback="addr_cancel_selection",
+                page=page, page_prefix="apartment_create_bpage")
+        )
+    except Exception as e:
+        logger.error(f"Ошибка страницы выбора здания: {e}")
         await callback.answer(get_text("address_apartments.handlers.error_generic", language=lang), show_alert=True)
 
 
@@ -125,9 +159,11 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
 async def process_apartment_number(message: Message, state: FSMContext, language: str = "ru"):
     """Обработка номера квартиры"""
     lang = language
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение (фото,
-    # стикер) в FSM-состоянии даёт message.text is None → AttributeError мимо
-    # обработчиков ошибок; класс общий для всей цепочки создания.
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     number = message.text.strip()
 
     if len(number) < 1 or len(number) > 20:
@@ -150,6 +186,11 @@ async def process_apartment_entrance(message: Message, state: FSMContext, langua
                                      roles: list = None, active_role: str = None):
     """Обработка номера подъезда"""
     lang = language
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -187,6 +228,11 @@ async def process_apartment_floor(message: Message, state: FSMContext, language:
                                   roles: list = None, active_role: str = None):
     """Обработка номера этажа"""
     lang = language
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -224,6 +270,11 @@ async def process_apartment_rooms(message: Message, state: FSMContext, language:
                                   roles: list = None, active_role: str = None):
     """Обработка количества комнат и переход к вводу площади"""
     lang = language
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -261,6 +312,11 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
                                  roles: list = None, active_role: str = None, *, _db=None):
     """Обработка площади квартиры и создание квартиры"""
     lang = language
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     skip_text = get_text("address.keyboards.skip", language=lang)
     cancel_text = get_text("address.keyboards.cancel", language=lang)
     if message.text == skip_text:
@@ -311,10 +367,8 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
         )
 
         if error:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой код ошибки
-            # сервиса в тексте пользователю, без localize_address_error.
             await message.answer(
-                get_text("address_apartments.handlers.creation_error", language=lang).format(error=error),
+                get_text("address_apartments.handlers.creation_error", language=lang).format(error=localize_address_error(error, lang)),
                 reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
             )
             await state.clear()

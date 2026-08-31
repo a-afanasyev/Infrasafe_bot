@@ -10,7 +10,7 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentManagementStates
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.address_helpers import apartment_address
+from uk_management_bot.utils.address_helpers import apartment_address, localize_address_error
 from uk_management_bot.keyboards.address_management import (
     get_apartment_edit_keyboard,
     get_confirmation_keyboard
@@ -110,10 +110,7 @@ async def toggle_apartment_status(callback: CallbackQuery, language: str = "ru",
         )
 
         if error:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): наружу уходит сырой код
-            # ошибки сервиса ("save_failed"/"not_found"), без localize_address_error —
-            # ср. address_buildings.toggle_building_status.
-            await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=error), show_alert=True)
+            await callback.answer(get_text("address_apartments.handlers.error_with_details", language=lang).format(error=localize_address_error(error, lang)), show_alert=True)
             return
 
         status_text = get_text("address_apartments.handlers.status_activated", language=lang) if new_status else get_text("address_apartments.handlers.status_deactivated", language=lang)
@@ -180,9 +177,7 @@ async def delete_apartment(callback: CallbackQuery, language: str = "ru"):
         success, error = await AddressService.delete_apartment(None, apartment_id)
 
         if not success:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): в текст подставляется
-            # сырой код ошибки сервиса, без localize_address_error.
-            await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=error), show_alert=True)
+            await callback.answer(get_text("address_apartments.handlers.delete_error", language=lang).format(error=localize_address_error(error, lang)), show_alert=True)
             return
 
         await callback.message.edit_text(
@@ -268,10 +263,8 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
         )
 
         if error:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой код ошибки
-            # сервиса в тексте пользователю, без localize_address_error.
             await message.answer(
-                get_text("address_apartments.handlers.area_update_error", language=lang).format(error=error),
+                get_text("address_apartments.handlers.area_update_error", language=lang).format(error=localize_address_error(error, lang)),
                 reply_markup=get_main_keyboard_for_role(active_role or "manager", roles or ["manager"], language=lang)
             )
             await state.clear()
