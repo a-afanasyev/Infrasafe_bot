@@ -60,8 +60,6 @@ class ShiftScheduler:
             'process_transfers': {'success': 0, 'failed': 0, 'last_run': None},
             'cleanup_expired': {'success': 0, 'failed': 0, 'last_run': None},
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
-            'auto_assign_requests': {'success': 0, 'failed': 0, 'last_run': None},
-            'sync_assignments': {'success': 0, 'failed': 0, 'last_run': None},
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None}
         }
 
@@ -183,25 +181,11 @@ class ShiftScheduler:
                 coalesce=True
             )
 
-            # 8. Автоназначение заявок исполнителям смен (каждые 10 минут)
-            self.scheduler.add_job(
-                self._auto_assign_requests_to_executors,
-                IntervalTrigger(minutes=10),
-                id='auto_assign_requests',
-                name='Автоназначение заявок исполнителям',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 9. Синхронизация назначений заявок со сменами (каждые 30 минут)
-            self.scheduler.add_job(
-                self._sync_request_assignments,
-                IntervalTrigger(minutes=30),
-                id='sync_assignments',
-                name='Синхронизация назначений со сменами',
-                max_instances=1,
-                coalesce=True
-            )
+            # Джобы №8 (автоназначение заявок исполнителям) и №9 (синхронизация
+            # назначений со сменами) ретайрены — BUG-148: их путь
+            # (RequestAssignmentEngine → smart_assign_request → SmartDispatcher)
+            # был мёртв с рождения и всегда отчитывался failed. Реальное
+            # авто-назначение — auto_manager_tick ниже.
 
             # 10. Автоматический менеджер — назначение дежурных на ночные заявки (каждые 2 минуты)
             self.scheduler.add_job(
@@ -665,106 +649,6 @@ class ShiftScheduler:
 
         except Exception as e:
             logger.error(f"Ошибка еженедельного планирования: {e}")
-
-    def _auto_assign_requests_sync(self) -> int:
-        db = SessionLocal()
-        try:
-            # Выключатель автоназначения гасит и эту джобу: менеджер, снявший
-            # тумблер, вправе ожидать, что заявки никто не раздаёт вообще.
-            # ⚠️ Джоба и без того ничего не назначает — внутри она фильтрует
-            # `status == 'new'`, а канон хранит «Новая» (см. BUG-150/154/158 про
-            # ретайр мёртвого кода). Гейт оставлен, чтобы тумблер был честным,
-            # если движок когда-нибудь оживят; сам код не трогаем.
-            from uk_management_bot.services.auto_manager.config import (
-                is_auto_assign_enabled_sync,
-            )
-            if not is_auto_assign_enabled_sync(db):
-                logger.info("Автоназначение выключено — джоба пропущена")
-                return 0
-
-            assignment_service = ShiftAssignmentService(db)
-
-            # Назначаем заявки на сегодня и завтра (бизнес-день)
-            today = business_today()
-            tomorrow = today + timedelta(days=1)
-
-            total_assigned = 0
-            for target_date in (today, tomorrow):
-                result = assignment_service.auto_assign_requests_to_shift_executors(target_date)
-                if result['status'] == 'success':
-                    total_assigned += result.get('assigned_requests', 0)
-            return total_assigned
-        finally:
-            db.close()
-
-    async def _auto_assign_requests_to_executors(self):
-        """Автоматическое назначение заявок исполнителям смен"""
-        task_name = 'auto_assign_requests'
-        try:
-            logger.info("Запуск автоназначения заявок исполнителям...")
-
-            total_assigned = await asyncio.to_thread(self._auto_assign_requests_sync)
-
-            self.task_stats[task_name]['success'] += 1
-            self.task_stats[task_name]['last_run'] = utc_now()
-
-            if total_assigned > 0:
-                logger.info(f"Автоназначение заявок завершено: {total_assigned} заявок назначено")
-
-                # Уведомляем менеджеров о значительных назначениях
-                if total_assigned > 5:
-                    await self._notify_managers(
-                        "📋 Автоназначение заявок",
-                        f"Автоматически назначено {total_assigned} заявок исполнителям смен"
-                    )
-
-        except Exception as e:
-            self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = utc_now()
-            logger.error(f"Ошибка автоназначения заявок: {e}")
-
-    def _sync_request_assignments_sync(self) -> int:
-        db = SessionLocal()
-        try:
-            assignment_service = ShiftAssignmentService(db)
-
-            # Синхронизируем на сегодня и завтра (бизнес-день)
-            today = business_today()
-            tomorrow = today + timedelta(days=1)
-
-            total_reassigned = 0
-            for target_date in (today, tomorrow):
-                result = assignment_service.sync_request_assignments_with_shifts(target_date)
-                if result['status'] == 'success':
-                    total_reassigned += result.get('reassigned', 0)
-            return total_reassigned
-        finally:
-            db.close()
-
-    async def _sync_request_assignments(self):
-        """Синхронизация назначений заявок со сменами"""
-        task_name = 'sync_assignments'
-        try:
-            logger.info("Запуск синхронизации назначений...")
-
-            total_reassigned = await asyncio.to_thread(self._sync_request_assignments_sync)
-
-            self.task_stats[task_name]['success'] += 1
-            self.task_stats[task_name]['last_run'] = utc_now()
-
-            if total_reassigned > 0:
-                logger.info(f"Синхронизация завершена: {total_reassigned} переназначений")
-
-                # Уведомляем менеджеров о переназначениях
-                await self._notify_managers(
-                    "🔄 Синхронизация назначений",
-                    f"Переназначено {total_reassigned} заявок в соответствии со сменами"
-                )
-
-        except Exception as e:
-            self.task_stats[task_name]['failed'] += 1
-            self.task_stats[task_name]['last_run'] = utc_now()
-            logger.error(f"Ошибка синхронизации назначений: {e}")
 
     async def _auto_manager_tick(self):
         """Тик автоматического менеджера — назначение дежурных на ночные заявки.

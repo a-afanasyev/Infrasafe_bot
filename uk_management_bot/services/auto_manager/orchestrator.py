@@ -13,7 +13,7 @@
     promote_group_assignment) и services/assignment_service.py (второй
     канонический писатель, используемый handlers/admin/assignment.py,
     handlers/admin/shared.py::auto_assign_request_by_category,
-    smart_dispatcher.py, shift_transfer_service.py). ⚠️ `assign_to_group`
+    shift_transfer_service.py; smart_dispatcher ретайрен — BUG-148). ⚠️ `assign_to_group`
     до этой фичи НЕ обнулял
     `Request.executor_id` при переходе в group (асимметрично с
     `assign_to_executor`, который его ставит) — устаревший individual
@@ -24,13 +24,8 @@
     а не только для workflow_runner'а.
     Фильтр по Request.assignment_type вместо джойна RequestAssignment
     безопасен именно потому, что ОБА писателя держат инвариант, а не потому,
-    что писатель один. Есть один пограничный случай: shift_assignment_service.
-    py::sync_request_assignments_with_shifts (планировщик) отменяет строки
-    RequestAssignment напрямую, не трогая поля Request, но её фильтр matчит
-    только строки с конкретным executor_id (SQL `NULL NOT IN (...)` не
-    матчит) — group-заявки (executor_id IS NULL, ровно фильтр main-очереди)
-    она не трогает никогда, так что для main-очереди устаревания не возникает,
-    но это следствие фильтра, а не осведомлённости писателя об этом инварианте.
+    что писатель один. (Пограничный случай с sync_request_assignments_with_shifts
+    исчез вместе с самим путём — джоба и её код ретайрены, BUG-148.)
     Специализация = Request.assigned_group.
   * "residual" — status=«Новая», executor_id IS NULL, assignment_type IS
     NULL (немаппированные категории/сбои dispatch при создании). Резерву

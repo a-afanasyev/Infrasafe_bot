@@ -33,12 +33,11 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE: dict[str, int] = {
     "uk_management_bot/main.py": 19,
     "uk_management_bot/services/request_service.py": 4,
-    "uk_management_bot/services/assignment_service.py": 7,
+    "uk_management_bot/services/assignment_service.py": 6,
     "uk_management_bot/services/shift_assignment_service/__init__.py": 0,
     "uk_management_bot/services/shift_assignment_service/_types.py": 0,
     "uk_management_bot/services/shift_assignment_service/balancer.py": 1,
     "uk_management_bot/services/shift_assignment_service/conflicts.py": 0,
-    "uk_management_bot/services/shift_assignment_service/request_engine.py": 4,
     "uk_management_bot/services/shift_assignment_service/scoring.py": 3,
     "uk_management_bot/services/shift_assignment_service/service.py": 8,
     "uk_management_bot/services/shift_planning_service/__init__.py": 0,

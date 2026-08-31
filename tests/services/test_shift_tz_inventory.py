@@ -60,7 +60,6 @@ SWEPT_FILES: tuple[str, ...] = (
     "services/shift_analytics.py",
     "services/recommendation_engine.py",
     "services/request_handler_service.py",
-    "services/smart_dispatcher.py",
     # AUD5-ARCH-3 волна 13, block-move: notification_service.py разнесён на
     # пакет — метём все содержательные под-модули (код байт-в-байт).
     "services/notification_service/channel.py",
