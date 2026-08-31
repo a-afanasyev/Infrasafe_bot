@@ -261,7 +261,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext, langu
             lang = language
             await callback.message.edit_text(
                 get_text("address_moderation.handlers.moderation_list_empty", language=lang),
-                reply_markup=get_moderation_requests_keyboard([], page=0)
+                reply_markup=get_moderation_requests_keyboard([], page=0, language=lang)
             )
             return
 
@@ -270,7 +270,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext, langu
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_moderation_requests_keyboard(requests, page=0)
+            reply_markup=get_moderation_requests_keyboard(requests, page=0, language=lang)
         )
 
     except Exception as e:
@@ -291,7 +291,7 @@ async def show_moderation_page(callback: CallbackQuery, language: str = "ru", *,
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_moderation_requests_keyboard(requests, page=page)
+            reply_markup=get_moderation_requests_keyboard(requests, page=page, language=lang)
         )
 
     except Exception as e:

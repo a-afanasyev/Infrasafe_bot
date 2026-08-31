@@ -23,7 +23,7 @@ from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment,
 )
 from uk_management_bot.services.addresses.exceptions import (
-    AddressNotFound, AddressConflict,
+    AddressNotFound, AddressConflict, AddressPermissionError,
 )
 from uk_management_bot.services.addresses.events import (
     enqueue_outbox, publish_realtime_after_commit,
@@ -557,6 +557,17 @@ async def _review_apartment_request(
 ):
     """Общее тело approve/reject — различаются только методом и событием."""
     event = "apartment_request.approved" if approve else "apartment_request.rejected"
+
+    # BUG-177: перепроверка роли ревьюера В ТОЧКЕ ЗАПИСИ (канон BUG-172) —
+    # второй рубеж поверх RoleGate бота и require_roles API на случай будущей
+    # ошибки роутинга/рефакторинга. Семантика has_admin_access: manager|admin.
+    from uk_management_bot.database.models import User
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+
+    reviewer = await db.get(User, reviewer_id)
+    if reviewer is None or not ({"manager", "admin"} & set(get_user_roles(reviewer) or [])):
+        raise AddressPermissionError(
+            "Недостаточно прав для модерации заявок на квартиры")
 
     ua = await _get_user_apartment_or_raise(db, user_apartment_id)
     if ua.status != "pending":

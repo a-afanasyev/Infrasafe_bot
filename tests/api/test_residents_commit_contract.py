@@ -52,6 +52,11 @@ async def binding(db_session: AsyncSession):
     await db_session.flush()
     apt = Apartment(building_id=bld.id, apartment_number="7")
     db_session.add(apt)
+    # Ревьюер с id=1 (тесты ниже зовут approve/reject с reviewer_id=1):
+    # с BUG-177 точка записи перепроверяет роль — ревьюер обязан быть менеджером.
+    reviewer = User(id=1, telegram_id=9000, first_name="Менеджер",
+                    roles='["manager"]', status="approved")
+    db_session.add(reviewer)
     user = User(telegram_id=9001, first_name="Тест", roles='["applicant"]', status="pending")
     db_session.add(user)
     await db_session.flush()

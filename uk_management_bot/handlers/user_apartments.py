@@ -7,6 +7,7 @@
 - Смена основной квартиры
 - Просмотр истории модерации
 """
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -389,7 +390,9 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
             text += get_text("user_apartments.rejected_header", language=lang) + "\n"
             for ua in rejected:
                 address = ua.address
-                reason = f" ({ua.admin_comment})" if ua.admin_comment else ""
+                # Секревью A2: admin_comment несёт свободный first_name
+                # админа, сообщение уходит с parse_mode=HTML (класс BUG-174).
+                reason = f" ({html.escape(ua.admin_comment)})" if ua.admin_comment else ""
                 text += f"  • {address}{reason}\n"
             text += "\n"
 
@@ -535,10 +538,11 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
 
         if user_apartment.has_reviewer:
             reviewer_name = user_apartment.reviewer_first_name or user_apartment.reviewer_username or get_text("user_apartments.admin_default_name", language=lang)
-            text += get_text("user_apartments.reviewed_by_label", language=lang).format(name=reviewer_name) + "\n"
+            # Секревью A2: имя из Telegram-профиля — свободный текст (BUG-174).
+            text += get_text("user_apartments.reviewed_by_label", language=lang).format(name=html.escape(reviewer_name)) + "\n"
 
         if user_apartment.admin_comment:
-            text += "\n" + get_text("user_apartments.admin_comment_label", language=lang).format(comment=user_apartment.admin_comment) + "\n"
+            text += "\n" + get_text("user_apartments.admin_comment_label", language=lang).format(comment=html.escape(user_apartment.admin_comment)) + "\n"
 
         await callback.message.edit_text(
             text,
@@ -693,7 +697,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
                 text += get_text("user_apartments.rejected_header", language=lang) + "\n"
                 for ua in rejected:
                     address = ua.address
-                    reason = f" - {ua.admin_comment}" if ua.admin_comment else ""
+                    reason = f" - {html.escape(ua.admin_comment)}" if ua.admin_comment else ""
                     text += f"  • {address}{reason}\n"
                 text += "\n"
 
@@ -763,7 +767,7 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, lan
 
         if user_apartment.admin_comment:
             text += get_text("user_apartments.admin_detail_comment", language=lang).format(
-                comment=user_apartment.admin_comment
+                comment=html.escape(user_apartment.admin_comment)
             ) + "\n"
 
         await callback.message.edit_text(

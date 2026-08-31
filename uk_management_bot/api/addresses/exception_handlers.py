@@ -8,7 +8,8 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 from uk_management_bot.services.addresses.exceptions import (
-    AddressNotFound, AddressConflict, AddressValidationError,
+    AddressNotFound, AddressConflict, AddressPermissionError,
+    AddressValidationError,
 )
 
 
@@ -26,8 +27,13 @@ async def _address_validation_handler(request: Request, exc: AddressValidationEr
     )
 
 
+async def _address_permission_handler(request: Request, exc: AddressPermissionError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
+
+
 def register_address_exception_handlers(app) -> None:
     """Attach the address domain-exception handlers to a FastAPI app."""
     app.add_exception_handler(AddressNotFound, _address_not_found_handler)
     app.add_exception_handler(AddressConflict, _address_conflict_handler)
     app.add_exception_handler(AddressValidationError, _address_validation_handler)
+    app.add_exception_handler(AddressPermissionError, _address_permission_handler)

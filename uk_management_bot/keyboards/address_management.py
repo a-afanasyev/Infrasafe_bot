@@ -505,8 +505,16 @@ def get_moderation_requests_keyboard(
             building_short = req.apartment.building.address[:30] + "..." if len(req.apartment.building.address) > 30 else req.apartment.building.address
             apartment_info = f"{apartment_info}, {building_short}"
 
-        # Время подачи заявки
-        days_ago = (req.requested_at.date() - req.requested_at.date()).days if req.requested_at else 0
+        # Время подачи заявки. BUG-152 п.5: раньше вычиталась дата из самой
+        # себя — days_ago был всегда 0 и метка не показывалась никогда.
+        # Даты считаем в бизнес-зоне (канон ARCH-116), а не по UTC-стенке.
+        from uk_management_bot.utils.business_time import (
+            business_date_of, business_today,
+        )
+        days_ago = (
+            (business_today() - business_date_of(req.requested_at)).days
+            if req.requested_at else 0
+        )
         time_info = f" ({days_ago}{get_text('address.keyboards.days_short', language=language)})" if days_ago > 0 else ""
 
         builder.row(

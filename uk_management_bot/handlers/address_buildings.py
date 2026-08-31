@@ -267,8 +267,13 @@ async def show_buildings_by_yard_page(callback: CallbackQuery, language: str = "
     Клавиатура генерила `addr_buildings_by_yard_page:<yard_id>:<page>` всегда,
     а хендлера не было — кнопки страниц по двору были мертвы (silent click).
     Зеркало пары show_buildings_by_yard / show_buildings_page."""
-    _, raw_yard_id, raw_page = callback.data.split(":")
-    yard_id, page = int(raw_yard_id), int(raw_page)
+    # callback_data шлёт клиент (урок BUG-169): кривая форма — молчаливый
+    # answer, а не необработанный ValueError до try.
+    parts = callback.data.split(":")
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+        await callback.answer()
+        return
+    yard_id, page = int(parts[1]), int(parts[2])
 
     lang = "ru"  # WR-06: дефолт ДО try (см. show_buildings_by_yard)
     try:
@@ -280,6 +285,9 @@ async def show_buildings_by_yard_page(callback: CallbackQuery, language: str = "
 
         yard_name, buildings = loaded
         text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard_name, total=len(buildings))
+
+        if not buildings:
+            text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
 
         await callback.message.edit_text(
             text,
