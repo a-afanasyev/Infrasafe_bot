@@ -138,7 +138,7 @@ async def test_comment_audit_old_specs_use_canon(monkeypatch):
     message.answer = AsyncMock()
     state = _state({"target_employee_id": 5, "current_specializations": ["plumber"]})
 
-    await emp.process_specialization_change_comment(message, state, _db=db, language="ru")
+    await emp.process_specialization_change_comment(message, state, _db=db, language="ru", roles=["manager"])
 
     assert len(added) == 1
     details = json.loads(added[0].details)

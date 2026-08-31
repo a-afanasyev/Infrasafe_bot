@@ -33,7 +33,6 @@ from uk_management_bot.keyboards.requests import (
     get_category_display,
     resolve_category_key,
 )
-from uk_management_bot.utils.auth_helpers import check_user_role_sync
 from uk_management_bot.utils.workflow_predicates import is_awaiting_applicant
 from uk_management_bot.utils.constants import (
     ROLE_APPLICANT,
@@ -126,12 +125,14 @@ def _load_applicant_action_context(db, request_number: str, telegram_id: int) ->
     -> ('no_role'|'request_not_found'|'not_owner'|'not_awaiting', None)
        | ('ok', _RequestBrief).
     """
-    # Проверяем права доступа (только заявитель)
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): в check_user_role уходит
-    # Telegram-id, а внутри фильтр `User.id == user_id` — по serial-ключу.
-    # Совпадение практически недостижимо, поэтому обе кнопки заявителя
-    # (принять / доработка) всегда отвечают «нет доступа».
-    if not check_user_role_sync(telegram_id, ROLE_APPLICANT, db):
+    # BUG-153 п.4: единый резолв telegram_id -> users.id. Раньше в
+    # check_user_role уходил Telegram-id (фильтр по serial-ключу), а владение
+    # сверялось request.user_id == telegram_id — обе кнопки заявителя всегда
+    # отвечали «нет доступа». Дальше мутации идут КАНОНОМ (run_command
+    # авторизует владельца сам), так что оживление пути безопасно.
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    actor = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not actor or ROLE_APPLICANT not in set(get_user_roles(actor) or []):
         return ("no_role", None)
 
     # Проверяем существование заявки
@@ -139,10 +140,8 @@ def _load_applicant_action_context(db, request_number: str, telegram_id: int) ->
     if not request:
         return ("request_not_found", None)
 
-    # Проверяем, что заявка принадлежит этому пользователю
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): `request.user_id` — это
-    # `users.id`, а сравнивается с Telegram-id (тот же класс id-микса).
-    if request.user_id != telegram_id:
+    # Владение — по внутреннему users.id
+    if request.user_id != actor.id:
         return ("not_owner", None)
 
     # PR2a-6: заявка ожидает решения заявителя (Исполнено, не возвращена) —
@@ -188,8 +187,7 @@ def _add_revision_comment(db, request_number: str, telegram_id: int, revision_re
     сохранялась никогда: переход APPLICANT_RETURN к этому моменту уже
     закоммичен, и заявитель видел «ошибка» при сменившемся статусе.
 
-    ⚠️ Предсуществующий дефект (сохранён): RU-хардкод текста комментария —
-    UZ-заявитель получит русский (BUG-153 п.2, отдельный пункт бэклога).
+    Текст комментария — через локаль на языке актора (BUG-153 п.2).
     """
     actor = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not actor:
@@ -203,7 +201,10 @@ def _add_revision_comment(db, request_number: str, telegram_id: int, revision_re
     _, notices = comment_service.add_clarification_comment(
         request_number=request_number,
         user_id=actor.id,
-        clarification=f"Запрошена доработка. Причина: {revision_reason}"
+        clarification=get_text(
+            "request_reports.handlers.revision_comment",
+            language=actor.language or "ru",
+        ).format(reason=revision_reason)
     )
     return notices
 
@@ -512,11 +513,10 @@ def format_report_for_display(request: Request, report_comments: list, language:
         report_text += f"📝 **{get_text('request_reports.handlers.description', language=language)}**: {request.description}\n"
         report_text += f"📊 **{get_text('request_reports.handlers.status', language=language)}**: {get_status_display(request.status, language=language)}\n"
 
-        # Информация о выполнении
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): сырой strftime по
-        # completed_at — время показывается в UTC мимо канона business_time.
+        # Информация о выполнении (BUG-153 п.6: канон бизнес-зоны ARCH-116)
         if request.completed_at:
-            report_text += f"✅ **{get_text('request_reports.handlers.completed_at', language=language)}**: {request.completed_at.strftime('%d.%m.%Y %H:%M')}\n"
+            from uk_management_bot.utils.business_time import fmt_datetime
+            report_text += f"✅ **{get_text('request_reports.handlers.completed_at', language=language)}**: {fmt_datetime(request.completed_at)}\n"
 
         # Отчет о выполнении
         if request.completion_report:

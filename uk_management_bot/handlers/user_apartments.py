@@ -246,7 +246,7 @@ def _load_admin_apartment_view(db, user_apartment_id: int) -> Optional[_Apartmen
 
 
 def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int) -> str:
-    """-> 'not_found' | 'admin_not_found' | 'ok'."""
+    """-> 'not_found' | 'admin_not_found' | 'not_pending' | 'ok'."""
     from uk_management_bot.database.models import UserApartment, User
     from sqlalchemy import select
     from datetime import timezone
@@ -294,7 +294,7 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
 
 
 def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) -> str:
-    """-> 'not_found' | 'admin_not_found' | 'ok'."""
+    """-> 'not_found' | 'admin_not_found' | 'not_pending' | 'ok'."""
     from uk_management_bot.database.models import UserApartment, User
     from sqlalchemy import select
     from datetime import timezone

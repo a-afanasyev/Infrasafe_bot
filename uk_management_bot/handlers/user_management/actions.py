@@ -122,14 +122,10 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
 
         documents_text += f"{i}. {status_emoji} <b>{doc_type_name}</b>\n"
         documents_text += get_text('user_mgmt.handlers.doc_file', language=lang).format(name=file_name) + "\n"
-        # ⚠️ Предсуществующий дефект-класс (сохранён 1:1): falsy-проверка
-        # `if doc.file_size` — размер 0 байт читается как «размера нет».
-        if doc.file_size:
+        # BUG-155 п.7: размер 0 байт легитимен; created_at может быть NULL.
+        if doc.file_size is not None:
             documents_text += get_text('user_mgmt.handlers.doc_size', language=lang).format(size=doc.file_size // 1024) + "\n"
-        # ⚠️ Предсуществующий дефект-класс (сохранён 1:1): NULL-strftime —
-        # у документа без created_at строка падает AttributeError и весь экран
-        # уходит в общий except с «неизвестной ошибкой».
-        documents_text += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=doc.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
+        documents_text += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=doc.created_at.strftime('%d.%m.%Y %H:%M') if doc.created_at else "—") + "\n"
 
         if doc.verification_notes:
             documents_text += get_text('user_mgmt.handlers.doc_comment', language=lang).format(comment=doc.verification_notes) + "\n"
@@ -491,14 +487,10 @@ async def handle_download_document(callback: CallbackQuery,
             doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{payload.document_type.value}', language=lang)
 
             caption = f"📄 {doc_type_name}\n"
-            # ⚠️ Предсуществующий дефект-класс (сохранён 1:1): NULL-strftime —
-            # документ без created_at роняет сборку подписи (ловится внутренним
-            # except → «ошибка отправки документа»).
-            caption += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=payload.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
+            # BUG-155 п.7: created_at может быть NULL; размер 0 байт легитимен.
+            caption += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=payload.created_at.strftime('%d.%m.%Y %H:%M') if payload.created_at else "—") + "\n"
 
-            # ⚠️ Предсуществующий дефект-класс (сохранён 1:1): falsy-проверка
-            # размера — 0 байт читается как «размера нет».
-            if payload.file_size:
+            if payload.file_size is not None:
                 caption += get_text('user_mgmt.handlers.doc_size', language=lang).format(size=payload.file_size // 1024)
 
             # Определяем тип файла по file_name или пробуем отправить как фото
@@ -560,17 +552,14 @@ async def handle_request_documents(callback: CallbackQuery, state: FSMContext,
             await callback.answer(get_text('user_mgmt.handlers.manager_not_found', language=lang), show_alert=True)
             return
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): записанные сюда данные
-        # тут же стираются `state.clear()` ниже — action/target_user_id/manager_id
-        # до чек-листа не доживают.
+        # BUG-155 п.4: сначала чистим ПРЕДЫДУЩЕЕ состояние, потом пишем своё —
+        # раньше clear() стоял после update_data и стирал только что записанное.
+        await state.clear()
         await state.update_data({
             'action': 'request_documents',
             'target_user_id': target_user_id,
             'manager_id': manager_id  # Используем внутренний ID из базы данных
         })
-
-        # Очищаем предыдущее состояние
-        await state.clear()
 
         # Показываем меню с галочками для выбора документов
         from uk_management_bot.keyboards.user_verification import get_document_checklist_keyboard

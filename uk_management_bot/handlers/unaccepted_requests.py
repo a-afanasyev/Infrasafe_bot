@@ -74,9 +74,12 @@ class _AcceptanceContext:
 
 @dataclass(frozen=True)
 class _NotifyTargets:
-    """Telegram-адресаты post-commit уведомлений."""
+    """Telegram-адресаты post-commit уведомлений (+ язык каждого — BUG-153 п.1:
+    текст рендерится на языке получателя, не менеджера)."""
     applicant_telegram_id: Optional[int]
     executor_telegram_id: Optional[int]
+    applicant_language: str = "ru"
+    executor_language: str = "ru"
 
 
 @dataclass(frozen=True)
@@ -124,13 +127,13 @@ def _load_remind_context(db, request_number: str, lang: str) -> tuple:
     else:
         completed_str = get_text("unaccepted.handlers.unknown_time", language=lang)
 
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): текст получателю рендерится на
-    # языке МЕНЕДЖЕРА (`lang` = language нажавшего кнопку), язык заявителя
-    # (applicant.language) не пробрасывается.
-    notification_text = get_text("unaccepted.handlers.reminder_notification", language=lang).format(
+    # BUG-153 п.1: текст рендерится на языке ПОЛУЧАТЕЛЯ (заявителя), а не
+    # менеджера, нажавшего кнопку (канон B3 notification_service).
+    recipient_lang = applicant.language or "ru"
+    notification_text = get_text("unaccepted.handlers.reminder_notification", language=recipient_lang).format(
         request_number=request.request_number,
         category=request.category,
-        address=request.address or get_text("unaccepted.handlers.not_specified", language=lang),
+        address=request.address or get_text("unaccepted.handlers.not_specified", language=recipient_lang),
         completed_str=completed_str
     )
 
@@ -188,17 +191,19 @@ def _load_notify_targets(db, applicant_user_id, executor_id) -> _NotifyTargets:
     applicant = db.query(User).filter(User.id == applicant_user_id).first()
 
     executor_telegram_id = None
-    # ⚠️ Предсуществующий дефект-класс (сохранён 1:1): falsy-проверка
-    # `if executor_id` — executor_id == 0 читался бы как «исполнителя нет».
-    # На serial-ключах 0 недостижим, поведение не менялось.
-    if executor_id:
+    executor_language = "ru"
+    # BUG-153 п.3: id 0 легитимен как значение — сравнение по is not None.
+    if executor_id is not None:
         executor = db.query(User).filter(User.id == executor_id).first()
         if executor:
             executor_telegram_id = executor.telegram_id
+            executor_language = executor.language or "ru"
 
     return _NotifyTargets(
         applicant_telegram_id=applicant.telegram_id if applicant else None,
         executor_telegram_id=executor_telegram_id,
+        applicant_language=(applicant.language or "ru") if applicant else "ru",
+        executor_language=executor_language,
     )
 
 
@@ -373,13 +378,13 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         # больше не выставляем (исторические поля, PR0 Р6). Форматированный
         # комментарий менеджера дописывается в manager_confirmation_notes
         # внутри run_command (Op.APPEND).
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): RU-хардкод шапки и подписи
-        # комментария — UZ-менеджер получает русский блок.
-        manager_comment = (
-            f"\n\n--- ПРИНЯТО МЕНЕДЖЕРОМ {fmt_datetime(utc_now())} ---\n"
-            f"👨‍💼 Менеджер: {user.first_name or 'Unknown'} {user.last_name or ''}\n"
-            f"💬 Комментарий: {comment}\n"
-            f"⚠️ Заявка принята без оценки заявителя"
+        # BUG-153 п.2: блок через локаль на языке менеджера (класс BUG-147).
+        manager_comment = get_text(
+            "unaccepted.handlers.manager_comment_block", language=lang
+        ).format(
+            date=fmt_datetime(utc_now()),
+            name=f"{user.first_name or 'Unknown'} {user.last_name or ''}".strip(),
+            comment=comment,
         )
 
         from uk_management_bot.database.session import SessionLocal
@@ -425,14 +430,13 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         # Уведомляем заявителя
         if targets.applicant_telegram_id is not None:
             try:
-                # ⚠️ Предсуществующий дефект (сохранён 1:1): текст заявителю
-                # рендерится на языке МЕНЕДЖЕРА — язык получателя не читается.
+                # BUG-153 п.1: язык ПОЛУЧАТЕЛЯ (заявителя).
                 await message.bot.send_message(
                     chat_id=targets.applicant_telegram_id,
-                    text=get_text("unaccepted.handlers.applicant_notification", language=lang).format(
+                    text=get_text("unaccepted.handlers.applicant_notification", language=targets.applicant_language).format(
                         request_number=request_number,
                         category=ctx.category,
-                        address=ctx.address or get_text("unaccepted.handlers.not_specified", language=lang),
+                        address=ctx.address or get_text("unaccepted.handlers.not_specified", language=targets.applicant_language),
                         comment=comment
                     ),
                     parse_mode="HTML"
@@ -443,11 +447,10 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         # Уведомляем исполнителя (если назначен)
         if targets.executor_telegram_id is not None:
             try:
-                # ⚠️ Предсуществующий дефект (сохранён 1:1): язык исполнителя
-                # так же не пробрасывается — текст на языке менеджера.
+                # BUG-153 п.1: язык ПОЛУЧАТЕЛЯ (исполнителя).
                 await message.bot.send_message(
                     chat_id=targets.executor_telegram_id,
-                    text=get_text("unaccepted.handlers.executor_notification", language=lang).format(
+                    text=get_text("unaccepted.handlers.executor_notification", language=targets.executor_language).format(
                         request_number=request_number,
                         category=ctx.category
                     ),
@@ -511,16 +514,18 @@ async def handle_back_to_unaccepted_list(callback: CallbackQuery, roles: list = 
                 hours = waiting_time.seconds // 3600
                 minutes = (waiting_time.seconds % 3600) // 60
 
+                # BUG-153 п.2: суффиксы через локаль (класс BUG-147).
+                d_s = get_text("unaccepted.handlers.days_short", language=lang)
+                h_s = get_text("unaccepted.handlers.hours_short", language=lang)
+                m_s = get_text("unaccepted.handlers.minutes_short", language=lang)
                 if days > 0:
-                    time_str = f"{days}д {hours}ч"
+                    time_str = f"{days}{d_s} {hours}{h_s}"
                 elif hours > 0:
-                    time_str = f"{hours}ч {minutes}м"
+                    time_str = f"{hours}{h_s} {minutes}{m_s}"
                 else:
-                    time_str = f"{minutes}м"
+                    time_str = f"{minutes}{m_s}"
             else:
-                # ⚠️ Предсуществующий дефект (сохранён 1:1): RU-хардкод «неизв.»
-                # и суффиксы «д/ч/м» выше — UZ-менеджер читает их по-русски.
-                time_str = "неизв."
+                time_str = get_text("unaccepted.handlers.unknown_short", language=lang)
 
             item = {
                 "request_number": r.request_number,

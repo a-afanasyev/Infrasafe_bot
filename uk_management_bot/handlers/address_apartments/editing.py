@@ -220,6 +220,11 @@ async def process_new_apartment_area(message: Message, state: FSMContext, langua
     """Обработка новой площади квартиры"""
     # BUG-139: роли из middleware-контекста (DI), не хардкод "manager".
     lang = language
+    # BUG-156 п.6 (ревью батча 3): нетекстовое сообщение давало AttributeError
+    # мимо except ValueError.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     cancel_text = get_text("buttons.cancel", language=lang)
     if message.text == cancel_text:
         data = await state.get_data()
