@@ -210,7 +210,7 @@ async def test_process_role_change_comment_full_contour_on_seam(db, monkeypatch)
     message.answer = AsyncMock()
     state = _state({"target_employee_id": 5, "current_roles": ["manager", "executor"]})
 
-    await emp_roles.process_role_change_comment(message, state, language="ru", _db=db)
+    await emp_roles.process_role_change_comment(message, state, language="ru", roles=["manager"], _db=db)
 
     fresh = db.get(User, 5)
     assert json.loads(fresh.roles) == ["manager", "executor"]

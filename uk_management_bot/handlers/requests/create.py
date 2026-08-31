@@ -249,7 +249,7 @@ async def handle_address_page(callback: CallbackQuery, state: FSMContext):
         return
     from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
 
-    addresses = _load_user_request_addresses(callback.from_user.id)
+    addresses = await run_db(lambda s: _load_user_request_addresses(s, callback.from_user.id))
     if not _has_any_address(addresses):
         await callback.answer()
         return
@@ -275,7 +275,7 @@ async def process_address(message: Message, state: FSMContext):
     lang = await _get_user_language(message=message)
     from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
 
-    addresses = _load_user_request_addresses(message.from_user.id)
+    addresses = await run_db(lambda s: _load_user_request_addresses(s, message.from_user.id))
     if not _has_any_address(addresses):
         await message.answer(get_text("requests.no_available_addresses", language=lang))
         await state.clear()

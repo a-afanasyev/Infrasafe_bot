@@ -136,34 +136,37 @@ def _load_cancel_input_view(db, telegram_id: int) -> tuple:
     return lang, _user_view_from(fresh_user)
 
 
-def _update_user_phone(db, telegram_id: int, phone: str) -> bool:
-    """Обновляем телефон в базе данных. -> False, если пользователь не найден."""
+def _update_user_phone(db, telegram_id: int, phone: str) -> Optional[_ProfileUserView]:
+    """Обновляем телефон. -> свежий view для клавиатуры | None (не найден).
+
+    BUG-151 п.8: view возвращается ИЗ ЮНИТА (рецепт BUG-BOT-020) — иначе
+    клавиатура после сохранения рендерилась без user, все значения «не указано»."""
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        return False
+        return None
     user.phone = phone
     db.commit()
-    return True
+    return _user_view_from(user)
 
 
-def _update_user_first_name(db, telegram_id: int, first_name: str) -> bool:
-    """Обновляем имя в базе данных. -> False, если пользователь не найден."""
+def _update_user_first_name(db, telegram_id: int, first_name: str) -> Optional[_ProfileUserView]:
+    """Обновляем имя. -> свежий view | None (не найден). См. _update_user_phone."""
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        return False
+        return None
     user.first_name = first_name
     db.commit()
-    return True
+    return _user_view_from(user)
 
 
-def _update_user_last_name(db, telegram_id: int, last_name: str) -> bool:
-    """Обновляем фамилию в базе данных. -> False, если пользователь не найден."""
+def _update_user_last_name(db, telegram_id: int, last_name: str) -> Optional[_ProfileUserView]:
+    """Обновляем фамилию. -> свежий view | None (не найден). См. _update_user_phone."""
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user:
-        return False
+        return None
     user.last_name = last_name
     db.commit()
-    return True
+    return _user_view_from(user)
 
 
 def _set_user_language(db, telegram_id: int, selected_lang: str) -> Optional[_ProfileUserView]:
@@ -282,12 +285,9 @@ async def handle_phone_input(message: Message, state: FSMContext, *, _db=None):
 
         updated = await run_db(lambda s: _update_user_phone(s, message.from_user.id, phone), db=_db)
         if updated:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): клавиатура рендерится
-            # без user — все значения показываются как «не указано» (stale,
-            # класс BUG-BOT-020; починен только для cancel_input).
             await message.answer(
                 get_text("profile.phone_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
+                reply_markup=get_profile_edit_keyboard(lang, updated)
             )
         else:
             await message.answer(get_text("errors.user_not_found", language=lang))
@@ -453,12 +453,9 @@ async def handle_first_name_input(message: Message, state: FSMContext, *, _db=No
 
         updated = await run_db(lambda s: _update_user_first_name(s, message.from_user.id, first_name), db=_db)
         if updated:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): клавиатура рендерится
-            # без user — все значения показываются как «не указано» (stale,
-            # класс BUG-BOT-020; починен только для cancel_input).
             await message.answer(
                 get_text("profile.first_name_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
+                reply_markup=get_profile_edit_keyboard(lang, updated)
             )
         else:
             await message.answer(get_text("errors.user_not_found", language=lang))
@@ -510,12 +507,9 @@ async def handle_last_name_input(message: Message, state: FSMContext, *, _db=Non
 
         updated = await run_db(lambda s: _update_user_last_name(s, message.from_user.id, last_name), db=_db)
         if updated:
-            # ⚠️ Предсуществующий дефект (сохранён 1:1): клавиатура рендерится
-            # без user — все значения показываются как «не указано» (stale,
-            # класс BUG-BOT-020; починен только для cancel_input).
             await message.answer(
                 get_text("profile.last_name_updated", language=lang),
-                reply_markup=get_profile_edit_keyboard(lang)
+                reply_markup=get_profile_edit_keyboard(lang, updated)
             )
         else:
             await message.answer(get_text("errors.user_not_found", language=lang))

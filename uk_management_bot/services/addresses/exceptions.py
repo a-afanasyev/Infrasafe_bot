@@ -31,3 +31,8 @@ class AddressConflict(AddressError):
 
 class AddressValidationError(AddressError):
     """Input is malformed (empty apartment number, value out of range, etc.)."""
+
+
+class AddressPermissionError(AddressError):
+    """Actor lacks the role required for the operation (BUG-177: перепроверка
+    в точке записи, канон BUG-172 — второй рубеж поверх RoleGate/require_roles)."""

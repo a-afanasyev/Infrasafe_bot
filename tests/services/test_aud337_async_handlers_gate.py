@@ -218,6 +218,87 @@ def test_converted_list_is_not_empty():
     assert CONVERTED
 
 
+def _session_opener_registry() -> dict[str, str]:
+    """Имена функций handlers/, чьё СОБСТВЕННОЕ тело открывает sync-сессию.
+
+    BUG-157 (транзитивная проверка, один уровень): гейт выше смотрит только на
+    прямые вызовы в async-телах — sync/async-хелпер, открывающий сессию у себя
+    (`_db_scope(`, `session_scope(`, `SessionLocal(`), оставался невидимым, и
+    «конвертированный» модуль всё равно блокировал loop на его вызове (ровно
+    так жил `_get_user_language`). Ключ — голое имя: коллизия имён даст ложное
+    срабатывание, что для гейта безопаснее пропуска.
+    """
+    openers: dict[str, str] = {}
+    opener_names = {"session_scope", "SessionLocal", "_db_scope"}
+    for path in sorted((ROOT / "uk_management_bot" / "handlers").rglob("*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for call in ast.walk(node):
+                if (isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Name)
+                        and call.func.id in opener_names):
+                    openers[node.name] = f"{rel}:{node.lineno}"
+                    break
+    # сами открыватели тоже запрещены к вызову из async-тел
+    for name in opener_names:
+        openers.setdefault(name, "database/session.py")
+    return openers
+
+
+# Известные транзитивные блокировки loop (класс AUD3-07, деферрал владельца
+# 2026-08-19): вызываемые хелперы — целые неконвертированные хендлеры
+# (myrequests.show_my_requests, templates_a.handle_edit_*), их конверсия —
+# отдельные волны программы. Ратчет держит НЕ-РОСТ: новый вызов открывателя из
+# async-тела краснеет сразу; после конверсии хелпера строку СНЯТЬ (гейт сам
+# потребует — фикс обязан пиниться уменьшением baseline).
+_TRANSITIVE_BASELINE = {
+    ("uk_management_bot/handlers/my_shifts/viewing.py", "open_shift_requests", "show_my_requests"),
+    ("uk_management_bot/handlers/base.py", "executor_active_requests", "show_my_requests"),
+    ("uk_management_bot/handlers/base.py", "executor_archive_requests", "show_my_requests"),
+    ("uk_management_bot/handlers/shift_management/templates_b.py", "handle_save_template_specializations", "handle_edit_template_details"),
+    ("uk_management_bot/handlers/shift_management/templates_b.py", "handle_delete_template_confirm", "handle_edit_templates"),
+    ("uk_management_bot/handlers/shift_management/templates_b.py", "handle_force_delete_template", "handle_edit_templates"),
+}
+
+
+def test_no_transitive_session_openers_in_async_bodies():
+    """BUG-157: async-тела CONVERTED-модулей не зовут хелперы, открывающие
+    sync-сессию у себя, — «конвертирован» значит «loop свободен», а не «прямых
+    .query() нет». Первым этим гейтом закрыт `_get_user_language` (30+
+    вызывающих блокировали loop на резолве языка незаметно для гейта выше)."""
+    openers = _session_opener_registry()
+    found: set[tuple[str, str, str]] = set()
+    problems: list[str] = []
+    for rel in CONVERTED:
+        tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
+        for fn in _async_defs(tree):
+            if fn.name in openers:
+                continue  # сам открыватель проверяется реестром, не здесь
+            for node in ast.walk(fn):
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id in openers):
+                    key = (rel, fn.name, node.func.id)
+                    found.add(key)
+                    if key not in _TRANSITIVE_BASELINE:
+                        problems.append(
+                            f"{rel}:{node.lineno}: async def {fn.name} зовёт "
+                            f"{node.func.id}() (открывает sync-сессию: "
+                            f"{openers[node.func.id]}) — DB-фаза обязана жить "
+                            "в run_db-юните"
+                        )
+    assert not problems, "BUG-157 transitive ratchet:\n" + "\n".join(problems)
+
+    healed = _TRANSITIVE_BASELINE - found
+    assert not healed, (
+        "Транзитивных блокировок стало меньше — зафиксируйте прогресс, сняв "
+        "строки из _TRANSITIVE_BASELINE:\n" + "\n".join(map(str, sorted(healed)))
+    )
+
+
 def test_no_handler_mixes_declared_db_with_run_db():
     """F1-ревью follow-up: хендлер с объявленным ``db`` не зовёт run_db напрямую.
 

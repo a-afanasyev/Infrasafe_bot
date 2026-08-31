@@ -109,23 +109,29 @@ def _apply_role_changes(db: Session, target_user_id: int, added_roles, removed_r
                         manager_id: int, comment: str, lang: str):
     """Применяет набор ролей. -> (success, user_name, user_info, клавиатура).
 
-    ⚠️ Предсуществующий дефект (сохранён 1:1): каждая роль применяется своей
-    транзакцией сервиса — при отказе на середине уже применённые изменения
-    остаются, а пользователь видит только «операция не удалась».
-    """
+    BUG-156 п.7: весь набор — ОДНОЙ транзакцией (commit=False у сервиса,
+    коммит/откат здесь): отказ на середине больше не оставляет частично
+    применённые роли при «операция не удалась»."""
     auth_service = AuthService(db)
 
     success = True
 
     # Добавляем новые роли
     for role in added_roles:
-        if not auth_service.assign_role(target_user_id, role, manager_id, comment):
+        if not auth_service.assign_role(target_user_id, role, manager_id, comment,
+                                        commit=False):
             success = False
 
     # Удаляем роли
     for role in removed_roles:
-        if not auth_service.remove_role(target_user_id, role, manager_id, comment):
+        if not auth_service.remove_role(target_user_id, role, manager_id, comment,
+                                        commit=False):
             success = False
+
+    if success:
+        db.commit()
+    else:
+        db.rollback()
 
     if not success:
         return False, None, None, None
@@ -221,9 +227,14 @@ async def show_user_roles_management(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data.startswith("role_add_"), UserManagementStates.selecting_roles)
-async def add_role_to_user(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def add_role_to_user(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Добавить роль пользователю"""
     lang = language
+    # BUG-156 п.8: права перепроверяются НА КАЖДОМ шаге цепочки, а не только
+    # на входе в экран — callback_data шлёт клиент (урок BUG-169).
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
     
     try:
         # AUD3-15: роль может содержать "_" (resource_meter_entry) —
@@ -252,9 +263,14 @@ async def add_role_to_user(callback: CallbackQuery, state: FSMContext, language:
 
 
 @router.callback_query(F.data.startswith("role_remove_"), UserManagementStates.selecting_roles)
-async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Удалить роль у пользователя"""
     lang = language
+    # BUG-156 п.8: права перепроверяются НА КАЖДОМ шаге цепочки, а не только
+    # на входе в экран — callback_data шлёт клиент (урок BUG-169).
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
     
     try:
         # AUD3-15: роль может содержать "_" (resource_meter_entry) —
@@ -291,9 +307,14 @@ async def remove_role_from_user(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "roles_save", UserManagementStates.selecting_roles)
-async def save_user_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def save_user_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Сохранить изменения ролей"""
     lang = language
+    # BUG-156 п.8: права перепроверяются НА КАЖДОМ шаге цепочки, а не только
+    # на входе в экран — callback_data шлёт клиент (урок BUG-169).
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
 
     try:
         data = await state.get_data()
@@ -361,9 +382,14 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, langu
 
 
 @router.message(UserManagementStates.waiting_for_role_comment)
-async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий к изменению ролей"""
     lang = language
+    # BUG-156 п.8: права перепроверяются и на шаге комментария (см. выше).
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()
@@ -371,17 +397,17 @@ async def process_role_change_comment(message: Message, state: FSMContext, langu
         manager_id = data.get('manager_id')
         original_roles = data.get('original_roles', [])
         current_roles = data.get('current_roles', [])
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение даёт
-        # comment=None — в аудит уедет null, отдельной обработки нет.
+        # BUG-156 п.6: нетекстовое сообщение (фото/стикер) давало comment=None
+        # — в аудит уезжал null.
+        if not message.text:
+            await message.answer(get_text("errors.invalid_input", language=lang))
+            return
         comment = message.text
 
         # Определяем добавленные и удаленные роли
         added_roles = set(current_roles) - set(original_roles)
         removed_roles = set(original_roles) - set(current_roles)
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): права администратора
-        # проверяются только на входе в экран (show_user_roles_management);
-        # шаг применения полагается на FSM-состояние.
         success, user_name, user_info, keyboard = await run_db(
             lambda s: _apply_role_changes(
                 s, target_user_id, added_roles, removed_roles, manager_id, comment, lang
@@ -477,9 +503,14 @@ async def show_user_specializations_management(callback: CallbackQuery, state: F
 
 
 @router.callback_query(F.data.startswith("spec_toggle_"), UserManagementStates.selecting_specializations)
-async def toggle_specialization(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def toggle_specialization(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Переключить специализацию (добавить/удалить)"""
     lang = language
+    # BUG-156 п.8: права перепроверяются НА КАЖДОМ шаге цепочки, а не только
+    # на входе в экран — callback_data шлёт клиент (урок BUG-169).
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
     
     try:
         specialization = callback.data.split('_')[-1]
@@ -509,9 +540,14 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "spec_save", UserManagementStates.selecting_specializations)
-async def save_user_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def save_user_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Сохранить изменения специализаций"""
     lang = language
+    # BUG-156 п.8: права перепроверяются НА КАЖДОМ шаге цепочки, а не только
+    # на входе в экран — callback_data шлёт клиент (урок BUG-169).
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
     
     try:
         data = await state.get_data()
@@ -579,17 +615,24 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(UserManagementStates.waiting_for_specialization_comment)
-async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий к изменению специализаций"""
     lang = language
+    # BUG-156 п.8: права перепроверяются и на шаге комментария (см. выше).
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()
         target_user_id = data.get('target_user_id')
         manager_id = data.get('manager_id')
         current_specializations = data.get('current_specializations', [])
-        # ⚠️ Тот же ⚠️-класс, что в process_role_change_comment: нетекстовое
-        # сообщение даёт comment=None.
+        # BUG-156 п.6: нетекстовое сообщение давало comment=None (null в аудит).
+        if not message.text:
+            await message.answer(get_text("errors.invalid_input", language=lang))
+            return
         comment = message.text
 
         success, user_name, user_info, keyboard = await run_db(

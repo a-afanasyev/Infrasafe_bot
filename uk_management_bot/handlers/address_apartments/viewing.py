@@ -82,32 +82,33 @@ def _load_buildings_with_counts(db) -> list:
     return options
 
 
-def _load_building_apartments(db, building_id: int, page: int) -> Optional[tuple]:
+def _load_building_apartments(db, building_id: int, page: int,
+                              lang: str = "ru") -> Optional[tuple]:
     """-> (building_address, total, разметка списка) | None (здание не найдено)."""
     building = AddressService.get_building_by_id(db, building_id, include_yard=True)
     if not building:
         return None
 
     apartments = AddressService.get_apartments_by_building(db, building_id, only_active=False)
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): в клавиатуру не пробрасывается
-    # language — подписи кнопок и адреса всегда рендерятся на ru.
     return (
         building.address,
         len(apartments),
-        get_apartments_list_keyboard(apartments, page=page, building_id=building_id),
+        get_apartments_list_keyboard(apartments, page=page,
+                                     building_id=building_id, language=lang),
     )
 
 
-def _search_apartments_markup(db, query_text: str) -> tuple:
-    """-> (total, разметка списка | None при пустом результате)."""
+def _search_apartments_markup(db, query_text: str, lang: str = "ru") -> tuple:
+    """-> (total, разметка списка | None при пустом результате).
+
+    BUG-156 п.2: кнопки страниц в поиске НЕ рендерятся (show_pagination=False)
+    — их callback `addr_apartments_page:<n>` не имеет хендлера (у поиска нет
+    сохранённого запроса, листать нечем); мёртвые кнопки хуже отсутствующих."""
     apartments = AddressService.search_apartments(db, query_text, only_active=True)
     if not apartments:
         return 0, None
-    # ⚠️ Предсуществующие дефекты (сохранены 1:1): (1) language не пробрасывается
-    # в клавиатуру — результаты поиска всегда на ru; (2) без building_id
-    # пагинация генерит callback `addr_apartments_page:<n>`, хендлера которого
-    # в проекте нет — кнопки страниц поиска мертвы.
-    return len(apartments), get_apartments_list_keyboard(apartments, page=0)
+    return len(apartments), get_apartments_list_keyboard(
+        apartments, page=0, language=lang, show_pagination=False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -188,7 +189,7 @@ async def show_apartments_by_building(callback: CallbackQuery, language: str = "
     lang = language
 
     try:
-        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, 0), db=_db)
+        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, 0, lang), db=_db)
         if loaded is None:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
@@ -222,7 +223,7 @@ async def paginate_apartments_by_building(callback: CallbackQuery, language: str
     lang = language
 
     try:
-        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, page), db=_db)
+        loaded = await run_db(lambda s: _load_building_apartments(s, building_id, page, lang), db=_db)
         if loaded is None:
             await callback.answer(get_text("address_apartments.handlers.building_not_found", language=lang), show_alert=True)
             return
@@ -285,7 +286,7 @@ async def process_apartment_search(message: Message, state: FSMContext, language
         return
 
     try:
-        total, markup = await run_db(lambda s: _search_apartments_markup(s, query), db=_db)
+        total, markup = await run_db(lambda s: _search_apartments_markup(s, query, lang), db=_db)
 
         if not total:
             no_results_text = (

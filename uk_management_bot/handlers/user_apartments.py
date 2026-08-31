@@ -7,6 +7,7 @@
 - Смена основной квартиры
 - Просмотр истории модерации
 """
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -245,7 +246,7 @@ def _load_admin_apartment_view(db, user_apartment_id: int) -> Optional[_Apartmen
 
 
 def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int) -> str:
-    """-> 'not_found' | 'admin_not_found' | 'ok'."""
+    """-> 'not_found' | 'admin_not_found' | 'not_pending' | 'ok'."""
     from uk_management_bot.database.models import UserApartment, User
     from sqlalchemy import select
     from datetime import timezone
@@ -265,20 +266,35 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
     if not admin:
         return "admin_not_found"
 
-    # Одобряем квартиру
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): admin_comment —
-    # русский хардкод, не проходит через локализацию (класс BUG-147).
+    # BUG-177 (второй рубеж, канон BUG-172): роль перепроверяется В ЮНИТЕ
+    # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
+    # состояния: решение принимается только по pending-заявке (паритет с
+    # канон-путём _review_apartment_request).
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+        return "admin_not_found"
+    if user_apartment.status != "pending":
+        return "not_pending"
+
+    # Одобряем квартиру. BUG-151 п.3: комментарий хранится строкой и читает
+    # его ЖИТЕЛЬ (reason в списке квартир) — рендерим на языке владельца.
+    owner = db.execute(
+        select(User).where(User.id == user_apartment.user_id)
+    ).scalar_one_or_none()
+    owner_lang = (owner.language if owner else None) or "ru"
     user_apartment.status = 'approved'
     user_apartment.reviewed_at = datetime.now(timezone.utc)
     user_apartment.reviewed_by = admin.id
-    user_apartment.admin_comment = f"Одобрено администратором {admin.first_name or admin_telegram_id}"
+    user_apartment.admin_comment = get_text(
+        "user_apartments.admin_comment_approved", language=owner_lang
+    ).format(name=admin.first_name or admin_telegram_id)
 
     db.commit()
     return "ok"
 
 
 def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) -> str:
-    """-> 'not_found' | 'admin_not_found' | 'ok'."""
+    """-> 'not_found' | 'admin_not_found' | 'not_pending' | 'ok'."""
     from uk_management_bot.database.models import UserApartment, User
     from sqlalchemy import select
     from datetime import timezone
@@ -298,13 +314,27 @@ def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) 
     if not admin:
         return "admin_not_found"
 
-    # Отклоняем квартиру
-    # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): admin_comment —
-    # русский хардкод, не проходит через локализацию (класс BUG-147).
+    # BUG-177 (второй рубеж, канон BUG-172): роль перепроверяется В ЮНИТЕ
+    # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
+    # состояния: решение принимается только по pending-заявке (паритет с
+    # канон-путём _review_apartment_request).
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+        return "admin_not_found"
+    if user_apartment.status != "pending":
+        return "not_pending"
+
+    # Отклоняем квартиру. BUG-151 п.3: язык владельца — как в approve выше.
+    owner = db.execute(
+        select(User).where(User.id == user_apartment.user_id)
+    ).scalar_one_or_none()
+    owner_lang = (owner.language if owner else None) or "ru"
     user_apartment.status = 'rejected'
     user_apartment.reviewed_at = datetime.now(timezone.utc)
     user_apartment.reviewed_by = admin.id
-    user_apartment.admin_comment = f"Отклонено администратором {admin.first_name or admin_telegram_id}"
+    user_apartment.admin_comment = get_text(
+        "user_apartments.admin_comment_rejected", language=owner_lang
+    ).format(name=admin.first_name or admin_telegram_id)
 
     db.commit()
     return "ok"
@@ -380,7 +410,9 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
             text += get_text("user_apartments.rejected_header", language=lang) + "\n"
             for ua in rejected:
                 address = ua.address
-                reason = f" ({ua.admin_comment})" if ua.admin_comment else ""
+                # Секревью A2: admin_comment несёт свободный first_name
+                # админа, сообщение уходит с parse_mode=HTML (класс BUG-174).
+                reason = f" ({html.escape(ua.admin_comment)})" if ua.admin_comment else ""
                 text += f"  • {address}{reason}\n"
             text += "\n"
 
@@ -512,12 +544,11 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
             if user_apartment.area:
                 text += get_text("user_apartments.area_label", language=lang).format(value=user_apartment.area) + "\n"
 
-        # История модерации
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): requested_at.strftime без
-        # guard'а на NULL (класс BUG-144) — NULL уронит хендлер в except.
+        # История модерации. BUG-151 п.2: NULL-guard на requested_at (BUG-144).
         text += "\n" + get_text("user_apartments.history_header", language=lang) + "\n"
         text += get_text("user_apartments.requested_at_label", language=lang).format(
             date=user_apartment.requested_at.strftime('%d.%m.%Y %H:%M')
+            if user_apartment.requested_at else "—"
         ) + "\n"
 
         if user_apartment.reviewed_at:
@@ -527,10 +558,11 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
 
         if user_apartment.has_reviewer:
             reviewer_name = user_apartment.reviewer_first_name or user_apartment.reviewer_username or get_text("user_apartments.admin_default_name", language=lang)
-            text += get_text("user_apartments.reviewed_by_label", language=lang).format(name=reviewer_name) + "\n"
+            # Секревью A2: имя из Telegram-профиля — свободный текст (BUG-174).
+            text += get_text("user_apartments.reviewed_by_label", language=lang).format(name=html.escape(reviewer_name)) + "\n"
 
         if user_apartment.admin_comment:
-            text += "\n" + get_text("user_apartments.admin_comment_label", language=lang).format(comment=user_apartment.admin_comment) + "\n"
+            text += "\n" + get_text("user_apartments.admin_comment_label", language=lang).format(comment=html.escape(user_apartment.admin_comment)) + "\n"
 
         await callback.message.edit_text(
             text,
@@ -649,9 +681,11 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
 
         # Формируем текст
         text = get_text("user_apartments.admin_manage_title", language=lang) + "\n\n"
+        # Секревью A2: имя из Telegram-профиля жителя — свободный текст,
+        # обзор уходит с parse_mode=HTML (класс BUG-174).
         text += get_text("user_apartments.admin_user_info", language=lang).format(
-            first_name=overview.user_first_name or '',
-            last_name=overview.user_last_name or ''
+            first_name=html.escape(overview.user_first_name or ''),
+            last_name=html.escape(overview.user_last_name or '')
         ) + "\n"
         text += get_text("user_apartments.admin_telegram_id", language=lang).format(telegram_id=user_telegram_id) + "\n\n"
 
@@ -685,7 +719,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
                 text += get_text("user_apartments.rejected_header", language=lang) + "\n"
                 for ua in rejected:
                     address = ua.address
-                    reason = f" - {ua.admin_comment}" if ua.admin_comment else ""
+                    reason = f" - {html.escape(ua.admin_comment)}" if ua.admin_comment else ""
                     text += f"  • {address}{reason}\n"
                 text += "\n"
 
@@ -755,7 +789,7 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, lan
 
         if user_apartment.admin_comment:
             text += get_text("user_apartments.admin_detail_comment", language=lang).format(
-                comment=user_apartment.admin_comment
+                comment=html.escape(user_apartment.admin_comment)
             ) + "\n"
 
         await callback.message.edit_text(
@@ -791,6 +825,11 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
             await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
             return
 
+        if result == "not_pending":
+            # Стейл-клавиатура/чужой callback: решение уже принято.
+            await callback.answer(get_text("user_apartments.already_processed", language=lang), show_alert=True)
+            return
+
         await callback.answer(get_text("user_apartments.apartment_approved", language=lang), show_alert=True)
 
         # Возвращаемся к деталям (BUG-165: язык пробрасывается).
@@ -823,6 +862,11 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
         if result == "admin_not_found":
             await callback.answer(get_text("user_apartments.admin_not_found", language=lang), show_alert=True)
+            return
+
+        if result == "not_pending":
+            # Стейл-клавиатура/чужой callback: решение уже принято.
+            await callback.answer(get_text("user_apartments.already_processed", language=lang), show_alert=True)
             return
 
         await callback.answer(get_text("user_apartments.apartment_rejected", language=lang), show_alert=True)

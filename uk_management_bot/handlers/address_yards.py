@@ -323,7 +323,8 @@ async def show_yard_details(callback: CallbackQuery, language: str = "ru", *, _d
             return
 
         status = get_text("address_yards.handlers.status_active", language=lang) if yard.is_active else get_text("address_yards.handlers.status_inactive", language=lang)
-        gps = f"📍 {yard.gps_latitude}, {yard.gps_longitude}" if yard.gps_latitude and yard.gps_longitude else get_text("address_yards.handlers.gps_not_set", language=lang)
+        # BUG-149 п.3: координата 0.0 легитимна — сравнение по is not None.
+        gps = f"📍 {yard.gps_latitude}, {yard.gps_longitude}" if yard.gps_latitude is not None and yard.gps_longitude is not None else get_text("address_yards.handlers.gps_not_set", language=lang)
         buildings_count = yard.buildings_count
 
         text = get_text("address_yards.handlers.yard_details", language=lang).format(
@@ -477,9 +478,8 @@ async def process_yard_gps(message: Message, state: FSMContext, language: str = 
             await state.clear()
             return
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1 при A2-конвертации): координата
-        # 0.0 falsy — легитимный GPS "0.0, X" показался бы как «не задан».
-        gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude and gps_longitude else get_text("address_yards.handlers.gps_not_set", language=lang)
+        # BUG-149 п.3: координата 0.0 легитимна — сравнение по is not None.
+        gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude is not None and gps_longitude is not None else get_text("address_yards.handlers.gps_not_set", language=lang)
         desc_info = get_text("address_yards.handlers.description_info", language=lang).format(desc=data.get('description')) if data.get('description') else ""
 
         await message.answer(

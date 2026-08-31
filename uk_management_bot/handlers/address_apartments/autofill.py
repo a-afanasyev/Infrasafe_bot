@@ -103,8 +103,11 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, 
 async def process_autofill_range(message: Message, state: FSMContext, language: str = "ru"):
     """Обработать ввод диапазона номеров квартир"""
     lang = language
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): нетекстовое сообщение в этом
-    # FSM-состоянии даёт message.text is None → AttributeError мимо обработчиков.
+    # BUG-156 п.6: нетекстовое сообщение (фото/стикер) в FSM-шаге давало
+    # message.text is None -> AttributeError мимо обработчиков ошибок.
+    if not message.text:
+        await message.answer(get_text("errors.invalid_input", language=lang))
+        return
     range_text = message.text.strip()
 
     cancel_text = get_text("address.keyboards.cancel", language=lang)

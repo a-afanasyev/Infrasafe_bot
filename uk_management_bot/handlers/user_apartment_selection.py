@@ -270,7 +270,8 @@ async def start_apartment_selection(message: Message, state: FSMContext, languag
             reply_markup=get_user_apartment_selection_keyboard(
                 yards,
                 "yard",
-                "user_apartment_yard"
+                "user_apartment_yard",
+                language=lang
             )
         )
 
@@ -320,7 +321,8 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext, lan
             reply_markup=get_user_apartment_selection_keyboard(
                 yard.buildings,
                 "building",
-                "user_apartment_building"
+                "user_apartment_building",
+                language=lang
             )
         )
 
@@ -372,7 +374,8 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext,
             reply_markup=get_user_apartment_selection_keyboard(
                 building.apartments,
                 "apartment",
-                "user_apartment_final"
+                "user_apartment_final",
+                language=lang
             )
         )
 
@@ -425,16 +428,17 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
 
         data = await state.get_data()
         yard_name = data.get('selected_yard_name', get_text("user_apt_selection.handlers.not_specified", language=lang))
-        building_address = data.get('selected_building_address', 'Не указан')
+        building_address = data.get('selected_building_address') or get_text("user_apt_selection.handlers.not_specified", language=lang)
 
         await state.update_data(selected_apartment_id=apartment_id)
         await state.set_state(OnboardingStates.confirming_apartment)
 
         # Формируем информацию о квартире
         apartment_info = get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
-        if apartment.entrance:
+        # BUG-152 п.5: значение 0 легитимно — сравнение по is not None.
+        if apartment.entrance is not None:
             apartment_info += get_text("user_apt_selection.handlers.entrance_label", language=lang).format(entrance=apartment.entrance)
-        if apartment.floor:
+        if apartment.floor is not None:
             apartment_info += get_text("user_apt_selection.handlers.floor_label", language=lang).format(floor=apartment.floor)
 
         await callback.message.edit_text(
@@ -443,7 +447,8 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
             ),
             reply_markup=get_confirmation_keyboard(
                 confirm_callback="user_apartment_confirm",
-                cancel_callback="user_apartment_cancel"
+                cancel_callback="user_apartment_cancel",
+                language=lang
             )
         )
 
@@ -531,7 +536,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
         from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
         await callback.message.answer(
             get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
-            reply_markup=get_document_type_keyboard()
+            reply_markup=get_document_type_keyboard(language=lang)
         )
 
     except Exception as e:
@@ -563,7 +568,7 @@ async def cancel_apartment_request(callback: CallbackQuery, state: FSMContext, l
     from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
     await callback.message.answer(
         get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
-        reply_markup=get_document_type_keyboard()
+        reply_markup=get_document_type_keyboard(language=lang)
     )
 
 
@@ -726,7 +731,7 @@ async def cancel_apartment_selection_user(callback: CallbackQuery, state: FSMCon
         from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
         await callback.message.answer(
             get_text("user_apt_selection.handlers.upload_documents_prompt", language=lang),
-            reply_markup=get_document_type_keyboard(),
+            reply_markup=get_document_type_keyboard(language=lang),
         )
         return
 

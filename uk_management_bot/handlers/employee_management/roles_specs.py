@@ -248,8 +248,13 @@ async def show_employee_specializations_management(callback: CallbackQuery, role
 # ═══ ВЫБОР РОЛЕЙ И СПЕЦИАЛИЗАЦИЙ ═══
 
 @router.callback_query(F.data.startswith("role_toggle_"), EmployeeManagementStates.selecting_roles)
-async def toggle_role(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def toggle_role(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Переключить роль"""
+    # BUG-156 п.8 (близнец user_management/roles_specs, ревью батча 3): права
+    # перепроверяются на каждом шаге цепочки — callback_data шлёт клиент.
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=language), show_alert=True)
+        return
     try:
         role = callback.data.split('_')[-1]
         data = await state.get_data()
@@ -279,8 +284,13 @@ async def toggle_role(callback: CallbackQuery, state: FSMContext, language: str 
 
 
 @router.callback_query(F.data == "role_save", EmployeeManagementStates.selecting_roles)
-async def save_employee_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def save_employee_roles(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Сохранить роли сотрудника"""
+    # BUG-156 п.8 (близнец user_management/roles_specs, ревью батча 3): права
+    # перепроверяются на каждом шаге цепочки — callback_data шлёт клиент.
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=language), show_alert=True)
+        return
     try:
         data = await state.get_data()
         original_roles = data.get('original_roles', [])
@@ -335,8 +345,13 @@ async def cancel_roles_editing(callback: CallbackQuery, state: FSMContext, langu
 
 
 @router.message(EmployeeManagementStates.waiting_for_role_comment)
-async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_role_change_comment(message: Message, state: FSMContext, language: str = "ru", roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий для изменения ролей"""
+    # BUG-156 п.8 (близнец user_management/roles_specs): права и на шаге текста.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=language))
+        await state.clear()
+        return
     try:
         comment = message.text
         data = await state.get_data()
@@ -389,8 +404,13 @@ async def process_role_change_comment(message: Message, state: FSMContext, langu
 
 
 @router.callback_query(F.data.startswith("spec_toggle_"), EmployeeManagementStates.selecting_specializations)
-async def toggle_specialization(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def toggle_specialization(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Переключить специализацию"""
+    # BUG-156 п.8 (близнец user_management/roles_specs, ревью батча 3): права
+    # перепроверяются на каждом шаге цепочки — callback_data шлёт клиент.
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=language), show_alert=True)
+        return
     try:
         specialization = callback.data.split('_')[-1]
         data = await state.get_data()
@@ -420,8 +440,13 @@ async def toggle_specialization(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "spec_save", EmployeeManagementStates.selecting_specializations)
-async def save_employee_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+async def save_employee_specializations(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user: User = None):
     """Сохранить специализации сотрудника"""
+    # BUG-156 п.8 (близнец user_management/roles_specs, ревью батча 3): права
+    # перепроверяются на каждом шаге цепочки — callback_data шлёт клиент.
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=language), show_alert=True)
+        return
     try:
         data = await state.get_data()
         original_specializations = data.get('original_specializations', [])
@@ -476,8 +501,13 @@ async def cancel_specializations_editing(callback: CallbackQuery, state: FSMCont
 
 
 @router.message(EmployeeManagementStates.waiting_for_specialization_comment)
-async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_specialization_change_comment(message: Message, state: FSMContext, language: str = "ru", roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий для изменения специализаций"""
+    # BUG-156 п.8 (близнец user_management/roles_specs): права и на шаге текста.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=language))
+        await state.clear()
+        return
     try:
         comment = message.text
         data = await state.get_data()

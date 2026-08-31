@@ -8,6 +8,7 @@ from uk_management_bot.keyboards.requests import (
     get_media_keyboard,
 )
 from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+from uk_management_bot.database.session import run_db
 import logging
 from typing import Optional
 
@@ -82,7 +83,7 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
         try:
             from uk_management_bot.keyboards.requests import build_request_address_inline_keyboard
 
-            addresses = _load_user_request_addresses(callback.from_user.id)
+            addresses = await run_db(lambda s: _load_user_request_addresses(s, callback.from_user.id))
             if not _has_any_address(addresses):
                 await callback.message.answer(
                     get_text("requests.no_available_addresses", language=lang)

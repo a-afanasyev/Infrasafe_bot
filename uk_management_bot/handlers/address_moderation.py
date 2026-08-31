@@ -8,6 +8,7 @@
 - Отклонение заявки (reject)
 - Добавление комментариев к решению
 """
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -234,14 +235,16 @@ def _render_user_notification(db, user_telegram_id: int, template_key: str, **fm
         notification_text = get_text("address_moderation.handlers.approval_notification", language=lang).format(apartment_address=fmt["apartment_address"])
 
         if fmt.get("comment"):
-            notification_text += "\n\n💬 <b>" + get_text("address_moderation.handlers.admin_comment_label", language=lang) + ":</b>\n" + fmt["comment"]
+            # Секревью A2: комментарий — свободный текст менеджера, сообщение
+            # уходит жителю с parse_mode=HTML (класс BUG-174).
+            notification_text += "\n\n💬 <b>" + get_text("address_moderation.handlers.admin_comment_label", language=lang) + ":</b>\n" + html.escape(fmt["comment"])
 
         notification_text += "\n\n" + get_text("address_moderation.handlers.can_create_requests", language=lang)
         return notification_text
 
     # Формируем текст уведомления
     return get_text("address_moderation.handlers.rejection_notification", language=lang).format(
-        apartment_address=fmt["apartment_address"], comment=fmt["comment"]
+        apartment_address=fmt["apartment_address"], comment=html.escape(fmt["comment"])
     )
 
 
@@ -261,7 +264,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext, langu
             lang = language
             await callback.message.edit_text(
                 get_text("address_moderation.handlers.moderation_list_empty", language=lang),
-                reply_markup=get_moderation_requests_keyboard([], page=0)
+                reply_markup=get_moderation_requests_keyboard([], page=0, language=lang)
             )
             return
 
@@ -270,7 +273,7 @@ async def show_moderation_list(callback: CallbackQuery, state: FSMContext, langu
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_moderation_requests_keyboard(requests, page=0)
+            reply_markup=get_moderation_requests_keyboard(requests, page=0, language=lang)
         )
 
     except Exception as e:
@@ -291,7 +294,7 @@ async def show_moderation_page(callback: CallbackQuery, language: str = "ru", *,
 
         await callback.message.edit_text(
             text,
-            reply_markup=get_moderation_requests_keyboard(requests, page=page)
+            reply_markup=get_moderation_requests_keyboard(requests, page=page, language=lang)
         )
 
     except Exception as e:
@@ -447,7 +450,7 @@ async def process_approve_comment(message: Message, state: FSMContext, language:
             _db=_db
         )
 
-        comment_text = "\n\n<b>" + get_text("address_moderation.handlers.comment_label", language=lang) + ":</b> " + comment if comment else ""
+        comment_text = "\n\n<b>" + get_text("address_moderation.handlers.comment_label", language=lang) + ":</b> " + html.escape(comment) if comment else ""
 
         await message.answer(
             get_text("address_moderation.handlers.approve_success", language=lang) + comment_text,
@@ -556,7 +559,7 @@ async def process_reject_comment(message: Message, state: FSMContext, language: 
         )
 
         await message.answer(
-            get_text("address_moderation.handlers.reject_success", language=lang).format(comment=comment),
+            get_text("address_moderation.handlers.reject_success", language=lang).format(comment=html.escape(comment)),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 

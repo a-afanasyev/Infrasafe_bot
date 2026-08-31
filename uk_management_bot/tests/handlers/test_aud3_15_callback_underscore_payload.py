@@ -160,7 +160,7 @@ class TestRoleAddRemove:
         cb = _make_callback("role_add_resource_meter_entry")
         state = _make_state({"current_roles": ["applicant"]})
 
-        await add_role_to_user(cb, state)
+        await add_role_to_user(cb, state, roles=["manager"])
 
         state.update_data.assert_awaited_once_with(
             current_roles=["applicant", "resource_meter_entry"]
@@ -177,7 +177,7 @@ class TestRoleAddRemove:
             {"current_roles": ["applicant", "resource_meter_entry"]}
         )
 
-        await remove_role_from_user(cb, state)
+        await remove_role_from_user(cb, state, roles=["manager"])
 
         state.update_data.assert_awaited_once_with(current_roles=["applicant"])
 
@@ -191,7 +191,7 @@ class TestRoleAddRemove:
         cb = _make_callback("role_add_manager")
         state = _make_state({"current_roles": ["applicant"]})
 
-        await add_role_to_user(cb, state)
+        await add_role_to_user(cb, state, roles=["manager"])
 
         state.update_data.assert_awaited_once_with(
             current_roles=["applicant", "manager"]

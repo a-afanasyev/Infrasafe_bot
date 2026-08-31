@@ -38,8 +38,10 @@ def _suffix() -> str:
 
 @pytest_asyncio.fixture
 async def uid(address_async_db) -> int:
-    """Create a throwaway user and return its id (FK target for created_by etc.)."""
-    user = User(telegram_id=int(uuid.uuid4().int % 10**15))
+    """Create a throwaway MANAGER and return its id (FK target for created_by,
+    reviewer_id). Роль нужна с BUG-177: точка записи решения модерации
+    перепроверяет ревьюера (manager|admin)."""
+    user = User(telegram_id=int(uuid.uuid4().int % 10**15), roles='["manager"]')
     address_async_db.add(user)
     await address_async_db.flush()
     return user.id
