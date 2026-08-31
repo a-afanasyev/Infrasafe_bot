@@ -89,16 +89,22 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
         elif user_id:
             target_user_id = user_id
         
-        # Используем язык из базы данных (приоритет над language_code из Telegram)
+        # Используем язык из базы данных (приоритет над language_code из Telegram).
+        # BUG-157: DB-фаза уходит в worker-поток через run_db — раньше здесь
+        # открывалась sync-сессия ПРЯМО на event loop (_db_scope(None)), и все
+        # 30+ вызывающих хендлеров блокировали loop на резолве языка.
         if target_user_id:
-            with _db_scope(None) as db:
-                try:
-                    from uk_management_bot.utils.helpers import get_user_language
-                    lang = get_user_language(target_user_id, db)
-                    if lang and lang in ['ru', 'uz']:
-                        return lang
-                except Exception as e:
-                    logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")
+            def _lang_unit(db):
+                from uk_management_bot.utils.helpers import get_user_language
+                return get_user_language(target_user_id, db)
+
+            try:
+                from uk_management_bot.database.session import run_db
+                lang = await run_db(_lang_unit)
+                if lang and lang in ['ru', 'uz']:
+                    return lang
+            except Exception as e:
+                logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")
         
         # Fallback: используем language_code из Telegram
         if message:
@@ -207,21 +213,22 @@ class RequestStates(StatesGroup):
 # (registered first in dispatcher, catches /start from ANY FSM state)
 
 
-def _load_user_request_addresses(telegram_id: int):
+def _load_user_request_addresses(db, telegram_id: int):
     """Наборы доступных жителю уровней адреса (по telegram_id → user.id).
 
     Единый источник правил — resolve_request_address. Возвращает dict
     {yards, buildings, apartments} или None, если пользователь не найден.
-    """
+
+    BUG-157: сессию больше не открывает сам (раньше `_db_scope(None)` прямо
+    на event loop) — это sync-юнит под run_db, сессию даёт вызывающий."""
     from uk_management_bot.services.request_address import (
         list_available_request_addresses_sync,
     )
 
-    with _db_scope(None) as db:
-        user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
-        if not user:
-            return None
-        return list_available_request_addresses_sync(db, user.id)
+    user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
+    if not user:
+        return None
+    return list_available_request_addresses_sync(db, user.id)
 
 
 def _has_any_address(addresses: Optional[dict]) -> bool:
