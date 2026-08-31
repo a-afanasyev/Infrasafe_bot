@@ -203,7 +203,7 @@
 
 ### 2.14. WebSocket — `/ws/v2` (`ws/router.py`)
 
-Аутентификация: cookie `uk_access` → legacy `access_token` → `?token=` (**DEPRECATED**, SEC-03, до 2026-09-01) → первый WS-message. Требуется роль `manager` (`ws/router.py:98`).
+Аутентификация: cookie `uk_access` → legacy `access_token` → первый WS-message. Query-путь `?token=` **снят** (SEC-03, срок депрекации 2026-09-01 истёк): токен-подобный query-параметр (`token`/`access_token`/`jwt`) отклоняется до апгрейда — HTTP 403. Требуется роль `manager` (`ws/router.py`).
 
 | Путь | Назначение |
 |------|-----------|

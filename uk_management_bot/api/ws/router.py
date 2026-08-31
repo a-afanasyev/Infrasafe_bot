@@ -48,7 +48,7 @@ import time
 from typing import Optional
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from uk_management_bot.api.auth.service import verify_access_token
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.redis_pubsub import (
@@ -59,13 +59,15 @@ from uk_management_bot.services.redis_pubsub import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# SEC-03: the ?token= query param leaks the JWT into access logs, proxy
-# history and browser history. The web SPA authenticates via the httpOnly
-# uk_access cookie (sent automatically on the WS upgrade). Token-based clients
-# without a cookie should send the token as the FIRST WS message instead. The
-# query param stays supported with a deprecation warning until the deadline
-# below, then will be removed.
-_WS_QUERY_TOKEN_DEPRECATED_UNTIL = "2026-09-01"
+# SEC-03 / PENT-F04: the ?token= query param leaked the JWT into access logs,
+# proxy history and browser history. The deprecation window ended 2026-09-01;
+# the path is now REMOVED. A token-like query key is rejected BEFORE accept()
+# (mirrors access_control/api/ws_security._has_query_token — one door must not
+# be softer than the other): silently ignoring it would leave a legacy client
+# hanging on the first-message timeout, and the token has already leaked into
+# the logs on the way in. The web SPA authenticates via the httpOnly uk_access
+# cookie; cookieless clients send the token as the FIRST WS message.
+_FORBIDDEN_QUERY_TOKEN_KEYS = ("token", "access_token", "jwt")
 _WS_AUTH_MESSAGE_TIMEOUT = 10  # seconds to wait for the first-message token
 
 # F-04: app close code (RFC 6455 range 4000-4999) "JWT expired" — the client
@@ -192,17 +194,18 @@ def _origin_allowed(websocket: WebSocket) -> bool:
     return bool(host) and urlsplit(origin).netloc == host
 
 
-async def authenticate_ws_manager(
-    websocket: WebSocket, query_token: Optional[str]
-) -> Optional[dict]:
+async def authenticate_ws_manager(websocket: WebSocket) -> Optional[dict]:
     """Authenticate a manager WebSocket.
 
     On success accepts the connection and returns the JWT payload; on failure
     closes the socket and returns None. Token source precedence:
       1. ``uk_access`` cookie (web SPA — preferred, validated before accept);
       2. ``access_token`` cookie (legacy transitional alias);
-      3. ``?token=`` query param (DEPRECATED — SEC-03, logs a warning);
-      4. first WS message (secure path for cookieless/token clients).
+      3. first WS message (secure path for cookieless/token clients).
+
+    A token-like query param (SEC-03) is rejected before accept — even
+    alongside a valid cookie: presence alone means the value already hit the
+    access logs, and the client must be told loudly, not left to time out.
     """
     if not _origin_allowed(websocket):
         logger.warning(
@@ -212,10 +215,16 @@ async def authenticate_ws_manager(
         await _safe_close(websocket)
         return None
 
+    if any(key in websocket.query_params for key in _FORBIDDEN_QUERY_TOKEN_KEYS):
+        logger.warning(
+            "SEC-03: WebSocket auth via a query-string token was removed after "
+            "2026-09-01 — rejecting. Send the token as the first WS message "
+            "(or authenticate via the uk_access cookie) instead."
+        )
+        await _safe_close(websocket)
+        return None
+
     token = websocket.cookies.get("uk_access") or websocket.cookies.get("access_token")
-    via_query = False
-    if not token and query_token:
-        token, via_query = query_token, True
 
     accepted = False
     if token is None:
@@ -230,13 +239,6 @@ async def authenticate_ws_manager(
             await _safe_close(websocket)
             return None
         token = _extract_token_from_message(raw)
-    elif via_query:
-        logger.warning(
-            "SEC-03: WebSocket auth via ?token= query is DEPRECATED "
-            "(token leaks into access/proxy logs) and will be removed after %s. "
-            "Send the token as the first WS message instead.",
-            _WS_QUERY_TOKEN_DEPRECATED_UNTIL,
-        )
 
     payload = verify_access_token(token) if token else None
     user_id = _payload_user_id(payload) if payload else None
@@ -353,7 +355,7 @@ async def _relay(websocket: WebSocket, payload: dict, pubsub) -> None:
 _relay_until_exp = _relay
 
 
-async def _serve_ws(websocket: WebSocket, token: Optional[str], subscribe, label: str) -> None:
+async def _serve_ws(websocket: WebSocket, subscribe, label: str) -> None:
     """Общее тело всех трёх WS-эндпоинтов.
 
     Раньше это были три почти посимвольные копии (AUD5-APIFE-2), различавшиеся
@@ -361,7 +363,7 @@ async def _serve_ws(websocket: WebSocket, token: Optional[str], subscribe, label
     чтения `receive()` требовала трёх одинаковых изменений и разъезжалась бы,
     как уже разъехались карты статусов на фронте.
     """
-    payload = await authenticate_ws_manager(websocket, token)
+    payload = await authenticate_ws_manager(websocket)
     if payload is None:
         return
 
@@ -390,22 +392,22 @@ async def _serve_ws(websocket: WebSocket, token: Optional[str], subscribe, label
 
 
 @router.websocket("/kanban")
-async def kanban_ws(websocket: WebSocket, token: str = Query(default=None)):
-    await _serve_ws(websocket, token, subscribe_to_requests, "kanban")
+async def kanban_ws(websocket: WebSocket):
+    await _serve_ws(websocket, subscribe_to_requests, "kanban")
 
 
 @router.websocket("/shifts")
-async def shifts_ws(websocket: WebSocket, token: str = Query(default=None)):
-    await _serve_ws(websocket, token, subscribe_to_shifts, "shifts")
+async def shifts_ws(websocket: WebSocket):
+    await _serve_ws(websocket, subscribe_to_shifts, "shifts")
 
 
 @router.websocket("/buildings")
-async def buildings_ws(websocket: WebSocket, token: str = Query(default=None)):
-    await _serve_ws(websocket, token, subscribe_to_buildings, "buildings")
+async def buildings_ws(websocket: WebSocket):
+    await _serve_ws(websocket, subscribe_to_buildings, "buildings")
 
 
 @router.websocket("/apartments")
-async def apartments_ws(websocket: WebSocket, token: str = Query(default=None)):
+async def apartments_ws(websocket: WebSocket):
     """Канал `apartments:updates` — события привязок жителей к квартирам.
 
     Канал публиковался и раньше (`apartment_request.*`), но подписчика со
@@ -413,4 +415,4 @@ async def apartments_ws(websocket: WebSocket, token: str = Query(default=None)):
     полагаясь на него: статусы аккаунта и верификации событий не имеют вовсе,
     поэтому polling там остаётся основным механизмом, а WS — ускорителем.
     """
-    await _serve_ws(websocket, token, subscribe_to_apartments, "apartments")
+    await _serve_ws(websocket, subscribe_to_apartments, "apartments")
