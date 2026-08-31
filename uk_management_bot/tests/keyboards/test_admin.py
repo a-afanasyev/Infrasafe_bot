@@ -149,20 +149,21 @@ class TestGetInviteRoleKeyboard:
             result = get_invite_role_keyboard()
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_five_buttons(self):
-        # applicant/executor/manager/inspector + cancel (inspector добавлен —
-        # план «Обходчик»).
+    def test_has_four_buttons(self):
+        # executor/manager/inspector + cancel. «Заявитель» убран (BUG-164,
+        # решение владельца 2026-08-19): житель регистрируется сам, инвайт
+        # лишь сжигал одноразовый токен.
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.admin import get_invite_role_keyboard
             result = get_invite_role_keyboard()
-        assert len(_all_inline_buttons(result)) == 5
+        assert len(_all_inline_buttons(result)) == 4
 
     def test_role_callbacks(self):
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.admin import get_invite_role_keyboard
             result = get_invite_role_keyboard()
         callbacks = set(_all_inline_callbacks(result))
-        assert "invite_role_applicant" in callbacks
+        assert "invite_role_applicant" not in callbacks
         assert "invite_role_executor" in callbacks
         assert "invite_role_manager" in callbacks
         assert "invite_role_inspector" in callbacks

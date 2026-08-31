@@ -17,6 +17,7 @@ from uk_management_bot.utils.constants import (
     COMMENT_TYPE_CLARIFICATION,
     COMMENT_TYPE_PURCHASE,
     COMMENT_TYPE_REPORT,
+    COMMENT_TYPES,
     AUDIT_ACTION_REQUEST_STATUS_CHANGED
 )
 from uk_management_bot.utils.helpers import get_text
@@ -78,10 +79,10 @@ class CommentService:
             if not user:
                 raise ValueError(f"Пользователь с ID {user_id} не найден")
             
-            # Валидация типа комментария
-            valid_types = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, 
-                          COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT]
-            if comment_type not in valid_types:
+            # Валидация типа комментария — строго по канону COMMENT_TYPES:
+            # локальная копия списка здесь не включала general, и кнопка
+            # «Общий комментарий» падала всегда (BUG-171).
+            if comment_type not in COMMENT_TYPES:
                 raise ValueError(f"Неверный тип комментария: {comment_type}")
             
             # Создаем комментарий
