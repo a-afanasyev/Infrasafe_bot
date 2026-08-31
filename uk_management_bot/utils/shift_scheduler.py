@@ -5,7 +5,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from uk_management_bot.utils.business_time import business_today
 from typing import Optional, Dict, Any, List
@@ -156,10 +156,17 @@ class ShiftScheduler:
                 coalesce=True
             )
 
-            # 5. Уведомления о предстоящих сменах (каждые 30 минут с 08:00 до 20:00)
+            # 5. Уведомления о предстоящих сменах — круглосуточно каждые 30 мин.
+            #    Раньше стоял CronTrigger(hour='8-20') — планировщик живёт в UTC
+            #    контейнера, так что это было 13:00–01:30 по Ташкенту, и окно
+            #    «за ≤2 часа до начала» утренних смен (старт 08:00–09:00
+            #    местного = 03:00–04:00 UTC) не попадало в график НИКОГДА —
+            #    утренние напоминания не отправлялись (SHIFTS.md, находка №2).
+            #    Когда есть что слать — решает сам фильтр «смены в ближайшие
+            #    2 часа»: ночью смен нет — джоба молчит сама.
             self.scheduler.add_job(
                 self._notify_upcoming_shifts,
-                CronTrigger(hour='8-20', minute='0,30'),
+                IntervalTrigger(minutes=30),
                 id='notify_upcoming',
                 name='Уведомления о предстоящих сменах',
                 max_instances=1,
@@ -447,27 +454,39 @@ class ShiftScheduler:
             from uk_management_bot.database.models.shift import Shift
             from uk_management_bot.database.models.user import User
 
-            # Ищем смены, которые начинаются в течение следующих 2 часов
+            # Срез [now+90м, now+120м): при 30-минутном тике каждая смена
+            # попадает РОВНО в один тик — одно напоминание, за ~2 часа до
+            # начала. Раньше бралось всё окно [now, now+2ч] — та же смена
+            # напоминалась каждые 30 минут, до пяти раз подряд; с переводом
+            # джобы на круглосуточный тик (находка №2) этот спам стал бы
+            # ежеутренним. Границы полуинтервала намеренно: inclusive снизу,
+            # exclusive сверху — соседние тики не пересекаются.
             # QA-04: tz-aware now — Shift.start_time это timestamptz; naive
             # now ронял `shift.start_time - now` ("can't subtract offset-naive
             # and offset-aware datetimes") → уведомления не уходили.
             now = utc_now()
-            upcoming_threshold = now + timedelta(hours=2)
+            slice_start = now + timedelta(minutes=90)
+            slice_end = now + timedelta(minutes=120)
 
             upcoming_shifts = db.query(Shift).join(User).filter(
-                Shift.start_time.between(now, upcoming_threshold),
+                Shift.start_time >= slice_start,
+                Shift.start_time < slice_end,
                 Shift.status == 'planned',
                 Shift.user_id.isnot(None)
             ).all()
 
             reminders = []
             for shift in upcoming_shifts:
-                left = shift.start_time - now
+                # Канон business_time: naive из БД трактуется как UTC (sqlite
+                # в тест-харнессе отдаёт timestamptz без tzinfo; Postgres — с).
+                start = shift.start_time if shift.start_time.tzinfo \
+                    else shift.start_time.replace(tzinfo=dt_timezone.utc)
+                left = start - now
                 hours = int(left.total_seconds() / 3600)
                 minutes = int((left.total_seconds() % 3600) / 60)
                 reminders.append(_ShiftReminder(
                     executor_id=shift.user_id,
-                    start_time=shift.start_time,
+                    start_time=start,
                     time_until=f"{hours}ч {minutes}м",
                 ))
             return reminders
@@ -600,7 +619,11 @@ class ShiftScheduler:
                 shifts=empty_shifts,
                 force_reassign=False
             )
-            return int(result['stats']['assigned'])
+            # Ключа 'stats' в ответе сервиса не существует ни в одной ветке —
+            # старое чтение result['stats']['assigned'] валило каждый непустой
+            # тик KeyError'ом и теряло счётчик (SHIFTS.md, находка №3; тот же
+            # класс, что BUG-184).
+            return int(result.get('successful_assignments', 0))
         finally:
             db.close()
 

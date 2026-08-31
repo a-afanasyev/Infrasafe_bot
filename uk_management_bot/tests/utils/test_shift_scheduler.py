@@ -109,6 +109,113 @@ class TestSetupJobs:
         assert call.kwargs.get("max_instances") == 1
         assert call.kwargs.get("coalesce") is True
 
+    def test_notify_upcoming_runs_around_the_clock(self):
+        """SHIFTS.md находка №2: cron-окно 08–20 в UTC планировщика означало
+        13:00–01:30 по Ташкенту — а типовые смены начинаются 08:00–09:00
+        местного (03–04 UTC), то есть окно «за ≤2 часа до начала» целиком вне
+        графика джобы и утренние напоминания не отправлялись НИКОГДА. Когда
+        слать — решает сам фильтр «смены в ближайшие 2 часа», поэтому джоба
+        обязана тикать круглосуточно."""
+        from datetime import timedelta
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        sched = _make_scheduler()
+        sched.setup_jobs()
+
+        calls = [
+            call for call in sched._mock_apscheduler.add_job.call_args_list
+            if call.kwargs.get("id") == "notify_upcoming"
+        ]
+        assert len(calls) == 1
+        trigger = calls[0].args[1]
+        assert isinstance(trigger, IntervalTrigger)
+        assert trigger.interval == timedelta(minutes=30)
+
+
+# ---------------------------------------------------------------------------
+# _auto_assign_empty_shifts_sync — честный счётчик (SHIFTS.md находка №3)
+# ---------------------------------------------------------------------------
+
+class TestAutoAssignEmptyShiftsCounter:
+    def test_reads_real_result_shape(self):
+        """Джоба читала result['stats']['assigned'], а ключа `stats` в ответе
+        auto_assign_executors_to_shifts не существует ни в одной ветке (тот же
+        класс, что BUG-184): назначения проходили, но каждый непустой тик
+        падал KeyError и счётчик терялся. Ответ здесь — РЕАЛЬНОЙ формы сервиса."""
+        sched = _make_scheduler()
+
+        real_shape = {
+            "total_shifts": 2,
+            "successful_assignments": 2,
+            "failed_assignments": 0,
+            "conflicts_found": 0,
+            "assignments": [],
+            "conflicts": [],
+            "warnings": [],
+        }
+
+        with (
+            patch("uk_management_bot.utils.shift_scheduler.SessionLocal"),
+            patch(
+                "uk_management_bot.utils.shift_scheduler.ShiftAssignmentService"
+            ) as svc_cls,
+        ):
+            svc_cls.return_value.auto_assign_executors_to_shifts.return_value = (
+                real_shape
+            )
+            assigned = sched._auto_assign_empty_shifts_sync()
+
+        assert assigned == 2
+
+
+# ---------------------------------------------------------------------------
+# _collect_upcoming_reminders — ровно одно напоминание на смену
+# ---------------------------------------------------------------------------
+
+class TestReminderSlice:
+    def test_each_shift_reminded_exactly_once_per_slice(self):
+        """С круглосуточным 30-минутным тиком (находка №2) старое окно
+        [now, now+2ч] слало бы одной смене до пяти напоминаний подряд.
+        Срез [now+90м, now+120м) не пересекается с соседними тиками:
+        смена за ~2 часа попадает в выборку, ближе/дальше — нет."""
+        from datetime import timedelta, timezone, datetime
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+
+        from uk_management_bot.database.session import Base
+        from uk_management_bot.database.models.shift import Shift
+        from uk_management_bot.database.models.user import User
+
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(bind=engine)
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+        now = datetime.now(timezone.utc)
+        setup = factory()
+        setup.add(User(id=1, telegram_id=1, first_name="E",
+                       roles='["executor"]', active_role="executor",
+                       status="approved", language="ru"))
+        for minutes in (60, 100, 130):  # ближе среза / в срезе / дальше среза
+            start = now + timedelta(minutes=minutes)
+            setup.add(Shift(user_id=1, status="planned", start_time=start,
+                            end_time=start + timedelta(hours=8)))
+        setup.commit()
+        setup.close()
+
+        sched = _make_scheduler()
+        with patch(
+            "uk_management_bot.utils.shift_scheduler.SessionLocal", factory
+        ):
+            reminders = sched._collect_upcoming_reminders()
+
+        assert len(reminders) == 1
+        assert reminders[0].executor_id == 1
+        engine.dispose()
+
 
 # ---------------------------------------------------------------------------
 # start
