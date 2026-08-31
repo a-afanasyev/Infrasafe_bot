@@ -31,7 +31,11 @@ from uk_management_bot.utils.request_access import (
     access_reason,
 )
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
-from uk_management_bot.utils.specializations import parse_specializations
+from uk_management_bot.utils.specializations import (
+    matches_required_specs,
+    parse_specialization_values,
+    parse_specializations,
+)
 
 _ACTIVE = "active"
 _APPROVED = "approved"
@@ -96,8 +100,18 @@ def request_access_reason_sync(db: Session, user, request) -> Optional[str]:
                 RequestAssignment.assignment_type == "group",
                 RequestAssignment.status == _ACTIVE,
             ).all()
-            group_specs = frozenset(r[0] for r in rows if r[0])
-            if group_specs & cheap.user_specializations:
+            # BUG-168: скаляры из БД → канон на чтении (fail-closed: мусорная
+            # строка резолвится в пустоту и доступа не даёт); сравнение — тем
+            # же предикатом BUG-166, что и в facts-канонe (джокер universal).
+            group_specs = frozenset(
+                spec
+                for r in rows if r[0]
+                for spec in parse_specialization_values(
+                    r[0], side="need", allow_universal=True)
+            )
+            if group_specs and matches_required_specs(
+                set(cheap.user_specializations), set(group_specs),
+            ):
                 active_shift = db.query(Shift).filter(
                     Shift.user_id == user.id,
                     Shift.status == _ACTIVE,
@@ -160,8 +174,17 @@ async def request_access_reason_async(db: AsyncSession, user, request) -> Option
                     RequestAssignment.status == _ACTIVE,
                 )
             )
-            group_specs = frozenset(r[0] for r in rows.all() if r[0])
-            if group_specs & cheap.user_specializations:
+            # BUG-168: зеркально sync-ветке — канон на чтении + предикат
+            # BUG-166 (паритет держит test_bug167_168_spec_canon).
+            group_specs = frozenset(
+                spec
+                for r in rows.all() if r[0]
+                for spec in parse_specialization_values(
+                    r[0], side="need", allow_universal=True)
+            )
+            if group_specs and matches_required_specs(
+                set(cheap.user_specializations), set(group_specs),
+            ):
                 shift = await db.execute(
                     select(Shift).where(
                         Shift.user_id == user.id,
