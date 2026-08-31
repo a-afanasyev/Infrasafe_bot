@@ -12,6 +12,7 @@ handlers/admin/actions.py + services/workflow_notifications.py), а второй
 хендлер срабатывает по FSM-состоянию, которое ставит первый.
 """
 
+import html
 from dataclasses import dataclass
 from typing import Optional
 
@@ -153,11 +154,14 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
                 if not manager.telegram_id:
                     continue
                 manager_lang = get_user_language(manager.telegram_id, db)
+                # BUG-178: свободный текст заявителя в HTML-сообщении (бот с
+                # parse_mode=HTML) обязан экранироваться — иначе инъекция
+                # разметки менеджеру, а кривой тег молча гасит доставку.
                 notification_text = get_text("clarification.manager_notification", language=manager_lang).format(
                     request_number=request.request_number,
                     category=request.category,
                     address=request.address,
-                    reply_text=reply_text
+                    reply_text=html.escape(reply_text)
                 )
                 notices.append(_ManagerNotice(telegram_id=manager.telegram_id, text=notification_text))
             except Exception as e:

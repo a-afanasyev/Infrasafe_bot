@@ -7,7 +7,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.constants import (
-    COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT
+    COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_GENERAL, COMMENT_TYPE_PURCHASE,
+    COMMENT_TYPE_REPORT,
 )
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 
@@ -40,18 +41,10 @@ def get_comment_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
                 callback_data=f"comment_type_{COMMENT_TYPE_REPORT}"
             )
         ],
-        # ⚠️ ЖИВОЙ ДЕФЕКТ (найден 2026-08-18, сохранён байт-в-байт до решения
-        # владельца — BUG-171). `general` не входит в `COMMENT_TYPES`
-        # (`utils/constants.py:89`), а `CommentService.add_comment` валидирует
-        # тип по этому списку и бросает ValueError «Неверный тип комментария».
-        # То есть кнопка «Общий комментарий» проводит человека через весь ввод и
-        # падает на подтверждении — всегда. Чинить можно двумя способами
-        # (добавить `general` в канон типов ИЛИ убрать кнопку), и это
-        # продуктовый выбор, а не техническая правка.
         [
             InlineKeyboardButton(
                 text=get_text("request_comments.keyboards.type_general", language=language),
-                callback_data="comment_type_general"
+                callback_data=f"comment_type_{COMMENT_TYPE_GENERAL}"
             )
         ],
         [

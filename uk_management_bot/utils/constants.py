@@ -94,7 +94,10 @@ COMMENT_TYPE_STATUS_CHANGE = "status_change"
 COMMENT_TYPE_CLARIFICATION = "clarification"
 COMMENT_TYPE_PURCHASE = "purchase"
 COMMENT_TYPE_REPORT = "report"
-COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT]
+# BUG-171 (решение владельца 2026-08-19): «Общий комментарий» — полноправный
+# тип; локали comments.type_general / request_comments.keyboards.type_general.
+COMMENT_TYPE_GENERAL = "general"
+COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT, COMMENT_TYPE_GENERAL]
 
 # ─── Срочность заявок: КАНОН — внутренние ключи (TASK 17 завершён) ───
 # Хранимые значения urgency во всём стеке: low/medium/high/critical.

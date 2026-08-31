@@ -58,10 +58,12 @@ async def handle_invite_role_selection(callback: CallbackQuery, state: FSMContex
         await callback.answer(get_text("invites.manager_only", language=lang), show_alert=True)
         return
 
-    # Извлекаем роль из callback_data
+    # Извлекаем роль из callback_data. «applicant» исключён (BUG-164):
+    # кнопки в клавиатуре больше нет, но callback_data шлёт КЛИЕНТ (урок
+    # BUG-169) — точка записи обязана отвергать роль сама.
     role = callback.data.replace("invite_role_", "")
-    
-    if role not in ["applicant", "executor", "manager", "inspector"]:
+
+    if role not in ["executor", "manager", "inspector"]:
         await callback.answer(get_text("admin.handlers.invalid_role", language=lang))
         return
     

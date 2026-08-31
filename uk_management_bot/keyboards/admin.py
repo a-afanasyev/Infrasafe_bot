@@ -82,7 +82,9 @@ def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: in
 def get_invite_role_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура выбора роли для приглашения"""
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_applicant", language=language), callback_data="invite_role_applicant"))
+    # «Заявитель» убран (BUG-164, решение владельца 2026-08-19): житель
+    # регистрируется сам, а такой инвайт лишь сжигал одноразовый токен,
+    # не меняя ролей — неотличимо от «токен не сработал».
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_executor", language=language), callback_data="invite_role_executor"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_manager", language=language), callback_data="invite_role_manager"))
     builder.add(InlineKeyboardButton(text=get_text("admin.keyboards.role_inspector", language=language), callback_data="invite_role_inspector"))
