@@ -85,53 +85,34 @@ def get_shift_list_keyboard(shifts: List[Shift], language: str = "ru") -> Inline
 
 
 def get_shift_actions_keyboard(shift: Shift, language: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура действий со сменой"""
+    """Клавиатура действий со сменой.
+
+    Только кнопки с существующими хендлерами. Скаффолд 2025-09-26 показывал
+    здесь одиннадцать мёртвых кнопок (перерыв, отклонение, геолокация, SOS,
+    отчёты, «поделиться» и т.д.) — нажатие молча не делало ничего; убраны по
+    ревью 2026-08-31 (docs/guides/SHIFTS.md, находка №1). Возвращать кнопку —
+    только вместе с хендлером и строкой в test_shift_card_buttons.py.
+    """
     keyboard = []
 
-    # Действия в зависимости от статуса смены
     if shift.status == 'planned':
         # Смена запланирована - можно начать или передать
         keyboard.extend([
             [InlineKeyboardButton(text=get_text("my_shifts.keyboards.start_shift", language=language), callback_data="start_shift")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.transfer_shift", language=language), callback_data=f"transfer_shift:{shift.id}")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.contact_manager", language=language), callback_data=f"contact_manager:{shift.id}")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.decline_shift", language=language), callback_data=f"decline_shift:{shift.id}")]
-        ])
-
-    elif shift.status == 'active':
-        # Смена активна - можно завершить и работать с заявками
-        keyboard.extend([
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.end_shift", language=language), callback_data="end_shift")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.my_requests", language=language), callback_data=f"shift_requests:{shift.id}")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.take_break", language=language), callback_data="take_break")],
             [InlineKeyboardButton(text=get_text("my_shifts.keyboards.transfer_shift", language=language), callback_data=f"transfer_shift:{shift.id}")]
         ])
 
-        # Дополнительные действия
+    elif shift.status == 'active':
+        # Смена активна - завершить, посмотреть свои заявки, передать
         keyboard.extend([
-            [
-                InlineKeyboardButton(text=get_text("my_shifts.keyboards.mark_location", language=language), callback_data="mark_location"),
-                InlineKeyboardButton(text=get_text("my_shifts.keyboards.add_note", language=language), callback_data="add_note")
-            ],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.emergency_help", language=language), callback_data="emergency_help")]
+            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.end_shift", language=language), callback_data="end_shift")],
+            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.my_requests", language=language), callback_data=f"shift_requests:{shift.id}")],
+            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.transfer_shift", language=language), callback_data=f"transfer_shift:{shift.id}")]
         ])
 
-    elif shift.status == 'completed':
-        # Смена завершена - просмотр результатов
-        keyboard.extend([
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.shift_report", language=language), callback_data=f"view_shift_report:{shift.id}")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.processed_requests", language=language), callback_data=f"completed_requests:{shift.id}")],
-            [InlineKeyboardButton(text=get_text("my_shifts.keyboards.payment_calculation", language=language), callback_data=f"payment_calculation:{shift.id}")]
-        ])
-
-    # Общие действия (доступны всегда)
-    keyboard.extend([
-        [
-            InlineKeyboardButton(text=get_text("my_shifts.keyboards.details", language=language), callback_data=f"shift_info:{shift.id}"),
-            InlineKeyboardButton(text=get_text("my_shifts.keyboards.share", language=language), callback_data=f"share_shift:{shift.id}")
-        ],
+    keyboard.append(
         [InlineKeyboardButton(text=get_text("my_shifts.keyboards.back_to_list", language=language), callback_data="view_current_shifts")]
-    ])
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
