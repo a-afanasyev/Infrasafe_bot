@@ -491,6 +491,75 @@ async def send_notify_messages(bot, messages: list[tuple[int, str]]) -> int:
     return sent
 
 
+# BUG-181: уведомление СНЯТОМУ исполнителю. Оно не может жить в матрице
+# интентов: интент несёт только действие и номер, а получатель здесь — человек
+# из old_state, которого в заявке уже нет. Сборка общая для обоих путей;
+# решение «слать/не слать» (old != new, оба не None) остаётся за вызывающим.
+_REASSIGNED_AWAY_KEY = "notifications.workflow.reassigned_away"
+
+
+def collect_reassigned_away_sync(
+    db: Session, request_number: str, old_executor_id: int
+) -> Optional[tuple[int, str]]:
+    """(telegram_id, text) для снятого исполнителя; None, если слать некуда.
+
+    Текст — на языке ПОЛУЧАТЕЛЯ. Номер заявки экранируется по общему правилу
+    модуля (оба бота в parse_mode=HTML)."""
+    user = db.execute(
+        select(User).where(User.id == old_executor_id)
+    ).scalar_one_or_none()
+    if user is None or not user.telegram_id:
+        return None
+    text = get_text(
+        _REASSIGNED_AWAY_KEY,
+        language=user.language or "ru",
+        request_number=html.escape(request_number),
+    )
+    return (user.telegram_id, text)
+
+
+async def notify_reassigned_away_detached(
+    request_number: str, old_executor_id: int
+) -> int:
+    """API-путь (BackgroundTasks): уведомить снятого исполнителя. Не бросает.
+
+    Своя короткая сессия — по тем же причинам, что у
+    ``dispatch_notify_intents_detached``: request-scoped к моменту фоновой
+    задачи уже закрыта."""
+    from uk_management_bot.database.session import AsyncSessionLocal
+
+    if AsyncSessionLocal is None:
+        logger.warning(
+            "reassigned_away для %s пропущен: AsyncSessionLocal недоступен "
+            "(sqlite dev)", request_number,
+        )
+        return 0
+    try:
+        async with AsyncSessionLocal() as session:
+            user = (await session.execute(
+                select(User).where(User.id == old_executor_id)
+            )).scalar_one_or_none()
+        if user is None or not user.telegram_id:
+            return 0
+        text = get_text(
+            _REASSIGNED_AWAY_KEY,
+            language=user.language or "ru",
+            request_number=html.escape(request_number),
+        )
+        from uk_management_bot.services.notification_service import (
+            _get_shared_bot, send_to_user,
+        )
+
+        return 1 if await send_to_user(_get_shared_bot(), user.telegram_id, text) else 0
+    except Exception as e:
+        # Переход уже закоммичен — сбой рассылки не роняет фоновую задачу.
+        logger.warning(
+            "Уведомление снятому исполнителю по заявке %s не отправлено: %s",
+            request_number, e,
+        )
+        return 0
+
+
 def render_channel_status_text(
     request: Optional[Request], old_status: str, new_status: str
 ) -> Optional[str]:

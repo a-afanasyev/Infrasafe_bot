@@ -34,6 +34,7 @@ from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.workflow_notifications import (
     dispatch_notify_intents_detached,
+    notify_reassigned_away_detached,
 )
 from uk_management_bot.services.workflow_runner import (
     run_command_async,
@@ -50,6 +51,7 @@ from uk_management_bot.utils.request_workflow import (
     RepeatConflict,
     PayloadInvalid,
     EditForbidden,
+    SameExecutor,
     WorkflowError,
     TERMINAL_STATUSES,
     normalize_status,
@@ -467,6 +469,12 @@ async def update_request(
         except (InvalidTransition, RepeatRejected, RepeatConflict,
                 PayloadInvalid, EditForbidden) as e:
             raise HTTPException(status_code=422, detail=str(e))
+        except SameExecutor:
+            # BUG-180: заявка уже назначена этому исполнителю (в т.ч. гонка
+            # двух менеджеров). Конфликт состояния, а не битый запрос → 409.
+            raise HTTPException(
+                status_code=409,
+                detail="Заявка уже назначена этому исполнителю")
         except WorkflowError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
@@ -498,6 +506,16 @@ async def update_request(
             request_number, outcome.post_commit_intents,
             updates.get("notes"),
         )
+        # BUG-181: снятый исполнитель узнаёт о переназначении и с API-пути.
+        # Матрица интентов его не покрывает (получатель — человек из old_state,
+        # которого в заявке уже нет), поэтому решение принимается по факту из
+        # outcome: оба id есть и они разные ⟺ переназначение.
+        old_executor = getattr(outcome.old_state, "executor_id", None)
+        new_executor = getattr(outcome.new_state, "executor_id", None)
+        if (old_executor is not None and new_executor is not None
+                and old_executor != new_executor):
+            background.add_task(
+                notify_reassigned_away_detached, request_number, old_executor)
 
         # Свежая карточка из живой сессии (run_command коммитнул в своей сессии и
         # закрыл её; READ COMMITTED → новый SELECT видит коммит).

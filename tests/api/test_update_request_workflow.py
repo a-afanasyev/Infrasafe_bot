@@ -23,6 +23,7 @@ from uk_management_bot.services.workflow_runner import CommandOutcome, RequestNo
 from uk_management_bot.utils.request_workflow import (
     RequestState, EventIntent,
     NotAuthorized, InvalidTransition, RepeatRejected, PayloadInvalid,
+    SameExecutor,
 )
 import uk_management_bot.utils.constants as C
 
@@ -284,6 +285,8 @@ async def test_assign_to_duty_409_when_no_duty_executor(
     (RepeatRejected("x"), 422),
     (PayloadInvalid("x"), 422),
     (RequestNotFound("260101-001"), 404),
+    # BUG-180: гонка «тот же исполнитель» — конфликт состояния, не битый запрос.
+    (SameExecutor("x"), 409),
 ])
 async def test_workflow_exception_maps_to_http(
     client, db_session, applicant_user, monkeypatch, exc, code
@@ -315,6 +318,63 @@ async def test_workflow_concurrent_delete_returns_404_not_500(
     r = await client.patch(PATCH_URL.format(number="260101-001"),
                            json={"status": "Выполнена", "completion_report": "готово"})
     assert r.status_code == 404, r.text
+
+
+# ═══════════════════════ BUG-181: old-notice с API-пути ═══════════════════════
+
+
+def _reassign_outcome(*, old_executor, new_executor):
+    """Outcome переназначения: исполнитель сменился, статус остался «В работе»."""
+    def _state(executor):
+        return RequestState(
+            request_number="260101-001", user_id=2, status="В работе",
+            manager_confirmed=False, is_returned=False,
+            apartment_id=None, executor_id=executor)
+    return CommandOutcome(
+        request_number="260101-001", no_op=False,
+        old_state=_state(old_executor), new_state=_state(new_executor),
+        old_status="В работе", new_status="В работе",
+        new_canon_status="В работе", public_status="В работе",
+        post_commit_intents=(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_reassign_schedules_notice_to_replaced_executor(
+    client, db_session, applicant_user, monkeypatch
+):
+    """Переназначение с дашборда обязано уведомить СНЯТОГО исполнителя.
+
+    Матрица интентов его не покрывает (получатель — человек из old_state,
+    которого в заявке уже нет), поэтому роутер планирует отдельную фоновую
+    задачу по факту из outcome: оба executor_id есть и они разные."""
+    await _seed(db_session, owner_id=applicant_user.id, status="В работе")
+    monkeypatch.setattr(req_router, "run_command_async", AsyncMock(
+        return_value=_reassign_outcome(old_executor=42, new_executor=55)))
+    spy = AsyncMock(return_value=1)
+    monkeypatch.setattr(req_router, "notify_reassigned_away_detached", spy)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"executor_id": 55})
+    assert r.status_code == 200, r.text
+    spy.assert_awaited_once_with("260101-001", 42)
+
+
+@pytest.mark.asyncio
+async def test_primary_assign_does_not_schedule_old_notice(
+    client, db_session, applicant_user, monkeypatch
+):
+    """Первичное назначение (old executor = None): снимать было некого."""
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")
+    monkeypatch.setattr(req_router, "run_command_async", AsyncMock(
+        return_value=_reassign_outcome(old_executor=None, new_executor=55)))
+    spy = AsyncMock(return_value=1)
+    monkeypatch.setattr(req_router, "notify_reassigned_away_detached", spy)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"executor_id": 55})
+    assert r.status_code == 200, r.text
+    spy.assert_not_awaited()
 
 
 @pytest.mark.asyncio

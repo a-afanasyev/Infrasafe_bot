@@ -72,6 +72,17 @@ class RepeatConflict(WorkflowError):
     """no_op_if_same: состояние достигнуто, но effective-payload отличается."""
 
 
+class SameExecutor(WorkflowError):
+    """MANAGER_ASSIGN на УЖЕ назначенного исполнителя (BUG-180).
+
+    «В работе»→«В работе» — легальный re-entry (check_repeat отдаёт None),
+    поэтому политика повтора этот случай не ловит: без отдельного отказа
+    повтор проходил бы как полноценное переназначение — новая строка
+    RequestAssignment и повторные уведомления. Проверка живёт в
+    plan_transition и исполняется под тем же FOR UPDATE, где строится
+    снимок, — преflight адаптера гонку закрыть не может."""
+
+
 class EditForbidden(WorkflowError):
     pass
 
