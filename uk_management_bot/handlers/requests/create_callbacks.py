@@ -40,7 +40,7 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
     # Get user language
     lang = await _get_user_language(callback=callback)
 
-    if await _deny_if_pending_callback(callback, user_status):
+    if await _deny_if_pending_callback(callback, user_status, language=lang):
         return
 
     try:
@@ -145,7 +145,7 @@ async def handle_urgency_selection(callback: CallbackQuery, state: FSMContext, u
     """Обработка выбора уровня срочности через inline клавиатуру"""
     lang = await _get_user_language(callback=callback)
 
-    if await _deny_if_pending_callback(callback, user_status):
+    if await _deny_if_pending_callback(callback, user_status, language=lang):
         return
     try:
         logger.info(f"Обработка выбора срочности для пользователя {callback.from_user.id}")
@@ -210,7 +210,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
     """Обработка подтверждения заявки через inline клавиатуру"""
     lang = await _get_user_language(callback=callback)
 
-    if await _deny_if_pending_callback(callback, user_status):
+    if await _deny_if_pending_callback(callback, user_status, language=lang):
         return
     try:
         logger.info(f"Обработка подтверждения для пользователя {callback.from_user.id}")

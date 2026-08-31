@@ -79,7 +79,8 @@ async def show_employee_management_panel(callback: CallbackQuery, roles: list = 
 @router.callback_query(F.data == "employee_mgmt_main")
 async def back_to_main_panel(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Вернуться к главному меню панели управления"""
-    await show_employee_management_panel(callback, roles, active_role, user, _db=_db)
+    await show_employee_management_panel(callback, roles, active_role, user,
+                                         language=language, _db=_db)
 
 
 @router.callback_query(F.data == "employee_mgmt_stats")

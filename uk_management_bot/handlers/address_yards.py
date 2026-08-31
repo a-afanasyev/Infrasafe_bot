@@ -606,10 +606,8 @@ async def toggle_yard_status(callback: CallbackQuery, language: str = "ru", *, _
         status_text = get_text("address_yards.handlers.activated", language=lang) if new_status else get_text("address_yards.handlers.deactivated", language=lang)
         await callback.answer(get_text("address_yards.handlers.yard_status_changed", language=lang).format(status=status_text))
 
-        # Обновляем отображение
-        # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): language не
-        # пробрасывается — карточка после переключения рендерится на "ru".
-        await show_yard_details(callback)
+        # Обновляем отображение (BUG-165: язык пробрасывается)
+        await show_yard_details(callback, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса двора: {e}")
@@ -682,9 +680,8 @@ async def delete_yard(callback: CallbackQuery, language: str = "ru", *, _db=None
 
         logger.info(f"Двор {yard_id} удален пользователем {callback.from_user.id}")
 
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): show_yards_list без language —
-        # заголовок списка после удаления всегда на ru.
-        await show_yards_list(callback, None, _db=_db)
+        # Показываем список дворов (BUG-165: язык пробрасывается)
+        await show_yards_list(callback, None, language=lang, _db=_db)
 
     except Exception:
         logger.exception("delete yard handler failed")
@@ -704,8 +701,7 @@ async def cancel_action(callback: CallbackQuery, state: FSMContext, language: st
     await state.clear()
     lang = language
     await callback.message.edit_text(get_text("address_yards.handlers.action_cancelled", language=lang))
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): без language — список на ru.
-    await show_yards_list(callback, state)
+    await show_yards_list(callback, state, language=lang)
 
 
 @router.message(F.text.in_(CANCEL_TEXTS))
