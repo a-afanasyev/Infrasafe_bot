@@ -210,9 +210,10 @@ async def login_via_button(message: Message, user_status: str = None, language: 
 
 
 @router.message(F.text == "/login")
-async def login_command(message: Message, *, _db=None):
-    # Аналог кнопки — одобряем пользователя как заявителя
-    await login_via_button(message, _db=_db)
+async def login_command(message: Message, language: str = "ru", *, _db=None):
+    # Аналог кнопки — одобряем пользователя как заявителя. language — из
+    # aiogram-DI: без протяжки ответ рендерился бы на "ru" (BUG-165).
+    await login_via_button(message, language=language, _db=_db)
 
 
 async def start_invite_registration(message: Message, state: FSMContext, token: str,

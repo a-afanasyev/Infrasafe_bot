@@ -129,7 +129,7 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
     # Get user language
     lang = await _get_user_language(message=message)
 
-    if await _deny_if_pending_message(message, user_status):
+    if await _deny_if_pending_message(message, user_status, language=lang):
         return
 
     # Проверяем наличие телефона у пользователя
@@ -195,7 +195,7 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
     неуникальный Building.address больше не уводит в чужой дом (R17).
     """
     lang = await _get_user_language(callback=callback)
-    if await _deny_if_pending_callback(callback, user_status):
+    if await _deny_if_pending_callback(callback, user_status, language=lang):
         return
     try:
         _, atype, raw_id = callback.data.split(":", 2)

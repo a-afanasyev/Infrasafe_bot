@@ -235,7 +235,7 @@ async def process_manual_phone(message: Message, state: FSMContext, user_status:
 
     # Проверяем на отмену
     if message.text in CANCEL_TEXTS:
-        await cancel_onboarding(message, state, user_status)
+        await cancel_onboarding(message, state, user_status, language=lang)
         return
     
     # Проверяем системные команды/кнопки - не обрабатываем их как телефон
@@ -329,10 +329,11 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
 
     # Проверяем специальные команды
     if message.text in SKIP_DOCUMENTS_TEXTS:
-        await skip_documents(message, state)
+        await skip_documents(message, state, language=lang)
         return
     elif message.text in COMPLETE_ONBOARDING_TEXTS:
-        await complete_onboarding_with_documents(message, state, _db=_db)
+        await complete_onboarding_with_documents(message, state, language=lang,
+                                                 _db=_db)
         return
     
     # Определяем тип документа
@@ -433,11 +434,11 @@ async def process_document_confirmation(message: Message, state: FSMContext, lan
     lang = language
 
     if message.text in CONFIRM_UPLOAD_TEXTS:
-        await save_document(message, state, _db=_db)
+        await save_document(message, state, language=lang, _db=_db)
     elif message.text in ONBOARDING_CANCEL_TEXTS:
-        await cancel_document_upload(message, state)
+        await cancel_document_upload(message, state, language=lang)
     elif message.text in UPLOAD_ANOTHER_DOCUMENT_TEXTS:
-        await start_document_upload(message, state)
+        await start_document_upload(message, state, language=lang)
     else:
         await message.answer(get_text("errors.unknown_error", language=lang))
 
@@ -597,6 +598,9 @@ async def add_more_documents(message: Message, state: FSMContext, language: str 
     logger.info(f"Пользователь {message.from_user.id} решил добавить еще документы")
 
 @router.message(F.text.in_(COMPLETE_ONBOARDING_TEXTS))
-async def complete_onboarding_final(message: Message, state: FSMContext, *, _db=None):
-    """Обрабатывает нажатие кнопки 'Завершить онбординг'"""
-    await complete_onboarding_with_documents(message, state, _db=_db)
+async def complete_onboarding_final(message: Message, state: FSMContext,
+                                    language: str = "ru", *, _db=None):
+    """Обрабатывает нажатие кнопки 'Завершить онбординг'. language — из
+    aiogram-DI: без протяжки финальный экран рендерился на "ru" (BUG-165)."""
+    await complete_onboarding_with_documents(message, state, language=language,
+                                             _db=_db)

@@ -592,10 +592,8 @@ async def cancel_moderation_action(callback: CallbackQuery, state: FSMContext, l
         lang = language
         await callback.message.edit_text(get_text("address_moderation.handlers.action_cancelled", language=lang))
 
-        # Вернуться к списку заявок
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
-        # список после отмены рендерится на "ru".
-        await show_moderation_list(callback, state, _db=_db)
+        # Вернуться к списку заявок (BUG-165: язык пробрасывается)
+        await show_moderation_list(callback, state, language=lang, _db=_db)
     else:
         await callback.answer(get_text("address_moderation.handlers.no_active_actions", language=language))
 

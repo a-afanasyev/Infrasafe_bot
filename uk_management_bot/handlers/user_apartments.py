@@ -442,10 +442,8 @@ async def set_primary_apartment(callback: CallbackQuery, state: FSMContext, lang
 
         await callback.answer(get_text("user_apartments.primary_changed", language=lang), show_alert=True)
 
-        # Обновляем отображение
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
-        # список после смены основной квартиры рендерится на "ru".
-        await show_my_apartments(callback, state, _db=_db)
+        # Обновляем отображение (BUG-165: язык пробрасывается)
+        await show_my_apartments(callback, state, language=lang, _db=_db)
 
     except Exception as e:
         logger.error(f"Ошибка установки основной квартиры {user_apartment_id}: {e}")
@@ -795,12 +793,11 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
 
         await callback.answer(get_text("user_apartments.apartment_approved", language=lang), show_alert=True)
 
-        # Возвращаемся к деталям
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
-        # карточка после одобрения рендерится на "ru".
+        # Возвращаемся к деталям (BUG-165: язык пробрасывается).
         # roles/user обязательны: require_role читает kwargs, без них менеджер
         # получил бы отказ сразу после успешного действия.
-        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
+        await admin_apartment_detail(callback, state, language=lang,
+                                     roles=roles, user=user, _db=_db)
 
 
     except Exception as e:
@@ -830,11 +827,10 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
         await callback.answer(get_text("user_apartments.apartment_rejected", language=lang), show_alert=True)
 
-        # Возвращаемся к деталям
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
-        # карточка после отклонения рендерится на "ru".
+        # Возвращаемся к деталям (BUG-165: язык пробрасывается).
         # roles/user обязательны: require_role читает kwargs (см. approve выше).
-        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
+        await admin_apartment_detail(callback, state, language=lang,
+                                     roles=roles, user=user, _db=_db)
 
 
     except Exception as e:
@@ -859,11 +855,10 @@ async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, 
         new_status = get_text("user_apartments.toggle_to_owner", language=lang) if is_owner else get_text("user_apartments.toggle_to_resident", language=lang)
         await callback.answer(get_text("user_apartments.status_changed_to", language=lang).format(status=new_status), show_alert=True)
 
-        # Обновляем детали
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): language не пробрасывается —
-        # карточка после переключения рендерится на "ru".
+        # Обновляем детали (BUG-165: язык пробрасывается).
         # roles/user обязательны: require_role читает kwargs (см. approve выше).
-        await admin_apartment_detail(callback, state, roles=roles, user=user, _db=_db)
+        await admin_apartment_detail(callback, state, language=lang,
+                                     roles=roles, user=user, _db=_db)
 
 
     except Exception as e:

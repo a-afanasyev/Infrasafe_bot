@@ -187,9 +187,8 @@ async def show_user_management_panel(callback: CallbackQuery, roles: list = None
 @router.callback_query(F.data == "user_mgmt_main")
 async def back_to_main_panel(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
     """Вернуться к главному меню панели управления"""
-    # ⚠️ Предсуществующий дефект (сохранён 1:1): `language` не пробрасывается —
-    # панель после «назад» рендерится на "ru" независимо от языка менеджера.
-    await show_user_management_panel(callback, roles, active_role, user, _db=_db)
+    await show_user_management_panel(callback, roles, active_role, user,
+                                     language=language, _db=_db)
 
 
 @router.callback_query(F.data == "user_mgmt_stats")

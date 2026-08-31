@@ -611,10 +611,8 @@ async def toggle_building_status(callback: CallbackQuery, language: str = "ru", 
         status_text = get_text("address_buildings.handlers.activated", language=lang) if new_status else get_text("address_buildings.handlers.deactivated", language=lang)
         await callback.answer(get_text("address_buildings.handlers.building_status_changed", language=lang).format(status=status_text))
 
-        # Обновляем отображение
-        # ⚠️ Предсуществующий дефект (сохранён байт-в-байт): language не
-        # пробрасывается — карточка после переключения рендерится на "ru".
-        await show_building_details(callback)
+        # Обновляем отображение (BUG-165: язык пробрасывается)
+        await show_building_details(callback, language=lang)
 
     except Exception as e:
         logger.error(f"Ошибка при переключении статуса здания: {e}")
@@ -687,10 +685,8 @@ async def delete_building(callback: CallbackQuery, language: str = "ru", *, _db=
 
         logger.info(f"Здание {building_id} удалено пользователем {callback.from_user.id}")
 
-        # Показываем список зданий
-        # ⚠️ Предсуществующий дефект (сохранён 1:1): show_buildings_list без
-        # language — заголовок списка после удаления всегда на ru.
-        await show_buildings_list(callback, None, _db=_db)
+        # Показываем список зданий (BUG-165: язык пробрасывается)
+        await show_buildings_list(callback, None, language=lang, _db=_db)
 
     except Exception:
         logger.exception("delete building handler failed")
