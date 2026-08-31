@@ -53,6 +53,17 @@ THREAD_RUNNERS = {"to_thread", "run_in_executor"}
 # BASELINE — каждый кандидат обязан быть здесь; новый кандидат = красный тест.
 # ══════════════════════════════════════════════════════════════════════════════
 BASELINE = {
+    # ── Волна A2 (2026-09-01) ──
+    # BUG-153 п.4: сломанный check_user_role_sync (Telegram-id против serial-
+    # ключа, «нет доступа» всегда) заменён честным резолвом в юните — маркер
+    # ушёл из скана, авторизация осталась и стала РАБОТАЮЩЕЙ.
+    ("request_reports.py", "handle_approve_request"): "OWNER-CHECK@_load_applicant_action_context (telegram_id→users.id, роль applicant + not_owner при чужой; мутация — каноном run_command, авторизует владельца сам)",
+    ("request_reports.py", "handle_request_revision"): "OWNER-CHECK@_load_applicant_action_context (тот же юнит; мутация APPLICANT_RETURN — каноном)",
+    # BUG-157: _load_user_request_addresses переведён на run_db — скан впервые
+    # увидел DATA_CALL. Данные — СВОИ адреса по from_user.id; id из callback —
+    # номер страницы/ключ категории, не объект.
+    ("requests/create.py", "handle_address_page"): "SELF (адреса самого from_user.id; в callback — номер страницы)",
+    ("requests/create_callbacks.py", "handle_category_selection"): "SELF (адреса самого from_user.id; в callback — ключ категории)",
     # Проверено чтением в волнах B/D (PR I/II):
     ("user_apartments.py", "set_primary_apartment"): "OWNER-CHECK@_set_primary_apartment (access_denied при чужом from_user)",
     ("user_apartments.py", "view_apartment_details"): "OWNER-CHECK@handler (user_telegram_id != from_user.id → отказ)",
