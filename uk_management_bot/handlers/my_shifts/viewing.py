@@ -344,3 +344,28 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
     except Exception as e:
         logger.error(f"Ошибка просмотра деталей смены: {e}")
         await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("shift_requests:"))
+@require_role(['executor'])
+async def open_shift_requests(callback: CallbackQuery, state: FSMContext, language: str = "ru",
+                              user: User = None, roles: list = None, *, _db=None):
+    """«Мои заявки» из карточки активной смены → существующий раздел заявок.
+
+    Ревью 2026-08-31 (SHIFTS.md, находка №1): кнопка была мёртвой со скаффолда.
+    Своего списка «заявки этой смены» не строим — редирект в канонический
+    раздел с фильтром «активные»; это тот же приём, что у reply-кнопки
+    «Активные заявки» в base.py. from_user подменяется на нажавшего:
+    callback.message.from_user — это бот (паттерн categoryfilter_ в
+    requests/myrequests.py).
+    """
+    try:
+        await state.update_data(my_requests_status="active", my_requests_page=1)
+        from uk_management_bot.handlers.requests import show_my_requests
+        fake_message = callback.message
+        fake_message.from_user = callback.from_user
+        await show_my_requests(fake_message, state)
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка открытия заявок из карточки смены: {e}")
+        await callback.answer(get_text("my_shifts.handlers.error_occurred", language=language), show_alert=True)

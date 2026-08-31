@@ -138,14 +138,16 @@ class TestGetShiftActionsKeyboard:
             result = get_shift_actions_keyboard(shift)
         assert "start_shift" in _flat_cbs(result)
 
-    def test_planned_has_transfer_and_decline(self):
+    def test_planned_has_transfer(self):
+        # «Отклонить смену» убрана как мёртвая (ревью 2026-08-31, SHIFTS.md №1):
+        # сценарий «не могу выйти» покрывает передача смены.
         shift = _make_shift(shift_id=3, status="planned")
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.my_shifts import get_shift_actions_keyboard
             result = get_shift_actions_keyboard(shift)
         cbs = _flat_cbs(result)
         assert any("transfer_shift:3" in cb for cb in cbs)
-        assert any("decline_shift:3" in cb for cb in cbs)
+        assert not any("decline_shift" in cb for cb in cbs)
 
     def test_active_has_end_shift(self):
         shift = _make_shift(status="active")
@@ -154,20 +156,24 @@ class TestGetShiftActionsKeyboard:
             result = get_shift_actions_keyboard(shift)
         assert "end_shift" in _flat_cbs(result)
 
-    def test_active_has_take_break(self):
-        shift = _make_shift(status="active")
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.my_shifts import get_shift_actions_keyboard
-            result = get_shift_actions_keyboard(shift)
-        assert "take_break" in _flat_cbs(result)
-
-    def test_completed_has_shift_report(self):
-        shift = _make_shift(shift_id=5, status="completed")
+    def test_active_has_my_requests(self):
+        # «Перерыв» убран как мёртвый (ревью 2026-08-31, SHIFTS.md №1);
+        # «Мои заявки» с той же правкой обрела хендлер (open_shift_requests).
+        shift = _make_shift(shift_id=4, status="active")
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.my_shifts import get_shift_actions_keyboard
             result = get_shift_actions_keyboard(shift)
         cbs = _flat_cbs(result)
-        assert any("view_shift_report:5" in cb for cb in cbs)
+        assert any("shift_requests:4" in cb for cb in cbs)
+        assert "take_break" not in cbs
+
+    def test_completed_has_only_back(self):
+        # Completed-блок (отчёт/заявки/оплата) был мёртвым целиком — убран.
+        shift = _make_shift(shift_id=5, status="completed")
+        with patch(GET_TEXT_PATH, side_effect=_echo):
+            from uk_management_bot.keyboards.my_shifts import get_shift_actions_keyboard
+            result = get_shift_actions_keyboard(shift)
+        assert _flat_cbs(result) == ["view_current_shifts"]
 
     def test_back_to_list_callback_always_present(self):
         for status in ("planned", "active", "completed", "cancelled"):
