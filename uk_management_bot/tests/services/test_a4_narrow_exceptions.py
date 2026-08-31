@@ -17,7 +17,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
-from uk_management_bot.services.assignment_service import AssignmentService
 from uk_management_bot.services.request_service import RequestService
 from uk_management_bot.services.shift_assignment_service import (
     ShiftAssignmentService,

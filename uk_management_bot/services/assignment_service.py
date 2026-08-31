@@ -5,7 +5,6 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
-from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
