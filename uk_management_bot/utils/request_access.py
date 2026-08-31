@@ -40,6 +40,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
+from uk_management_bot.utils.specializations import matches_required_specs
+
 #: Порядок правил канона. Служит и документацией, и опорой для тестов.
 ACCESS_RULES = (
     "manager",
@@ -100,16 +102,21 @@ def access_reason(facts: RequestAccessFacts) -> Optional[str]:
         # Смена обязательна именно для группового назначения: его смысл —
         # «кто сейчас на дежурстве с этой специализацией», в отличие от
         # индивидуального, которое адресовано конкретному человеку.
-        # ⚠️ BUG-168: единственное место, где сравнение специализаций осознанно
-        # НЕ переведено на общий предикат `matches_required_specs` (BUG-166).
-        # Здесь семантика уже ЛЮБАЯ (пересечение), но джокера `universal` нет,
-        # а `group_specializations` берутся из БД сырыми, без нормализации к
-        # канону. Это предикат ДОСТУПА: любое расширение меняет, кто ВИДИТ
-        # заявку, — решение владельца, а не побочный эффект унификации подбора.
+        # BUG-168 (решение владельца 2026-08-19): канон BUG-166 и здесь —
+        # `matches_required_specs` (universal-джокер с обеих сторон, одного
+        # совпадения достаточно; расширение видимости универсалов одобрено).
+        # Гвард на непустоту ОБЯЗАТЕЛЕН и не переносится в предикат: пустой
+        # набор здесь значит «группового назначения нет», а не «требование
+        # не ограничивает» (правило 1 канона сюда не относится). Сами
+        # `group_specializations` приходят уже нормализованными — сбор в
+        # `services/request_access.py`.
         if (
             facts.has_active_shift
             and facts.group_specializations
-            and facts.group_specializations & facts.user_specializations
+            and matches_required_specs(
+                set(facts.user_specializations),
+                set(facts.group_specializations),
+            )
         ):
             return "executor_group_assignment_on_shift"
 

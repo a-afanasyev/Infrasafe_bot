@@ -9,7 +9,12 @@ from uk_management_bot.utils.business_time import (
     to_business,
 )
 
+from uk_management_bot.constants.specializations import (
+    CANONICAL_SET,
+    UNIVERSAL_SPECIALIZATION,
+)
 from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.utils.specializations import parse_specialization_values
 import logging
 
 logger = logging.getLogger(__name__)
@@ -107,28 +112,29 @@ class ScoringMixin:
         return round(balance_score, 2)
     
     def _calculate_specialization_coverage_score(self, shifts: List[Shift]) -> float:
-        """Вычисляет оценку покрытия специализаций"""
+        """Оценка покрытия: доля канон-набора, покрытая сменами периода.
+
+        BUG-167 (решение владельца 2026-08-19): все девять канонических
+        специализаций равнозначны — знаменатель = полный канон-набор (раньше
+        тут был зашит legacy-набор из пяти токенов, четырёх из которых после
+        миграции 010 не существует, и метрика не поднималась выше 20%).
+        Фокус смены читается канон-парсером стороной «покрывает» (hvac →
+        heating+ventilation), universal-смена покрывает всё, мусорный токен
+        не покрывает ничего.
+        """
         if not shifts:
             return 0.0
-        
-        # Собираем все покрываемые специализации
-        all_specializations = set()
+
+        covered: set = set()
         for shift in shifts:
-            if shift.specialization_focus:
-                all_specializations.update(shift.specialization_focus)
-        
-        # Считаем, что основных специализаций 5
-        # ⚠️ BUG-167: четыре из пяти токенов — legacy (`electric`, `plumbing`,
-        # `hvac`, `maintenance`), после миграции 010 их нет ни в одной строке
-        # `specialization_focus`. Метрика поэтому не может показать больше 20%
-        # (совпадает только `security`). Оставлено байт-в-байт: это АНАЛИТИКА,
-        # а не предикат подбора; правка меняет цифры в отчёте менеджера и
-        # требует отдельного решения — что теперь считать «основными»
-        # специализациями из девяти канонических.
-        main_specializations = {'electric', 'plumbing', 'hvac', 'maintenance', 'security'}
-        covered_main = len(all_specializations.intersection(main_specializations))
-        
-        return (covered_main / len(main_specializations)) * 100
+            specs = parse_specialization_values(
+                shift.specialization_focus, side="have", allow_universal=True)
+            if UNIVERSAL_SPECIALIZATION in specs:
+                covered = set(CANONICAL_SET)
+                break
+            covered |= specs & CANONICAL_SET
+
+        return round(len(covered) / len(CANONICAL_SET) * 100, 2)
     
     def _calculate_efficiency_score(self, shifts: List[Shift]) -> float:
         """Вычисляет оценку эффективности"""
