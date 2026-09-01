@@ -20,11 +20,9 @@ from uk_management_bot.utils.constants import (
     ASSIGNMENT_STATUS_CANCELLED,
     AUDIT_ACTION_REQUEST_ASSIGNED,
 )
-from uk_management_bot.services.notification_service import NotificationService
-# AUD5-DEAD-4: импорт был под `try/except ImportError` с флагом
-# ADVANCED_ASSIGNMENT_AVAILABLE. Модуль свой, его зависимости — stdlib,
-# SQLAlchemy и модели проекта: при их отсутствии не поднимется вообще ничего.
-# Флаг всегда был True, ветка «недоступно» — недостижимой.
+# AUD5-DEAD-4: импорт NotificationService был под `try/except ImportError` с
+# флагом ADVANCED_ASSIGNMENT_AVAILABLE; флаг всегда был True. BUG-185: импорт
+# снят целиком — сервис больше не уведомляет (см. надгробие у assign_to_group).
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,6 @@ class AssignmentService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.notification_service = NotificationService(db)
     
     def assign_to_group(self, request_number: str, specialization: str, assigned_by: int) -> RequestAssignment:
         """
@@ -123,10 +120,14 @@ class AssignmentService:
             
             # Создаем запись в аудите
             self._create_audit_log(request_number, assigned_by, f"Назначена группе: {specialization}")
-            
-            # Отправляем уведомления
-            self._notify_group_assignment(request, assignment)
-            
+
+            # BUG-185: уведомления группе живут у ВЫЗЫВАЮЩЕГО
+            # (auto_assign_request_by_category — единственный живой путь):
+            # дежурным — наряд, остальным подходящим — «в группе новая заявка».
+            # Прежний внутренний `_notify_group_assignment` звал несуществующий
+            # NotificationService.send_notification — AttributeError с рождения
+            # гасился except'ом, и никто ничего не получал.
+
             logger.info(f"Заявка {request_number} назначена группе {specialization} пользователем {assigned_by}")
             return assignment
             
@@ -187,10 +188,12 @@ class AssignmentService:
             # Создаем запись в аудите
             executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
             self._create_audit_log(request_number, assigned_by, f"Назначена исполнителю: {executor_name}")
-            
-            # Отправляем уведомления
-            self._notify_executor_assignment(request, assignment)
-            
+
+            # BUG-185: внутреннего уведомления здесь не было никогда —
+            # `_notify_executor_assignment` звал несуществующий метод и молчал.
+            # Живых прод-вызывающих у метода нет (канон назначения —
+            # MANAGER_ASSIGN, он уведомляет через матрицу интентов).
+
             logger.info(f"Заявка {request_number} назначена исполнителю {executor_id} пользователем {assigned_by}")
             return assignment
 
@@ -297,27 +300,11 @@ class AssignmentService:
             logger.exception("Ошибка отмены назначения")
             raise
     
-    def get_available_executors(self, specialization: str) -> List[User]:
-        """
-        Получение доступных исполнителей по специализации
-        
-        Args:
-            specialization: Специализация
-            
-        Returns:
-            List[User]: Список доступных исполнителей
-        """
-        # Получаем пользователей с ролью исполнителя и нужной специализацией
-        users = self.db.query(User).filter(
-            and_(
-                User.roles.contains('["executor"]'),  # JSON содержит роль executor
-                User.specialization.contains(specialization),  # JSON содержит специализацию
-                User.status == "approved"  # Пользователь одобрен
-            )
-        ).all()
-        
-        return users
-    
+    # BUG-185: get_available_executors ретайрен вместе с единственным
+    # потребителем `_notify_group_assignment`. Его LIKE-матчинг
+    # (roles.contains + specialization.contains) расходился с каноном подбора
+    # `matches_required_specs` (класс BUG-166) — оживлять его было нельзя.
+
     def get_active_assignment(self, request_number: str) -> Optional[RequestAssignment]:
         """
         Получение активного назначения заявки
@@ -363,39 +350,12 @@ class AssignmentService:
             # логе с полным трейсбеком (CODE-09: тут уже гасился TypeError).
             logger.exception("Не удалось создать запись в аудите")
     
-    def _notify_group_assignment(self, request: Request, assignment: RequestAssignment):
-        """Уведомление о назначении группе"""
-        try:
-            # Получаем всех исполнителей с нужной специализацией
-            executors = self.get_available_executors(assignment.group_specialization)
-            
-            for executor in executors:
-                self.notification_service.send_notification(
-                    user_id=executor.id,
-                    notification_type="request_assigned",
-                    title="Новая заявка назначена группе",
-                    message=f"Заявка #{request.request_number} назначена группе {assignment.group_specialization}",
-                    data={"request_number": request.request_number, "assignment_id": assignment.id}
-                )
-        except Exception:
-            # Best-effort уведомления; полный трейсбек вместо «{e}».
-            logger.exception("Не удалось отправить уведомления о назначении группе")
-    
-    def _notify_executor_assignment(self, request: Request, assignment: RequestAssignment):
-        """Уведомление о назначении исполнителю"""
-        try:
-            self.notification_service.send_notification(
-                user_id=assignment.executor_id,
-                notification_type="request_assigned",
-                title="Заявка назначена вам",
-                message=f"Заявка #{request.request_number} назначена вам для выполнения",
-                data={"request_number": request.request_number, "assignment_id": assignment.id}
-            )
-        except Exception:
-            logger.exception("Не удалось отправить уведомление исполнителю")
-    
     # smart_assign_request ретайрен (BUG-148): звал несуществующий
     # SmartDispatcher.auto_assign_request и всегда возвращал None.
+    # _notify_group_assignment / _notify_executor_assignment ретайрены
+    # (BUG-185): тот же класс — несуществующий NotificationService
+    # .send_notification под broad-except, ни одно уведомление не уходило.
+    # Живая замена — в auto_assign_request_by_category (handlers/admin/shared).
 
     def _get_request_by_number(self, request_number: str) -> Optional[Request]:
         """Возвращает заявку по её номеру."""

@@ -807,6 +807,7 @@
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Navbatchi {specialization} uchun yangi ariza</b>\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}\nShoshilinchlik: {urgency}\n\nTavsif: {description}",
+      "new_request_for_group": "📋 «{specialization}» guruhida yangi ariza\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}\n\nAriza «🆓 Bo'sh arizalar» bo'limida mavjud.",
       "no_access_view_requests": "Arizalarni ko'rish uchun ruxsat yo'q",
       "request_not_found": "Ariza topilmadi",
       "user_by_id": "Foydalanuvchi {telegram_id}",
@@ -8207,7 +8208,8 @@
       "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}",
       "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}",
       "assigned_executor": "📋 <b>Sizga #{request_number} arizasi tayinlandi</b>\n\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, bajarishga kirishing.",
-      "reassigned_away": "ℹ️ #{request_number} arizasi boshqa ijrochiga o‘tkazildi"
+      "reassigned_away": "ℹ️ #{request_number} arizasi boshqa ijrochiga o‘tkazildi",
+      "reassigned": "🔁 #{request_number} arizasi: ishlarni boshqa ijrochi davom ettiradi\n\n📍 {address}"
     }
   },
   "document_types": {

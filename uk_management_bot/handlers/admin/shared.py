@@ -1,4 +1,6 @@
 """Разделяемое для admin-пакета: SSOT-константы кнопок, ManagerStates, auto_assign_request_by_category (AUD3-06)."""
+import html
+
 from aiogram.fsm.state import StatesGroup, State
 from sqlalchemy.orm import Session
 
@@ -158,44 +160,58 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         # SSOT-кластер #1, PR2d: запись назначения (RequestAssignment +
         # request.assignment_type/assigned_group/assigned_at/assigned_by) через
         # allowlist-слой assignment_service вместо сырого ORM в хендлере.
-        # _notify_group_assignment (in-app) — внутри сервиса; кастомный
-        # on-shift Telegram-дути-нотифай ниже сохранён (другой канал/таргетинг).
         from uk_management_bot.services.assignment_service import AssignmentService
         AssignmentService(db).assign_to_group(request.request_number, specialization, manager.id)
         svc.refresh(request)
 
         logger.info(f"[AUTO_ASSIGN] ✅ Заявка {request.request_number} автоматически назначена группе {specialization} ({len(matching_executors)} исполнителей)")
 
-        # Отправляем уведомления исполнителям в активных сменах
+        # BUG-185: уведомления ВСЕЙ группе живут здесь (единственный живой
+        # вызывающий assign_to_group). Дежурным — богатый наряд, остальным
+        # подходящим — лёгкое «в вашей группе новая заявка»: раньше их звал
+        # несуществующий NotificationService.send_notification внутри сервиса,
+        # AttributeError гасился except'ом, и исполнители без смены не узнавали
+        # о заявке никогда. Оба текста — на языке ПОЛУЧАТЕЛЯ; свободные
+        # подстановки (адрес/описание/категория-fallback) экранируются: сырой
+        # '<' давал Telegram-400, и уведомление молча терялось (канон BUG-174).
         from datetime import datetime as dt
+
+        from uk_management_bot.handlers.shift_management.shared import (
+            translate_specializations,
+        )
         from uk_management_bot.services.notification_service import _get_shared_bot
 
         bot = _get_shared_bot()
         now = dt.now()
 
-        # Находим исполнителей в активных сменах с нужной специализацией
         for executor in matching_executors:
-            # Проверяем активную смену
             active_shift = svc.get_active_shift_for(executor.id, now)
-
-            if active_shift:
-                try:
-                    notification_text = get_text("admin.handlers.new_request_for_duty", language="ru").format(
-                        specialization=specialization,
+            lang = executor.language or "ru"
+            try:
+                if active_shift:
+                    notification_text = get_text("admin.handlers.new_request_for_duty", language=lang).format(
+                        specialization=translate_specializations([specialization], lang),
                         request_number=request.request_number,
-                        category=get_category_display(resolve_category_key(request.category), language="ru"),
-                        address=request.address,
-                        urgency=get_urgency_display(request.urgency, language="ru") if request.urgency else "",
-                        description=request.description
+                        category=html.escape(get_category_display(resolve_category_key(request.category), language=lang)),
+                        address=html.escape(request.address or ""),
+                        urgency=html.escape(get_urgency_display(request.urgency, language=lang)) if request.urgency else "",
+                        description=html.escape(request.description or "")
                     )
-                    await bot.send_message(
-                        chat_id=executor.telegram_id,
-                        text=notification_text,
-                        parse_mode="HTML"
+                else:
+                    notification_text = get_text("admin.handlers.new_request_for_group", language=lang).format(
+                        specialization=translate_specializations([specialization], lang),
+                        request_number=request.request_number,
+                        category=html.escape(get_category_display(resolve_category_key(request.category), language=lang)),
+                        address=html.escape(request.address or "")
                     )
-                    logger.info(f"Уведомление о групповом назначении отправлено исполнителю {executor.id} (смена {active_shift.id})")
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления исполнителю {executor.id}: {e}")
+                await bot.send_message(
+                    chat_id=executor.telegram_id,
+                    text=notification_text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Уведомление о групповом назначении отправлено исполнителю {executor.id} (смена {active_shift.id if active_shift else '—'})")
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления исполнителю {executor.id}: {e}")
 
         return ASSIGN_OK
 
