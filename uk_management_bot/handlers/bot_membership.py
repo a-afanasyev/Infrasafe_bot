@@ -27,10 +27,6 @@ logger = logging.getLogger(__name__)
 router = Router()
 router.my_chat_member.filter(F.chat.type == "private")
 
-# Статусы «бот недоступен пользователю» в приватном чате.
-_BLOCKED_STATUSES = {ChatMemberStatus.KICKED, ChatMemberStatus.LEFT}
-
-
 def _set_bot_blocked(db, telegram_id: int, blocked: bool) -> bool:
     """Проставить/снять штамп. -> запись найдена и изменена."""
     from uk_management_bot.database.models.user import User
@@ -50,8 +46,19 @@ def _set_bot_blocked(db, telegram_id: int, blocked: bool) -> bool:
 
 @router.my_chat_member()
 async def on_private_membership_change(event: ChatMemberUpdated, *, _db=None):
-    """kicked/left → штамп блокировки; member → снять."""
-    blocked = event.new_chat_member.status in _BLOCKED_STATUSES
+    """kicked → штамп блокировки; member → снять; прочее игнорируем.
+
+    Документированный цикл блокировки приватного чата — member ↔ kicked.
+    Прочие статусы (left и т.п.) осознанно НЕ трогают штамп (ревью): их
+    семантика для приватного чата не подтверждена, а ложное движение бейджа
+    хуже пропуска — пропуск добьёт второй источник (вердикт доставки)."""
+    status = event.new_chat_member.status
+    if status == ChatMemberStatus.KICKED:
+        blocked = True
+    elif status == ChatMemberStatus.MEMBER:
+        blocked = False
+    else:
+        return
     changed = await run_db(
         lambda s: _set_bot_blocked(s, event.from_user.id, blocked), db=_db)
     if changed:

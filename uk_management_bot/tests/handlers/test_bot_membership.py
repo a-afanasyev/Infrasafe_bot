@@ -73,21 +73,24 @@ class TestSetBotBlockedUnit:
 
 class TestHandler:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("status,expect_blocked", [
-        ("kicked", True),
-        ("left", True),
-        ("member", False),
+    @pytest.mark.parametrize("status,pre_blocked,expect_blocked", [
+        ("kicked", False, True),
+        ("member", True, False),
+        # left осознанно ИГНОРИРУЕТСЯ в обе стороны (семантика для приватного
+        # чата не подтверждена; ложное движение бейджа хуже пропуска):
+        ("left", True, True),
+        ("left", False, False),
     ])
-    async def test_statuses_map_to_stamp(self, db, status, expect_blocked):
+    async def test_statuses_map_to_stamp(self, db, status, pre_blocked,
+                                         expect_blocked):
         from uk_management_bot.database.models.user import User
         from uk_management_bot.handlers.bot_membership import (
             on_private_membership_change,
         )
 
-        if not expect_blocked:  # для member сначала блокируем
-            user = db.get(User, 1)
+        if pre_blocked:
             from datetime import datetime, timezone
-            user.bot_blocked_at = datetime.now(timezone.utc)
+            db.get(User, 1).bot_blocked_at = datetime.now(timezone.utc)
             db.commit()
 
         await on_private_membership_change(_event(status), _db=db)
