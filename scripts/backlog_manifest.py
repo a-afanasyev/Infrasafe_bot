@@ -205,6 +205,9 @@ ASSIGNMENT: dict[str, dict] = {
     # уведомления группе консолидированы в auto_assign_request_by_category
     # (дежурным наряд, остальным лёгкий текст, язык получателя, html.escape);
     # _notify_* и get_available_executors ретайрены из assignment_service.
+    # `BUG-186` заведён и закрыт 2026-09-01: `view=own|assigned` в GET /requests
+    # (сужение и только, Literal → 422), мёртвый `scope` снят; список исполнителя
+    # на канонах parse_specializations + is_on_shift_now_async, tiebreak по PK.
     "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",
                  note="раздел «Жители» дашборда 404 на edge infrasafe.uz — нужен запрос в InfraSafe на allowlist префикса residents"),
     # `BUG-148` закрыт 2026-09-01: путь ретайрен целиком (джобы №8/№9,

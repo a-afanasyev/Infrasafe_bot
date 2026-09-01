@@ -14,7 +14,7 @@ export default function TasksPage() {
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
-      params: { scope: 'my', limit: 50 }
+      params: { view: 'assigned', limit: 50 }
     }).then(r => r.data),
     staleTime: 30_000,
   })

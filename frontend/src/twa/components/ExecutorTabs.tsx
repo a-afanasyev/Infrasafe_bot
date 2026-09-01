@@ -9,7 +9,7 @@ export function ExecutorTabs() {
   // Self-fetch purchase count (shared cache with PurchasePage/TasksPage).
   const { data: tasks = [] } = useQuery({
     queryKey: ['twa', 'executor-tasks'],
-    queryFn: () => twaClient.get('/api/v2/requests', { params: { scope: 'my', limit: 50 } }).then((r) => r.data),
+    queryFn: () => twaClient.get('/api/v2/requests', { params: { view: 'assigned', limit: 50 } }).then((r) => r.data),
     staleTime: 30_000,
   })
   const purchaseBadge = tasks.filter((r: { status: string }) => r.status === 'Закуп').length

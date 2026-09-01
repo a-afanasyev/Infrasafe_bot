@@ -16,7 +16,7 @@ export default function RequestsPage() {
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['twa', 'my-requests'],
     queryFn: () => twaClient.get('/api/v2/requests', {
-      params: { scope: 'my', limit: 50 }
+      params: { view: 'own', limit: 50 }
     }).then(r => r.data),
     staleTime: 30_000,
   })

@@ -179,17 +179,26 @@ async def list_requests(
     category: Optional[str] = Query(None),
     executor_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
-    scope: Optional[str] = Query(None),
+    view: Optional[svc.RequestListView] = Query(
+        None,
+        description=(
+            "Режим просмотра, выбирает клиент; только сужает выборку: "
+            "`own` — поданные мной, `assigned` — мои назначения. "
+            "Без параметра — по ролям (менеджер видит всё)."
+        ),
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    # Server-enforced object-level scoping живёт в сервисе: клиентский `scope`
-    # не является authz-входом и в выборку не передаётся.
+    # Server-enforced object-level scoping живёт в сервисе. `view` — сужение
+    # и только (оба режима привязаны к user.id), не authz-вход: мёртвый
+    # `scope` (H-3) удалён из контракта.
     rows = await svc.list_requests_rows(
         db,
         user=user,
+        view=view,
         status=status,
         category=category,
         executor_id=executor_id,

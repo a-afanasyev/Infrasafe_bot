@@ -12,11 +12,10 @@ AST-гейт `tests/api/test_requests_router_inventory.py` фиксирует о
 прямого ORM в роутере на нуле.
 """
 
-import json
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -26,7 +25,6 @@ from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.request_comment import RequestComment
-from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
@@ -36,6 +34,8 @@ from uk_management_bot.services.request_address import ResolvedAddress
 from uk_management_bot.services.request_number_service import RequestNumberService
 from uk_management_bot.services.webhook_payloads import emit_request_created
 from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES
+from uk_management_bot.utils.shifts import is_on_shift_now_async
+from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.workflow_predicates import (
     active_status_clause,
     terminal_status_clause,
@@ -144,10 +144,51 @@ async def kanban_rows(
     return active_rows, terminal_rows, terminal_totals
 
 
+RequestListView = Literal["own", "assigned"]
+
+
+async def assigned_to_executor_clause(db: AsyncSession, user: User):
+    """OR-условие «заявка назначена этому исполнителю» для списка.
+
+    1. индивидуальное активное назначение на `user.id`;
+    2. групповое активное назначение по канон-специализации исполнителя —
+       ТОЛЬКО пока он на смене сейчас (окно по времени, канон `utils/shifts`;
+       голый `Shift.status == "active"` держал пул открытым после конца смены);
+    3. legacy-fallback `Request.executor_id` (строки до RequestAssignment).
+
+    Специализации — через канон `parse_specializations` (алиасы `electric`→
+    `electrician`, CSV/JSON-хранение). Раньше здесь была пятая копия правил
+    с сырым сравнением, из-за чего групповые заявки пропадали из списка при
+    том, что `check_request_access` их пропускал.
+
+    Джокер `universal` здесь НЕ РАСШИРЯЕТСЯ (токен в `specs` попадает как есть,
+    wildcard-сопоставления нет) — паритет с `get_group_pool_query`
+    (`request_handler_service.py`), там же причина и условие снятия.
+    """
+    individual_sub = select(RequestAssignment.request_number).where(
+        RequestAssignment.executor_id == user.id,
+        RequestAssignment.status == "active",
+    )
+    conditions = [
+        RequestModel.request_number.in_(individual_sub),
+        RequestModel.executor_id == user.id,
+    ]
+    specs = parse_specializations(user)
+    if specs and await is_on_shift_now_async(db, user.id):
+        group_sub = select(RequestAssignment.request_number).where(
+            RequestAssignment.assignment_type == "group",
+            RequestAssignment.group_specialization.in_(specs),
+            RequestAssignment.status == "active",
+        )
+        conditions.append(RequestModel.request_number.in_(group_sub))
+    return or_(*conditions)
+
+
 async def list_requests_rows(
     db: AsyncSession,
     *,
     user: User,
+    view: Optional[RequestListView] = None,
     status: Optional[str],
     category: Optional[str],
     executor_id: Optional[int],
@@ -157,9 +198,19 @@ async def list_requests_rows(
 ) -> list:
     """Список заявок с server-enforced object-level scoping.
 
-    Only managers may list across all users. For everyone else,
-    ownership/assignment filtering is applied unconditionally (клиентский
-    `scope`-параметр не является authz-входом и сюда не передаётся).
+    `view` — режим просмотра, который выбирает КЛИЕНТ, и который может только
+    СУЖАТЬ выборку (оба режима привязаны к `user.id`):
+      * `own`      — поданные этим пользователем, при любом наборе ролей;
+      * `assigned` — назначения этого исполнителя (см.
+        `assigned_to_executor_clause`), при любом наборе ролей; без роли
+        `executor` — пусто (паритет с каноном доступа: executor-причины
+        требуют роль);
+      * None       — прежний режим по ролям: менеджер видит всё, исполнитель —
+        назначения, остальные — своё (совместимость с вызывающими без режима;
+        регресс-гард на H-3, security-audit 2026-05-29).
+
+    Клиентский параметр не является authz-входом: расширить выборку он не
+    может by construction — именно этим был опасен прежний `scope` до H-3.
     """
     ExecutorUser = aliased(User)
     query = (
@@ -167,44 +218,18 @@ async def list_requests_rows(
         .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
     )
     user_roles = _parse_user_roles(user)
-    if "manager" not in user_roles:
-        if "executor" in user_roles:
-            # Executor: individual assignments + group (if in shift) + executor_id fallback
-            conditions = []
-            # 1. Individual assignments
-            assignment_sub = select(RequestAssignment.request_number).where(
-                RequestAssignment.executor_id == user.id,
-                RequestAssignment.status == "active",
-            )
-            conditions.append(RequestModel.request_number.in_(assignment_sub))
-            # 2. Group assignments (only if executor has active shift)
-            active_shift = await db.execute(
-                select(Shift).where(Shift.user_id == user.id, Shift.status == "active")
-            )
-            if active_shift.scalars().first():
-                specs = []
-                if user.specialization:
-                    try:
-                        raw = user.specialization
-                        if isinstance(raw, str) and raw.startswith("["):
-                            specs = json.loads(raw)
-                        else:
-                            specs = [raw] if raw else []
-                    except Exception:
-                        specs = [user.specialization] if user.specialization else []
-                if specs:
-                    group_sub = select(RequestAssignment.request_number).where(
-                        RequestAssignment.assignment_type == "group",
-                        RequestAssignment.group_specialization.in_(specs),
-                        RequestAssignment.status == "active",
-                    )
-                    conditions.append(RequestModel.request_number.in_(group_sub))
-            # 3. Fallback: executor_id
-            conditions.append(RequestModel.executor_id == user.id)
-            query = query.filter(or_(*conditions))
-        else:
-            # Applicant: own requests only
-            query = query.filter(RequestModel.user_id == user.id)
+    # Режим без `view` — прежняя ветка по ролям; менеджер без `view` → mode=None → без фильтра.
+    mode = view
+    if mode is None and "manager" not in user_roles:
+        mode = "assigned" if "executor" in user_roles else "own"
+    if mode == "own":
+        query = query.filter(RequestModel.user_id == user.id)
+    elif mode == "assigned":
+        query = query.filter(
+            await assigned_to_executor_clause(db, user)
+            if "executor" in user_roles
+            else false()
+        )
     if status:
         query = query.filter(RequestModel.status == status)
     if category:
@@ -214,8 +239,14 @@ async def list_requests_rows(
     if source:
         query = query.filter(RequestModel.source == source)
 
+    # Tiebreak по PK обязателен из-за offset-пагинации: у заявок одной секунды
+    # порядок по created_at не определён, и строки дублировались/пропадали бы
+    # между страницами. `request_number` (YYMMDD-NNN) лексикографически
+    # совпадает с хронологией — как в `kanban_rows`.
     result = await db.execute(
-        query.order_by(RequestModel.created_at.desc()).offset(offset).limit(limit)
+        query.order_by(RequestModel.created_at.desc(), RequestModel.request_number.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return result.all()
 
