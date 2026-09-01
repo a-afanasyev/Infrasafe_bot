@@ -154,3 +154,55 @@ def test_outbox_source_instance_debug_fallback_dev(monkeypatch: pytest.MonkeyPat
     """DEBUG=True без переменной → стабильный фолбэк "dev"."""
     mod = _reload_settings(monkeypatch, OUTBOX_SOURCE_INSTANCE=None)
     assert mod.settings.OUTBOX_SOURCE_INSTANCE == "dev"
+
+
+# ---------------------------------------------------------------------------
+# AUD5-ARCH-6: Settings конструируется, а не исполняется телом класса.
+# Env читается в __init__, валидация — при инстанцировании; модульный синглтон
+# `settings = Settings()` сохраняет import-time fail-fast для прода. Прежняя
+# форма (env + ValueError в class-body) делала класс одноразовым: повторное
+# Settings() отдавало снимок среды НА МОМЕНТ ИМПОРТА, а «валидация» второй раз
+# не исполнялась вовсе.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_fresh_instance_reads_current_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Settings() без перезагрузки модуля видит ТЕКУЩЕЕ окружение."""
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    monkeypatch.setenv("BOT_USERNAME", "fresh_env_bot")
+    assert Settings().BOT_USERNAME == "fresh_env_bot"
+
+
+@pytest.mark.unit
+def test_validation_runs_on_every_instantiation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Прод-гейты исполняются при КАЖДОМ конструировании, не однажды на импорт."""
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "False")
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    # Первый прод-гейт на пустом окружении — ADMIN_PASSWORD (порядок гейтов
+    # унаследован от прежнего class-body и является контрактом).
+    with pytest.raises(ValueError, match="ADMIN_PASSWORD"):
+        Settings()
+
+
+@pytest.mark.unit
+def test_instance_mutation_does_not_leak_between_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BUG-BOT-001-восстановление (`settings.BOT_USERNAME = ...`) пишет в
+    ИНСТАНС: раньше это мутировало class-атрибут, то есть глобальное разделяемое
+    состояние для любого держателя класса."""
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    monkeypatch.setenv("BOT_USERNAME", "original_bot")
+    first = Settings()
+    first.BOT_USERNAME = "discovered_bot"
+    assert Settings().BOT_USERNAME == "original_bot", \
+        "мутация инстанса не имеет права протекать в следующий Settings()"
+    assert "BOT_USERNAME" not in vars(Settings), \
+        "BOT_USERNAME не должен существовать как атрибут КЛАССА"
