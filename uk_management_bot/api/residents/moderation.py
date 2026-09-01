@@ -161,15 +161,15 @@ async def request_resident_phone(
 ):
     """Отправить жителю в Telegram запрос поделиться контактом (номером)."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
-    from fastapi import HTTPException
 
-    from uk_management_bot.api.users.phone_request import send_phone_request
+    from uk_management_bot.api.users.phone_request import (
+        raise_unless_delivered, send_phone_request,
+    )
 
     resident = await queries.get_resident(db, resident_id)
     if resident is None:
         raise ResidentNotFound("Житель не найден")
-    if not await send_phone_request(resident):
-        raise HTTPException(status_code=502, detail="Telegram delivery failed")
+    raise_unless_delivered(await send_phone_request(resident))
     return {"sent": True}
 
 

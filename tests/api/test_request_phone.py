@@ -35,9 +35,9 @@ def sent(monkeypatch):
     """Мок сетевой границы; собирает (chat_id, payload)."""
     calls: list[tuple[int, dict]] = []
 
-    async def fake_send(chat_id: int, payload: dict) -> bool:
+    async def fake_send(chat_id: int, payload: dict) -> str:
         calls.append((chat_id, payload))
-        return True
+        return phone_request.VERDICT_OK
 
     monkeypatch.setattr(phone_request, "_send", fake_send)
     return calls
@@ -68,11 +68,50 @@ async def test_employee_not_found_404(client, sent):
 @pytest.mark.asyncio
 async def test_telegram_refusal_becomes_502(client, db_session, monkeypatch):
     emp = await _user(db_session, 7003)
-    monkeypatch.setattr(phone_request, "_send", AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_ERROR))
 
     resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
 
     assert resp.status_code == 502
+
+
+@pytest.mark.asyncio
+async def test_blocked_bot_becomes_409_with_reason(client, db_session, monkeypatch):
+    """Прод-случай 2026-09-01: житель заблокировал бота — менеджер видел общее
+    «Telegram delivery failed» и считал фичу сломанной. Причина обязана дойти."""
+    emp = await _user(db_session, 7004)
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_BLOCKED))
+
+    resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
+
+    assert resp.status_code == 409
+    assert "заблокировал" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_no_chat_becomes_409_with_reason(client, db_session, monkeypatch):
+    emp = await _user(db_session, 7005)
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_NO_CHAT))
+
+    resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
+
+    assert resp.status_code == 409
+    assert "не открывал" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("status,description,expected", [
+    (200, "", "ok"),
+    (403, "Forbidden: bot was blocked by the user", "blocked"),
+    (403, "Forbidden: user is deactivated", "blocked"),
+    (400, "Bad Request: chat not found", "no_chat"),
+    (400, "Bad Request: message is too long", "error"),
+    (500, "", "error"),
+])
+def test_classify_telegram_refusals(status, description, expected):
+    assert phone_request._classify(status, description) == expected
 
 
 @pytest.mark.asyncio
