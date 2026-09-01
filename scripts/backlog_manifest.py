@@ -177,8 +177,10 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
-    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-19",
-                  note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
+    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-09-01",
+                  note="порция 3.1: 750 тестов, покрытие 50.8/48.8/40.7/41.1, "
+                       "floors 49/47/39/40; остаток до 80% — components/addresses, "
+                       "twa/pages, components/materials"),
     # `AUD3-25` закрыт 2026-09-01 (фаза 2 программы ратчетов): sqlite-сьют
     # test_aud325_scoring_sqlite.py гоняет реальные SQL-предикаты скоринга;
     # мутационная порча каждого предиката краснит (мок-сосед — нет).
