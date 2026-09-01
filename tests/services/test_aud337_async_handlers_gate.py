@@ -153,8 +153,12 @@ CONVERTED = [
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.
+# `_db_scope` добавлен вместе с ратчетом AUD3-07: это тот же открыватель
+# sync-сессии (тестовый seam, ставший бы прод-механизмом); в CONVERTED-файлах
+# его нет (проверено сканом на добавлении), для неконвертированных он входит
+# в метрику baseline.
 _FORBIDDEN_ATTR_CALLS = {"query", "commit"}
-_FORBIDDEN_NAME_CALLS = {"session_scope", "SessionLocal"}
+_FORBIDDEN_NAME_CALLS = {"session_scope", "SessionLocal", "_db_scope"}
 
 
 def _async_defs(tree: ast.AST):
@@ -296,6 +300,104 @@ def test_no_transitive_session_openers_in_async_bodies():
     assert not healed, (
         "Транзитивных блокировок стало меньше — зафиксируйте прогресс, сняв "
         "строки из _TRANSITIVE_BASELINE:\n" + "\n".join(map(str, sorted(healed)))
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# AUD3-07 — ратчет неконвертированного остатка (деферрал владельца 2026-08-19)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Программа A2-2 (конверсия волнами) отклонена владельцем — масштаб L не
+# окупается. Вместо неё класс «sync-БД в async-хендлере» заморожен per-file
+# baseline'ом по метрике этого гейта (async def с параметром `db` + запрещённые
+# вызовы из _FORBIDDEN_*). Ратчет двунаправленный, по образцу
+# test_aud5_arch5_broad_except_ratchet.py:
+#
+# * счёт ВЫШЕ baseline — регресс: новый sync-сайт в async. Конвертируйте
+#   (sync-юнит под run_db) — baseline вверх не двигается никогда;
+# * счёт НИЖЕ baseline — прогресс: обновите число вниз; файл, дошедший до
+#   нуля, СНИМИТЕ отсюда и добавьте в CONVERTED (полный гейт строже счёта);
+# * новый файл handlers/ вне CONVERTED и вне baseline обязан рождаться
+#   чистым — счёт 0.
+#
+# Снимок 2026-09-01 (23 файла / 232 сайта; лидеры — shift_management/*).
+_UNCONVERTED_BASELINE: dict[str, int] = {
+    "uk_management_bot/handlers/access_control.py": 15,
+    "uk_management_bot/handlers/admin/actions.py": 9,
+    "uk_management_bot/handlers/admin/assignment.py": 3,
+    "uk_management_bot/handlers/admin/invites.py": 6,
+    "uk_management_bot/handlers/admin/lists.py": 15,
+    "uk_management_bot/handlers/admin/materials.py": 4,
+    "uk_management_bot/handlers/admin/shared.py": 1,
+    "uk_management_bot/handlers/admin/views.py": 7,
+    "uk_management_bot/handlers/auto_manager.py": 10,
+    "uk_management_bot/handlers/health.py": 5,
+    "uk_management_bot/handlers/requests/executor.py": 11,
+    "uk_management_bot/handlers/requests/listing.py": 6,
+    "uk_management_bot/handlers/requests/materials.py": 5,
+    "uk_management_bot/handlers/requests/myrequests.py": 8,
+    "uk_management_bot/handlers/shift_management/analytics.py": 18,
+    "uk_management_bot/handlers/shift_management/assignment_a.py": 12,
+    "uk_management_bot/handlers/shift_management/assignment_b.py": 16,
+    "uk_management_bot/handlers/shift_management/auto_planning.py": 24,
+    "uk_management_bot/handlers/shift_management/manual_planning.py": 12,
+    "uk_management_bot/handlers/shift_management/schedule.py": 14,
+    "uk_management_bot/handlers/shift_management/templates_a.py": 26,
+    "uk_management_bot/handlers/user_management/entry.py": 1,
+    "uk_management_bot/handlers/user_management/listing.py": 4,
+}
+
+
+def _aud337_count(path: Path, rel: str) -> int:
+    """Счёт метрики гейта по файлу: сумма нарушений всех async def."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sum(len(_violations_in(fn, rel)) for fn in _async_defs(tree))
+
+
+def test_unconverted_baseline_is_consistent():
+    """Baseline не пересекается с CONVERTED и не указывает в пустоту; нулевые
+    записи запрещены — файл на нуле обязан переехать в CONVERTED."""
+    overlap = set(_UNCONVERTED_BASELINE) & set(CONVERTED)
+    assert not overlap, f"файл и в baseline, и в CONVERTED: {sorted(overlap)}"
+    missing = [rel for rel in _UNCONVERTED_BASELINE if not (ROOT / rel).exists()]
+    assert not missing, f"baseline указывает на несуществующие файлы: {missing}"
+    zeros = [rel for rel, n in _UNCONVERTED_BASELINE.items() if n <= 0]
+    assert not zeros, (
+        "нулевые записи baseline — переведите файлы в CONVERTED: " f"{zeros}"
+    )
+
+
+def test_aud307_unconverted_ratchet():
+    grew: list[str] = []
+    shrank: list[str] = []
+    converted = set(CONVERTED)
+    seen: set[str] = set()
+    for path in sorted((ROOT / "uk_management_bot" / "handlers").rglob("*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        if rel in converted:
+            continue
+        actual = _aud337_count(path, rel)
+        expected = _UNCONVERTED_BASELINE.get(rel, 0)
+        seen.add(rel)
+        if actual > expected:
+            grew.append(f"{rel}: {actual} > baseline {expected}")
+        elif actual < expected:
+            shrank.append(f"{rel}: {actual} < baseline {expected}")
+
+    assert not grew, (
+        "AUD3-07 ratchet: sync-БД в async-хендлерах выросла — DB-фаза нового "
+        "кода обязана жить sync-юнитом под run_db (baseline вверх не "
+        "двигается):\n" + "\n".join(grew)
+    )
+    assert not shrank, (
+        "Sync-сайтов стало МЕНЬШЕ — отлично: обновите baseline вниз; файл на "
+        "нуле снимите отсюда и добавьте в CONVERTED:\n" + "\n".join(shrank)
+    )
+
+    gone = set(_UNCONVERTED_BASELINE) - seen
+    assert not gone, (
+        "Файлы baseline исчезли из handlers/ (переезд/ретайр) — обновите "
+        f"гейт: {sorted(gone)}"
     )
 
 
