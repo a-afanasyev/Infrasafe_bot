@@ -179,7 +179,9 @@ ASSIGNMENT: dict[str, dict] = {
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
     "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-08-19",
                   note="floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80%"),
-    "AUD3-25": A(pkg="П11", status="actionable", method="verified-2026-08-19"),
+    # `AUD3-25` закрыт 2026-09-01 (фаза 2 программы ратчетов): sqlite-сьют
+    # test_aud325_scoring_sqlite.py гоняет реальные SQL-предикаты скоринга;
+    # мутационная порча каждого предиката краснит (мок-сосед — нет).
     # ── Программа A: архитектура
     "AUD3-07": A(pkg="A2", status="deferred", method="gate-2026-09-01",
                  note="ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, "
