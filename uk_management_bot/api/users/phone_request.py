@@ -105,6 +105,22 @@ def raise_unless_delivered(verdict: str) -> None:
     raise HTTPException(status_code=502, detail="Telegram delivery failed")
 
 
+async def record_delivery_verdict(db, user: User, verdict: str) -> None:
+    """Обновить `users.bot_blocked_at` по вердикту доставки (и закоммитить).
+
+    BLOCKED — поставить штамп (карточка покажет «Бот заблокирован»), OK —
+    снять (человек разблокировал, доставка прошла). Сетевые/прочие сбои
+    (`no_chat`/`error`) статус НЕ трогают: они не говорят о блокировке."""
+    from datetime import datetime, timezone
+
+    if verdict == VERDICT_BLOCKED and user.bot_blocked_at is None:
+        user.bot_blocked_at = datetime.now(timezone.utc)
+        await db.commit()
+    elif verdict == VERDICT_OK and user.bot_blocked_at is not None:
+        user.bot_blocked_at = None
+        await db.commit()
+
+
 async def send_phone_request(user: User) -> str:
     """Отправляет пользователю запрос поделиться контактом. -> вердикт."""
     lang = user.language or "ru"

@@ -22,9 +22,22 @@ function makeEmployee(overrides: Partial<EmployeeBrief> = {}): EmployeeBrief {
     verification_status: 'verified',
     status: 'approved',
     roles: ['executor'],
+    bot_blocked: false,
     ...overrides,
   }
 }
+
+describe('StaffCard — бейдж «Бот заблокирован»', () => {
+  it('показывается при bot_blocked', () => {
+    render(<StaffCard employee={makeEmployee({ bot_blocked: true })} />)
+    expect(screen.getByText(/Бот заблокирован/)).toBeInTheDocument()
+  })
+
+  it('нет бейджа без блокировки', () => {
+    render(<StaffCard employee={makeEmployee()} />)
+    expect(screen.queryByText(/Бот заблокирован/)).not.toBeInTheDocument()
+  })
+})
 
 describe('displayFullName — КАПС → Вид Имени', () => {
   it('капс-слова приводятся, узбекский апостроф не капитализируется', () => {

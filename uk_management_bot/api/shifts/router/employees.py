@@ -315,13 +315,15 @@ async def request_employee_phone(user_id: int, db: AsyncSession = Depends(get_db
     """Отправить сотруднику в Telegram запрос поделиться контактом (номером)."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
     from uk_management_bot.api.users.phone_request import (
-        raise_unless_delivered, send_phone_request,
+        raise_unless_delivered, record_delivery_verdict, send_phone_request,
     )
 
     user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    raise_unless_delivered(await send_phone_request(user))
+    verdict = await send_phone_request(user)
+    await record_delivery_verdict(db, user, verdict)
+    raise_unless_delivered(verdict)
     return {"sent": True}
 
 

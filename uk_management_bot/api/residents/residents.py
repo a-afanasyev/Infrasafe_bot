@@ -92,6 +92,7 @@ async def list_residents(
             created_at=u.created_at,
             apartments_count=counts.get(u.id, 0),
             primary_address=_format_address(*primary) if primary else None,
+            bot_blocked=u.bot_blocked_at is not None,
         ))
     return ResidentListOut(items=items, total=total, limit=limit, offset=offset)
 
@@ -137,6 +138,7 @@ async def get_resident(
         verification_date=resident.verification_date,
         language=resident.language,
         created_at=resident.created_at,
+        bot_blocked=resident.bot_blocked_at is not None,
         roles=parse_roles_safe(resident.roles),
         apartments=[
             ResidentApartmentOut(

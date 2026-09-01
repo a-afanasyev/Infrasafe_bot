@@ -1827,6 +1827,11 @@
             ],
             "title": "Active Shift Id"
           },
+          "bot_blocked": {
+            "default": false,
+            "title": "Bot Blocked",
+            "type": "boolean"
+          },
           "first_name": {
             "anyOf": [
               {
@@ -1923,6 +1928,11 @@
               }
             ],
             "title": "Active Shift Id"
+          },
+          "bot_blocked": {
+            "default": false,
+            "title": "Bot Blocked",
+            "type": "boolean"
           },
           "first_name": {
             "anyOf": [
@@ -4790,6 +4800,11 @@
             "title": "Apartments",
             "type": "array"
           },
+          "bot_blocked": {
+            "default": false,
+            "title": "Bot Blocked",
+            "type": "boolean"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -5002,6 +5017,11 @@
             "default": 0,
             "title": "Apartments Count",
             "type": "integer"
+          },
+          "bot_blocked": {
+            "default": false,
+            "title": "Bot Blocked",
+            "type": "boolean"
           },
           "created_at": {
             "anyOf": [

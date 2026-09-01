@@ -18,6 +18,8 @@ export interface EmployeeBrief {
   verification_status: VerificationStatus
   status: string
   roles: string[]
+  /** Сотрудник заблокировал бота. */
+  bot_blocked: boolean
 }
 
 export interface ShiftBrief {
@@ -269,6 +271,8 @@ export interface ResidentListItem {
   apartments_count: number
   /** «Двор · дом · кв. N» основной квартиры или null. */
   primary_address: string | null
+  /** Пользователь заблокировал бота — запрос номера/уведомления недоставимы. */
+  bot_blocked: boolean
 }
 
 export interface ResidentListResponse {

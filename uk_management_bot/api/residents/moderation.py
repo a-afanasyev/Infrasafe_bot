@@ -163,13 +163,15 @@ async def request_resident_phone(
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
 
     from uk_management_bot.api.users.phone_request import (
-        raise_unless_delivered, send_phone_request,
+        raise_unless_delivered, record_delivery_verdict, send_phone_request,
     )
 
     resident = await queries.get_resident(db, resident_id)
     if resident is None:
         raise ResidentNotFound("Житель не найден")
-    raise_unless_delivered(await send_phone_request(resident))
+    verdict = await send_phone_request(resident)
+    await record_delivery_verdict(db, resident, verdict)
+    raise_unless_delivered(verdict)
     return {"sent": True}
 
 

@@ -41,6 +41,14 @@ export function ResidentAccountBadge({ status }: { status: string }) {
   )
 }
 
+/** Пользователь заблокировал бота: доставка ему невозможна, пока сам не
+ *  разблокирует. Для карточек жителей; StaffCard рендерит свой инлайн в
+ *  стиле остальных своих бейджей. */
+export function BotBlockedBadge() {
+  const { t } = useTranslation()
+  return <Badge color="var(--red)">{`🚫 ${t('residents.botBlocked')}`}</Badge>
+}
+
 export function ResidentVerificationBadge({ status }: { status: string }) {
   const { t } = useTranslation()
   return (

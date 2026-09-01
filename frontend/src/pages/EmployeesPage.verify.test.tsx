@@ -24,6 +24,7 @@ const UNVERIFIED: EmployeeBrief = {
   verification_status: 'pending',
   status: 'pending',
   roles: ['applicant', 'executor'],
+  bot_blocked: false,
 }
 
 const { approveSpy } = vi.hoisted(() => ({ approveSpy: vi.fn() }))

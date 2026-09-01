@@ -66,6 +66,9 @@ class ResidentListItemOut(BaseModel):
     created_at: Optional[datetime] = None
     apartments_count: int = 0
     primary_address: Optional[str] = None
+    # Пользователь заблокировал бота (users.bot_blocked_at IS NOT NULL) —
+    # бейдж в карточке; запрос номера/уведомления ему недоставимы.
+    bot_blocked: bool = False
 
 
 class ResidentListOut(BaseModel):
@@ -100,6 +103,7 @@ class ResidentDetailOut(BaseModel):
     verification_date: Optional[datetime] = None
     language: Optional[str] = None
     created_at: Optional[datetime] = None
+    bot_blocked: bool = False
     # Роли нужны фронту, чтобы прятать блокировку у мультиролевых: блокировка
     # общая на все роли (users.status), у сотрудника она снимает и рабочий доступ.
     roles: list[str] = []

@@ -72,6 +72,8 @@ class EmployeeBrief(BaseModel):
     verification_status: str
     status: str = "approved"
     roles: list[str] = []  # parsed from User.roles (JSON) — нужен для бейджа роли в очереди
+    # Сотрудник заблокировал бота — бейдж в карточке, доставка ему невозможна.
+    bot_blocked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -90,6 +92,7 @@ class EmployeeBrief(BaseModel):
                 "status": getattr(values, "status", "approved"),
                 "specialization": getattr(values, "specialization", None),
                 "roles": getattr(values, "roles", None),
+                "bot_blocked": getattr(values, "bot_blocked_at", None) is not None,
             }
         if isinstance(values, dict):
             # Спецификации: JSON-массив / CSV / скаляр → список (порядок сохранён).
