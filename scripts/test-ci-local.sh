@@ -93,9 +93,15 @@ cleanup() {
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
 
-if [ "${KEEP_STACK:-}" != "1" ]; then
-  trap cleanup EXIT
-fi
+# Один EXIT-trap на всё. Второй `trap … EXIT` ЗАМЕНЯЕТ первый, а не дополняет:
+# ниже trap на COVDIR молча снимал этот, и одноразовые pg/redis + сеть
+# оставались висеть после каждого прогона (BUG найден 2026-09-01).
+COVDIR=""
+finish() {
+  [ -n "$COVDIR" ] && rm -rf "$COVDIR"
+  if [ "${KEEP_STACK:-}" != "1" ]; then cleanup; fi
+}
+trap finish EXIT
 
 echo "==> сборка образа из текущего дерева ($IMAGE)"
 docker build -q -t "$IMAGE" . >/dev/null
@@ -128,7 +134,6 @@ docker run --rm --network "$NET" -v "${ROOT}/alembic:/app/alembic:ro" \
 # половину покрытия и «локально зелено» опять значило бы не то же, что в CI.
 COVDIR="$(mktemp -d)"
 chmod 777 "$COVDIR"
-trap 'rm -rf "$COVDIR"' EXIT
 COV_ARGS=(-v "${COVDIR}:/covdata" -e COVERAGE_FILE=/covdata/.coverage)
 
 echo "==> сьют 1/2: pytest -q (uk_management_bot, postgres)"
