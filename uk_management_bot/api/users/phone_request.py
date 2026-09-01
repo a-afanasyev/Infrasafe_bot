@@ -49,15 +49,29 @@ def _classify(status_code: int, description: str) -> str:
 
 
 async def _send(chat_id: int, payload: dict) -> str:
-    """POST sendMessage. -> вердикт доставки (VERDICT_*)."""
+    """POST sendMessage. -> вердикт доставки (VERDICT_*).
+
+    Один ретрай ТОЛЬКО на connect-сбои (прод 2026-09-01: интермиттентный
+    ConnectTimeout до api.telegram.org): соединение не установлено — сообщение
+    гарантированно не отправлено, дубль невозможен. Read-таймаут после
+    отправки НЕ ретраим — там дубль возможен."""
     url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            response = await client.post(url, json={"chat_id": chat_id, **payload})
-    except Exception as e:  # noqa: BLE001 — сеть, наружу только описание без URL
-        logger.error("Запрос телефона: Telegram недоступен для %s: %s",
-                     chat_id, describe_http_error(e))
-        return VERDICT_ERROR
+    response = None
+    for attempt in (1, 2):
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                response = await client.post(url, json={"chat_id": chat_id, **payload})
+            break
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            logger.warning("Запрос телефона: connect-сбой к Telegram для %s "
+                           "(попытка %s): %s", chat_id, attempt,
+                           describe_http_error(e))
+            if attempt == 2:
+                return VERDICT_ERROR
+        except Exception as e:  # noqa: BLE001 — сеть, наружу описание без URL
+            logger.error("Запрос телефона: Telegram недоступен для %s: %s",
+                         chat_id, describe_http_error(e))
+            return VERDICT_ERROR
     if response.status_code != 200:
         # description безопасен для лога (в отличие от текста httpx-исключений
         # он не несёт URL с токеном) и называет причину.
