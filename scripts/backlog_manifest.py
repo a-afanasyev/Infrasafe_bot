@@ -173,7 +173,9 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П8: i18n
     # ── П9
     # ── П10: security-программа
-    "AUD5-ARCH-6": A(pkg="П10", status="actionable", method="verified-2026-08-19"),
+    # `AUD5-ARCH-6` закрыт 2026-09-01 (фаза 4 программы ратчетов): Settings —
+    # конструктор вместо class-body (env/валидация на инстанцировании, синглтон
+    # держит import-time fail-fast); pydantic-settings отклонён осознанно.
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
