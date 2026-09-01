@@ -314,13 +314,14 @@ async def toggle_meter_entry(
 async def request_employee_phone(user_id: int, db: AsyncSession = Depends(get_db)):
     """Отправить сотруднику в Telegram запрос поделиться контактом (номером)."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
-    from uk_management_bot.api.users.phone_request import send_phone_request
+    from uk_management_bot.api.users.phone_request import (
+        raise_unless_delivered, send_phone_request,
+    )
 
     user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not await send_phone_request(user):
-        raise HTTPException(status_code=502, detail="Telegram delivery failed")
+    raise_unless_delivered(await send_phone_request(user))
     return {"sent": True}
 
 
