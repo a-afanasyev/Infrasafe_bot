@@ -807,6 +807,7 @@
     },
     "handlers": {
       "new_request_for_duty": "📋 <b>Новая заявка для дежурных {specialization}</b>\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}\nСрочность: {urgency}\n\nОписание: {description}",
+      "new_request_for_group": "📋 Новая заявка в группе «{specialization}»\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}\n\nЗаявка доступна в разделе «🆓 Свободные заявки».",
       "no_access_view_requests": "Нет прав для просмотра заявок",
       "request_not_found": "Заявка не найдена",
       "user_by_id": "Пользователь {telegram_id}",
@@ -8206,7 +8207,8 @@
       "cancelled": "🚫 Заявка #{request_number} отменена\n\n📍 {address}",
       "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}",
       "assigned_executor": "📋 <b>Вам назначена заявка #{request_number}</b>\n\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению.",
-      "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю"
+      "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю",
+      "reassigned": "🔁 Заявка #{request_number}: работы продолжит другой исполнитель\n\n📍 {address}"
     }
   },
   "document_types": {

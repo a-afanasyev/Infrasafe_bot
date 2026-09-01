@@ -33,7 +33,10 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE: dict[str, int] = {
     "uk_management_bot/main.py": 19,
     "uk_management_bot/services/request_service.py": 4,
-    "uk_management_bot/services/assignment_service.py": 6,
+    # BUG-185 (2026-09-01): −2 — ретайрены _notify_group_assignment /
+    # _notify_executor_assignment (broad-except глотал AttributeError
+    # несуществующего send_notification).
+    "uk_management_bot/services/assignment_service.py": 4,
     "uk_management_bot/services/shift_assignment_service/__init__.py": 0,
     "uk_management_bot/services/shift_assignment_service/_types.py": 0,
     "uk_management_bot/services/shift_assignment_service/balancer.py": 1,

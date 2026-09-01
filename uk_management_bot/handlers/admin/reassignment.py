@@ -243,9 +243,6 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
         collect_reassigned_away_sync,
     )
 
-    messages = collect_notify_messages_sync(
-        db, request_number, outcome.post_commit_intents)
-
     svc = AdminHandlerService(db)
     request = svc.get_request_by_number(request_number)
     new_name = ""
@@ -253,6 +250,15 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
         new_name = display_name(svc.get_user_by_id(request.executor_id)) or ""
 
     old_id = getattr(outcome.old_state, "executor_id", None)
+    # Исполнитель именно СМЕНИЛСЯ (а не появился): по этому же факту решаются
+    # и old-notice (BUG-181), и текст жителю (BUG-182 — «работы продолжит
+    # другой исполнитель» вместо повторного «принята в работу»).
+    is_reassign = (old_id is not None and request is not None
+                   and request.executor_id != old_id)
+
+    messages = collect_notify_messages_sync(
+        db, request_number, outcome.post_commit_intents, reassigned=is_reassign)
+
     old_notice = None
     old_label = ""
     if old_id is not None:
@@ -260,7 +266,7 @@ def _aftermath(db: Session, request_number: str, outcome, lang: str) -> Aftermat
         old_label = (display_name(old_user) or f"ID{old_id}") if old_user else f"ID{old_id}"
         # Тот же человек остался исполнителем — снимать было некого. Сборка
         # текста общая с API-путём (BUG-181): workflow_notifications.
-        if request is not None and request.executor_id != old_id:
+        if is_reassign:
             old_notice = collect_reassigned_away_sync(db, request_number, old_id)
     else:
         # Читать здесь СТАРОЕ групповое назначение бессмысленно: команда уже

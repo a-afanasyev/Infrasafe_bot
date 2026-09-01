@@ -123,6 +123,15 @@ _CLARIFY_RICH_KEY = "admin.handlers.notify_user_clarification"
 # Наряд исполнителю: свой ключ, потому что `assigned` написан для ЖИТЕЛЯ.
 _ASSIGNED_EXECUTOR_KEY = "notifications.workflow.assigned_executor"
 
+# BUG-182 (решение владельца 2026-09-01): при СМЕНЕ исполнителя жителю уходит
+# «работы продолжит другой исполнитель», а не повтор «принята в работу» — для
+# него работы не начинались заново. Матрица сама различить не может: интент
+# несёт только действие и номер, а «менялся или появился» видно лишь по
+# `outcome.old_state.executor_id` — признак передаёт вызывающий (тот же факт,
+# по которому решается old-notice BUG-181).
+_APPLICANT_ASSIGNED_KEY = "notifications.workflow.assigned"
+_APPLICANT_REASSIGNED_KEY = "notifications.workflow.reassigned"
+
 # Лимиты подстановок наряда (перенесены из удалённого ручного уведомления).
 # Telegram режет сообщение на 4096; запас взят с большим коэффициентом.
 _MAX_ADDRESS = 150
@@ -146,12 +155,18 @@ def _specs(value) -> tuple[tuple[tuple[str, ...], str], ...]:
     return tuple(value)
 
 
-def _plan(intents: Iterable) -> list[tuple[Action, tuple[str, ...], str]]:
+def _plan(
+    intents: Iterable, reassigned: bool = False
+) -> list[tuple[Action, tuple[str, ...], str]]:
     """Отфильтровать интенты до плана рассылки (чистая часть, общая обоим путям).
 
     Спецификации с разными текстами по ролям разворачиваются в ОТДЕЛЬНЫЕ
     задания: получатели резолвятся по ролям каждого задания в отдельности,
     иначе роль, по которой выбран человек, теряется и текст выбрать нечем.
+
+    `reassigned` (BUG-182) подменяет ТОЛЬКО жительский ключ назначения:
+    исполнительский наряд при переназначении остаётся прежним — для нового
+    исполнителя это и есть первичное назначение.
     """
     plan: list[tuple[Action, tuple[str, ...], str]] = []
     for intent in intents:
@@ -167,6 +182,8 @@ def _plan(intents: Iterable) -> list[tuple[Action, tuple[str, ...], str]]:
             # Служебный переход — молчим (см. docstring модуля).
             continue
         for roles, text_key in _specs(spec):
+            if reassigned and text_key == _APPLICANT_ASSIGNED_KEY:
+                text_key = _APPLICANT_REASSIGNED_KEY
             plan.append((action, roles, text_key))
     return plan
 
@@ -333,6 +350,7 @@ async def dispatch_notify_intents(
     request_number: str,
     intents: Iterable,
     clarification_text: Optional[str] = None,
+    reassigned: bool = False,
 ) -> int:
     """Разослать адресные уведомления по `notify`-интентам (API-путь). Не бросает.
 
@@ -340,7 +358,7 @@ async def dispatch_notify_intents(
     """
     from uk_management_bot.services.notification_service import _get_shared_bot
 
-    plan = _plan(intents)
+    plan = _plan(intents, reassigned=reassigned)
     if not plan:
         return 0
     # AUD6-P2-02: заявка грузится один раз на весь набор интентов, не на каждый.
@@ -371,6 +389,7 @@ async def dispatch_notify_intents_detached(
     request_number: str,
     intents: Iterable,
     clarification_text: Optional[str] = None,
+    reassigned: bool = False,
 ) -> int:
     """Вариант для fastapi `BackgroundTasks` (AUD6-P2-02).
 
@@ -392,7 +411,8 @@ async def dispatch_notify_intents_detached(
         return 0
     async with AsyncSessionLocal() as session:
         return await dispatch_notify_intents(
-            session, request_number, intents, clarification_text=clarification_text
+            session, request_number, intents,
+            clarification_text=clarification_text, reassigned=reassigned,
         )
 
 
@@ -402,6 +422,7 @@ async def dispatch_notify_intents_sync(
     intents: Iterable,
     bot=None,
     clarification_text: Optional[str] = None,
+    reassigned: bool = False,
 ) -> int:
     """Тот же диспетчер для бот-пути: sync-сессия + явный bot из хендлера.
 
@@ -410,7 +431,7 @@ async def dispatch_notify_intents_sync(
     """
     from uk_management_bot.services.notification_service import _get_shared_bot
 
-    plan = _plan(intents)
+    plan = _plan(intents, reassigned=reassigned)
     if not plan:
         return 0
     request = (
@@ -441,6 +462,7 @@ def collect_notify_messages_sync(
     request_number: str,
     intents: Iterable,
     clarification_text: Optional[str] = None,
+    reassigned: bool = False,
 ) -> list[tuple[int, str]]:
     """Fetch/render-фаза диспетчера для AUD3-37-конвертированных хендлеров.
 
@@ -450,7 +472,7 @@ def collect_notify_messages_sync(
     те же ``_plan``/``_wanted_user_ids``/``_render_text``, что у обоих
     диспетчеров выше. Best-effort по-интентно: сбой одного не валит остальные.
     """
-    plan = _plan(intents)
+    plan = _plan(intents, reassigned=reassigned)
     if not plan:
         return []
     request = (

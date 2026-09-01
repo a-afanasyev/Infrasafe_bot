@@ -185,6 +185,50 @@ class TestAftermathUsesOutcome:
         assert 200 not in targets, "снятый не должен получить «вам назначена»"
         assert 100 in targets, "житель получает уведомление о назначении"
 
+    def test_applicant_gets_reassigned_text_when_executor_changed(self, db):
+        """BUG-182 (решение владельца 2026-09-01): при СМЕНЕ исполнителя житель
+        получает «работы продолжит другой исполнитель», а не повтор «принята в
+        работу» — для него работы не начинались заново."""
+        from uk_management_bot.utils.helpers import get_text
+        from uk_management_bot.utils.request_workflow import Action
+
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, OLD_ID, 200)
+        _user(db, NEW_ID, 300)
+        _request(db, executor_id=NEW_ID, status=REQUEST_STATUS_IN_PROGRESS)
+
+        outcome = _outcome(
+            old_executor_id=OLD_ID,
+            intents=[_intent("notify", {"action": Action.MANAGER_ASSIGN.value})])
+        after = mod._aftermath(db, NUMBER, outcome, "ru")
+
+        applicant_texts = [text for tg, text in after.messages if tg == 100]
+        expected = get_text("notifications.workflow.reassigned", language="ru",
+                            request_number=NUMBER, address="Дом 1",
+                            category="Электрика")
+        assert applicant_texts == [expected]
+
+    def test_applicant_gets_assigned_text_on_primary_assignment(self, db):
+        """Первичное назначение (old executor = None): прежний текст «принята
+        в работу» — работы действительно начинаются."""
+        from uk_management_bot.utils.helpers import get_text
+        from uk_management_bot.utils.request_workflow import Action
+
+        _user(db, APPLICANT_ID, 100, roles='["applicant"]')
+        _user(db, NEW_ID, 300)
+        _request(db, executor_id=NEW_ID, status=REQUEST_STATUS_IN_PROGRESS)
+
+        outcome = _outcome(
+            old_executor_id=None,
+            intents=[_intent("notify", {"action": Action.MANAGER_ASSIGN.value})])
+        after = mod._aftermath(db, NUMBER, outcome, "ru")
+
+        applicant_texts = [text for tg, text in after.messages if tg == 100]
+        expected = get_text("notifications.workflow.assigned", language="ru",
+                            request_number=NUMBER, address="Дом 1",
+                            category="Электрика")
+        assert applicant_texts == [expected]
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Фаза 1: преflight

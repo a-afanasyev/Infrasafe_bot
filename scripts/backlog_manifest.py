@@ -190,8 +190,13 @@ ASSIGNMENT: dict[str, dict] = {
     # бот — тот же честный текст, API — 409.
     # `BUG-181` закрыт 2026-09-01: old-notice в workflow_notifications
     # (collect_reassigned_away_sync + notify_reassigned_away_detached), API-путь шлёт.
-    "BUG-182": A(pkg="A2", status="actionable", method="verified-2026-08-19",
-                 note="житель уведомляется на каждое переназначение — нужен выбор владельца"),
+    # `BUG-182` закрыт 2026-09-01 решением владельца «уведомлять при смене»
+    # (вариант б): ключ notifications.workflow.reassigned, признак reassigned
+    # через оба пути (бот _aftermath + API PATCH) по факту из outcome.
+    # `BUG-185` заведён и закрыт 2026-09-01 тем же днём («заводи и чини»):
+    # уведомления группе консолидированы в auto_assign_request_by_category
+    # (дежурным наряд, остальным лёгкий текст, язык получателя, html.escape);
+    # _notify_* и get_available_executors ретайрены из assignment_service.
     "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",
                  note="раздел «Жители» дашборда 404 на edge infrasafe.uz — нужен запрос в InfraSafe на allowlist префикса residents"),
     # `BUG-148` закрыт 2026-09-01: путь ретайрен целиком (джобы №8/№9,

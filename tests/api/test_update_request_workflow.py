@@ -378,6 +378,45 @@ async def test_primary_assign_does_not_schedule_old_notice(
 
 
 @pytest.mark.asyncio
+async def test_reassign_dispatches_notify_with_reassigned_flag(
+    client, db_session, applicant_user, monkeypatch
+):
+    """BUG-182: диспетчер уведомлений обязан узнать, что это СМЕНА исполнителя
+    (жителю уходит «работы продолжит другой исполнитель», а не повтор «принята
+    в работу»). Признак считается по факту из outcome, как и old-notice."""
+    await _seed(db_session, owner_id=applicant_user.id, status="В работе")
+    monkeypatch.setattr(req_router, "run_command_async", AsyncMock(
+        return_value=_reassign_outcome(old_executor=42, new_executor=55)))
+    spy = AsyncMock(return_value=0)
+    monkeypatch.setattr(req_router, "dispatch_notify_intents_detached", spy)
+    monkeypatch.setattr(
+        req_router, "notify_reassigned_away_detached", AsyncMock(return_value=1))
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"executor_id": 55})
+    assert r.status_code == 200, r.text
+    assert spy.await_count == 1
+    assert spy.await_args.kwargs.get("reassigned") is True
+
+
+@pytest.mark.asyncio
+async def test_primary_assign_dispatches_notify_without_reassigned_flag(
+    client, db_session, applicant_user, monkeypatch
+):
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")
+    monkeypatch.setattr(req_router, "run_command_async", AsyncMock(
+        return_value=_reassign_outcome(old_executor=None, new_executor=55)))
+    spy = AsyncMock(return_value=0)
+    monkeypatch.setattr(req_router, "dispatch_notify_intents_detached", spy)
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"executor_id": 55})
+    assert r.status_code == 200, r.text
+    assert spy.await_count == 1
+    assert spy.await_args.kwargs.get("reassigned") is False
+
+
+@pytest.mark.asyncio
 async def test_list_requests_rejects_negative_offset(client):
     """APIFE-10: offset<0 (и limit<1) раньше уходили в Postgres → 500; теперь 422."""
     r = await client.get("/api/v2/requests?offset=-1")

@@ -501,19 +501,23 @@ async def update_request(
         # api/shifts/executor_router.py): inline она держала request-scoped
         # сессию idle-in-transaction на всё время Telegram-таймаутов; detached-
         # вариант открывает собственную короткую сессию уже после ответа.
+        # BUG-181/182: переназначение распознаётся по факту из outcome (оба
+        # executor_id есть и они разные ⟺ переназначение) — интенты этого не
+        # несут. Признак выбирает жителю текст «работы продолжит другой
+        # исполнитель» вместо повторного «принята в работу» (BUG-182) и
+        # включает old-notice снятому исполнителю (BUG-181: получатель —
+        # человек из old_state, которого в заявке уже нет, матрица его не
+        # покрывает).
+        old_executor = getattr(outcome.old_state, "executor_id", None)
+        new_executor = getattr(outcome.new_state, "executor_id", None)
+        is_reassign = (old_executor is not None and new_executor is not None
+                       and old_executor != new_executor)
         background.add_task(
             dispatch_notify_intents_detached,
             request_number, outcome.post_commit_intents,
-            updates.get("notes"),
+            updates.get("notes"), reassigned=is_reassign,
         )
-        # BUG-181: снятый исполнитель узнаёт о переназначении и с API-пути.
-        # Матрица интентов его не покрывает (получатель — человек из old_state,
-        # которого в заявке уже нет), поэтому решение принимается по факту из
-        # outcome: оба id есть и они разные ⟺ переназначение.
-        old_executor = getattr(outcome.old_state, "executor_id", None)
-        new_executor = getattr(outcome.new_state, "executor_id", None)
-        if (old_executor is not None and new_executor is not None
-                and old_executor != new_executor):
+        if is_reassign:
             background.add_task(
                 notify_reassigned_away_detached, request_number, old_executor)
 
