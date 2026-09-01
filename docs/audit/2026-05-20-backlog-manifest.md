@@ -53,7 +53,7 @@
 | `AUD5-CODE-10` | P3 | deferred | gate-2026-09-01 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций, двунаправленный; раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `AUD5-ARCH-6` | P3 | actionable | verified-2026-08-19 | П10 | — | — | — |  |
-| `TEST-068` | P2 | actionable | verified-2026-08-19 | П11 | — | — | — | floors уже 41/39/31/32 (#331, twa в знаменателе); остаток — ratchet до 80% |
+| `TEST-068` | P2 | actionable | verified-2026-09-01 | П11 | — | — | — | порция 3.1: 750 тестов, покрытие 50.8/48.8/40.7/41.1, floors 49/47/39/40; остаток до 80% — components/addresses, twa/pages, components/materials |
 | `PENT-F17` | P3 | actionable | verified-2026-08-19 | П2a | — | — | — | /uk/health уже 404 (наш фикс жив); корень /health → proxy_pass app:3000 (сделал владелец); остаток: allowlist /uk/api/health + монитор |
 | `PENT-F14` | P3 | actionable | verified-2026-08-19 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации; ssh-блокер .105 испарился — второй хост инспектируем |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-08-19 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; venv вырос 148→164 МБ |

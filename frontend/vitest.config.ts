@@ -53,11 +53,14 @@ export default mergeConfig(
         // AUD6-P2-28 (2026-07-31): twa включён в знаменатель; замер с ним —
         // lines 42.28 / statements 40.38 / functions 32.89 / branches 33.57.
         // Floor'ы на ~1 пункт ниже факта: регрессия ловится, flake — нет.
+        // TEST-068: ratchet — только вверх, вслед за фактом (порция 3.1,
+        // 2026-09-01: факт 50.8/48.8/40.7/41.1 после закрытия нулей
+        // useAddresses/AddressesPage/DashboardLayout; floor = факт − ~1 п.п.).
         thresholds: {
-          lines: 41,
-          statements: 39,
-          functions: 31,
-          branches: 32,
+          lines: 49,
+          statements: 47,
+          functions: 39,
+          branches: 40,
         },
       },
     },
