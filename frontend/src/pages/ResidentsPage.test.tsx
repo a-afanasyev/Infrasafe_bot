@@ -48,6 +48,7 @@ function makeResident(over: Partial<ResidentListItem> = {}): ResidentListItem {
     language: 'ru',
     created_at: '2026-07-01T10:00:00Z',
     apartments_count: 1,
+    bot_blocked: false,
     primary_address: 'Двор-7 · ул. Тестовая 1 · кв. 42',
     ...over,
   }

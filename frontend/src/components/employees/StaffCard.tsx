@@ -91,6 +91,11 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
                 {t('employees.blocked')}
               </span>
             )}
+            {employee.bot_blocked && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-[10px] bg-red/15 text-red">
+                {`🚫 ${t('residents.botBlocked')}`}
+              </span>
+            )}
             <span
               className={cn(
                 'text-[10px] font-semibold px-2 py-0.5 rounded-[10px]',

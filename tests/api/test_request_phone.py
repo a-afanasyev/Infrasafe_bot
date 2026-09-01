@@ -144,6 +144,43 @@ async def test_two_connect_failures_become_error(monkeypatch):
     assert await phone_request._send(1, {"text": "t"}) == phone_request.VERDICT_ERROR
 
 
+@pytest.mark.asyncio
+async def test_blocked_verdict_stamps_user_and_ok_clears(client, db_session, monkeypatch):
+    """Статус «бот заблокирован» в карточке: вердикт BLOCKED ставит штамп
+    users.bot_blocked_at, успешная доставка позже — снимает."""
+    emp = await _user(db_session, 7006)
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_BLOCKED))
+    resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
+    assert resp.status_code == 409
+    await db_session.refresh(emp)
+    assert emp.bot_blocked_at is not None
+
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_OK))
+    resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
+    assert resp.status_code == 200
+    await db_session.refresh(emp)
+    assert emp.bot_blocked_at is None
+
+
+@pytest.mark.asyncio
+async def test_network_error_does_not_touch_blocked_stamp(client, db_session, monkeypatch):
+    """Сетевой сбой ничего не говорит о блокировке — штамп не трогаем."""
+    from datetime import datetime, timezone
+
+    emp = await _user(db_session, 7007)
+    emp.bot_blocked_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_ERROR))
+    resp = await client.post(f"/api/v2/shifts/employees/{emp.id}/request-phone")
+    assert resp.status_code == 502
+    await db_session.refresh(emp)
+    assert emp.bot_blocked_at is not None
+
+
 @pytest.mark.parametrize("status,description,expected", [
     (200, "", "ok"),
     (403, "Forbidden: bot was blocked by the user", "blocked"),

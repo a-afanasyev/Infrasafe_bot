@@ -27,6 +27,11 @@ class User(Base):
     
     # Дополнительная информация
     phone = Column(String(20), nullable=True)
+
+    # Пользователь заблокировал бота (штамп момента). Источники истины:
+    # my_chat_member kicked/member (handlers/bot_membership.py) и вердикт
+    # доставки запроса номера (api/users/phone_request.py). NULL = не заблокирован.
+    bot_blocked_at = Column(DateTime(timezone=True), nullable=True)
     
     # Специализация сотрудника (для исполнителей/менеджеров):
     # JSON строка с массивом специализаций: ["electrician", "plumber", "security"]

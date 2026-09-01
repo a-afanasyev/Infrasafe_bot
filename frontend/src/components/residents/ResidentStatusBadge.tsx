@@ -41,6 +41,13 @@ export function ResidentAccountBadge({ status }: { status: string }) {
   )
 }
 
+/** Пользователь заблокировал бота: доставка ему невозможна, пока сам не
+ *  разблокирует. Общий для карточек жителей и сотрудников. */
+export function BotBlockedBadge() {
+  const { t } = useTranslation()
+  return <Badge color="var(--red)">{`🚫 ${t('residents.botBlocked')}`}</Badge>
+}
+
 export function ResidentVerificationBadge({ status }: { status: string }) {
   const { t } = useTranslation()
   return (

@@ -20,6 +20,7 @@ function makeResident(overrides: Partial<ResidentListItem> = {}): ResidentListIt
     verification_status: 'verified',
     primary_address: 'Дом 23 · кв. 5',
     apartments_count: 1,
+    bot_blocked: false,
     ...overrides,
   } as ResidentListItem
 }

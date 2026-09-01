@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { useRequestResidentPhone } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
-import { ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
+import { BotBlockedBadge, ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
 
 interface Props {
   resident: ResidentListItem
@@ -69,6 +69,7 @@ export default function ResidentCard({ resident }: Props) {
       <div className="flex items-center gap-1.5 flex-wrap">
         <ResidentAccountBadge status={resident.status} />
         <ResidentVerificationBadge status={resident.verification_status} />
+        {resident.bot_blocked && <BotBlockedBadge />}
         <span className="text-[11px] text-text-muted ml-auto font-[family-name:var(--font-mono)]">
           {t('residents.apartmentsCount', { count: resident.apartments_count })}
         </span>

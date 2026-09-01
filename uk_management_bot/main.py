@@ -24,6 +24,7 @@ from uk_management_bot.handlers.admin import router as admin_router
 from uk_management_bot.handlers.auth import router as auth_router
 from uk_management_bot.handlers.onboarding import router as onboarding_router
 from uk_management_bot.handlers.phone_share import router as phone_share_router
+from uk_management_bot.handlers.bot_membership import router as bot_membership_router
 from uk_management_bot.handlers.user_management import router as user_management_router
 from uk_management_bot.handlers.user_rename import router as user_rename_router
 from uk_management_bot.handlers.employee_management import router as employee_management_router
@@ -311,6 +312,9 @@ def setup_routers(dp: Dispatcher) -> None:
     # его state-фильтры (waiting_for_phone) специфичнее и не пересекаются со
     # StateFilter(None) этого роутера.
     dp.include_router(phone_share_router)
+    # my_chat_member (блокировка/разблокировка бота) — отдельный тип апдейта,
+    # message-роутерам не конкурент; порядок не важен.
+    dp.include_router(bot_membership_router)
     dp.include_router(admin_router)  # admin раньше для перехвата действий менеджеров
 
     # Система приёмки заявок (ДОЛЖНА БЫТЬ РАНЬШЕ других handlers заявок!)
