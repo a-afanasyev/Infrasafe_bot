@@ -19,14 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **458**
-- закрыто маркером: **443**
-- открыто маркером: **15**
+- закрыто маркером: **448**
+- открыто маркером: **10**
 
-  - `actionable` — **7**
+  - `actionable` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=1, P3=6.
+Из них actionable по приоритету: P2=1, P3=1.
 
 Значения `status`:
 
@@ -53,15 +53,10 @@
 | `AUD5-CODE-10` | P3 | deferred | gate-2026-09-01 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций, двунаправленный; раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `TEST-068` | P2 | actionable | verified-2026-09-01 | П11 | — | — | — | порция 3.1: 750 тестов, покрытие 50.8/48.8/40.7/41.1, floors 49/47/39/40; остаток до 80% — components/addresses, twa/pages, components/materials |
-| `PENT-F17` | P3 | actionable | verified-2026-08-19 | П2a | — | — | — | /uk/health уже 404 (наш фикс жив); корень /health → proxy_pass app:3000 (сделал владелец); остаток: allowlist /uk/api/health + монитор |
-| `PENT-F14` | P3 | actionable | verified-2026-08-19 | П2b | — | edge владельца (оба домена) | — | артефакт+инструкция готовы; ждёт публикации; ssh-блокер .105 испарился — второй хост инспектируем |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-08-19 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; venv вырос 148→164 МБ |
 | `ARCH-06` | P2 | deferred | verified-2026-07-27 | — | — | — | — | возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
-| `PENT-F12` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
-| `PENT-F13` | P3 | actionable | verified-2026-07-27 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md |
-| `PENT-F15` | P3 | actionable | verified-2026-08-19 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен 27.07, не применён: проба 19.08 — Server: nginx/1.31.2 на :80 |
-| `PENT-F16` | P3 | actionable | verified-2026-08-19 | — | — | edge владельца (profk.uz) | — | чек-лист отправлен 27.07, не применён: проба 19.08 — два HSTS + X-Frame-Options DENY и SAMEORIGIN |
+| `PENT-F13` | P3 | actionable | verified-2026-09-02 | — | — | DNS/регистратор владельца (оба домена) | — | OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, ждём непустой dig CAA |
 | `SEC-115` | P3 | deferred | verified-2026-07-27 | — | — | — | — | фикс на стороне InfraSafe; в повестку следующего разговора |
 
 ## Спорные пункты, разведённые явно
