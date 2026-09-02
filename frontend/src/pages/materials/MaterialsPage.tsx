@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { Package, Download, Plus, ArrowDownToLine, ArrowUpFromLine, Scale, Pencil, Undo2 } from 'lucide-react'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import AccessTabBar from '../../components/access/AccessTabBar'
@@ -55,6 +56,7 @@ function Td({ children, className = '' }: { children?: React.ReactNode; classNam
 
 export default function MaterialsPage() {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   usePageTitle(t('materials.title'))
   const unitLabel = useUnitLabel()
 
@@ -379,7 +381,7 @@ export default function MaterialsPage() {
                             №{req.request_number}
                           </Link>
                           {req.executor_name && (
-                            <span className="text-text-muted">{req.executor_name}</span>
+                            <span className="text-text-muted">{personName(req.executor_name)}</span>
                           )}
                         </div>
                         <p className="text-text-secondary whitespace-pre-wrap">

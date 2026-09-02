@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import type { ApplicantInfo, AddressInfo, ZoneRef } from '../../types/access'
 import { formatAddress, formatApplicant, formatZones } from '../../utils/accessMeta'
 
@@ -32,9 +33,10 @@ export function ApplicantAddressZones({
   zonesLabel?: string
 }) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   return (
     <div className="grid grid-cols-2 gap-3">
-      <MetaField label={t('accessControl.meta.applicant')} value={formatApplicant(applicant)} />
+      <MetaField label={t('accessControl.meta.applicant')} value={formatApplicant(applicant, personName)} />
       <MetaField label={t('accessControl.meta.address')} value={formatAddress(address, t)} />
       <MetaField
         label={zonesLabel ?? t('accessControl.meta.zone')}

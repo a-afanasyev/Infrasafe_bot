@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
 import { tSpecialization } from '../../i18n/apiMaps'
@@ -13,9 +14,10 @@ interface Props {
 
 export default function PendingApprovalCard({ employee, onApprove, onReject, isPending }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const gradient = AVATAR_GRADIENTS[employee.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(employee.first_name, employee.last_name)
-  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  const name = fullName(employee, t('employees.noName'))
   // Бейдж роли: приоритет manager > inspector > executor (у приглашённого есть и applicant).
   const staffRole = ['manager', 'inspector', 'executor'].find(r => employee.roles?.includes(r))
 

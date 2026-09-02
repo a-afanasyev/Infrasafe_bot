@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import {
   usePendingModeration,
   useApproveModeration,
@@ -16,6 +17,7 @@ import { formatDate as fmtDate } from '../../i18n/formatters'
 
 export default function ModerationPanel() {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const { data: items = [], isLoading } = usePendingModeration()
   const approve = useApproveModeration()
   const reject = useRejectModeration()
@@ -80,7 +82,7 @@ export default function ModerationPanel() {
           {/* Top row: name + badge */}
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-[family-name:var(--font-display)] font-semibold text-[15px] text-text-primary">
-              {item.user_name || t('moderationPanel.noName')}
+              {personName(item.user_name, t('moderationPanel.noName'))}
             </span>
             {item.user_phone && (
               <span className="text-[13px] text-text-muted font-[family-name:var(--font-mono)]">

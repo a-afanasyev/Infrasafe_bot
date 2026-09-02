@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../hooks/usePersonName'
 import { useTopbar } from '../contexts/topbar'
 import {
   useEmployees,
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils'
 
 export default function EmployeesPage() {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   usePageTitle(t('nav.employees'))
   const { setActions, clearActions } = useTopbar()
   const [roleFilter, setRoleFilter] = useState<string>('all')
@@ -79,7 +81,7 @@ export default function EmployeesPage() {
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; список зависимостей сохранён как есть во избежание пересоздания коллбэка при смене локали
   const handleBlockToggle = useCallback((e: EmployeeBrief) => {
-    const empName = [e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`
+    const empName = fullName(e, `#${e.id}`)
     const isBlocked = e.status === 'blocked'
     setConfirmState({
       open: true,
@@ -95,7 +97,7 @@ export default function EmployeesPage() {
         }
       },
     })
-  }, [blockEmployee, unblockEmployee])
+  }, [blockEmployee, unblockEmployee, fullName])
 
   const total = employees.length
   const onShift = employees.filter(e => e.active_shift_id !== null).length

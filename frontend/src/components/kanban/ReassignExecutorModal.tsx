@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
@@ -46,6 +47,7 @@ export default function ReassignExecutorModal({
   onClose,
 }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const queryClient = useQueryClient()
   const [choice, setChoice] = useState<ExecutorChoice>('')
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +89,7 @@ export default function ReassignExecutorModal({
           </DialogTitle>
           {isReassign && currentExecutorName && (
             <p className="text-[13px] text-text-muted mt-0.5">
-              {t('kanban.currentExecutor', { name: currentExecutorName })}
+              {t('kanban.currentExecutor', { name: personName(currentExecutorName) })}
             </p>
           )}
         </DialogHeader>

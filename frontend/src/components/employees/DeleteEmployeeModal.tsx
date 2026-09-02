@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import {
   Dialog,
   DialogContent,
@@ -29,13 +30,12 @@ type Step = 'confirm' | 'reassign'
 
 export default function DeleteEmployeeModal({ employee, onClose }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const [step, setStep] = useState<Step>('confirm')
   const [reason, setReason] = useState('')
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null)
 
-  const name =
-    [employee.first_name, employee.last_name].filter(Boolean).join(' ') ||
-    t('employees.noName')
+  const name = fullName(employee, t('employees.noName'))
 
   const { data: activeRequestsData } = useActiveRequestsCount(employee.id)
   const activeCount = activeRequestsData?.count ?? 0
@@ -121,9 +121,7 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
                 const gradient =
                   AVATAR_GRADIENTS[e.id % AVATAR_GRADIENTS.length]
                 const initials = getInitials(e.first_name, e.last_name)
-                const targetName =
-                  [e.first_name, e.last_name].filter(Boolean).join(' ') ||
-                  t('employees.noName')
+                const targetName = fullName(e, t('employees.noName'))
                 const isSelected = selectedTarget === e.id
 
                 return (

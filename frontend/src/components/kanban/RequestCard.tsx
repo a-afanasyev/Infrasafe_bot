@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { RequestCard as TCard } from '../../hooks/useKanban'
@@ -86,6 +87,7 @@ export default function RequestCard({ card, onClick, isOverlay, unread }: Props)
 
 function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: string; text: string } | undefined; unread?: boolean }) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   // Бейдж «новый ответ» — только для уточнения: там непрочитанное означает
   // конкретное событие (житель ответил). В «Закупе» смысл индикатора другой
   // («новая заявка на закуп»), и достаточно точки.
@@ -131,7 +133,7 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: st
         <div className="text-[11px] text-text-muted mb-[5px] flex items-center gap-1">
           <span>👤</span>
           <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-            {card.executor_name}
+            {personName(card.executor_name)}
           </span>
         </div>
       )}

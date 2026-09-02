@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
 import { useRequestEmployeePhone } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import { AVATAR_GRADIENTS, SPEC_COLORS, displayFullName, getInitials } from '../../utils/employeeUtils'
+import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
 import { tSpecialization } from '../../i18n/apiMaps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ interface Props {
 
 export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVerify, isBlockPending }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const [hovered, setHovered] = useState(false)
   const navigate = useNavigate()
   const requestPhone = useRequestEmployeePhone()
@@ -28,7 +30,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
   const isOnShift = employee.active_shift_id !== null
   const isVerified = employee.verification_status === 'verified'
   const isBlocked = employee.status === 'blocked'
-  const name = [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  const name = fullName(employee, t('employees.noName'))
   // Бейдж роли для не-исполнителей (менеджер/обходчик) — список executor-центричен
   // по умолчанию, поэтому помечаем только тех, кто выделяется при фильтре по роли.
   const staffRole = (['manager', 'inspector'] as const).find(r => employee.roles?.includes(r))
@@ -66,7 +68,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
         <div className="flex-1 min-w-0">
           {/* КАПС-ФИО из БД → Вид Имени; до двух строк вместо truncate. */}
           <div className="font-[var(--font-display)] font-semibold text-[15px] leading-snug text-text-primary break-words line-clamp-2">
-            {displayFullName(name)}
+            {name}
           </div>
           {employee.phone ? (
             <div className="text-xs text-text-muted mt-0.5 font-[var(--font-mono)]">

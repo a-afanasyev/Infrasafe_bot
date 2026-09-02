@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useApartmentDetail } from '../../hooks/useAddresses'
 import type { ApartmentResidentBrief } from '../../types/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -29,6 +30,7 @@ interface Props {
 
 export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const { data: apartment, isLoading, isError } = useApartmentDetail(apartmentId)
 
   if (isLoading) {
@@ -140,7 +142,7 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-semibold text-[13px] text-text-primary">
-                    {r.user_name ?? t('apartmentProfile.noName')}
+                    {personName(r.user_name, t('apartmentProfile.noName'))}
                   </span>
                   {r.username && (
                     <span className="text-xs text-text-muted">

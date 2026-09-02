@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useShift, useEndShift, useReassignShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
 import { useHasRole } from '../../hooks/useHasRole'
@@ -47,6 +48,7 @@ const borderTint = (c: string) => (c === ACCENT_TOKEN ? 'rgba(var(--accent-rgb),
 
 export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
+  const { name: personName, full: fullName } = usePersonName()
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
   const reassign = useReassignShift()
@@ -103,7 +105,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="font-[var(--font-display)] text-base font-semibold text-text-primary">
-                    {shift.executor_name ?? t('shifts.executorFallback', { id: shift.user_id })}
+                    {personName(shift.executor_name, t('shifts.executorFallback', { id: shift.user_id }))}
                   </span>
                   <span
                     className="rounded-full px-2.5 py-0.5 text-[11px] font-bold"
@@ -229,7 +231,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                     <option value="">{t('shifts.reassignSelectPlaceholder')}</option>
                     {eligibleExecutors.map(e => (
                       <option key={e.id} value={e.id}>
-                        {[e.first_name, e.last_name].filter(Boolean).join(' ') || `#${e.id}`}
+                        {fullName(e, `#${e.id}`)}
                         {e.specialization?.length ? ` (${e.specialization.join(', ')})` : ''}
                       </option>
                     ))}

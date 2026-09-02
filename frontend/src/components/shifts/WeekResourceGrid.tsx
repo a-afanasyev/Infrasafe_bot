@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { useResizableColumn } from '../../hooks/useResizableColumn'
@@ -107,6 +108,7 @@ function getGradient(name: string | null): string {
 
 export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
 
   // Group shifts by executor; preserve insertion order so the same shift list
   // produces a stable row order across re-renders (sorted by first start_time).
@@ -126,7 +128,7 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
       if (!executorMap.has(key)) {
         executorMap.set(key, {
           key,
-          name: shift.executor_name ?? key,
+          name: personName(shift.executor_name, key),
           primarySpec: (shift.specialization_focus ?? [])[0] ?? null,
           segments: [],
           firstStartMs: new Date(shift.start_time).getTime(),
@@ -142,7 +144,7 @@ export default function WeekResourceGrid({ shifts, weekAnchor, onShiftClick }: P
     return Array.from(executorMap.values()).sort(
       (a, b) => a.firstStartMs - b.firstStartMs,
     )
-  }, [shifts])
+  }, [shifts, personName])
 
   // Автоподбор под самое длинное ФИО (см. MonthResourceGrid): аватар шире
   // точки, поэтому константа отступов больше.

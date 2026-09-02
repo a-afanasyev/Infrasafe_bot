@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function VehicleDetailDialog({ vehicleId, onClose, onEdit }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const { data, isLoading, isError } = useAccessVehicleDetail(vehicleId)
 
   return (
@@ -114,7 +116,7 @@ export default function VehicleDetailDialog({ vehicleId, onClose, onEdit }: Prop
                       <div className="text-text-secondary">
                         {t('accessControl.meta.resident')}:{' '}
                         {a.residents.length > 0
-                          ? a.residents.map((r) => formatApplicant(r)).join('; ')
+                          ? a.residents.map((r) => formatApplicant(r, personName)).join('; ')
                           : '—'}
                       </div>
                       <div className="text-text-muted">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { apiClient } from '../../api/client'
 import {
   useFeedbackDetail,
@@ -31,6 +32,7 @@ interface Props {
 
 export default function FeedbackDetailModal({ feedbackId, onClose }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const { data: fb, isLoading } = useFeedbackDetail(feedbackId)
   const update = useUpdateFeedback(feedbackId)
   const [reply, setReply] = useState('')
@@ -49,7 +51,7 @@ export default function FeedbackDetailModal({ feedbackId, onClose }: Props) {
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-text-secondary">
-              <span>{t('feedback.author')}: <b className="text-text-primary">{fb.author_name || '—'}</b></span>
+              <span>{t('feedback.author')}: <b className="text-text-primary">{personName(fb.author_name, '—')}</b></span>
               {fb.author_phone && <span>{fb.author_phone}</span>}
               <span>{fb.source === 'twa' ? t('feedback.sourceTwa') : t('feedback.sourceBot')}</span>
             </div>

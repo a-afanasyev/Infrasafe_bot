@@ -40,6 +40,8 @@ describe('formatAddress', () => {
   })
 })
 
+const ident = (raw: string | null | undefined, fallback = '') => raw || fallback
+
 describe('formatApplicant', () => {
   it('имя + телефон + username', () => {
     const a: ApplicantInfo = {
@@ -49,7 +51,7 @@ describe('formatApplicant', () => {
       username: 'andrey',
       telegram_id: 1,
     }
-    expect(formatApplicant(a)).toBe('Андрей · +998901112233 · @andrey')
+    expect(formatApplicant(a, ident)).toBe('Андрей · +998901112233 · @andrey')
   })
 
   it('фолбэк на ID без имени', () => {
@@ -60,11 +62,11 @@ describe('formatApplicant', () => {
       username: null,
       telegram_id: null,
     }
-    expect(formatApplicant(a)).toBe('ID 9')
+    expect(formatApplicant(a, ident)).toBe('ID 9')
   })
 
   it('null → тире', () => {
-    expect(formatApplicant(null)).toBe('—')
+    expect(formatApplicant(null, ident)).toBe('—')
   })
 })
 

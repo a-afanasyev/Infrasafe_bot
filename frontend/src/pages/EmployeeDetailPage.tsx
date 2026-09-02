@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../hooks/usePersonName'
 import { useState } from 'react'
 import { useEmployee, useRenameEmployee, useToggleMeterEntry } from '../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../utils/employeeUtils'
@@ -10,13 +11,14 @@ import { Button } from '@/components/ui/button'
 
 export default function EmployeeDetailPage() {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: emp, isLoading, isError } = useEmployee(id ? Number(id) : null)
   const toggleMeterEntry = useToggleMeterEntry(id ? Number(id) : null)
   const rename = useRenameEmployee(id ? Number(id) : null)
   const [renameOpen, setRenameOpen] = useState(false)
-  const empName = emp ? [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName') : t('employees.noName')
+  const empName = emp ? fullName(emp, t('employees.noName')) : t('employees.noName')
   usePageTitle(empName)
 
   if (isLoading) return <LoadingSpinner />
@@ -28,7 +30,7 @@ export default function EmployeeDetailPage() {
 
   const gradient = AVATAR_GRADIENTS[emp.id % AVATAR_GRADIENTS.length]
   const initials = getInitials(emp.first_name, emp.last_name)
-  const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  const name = fullName(emp, t('employees.noName'))
   const isOnShift = emp.active_shift_id !== null
   const isVerified = emp.verification_status === 'verified'
   const isBlocked = emp.status === 'blocked'

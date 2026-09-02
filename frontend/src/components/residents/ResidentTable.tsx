@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
@@ -11,6 +12,7 @@ interface Props {
 
 export default function ResidentTable({ residents }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const navigate = useNavigate()
 
   const HEADERS = [
@@ -46,7 +48,7 @@ export default function ResidentTable({ residents }: Props) {
         </thead>
         <tbody>
           {residents.map(r => {
-            const name = [r.first_name, r.last_name].filter(Boolean).join(' ') || t('residents.noName')
+            const name = fullName(r, t('residents.noName'))
             return (
               <tr
                 key={r.id}

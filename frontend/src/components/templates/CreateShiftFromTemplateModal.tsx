@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName, type PersonNameFormatter } from '../../hooks/usePersonName'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
 import { useEmployees } from '../../hooks/useEmployees'
 import { tSpecialization } from '../../i18n/apiMaps'
@@ -27,9 +28,8 @@ interface Props {
   requiredSpecializations?: string[]
 }
 
-function employeeName(e: EmployeeBrief): string {
-  const full = [e.first_name, e.last_name].filter(Boolean).join(' ').trim()
-  return full || e.phone || `#${e.id}`
+function employeeName(e: EmployeeBrief, fullName: PersonNameFormatter['full']): string {
+  return fullName(e) || e.phone || `#${e.id}`
 }
 
 // ARCH-137 B7: дефолт даты — день объекта (display-зона), а не UTC-день
@@ -46,6 +46,7 @@ export default function CreateShiftFromTemplateModal({
   requiredSpecializations = [],
 }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const createFromTemplate = useCreateShiftFromTemplate()
   const { data: employees = [], isLoading } = useEmployees({
     ...(requiredSpecializations.length > 0
@@ -143,7 +144,7 @@ export default function CreateShiftFromTemplateModal({
                       onChange={() => toggle(e.id)}
                     />
                     <span className="flex-1 min-w-0 text-[13px] text-text-primary">
-                      {employeeName(e)}
+                      {employeeName(e, fullName)}
                       {e.active_shift_id !== null && (
                         <span className="ml-2 text-xs text-emerald whitespace-nowrap">
                           ● {t('kanban.onShift')}
