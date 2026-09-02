@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { useResizableColumn } from '../../hooks/useResizableColumn'
@@ -43,6 +44,7 @@ export default function MonthResourceGrid({
   onShiftClick,
 }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const days = useMemo(() => daysInMonth(monthAnchor), [monthAnchor])
   const today = new Date()
   // Автоподбор под самое длинное ФИО (жалоба владельца: дефолт снова резал
@@ -64,7 +66,7 @@ export default function MonthResourceGrid({
       if (!row) {
         row = {
           key,
-          name: shift.executor_name ?? key,
+          name: personName(shift.executor_name, key),
           primarySpec: (shift.specialization_focus ?? [])[0] ?? null,
           shiftsByDay: new Map(),
           totalShifts: 0,
@@ -92,7 +94,7 @@ export default function MonthResourceGrid({
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [shifts, monthAnchor])
+  }, [shifts, monthAnchor, personName])
 
   if (executors.length === 0) {
     return (

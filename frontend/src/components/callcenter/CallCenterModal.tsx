@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { apiClient } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { tCategory, tUrgency } from '../../i18n/apiMaps'
@@ -25,6 +26,7 @@ const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '
 
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const [query, setQuery] = useState('')
   const [residents, setResidents] = useState<Array<{ id: number; full_name: string; phone: string }>>([])
   const [selected, setSelected] = useState<number | null>(null)
@@ -106,7 +108,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
                     : 'border-border-default hover:bg-bg-surface'
                 )}
               >
-                <span className="font-medium text-text-primary">{r.full_name}</span>
+                <span className="font-medium text-text-primary">{personName(r.full_name)}</span>
                 <span className="text-text-muted"> &middot; {r.phone}</span>
               </div>
             ))}

@@ -56,6 +56,9 @@
     "success": "Email обновлён",
     "invalid": "Введите корректный email"
   },
+  "nameCase": {
+    "menuItem": "ФИО заглавными буквами"
+  },
   "nav": {
     "analytics": "Аналитика",
     "requests": "Заявки",

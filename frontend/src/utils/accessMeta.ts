@@ -15,10 +15,14 @@ export function formatAddress(a: AddressInfo | null | undefined, t: TFunction): 
   return parts.length ? parts.join(' · ') : `#${a.apartment_id}`
 }
 
-export function formatApplicant(a: ApplicantInfo | null | undefined): string {
+/** `fmt` — форматтер имени из `usePersonName().name` (предпочтение «ФИО заглавными»). */
+export function formatApplicant(
+  a: ApplicantInfo | null | undefined,
+  fmt: (raw: string | null | undefined, fallback?: string) => string,
+): string {
   if (!a) return '—'
   const contact = [a.phone, a.username ? `@${a.username}` : null].filter(Boolean).join(' · ')
-  const name = a.name || `ID ${a.user_id}`
+  const name = fmt(a.name, `ID ${a.user_id}`)
   return contact ? `${name} · ${contact}` : name
 }
 

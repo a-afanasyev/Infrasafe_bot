@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../hooks/usePersonName'
 import {
   BarChart,
   Bar,
@@ -151,6 +152,7 @@ function PieTooltip({ active, payload }: {
 
 export default function AnalyticsPage() {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   usePageTitle(t('nav.analytics'))
   const [period, setPeriod] = useState<AnalyticsPeriod>('7d')
   const [clockStr, setClockStr] = useState('')
@@ -475,7 +477,7 @@ export default function AnalyticsPage() {
                     {/* Info */}
                     <div className="flex-1 overflow-hidden">
                       <div className="text-[13px] font-semibold text-text-primary truncate">
-                        {ex.name ?? t('analytics.unknown')}
+                        {personName(ex.name, t('analytics.unknown'))}
                       </div>
                       <div className="text-[11px] text-text-muted mt-0.5">
                         {ex.completed} {t('analytics.requests')} · {ex.avg_hours?.toFixed(1) ?? '?'}{t('analytics.h')}
@@ -522,7 +524,7 @@ export default function AnalyticsPage() {
                       </span>
                       {item.executor_name && (
                         <span className="text-text-muted">
-                          {' \u00B7 '}{item.executor_name}
+                          {' \u00B7 '}{personName(item.executor_name)}
                         </span>
                       )}
                     </div>

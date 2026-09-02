@@ -2,6 +2,8 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
+import { useNameCaseStore } from '../stores/nameCaseStore'
+import { usePersonName } from '../hooks/usePersonName'
 import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from '../constants/roles'
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
@@ -42,6 +44,8 @@ import {
   Package,
   Gauge,
   MessagesSquare,
+  CaseUpper,
+  Check,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -323,6 +327,9 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
   const [emailOpen, setEmailOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const initials = user?.first_name ? user.first_name[0].toUpperCase() : 'U'
+  const { name: personName } = usePersonName()
+  const capsOn = useNameCaseStore(s => s.mode === 'caps')
+  const toggleNameCase = useNameCaseStore(s => s.toggle)
 
   // Close on click outside
   useEffect(() => {
@@ -370,7 +377,7 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
           <>
             <div className="min-w-0 flex-1 text-left">
               <div className="truncate text-[13px] font-semibold text-text-primary">
-                {user?.first_name ?? t('common.user')}
+                {personName(user?.first_name, t('common.user'))}
               </div>
               <div className="text-[11px] text-text-muted">
                 {(['manager', 'executor', 'applicant'].find(r => user?.roles?.includes(r))) ?? 'manager'}
@@ -422,6 +429,17 @@ function UserDropdown({ collapsed }: { collapsed: boolean }) {
           >
             <Mail size={14} />
             {t('changeEmail.menuItem')}
+          </button>
+          {/* Чекбокс: меню не закрываем — пользователь сразу видит смену вида ФИО */}
+          <button
+            role="menuitemcheckbox"
+            aria-checked={capsOn}
+            onClick={toggleNameCase}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-primary font-[family-name:var(--font-display)] hover:bg-bg-surface transition-colors"
+          >
+            <CaseUpper size={14} />
+            <span className="flex-1">{t('nameCase.menuItem')}</span>
+            {capsOn && <Check size={14} className="shrink-0 text-accent" />}
           </button>
           <div className="mx-3 h-px bg-border-default" />
           <button

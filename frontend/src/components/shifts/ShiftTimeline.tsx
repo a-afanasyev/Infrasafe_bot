@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { useResizableColumn } from '../../hooks/useResizableColumn'
 import { formatTime } from '../../utils/timezone'
@@ -42,6 +43,7 @@ function getGradient(name: string | null): string {
 
 export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const [currentHour, setCurrentHour] = useState(new Date().getHours())
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -126,7 +128,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
 
         {/* Executor rows */}
         {Array.from(executorMap.entries()).map(([executorKey, executorShifts]) => {
-          const displayName = executorShifts[0].executor_name ?? executorKey
+          const displayName = personName(executorShifts[0].executor_name, executorKey)
           const blocks: ShiftBlock[] = executorShifts.flatMap(s => computeBlocks(s, date))
 
           return (

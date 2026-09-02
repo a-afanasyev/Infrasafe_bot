@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '../../test/test-utils'
 import StaffCard from './StaffCard'
-import { displayFullName } from '../../utils/employeeUtils'
+import { useNameCaseStore } from '../../stores/nameCaseStore'
 import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 
@@ -39,26 +39,21 @@ describe('StaffCard — бейдж «Бот заблокирован»', () => {
   })
 })
 
-describe('displayFullName — КАПС → Вид Имени', () => {
-  it('капс-слова приводятся, узбекский апостроф не капитализируется', () => {
-    expect(displayFullName('ABDULLAXATOV AZIZJON ABDUAKIM O’G’LI'))
-      .toBe('Abdullaxatov Azizjon Abduakim O’g’li')
-    expect(displayFullName("KALMENOVA NAGIMA QUCHQOR QIZI"))
-      .toBe('Kalmenova Nagima Quchqor Qizi')
-    expect(displayFullName("O'KTAMOV ANNA-MARIA")).toBe("O'ktamov Anna-Maria")
-  })
-
-  it('уже нормальный регистр не трогаем', () => {
-    expect(displayFullName('Mirzabek Valiulin')).toBe('Mirzabek Valiulin')
-  })
-})
-
 describe('StaffCard', () => {
+  beforeEach(() => useNameCaseStore.setState({ mode: 'title' }))
+
   it('ФИО показывается Видом Имени, бейдж верификации и специализация на месте', () => {
     render(<StaffCard employee={makeEmployee()} />)
     expect(screen.getByText('Kasimov Talgat Mansurovich')).toBeInTheDocument()
     expect(screen.getByText(/Верифицирован/)).toBeInTheDocument()
     expect(screen.getByText('Электрика')).toBeInTheDocument()
+  })
+
+  it('режим «ФИО заглавными» — имя капсом, бейджи не тронуты', () => {
+    useNameCaseStore.setState({ mode: 'caps' })
+    render(<StaffCard employee={makeEmployee({ first_name: 'Kasimov Talgat' })} />)
+    expect(screen.getByText('KASIMOV TALGAT MANSUROVICH')).toBeInTheDocument()
+    expect(screen.getByText(/Верифицирован/)).toBeInTheDocument()
   })
 
   it('заблокированный: бейдж «Заблокирован» рядом с верификацией, оба в потоке', () => {

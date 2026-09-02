@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useEmployees } from '../../hooks/useEmployees'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -41,6 +42,7 @@ export default function ExecutorPicker({
   emptyText,
 }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const { data: employees = [] } = useEmployees({
     verification_status: 'verified',
     ...(forCategory ? { for_category: forCategory } : {}),
@@ -81,7 +83,7 @@ export default function ExecutorPicker({
         <div className="max-h-48 overflow-y-auto space-y-1">
           {candidates.map(emp => {
             const name =
-              [emp.first_name, emp.last_name].filter(Boolean).join(' ') || `#${emp.id}`
+              fullName(emp, `#${emp.id}`)
             return (
               <button
                 type="button"

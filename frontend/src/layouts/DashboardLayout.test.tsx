@@ -4,6 +4,7 @@ import { Routes, Route } from 'react-router'
 import { render, screen } from '../test/test-utils'
 import DashboardLayout from './DashboardLayout'
 import { useAuthStore } from '../stores/authStore'
+import { useNameCaseStore } from '../stores/nameCaseStore'
 
 // TEST-068 Phase 3: каркас дашборда был 0 строк покрытия, при том что в нём
 // живёт ролевой гейтинг навигации (isVisibleTo) — регресс тут прячет целые
@@ -31,6 +32,7 @@ function login(roles: string[]) {
 
 beforeEach(() => {
   localStorage.clear()
+  useNameCaseStore.setState({ mode: 'title' })
   login(['manager'])
   // Глобальный стаб setup.ts всегда отвечает matches:false → лэйаут считает
   // окно мобильным и прячет сайдбар. Здесь предмет — десктопная навигация.
@@ -101,5 +103,24 @@ describe('DashboardLayout — меню пользователя', () => {
     await userEvent.click(trigger)
     await userEvent.keyboard('{Escape}')
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  // Предпочтение «ФИО заглавными буквами»: чекбокс в меню, пишет в
+  // localStorage, меню не закрывает, имя в шапке меню сразу капсится.
+  it('галочка «ФИО заглавными» переключает режим и сохраняет его', async () => {
+    renderLayout()
+    await userEvent.click(userMenuTrigger())
+    const toggle = screen.getByRole('menuitemcheckbox', { name: /ФИО заглавными/i })
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('Мария')).toBeInTheDocument()
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(localStorage.getItem('uk.nameCase')).toBe('caps')
+    expect(screen.getByText('МАРИЯ')).toBeInTheDocument()
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('Мария')).toBeInTheDocument()
   })
 })

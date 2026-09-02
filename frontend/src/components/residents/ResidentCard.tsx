@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
 import { useRequestResidentPhone } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
@@ -11,10 +12,11 @@ interface Props {
 
 export default function ResidentCard({ resident }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const navigate = useNavigate()
   const requestPhone = useRequestResidentPhone(resident.id)
 
-  const name = [resident.first_name, resident.last_name].filter(Boolean).join(' ') || t('residents.noName')
+  const name = fullName(resident, t('residents.noName'))
   const isBlocked = resident.status === 'blocked'
 
   return (

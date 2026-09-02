@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '../../api/client'
@@ -18,6 +19,7 @@ interface Props {
 
 export default function AssignRequestModal({ employee, onClose }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const queryClient = useQueryClient()
   const [assignError, setAssignError] = useState<string | null>(null)
 
@@ -49,8 +51,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
     },
   })
 
-  const employeeName =
-    [employee.first_name, employee.last_name].filter(Boolean).join(' ') || t('employees.noName')
+  const employeeName = fullName(employee, t('employees.noName'))
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>

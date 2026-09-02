@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ChevronDown, ImageOff, ImagePlus, X as XIcon } from 'lucide-react'
@@ -78,6 +79,7 @@ interface Props {
 
 export default function RequestDetailModal({ requestNumber, onClose, onOpenRelated }: Props) {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
   const [confirmNote, setConfirmNote] = useState('')
@@ -424,7 +426,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                     {request.executor_name ? (
                       <span>
                         {t('kanban.executor')}{' '}
-                        <span className="font-semibold text-text-primary">{request.executor_name}</span>
+                        <span className="font-semibold text-text-primary">{personName(request.executor_name)}</span>
                       </span>
                     ) : (
                       <span>{t('kanban.executorNotAssigned')}</span>

@@ -56,6 +56,9 @@
     "success": "Email yangilandi",
     "invalid": "To'g'ri email kiriting"
   },
+  "nameCase": {
+    "menuItem": "F.I.Sh. bosh harflar bilan"
+  },
   "nav": {
     "analytics": "Analitika",
     "requests": "Arizalar",

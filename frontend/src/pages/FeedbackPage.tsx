@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../hooks/usePersonName'
 import {
   useFeedbackList,
   type FeedbackFilters,
@@ -52,6 +53,7 @@ function FilterRow<T extends string>({
 
 export default function FeedbackPage() {
   const { t } = useTranslation()
+  const { name: personName } = usePersonName()
   usePageTitle(t('feedback.title')) // QA-03: иначе document.title оставался от предыдущей страницы
   const [typeFilter, setTypeFilter] = useState<FeedbackType | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | 'all'>('all')
@@ -122,7 +124,7 @@ export default function FeedbackPage() {
                       <span className="truncate text-text-primary">{it.text}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap text-text-secondary">{it.author_name || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-text-secondary">{personName(it.author_name, '—')}</td>
                 </tr>
               ))}
             </tbody>

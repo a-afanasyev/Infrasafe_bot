@@ -1,9 +1,10 @@
 // frontend/src/components/employees/StaffTable.tsx
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import { AVATAR_GRADIENTS, SPEC_COLORS, displayFullName, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
+import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,7 @@ function specColor(key: string): string {
 
 export default function StaffTable({ employees, onAssign, onBlock, onDelete, isBlockPending }: Props) {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const navigate = useNavigate()
 
@@ -63,7 +65,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
             const isOnShift = emp.active_shift_id !== null
             const isVerified = emp.verification_status === 'verified'
             const isBlocked = emp.status === 'blocked'
-            const name = [emp.first_name, emp.last_name].filter(Boolean).join(' ') || t('employees.noName')
+            const name = fullName(emp, t('employees.noName'))
             const staffRole = (['manager', 'inspector'] as const).find(r => emp.roles?.includes(r))
             const isLast = idx === employees.length - 1
             const isHovered = hoveredId === emp.id
@@ -101,7 +103,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-[var(--font-display)] font-semibold text-xs text-text-primary truncate">
-                          {displayFullName(name)}
+                          {name}
                         </span>
                         {staffRole && (
                           <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">

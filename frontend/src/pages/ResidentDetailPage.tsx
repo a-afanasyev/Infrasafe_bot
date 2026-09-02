@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../hooks/usePersonName'
 import { useResident, useRenameResident, useResidentsWebSocket } from '../hooks/useResidents'
 import ResidentApartmentsList from '../components/residents/ResidentApartmentsList'
 import ResidentAccountActions from '../components/residents/ResidentAccountActions'
@@ -26,6 +27,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function ResidentDetailPage() {
   const { t } = useTranslation()
+  const { full: fullName } = usePersonName()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: resident, isLoading, isError } = useResident(id ? Number(id) : null)
@@ -34,9 +36,7 @@ export default function ResidentDetailPage() {
   const rename = useRenameResident(id ? Number(id) : 0)
   useResidentsWebSocket()
 
-  const name = resident
-    ? [resident.first_name, resident.last_name].filter(Boolean).join(' ') || t('residents.noName')
-    : t('residents.noName')
+  const name = resident ? fullName(resident, t('residents.noName')) : t('residents.noName')
   usePageTitle(name)
 
   if (isLoading) return <LoadingSpinner />

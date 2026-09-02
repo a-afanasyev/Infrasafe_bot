@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePersonName } from '../../hooks/usePersonName'
 import { useCreateShift, useUpdateShift, useDeleteShift } from '../../hooks/useShifts'
 import { useEmployees } from '../../hooks/useEmployees'
 import { fromDisplayTz, isoToDatetimeLocal } from '../../utils/timezone'
@@ -30,6 +31,7 @@ interface Props {
 
 export default function CreateShiftModal({ isOpen, onClose, shift = null }: Props) {
   const { t } = useTranslation()
+  const { name: personName, full: fullName } = usePersonName()
   const createShift = useCreateShift()
   const updateShift = useUpdateShift()
   const deleteShift = useDeleteShift()
@@ -178,12 +180,12 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
                 <option value="">{t('shifts.selectExecutor')}</option>
                 {showCurrentExecutor && shift && (
                   <option value={String(shift.user_id)}>
-                    {shift.executor_name ?? `ID ${shift.user_id}`}
+                    {personName(shift.executor_name, `ID ${shift.user_id}`)}
                   </option>
                 )}
                 {employees.map(emp => (
                   <option key={emp.id} value={String(emp.id)}>
-                    {[emp.first_name, emp.last_name].filter(Boolean).join(' ') || `ID ${emp.id}`}
+                    {fullName(emp, `ID ${emp.id}`)}
                     {emp.phone ? ` · ${emp.phone}` : ''}
                   </option>
                 ))}
