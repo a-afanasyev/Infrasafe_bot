@@ -122,12 +122,9 @@ ASSIGNMENT: dict[str, dict] = {
     # `AUD5-APIFE-18`, `AUD5-PRAC-5`, `AUD5-DEP-1`, `AUD5-PRAC-9` — все шесть
     # помечены закрытыми в бэклоге, поэтому строк здесь больше нет (`--check`
     # держит равенство ASSIGNMENT ↔ открытые пункты в обе стороны).
-    # ── П2
-    "PENT-F17": A(pkg="П2a", status="actionable", method="verified-2026-08-19",
-                  note="/uk/health уже 404 (наш фикс жив); корень /health → proxy_pass app:3000 (сделал владелец); остаток: allowlist /uk/api/health + монитор"),
-    "PENT-F14": A(pkg="П2b", status="actionable", method="verified-2026-08-19",
-                  services="edge владельца (оба домена)",
-                  note="артефакт+инструкция готовы; ждёт публикации; ssh-блокер .105 испарился — второй хост инспектируем"),
+    # ── П2 (`PENT-F17`, `PENT-F14`) закрыт 2026-09-02: владелец edge применил запрос
+    # `2026-09-02-edge-owner-request.md` на оба домена — allowlist `/uk/api/health`
+    # и `security.txt` проверены нашими пробами снаружи. Строк здесь больше нет.
     # П2c (`PENT-F10`) закрыт 2026-07-27: оба хоста 600/700. `.105` доступен с
     # `ssh -o IdentitiesOnly=no` — вывод «хост заблокирован» от 26.07 был неверным.
     # П2d закрыт целиком 2026-07-26: `AUD5-PRAC-1` (канонический .env.example +
@@ -290,18 +287,11 @@ ASSIGNMENT: dict[str, dict] = {
     # ARCH-107 закрыт 2026-08-05: dual-key {primary,next} + kid в заголовке токена,
     # форма webhook-*_NEXT; включение механизма — со следующим деплоем api+access-api,
     # процедура ротации → uk-deploy SKILL.md.
-    "PENT-F12": A(pkg="—", status="actionable", method="verified-2026-07-27",
-                 services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
-    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-07-27",
-                 services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен: docs/audit/2026-07-27-edge-owner-checklist.md"),
-    "PENT-F15": A(pkg="—", status="actionable", method="verified-2026-08-19",
-                 services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен 27.07, не применён: проба 19.08 — Server: nginx/1.31.2 на :80"),
-    "PENT-F16": A(pkg="—", status="actionable", method="verified-2026-08-19",
-                 services="edge владельца (profk.uz)",
-                 note="чек-лист отправлен 27.07, не применён: проба 19.08 — два HSTS + X-Frame-Options DENY и SAMEORIGIN"),
+    # `PENT-F12`, `PENT-F15`, `PENT-F16` закрыты 2026-09-02 вместе с П2: один PR
+    # владельца edge на оба конфига, релоад 11:22 UTC, наши пробы снаружи зелёные.
+    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-09-02",
+                 services="DNS/регистратор владельца (оба домена)",
+                 note="OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, ждём непустой dig CAA"),
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
     "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-07-27",
                  note="возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
