@@ -205,8 +205,9 @@ ASSIGNMENT: dict[str, dict] = {
     # `BUG-186` заведён и закрыт 2026-09-01: `view=own|assigned` в GET /requests
     # (сужение и только, Literal → 422), мёртвый `scope` снят; список исполнителя
     # на канонах parse_specializations + is_on_shift_now_async, tiebreak по PK.
-    "BUG-183": A(pkg="A2", status="blocked", method="verified-2026-08-20",
-                 note="раздел «Жители» дашборда 404 на edge infrasafe.uz — нужен запрос в InfraSafe на allowlist префикса residents"),
+    # `BUG-183` закрыт 2026-09-02: InfraSafe открыли префикс `residents` на edge 105
+    # ещё 22.08, док отставал; пробы снаружи — residents* отвечает JSON 401/405 от
+    # FastAPI на обоих доменах. Строки нет: `--check` держит равенство в обе стороны.
     # `BUG-148` закрыт 2026-09-01: путь ретайрен целиком (джобы №8/№9,
     # RequestAssignmentEngine, smart_assign_request, SmartDispatcher).
     # Найденный живой остаток близнеца BUG-174 (_notify_group_assignment
