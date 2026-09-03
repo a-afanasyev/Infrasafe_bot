@@ -335,7 +335,11 @@ FSM `RequestStates` (`handlers/requests/shared.py:193-204`), шаги:
 через `translit`). Хит словаря идёт подсказкой в user-сообщение и
 переопределяет только вердикт `other`; он же пропускает короткие тексты через
 префильтр и даёт категорию в тег-режиме при NOT_REQUEST. Источник категории
-пишется в лог `group_intake.category: … source=llm|keyword`.
+пишется в лог `group_intake.category: … source=llm|keyword`. В staff-приёмке
+(`acceptance_mode=manager`) сотрудник может сменить категорию до «Да» —
+кнопка «🏷 Категория» в промпте (`gint:cat:<key>`, picker по
+`SELECTABLE_CATEGORY_KEYS`); источник (`llm|keyword|manual`) уходит в
+`AuditLog.details.category_source` записи `request.created_from_group`.
 
 Метрика качества (решение владельца 2026-09-03: доля `other` среди заявок из
 групп < 10 %, было ~30 %). Проверять раз в 2–4 недели, только чтение:
