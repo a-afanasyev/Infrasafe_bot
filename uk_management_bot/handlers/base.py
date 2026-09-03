@@ -397,6 +397,45 @@ async def cmd_start(message: Message, state: FSMContext = None, roles: list[str]
     await handle_regular_start(message, roles, active_role, user_status, language=language,
                                offer_role_choice=True, _db=_db)
 
+def _load_onboarding_redraw(db, telegram_id: int) -> Optional[_MenuContext]:
+    """-> _MenuContext | None (пользователя нет). Для перерисовки экрана
+    онбординга после контакта вне FSM (спека 2026-09-03 §3.2)."""
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    return _menu_context(user) if user else None
+
+
+def needs_onboarding_redraw(ctx: Optional[_MenuContext]) -> bool:
+    """Гейт §3.2: экран онбординга после контакта — только pending-жителю с
+    единственной ролью applicant и неполным профилем. Сотруднику и одобренному
+    жителю (контакт по запросу менеджера с дашборда) — только «телефон сохранён»."""
+    if ctx is None or not isinstance(ctx, _MenuContext):
+        return False
+    return (
+        ctx.status == "pending"
+        and (ctx.db_roles or ["applicant"]) == ["applicant"]
+        and not (ctx.phone and ctx.has_approved_apartment)
+    )
+
+
+async def send_onboarding_screen(message: Message, tg_user, language: str = "ru", *, _db=None):
+    """Показать экран онбординга жителя — тот же, что рисует /start.
+
+    ``tg_user`` передаётся отдельно: у сообщения, на которое отвечает колбэк,
+    ``from_user`` — это БОТ, а нам нужен человек. Сборка экрана переиспользуется:
+    собственная копия незаметно потеряла бы WebApp-кнопку регистрации при
+    следующей правке. Живёт здесь (не в start_role_choice), чтобы phone_share
+    не тянул роутер развилки.
+    """
+    ctx = await run_db(
+        lambda s: _load_start_context(
+            s, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name,
+        ),
+        db=_db,
+    )
+    text, keyboard = _build_onboarding_screen(ctx, language)
+    await message.answer(text, reply_markup=keyboard)
+
+
 def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     """-> (текст, клавиатура) онбординга жителя, либо (текст, None).
 
