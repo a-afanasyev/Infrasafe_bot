@@ -18,7 +18,7 @@ from aiogram.types import Message, ReplyKeyboardRemove
 from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.base import (
     _build_onboarding_screen,
-    _load_onboarding_redraw,
+    _load_menu_context as _load_onboarding_redraw,
     needs_onboarding_redraw,
 )
 from uk_management_bot.handlers.onboarding import _apply_phone

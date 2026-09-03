@@ -397,13 +397,6 @@ async def cmd_start(message: Message, state: FSMContext = None, roles: list[str]
     await handle_regular_start(message, roles, active_role, user_status, language=language,
                                offer_role_choice=True, _db=_db)
 
-def _load_onboarding_redraw(db, telegram_id: int) -> Optional[_MenuContext]:
-    """-> _MenuContext | None (пользователя нет). Для перерисовки экрана
-    онбординга после контакта вне FSM (спека 2026-09-03 §3.2)."""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    return _menu_context(user) if user else None
-
-
 def needs_onboarding_redraw(ctx: Optional[_MenuContext]) -> bool:
     """Гейт §3.2: экран онбординга после контакта — только pending-жителю с
     единственной ролью applicant и неполным профилем. Сотруднику и одобренному

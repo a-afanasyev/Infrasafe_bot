@@ -114,7 +114,7 @@ async def test_completion_applies_role_and_consumes_nonce():
     cb.answer = AsyncMock()
     cb.bot.send_message = AsyncMock()
     st = _state({
-        "full_name": "Иван Петров", "phone": "+998901112233",
+        "full_name": "Иван Петров", "employee_phone": "+998901112233",
         "invite_role": "manager", "invite_specialization": "",
         "invite_token": "invite_v1:sometoken",
     })

@@ -8,6 +8,10 @@ class RegistrationStates(StatesGroup):
     # Предшествует анкете: принятый токен переводит в waiting_for_full_name.
     waiting_for_invite_token = State()
 
+    # «Я сотрудник» → сначала контакт (спека 2026-09-03 §3.4): телефон до
+    # подтверждения анкеты живёт только в FSM-данных (employee_phone).
+    waiting_for_employee_contact = State()
+
     # Начальное состояние - ожидание ввода ФИО
     waiting_for_full_name = State()
     
