@@ -4207,6 +4207,9 @@
     "create_заявку": "The So'rovni yarating",
     "documents": {
       "add_more": "📄 Qo'shimcha hujjatlar qo'shing",
+      "btn_upload_inline": "📤 Hujjatlarni yuklash",
+      "send_after_button": "Hujjat yuklash uchun quyidagi tugmani bosing va turini tanlang.",
+      "choose_type_first": "Avval quyidagi tugma bilan hujjat turini tanlang, so'ng faylni qayta yuboring.",
       "complete_onboarding": "✅ To'liq ishga tushirish",
       "confirm_upload": "Hujjatni yuklashni tasdiqlang:",
       "description": "Tekshirish jarayonini tezlashtirish uchun siz kerakli hujjatlarni yuklashingiz mumkin:",

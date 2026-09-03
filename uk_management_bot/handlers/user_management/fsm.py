@@ -133,6 +133,7 @@ class _DocumentRequest:
     target_telegram_id: Optional[int] = None
     user_text: Optional[str] = None
     channel_text: Optional[str] = None
+    target_language: str = "ru"
 
 
 def _apply_document_request(db, action: str, target_user_id: int, manager_id: int,
@@ -180,6 +181,7 @@ def _apply_document_request(db, action: str, target_user_id: int, manager_id: in
             target_telegram_id=target_user.telegram_id,
             user_text=build_multiple_documents_request_message(target_user, request_text, selected_docs, for_channel=False),
             channel_text=build_multiple_documents_request_message(target_user, request_text, selected_docs, for_channel=True),
+            target_language=getattr(target_user, "language", None) or "ru",
         )
 
     doc_type = document_type if action == 'request_specific_document' else None
@@ -188,6 +190,7 @@ def _apply_document_request(db, action: str, target_user_id: int, manager_id: in
         target_telegram_id=target_user.telegram_id,
         user_text=build_document_request_message(target_user, request_text, doc_type, for_channel=False),
         channel_text=build_document_request_message(target_user, request_text, doc_type, for_channel=True),
+        target_language=getattr(target_user, "language", None) or "ru",
     )
 
 
@@ -459,8 +462,14 @@ async def process_document_request(message: Message, state: FSMContext,
                 # Получаем бота из контекста сообщения
                 bot = message.bot
 
+                # BUG-188: без кнопки жителю некуда было «загрузить» — фото вне
+                # FSM-состояния терялось молча. Кнопка ведёт в выбор типа документа.
+                from uk_management_bot.keyboards.documents_entry import get_upload_documents_inline
                 try:
-                    await send_to_user(bot, requested.target_telegram_id, requested.user_text)
+                    await send_to_user(
+                        bot, requested.target_telegram_id, requested.user_text,
+                        reply_markup=get_upload_documents_inline(requested.target_language),
+                    )
                     await send_to_channel(bot, requested.channel_text)
                 except Exception as e:
                     logger.warning(f"Ошибка async уведомления о запросе документов: {e}")

@@ -42,12 +42,15 @@ async def send_to_channel(bot, text: str) -> bool:
         return False
 
 
-async def send_to_user(bot, user_telegram_id: int, text: str) -> bool:
+async def send_to_user(bot, user_telegram_id: int, text: str, reply_markup=None) -> bool:
     """Отправить сообщение пользователю. Возвращает True при успешной доставке,
     False при ошибке (Telegram 403/400, network) — BUG-BOT-036: caller'ы должны
     различать фактическую доставку и проглоченный сбой."""
     try:
-        await bot.send_message(user_telegram_id, text, request_timeout=SEND_TIMEOUT)
+        kwargs = {"request_timeout": SEND_TIMEOUT}
+        if reply_markup is not None:
+            kwargs["reply_markup"] = reply_markup
+        await bot.send_message(user_telegram_id, text, **kwargs)
         return True
     except Exception as e:
         logger.warning(f"Не удалось отправить сообщение пользователю {user_telegram_id}: {e}")
