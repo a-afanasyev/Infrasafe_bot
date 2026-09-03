@@ -6,9 +6,8 @@
 ввода телефона. Нажатие первой кнопкой не давало ничего — молча.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from aiogram.types import Message
 from aiogram.types import User as TgUser
 

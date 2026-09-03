@@ -28,13 +28,12 @@ import logging
 from typing import Optional
 
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.user_verification_service import UserVerificationService
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.validators import Validator
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
