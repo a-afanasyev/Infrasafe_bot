@@ -311,6 +311,29 @@ FSM `RequestStates` (`handlers/requests/shared.py:193-204`), шаги:
 | колл-центр | оператор с дашборда | `api/callcenter/` |
 | вебхук | портал InfraSafe (inbox с дедупом) | `api/webhooks/` |
 
+**Категория из групп (Group Intake).** Классификатор — LLM с глоссарием
+категорий в системном промпте (`services/group_intake/classifier.py`,
+глоссарий генерируется из канона `SELECTABLE_CATEGORY_KEYS` +
+`category_keywords.CATEGORY_GLOSSARY`) плюс детерминированный keyword-проход
+(`category_keywords.guess_category`: стемы ru / uz-латиница, uz-кириллица
+через `translit`). Хит словаря идёт подсказкой в user-сообщение и
+переопределяет только вердикт `other`; он же пропускает короткие тексты через
+префильтр и даёт категорию в тег-режиме при NOT_REQUEST. Источник категории
+пишется в лог `group_intake.category: … source=llm|keyword`.
+
+Метрика качества (решение владельца 2026-09-03: доля `other` среди заявок из
+групп < 10 %, было ~30 %). Проверять раз в 2–4 недели, только чтение:
+
+```sql
+SELECT count(*) FILTER (WHERE category = 'other')::float / count(*) AS other_share,
+       count(*) AS total
+FROM requests
+WHERE source = 'group' AND created_at >= now() - interval '60 days';
+```
+
+Офлайн-проверка словаря на эталоне: `python3 scripts/group_intake_eval.py
+scripts/group_intake_eval.sample.jsonl --keywords-only` (без API).
+
 ## 8. Назначение исполнителя
 
 Механизмы (все пишут `executor_id`/назначение через канонический слой). Одна
