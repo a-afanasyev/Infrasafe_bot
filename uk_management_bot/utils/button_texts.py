@@ -213,11 +213,8 @@ def _init_button_texts() -> dict:
         fallback_text="📊 Ввод показаний"
     )
 
-    # Onboarding
-    button_texts['specify_phone'] = get_button_texts_for_all_languages(
-        "onboarding.handlers.btn_specify_phone",
-        fallback_text="📱 Указать телефон"
-    )
+    # Onboarding. «Указать телефон» удалена (спека 2026-09-03): телефон только
+    # из Telegram-контакта, кнопка request_contact текстового фильтра не требует.
     # Ключ ТОТ ЖЕ, что рисует handlers/base.py в клавиатуре онбординга. Эта
     # идентичность и есть смысл записи: кнопка была мёртвой ровно потому, что
     # фильтра на её текст не существовало. Другой ключ — тот же дефект заново.
@@ -551,10 +548,6 @@ def get_login_texts() -> List[str]:
 def get_select_apartment_texts() -> List[str]:
     """Тексты кнопки «🏠 Выбрать квартиру» для всех языков."""
     return BUTTON_TEXTS.get('select_apartment', ["🏠 Выбрать квартиру"])
-
-
-def get_specify_phone_texts() -> List[str]:
-    return BUTTON_TEXTS.get('specify_phone', ["📱 Указать телефон"])
 
 
 def get_register_webapp_texts() -> List[str]:

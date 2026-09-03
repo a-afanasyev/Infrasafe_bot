@@ -50,40 +50,8 @@ def _passed_language(mock_call):
     return mock_call.args[2] if len(mock_call.args) > 2 else None
 
 
-class TestOnboardingKeepsLanguage:
-    @pytest.mark.asyncio
-    async def test_manual_phone_passes_language(self):
-        from uk_management_bot.handlers.onboarding import process_manual_phone
-
-        msg = _make_message()
-        state = _make_state()
-
-        with patch("uk_management_bot.handlers.user_apartment_selection.start_apartment_selection",
-                   new=AsyncMock()) as target, \
-             patch("uk_management_bot.handlers.onboarding.run_db",
-                   new=AsyncMock(return_value=True)):
-            await process_manual_phone(msg, state, language="uz", _db=MagicMock())
-
-        target.assert_awaited_once()
-        assert _passed_language(target.await_args) == "uz"
-
-    @pytest.mark.asyncio
-    async def test_contact_passes_language(self):
-        from uk_management_bot.handlers.onboarding import process_contact
-
-        msg = _make_message()
-        msg.contact = MagicMock()
-        msg.contact.phone_number = "+998901234567"
-        state = _make_state()
-
-        with patch("uk_management_bot.handlers.user_apartment_selection.start_apartment_selection",
-                   new=AsyncMock()) as target, \
-             patch("uk_management_bot.handlers.onboarding.run_db",
-                   new=AsyncMock(return_value=True)):
-            await process_contact(msg, state, language="uz", _db=MagicMock())
-
-        target.assert_awaited_once()
-        assert _passed_language(target.await_args) == "uz"
+# TestOnboardingKeepsLanguage удалён вместе с process_manual_phone/process_contact
+# (спека 2026-09-03: телефон только из контакта вне FSM — handlers/phone_share.py).
 
 
 class TestProfileKeepsLanguage:

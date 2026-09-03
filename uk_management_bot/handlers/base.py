@@ -407,18 +407,23 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     welcome_text = get_text("onboarding.welcome_new_user", language=lang)
     welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
 
-    # Создаём клавиатуру онбординга
+    # Клавиатура онбординга. Телефон — ТОЛЬКО из Telegram-контакта (спека
+    # 2026-09-03): без телефона единственный шаг — «Поделиться контактом»
+    # (request_contact), «Выбрать квартиру» появляется после него. Контакт
+    # приходит без FSM-состояния и обрабатывается handlers/phone_share.py.
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    missing_items = []
-    if not ctx.phone:
-        missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
-    if not ctx.has_approved_apartment:
-        missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
-
-    if not missing_items:
+    if ctx.phone and ctx.has_approved_apartment:
         return welcome_text, None
 
-    keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
+    if not ctx.phone:
+        keyboard_rows = [[KeyboardButton(
+            text=get_text("base.handlers.btn_share_contact", language=lang),
+            request_contact=True,
+        )]]
+    else:
+        keyboard_rows = [[KeyboardButton(
+            text=get_text("base.handlers.btn_select_apartment", language=lang)
+        )]]
     # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL).
     # Текстовая, БЕЗ web_app: reply web_app не передаёт initData — ссылку шлёт
     # handlers/webapp_buttons.py inline-кнопкой по нажатию.

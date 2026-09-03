@@ -46,7 +46,6 @@ from uk_management_bot.keyboards.onboarding import (
 from uk_management_bot.states.onboarding import OnboardingStates
 from uk_management_bot.database.models.user_verification import DocumentType
 from uk_management_bot.utils.button_texts import (
-    get_specify_phone_texts,
     get_select_apartment_texts,
     get_complete_without_docs_texts,
     get_specify_address_texts,
@@ -75,7 +74,6 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 # Button text constants for filters
-SPECIFY_PHONE_TEXTS = get_specify_phone_texts()
 SELECT_APARTMENT_TEXTS = get_select_apartment_texts()
 COMPLETE_WITHOUT_DOCS_TEXTS = get_complete_without_docs_texts()
 SPECIFY_ADDRESS_TEXTS = get_specify_address_texts()
@@ -164,133 +162,10 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
     return user.status, documents_summary
 
 
-@router.message(F.text.in_(SPECIFY_PHONE_TEXTS))
-async def start_phone_input(message: Message, state: FSMContext, language: str = "ru"):
-    """Начинает процесс ввода телефона"""
-    lang = language
-    
-    # Создаем клавиатуру для запроса контакта
-    contact_keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=get_text("onboarding.share_contact", language=lang), request_contact=True)],
-            [KeyboardButton(text=get_text("buttons.cancel", language=lang))]
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-    
-    await message.answer(
-        get_text("onboarding.phone_request", language=lang),
-        reply_markup=contact_keyboard
-    )
-    await state.set_state(OnboardingStates.waiting_for_phone)
-    logger.info(f"Пользователь {message.from_user.id} начал ввод телефона")
+# Ручной ввод телефона и FSM-шаг waiting_for_phone удалены (спека 2026-09-03):
+# телефон только из Telegram-контакта, который приходит без состояния и
+# обрабатывается handlers/phone_share.py.
 
-@router.message(OnboardingStates.waiting_for_phone, F.contact)
-async def process_contact(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
-    """Обрабатывает получение контакта"""
-    lang = language
-
-    try:
-        # Получаем номер телефона
-        phone_number = message.contact.phone_number
-        if not phone_number.startswith('+'):
-            phone_number = '+' + phone_number
-
-        # Сохраняем телефон в базе данных
-        saved = await run_db(
-            lambda s: _apply_phone(s, message.from_user.id, phone_number), db=_db
-        )
-
-        if saved:
-            logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
-
-            await message.answer(
-                get_text("onboarding.phone_saved", language=lang, phone=phone_number),
-                reply_markup=ReplyKeyboardRemove()
-            )
-
-            # Переходим к выбору квартиры из справочника
-            from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
-            await start_apartment_selection(message, state, language=lang)
-        else:
-            await message.answer(
-                get_text("errors.unknown_error", language=lang),
-                reply_markup=ReplyKeyboardRemove()
-            )
-            await state.clear()
-
-    except Exception as e:
-        logger.error(f"Ошибка обработки контакта для {message.from_user.id}: {e}")
-        await message.answer(
-            get_text("errors.unknown_error", language=lang),
-            reply_markup=ReplyKeyboardRemove()
-        )
-        await state.clear()
-
-@router.message(OnboardingStates.waiting_for_phone, F.text)
-async def process_manual_phone(message: Message, state: FSMContext, user_status: str = None, language: str = "ru", *, _db=None):
-    """Обрабатывает ручной ввод телефона"""
-    lang = language
-
-    # Проверяем на отмену
-    if message.text in CANCEL_TEXTS:
-        await cancel_onboarding(message, state, user_status, language=lang)
-        return
-    
-    # Проверяем системные команды/кнопки - не обрабатываем их как телефон
-    system_commands = ["/start", "/help"]
-    for texts_list in [PROFILE_TEXTS, CREATE_REQUEST_TEXTS, MY_REQUESTS_TEXTS,
-                       HELP_TEXTS, SHIFT_TEXTS, SWITCH_ROLE_TEXTS,
-                       SPECIFY_ADDRESS_TEXTS, SPECIFY_PHONE_TEXTS,
-                       SELECT_APARTMENT_TEXTS,
-                       MY_SHIFTS_TEXTS, ACTIVE_REQUESTS_TEXTS, ARCHIVE_TEXTS,
-                       ACCEPTANCE_TEXTS, ADMIN_PANEL_TEXTS, CANCEL_TEXTS,
-                       UPLOAD_DOCUMENTS_TEXTS, COMPLETE_WITHOUT_DOCS_TEXTS]:
-        system_commands.extend(texts_list)
-    
-    if message.text in system_commands:
-        # Очищаем состояние и пропускаем обработку
-        await state.clear()
-        return
-    
-    # Валидируем телефон
-    phone_number = message.text.strip()
-    lang = language
-    is_valid, error_message = Validator.validate_phone(phone_number, language=lang)
-    if not is_valid:
-        await message.answer(get_text("onboarding.phone_invalid", language=lang))
-        return
-    
-    # Нормализуем номер
-    if not phone_number.startswith('+'):
-        phone_number = '+' + phone_number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-    
-    try:
-        # Сохраняем телефон
-        saved = await run_db(
-            lambda s: _apply_phone(s, message.from_user.id, phone_number), db=_db
-        )
-
-        if saved:
-            logger.info(f"Сохранен телефон для пользователя {message.from_user.id}")
-
-            await message.answer(
-                get_text("onboarding.phone_saved", language=lang, phone=phone_number),
-                reply_markup=ReplyKeyboardRemove()
-            )
-
-            # Переходим к выбору квартиры из справочника
-            from uk_management_bot.handlers.user_apartment_selection import start_apartment_selection
-            await start_apartment_selection(message, state, language=lang)
-        else:
-            await message.answer(get_text("errors.unknown_error", language=lang))
-            await state.clear()
-            
-    except Exception as e:
-        logger.error(f"Ошибка сохранения телефона для {message.from_user.id}: {e}")
-        await message.answer(get_text("errors.unknown_error", language=lang))
-        await state.clear()
 
 async def cancel_onboarding(message: Message, state: FSMContext, user_status: str = None, language: str = "ru"):
     """Отменяет процесс онбординга"""
