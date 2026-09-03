@@ -6,9 +6,8 @@
 ввода телефона. Нажатие первой кнопкой не давало ничего — молча.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from aiogram.types import Message
 from aiogram.types import User as TgUser
 
@@ -50,18 +49,5 @@ class TestSelectApartmentButtonWired:
         names = [h.callback.__name__ for h in mod.router.message.handlers]
         assert "start_apartment_selection" in names
 
-    @pytest.mark.asyncio
-    async def test_button_is_not_mistaken_for_a_phone_number(self):
-        """В состоянии ввода телефона оживлённая кнопка не должна разбираться
-        как номер (`process_manual_phone` фильтрует системные тексты списком)."""
-        from uk_management_bot.handlers.onboarding import process_manual_phone
-        from uk_management_bot.utils.helpers import get_text
-
-        msg = _make_message(text=get_text("base.handlers.btn_select_apartment", language="ru"))
-        state = _make_state()
-
-        with patch("uk_management_bot.handlers.onboarding.Validator") as MockValidator:
-            await process_manual_phone(msg, state, _db=MagicMock())
-
-        MockValidator.validate_phone.assert_not_called()
-        state.clear.assert_awaited()
+    # test_button_is_not_mistaken_for_a_phone_number удалён: ручного ввода
+    # телефона больше нет (спека 2026-09-03).

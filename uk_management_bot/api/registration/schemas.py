@@ -15,11 +15,27 @@ class StartIn(BaseModel):
     init_data: str = Field(..., min_length=1)
 
 
+class RegistrationYardOut(BaseModel):
+    id: int
+    name: str
+
+
+class RegistrationBuildingOut(BaseModel):
+    id: int
+    address: str
+
+
 class ApartmentOut(BaseModel):
     id: int
-    yard_name: Optional[str] = None
-    building_address: Optional[str] = None
     apartment_number: str
+    floor: Optional[int] = None
+    entrance: Optional[int] = None
+
+
+class ContactStatusOut(BaseModel):
+    """users.phone пользователя тикета — TWA ждёт его после requestContact
+    (контакт Telegram доставляет боту, тот пишет телефон; спека §4.3)."""
+    phone: Optional[str] = None
 
 
 class Prefill(BaseModel):
@@ -31,14 +47,14 @@ class Prefill(BaseModel):
 class StartOut(BaseModel):
     registration_ticket: str
     prefill: Prefill
-    apartments: list[ApartmentOut]
 
 
 class RegisterApplicantIn(BaseModel):
     full_name: str = Field(
         ..., min_length=2, max_length=200, pattern=_FULL_NAME_PATTERN
     )
-    phone: str = Field(..., min_length=1, max_length=20)
+    # Телефон в теле НЕ принимается (спека §4.4): берётся из users.phone,
+    # куда его кладёт бот из Telegram-контакта.
     apartment_id: int
 
     @field_validator("full_name")

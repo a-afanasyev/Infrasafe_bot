@@ -1,17 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Label } from '../components/ui/label'
-import { Select } from '../components/ui/select'
 import { useRegistration, type RegistrationApartment } from '../hooks/useRegistration'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { brand } from '../brand/brand'
+import { ContactStep } from './register/ContactStep'
+import { AddressCascade, type AddressLabels } from './register/AddressCascade'
+import { ConfirmStep } from './register/ConfirmStep'
 
-type Phase = 'loading' | 'no_telegram' | 'form' | 'pending' | 'already_registered'
+// Спека 2026-09-03 §5.1: contact → address → confirm → pending.
+// Контакт — только через Telegram (requestContact), квартира — каскадом
+// двор → дом → квартира, как в боте.
+type Phase =
+  | 'loading'
+  | 'no_telegram'
+  | 'contact'
+  | 'address'
+  | 'confirm'
+  | 'pending'
+  | 'already_registered'
 
-function apartmentLabel(a: RegistrationApartment): string {
-  return [a.yard_name, a.building_address, a.apartment_number ? `кв ${a.apartment_number}` : null]
+interface SelectedAddress {
+  apartment: RegistrationApartment
+  labels: AddressLabels
+}
+
+function addressLabel(sel: SelectedAddress): string {
+  return [sel.labels.yard, sel.labels.building, `кв ${sel.apartment.apartment_number}`]
     .filter(Boolean)
     .join(' · ')
 }
@@ -27,14 +42,14 @@ function getStatus(err: unknown): number | undefined {
 export default function RegisterPage() {
   const { t } = useTranslation()
   usePageTitle(t('register.title')) // QA-03: иначе document.title оставался от предыдущей страницы
-  const { initData, start, submit } = useRegistration()
+  const reg = useRegistration()
+  const { initData, start, submit } = reg
 
   const [phase, setPhase] = useState<Phase>('loading')
-  const [ticket, setTicket] = useState<string>('')
-  const [apartments, setApartments] = useState<RegistrationApartment[]>([])
+  const [ticket, setTicket] = useState('')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [apartmentId, setApartmentId] = useState<string>('')
+  const [selected, setSelected] = useState<SelectedAddress | null>(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const startedRef = useRef(false)
@@ -44,28 +59,28 @@ export default function RegisterPage() {
     try {
       const data = await start()
       setTicket(data.registration_ticket)
-      setApartments(data.apartments)
       const name = [data.prefill.first_name, data.prefill.last_name].filter(Boolean).join(' ')
       setFullName((prev) => prev || name)
-      setPhone((prev) => prev || data.prefill.phone || '')
-      setApartmentId((prev) => prev || (data.apartments[0] ? String(data.apartments[0].id) : ''))
-      setPhase('form')
+      const knownPhone = data.prefill.phone || ''
+      setPhone((prev) => prev || knownPhone)
+      // Телефон уже оставлен в боте — шаг контакта не нужен.
+      setPhase(knownPhone || phone ? 'address' : 'contact')
       return true
     } catch (err: unknown) {
       const status = getStatus(err)
       if (status === 409) {
         const detail = getDetail(err)
         // "already approved" → user already has an account.
-        if (!detail || /approv|одобр|уже/i.test(detail)) {
+        if (!detail || /already|уже/i.test(detail)) {
           setPhase('already_registered')
         } else {
           setError(detail)
-          setPhase('form')
+          setPhase('contact')
         }
         return false
       }
       setError(getDetail(err) || t('register.error_generic'))
-      setPhase('form')
+      setPhase('contact')
       return false
     }
   }
@@ -86,36 +101,41 @@ export default function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initData])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function onContactDone(p: string) {
+    setPhone(p)
+    setPhase('address')
+  }
+
+  function onAddressSelected(apartment: RegistrationApartment, labels: AddressLabels) {
+    setSelected({ apartment, labels })
+    setPhase('confirm')
+  }
+
+  async function handleSubmit() {
     setError('')
-    if (!apartmentId) {
-      setError(t('register.apartment'))
+    if (!selected) {
+      setPhase('address')
       return
     }
     setSubmitting(true)
     try {
-      const data = await submit(ticket, {
-        full_name: fullName.trim(),
-        phone: phone.trim(),
-        apartment_id: Number(apartmentId),
-      })
-      if (data.status === 'pending') setPhase('pending')
+      await submit(ticket, { full_name: fullName.trim(), apartment_id: selected.apartment.id })
+      setPhase('pending')
     } catch (err: unknown) {
       const status = getStatus(err)
       const detail = getDetail(err)
       if (status === 401) {
-        // Ticket expired — re-run start() and ask to resubmit.
-        const ok = await runStart()
-        if (ok) setError(t('register.error_generic'))
-      } else if (status === 409) {
-        if (detail && /approv|одобр|уже/i.test(detail)) {
-          setPhase('already_registered')
-        } else {
-          setError(detail || t('register.error_generic'))
-        }
-      } else if (status === 400 || status === 422) {
+        // Ticket expired (30 min) → fetch a fresh one and let the user resubmit.
+        await runStart()
+        setPhase('confirm')
         setError(detail || t('register.error_generic'))
+      } else if (status === 409 && detail && /контакт|kontakt/i.test(detail)) {
+        // Телефон в БД не появился — вернуть на шаг контакта.
+        setPhone('')
+        setPhase('contact')
+        setError(t('register.phone_required'))
+      } else if (status === 409 && detail && /уже подтверждены|already/i.test(detail)) {
+        setPhase('already_registered')
       } else {
         setError(detail || t('register.error_generic'))
       }
@@ -123,6 +143,8 @@ export default function RegisterPage() {
       setSubmitting(false)
     }
   }
+
+  const muted = 'text-center text-sm text-text-secondary font-[family-name:var(--font-body)]'
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-root px-4">
@@ -137,25 +159,12 @@ export default function RegisterPage() {
             {t('register.title')}
           </div>
         </div>
-
         <div className="bg-bg-card border border-[color:var(--auth-card-border)] rounded-2xl p-8 px-7 shadow-[var(--auth-card-shadow)]">
-          {phase === 'loading' && (
-            <div className="text-center text-sm text-text-secondary font-[family-name:var(--font-body)]">
-              {t('common.loading')}
-            </div>
-          )}
-
-          {phase === 'no_telegram' && (
-            <div className="text-center text-sm text-text-secondary font-[family-name:var(--font-body)]">
-              {t('register.open_in_telegram')}
-            </div>
-          )}
-
+          {phase === 'loading' && <div className={muted}>{t('common.loading')}</div>}
+          {phase === 'no_telegram' && <div className={muted}>{t('register.open_in_telegram')}</div>}
           {phase === 'already_registered' && (
             <div className="flex flex-col gap-4 text-center">
-              <div className="text-sm text-text-secondary font-[family-name:var(--font-body)]">
-                {t('register.already_registered')}
-              </div>
+              <div className={muted}>{t('register.already_registered')}</div>
               <a href={`${import.meta.env.BASE_URL}`}>
                 <Button type="button" className="w-full">
                   {t('common.goHome')}
@@ -163,71 +172,38 @@ export default function RegisterPage() {
               </a>
             </div>
           )}
-
           {phase === 'pending' && (
             <div className="flex flex-col gap-2 text-center">
               <div className="font-[family-name:var(--font-display)] font-bold text-text-primary">
                 {t('register.pending_title')}
               </div>
-              <div className="text-sm text-text-secondary font-[family-name:var(--font-body)]">
-                {t('register.pending_body')}
-              </div>
+              <div className={muted}>{t('register.pending_body')}</div>
             </div>
           )}
-
-          {phase === 'form' && (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reg-full-name">{t('register.full_name')}</Label>
-                <Input
-                  id="reg-full-name"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                  autoComplete="name"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reg-phone">{t('register.phone')}</Label>
-                <Input
-                  id="reg-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  autoComplete="tel"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reg-apartment">{t('register.apartment')}</Label>
-                <Select
-                  id="reg-apartment"
-                  value={apartmentId}
-                  onChange={(e) => setApartmentId(e.target.value)}
-                  required
-                >
-                  {apartments.length === 0 && <option value="" />}
-                  {apartments.map((a) => (
-                    <option key={a.id} value={String(a.id)}>
-                      {apartmentLabel(a)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {error && (
-                <div className="text-[13px] text-red font-[family-name:var(--font-body)]">
-                  {error}
-                </div>
-              )}
-
-              <Button type="submit" disabled={submitting} className="w-full">
-                {submitting ? t('common.sending') : t('register.submit')}
-              </Button>
-            </form>
+          {phase === 'contact' && (
+            <>
+              {error && <div className="text-[13px] text-red mb-3 text-center">{error}</div>}
+              <ContactStep ticket={ticket} contactStatus={reg.contactStatus} onDone={onContactDone} />
+            </>
+          )}
+          {phase === 'address' && (
+            <AddressCascade
+              ticket={ticket}
+              api={{ yards: reg.yards, buildings: reg.buildings, apartments: reg.apartments }}
+              onSelect={onAddressSelected}
+            />
+          )}
+          {phase === 'confirm' && selected && (
+            <ConfirmStep
+              fullName={fullName}
+              onFullNameChange={setFullName}
+              phone={phone}
+              addressLabel={addressLabel(selected)}
+              onChangeAddress={() => setPhase('address')}
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              error={error}
+            />
           )}
         </div>
       </div>

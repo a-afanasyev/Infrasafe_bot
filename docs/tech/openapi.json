@@ -1408,6 +1408,24 @@
         "title": "CommentOut",
         "type": "object"
       },
+      "ContactStatusOut": {
+        "description": "users.phone пользователя тикета — TWA ждёт его после requestContact\n(контакт Telegram доставляет боту, тот пишет телефон; спека §4.3).",
+        "properties": {
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "title": "ContactStatusOut",
+        "type": "object"
+      },
       "ContactsCfg": {
         "properties": {
           "dispatch_label": {
@@ -4187,20 +4205,31 @@
             "pattern": "^[\\p{L}\\p{N}\\s\\-'\\.]+$",
             "title": "Full Name",
             "type": "string"
-          },
-          "phone": {
-            "maxLength": 20,
-            "minLength": 1,
-            "title": "Phone",
-            "type": "string"
           }
         },
         "required": [
           "full_name",
-          "phone",
           "apartment_id"
         ],
         "title": "RegisterApplicantIn",
+        "type": "object"
+      },
+      "RegistrationBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address"
+        ],
+        "title": "RegistrationBuildingOut",
         "type": "object"
       },
       "RegistrationResult": {
@@ -4214,6 +4243,24 @@
           "status"
         ],
         "title": "RegistrationResult",
+        "type": "object"
+      },
+      "RegistrationYardOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "RegistrationYardOut",
         "type": "object"
       },
       "RequestAddressApartment": {
@@ -6180,13 +6227,6 @@
       },
       "StartOut": {
         "properties": {
-          "apartments": {
-            "items": {
-              "$ref": "#/components/schemas/uk_management_bot__api__registration__schemas__ApartmentOut"
-            },
-            "title": "Apartments",
-            "type": "array"
-          },
           "prefill": {
             "$ref": "#/components/schemas/Prefill"
           },
@@ -6197,8 +6237,7 @@
         },
         "required": [
           "registration_ticket",
-          "prefill",
-          "apartments"
+          "prefill"
         ],
         "title": "StartOut",
         "type": "object"
@@ -7989,31 +8028,31 @@
             "title": "Apartment Number",
             "type": "string"
           },
-          "building_address": {
+          "entrance": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Building Address"
+            "title": "Entrance"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
           },
           "id": {
             "title": "Id",
             "type": "integer"
-          },
-          "yard_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Yard Name"
           }
         },
         "required": [
@@ -12224,6 +12263,118 @@
         ]
       }
     },
+    "/api/v2/registration/buildings/{building_id}/apartments": {
+      "get": {
+        "operationId": "building_apartments_api_v2_registration_buildings__building_id__apartments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/uk_management_bot__api__registration__schemas__ApartmentOut"
+                  },
+                  "title": "Response Building Apartments Api V2 Registration Buildings  Building Id  Apartments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Building Apartments",
+        "tags": [
+          "registration"
+        ]
+      }
+    },
+    "/api/v2/registration/contact-status": {
+      "get": {
+        "description": "TWA опрашивает после requestContact: контакт Telegram шлёт боту, бот\nпишет users.phone — здесь он и появляется.",
+        "operationId": "contact_status_api_v2_registration_contact_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Contact Status",
+        "tags": [
+          "registration"
+        ]
+      }
+    },
     "/api/v2/registration/start": {
       "post": {
         "operationId": "start_api_v2_registration_start_post",
@@ -12260,6 +12411,121 @@
           }
         },
         "summary": "Start",
+        "tags": [
+          "registration"
+        ]
+      }
+    },
+    "/api/v2/registration/yards": {
+      "get": {
+        "operationId": "yards_api_v2_registration_yards_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistrationYardOut"
+                  },
+                  "title": "Response Yards Api V2 Registration Yards Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Yards",
+        "tags": [
+          "registration"
+        ]
+      }
+    },
+    "/api/v2/registration/yards/{yard_id}/buildings": {
+      "get": {
+        "operationId": "yard_buildings_api_v2_registration_yards__yard_id__buildings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "yard_id",
+            "required": true,
+            "schema": {
+              "title": "Yard Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistrationBuildingOut"
+                  },
+                  "title": "Response Yard Buildings Api V2 Registration Yards  Yard Id  Buildings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Yard Buildings",
         "tags": [
           "registration"
         ]

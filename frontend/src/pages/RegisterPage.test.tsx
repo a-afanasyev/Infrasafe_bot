@@ -3,21 +3,32 @@ import userEvent from '@testing-library/user-event'
 import { render, screen } from '../test/test-utils'
 import RegisterPage from './RegisterPage'
 
-// TEST-068 Phase 5: страница самостоятельной регистрации жителя. Управляется
-// хуком useRegistration (initData из Telegram SDK + start/submit) — мокаем его,
-// чтобы прогнать фазовые переходы form / pending / already_registered.
-
+// Спека 2026-09-03 §5.1: шаги contact → address → confirm → pending.
+// useRegistration мокаем целиком; ContactStep и AddressCascade — заглушки,
+// у них свои тесты.
 const { mockReg } = vi.hoisted(() => ({
-  mockReg: { initData: '' as string, start: vi.fn(), submit: vi.fn() },
+  mockReg: {
+    initData: '' as string,
+    start: vi.fn(), submit: vi.fn(),
+    yards: vi.fn(), buildings: vi.fn(), apartments: vi.fn(), contactStatus: vi.fn(),
+  },
+}))
+vi.mock('../hooks/useRegistration', () => ({ useRegistration: () => mockReg }))
+vi.mock('./register/ContactStep', () => ({
+  ContactStep: ({ onDone }: { onDone: (p: string) => void }) => (
+    <button onClick={() => onDone('+998900000001')}>stub-contact</button>
+  ),
+}))
+vi.mock('./register/AddressCascade', () => ({
+  AddressCascade: ({ onSelect }: { onSelect: (a: unknown, l: unknown) => void }) => (
+    <button onClick={() => onSelect({ id: 7, apartment_number: '5' }, { yard: 'Двор-Y', building: 'Дом 1' })}>
+      stub-address
+    </button>
+  ),
 }))
 
-vi.mock('../hooks/useRegistration', () => ({
-  useRegistration: () => mockReg,
-}))
-
-const START_OK = {
+const START = {
   registration_ticket: 'ticket-1',
-  apartments: [{ id: 1, yard_name: 'Двор-Y', building_address: 'Дом 1', apartment_number: '5' }],
   prefill: { first_name: 'Иван', last_name: 'П', phone: '+998901112233' },
 }
 
@@ -28,30 +39,54 @@ beforeEach(() => {
 })
 
 describe('RegisterPage', () => {
-  it('renders the form prefilled after start() resolves', async () => {
-    mockReg.start.mockResolvedValue(START_OK)
+  it('с телефоном в prefill сразу шаг адреса, затем confirm с данными', async () => {
+    mockReg.start.mockResolvedValue(START)
+    const user = userEvent.setup()
     render(<RegisterPage />)
-    const name = await screen.findByLabelText('ФИО')
-    expect(name).toHaveValue('Иван П')
-    expect(screen.getByLabelText('Телефон')).toHaveValue('+998901112233')
+    await user.click(await screen.findByText('stub-address'))
+    expect(await screen.findByLabelText('ФИО')).toHaveValue('Иван П')
+    expect(screen.getByText('+998901112233')).toBeInTheDocument()
     expect(screen.getByText('Двор-Y · Дом 1 · кв 5')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Отправить заявку' })).toBeInTheDocument()
+    expect(screen.queryByText('stub-contact')).toBeNull()
   })
 
-  it('shows the pending screen after a successful submit', async () => {
-    mockReg.start.mockResolvedValue(START_OK)
+  it('без телефона — сначала шаг контакта', async () => {
+    mockReg.start.mockResolvedValue({ ...START, prefill: { first_name: 'Иван' } })
+    const user = userEvent.setup()
+    render(<RegisterPage />)
+    await user.click(await screen.findByText('stub-contact'))
+    expect(await screen.findByText('stub-address')).toBeInTheDocument()
+  })
+
+  it('«Изменить адрес» возвращает к каскаду', async () => {
+    mockReg.start.mockResolvedValue(START)
+    const user = userEvent.setup()
+    render(<RegisterPage />)
+    await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('button', { name: 'Изменить адрес' }))
+    expect(await screen.findByText('stub-address')).toBeInTheDocument()
+  })
+
+  it('submit шлёт full_name и apartment_id, затем pending', async () => {
+    mockReg.start.mockResolvedValue(START)
     mockReg.submit.mockResolvedValue({ status: 'pending' })
     const user = userEvent.setup()
     render(<RegisterPage />)
-    await screen.findByLabelText('ФИО')
-    await user.click(screen.getByRole('button', { name: 'Отправить заявку' }))
+    await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
     expect(await screen.findByText('Заявка отправлена')).toBeInTheDocument()
-    expect(mockReg.submit).toHaveBeenCalledWith('ticket-1', expect.objectContaining({ apartment_id: 1 }))
+    expect(mockReg.submit).toHaveBeenCalledWith('ticket-1', { full_name: 'Иван П', apartment_id: 7 })
   })
 
-  it('shows already-registered when start() returns 409 approved', async () => {
+  it('409 «уже зарегистрирован» на start → экран already_registered', async () => {
     mockReg.start.mockRejectedValue({ response: { status: 409, data: { detail: 'already approved' } } })
     render(<RegisterPage />)
     expect(await screen.findByText('Вы уже зарегистрированы. Перейдите в приложение.')).toBeInTheDocument()
+  })
+
+  it('без initData — просьба открыть из Telegram', async () => {
+    mockReg.initData = ''
+    render(<RegisterPage />)
+    expect(await screen.findByText('Откройте эту страницу из Telegram, чтобы зарегистрироваться.', {}, { timeout: 3000 })).toBeInTheDocument()
   })
 })

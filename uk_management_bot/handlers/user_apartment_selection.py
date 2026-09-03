@@ -19,6 +19,7 @@ from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.onboarding import OnboardingStates
+from uk_management_bot.keyboards.contact import get_share_contact_keyboard
 from uk_management_bot.keyboards.address_management import (
     get_user_apartment_selection_keyboard,
     get_confirmation_keyboard
@@ -85,6 +86,13 @@ class _BuildingApartments:
 # Мутация (request_apartment) сюда НЕ входит: это async-метод AddressService
 # с собственной async-сессией — его хендлер await'ит напрямую.
 # ==========================================================================
+
+def _load_user_phone(db, telegram_id: int) -> Optional[str]:
+    """-> users.phone | None (нет пользователя или телефона). Гейт §3.3."""
+    from uk_management_bot.database.models.user import User
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    return user.phone if user else None
+
 
 def _load_active_yards(db) -> list:
     """-> [_YardOpt] активных дворов (шаг 1)."""
@@ -251,6 +259,16 @@ async def start_apartment_selection(message: Message, state: FSMContext, languag
     нажатие первой кнопкой не давало ровным счётом ничего.
     """
     try:
+        # Телефон обязателен ДО выбора квартиры (спека 2026-09-03 §3.3). Текст
+        # кнопки шлёт клиент (BUG-169) — проверяем здесь, а не по клавиатуре.
+        phone = await run_db(lambda s: _load_user_phone(s, message.from_user.id), db=_db)
+        if not phone:
+            await message.answer(
+                get_text("onboarding.phone_required", language=language),
+                reply_markup=get_share_contact_keyboard(language, with_cancel=False),
+            )
+            return
+
         yards = await run_db(_load_active_yards, db=_db)
 
         if not yards:
@@ -640,6 +658,16 @@ async def start_apartment_selection_for_profile(callback: CallbackQuery, state: 
     # Можно создать отдельные состояния, если нужна другая логика
     # BUG-BOT-021: помечаем entry-point, чтобы cancel мог вернуться в профиль,
     # а не утечь в admin-вью справочника адресов.
+    lang = language
+    phone = await run_db(lambda s: _load_user_phone(s, callback.from_user.id), db=_db)
+    if not phone:
+        await callback.message.answer(
+            get_text("onboarding.phone_required", language=lang),
+            reply_markup=get_share_contact_keyboard(lang, with_cancel=False),
+        )
+        await callback.answer()
+        return
+
     await state.update_data(entry_from="profile")
     await state.set_state(OnboardingStates.waiting_for_yard_selection)
 

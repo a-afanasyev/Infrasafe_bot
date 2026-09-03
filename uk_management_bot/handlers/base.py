@@ -397,6 +397,38 @@ async def cmd_start(message: Message, state: FSMContext = None, roles: list[str]
     await handle_regular_start(message, roles, active_role, user_status, language=language,
                                offer_role_choice=True, _db=_db)
 
+def needs_onboarding_redraw(ctx: Optional[_MenuContext]) -> bool:
+    """Гейт §3.2: экран онбординга после контакта — только pending-жителю с
+    единственной ролью applicant и неполным профилем. Сотруднику и одобренному
+    жителю (контакт по запросу менеджера с дашборда) — только «телефон сохранён»."""
+    if ctx is None or not isinstance(ctx, _MenuContext):
+        return False
+    return (
+        ctx.status == "pending"
+        and (ctx.db_roles or ["applicant"]) == ["applicant"]
+        and not (ctx.phone and ctx.has_approved_apartment)
+    )
+
+
+async def send_onboarding_screen(message: Message, tg_user, language: str = "ru", *, _db=None):
+    """Показать экран онбординга жителя — тот же, что рисует /start.
+
+    ``tg_user`` передаётся отдельно: у сообщения, на которое отвечает колбэк,
+    ``from_user`` — это БОТ, а нам нужен человек. Сборка экрана переиспользуется:
+    собственная копия незаметно потеряла бы WebApp-кнопку регистрации при
+    следующей правке. Живёт здесь (не в start_role_choice), чтобы phone_share
+    не тянул роутер развилки.
+    """
+    ctx = await run_db(
+        lambda s: _load_start_context(
+            s, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name,
+        ),
+        db=_db,
+    )
+    text, keyboard = _build_onboarding_screen(ctx, language)
+    await message.answer(text, reply_markup=keyboard)
+
+
 def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     """-> (текст, клавиатура) онбординга жителя, либо (текст, None).
 
@@ -407,18 +439,23 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     welcome_text = get_text("onboarding.welcome_new_user", language=lang)
     welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
 
-    # Создаём клавиатуру онбординга
+    # Клавиатура онбординга. Телефон — ТОЛЬКО из Telegram-контакта (спека
+    # 2026-09-03): без телефона единственный шаг — «Поделиться контактом»
+    # (request_contact), «Выбрать квартиру» появляется после него. Контакт
+    # приходит без FSM-состояния и обрабатывается handlers/phone_share.py.
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    missing_items = []
-    if not ctx.phone:
-        missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
-    if not ctx.has_approved_apartment:
-        missing_items.append(get_text("base.handlers.btn_select_apartment", language=lang))
-
-    if not missing_items:
+    if ctx.phone and ctx.has_approved_apartment:
         return welcome_text, None
 
-    keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
+    if not ctx.phone:
+        keyboard_rows = [[KeyboardButton(
+            text=get_text("base.handlers.btn_share_contact", language=lang),
+            request_contact=True,
+        )]]
+    else:
+        keyboard_rows = [[KeyboardButton(
+            text=get_text("base.handlers.btn_select_apartment", language=lang)
+        )]]
     # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL).
     # Текстовая, БЕЗ web_app: reply web_app не передаёт initData — ссылку шлёт
     # handlers/webapp_buttons.py inline-кнопкой по нажатию.

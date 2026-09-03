@@ -28,9 +28,11 @@ from uk_management_bot.services.invite_service import InviteService, InviteRateL
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
+from uk_management_bot.keyboards.contact import get_share_contact_keyboard
+from aiogram.types import ReplyKeyboardRemove
 import logging
 
-from uk_management_bot.utils.button_texts import get_login_texts
+from uk_management_bot.utils.button_texts import get_cancel_texts, get_login_texts
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -393,111 +395,86 @@ async def handle_full_name_input(message: Message, state: FSMContext, language: 
         
         # Сохраняем ФИО
         await state.update_data(full_name=full_name)
-        
-        # Получаем данные о роли и специализации
         data = await state.get_data()
-        role = data.get("invite_role")
-        specialization = data.get("invite_specialization", "")
-        
-        # Формируем сообщение для подтверждения должности
-        role_name = get_text(f"roles.{role}", language=lang)
-        confirmation_text = f"✅ ФИО: {full_name}\n\n"
-        confirmation_text += f"🎯 Роль: {role_name}\n"
-        
-        if role == "executor" and specialization:
-            specializations = specialization.split(",")
-            spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
-            confirmation_text += f"🛠️ Специализация: {', '.join(spec_names)}\n"
-        
-        confirmation_text += f"\n{get_text('auth.confirm_position_prompt', language=lang)}"
 
-        # Создаем клавиатуру для подтверждения
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=get_text("auth.confirm_button", language=lang),
-                callback_data="confirm_position"
-            )],
-            [InlineKeyboardButton(
-                text=get_text("auth.cancel_button", language=lang),
-                callback_data="cancel_registration"
-            )]
-        ])
-        
-        await message.answer(confirmation_text, reply_markup=keyboard)
-        
-        # Переходим к следующему состоянию - запрос телефона
+        # Телефон — только из Telegram-контакта (спека 2026-09-03 §3.4). Через
+        # развилку «Я сотрудник» он уже в FSM; через /join — запрашиваем здесь.
+        if data.get("employee_phone"):
+            await _send_confirmation(message, data, lang)
+            await state.set_state(RegistrationStates.waiting_for_position_confirmation)
+            return
+        await message.answer(
+            get_text("auth.phone_contact_prompt", language=lang),
+            reply_markup=get_share_contact_keyboard(lang, with_cancel=True),
+        )
         await state.set_state(RegistrationStates.waiting_for_phone)
-        
+
     except Exception as e:
         logger.error(f"Ошибка обработки ФИО: {e}")
         await message.answer(get_text("auth.error_try_again", language=lang))
 
 
-@router.message(RegistrationStates.waiting_for_phone)
-async def handle_phone_input(message: Message, state: FSMContext, language: str = "ru"):
-    """Обработчик ввода номера телефона"""
-    logger.info(f"Обработчик телефона вызван для пользователя {message.from_user.id}")
+async def _send_confirmation(message: Message, data: dict, lang: str) -> None:
+    """Экран подтверждения анкеты (ФИО, телефон, роль) с inline-кнопками."""
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+    role = data.get("invite_role")
+    specialization = data.get("invite_specialization", "")
+    role_name = get_text(f"roles.{role}", language=lang)
+    confirmation_text = f"✅ ФИО: {data.get('full_name')}\n"
+    confirmation_text += f"📱 Телефон: {data.get('employee_phone')}\n\n"
+    confirmation_text += f"🎯 Роль: {role_name}\n"
+    if role == "executor" and specialization:
+        specializations = specialization.split(",")
+        spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
+        confirmation_text += f"🛠️ Специализация: {', '.join(spec_names)}\n"
+    confirmation_text += f"\n{get_text('auth.confirm_data_prompt', language=lang)}"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=get_text("auth.confirm_button", language=lang),
+            callback_data="confirm_position"
+        )],
+        [InlineKeyboardButton(
+            text=get_text("auth.cancel_button", language=lang),
+            callback_data="cancel_registration"
+        )]
+    ])
+    await message.answer(confirmation_text, reply_markup=keyboard)
+
+
+@router.message(RegistrationStates.waiting_for_phone, F.contact)
+async def handle_phone_contact(message: Message, state: FSMContext, language: str = "ru"):
+    """Контакт в анкете (вход через /join): только свой, затем подтверждение."""
     lang = language
-    
-    try:
-        phone = message.text.strip()
-        
-        # Простая валидация телефона (должен содержать цифры и быть не короче 10 символов)
-        if not phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
-            await message.answer(get_text("auth.phone_invalid", language=lang))
-            return
+    if message.contact.user_id != message.from_user.id:
+        await message.answer(get_text("phone_request_flow.foreign_contact", language=lang))
+        return
+    phone = message.contact.phone_number
+    if not phone.startswith("+"):
+        phone = "+" + phone
+    await state.update_data(employee_phone=phone)
+    data = {**(await state.get_data()), "employee_phone": phone}
+    await message.answer(
+        get_text("onboarding.phone_saved", language=lang, phone=phone),
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await _send_confirmation(message, data, lang)
+    await state.set_state(RegistrationStates.waiting_for_position_confirmation)
 
-        phone_clean = phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
-        if len(phone_clean) < 10:
-            await message.answer(get_text("auth.phone_too_short", language=lang))
-            return
-        
-        # Сохраняем телефон
-        await state.update_data(phone=phone)
-        
-        # Получаем все данные
-        data = await state.get_data()
-        full_name = data.get("full_name")
-        role = data.get("invite_role")
-        specialization = data.get("invite_specialization", "")
-        
-        # Формируем сообщение для подтверждения
-        role_name = get_text(f"roles.{role}", language=lang)
-        confirmation_text = f"✅ ФИО: {full_name}\n"
-        confirmation_text += f"📱 Телефон: {phone}\n\n"
-        confirmation_text += f"🎯 Роль: {role_name}\n"
-        
-        if role == "executor" and specialization:
-            specializations = specialization.split(",")
-            spec_names = [get_text(f"specializations.{spec.strip()}", language=lang) for spec in specializations]
-            confirmation_text += f"🛠️ Специализация: {', '.join(spec_names)}\n"
-        
-        confirmation_text += f"\n{get_text('auth.confirm_data_prompt', language=lang)}"
 
-        # Создаем клавиатуру для подтверждения
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=get_text("auth.confirm_button", language=lang),
-                callback_data="confirm_position"
-            )],
-            [InlineKeyboardButton(
-                text=get_text("auth.cancel_button", language=lang),
-                callback_data="cancel_registration"
-            )]
-        ])
-        
-        await message.answer(confirmation_text, reply_markup=keyboard)
-        
-        # Переходим к состоянию подтверждения
-        await state.set_state(RegistrationStates.waiting_for_position_confirmation)
-        
-    except Exception as e:
-        logger.error(f"Ошибка обработки телефона: {e}")
-        await message.answer(get_text("auth.error_try_again", language=lang))
+@router.message(RegistrationStates.waiting_for_phone)
+async def handle_phone_text(message: Message, state: FSMContext, language: str = "ru"):
+    """Ручной ввод номера удалён (спека 2026-09-03): отмена или напоминание."""
+    lang = language
+    text = (message.text or "").strip()
+    if text in get_cancel_texts() or text.startswith("/"):
+        await state.clear()
+        await message.answer(
+            get_text("auth.registration_cancelled", language=lang),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    await message.answer(get_text("auth.phone_contact_required", language=lang))
 
 
 @router.callback_query(F.data == "confirm_position")
@@ -509,11 +486,15 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         # Получаем все данные
         data = await state.get_data()
         full_name = data.get("full_name")
-        phone = data.get("phone")
+        phone = data.get("employee_phone")
         role = data.get("invite_role")
         specialization = data.get("invite_specialization", "")
 
         token = data.get("invite_token")
+        if not phone:
+            # Без подтверждённого контакта не регистрируем (спека §3.4).
+            await callback.answer(get_text("auth.phone_contact_required", language=lang), show_alert=True)
+            return
 
         verdict, payload = await run_db(
             lambda s: _apply_registration(

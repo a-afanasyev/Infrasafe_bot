@@ -19,12 +19,13 @@ import re
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.filters import StateFilter
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
-from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.auth import start_invite_registration
-from uk_management_bot.handlers.base import _build_onboarding_screen, _load_start_context
+from uk_management_bot.handlers.base import send_onboarding_screen  # noqa: F401 — реэкспорт для тестов/колбэков
 from uk_management_bot.keyboards.base import get_no_invite_token_inline
+from uk_management_bot.keyboards.contact import get_share_contact_keyboard
 from uk_management_bot.states.registration import RegistrationStates
 from uk_management_bot.utils.button_texts import get_back_texts, get_cancel_texts
 from uk_management_bot.utils.helpers import get_text
@@ -57,24 +58,6 @@ def extract_invite_token(text) -> str | None:
     return f"invite_v1:{match.group(1)}.{match.group(2)}"
 
 
-async def send_onboarding_screen(message: Message, tg_user, language: str = "ru", *, _db=None):
-    """Показать экран онбординга жителя — тот же, что рисует /start.
-
-    ``tg_user`` передаётся отдельно: у сообщения, на которое отвечает колбэк,
-    ``from_user`` — это БОТ, а нам нужен человек. Сборка экрана переиспользуется
-    из base: собственная копия незаметно потеряла бы WebApp-кнопку регистрации
-    при следующей правке.
-    """
-    ctx = await run_db(
-        lambda s: _load_start_context(
-            s, tg_user.id, tg_user.username, tg_user.first_name, tg_user.last_name,
-        ),
-        db=_db,
-    )
-    text, keyboard = _build_onboarding_screen(ctx, language)
-    await message.answer(text, reply_markup=keyboard)
-
-
 @router.callback_query(F.data == "start_role:resident")
 async def choose_resident(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
     """«Я житель» → сегодняшний онбординг, без изменений."""
@@ -93,14 +76,47 @@ async def choose_employee(callback: CallbackQuery, state: FSMContext, language: 
     и потратить их на нажатие кнопки — значит запереть человека до того, как он
     вообще прислал код.
     """
-    await state.set_state(RegistrationStates.waiting_for_invite_token)
+    await state.set_state(RegistrationStates.waiting_for_employee_contact)
     await _strip_markup(callback)
     await callback.message.answer(
-        get_text("start_role.token_prompt", language=language),
-        reply_markup=get_no_invite_token_inline(language),
+        get_text("start_role.employee_contact_prompt", language=language),
+        reply_markup=get_share_contact_keyboard(language, with_cancel=True),
     )
     await callback.answer()
     logger.info(f"Пользователь {callback.from_user.id} выбрал ветку сотрудника")
+
+
+@router.message(StateFilter(RegistrationStates.waiting_for_employee_contact), F.contact)
+async def employee_contact(message: Message, state: FSMContext, language: str = "ru"):
+    """Контакт сотрудника ДО токена (спека §3.4). В БД не пишем — иначе
+    бросивший анкету не увидит развилку на следующем /start."""
+    if message.contact.user_id != message.from_user.id:
+        await message.answer(get_text("phone_request_flow.foreign_contact", language=language))
+        return
+    phone = message.contact.phone_number
+    if not phone.startswith("+"):
+        phone = "+" + phone
+    await state.update_data(employee_phone=phone)
+    await state.set_state(RegistrationStates.waiting_for_invite_token)
+    await message.answer(
+        get_text("start_role.token_prompt", language=language),
+        reply_markup=get_no_invite_token_inline(language),
+    )
+
+
+@router.message(StateFilter(RegistrationStates.waiting_for_employee_contact))
+async def employee_contact_text(message: Message, state: FSMContext, language: str = "ru"):
+    """Всё, что не контакт, в этом состоянии: отмена или напоминание нажать кнопку.
+    Обрабатывается здесь — этот роутер в main.py раньше onboarding/auth."""
+    text = (message.text or "").strip()
+    if text in CANCEL_TEXTS or text in BACK_TEXTS or text.startswith("/"):
+        await state.clear()
+        await message.answer(
+            get_text("auth.registration_cancelled", language=language),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    await message.answer(get_text("start_role.employee_contact_required", language=language))
 
 
 @router.callback_query(F.data == "start_role:no_token")

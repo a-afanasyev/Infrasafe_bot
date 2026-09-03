@@ -228,7 +228,8 @@ class TestChoiceCallbacks:
                    new=AsyncMock(return_value=True)) as limiter:
             await choose_employee(cb, state)
 
-        state.set_state.assert_awaited_with(RegistrationStates.waiting_for_invite_token)
+        # спека 2026-09-03 §3.4: сначала контакт, токен — после него
+        state.set_state.assert_awaited_with(RegistrationStates.waiting_for_employee_contact)
         cb.message.answer.assert_awaited()
         limiter.assert_not_awaited()
 

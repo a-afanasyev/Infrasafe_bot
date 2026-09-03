@@ -14,16 +14,25 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.api.registration.tickets import (
     create_registration_ticket, verify_registration_ticket,
 )
-from uk_management_bot.api.registration.catalog import list_apartments, is_apartment_selectable, get_apartment_label
+from uk_management_bot.api.registration.catalog import (
+    get_apartment_label,
+    is_apartment_selectable,
+    list_apartments_out,
+    list_buildings_out,
+    list_yards_out,
+)
 from uk_management_bot.api.registration.schemas import (
     StartIn, StartOut, Prefill, RegisterApplicantIn, RegistrationResult,
+    RegistrationYardOut,
+    RegistrationBuildingOut,
+    ApartmentOut,
+    ContactStatusOut,
 )
 from uk_management_bot.api.registration.notify import notify_managers_new_registration
 from uk_management_bot.services.addresses import core as address_core
 from uk_management_bot.services.addresses.exceptions import (
     AddressConflict, AddressNotFound, AddressValidationError,
 )
-from uk_management_bot.utils.validators import Validator
 
 logger = logging.getLogger(__name__)
 # SEC-04: self-registration is a brute-force surface (ticket guessing, spam
@@ -57,11 +66,11 @@ async def start(request: Request, body: StartIn, db: AsyncSession = Depends(get_
     return StartOut(
         registration_ticket=create_registration_ticket(telegram_id),
         prefill=prefill,
-        apartments=await list_apartments(db),
     )
 
 
-def _ticket_telegram_id(authorization: str | None) -> int:
+def require_registration_ticket(authorization: str | None = Header(default=None)) -> int:
+    """Зависимость: telegram_id из Bearer-тикета регистрации (спека §4.1)."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing registration ticket")
     tid = verify_registration_ticket(authorization.split(" ", 1)[1])
@@ -70,25 +79,83 @@ def _ticket_telegram_id(authorization: str | None) -> int:
     return tid
 
 
+# ─── Каскад адресов и статус контакта под тикетом (спека §4.3) ───────────────
+
+@router.get("/contact-status", response_model=ContactStatusOut)
+@limiter.limit("60/minute")
+async def contact_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    telegram_id: int = Depends(require_registration_ticket),
+):
+    """TWA опрашивает после requestContact: контакт Telegram шлёт боту, бот
+    пишет users.phone — здесь он и появляется."""
+    existing = await get_user_by_telegram_id(db, telegram_id)
+    return ContactStatusOut(phone=existing.phone if existing else None)
+
+
+@router.get("/yards", response_model=list[RegistrationYardOut])
+@limiter.limit("60/minute")
+async def yards(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _telegram_id: int = Depends(require_registration_ticket),
+):
+    return await list_yards_out(db)
+
+
+@router.get("/yards/{yard_id}/buildings", response_model=list[RegistrationBuildingOut])
+@limiter.limit("60/minute")
+async def yard_buildings(
+    request: Request,
+    yard_id: int,
+    db: AsyncSession = Depends(get_db),
+    _telegram_id: int = Depends(require_registration_ticket),
+):
+    rows = await list_buildings_out(db, yard_id)
+    if rows is None:
+        raise HTTPException(status_code=404, detail="Двор не найден")
+    return rows
+
+
+@router.get("/buildings/{building_id}/apartments", response_model=list[ApartmentOut])
+@limiter.limit("60/minute")
+async def building_apartments(
+    request: Request,
+    building_id: int,
+    db: AsyncSession = Depends(get_db),
+    _telegram_id: int = Depends(require_registration_ticket),
+):
+    rows = await list_apartments_out(db, building_id)
+    if rows is None:
+        raise HTTPException(status_code=404, detail="Дом не найден")
+    return rows
+
+
 @router.post("/applicant", response_model=RegistrationResult)
 @limiter.limit("3/minute")
 async def register_applicant(
     request: Request,
     body: RegisterApplicantIn,
     db: AsyncSession = Depends(get_db),
-    authorization: str | None = Header(default=None),
+    telegram_id: int = Depends(require_registration_ticket),
 ):
-    telegram_id = _ticket_telegram_id(authorization)
-
-    ok, msg = Validator.validate_phone(body.phone)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
-    phone = body.phone.strip()
-    if not phone.startswith("+"):
-        phone = "+" + phone
     full_name = body.full_name.strip()
     if not full_name:
         raise HTTPException(status_code=400, detail="ФИО обязательно")
+
+    # Телефон только из Telegram-контакта, сохранённого ботом (спека §4.4).
+    # Порядок: blocked 403 → approved 409 → нет телефона 409 → квартира 400.
+    existing = await get_user_by_telegram_id(db, telegram_id)
+    if existing and existing.status == "blocked":
+        raise HTTPException(status_code=403, detail="Пользователь заблокирован")
+    if existing and existing.status == "approved":
+        raise HTTPException(status_code=409, detail="Уже зарегистрирован")
+    phone = existing.phone if existing else None
+    if not phone:
+        raise HTTPException(
+            status_code=409, detail="Сначала поделитесь контактом в Telegram"
+        )
 
     if not await is_apartment_selectable(db, body.apartment_id):
         raise HTTPException(status_code=400, detail="Квартира недоступна для выбора")
