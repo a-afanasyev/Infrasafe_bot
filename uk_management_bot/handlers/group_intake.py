@@ -58,7 +58,9 @@ from uk_management_bot.services.group_intake.classifier import (
     Outcome,
     classify_message,
 )
+from uk_management_bot.services.group_intake.category_keywords import guess_category
 from uk_management_bot.services.group_intake.prefilter import prefilter
+from uk_management_bot.services.group_intake.translit import CYR_TO_LAT
 from uk_management_bot.services.request_address import (
     AddressResolutionError,
     format_building_address,
@@ -267,15 +269,10 @@ def _staff_author_lang_sync(db, telegram_id: int) -> Optional[str]:
 
 # Кириллица → латиница для адресного хинта: справочник может быть латинским
 # («Yangi Olmazor, 14V»), а сотрудник пишет кириллицей («14в», «Янги Олмазор»).
-# Транслит детерминированный (узбекская латиница: х→x, ж→j), НЕ полагаемся на
-# LLM: address_hint извлекается дословно из сообщения.
-_CYR_TO_LAT = str.maketrans({
-    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
-    "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
-    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
-    "ф": "f", "х": "x", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
-    "ъ": "", "ы": "i", "ь": "", "э": "e", "ю": "yu", "я": "ya",
-})
+# Транслит детерминированный, НЕ полагаемся на LLM: address_hint извлекается
+# дословно из сообщения. Таблица общая с keyword-проходом категорий —
+# services/group_intake/translit.py.
+_CYR_TO_LAT = CYR_TO_LAT
 
 
 def _hint_variants(needle: str) -> list[str]:
@@ -720,7 +717,9 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         # тишиной: сломанный классификатор не заменить дефолтами честно.
         result = ClassificationResult(
             outcome=Outcome.REQUEST,
-            category=result.category or "other",
+            # у NOT_REQUEST категории нет — берём keyword-хит по тексту,
+            # иначе прежний дефолт «Другое»
+            category=result.category or guess_category(text) or "other",
             urgency=result.urgency or "low",
             confidence=result.confidence,
             location_scope=result.location_scope or "unknown",

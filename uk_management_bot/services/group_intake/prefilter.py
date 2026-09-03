@@ -14,6 +14,8 @@
 """
 import re
 
+from uk_management_bot.services.group_intake.category_keywords import guess_category
+
 # Минимальная длина описания заявки (= Validator.validate_description).
 MIN_TEXT_LEN = 10
 # Достаточно длинный текст пропускается и без словарного маркера.
@@ -57,6 +59,11 @@ def prefilter(text: str, has_photo: bool) -> bool:
         return False
 
     if any(marker in lowered for marker in _MARKERS):
+        return True
+    # Ключевое слово категории — тоже сигнал заявки: короткие «25v poliv
+    # yoqilsin» / «20v elektrik kerak» без маркеров проблемы и короче
+    # LONG_TEXT_LEN резались здесь и до LLM не доходили (прод, 2026-09).
+    if guess_category(stripped) is not None:
         return True
     if len(stripped) >= LONG_TEXT_LEN:
         return True

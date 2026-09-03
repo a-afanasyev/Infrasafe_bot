@@ -14,6 +14,7 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Optional
 
 from uk_management_bot.config.settings import settings
@@ -42,6 +43,7 @@ class ClassificationResult:
     confidence: float = 0.0
     location_scope: str = "unknown"       # apartment|building|yard|unknown
     address_hint: Optional[str] = None    # упоминание адреса в тексте, ≤100
+    category_source: str = "llm"          # llm | keyword (переопределил other)
 
 
 _NOT_REQUEST = ClassificationResult(outcome=Outcome.NOT_REQUEST)
@@ -66,14 +68,16 @@ def _get_client():
 
 
 def _schema() -> dict:
-    from uk_management_bot.keyboards.requests import CANONICAL_CATEGORY_KEYS
+    # SELECTABLE, не полный канон: служебную `engineering` (очередь InfraSafe)
+    # модель выдавать не должна.
+    from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
     from uk_management_bot.utils.constants import URGENCY_VALUES
 
     return {
         "type": "object",
         "properties": {
             "is_request": {"type": "boolean"},
-            "category": {"type": "string", "enum": list(CANONICAL_CATEGORY_KEYS)},
+            "category": {"type": "string", "enum": list(SELECTABLE_CATEGORY_KEYS)},
             "urgency": {"type": "string", "enum": list(URGENCY_VALUES)},
             "confidence": {"type": "number"},
             "location_scope": {"type": "string", "enum": list(LOCATION_SCOPES)},
@@ -91,16 +95,18 @@ def _schema() -> dict:
     }
 
 
-_SYSTEM_PROMPT = (
+_BASE_PROMPT = (
     "Ты — диспетчер управляющей компании жилых домов. Тебе дают одно сообщение "
-    "из общедомового Telegram-чата жителей (русский или узбекский язык). "
+    "из общедомового Telegram-чата жителей (русский или узбекский язык, "
+    "узбекский бывает и кириллицей, и латиницей, часто с сокращениями вроде "
+    "«17 v» = дом 17). "
     "Определи, описывает ли оно КОНКРЕТНУЮ бытовую/коммунальную проблему, "
     "требующую реакции УК (заявку): поломка, протечка, отключение, мусор, "
-    "лифт, канализация и т.п. Болтовня, вопросы без проблемы, объявления, "
+    "лифт, канализация, полив и т.п. Болтовня, вопросы без проблемы, объявления, "
     "благодарности, политика — не заявка.\n"
-    "category — тип проблемы; urgency — здравая оценка срочности "
-    "(critical только при угрозе жизни/имуществу: пожар, потоп, газ); "
-    "confidence — твоя уверенность 0..1, что это заявка; "
+    "category — тип проблемы, выбирай по глоссарию ниже; urgency — здравая "
+    "оценка срочности (critical только при угрозе жизни/имуществу: пожар, "
+    "потоп, газ); confidence — твоя уверенность 0..1, что это заявка; "
     "location_scope — где проблема: apartment (внутри квартиры автора), "
     "building (подъезд/лифт/крыша/подвал/стояк — общее в доме), "
     "yard (двор/улица/парковка/мусорка), unknown если непонятно; "
@@ -108,9 +114,51 @@ _SYSTEM_PROMPT = (
     "если автор его назвал, иначе null."
 )
 
+_GLOSSARY_RULES = (
+    "Правила выбора category: other — только если ни одна категория не "
+    "подходит. Полив, газон, клумбы, деревья, двор → landscaping. "
+    "«elektrik», «svet», «chiroq» → electricity. «suv», «вода», подвал с водой "
+    "→ plumbing."
+)
 
-def _parse_response(payload: dict) -> ClassificationResult:
-    """Валидация ответа модели. Битые значения → PROCESSING_ERROR."""
+_KEYWORD_HINT = "\n\n[подсказка по ключевым словам: предположительно {kw}; перепроверь по тексту]"
+
+
+def _category_glossary() -> str:
+    """Глоссарий категорий из канона: ключ (ru / uz): описание. Примеры: …"""
+    from uk_management_bot.keyboards.requests import (
+        SELECTABLE_CATEGORY_KEYS,
+        get_category_display,
+    )
+    from uk_management_bot.services.group_intake.category_keywords import (
+        CATEGORY_GLOSSARY,
+    )
+
+    lines = []
+    for key in SELECTABLE_CATEGORY_KEYS:
+        description, examples = CATEGORY_GLOSSARY[key]
+        ru = get_category_display(key, "ru")
+        uz = get_category_display(key, "uz")
+        quoted = ", ".join(f"«{example}»" for example in examples)
+        lines.append(f"- {key} ({ru} / {uz}): {description}. Примеры: {quoted}")
+    return "\n".join(lines)
+
+
+@lru_cache(maxsize=1)
+def _system_prompt() -> str:
+    """Стабильный системный промпт (кэшируется и у нас, и у провайдера)."""
+    return f"{_BASE_PROMPT}\n\nГлоссарий категорий:\n{_category_glossary()}\n\n{_GLOSSARY_RULES}"
+
+
+def _parse_response(
+    payload: dict, keyword_category: Optional[str] = None
+) -> ClassificationResult:
+    """Валидация ответа модели. Битые значения → PROCESSING_ERROR.
+
+    `keyword_category` — хит детерминированного словаря по тексту: он
+    переопределяет ТОЛЬКО вердикт `other` (у модели есть контекст: «нет
+    горячей воды» → heating, а словарь сказал бы plumbing).
+    """
     from uk_management_bot.keyboards.requests import (
         CANONICAL_CATEGORY_KEYS,
         resolve_category_key,
@@ -140,6 +188,14 @@ def _parse_response(payload: dict) -> ClassificationResult:
     category = resolve_category_key(raw_category)
     if category not in CANONICAL_CATEGORY_KEYS:
         category = "other"
+    category_source = "llm"
+    if category == "other" and keyword_category:
+        category = keyword_category
+        category_source = "keyword"
+    logger.info(
+        "group_intake.category: llm=%s kw=%s final=%s source=%s",
+        raw_category, keyword_category, category, category_source,
+    )
     urgency = normalize_urgency(raw_urgency) or "low"
     scope = raw_scope if raw_scope in LOCATION_SCOPES else "unknown"
     hint = None
@@ -153,6 +209,7 @@ def _parse_response(payload: dict) -> ClassificationResult:
         confidence=confidence,
         location_scope=scope,
         address_hint=hint,
+        category_source=category_source,
     )
 
 
@@ -160,13 +217,21 @@ async def classify_message(text: str) -> ClassificationResult:
     """Классифицировать текст сообщения. Никогда не бросает исключений."""
     import json
 
+    from uk_management_bot.services.group_intake.category_keywords import guess_category
+
+    # Подсказка — в user-сообщение, не в system: system стабилен и кэшируется.
+    keyword_category = guess_category(text)
+    content = text[:_TEXT_LIMIT]
+    if keyword_category:
+        content += _KEYWORD_HINT.format(kw=keyword_category)
+
     try:
         async with asyncio.timeout(settings.GROUP_INTAKE_LLM_TIMEOUT):
             response = await _get_client().messages.create(
                 model=settings.GROUP_INTAKE_MODEL,
                 max_tokens=_MAX_TOKENS,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": text[:_TEXT_LIMIT]}],
+                system=_system_prompt(),
+                messages=[{"role": "user", "content": content}],
                 output_config={"format": {"type": "json_schema", "schema": _schema()}},
             )
     except Exception as e:  # таймаут, сеть, 4xx/5xx, что угодно — best-effort
@@ -191,4 +256,4 @@ async def classify_message(text: str) -> ClassificationResult:
         logger.warning("group_intake.processing_error: invalid json")
         return _ERROR
 
-    return _parse_response(payload)
+    return _parse_response(payload, keyword_category=keyword_category)

@@ -551,9 +551,25 @@ async def test_tagged_not_request_verdict_is_overridden(env, db):
     await run_entry(message, db)
     message.reply.assert_awaited_once()
     payload = env.store_candidate.await_args.args[2]
-    assert payload["category"] == "other"
+    # у NOT_REQUEST полей нет — категорию даёт keyword-проход по тексту («свет»)
+    assert payload["category"] == "electricity"
     assert payload["urgency"] == "low"
     assert payload["selected_address"]["label_public"].startswith("Yangi Olmazor, 23V")
+
+
+async def test_tagged_not_request_without_keywords_defaults_to_other(env, db):
+    """Тег-режим без ключевых слов в тексте — прежний дефолт «Другое»."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db, addresses=("Yangi Olmazor, 23V",))
+    env.classify.return_value = CR(outcome=O.NOT_REQUEST)
+    message = make_message(text="#заявка 23 дом посмотрите пожалуйста")
+    await run_entry(message, db)
+    payload = env.store_candidate.await_args.args[2]
+    assert payload["category"] == "other"
 
 
 async def test_tagged_processing_error_stays_silent(env, db):

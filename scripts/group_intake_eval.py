@@ -15,6 +15,11 @@
     ANTHROPIC_API_KEY=... python3 scripts/group_intake_eval.py dataset.jsonl
     ... --model claude-sonnet-5          # A/B кандидат
     ... --threshold-sweep                # подбор GROUP_INTAKE_MIN_CONFIDENCE
+    python3 scripts/group_intake_eval.py dataset.jsonl --keywords-only
+        # без сети: только детерминированный keyword-проход
+        # (services/group_intake/category_keywords.guess_category) —
+        # покрытие и точность категории по размеченным строкам.
+        # Стартовый датасет: scripts/group_intake_eval.sample.jsonl.
 
 Выводит по разрезам (all / ru / uz / residents / staff):
     request precision / recall / F1; category / urgency / location_scope
@@ -36,6 +41,46 @@ PRICE_IN_PER_MTOK = 1.0
 PRICE_OUT_PER_MTOK = 5.0
 
 
+def _load_rows(dataset_path: str) -> list[dict]:
+    rows = []
+    with open(dataset_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def run_keywords_only(dataset_path: str) -> int:
+    """Офлайн: keyword-проход по размеченным строкам, без API."""
+    from uk_management_bot.services.group_intake.category_keywords import guess_category
+
+    rows = _load_rows(dataset_path)
+    if not rows:
+        print("пустой датасет", file=sys.stderr)
+        return 2
+    labelled = [r for r in rows if r.get("is_request") and r.get("category")]
+    hits = correct = 0
+    for row in labelled:
+        guess = guess_category(row["text"])
+        hits += guess is not None
+        correct += guess == row["category"]
+        mark = "OK " if guess == row["category"] else ("-- " if guess is None else "XX ")
+        print(f"  {mark} {row['category']:<12} kw={guess!s:<12} {row['text'][:60]}")
+    unlabelled = [r for r in rows if not r.get("category")]
+    false_hits = [(r["text"], guess_category(r["text"])) for r in unlabelled
+                  if guess_category(r["text"]) is not None]
+    n = len(labelled)
+    print(f"[keywords-only] размечено={n} покрытие={hits / n:.2f} "
+          f"точность_среди_хитов={(correct / hits) if hits else float('nan'):.2f} "
+          f"точность_всего={correct / n:.2f}")
+    if false_hits:
+        print("  срабатывания на строках без метки категории (проверить вручную):")
+        for text, guess in false_hits:
+            print(f"    {guess:<12} {text[:60]}")
+    return 0
+
+
 async def run(dataset_path: str, model: str | None, threshold_sweep: bool) -> int:
     from uk_management_bot.config.settings import settings
     from uk_management_bot.services.group_intake.classifier import (
@@ -49,12 +94,7 @@ async def run(dataset_path: str, model: str | None, threshold_sweep: bool) -> in
         print("ANTHROPIC_API_KEY не задан", file=sys.stderr)
         return 2
 
-    rows = []
-    with open(dataset_path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                rows.append(json.loads(line))
+    rows = _load_rows(dataset_path)
     if not rows:
         print("пустой датасет", file=sys.stderr)
         return 2
@@ -151,7 +191,11 @@ def main() -> int:
     parser.add_argument("dataset", help="jsonl с размеченными сообщениями")
     parser.add_argument("--model", default=None, help="переопределить модель (A/B)")
     parser.add_argument("--threshold-sweep", action="store_true")
+    parser.add_argument("--keywords-only", action="store_true",
+                        help="без API: только keyword-проход категории")
     args = parser.parse_args()
+    if args.keywords_only:
+        return run_keywords_only(args.dataset)
     return asyncio.run(run(args.dataset, args.model, args.threshold_sweep))
 
 
