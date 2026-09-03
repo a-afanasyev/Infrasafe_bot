@@ -199,6 +199,13 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
             )
             if reassign_row:
                 rows.append(reassign_row)
+            # Смена категории (решение владельца 2026-09-03): любой
+            # нетерминальный статус, только менеджер.
+            from uk_management_bot.keyboards.admin import get_change_category_button_row
+            category_row = get_change_category_button_row(
+                request.request_number, status=request.status, roles=roles, language=lang)
+            if category_row:
+                rows.append(category_row)
             rows.extend(get_discussion_rows(
                 request.request_number,
                 has_report=bool(request.completion_report),

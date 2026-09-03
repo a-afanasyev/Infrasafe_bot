@@ -99,4 +99,8 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
     # необязательность совпадает с прежним поведением API (прямой setattr без reason).
     Action.CANCEL: PayloadSchema(
         optional={"reason": str, "notes": str}),
+    # Категория проверяется по канону в `plan_transition` (как `group` у
+    # ASSIGN_GROUP): значение уходит в диспетч и видимость исполнителям.
+    Action.MANAGER_CHANGE_CATEGORY: PayloadSchema(
+        required={"category": str}, non_empty=frozenset({"category"})),
 }

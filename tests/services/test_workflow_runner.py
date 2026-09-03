@@ -1051,3 +1051,157 @@ class TestStatusVersionArch010:
                 await engine.dispose()
 
         assert asyncio.run(_async_version()) == sync_version == 1
+
+
+# ---------------------------------------------------------------------------
+# MANAGER_CHANGE_CATEGORY — смена категории: patch + комментарий + аудит +
+# снятие группы в ОДНОЙ транзакции (план 2026-09-03)
+# ---------------------------------------------------------------------------
+
+from uk_management_bot.database.models.request_comment import RequestComment  # noqa: E402
+
+
+def _seed_category(SF, *, status, category="electricity", executor_id=None,
+                   assignment=None):
+    """Как _seed, но с категорией и (опционально) активной строкой назначения:
+    assignment=("group", "electrician") | ("individual", 4)."""
+    _seed(SF, status=status, executor_id=executor_id)
+    s = SF()
+    req = s.query(Request).filter_by(request_number="260610-001").first()
+    req.category = category
+    if assignment is not None:
+        kind, value = assignment
+        req.assignment_type = kind
+        if kind == "group":
+            req.assigned_group = value
+            s.add(RequestAssignment(request_number="260610-001", assignment_type="group",
+                                    group_specialization=value, executor_id=None,
+                                    created_by=3, status="active"))
+        else:
+            s.add(RequestAssignment(request_number="260610-001", assignment_type="individual",
+                                    executor_id=value, created_by=3, status="active"))
+    s.commit()
+    s.close()
+    return SF
+
+
+def _change_cmd(category="plumbing"):
+    return ActionCommand("cat-1", Action.MANAGER_CHANGE_CATEGORY, {"category": category})
+
+
+class TestManagerChangeCategory:
+    def test_new_with_group_rewrites_category_cancels_group_writes_comment_and_audit(self, factory):
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_NEW,
+                            assignment=("group", "electrician"))
+        out = run_command_sync(SF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        assert out.no_op is False
+        assert out.new_status == C.REQUEST_STATUS_NEW      # статус не тронут
+        assert out.new_state.category == "plumbing"
+
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.category == "plumbing"
+        assert req.assigned_group is None and req.assignment_type is None
+        assert req.status_version in (None, 0)             # bump только по смене статуса
+        rows = s.query(RequestAssignment).filter_by(request_number="260610-001").all()
+        assert [r.status for r in rows] == ["cancelled"]
+        comment = s.query(RequestComment).filter_by(request_number="260610-001").one()
+        assert comment.user_id == 3                           # менеджер
+        assert comment.comment_type == C.COMMENT_TYPE_CATEGORY_CHANGE
+        assert comment.comment_text == "Категория: Электрика → Сантехника"
+        assert comment.is_internal is False
+        audit = s.query(AuditLog).filter_by(action=C.AUDIT_ACTION_REQUEST_CATEGORY_CHANGED).one()
+        assert audit.user_id == 3
+        assert audit.details["old_category"] == "electricity"
+        assert audit.details["new_category"] == "plumbing"
+        assert audit.details["request_number"] == "260610-001"
+        assert s.query(AuditLog).filter_by(action="request_status_changed").count() == 0
+        s.close()
+
+    def test_in_progress_keeps_executor_and_individual_assignment(self, factory):
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_IN_PROGRESS,
+                            executor_id=4, assignment=("individual", 4))
+        out = run_command_sync(SF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        assert out.new_state.executor_id == 4
+        assert [i.kind for i in out.post_commit_intents] == ["notify"]  # спец сменилась
+
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.executor_id == 4 and req.category == "plumbing"
+        row = s.query(RequestAssignment).filter_by(request_number="260610-001").one()
+        assert row.status == "active" and row.executor_id == 4
+        s.close()
+
+    def test_legacy_label_equivalent_is_no_op_and_untouched(self, factory):
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_NEW, category="Сантехника")
+        out = run_command_sync(SF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        assert out.no_op is True
+        s = SF()
+        req = s.query(Request).filter_by(request_number="260610-001").first()
+        assert req.category == "Сантехника"
+        assert s.query(RequestComment).count() == 0
+        assert s.query(AuditLog).count() == 0
+        s.close()
+
+    def test_owner_is_not_authorized(self, factory):
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_NEW)
+        with pytest.raises(NotAuthorized):
+            run_command_sync(SF, "260610-001", _owner(), _change_cmd("plumbing"))
+
+    def test_terminal_is_rejected_without_writes(self, factory):
+        from uk_management_bot.utils.request_workflow import InvalidTransition
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_APPROVED)
+        with pytest.raises(InvalidTransition):
+            run_command_sync(SF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        s = SF()
+        assert s.query(RequestComment).count() == 0
+        s.close()
+
+
+async def _async_change_run():
+    """async-зеркало смены категории: aiosqlite, «Новая» + группа electrician."""
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine, async_sessionmaker, AsyncSession)
+    from sqlalchemy import select as sa_select
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AF() as s:
+        s.add(User(id=3, telegram_id=3, first_name="Mgr", roles='["manager"]',
+                   active_role="manager", status="approved", language="ru"))
+        s.add(Request(request_number="260610-001", user_id=2, category="electricity",
+                      description="d", urgency="low", status=C.REQUEST_STATUS_NEW,
+                      assignment_type="group", assigned_group="electrician"))
+        s.add(RequestAssignment(request_number="260610-001", assignment_type="group",
+                                group_specialization="electrician", executor_id=None,
+                                created_by=3, status="active"))
+        await s.commit()
+    try:
+        out = await run_command_async(AF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        async with AF() as s:
+            req = (await s.execute(sa_select(Request))).scalar_one()
+            comments = (await s.execute(sa_select(RequestComment))).scalars().all()
+            rows = (await s.execute(sa_select(RequestAssignment))).scalars().all()
+            audits = (await s.execute(sa_select(AuditLog))).scalars().all()
+        return out, req, comments, rows, audits
+    finally:
+        await engine.dispose()
+
+
+class TestManagerChangeCategoryAsyncParity:
+    def test_async_mirrors_sync(self, factory):
+        SF = _seed_category(factory, status=C.REQUEST_STATUS_NEW,
+                            assignment=("group", "electrician"))
+        sync_out = run_command_sync(SF, "260610-001", _mgr(), _change_cmd("plumbing"))
+        async_out, req, comments, rows, audits = asyncio.run(_async_change_run())
+        assert async_out.no_op == sync_out.no_op is False
+        assert async_out.new_state.category == sync_out.new_state.category == "plumbing"
+        assert req.category == "plumbing" and req.assigned_group is None
+        assert [r.status for r in rows] == ["cancelled"]
+        assert [c.comment_type for c in comments] == [C.COMMENT_TYPE_CATEGORY_CHANGE]
+        assert [a.action for a in audits] == [C.AUDIT_ACTION_REQUEST_CATEGORY_CHANGED]

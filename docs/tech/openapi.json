@@ -1207,6 +1207,119 @@
         "title": "CallCenterCreateRequest",
         "type": "object"
       },
+      "CategoryChangeOut": {
+        "description": "Итог смены категории: свежая карточка + что произошло с назначением.",
+        "properties": {
+          "can_reassign": {
+            "title": "Can Reassign",
+            "type": "boolean"
+          },
+          "executor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Id"
+          },
+          "executor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Name"
+          },
+          "executor_spec_mismatch": {
+            "title": "Executor Spec Mismatch",
+            "type": "boolean"
+          },
+          "new_category": {
+            "title": "New Category",
+            "type": "string"
+          },
+          "new_specialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Specialization"
+          },
+          "no_op": {
+            "title": "No Op",
+            "type": "boolean"
+          },
+          "old_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Category"
+          },
+          "old_specialization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Specialization"
+          },
+          "redispatched": {
+            "title": "Redispatched",
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/RequestCard"
+          },
+          "specialization_changed": {
+            "title": "Specialization Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request",
+          "no_op",
+          "new_category",
+          "specialization_changed",
+          "redispatched",
+          "executor_spec_mismatch",
+          "can_reassign"
+        ],
+        "title": "CategoryChangeOut",
+        "type": "object"
+      },
+      "ChangeCategoryBody": {
+        "additionalProperties": false,
+        "description": "PATCH /requests/{n}/category — смена категории менеджером.\n\nОтдельное тело, а не поле в `UpdateRequestBody`: ответу нужны флаги\n(передиспетч, несоответствие специализации исполнителя), а edit-ветка\nмолча дропает неизвестные поля и отдаёт голую карточку. Только\nSELECTABLE-категории — служебную `engineering` человек не выбирает.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "title": "ChangeCategoryBody",
+        "type": "object"
+      },
       "CommentBody": {
         "properties": {
           "is_internal": {
@@ -12631,6 +12744,64 @@
           }
         ],
         "summary": "Update Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/category": {
+      "patch": {
+        "description": "Смена категории менеджером (решение владельца 2026-09-03).\n\nКанон MANAGER_CHANGE_CATEGORY: patch + комментарий в историю + аудит +\nснятие группового назначения одной транзакцией; «Новая» со сменой\nспециализации — передиспетч; «В работе» — исполнитель остаётся, ответ несёт\n`executor_spec_mismatch`/`can_reassign` для кнопки «Переназначить».",
+        "operationId": "change_request_category_api_v2_requests__request_number__category_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCategoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Request Category",
         "tags": [
           "requests"
         ]

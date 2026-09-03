@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { render, screen, waitFor } from '../../test/test-utils'
+import { render, screen, waitFor, within } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
 import { apiClient } from '../../api/client'
 import RequestDetailModal from './RequestDetailModal'
@@ -289,3 +289,110 @@ describe('смена исполнителя из карточки', () => {
   })
 })
 
+
+describe('RequestDetailModal — смена категории менеджером', () => {
+  function categoryResponse(over: Record<string, unknown> = {}) {
+    return {
+      request: makeRequest({ category: 'plumbing' }),
+      no_op: false,
+      old_category: 'electricity',
+      new_category: 'plumbing',
+      specialization_changed: true,
+      old_specialization: 'electrician',
+      new_specialization: 'plumber',
+      redispatched: false,
+      executor_id: null,
+      executor_name: null,
+      executor_spec_mismatch: false,
+      can_reassign: true,
+      ...over,
+    }
+  }
+
+  it('менеджер + активный статус → заголовок-категория это dropdown-кнопка', async () => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+    expect(screen.getByRole('button', { name: /Электрика/ })).toBeInTheDocument()
+  })
+
+  it('не-менеджер → категория только текстом', async () => {
+    mockHasRole.mockReturnValue(false)
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+    expect(screen.queryByRole('button', { name: /Электрика/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Электрика')).toBeInTheDocument()
+  })
+
+  it.each(['Принято', 'Отменена'])('терминальный статус %s → без dropdown', async (status) => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({ category: 'electricity', status }))
+    expect(screen.queryByRole('button', { name: /Электрика/ })).not.toBeInTheDocument()
+  })
+
+  it('выбор другой категории → PATCH …/category с канон-ключом', async () => {
+    mockHasRole.mockReturnValue(true)
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({ data: categoryResponse() })
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+
+    await userEvent.click(screen.getByRole('button', { name: /Электрика/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Сантехника' }))
+
+    await waitFor(() => expect(patch).toHaveBeenCalledWith(
+      '/api/v2/requests/260101-001/category', { category: 'plumbing' }))
+    patch.mockRestore()
+  })
+
+  it('выбор той же категории → запрос не уходит', async () => {
+    mockHasRole.mockReturnValue(true)
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({ data: categoryResponse() })
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+
+    await userEvent.click(screen.getByRole('button', { name: /Электрика/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Электрика' }))
+
+    expect(patch).not.toHaveBeenCalled()
+    patch.mockRestore()
+  })
+
+  it('несоответствие специализации в «В работе» → баннер и кнопка переназначения', async () => {
+    mockHasRole.mockReturnValue(true)
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({
+      data: categoryResponse({
+        request: makeRequest({ category: 'plumbing', status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов' }),
+        executor_id: 5, executor_name: 'Иван Иванов',
+        executor_spec_mismatch: true, can_reassign: true,
+      }),
+    })
+    await renderModal(makeRequest({
+      category: 'electricity', status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    await userEvent.click(screen.getByRole('button', { name: /Электрика/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Сантехника' }))
+
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent('Специализация текущего исполнителя не соответствует новой категории')
+    expect(within(banner).getByRole('button', { name: 'Переназначить' })).toBeInTheDocument()
+    patch.mockRestore()
+  })
+
+  it('несоответствие в «Закуп» → баннер без кнопки (канон не пускает переназначение)', async () => {
+    mockHasRole.mockReturnValue(true)
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({
+      data: categoryResponse({
+        request: makeRequest({ category: 'plumbing', status: 'Закуп', executor_id: 5, executor_name: 'Иван Иванов' }),
+        executor_id: 5, executor_name: 'Иван Иванов',
+        executor_spec_mismatch: true, can_reassign: false,
+      }),
+    })
+    await renderModal(makeRequest({
+      category: 'electricity', status: 'Закуп', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    await userEvent.click(screen.getByRole('button', { name: /Электрика/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Сантехника' }))
+
+    const banner = await screen.findByRole('alert')
+    expect(within(banner).queryByRole('button', { name: 'Переназначить' })).not.toBeInTheDocument()
+    patch.mockRestore()
+  })
+})

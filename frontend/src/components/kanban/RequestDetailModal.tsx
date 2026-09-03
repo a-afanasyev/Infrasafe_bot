@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronDown, ImageOff, ImagePlus, X as XIcon } from 'lucide-react'
+import { ChevronDown, ImageOff, ImagePlus, TriangleAlert, X as XIcon } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
-import { tStatus, tUrgency, tCategory } from '../../i18n/apiMaps'
+import { tStatus, tUrgency, tCategory, tSpecialization } from '../../i18n/apiMaps'
 import { useHasRole, useHasAnyRole } from '../../hooks/useHasRole'
 import { useSeenRequests } from '../../hooks/useSeenRequests'
-import { URGENCIES, normalizeUrgency } from '../../constants'
+import { CATEGORIES, URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
 import {
@@ -46,6 +46,18 @@ const URGENCY: Record<string, { bg: string; text: string }> = {
   'Средняя':    { bg: 'bg-amber/12',    text: 'text-amber' },
   'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
   'Критическая':{ bg: 'bg-red/12',      text: 'text-red' },
+}
+
+/** Ответ PATCH /requests/{n}/category — см. api/requests/schemas.CategoryChangeOut. */
+interface CategoryChangeOut {
+  no_op: boolean
+  new_category: string
+  new_specialization?: string | null
+  redispatched: boolean
+  executor_id?: number | null
+  executor_name?: string | null
+  executor_spec_mismatch: boolean
+  can_reassign: boolean
 }
 
 const SOURCE_ICON: Record<string, string> = {
@@ -91,6 +103,10 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
   const [reassignOpen, setReassignOpen] = useState(false)
+  // Итог смены категории: исполнитель «В работе» остался, но его
+  // специализация не покрывает новую категорию. Кнопка «Переназначить» —
+  // только там, где канон пускает MANAGER_ASSIGN (флаг с сервера).
+  const [categoryWarning, setCategoryWarning] = useState<{ canReassign: boolean } | null>(null)
 
   // FE-07: reset per-request form state when a *different* request opens.
   // Done at render time («adjust state when input changes») rather than in an
@@ -109,6 +125,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     setForceAcceptNote('')
     setRemindStatus('idle')
     setPendingTargetStatus(null)
+    setCategoryWarning(null)
   }
 
   const { data: request } = useQuery({
@@ -152,6 +169,36 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     },
     onError: (error: unknown) => {
       toast.error(t('toast.requestUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+
+  // Смена категории — свой эндпоинт (канон MANAGER_CHANGE_CATEGORY): ответ
+  // несёт итог передиспетча и флаг несоответствия специализации исполнителя,
+  // которых голая карточка из PATCH не даёт.
+  const changeCategory = useMutation({
+    mutationFn: (category: string) =>
+      apiClient.patch(`/api/v2/requests/${requestNumber}/category`, { category })
+        .then(r => r.data as CategoryChangeOut),
+    onSuccess: (data) => {
+      if (data.no_op) {
+        toast.info(t('kanban.categoryUnchanged'))
+        return
+      }
+      toast.success(t('toast.categoryUpdated'))
+      if (data.redispatched && data.executor_name) {
+        toast.info(t('kanban.categoryRedispatchedExecutor', { name: data.executor_name }))
+      } else if (data.redispatched) {
+        toast.info(t('kanban.categoryRedispatchedGroup', {
+          spec: tSpecialization(data.new_specialization ?? '', t),
+        }))
+      }
+      setCategoryWarning(data.executor_spec_mismatch ? { canReassign: data.can_reassign } : null)
+      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
+      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
+    },
+    onError: (error: unknown) => {
+      toast.error(t('toast.categoryUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
     },
   })
 
@@ -239,7 +286,38 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 <span className="text-[13px]">{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
               </div>
               <DialogTitle className="font-[family-name:var(--font-display)] text-lg">
-                {tCategory(request.category, t)}
+                {isManager && !FROZEN_STATUSES.has(request.status) ? (
+                  // Менеджер меняет категорию прямо из заголовка (терминальные
+                  // статусы заморожены каноном — там заголовок статичен).
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={changeCategory.isPending}
+                        title={t('kanban.changeCategory')}
+                        className="inline-flex items-center gap-1 hover:text-accent transition-colors"
+                      >
+                        {tCategory(request.category, t)}
+                        <ChevronDown className="w-4 h-4 text-text-muted" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {CATEGORIES.map((c) => (
+                        <DropdownMenuItem
+                          key={c}
+                          onSelect={() => {
+                            // Сравниваем по локализованной подписи: в БД может
+                            // лежать legacy-рус лейбл того же ключа — сервер
+                            // и так ответил бы no_op, но запрос не нужен.
+                            if (tCategory(c, t) !== tCategory(request.category, t)) changeCategory.mutate(c)
+                          }}
+                        >
+                          {tCategory(c, t)}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : tCategory(request.category, t)}
               </DialogTitle>
             </DialogHeader>
 
@@ -421,6 +499,32 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 <div className="text-xs text-text-secondary">
                   {t('kanban.createdAt')} {formatDate(request.created_at)}
                 </div>
+                {categoryWarning && (
+                  <div
+                    role="alert"
+                    className="flex items-center gap-2 flex-wrap rounded-sm border border-amber/40 bg-amber/10 px-2.5 py-1.5 text-xs text-text-primary"
+                  >
+                    <TriangleAlert className="w-3.5 h-3.5 text-amber shrink-0" />
+                    <span>{t('kanban.categorySpecMismatch')}</span>
+                    {categoryWarning.canReassign && (
+                      <button
+                        type="button"
+                        onClick={() => setReassignOpen(true)}
+                        className="text-accent hover:underline font-medium"
+                      >
+                        {t('kanban.reassignConfirm')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCategoryWarning(null)}
+                      aria-label={t('common.close')}
+                      className="ml-auto text-text-muted hover:text-text-primary"
+                    >
+                      <XIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
                 {(request.executor_name || canReassign) && (
                   <div className="text-xs text-text-secondary flex items-center gap-2 flex-wrap">
                     {request.executor_name ? (

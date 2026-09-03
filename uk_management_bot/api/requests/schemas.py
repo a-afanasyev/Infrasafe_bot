@@ -218,6 +218,40 @@ class UpdateRequestBody(BaseModel):
         return v
 
 
+class ChangeCategoryBody(BaseModel):
+    """PATCH /requests/{n}/category — смена категории менеджером.
+
+    Отдельное тело, а не поле в `UpdateRequestBody`: ответу нужны флаги
+    (передиспетч, несоответствие специализации исполнителя), а edit-ветка
+    молча дропает неизвестные поля и отдаёт голую карточку. Только
+    SELECTABLE-категории — служебную `engineering` человек не выбирает.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        return _validate_request_category(v)
+
+
+class CategoryChangeOut(BaseModel):
+    """Итог смены категории: свежая карточка + что произошло с назначением."""
+    request: RequestCard
+    no_op: bool
+    old_category: Optional[str] = None
+    new_category: str
+    specialization_changed: bool
+    old_specialization: Optional[str] = None
+    new_specialization: Optional[str] = None
+    redispatched: bool
+    executor_id: Optional[int] = None
+    executor_name: Optional[str] = None
+    executor_spec_mismatch: bool
+    can_reassign: bool
+
+
 class CommentBody(BaseModel):
     text: str
     is_internal: bool = False

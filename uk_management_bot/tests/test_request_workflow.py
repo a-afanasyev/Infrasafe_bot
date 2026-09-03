@@ -173,7 +173,8 @@ class TestAllowedActions:
         # «В работе ⟺ есть исполнитель»).
         assert acts == {Action.MANAGER_ASSIGN, Action.ASSIGN_GROUP,
                         Action.MANAGER_PURCHASE,
-                        Action.CLARIFY_REQUEST, Action.CANCEL}
+                        Action.CLARIFY_REQUEST, Action.CANCEL,
+                        Action.MANAGER_CHANGE_CATEGORY}
 
     def test_owner_applicant_on_new_can_only_cancel(self):
         assert allowed_actions(_snap(REQUEST_STATUS_NEW), OWNER) == {Action.CANCEL}
@@ -214,7 +215,8 @@ class TestAllowedActions:
         acts = allowed_actions(
             _snap(REQUEST_STATUS_COMPLETED, returned=True), MANAGER)
         assert acts == {Action.MANAGER_RETURN_TO_WORK,
-                        Action.MANAGER_FORCE_ACCEPT, Action.CANCEL}
+                        Action.MANAGER_FORCE_ACCEPT, Action.CANCEL,
+                        Action.MANAGER_CHANGE_CATEGORY}
 
     def test_owner_on_returned_nothing(self):
         """Возвращена ждёт менеджера: житель повторно не принимает/не возвращает."""
@@ -830,4 +832,178 @@ class TestActionTableInvariants:
         handlers = {a for a, s in ACTION_TABLE.items()
                     if STATUS_RETURNED in s.from_statuses}
         assert handlers == {Action.MANAGER_RETURN_TO_WORK,
-                            Action.MANAGER_FORCE_ACCEPT, Action.CANCEL}
+                            Action.MANAGER_FORCE_ACCEPT, Action.CANCEL,
+                            # ярлык, статус не трогает — тоже менеджерское
+                            Action.MANAGER_CHANGE_CATEGORY}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MANAGER_CHANGE_CATEGORY — смена категории заявки менеджером (план 2026-09-03)
+# ═══════════════════════════════════════════════════════════════════════════
+
+from dataclasses import replace as _replace  # noqa: E402
+
+from uk_management_bot.utils.constants import (  # noqa: E402
+    REQUEST_STATUS_CLARIFICATION,
+    REQUEST_STATUS_PURCHASE,
+)
+from uk_management_bot.utils.request_workflow.types import (  # noqa: E402
+    SAME_STATUS,
+    DomainOp,
+    EditForbidden,
+)
+
+
+def _cat_snap(status, category, **kw):
+    snap = _snap(status, **kw)
+    return _replace(snap, request=_replace(snap.request, category=category))
+
+
+def _change(snap, category, actor=MANAGER):
+    return _plan(snap, Action.MANAGER_CHANGE_CATEGORY, actor, {"category": category})
+
+
+class TestManagerChangeCategorySpec:
+    def test_spec_keeps_status_and_requires_manager(self):
+        spec = ACTION_TABLE[Action.MANAGER_CHANGE_CATEGORY]
+        assert spec.to_status == SAME_STATUS
+        assert spec.from_statuses == frozenset(
+            s for s in ACTION_TABLE[Action.CANCEL].from_statuses)  # все нетерминальные
+        assert not is_terminal(SAME_STATUS)
+
+    @pytest.mark.parametrize("status", [
+        REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE,
+        REQUEST_STATUS_CLARIFICATION, REQUEST_STATUS_EXECUTED,
+        REQUEST_STATUS_COMPLETED, STATUS_RETURNED,
+    ])
+    def test_allowed_from_every_non_terminal_status(self, status):
+        snap = _cat_snap(status, "electricity", executor=EXECUTOR_ID)
+        res = _change(snap, "plumbing")
+        assert not res.no_op
+        assert res.new_canon_status == status
+        # статус в patch НЕ трогаем — status_version не бампается
+        assert "status" not in _patch_fields(res)
+        assert _patch_fields(res)["category"] == (Op.SET, "plumbing")
+
+    @pytest.mark.parametrize("status", [REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED])
+    def test_terminal_is_invalid_transition(self, status):
+        with pytest.raises(InvalidTransition):
+            _change(_cat_snap(status, "electricity"), "plumbing")
+
+    @pytest.mark.parametrize("actor", [OWNER, EXECUTOR, DISPATCHER])
+    def test_non_manager_is_not_authorized(self, actor):
+        snap = _cat_snap(REQUEST_STATUS_NEW, "electricity")
+        with pytest.raises((NotAuthorized, InvalidTransition)):
+            _change(snap, "plumbing", actor=actor)
+
+    def test_unknown_category_is_payload_invalid(self):
+        with pytest.raises(PayloadInvalid):
+            _change(_cat_snap(REQUEST_STATUS_NEW, "electricity"), "nope-xyz")
+
+    def test_blank_category_is_payload_invalid(self):
+        with pytest.raises(PayloadInvalid):
+            _change(_cat_snap(REQUEST_STATUS_NEW, "electricity"), "   ")
+
+    def test_not_reachable_through_status_intent(self):
+        """Status-based вход никогда не резолвится в смену категории."""
+        snap = _cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity", executor=EXECUTOR_ID)
+        cmd = resolve_command(snap, MANAGER, LegacyStatusIntent(
+            "c", REQUEST_STATUS_IN_PROGRESS, {"executor_id": 9}))
+        assert cmd.action is not Action.MANAGER_CHANGE_CATEGORY
+
+    def test_category_is_no_longer_a_plain_edit(self):
+        with pytest.raises(EditForbidden):
+            validate_edits(_state(REQUEST_STATUS_NEW), {"category": "plumbing"})
+
+
+class TestManagerChangeCategoryNoOp:
+    def test_same_category_is_no_op_without_events(self):
+        res = _change(_cat_snap(REQUEST_STATUS_NEW, "plumbing"), "plumbing")
+        assert res.no_op and res.patch == () and res.events == () and res.domain_ops == ()
+
+    def test_legacy_label_equivalent_is_no_op_and_not_rewritten(self):
+        """В БД «Сантехника»; менеджер выбирает plumbing — то же самое.
+        Строка в БД остаётся как была (no-op без patch)."""
+        res = _change(_cat_snap(REQUEST_STATUS_NEW, "Сантехника"), "plumbing")
+        assert res.no_op and res.patch == ()
+
+
+class TestManagerChangeCategoryAssignment:
+    def test_new_with_group_and_spec_changed_clears_group(self):
+        snap = _cat_snap(REQUEST_STATUS_NEW, "electricity",
+                         assignment_type="group", assignment_group="electrician")
+        res = _change(snap, "plumbing")
+        fields = _patch_fields(res)
+        assert fields["assigned_group"] == (Op.CLEAR, None)
+        assert fields["assignment_type"] == (Op.CLEAR, None)
+        assert DomainOp("cancel_active_assignments") in res.domain_ops
+
+    def test_new_with_group_same_spec_keeps_group(self):
+        # internet и electricity → одна специализация electrician
+        snap = _cat_snap(REQUEST_STATUS_NEW, "electricity",
+                         assignment_type="group", assignment_group="electrician")
+        res = _change(snap, "internet")
+        assert "assigned_group" not in _patch_fields(res)
+        assert all(d.kind != "cancel_active_assignments" for d in res.domain_ops)
+
+    def test_legacy_label_old_value_compares_by_specialization(self):
+        # «Интернет» → electrician; electricity → electrician: спец не менялась
+        snap = _cat_snap(REQUEST_STATUS_NEW, "Интернет",
+                         assignment_type="group", assignment_group="electrician")
+        res = _change(snap, "electricity")
+        assert not res.no_op
+        assert all(d.kind != "cancel_active_assignments" for d in res.domain_ops)
+
+    def test_in_progress_keeps_executor_and_assignment(self):
+        snap = _cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity",
+                         executor=EXECUTOR_ID, assignment=EXECUTOR_ID,
+                         assignment_type="individual")
+        res = _change(snap, "plumbing")
+        fields = _patch_fields(res)
+        assert "executor_id" not in fields and "assigned_group" not in fields
+        assert all(d.kind != "cancel_active_assignments" for d in res.domain_ops)
+
+    def test_in_progress_legacy_without_executor_is_still_allowed(self):
+        """Инвариант «В работе ⟺ исполнитель» здесь не применяется: статус не
+        меняется, а legacy-заявка без исполнителя должна допускать правку."""
+        res = _change(_cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity"), "plumbing")
+        assert not res.no_op
+
+
+class TestManagerChangeCategoryEvents:
+    def _events(self, res, kind):
+        return [e for e in res.events if e.kind == kind]
+
+    def test_comment_and_audit_carry_old_and_new(self):
+        res = _change(_cat_snap(REQUEST_STATUS_NEW, "electricity"), "plumbing")
+        comments = [d for d in res.domain_ops if d.kind == "add_comment"]
+        assert len(comments) == 1
+        assert comments[0].data["comment_type"] == "category_change"
+        assert comments[0].data["text"] == "Категория: Электрика → Сантехника"
+        audit = self._events(res, "audit")
+        assert len(audit) == 1
+        assert audit[0].data["action"] == Action.MANAGER_CHANGE_CATEGORY.value
+        assert audit[0].data["audit_action"] == "request_category_changed"
+        assert audit[0].data["old_category"] == "electricity"
+        assert audit[0].data["new_category"] == "plumbing"
+        assert audit[0].data["payload"] == {"category": "plumbing"}
+
+    def test_no_webhook_and_no_realtime(self):
+        res = _change(_cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity",
+                                executor=EXECUTOR_ID), "plumbing")
+        assert self._events(res, "webhook") == []
+        assert self._events(res, "realtime") == []
+
+    def test_notify_only_in_progress_with_executor_and_spec_changed(self):
+        with_exec = _change(_cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity",
+                                      executor=EXECUTOR_ID), "plumbing")
+        assert [e.data["action"] for e in self._events(with_exec, "notify")] == [
+            Action.MANAGER_CHANGE_CATEGORY.value]
+        same_spec = _change(_cat_snap(REQUEST_STATUS_IN_PROGRESS, "electricity",
+                                      executor=EXECUTOR_ID), "internet")
+        assert self._events(same_spec, "notify") == []
+        no_exec = _change(_cat_snap(REQUEST_STATUS_NEW, "electricity"), "plumbing")
+        assert self._events(no_exec, "notify") == []
+        purchase = _change(_cat_snap(REQUEST_STATUS_PURCHASE, "electricity",
+                                     executor=EXECUTOR_ID), "plumbing")
+        assert self._events(purchase, "notify") == []

@@ -29,7 +29,8 @@ API-путь публикует `request.created` (Новая), и async-хел�
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from dataclasses import dataclass
+from typing import Literal, Optional
 
 from uk_management_bot.constants.categories import get_specialization_for_category
 from uk_management_bot.utils.request_workflow import (
@@ -39,6 +40,19 @@ from uk_management_bot.utils.request_workflow import (
 )
 
 logger = logging.getLogger(__name__)
+
+DispatchKind = Literal["no_spec", "disabled", "assigned", "grouped", "failed"]
+
+
+@dataclass(frozen=True)
+class DispatchResult:
+    """Что именно сделал best-effort диспетч. Исторические вызывающие
+    (создание заявки) значение игнорируют; смене категории
+    (`services/category_change`) нужен факт, а не лог."""
+
+    kind: DispatchKind
+    specialization: Optional[str] = None
+    executor_id: Optional[int] = None
 
 
 def _dispatch_principal() -> PrincipalRef:
@@ -153,7 +167,8 @@ async def _auto_assign_enabled_async(db=None) -> bool:
 
 def auto_dispatch_new_request_sync(request_number: str,
                                    category: Optional[str],
-                                   *, _db=None) -> None:
+                                   *, _db=None,
+                                   session_factory=None) -> DispatchResult:
     """Бот-путь: подобрать дежурного и назначить его (best-effort).
 
     Дежурный найден → «Новая»→«В работе» с ним. Не найден → заявка ОСТАЁТСЯ
@@ -170,13 +185,16 @@ def auto_dispatch_new_request_sync(request_number: str,
     """
     spec = _specialization_for(category)
     if not spec:
-        return
+        return DispatchResult("no_spec")
     if not _auto_assign_enabled_sync(_db):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
-        return
-    from uk_management_bot.database.session import SessionLocal
+        return DispatchResult("disabled", spec)
     from uk_management_bot.services.workflow_runner import run_command_sync
+
+    if session_factory is None:
+        from uk_management_bot.database.session import SessionLocal
+        session_factory = SessionLocal
 
     executor_id = pick_duty_executor_id(spec, _db)
     if executor_id is not None:
@@ -186,32 +204,38 @@ def auto_dispatch_new_request_sync(request_number: str,
         command = _assign_group_command(request_number, spec)
         done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
     try:
-        outcome = run_command_sync(SessionLocal, request_number,
+        outcome = run_command_sync(session_factory, request_number,
                                    _dispatch_principal(), command)
         logger.info("[DISPATCH] Заявка %s %s", request_number, done)
     except Exception as e:  # best-effort — не валим создание заявки
         logger.warning("[DISPATCH] авто-назначение %s ('%s') не выполнено: %s",
                        request_number, spec, e)
-        return
+        return DispatchResult("failed", spec)
     if executor_id is not None:
         _notify_assigned_sync(request_number, outcome)
+        return DispatchResult("assigned", spec, executor_id)
+    return DispatchResult("grouped", spec)
 
 
 async def auto_dispatch_new_request_async(request_number: str,
                                           category: Optional[str],
-                                          *, _db=None) -> None:
+                                          *, _db=None,
+                                          session_factory=None) -> DispatchResult:
     """API/TWA/обходчик: то же, что sync-путь, плюс realtime для канбана."""
     spec = _specialization_for(category)
     if not spec:
-        return
+        return DispatchResult("no_spec")
     if not await _auto_assign_enabled_async(_db):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
-        return
+        return DispatchResult("disabled", spec)
     import asyncio
 
-    from uk_management_bot.database.session import AsyncSessionLocal
     from uk_management_bot.services.workflow_runner import run_command_async
+
+    if session_factory is None:
+        from uk_management_bot.database.session import AsyncSessionLocal
+        session_factory = AsyncSessionLocal
 
     # Подбор дежурного — sync-код (`select_executor` ходит через Session), и
     # здесь мы в event loop'е. Отдельный поток, а не прямой вызов: блокировать
@@ -225,12 +249,12 @@ async def auto_dispatch_new_request_async(request_number: str,
         done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
     try:
         outcome = await run_command_async(
-            AsyncSessionLocal, request_number, _dispatch_principal(), command)
+            session_factory, request_number, _dispatch_principal(), command)
         logger.info("[DISPATCH] Заявка %s %s", request_number, done)
     except Exception as e:  # best-effort — не валим создание заявки
         logger.warning("[DISPATCH] авто-назначение %s ('%s') не выполнено: %s",
                        request_number, spec, e)
-        return
+        return DispatchResult("failed", spec)
     if executor_id is not None:
         await _publish_status_changed(outcome, request_number)
         from uk_management_bot.services.workflow_notifications import (
@@ -242,11 +266,12 @@ async def auto_dispatch_new_request_async(request_number: str,
         except Exception as e:  # уведомление не вправе ронять назначение
             logger.warning("[DISPATCH] уведомление о назначении %s пропущено: %s",
                            request_number, e)
-    else:
-        # Статус НЕ менялся — заявка осталась «Новая». Публиковать
-        # `status_changed` здесь было бы ложью; канбану нужно обновить карточку
-        # из-за появившейся группы.
-        await _publish_updated(request_number)
+        return DispatchResult("assigned", spec, executor_id)
+    # Статус НЕ менялся — заявка осталась «Новая». Публиковать
+    # `status_changed` здесь было бы ложью; канбану нужно обновить карточку
+    # из-за появившейся группы.
+    await _publish_updated(request_number)
+    return DispatchResult("grouped", spec)
 
 
 def _notify_assigned_sync(request_number: str, outcome) -> None:

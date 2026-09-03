@@ -988,7 +988,12 @@
     "noOtherExecutors": "Boshqa mos ijrochilar yo‘q — joriy ijrochi ro‘yxatga kirmaydi",
     "noExecutorsAvailable": "Mavjud ijrochilar yo‘q",
     "reassignConfirm": "Qayta tayinlash",
-    "assignConfirm": "Tayinlash"
+    "assignConfirm": "Tayinlash",
+    "changeCategory": "Kategoriyani o‘zgartirish",
+    "categoryUnchanged": "Kategoriya o‘zgarmadi",
+    "categoryRedispatchedExecutor": "Ariza navbatchiga topshirildi: {{name}}",
+    "categoryRedispatchedGroup": "Ariza «{{spec}}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
+    "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",
@@ -2019,6 +2024,8 @@
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",
+    "categoryUpdated": "Kategoriya o‘zgartirildi",
+    "categoryUpdateFailed": "Kategoriyani o‘zgartirib bo‘lmadi",
     "requestUpdateFailed": "Arizani yangilab bo'lmadi",
     "workPhotosUploaded": "Ish suratlari yuklandi",
     "workPhotosUploadFailed": "Ish suratlarini yuklab bo'lmadi",

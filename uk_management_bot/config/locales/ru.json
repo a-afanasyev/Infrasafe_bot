@@ -803,6 +803,7 @@
       "test_middleware": "🧪 Тест middleware",
       "reassign_request": "🔄 Переназначить",
       "assign_executor_to_request": "👤 Назначить исполнителя",
+      "change_category": "🏷 Категория",
       "back_to_request": "← К заявке"
     },
     "handlers": {
@@ -975,6 +976,16 @@
       "reassign_rejected": "Переназначение отклонено: заявка изменилась, откройте карточку заново",
       "reassign_from_unassigned": "не был назначен",
       "reassign_manager_only": "Переназначение доступно менеджеру",
+      "category_menu_title": "🏷 <b>Категория заявки #{request_number}</b>\n\nСейчас: {current}\n\nВыберите новую категорию.",
+      "category_success": "✅ <b>Заявка #{request_number}: категория изменена</b>\n\nБыло: {old_label}\nСтало: {new_label}",
+      "category_same": "Заявка #{request_number} уже в этой категории — ничего не изменилось",
+      "category_redispatched_executor": "👤 Заявка передана дежурному: {executor}",
+      "category_redispatched_group": "👥 Заявка адресована группе «{spec}» — дежурного сейчас нет",
+      "category_spec_mismatch": "⚠️ Специализация текущего исполнителя не соответствует новой категории",
+      "category_bad_status": "Категорию завершённой или отменённой заявки менять нельзя",
+      "category_manager_only": "Смена категории доступна менеджеру",
+      "category_unknown": "Такой категории нет",
+      "category_rejected": "Смена категории отклонена: заявка изменилась, откройте карточку заново",
       "reassign_already_assigned": "Заявка уже назначена — используйте «🔄 Переназначить»",
       "duty_assign_no_specialization": "Для категории заявки не определена специализация",
       "duty_assign_no_executors": "Нет подходящих исполнителей по специализации",
@@ -8209,7 +8220,8 @@
       "returned_to_work_manager": "↩️ Заявка #{request_number} возвращена в работу\n\n📍 {address}\n\n📝 Причина: {reason}",
       "assigned_executor": "📋 <b>Вам назначена заявка #{request_number}</b>\n\n📂 Категория: {category}\n📍 Адрес: {address}\n📝 Описание: {description}\n\nПожалуйста, приступите к выполнению.",
       "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю",
-      "reassigned": "🔁 Заявка #{request_number}: работы продолжит другой исполнитель\n\n📍 {address}"
+      "reassigned": "🔁 Заявка #{request_number}: работы продолжит другой исполнитель\n\n📍 {address}",
+      "category_changed": "🏷 Заявка #{request_number}: категория изменена на «{category}»\n\n📍 {address}\n\nЕсли это не ваш профиль — сообщите менеджеру."
     }
   },
   "document_types": {
