@@ -28,13 +28,15 @@ import logging
 from typing import Optional
 
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.filters import StateFilter
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.user_verification_service import UserVerificationService
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB, get_upload_documents_inline
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
     get_document_confirmation_keyboard,
@@ -183,18 +185,57 @@ async def cancel_onboarding(message: Message, state: FSMContext, user_status: st
 # Регистрация по UPLOAD_DOCUMENTS_TEXTS мертва (генератор кнопки — мёртвая
 # ``complete_onboarding``), но САМА функция живая: её напрямую зовёт
 # ``process_document_confirmation`` по кнопке «загрузить ещё документ».
-@router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
-async def start_document_upload(message: Message, state: FSMContext, language: str = "ru"):
-    """Начинает процесс загрузки документов"""
-    lang = language
-    
-    await message.answer(
+async def _begin_document_type_step(target: Message, state: FSMContext, lang: str) -> None:
+    """Экран выбора типа документа + состояние. Общий для reply-кнопки,
+    inline-кнопки «Загрузить документы» (BUG-188) и «загрузить ещё»."""
+    await target.answer(
         get_text("onboarding.documents.title", language=lang) + "\n\n" +
         get_text("onboarding.documents.description", language=lang),
         reply_markup=get_document_type_keyboard(lang)
     )
     await state.set_state(OnboardingStates.waiting_for_document_type)
+
+
+@router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
+async def start_document_upload(message: Message, state: FSMContext, language: str = "ru"):
+    """Начинает процесс загрузки документов"""
+    await _begin_document_type_step(message, state, language)
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
+
+
+@router.callback_query(F.data == UPLOAD_DOCUMENTS_CB)
+async def open_document_upload(callback: CallbackQuery, state: FSMContext, language: str = "ru"):
+    """Inline-кнопка «📤 Загрузить документы» из уведомления о запросе (BUG-188).
+    Работает из любого состояния онбординга-документов: повторное нажатие
+    просто перерисовывает выбор типа."""
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
+        logger.debug(f"Не удалось снять inline-кнопку загрузки документов: {e}")
+    await _begin_document_type_step(callback.message, state, language)
+    await callback.answer()
+    logger.info(f"Пользователь {callback.from_user.id} открыл загрузку документов по кнопке")
+
+
+@router.message(OnboardingStates.waiting_for_document_type, F.photo | F.document)
+async def document_before_type(message: Message, state: FSMContext, language: str = "ru"):
+    """Фото/файл до выбора типа (BUG-188): раньше терялись молча — хендлер
+    выбора типа ловил только текст. Состояние не трогаем."""
+    await message.answer(
+        get_text("onboarding.documents.choose_type_first", language=language),
+        reply_markup=get_document_type_keyboard(language),
+    )
+
+
+@router.message(StateFilter(None), F.chat.type == "private", F.photo | F.document)
+async def catch_stray_document(message: Message, language: str = "ru", **_kwargs):
+    """Фото/файл вне какого-либо сценария (BUG-188). Все штатные приёмники
+    медиа привязаны к FSM-состояниям, поэтому здесь — только подсказка с
+    кнопкой входа в загрузку документов, вместо тишины."""
+    await message.answer(
+        get_text("onboarding.documents.send_after_button", language=language),
+        reply_markup=get_upload_documents_inline(language),
+    )
 
 @router.message(OnboardingStates.waiting_for_document_type, F.text)
 async def process_document_type_selection(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
