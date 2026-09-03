@@ -1214,6 +1214,17 @@
             "title": "Can Reassign",
             "type": "boolean"
           },
+          "dispatch_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatch Kind"
+          },
           "executor_id": {
             "anyOf": [
               {

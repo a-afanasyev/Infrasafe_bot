@@ -267,7 +267,9 @@ def _comment_row(req: Request, dop, actor: ActorContext) -> RequestComment:
         user_id=actor.user_id,
         comment_text=dop.data["text"],
         comment_type=dop.data["comment_type"],
-        is_internal=False,
+        # Внутренняя запись: заявителю смена категории в /comments не отдаётся
+        # (решение владельца 2026-09-03), сотрудники видят её в истории.
+        is_internal=True,
     )
 
 

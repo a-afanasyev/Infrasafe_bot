@@ -412,3 +412,12 @@ class TestCollectNotices:
         # Не бросает — и до исключения честно ДОШЁЛ до запроса (AUD6-P2-26).
         assert self.svc._collect_notices(req, comment) == []
         assert self.db.query.called
+
+
+# ===== ревью 2026-09-03: эмодзи для комментария смены категории =====
+
+def test_category_change_comment_has_own_emoji():
+    from unittest.mock import MagicMock
+    from uk_management_bot.utils.constants import COMMENT_TYPE_CATEGORY_CHANGE
+    service = _build_service(MagicMock())
+    assert service._get_comment_type_emoji(COMMENT_TYPE_CATEGORY_CHANGE) == "🏷"

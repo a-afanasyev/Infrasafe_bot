@@ -574,3 +574,21 @@ class TestGetManagerRequestListKb:
             result = get_manager_request_list_kb(requests=[], page=1, total_pages=3)
         callbacks = _all_inline_callbacks(result)
         assert "mreq_page_2" in callbacks
+
+
+# ---------------------------------------------------------------------------
+# Ревью 2026-09-03 (live-QA dev): заявка с address=NULL валила весь список
+# менеджера («'NoneType' object is not subscriptable»)
+# ---------------------------------------------------------------------------
+
+class TestGetManagerRequestListKbNullAddress:
+    def test_null_address_does_not_break_the_list(self):
+        with patch(CALLBACK_HELPER_PATH + ".create_callback_data_with_request_number",
+                   side_effect=_mock_create_callback):
+            from uk_management_bot.keyboards.admin import get_manager_request_list_kb
+            result = get_manager_request_list_kb(
+                requests=[{"request_number": "250101-001", "category": "Сантехника",
+                           "address": None, "status": "Новая"}],
+                page=1, total_pages=1)
+        texts = [b.text for b in _all_inline_buttons(result)]
+        assert any("#250101-001" in t for t in texts)

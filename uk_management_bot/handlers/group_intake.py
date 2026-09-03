@@ -762,11 +762,13 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         # категория/срочность дефолтные (автор увидит их в промпте), адрес
         # достаёт токен-фолбэк по полному тексту. PROCESSING_ERROR остаётся
         # тишиной: сломанный классификатор не заменить дефолтами честно.
+        # у NOT_REQUEST категории нет — берём keyword-хит по тексту (и честно
+        # помечаем источник для аудита/метрики), иначе прежний дефолт «Другое»
+        keyword_category = None if result.category else guess_category(text)
         result = ClassificationResult(
             outcome=Outcome.REQUEST,
-            # у NOT_REQUEST категории нет — берём keyword-хит по тексту,
-            # иначе прежний дефолт «Другое»
-            category=result.category or guess_category(text) or "other",
+            category=result.category or keyword_category or "other",
+            category_source="keyword" if keyword_category else result.category_source,
             urgency=result.urgency or "low",
             confidence=result.confidence,
             location_scope=result.location_scope or "unknown",

@@ -122,3 +122,23 @@ async def test_no_hint_without_keyword(monkeypatch):
     assert user_content == "26v 2-podyezd"
     assert res.category == "other"
     assert res.category_source == "llm"
+
+
+# ───────────── ревью 2026-09-03: служебная категория не протекает из ответа модели ─────────────
+
+
+@pytest.mark.parametrize("leaked", ["engineering", "Инженерный разбор"])
+def test_service_category_leaked_by_model_falls_back_to_other(leaked):
+    """Схема сужена до SELECTABLE, но защитная проверка после парсинга обязана
+    держать тот же список: `engineering` (очередь InfraSafe) человек в потоке
+    группы выбрать не может — и модель отдать не должна."""
+    res = _parse_response(_payload(leaked), keyword_category=None)
+    assert res.outcome is Outcome.REQUEST
+    assert res.category == "other"
+    assert res.category_source == "llm"
+
+
+def test_service_category_leaked_by_model_yields_to_keyword():
+    res = _parse_response(_payload("engineering"), keyword_category="plumbing")
+    assert res.category == "plumbing"
+    assert res.category_source == "keyword"

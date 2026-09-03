@@ -11,6 +11,7 @@ import pytest
 
 from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
 from uk_management_bot.services.group_intake.category_keywords import (
+    MIN_STEM_LEN,
     CATEGORY_GLOSSARY,
     CATEGORY_KEYWORDS,
     guess_category,
@@ -110,4 +111,18 @@ def test_glossary_covers_every_selectable_category():
 def test_stems_are_normalised_and_long_enough(key, stems):
     for stem in stems:
         assert stem == normalize_text(stem), (key, stem)
-        assert len(stem) >= 3, (key, stem)
+        assert len(stem) >= MIN_STEM_LEN, (key, stem)
+
+
+# ───────────── ревью 2026-09-03: MIN_STEM_LEN — реальный инвариант, не декларация ─────────────
+
+
+def test_stems_shorter_than_min_len_never_match(monkeypatch):
+    """Короткий стем = лавина ложных хитов по `startswith`; словарь и
+    матчер держат один порог `MIN_STEM_LEN`, а не число в двух местах."""
+    from uk_management_bot.services.group_intake import category_keywords as kw
+
+    monkeypatch.setitem(kw.CATEGORY_KEYWORDS, "elevator", ("li",))
+    assert kw.MIN_STEM_LEN >= 3
+    assert kw.guess_category("li ishlamayapti") is None
+    assert kw.keyword_scores("li ishlamayapti") == {}

@@ -982,6 +982,7 @@
       "category_redispatched_executor": "👤 Ariza navbatchiga topshirildi: {executor}",
       "category_redispatched_group": "👥 Ariza «{spec}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
       "category_spec_mismatch": "⚠️ Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi",
+      "category_left_unassigned": "⚠️ Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang",
       "category_bad_status": "Yakunlangan yoki bekor qilingan arizaning kategoriyasini o‘zgartirib bo‘lmaydi",
       "category_manager_only": "Kategoriyani o‘zgartirish menejer uchun mavjud",
       "category_unknown": "Bunday kategoriya yo‘q",

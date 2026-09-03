@@ -396,3 +396,127 @@ describe('RequestDetailModal — смена категории менеджер�
     patch.mockRestore()
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────────
+// Ревью 2026-09-03: жизнь баннера после смены категории
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Live-QA на dev: после успешного переназначения на сантехника баннер
+// «специализация не соответствует» продолжал висеть; при повторном выборе
+// (no_op) — тоже. И тихая потеря группы: диспетч выключен → заявка осталась
+// «Новая» без группы, а менеджер видел только «Категория изменена».
+
+describe('RequestDetailModal — баннер после смены категории', () => {
+  const PLUMBER = {
+    id: 7, first_name: 'Пётр', last_name: 'Петров', phone: null,
+    specialization: ['plumber'], active_shift_id: null,
+    verification_status: 'verified', status: 'approved', roles: ['executor'],
+  }
+
+  function response(over: Record<string, unknown> = {}) {
+    return {
+      request: makeRequest({ category: 'plumbing', status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов' }),
+      no_op: false,
+      old_category: 'electricity',
+      new_category: 'plumbing',
+      specialization_changed: true,
+      old_specialization: 'electrician',
+      new_specialization: 'plumber',
+      redispatched: false,
+      dispatch_kind: null,
+      executor_id: 5,
+      executor_name: 'Иван Иванов',
+      executor_spec_mismatch: true,
+      can_reassign: true,
+      ...over,
+    }
+  }
+
+  async function changeTo(name: string) {
+    await userEvent.click(screen.getByRole('button', { name: /Электрика/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name }))
+  }
+
+  it('после успешного переназначения баннер несоответствия гаснет', async () => {
+    mockHasRole.mockReturnValue(true)
+    server.use(http.get('*/api/v2/shifts/employees', () => HttpResponse.json([PLUMBER])))
+    const spy = vi.spyOn(apiClient, 'patch').mockImplementation(((url: string) =>
+      Promise.resolve({
+        data: url.endsWith('/category')
+          ? response()
+          : makeRequest({ category: 'plumbing', status: 'В работе', executor_id: 7, executor_name: 'Пётр Петров' }),
+      })) as never)
+    await renderModal(makeRequest({
+      category: 'electricity', status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    await changeTo('Сантехника')
+    const banner = await screen.findByRole('alert')
+    await userEvent.click(within(banner).getByRole('button', { name: 'Переназначить' }))
+
+    await userEvent.click(await screen.findByText('Пётр Петров'))
+    const dialog = screen.getByRole('dialog', { name: 'Сменить исполнителя' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Переназначить' }))
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    spy.mockRestore()
+  })
+
+  it('повторный выбор → no_op → баннер гаснет', async () => {
+    mockHasRole.mockReturnValue(true)
+    const spy = vi.spyOn(apiClient, 'patch')
+      .mockResolvedValueOnce({ data: response() })
+      .mockResolvedValueOnce({ data: response({ no_op: true, executor_spec_mismatch: false }) })
+    await renderModal(makeRequest({
+      category: 'electricity', status: 'В работе', executor_id: 5, executor_name: 'Иван Иванов',
+    }))
+
+    await changeTo('Сантехника')
+    await screen.findByRole('alert')
+    // GET карточки в тесте отдаёт прежнюю «Электрика» → повторный выбор снова уходит на сервер
+    await changeTo('Сантехника')
+
+    await waitFor(() => expect(
+      spy.mock.calls.filter(c => String(c[0]).endsWith('/category')).length,
+    ).toBeGreaterThanOrEqual(2))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    spy.mockRestore()
+  })
+
+  it('диспетч выключен → баннер «осталась без группы» с кнопкой «Назначить»', async () => {
+    mockHasRole.mockReturnValue(true)
+    const spy = vi.spyOn(apiClient, 'patch').mockResolvedValue({
+      data: response({
+        request: makeRequest({ category: 'plumbing', status: 'Новая', executor_id: null, executor_name: null }),
+        dispatch_kind: 'disabled', executor_id: null, executor_name: null,
+        executor_spec_mismatch: false, can_reassign: true,
+      }),
+    })
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+
+    await changeTo('Сантехника')
+
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent('Заявка осталась «Новая» без группы — назначьте исполнителя')
+    expect(within(banner).getByRole('button', { name: 'Назначить' })).toBeInTheDocument()
+    spy.mockRestore()
+  })
+
+  it('диспетч передал дежурному → баннера нет', async () => {
+    mockHasRole.mockReturnValue(true)
+    const spy = vi.spyOn(apiClient, 'patch').mockResolvedValue({
+      data: response({
+        request: makeRequest({ category: 'plumbing', status: 'В работе', executor_id: 7, executor_name: 'Пётр Петров' }),
+        dispatch_kind: 'assigned', redispatched: true, executor_id: 7, executor_name: 'Пётр Петров',
+        executor_spec_mismatch: false,
+      }),
+    })
+    await renderModal(makeRequest({ category: 'electricity', status: 'Новая' }))
+
+    await changeTo('Сантехника')
+
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    spy.mockRestore()
+  })
+})

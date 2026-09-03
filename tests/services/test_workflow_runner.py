@@ -1109,7 +1109,9 @@ class TestManagerChangeCategory:
         assert comment.user_id == 3                           # менеджер
         assert comment.comment_type == C.COMMENT_TYPE_CATEGORY_CHANGE
         assert comment.comment_text == "Категория: Электрика → Сантехника"
-        assert comment.is_internal is False
+        # решение владельца 2026-09-03: смена категории — внутренняя запись,
+        # заявителю в /comments не отдаётся
+        assert comment.is_internal is True
         audit = s.query(AuditLog).filter_by(action=C.AUDIT_ACTION_REQUEST_CATEGORY_CHANGED).one()
         assert audit.user_id == 3
         assert audit.details["old_category"] == "electricity"

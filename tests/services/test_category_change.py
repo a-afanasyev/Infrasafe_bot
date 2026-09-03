@@ -217,3 +217,137 @@ class TestErrors:
         SF = _seed(factory, status=C.REQUEST_STATUS_APPROVED)
         with pytest.raises(InvalidTransition):
             _change(SF, "plumbing")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Ревью 2026-09-03: async-путь (дашборд) и исчезнувшая заявка
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _seed_objects(*, status=C.REQUEST_STATUS_NEW, category="electricity",
+                  assignment=None, auto_assign=True):
+    """Те же строки, что кладёт `_seed`, но списком — для async-сессии."""
+    from uk_management_bot.config.settings import settings
+
+    objs = [
+        User(id=1, telegram_id=settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID,
+             first_name="System", roles='["manager"]', active_role="manager",
+             status="approved", language="ru"),
+        User(id=APPLICANT, telegram_id=20, first_name="Owner", roles='["applicant"]',
+             active_role="applicant", status="approved", language="ru"),
+        User(id=MANAGER, telegram_id=30, first_name="Mgr", roles='["manager"]',
+             active_role="manager", status="approved", language="ru"),
+        User(id=PLUMBER, telegram_id=50, first_name="Pl", roles='["executor"]',
+             active_role="executor", status="approved", language="ru",
+             specialization="plumber"),
+        AutoManagerConfig(id=CONFIG_ROW_ID, data={**DEFAULT_CONFIG, "enabled": auto_assign}),
+    ]
+    req = Request(request_number=NUMBER, user_id=APPLICANT, category=category,
+                  description="d", urgency="low", status=status, address="Дом 1")
+    if assignment is not None:
+        kind, value = assignment
+        req.assignment_type = kind
+        req.assigned_group = value
+        objs.append(RequestAssignment(request_number=NUMBER, assignment_type="group",
+                                      group_specialization=value, executor_id=None,
+                                      created_by=MANAGER, status="active"))
+    objs.append(req)
+    return objs
+
+
+async def _async_change(monkeypatch, *, auto_assign=True, duty=PLUMBER):
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from uk_management_bot.services.category_change import change_category_async
+
+    engine = create_async_engine("sqlite+aiosqlite://",
+                                 connect_args={"check_same_thread": False},
+                                 poolclass=StaticPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AF() as s:
+        s.add_all(_seed_objects(assignment=("group", "electrician"), auto_assign=auto_assign))
+        await s.commit()
+
+    # Подбор дежурного в async-пути идёт в отдельном потоке через прод-SessionLocal
+    # (`pick_duty_executor_id(spec, None)`) — подменяем результат; sync-диспетч в
+    # event loop'е недопустим (`asyncio.run` внутри loop) — ловим подмену.
+    monkeypatch.setattr(dispatch, "pick_duty_executor_id", lambda *a, **k: duty)
+    monkeypatch.setattr(dispatch, "auto_dispatch_new_request_sync",
+                        lambda *a, **k: pytest.fail("sync dispatch used in async path"))
+    monkeypatch.setattr(dispatch, "_publish_status_changed", AsyncMock())
+    monkeypatch.setattr(dispatch, "_publish_updated", AsyncMock())
+    monkeypatch.setattr("uk_management_bot.services.workflow_notifications."
+                        "dispatch_notify_intents_detached", AsyncMock())
+
+    res = await change_category_async(AF, NUMBER, _mgr(), "plumbing")
+    async with AF() as s:
+        req = (await s.execute(select(Request).where(
+            Request.request_number == NUMBER))).scalar_one()
+        rows = [(r.assignment_type, r.group_specialization, r.executor_id, r.status)
+                for r in (await s.execute(select(RequestAssignment).order_by(
+                    RequestAssignment.id))).scalars()]
+        comments = len((await s.execute(select(RequestComment))).scalars().all())
+    await engine.dispose()
+    return res, req, rows, comments
+
+
+class TestAsyncPath:
+    def test_async_mirrors_sync_duty_assignment(self, monkeypatch):
+        import asyncio
+        res, req, rows, comments = asyncio.run(_async_change(monkeypatch))
+        assert res.no_op is False and res.specialization_changed is True
+        assert res.dispatch is not None and res.dispatch.kind == "assigned"
+        assert (res.status, res.executor_id) == (C.REQUEST_STATUS_IN_PROGRESS, PLUMBER)
+        assert (req.status, req.executor_id, req.category, req.assigned_group) == (
+            C.REQUEST_STATUS_IN_PROGRESS, PLUMBER, "plumbing", None)
+        assert rows == [("group", "electrician", None, "cancelled"),
+                        ("individual", None, PLUMBER, "active")]
+        assert comments == 1
+
+    def test_async_disabled_leaves_new_without_group(self, monkeypatch):
+        import asyncio
+        res, req, rows, _ = asyncio.run(_async_change(monkeypatch, auto_assign=False))
+        assert res.dispatch.kind == "disabled" and res.redispatched is False
+        assert (req.status, req.executor_id, req.assigned_group) == (
+            C.REQUEST_STATUS_NEW, None, None)
+        assert rows == [("group", "electrician", None, "cancelled")]
+
+
+class TestFreshReadMissingRequest:
+    """Окно между commit и свежим чтением узкое, но исход обязан быть одним и
+    тем же на обоих путях: `RequestNotFound`, а не AttributeError/NoResultFound."""
+
+    def test_sync_raises_request_not_found(self, factory):
+        from uk_management_bot.services.category_change import _fresh_sync
+        from uk_management_bot.services.workflow_runner import RequestNotFound
+        s = factory()
+        try:
+            with pytest.raises(RequestNotFound):
+                _fresh_sync(s, "000000-000")
+        finally:
+            s.close()
+
+    def test_async_raises_request_not_found(self):
+        import asyncio
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from uk_management_bot.services.category_change import _fresh_async
+        from uk_management_bot.services.workflow_runner import RequestNotFound
+
+        async def run():
+            engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            AF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            try:
+                async with AF() as s:
+                    with pytest.raises(RequestNotFound):
+                        await _fresh_async(s, "000000-000")
+            finally:
+                await engine.dispose()
+
+        asyncio.run(run())

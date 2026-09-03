@@ -1065,3 +1065,20 @@ def test_audit_details_carry_category_source(db):
     gi._audit_created_sync(db, "260903-009", CHAT_ID, 42, STAFF_ID, category_source="manual")
     row = db.query(AuditLog).filter_by(action="request.created_from_group").one()
     assert row.details["category_source"] == "manual"
+
+
+async def test_tagged_not_request_keyword_category_is_attributed_to_keyword(env, db):
+    """Ревью 2026-09-03: в тег-режиме категория из словаря уезжала в аудит как
+    `category_source="llm"` — метрика источников (REQUESTS.md) врала."""
+    from uk_management_bot.services.group_intake.classifier import (
+        ClassificationResult as CR, Outcome as O,
+    )
+    seed_staff_group(db, require_tag=True)
+    seed_staff_user(db)
+    seed_directory(db, addresses=("Yangi Olmazor, 23V",))
+    env.classify.return_value = CR(outcome=O.NOT_REQUEST)
+    message = make_message(text="#заявка когда будет свет 23 дом")
+    await run_entry(message, db)
+    payload = env.store_candidate.await_args.args[2]
+    assert payload["category"] == "electricity"
+    assert payload["category_source"] == "keyword"

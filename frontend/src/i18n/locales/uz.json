@@ -993,7 +993,8 @@
     "categoryUnchanged": "Kategoriya o‘zgarmadi",
     "categoryRedispatchedExecutor": "Ariza navbatchiga topshirildi: {{name}}",
     "categoryRedispatchedGroup": "Ariza «{{spec}}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
-    "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi"
+    "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi",
+    "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang"
   },
   "callcenter": {
     "title": "Qo'ng'iroq orqali ariza yaratish",

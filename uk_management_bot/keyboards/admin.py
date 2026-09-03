@@ -56,8 +56,10 @@ def get_manager_request_list_kb(requests: list[dict], page: int, total_pages: in
     """Список заявок: кнопки "#номер • Категория" и пагинация."""
     builder = InlineKeyboardBuilder()
     for item in requests:
-        short_addr = item.get('address', '')[:40]
-        if len(item.get('address', '')) > 40:
+        # address в БД nullable — None валил весь список менеджера (live-QA 2026-09-03)
+        address = item.get('address') or ''
+        short_addr = address[:40]
+        if len(address) > 40:
             short_addr += '…'
         icon = _status_icon(item.get('status', ''))
         request_number = item.get('request_number', item.get('id', 'N/A'))

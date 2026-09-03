@@ -211,7 +211,10 @@ class TestEndToEnd:
         assert "Сантехника" in text and NUMBER in text
         markup = cb.message.edit_text.await_args.kwargs["reply_markup"]
         assert f"mview_{NUMBER}" in _callbacks(markup)
-        assert not any(c.startswith("req_reassign_menu_") for c in _callbacks(markup))
+        # строки auto_manager_config нет → диспетч «disabled»: заявка осталась
+        # «Новая» без группы — менеджеру об этом говорят и дают «Назначить»
+        assert get_text("admin.handlers.category_left_unassigned", language="ru") in text
+        assert f"req_reassign_menu_{NUMBER}" in _callbacks(markup)
 
     @pytest.mark.asyncio
     async def test_in_progress_mismatch_offers_reassign(self, factory):
@@ -262,3 +265,32 @@ class TestEndToEnd:
         s = factory()
         assert s.query(Request).filter_by(request_number=NUMBER).one().category == "electricity"
         s.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Ревью 2026-09-03
+# ══════════════════════════════════════════════════════════════════════════
+
+
+class TestReviewFollowups:
+    @pytest.mark.asyncio
+    async def test_in_progress_without_mismatch_has_no_unassigned_notice(self, factory):
+        """«В работе» диспетч не зовётся (dispatch is None) — текста про
+        «без группы» быть не должно, как и кнопки."""
+        _seed(factory, status=REQUEST_STATUS_IN_PROGRESS, executor_id=EXEC_ID)
+        cb = await TestEndToEnd()._run_set(factory, "internet")   # та же специализация
+        text = cb.message.edit_text.await_args.args[0]
+        assert get_text("admin.handlers.category_left_unassigned", language="ru") not in text
+        markup = cb.message.edit_text.await_args.kwargs["reply_markup"]
+        assert not any(c.startswith("req_reassign_menu_") for c in _callbacks(markup))
+
+    @pytest.mark.parametrize("data,expected", [
+        (f"{mod.SET_PREFIX}260903-001_plumbing", ("260903-001", "plumbing")),
+        # ключ с подчёркиванием: rpartition("_") разобрал бы как
+        # ("260903-001_internet", "tv") — парсер не должен зависеть от формы ключа
+        (f"{mod.SET_PREFIX}260903-001_internet_tv", ("260903-001", "internet_tv")),
+        (f"{mod.SET_PREFIX}260903-001", None),
+        (f"{mod.SET_PREFIX}garbage_plumbing", None),
+    ])
+    def test_parse_set_callback_is_anchored_on_request_number(self, data, expected):
+        assert mod.parse_set_callback(data) == expected

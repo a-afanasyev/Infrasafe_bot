@@ -54,6 +54,8 @@ interface CategoryChangeOut {
   new_category: string
   new_specialization?: string | null
   redispatched: boolean
+  /** assigned | grouped | disabled | failed | no_spec; null — передиспетч не требовался */
+  dispatch_kind?: string | null
   executor_id?: number | null
   executor_name?: string | null
   executor_spec_mismatch: boolean
@@ -103,10 +105,15 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
   const [reassignOpen, setReassignOpen] = useState(false)
-  // Итог смены категории: исполнитель «В работе» остался, но его
-  // специализация не покрывает новую категорию. Кнопка «Переназначить» —
-  // только там, где канон пускает MANAGER_ASSIGN (флаг с сервера).
-  const [categoryWarning, setCategoryWarning] = useState<{ canReassign: boolean } | null>(null)
+  // Итог смены категории. `mismatch`: исполнитель «В работе» остался, но его
+  // специализация не покрывает новую категорию. `unassigned`: канон снял
+  // старую группу, а диспетч новую не поставил (выключен/упал) — заявка
+  // «Новая» без группы, пул дежурных её не видит. Кнопка назначения — только
+  // там, где канон пускает MANAGER_ASSIGN (флаг с сервера). Баннер гаснет при
+  // успешном (пере)назначении и при no_op (live-QA 2026-09-03).
+  const [categoryWarning, setCategoryWarning] = useState<
+    { kind: 'mismatch' | 'unassigned'; canReassign: boolean } | null
+  >(null)
 
   // FE-07: reset per-request form state when a *different* request opens.
   // Done at render time («adjust state when input changes») rather than in an
@@ -182,6 +189,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     onSuccess: (data) => {
       if (data.no_op) {
         toast.info(t('kanban.categoryUnchanged'))
+        setCategoryWarning(null)
         return
       }
       toast.success(t('toast.categoryUpdated'))
@@ -192,7 +200,14 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
           spec: tSpecialization(data.new_specialization ?? '', t),
         }))
       }
-      setCategoryWarning(data.executor_spec_mismatch ? { canReassign: data.can_reassign } : null)
+      const leftUnassigned = ['disabled', 'failed', 'no_spec'].includes(data.dispatch_kind ?? '')
+      setCategoryWarning(
+        data.executor_spec_mismatch
+          ? { kind: 'mismatch', canReassign: data.can_reassign }
+          : leftUnassigned
+            ? { kind: 'unassigned', canReassign: data.can_reassign }
+            : null,
+      )
       queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
@@ -505,14 +520,20 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                     className="flex items-center gap-2 flex-wrap rounded-sm border border-amber/40 bg-amber/10 px-2.5 py-1.5 text-xs text-text-primary"
                   >
                     <TriangleAlert className="w-3.5 h-3.5 text-amber shrink-0" />
-                    <span>{t('kanban.categorySpecMismatch')}</span>
+                    <span>
+                      {categoryWarning.kind === 'mismatch'
+                        ? t('kanban.categorySpecMismatch')
+                        : t('kanban.categoryLeftUnassigned')}
+                    </span>
                     {categoryWarning.canReassign && (
                       <button
                         type="button"
                         onClick={() => setReassignOpen(true)}
                         className="text-accent hover:underline font-medium"
                       >
-                        {t('kanban.reassignConfirm')}
+                        {categoryWarning.kind === 'mismatch'
+                          ? t('kanban.reassignConfirm')
+                          : t('kanban.assignConfirm')}
                       </button>
                     )}
                     <button
@@ -805,6 +826,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
         currentExecutorId={request.executor_id ?? null}
         currentExecutorName={request.executor_name ?? null}
         onClose={() => setReassignOpen(false)}
+        onReassigned={() => setCategoryWarning(null)}
       />
     )}
     </>

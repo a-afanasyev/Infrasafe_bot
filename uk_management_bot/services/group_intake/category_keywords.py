@@ -147,6 +147,10 @@ def keyword_scores(text: Optional[str]) -> dict[str, int]:
     for category, stems in CATEGORY_KEYWORDS.items():
         best = 0
         for stem in stems:
+            # Порог — здесь, а не только в ратчете: короткий стем по
+            # `startswith` = лавина ложных хитов.
+            if len(stem) < MIN_STEM_LEN:
+                continue
             if len(stem) > best and any(tok.startswith(stem) for tok in tokens):
                 best = len(stem)
         if best:
