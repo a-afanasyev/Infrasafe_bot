@@ -20,17 +20,44 @@ from uk_management_bot.utils.request_workflow import Action
 def test_specialization_lookup():
     assert _specialization_for("Сантехника") == "plumber"
     assert _specialization_for("plumbing") == "plumber"
-    assert _specialization_for("unknown-xyz") is None
+    # legacy-лейбл, которого не было в карте, но есть в каноне
+    assert _specialization_for("Интернет") == "electrician"
+    # Неизвестная категория → разнорабочий (как «Другое»): через хелпер, а не
+    # прямой `.get()` — раньше такая заявка молча оставалась «Новая».
+    assert _specialization_for("unknown-xyz") == "repair"
     assert _specialization_for(None) is None
     assert _specialization_for("") is None
 
 
-def test_unknown_category_does_not_dispatch(monkeypatch):
+def test_empty_category_does_not_dispatch(monkeypatch):
     called = []
     monkeypatch.setattr(wr, "run_command_sync",
                         lambda *a, **k: called.append(a))
-    auto_dispatch_new_request_sync("260610-001", "unknown-xyz")
+    auto_dispatch_new_request_sync("260610-001", "")
+    auto_dispatch_new_request_sync("260610-001", None)
     assert called == []
+
+
+def test_unknown_category_dispatches_to_repair_group(monkeypatch):
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch._auto_assign_enabled_sync",
+        lambda *a, **k: True,
+    )
+    captured = {}
+
+    def fake(_sf, num, principal, command, *a, **k):
+        captured["payload"] = dict(command.payload)
+        captured["action"] = command.action
+        return object()
+
+    monkeypatch.setattr(wr, "run_command_sync", fake)
+    monkeypatch.setattr(
+        "uk_management_bot.services.dispatch.pick_duty_executor_id",
+        lambda *a, **k: None,
+    )
+    auto_dispatch_new_request_sync("260610-001", "unknown-xyz")
+    assert captured["action"] == Action.ASSIGN_GROUP
+    assert captured["payload"] == {"group": "repair"}
 
 
 def test_known_category_without_duty_dispatches_group_command(monkeypatch):

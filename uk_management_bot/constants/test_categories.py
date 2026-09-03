@@ -1,18 +1,31 @@
-"""Unit tests for uk_management_bot/constants/categories.py."""
+"""Unit tests for uk_management_bot/constants/categories.py.
+
+Карта хранит ТОЛЬКО канон-ключи категорий; legacy RU-лейблы («Сантехника»,
+«Интернет») резолвит хелпер через `resolve_category_key`. До этого карта и
+канон вели legacy-списки порознь и разъезжались: канон знал «Интернет», карта
+— нет, и прямой `.get("Интернет")` давал бы `repair` вместо `electrician`.
+"""
+
+import pytest
 
 from uk_management_bot.constants.categories import (
     CATEGORY_TO_SPECIALIZATION,
     get_specialization_for_category,
 )
+from uk_management_bot.constants.specializations import CANONICAL_SET
+from uk_management_bot.keyboards.requests import (
+    CANONICAL_CATEGORY_KEYS,
+    CATEGORY_DEFINITIONS,
+)
 
 
 class TestCategoryToSpecializationDict:
-    def test_is_dict(self):
-        assert isinstance(CATEGORY_TO_SPECIALIZATION, dict)
+    def test_keys_are_exactly_the_canon(self):
+        assert set(CATEGORY_TO_SPECIALIZATION) == set(CANONICAL_CATEGORY_KEYS)
 
-    def test_all_values_are_strings(self):
+    def test_all_values_are_canonical_specializations(self):
         for key, value in CATEGORY_TO_SPECIALIZATION.items():
-            assert isinstance(value, str), f"Expected str for key {key!r}, got {type(value)}"
+            assert value in CANONICAL_SET, f"{key!r} → {value!r}"
 
     def test_known_internal_keys_mapped_correctly(self):
         assert CATEGORY_TO_SPECIALIZATION["plumbing"] == "plumber"
@@ -24,34 +37,32 @@ class TestCategoryToSpecializationDict:
         assert CATEGORY_TO_SPECIALIZATION["elevator"] == "elevator"
         assert CATEGORY_TO_SPECIALIZATION["repair"] == "repair"
         assert CATEGORY_TO_SPECIALIZATION["ventilation"] == "ventilation"
-
-    def test_legacy_russian_keys_mapped_correctly(self):
-        assert CATEGORY_TO_SPECIALIZATION["Сантехника"] == "plumber"
-        assert CATEGORY_TO_SPECIALIZATION["Электрика"] == "electrician"
-        assert CATEGORY_TO_SPECIALIZATION["Благоустройство"] == "landscaping"
-        assert CATEGORY_TO_SPECIALIZATION["Уборка"] == "cleaning"
-        assert CATEGORY_TO_SPECIALIZATION["Безопасность"] == "security"
-        assert CATEGORY_TO_SPECIALIZATION["Охрана"] == "security"
-        assert CATEGORY_TO_SPECIALIZATION["Ремонт"] == "repair"
-        assert CATEGORY_TO_SPECIALIZATION["Установка"] == "repair"
-        assert CATEGORY_TO_SPECIALIZATION["Обслуживание"] == "elevator"
-        assert CATEGORY_TO_SPECIALIZATION["HVAC"] == "heating"
-        assert CATEGORY_TO_SPECIALIZATION["Отопление"] == "heating"
-        assert CATEGORY_TO_SPECIALIZATION["Вентиляция"] == "ventilation"
-        assert CATEGORY_TO_SPECIALIZATION["Лифт"] == "elevator"
-        assert CATEGORY_TO_SPECIALIZATION["Интернет/ТВ"] == "electrician"
-
-    def test_contains_at_least_twenty_entries(self):
-        # 9 internal + 14 legacy Russian = 23 total
-        assert len(CATEGORY_TO_SPECIALIZATION) >= 20
+        assert CATEGORY_TO_SPECIALIZATION["internet"] == "electrician"
+        assert CATEGORY_TO_SPECIALIZATION["other"] == "repair"
+        # Служебная очередь InfraSafe: «инженера» в каноне специализаций нет,
+        # разбор берёт дежурный универсал — как и «Другое».
+        assert CATEGORY_TO_SPECIALIZATION["engineering"] == "repair"
 
 
 class TestGetSpecializationForCategory:
     def test_known_key_returns_correct_specialization(self):
         assert get_specialization_for_category("plumbing") == "plumber"
 
-    def test_known_russian_key_returns_correct_specialization(self):
-        assert get_specialization_for_category("Сантехника") == "plumber"
+    @pytest.mark.parametrize("legacy,key", [
+        (text, key)
+        for key, definition in CATEGORY_DEFINITIONS.items()
+        for text in definition.get("legacy_texts", [])
+    ])
+    def test_every_legacy_text_resolves_like_its_canon_key(self, legacy, key):
+        assert get_specialization_for_category(legacy) == CATEGORY_TO_SPECIALIZATION[key]
+
+    def test_internet_legacy_label_goes_to_electrician(self):
+        # ровно тот случай, где карта и канон расходились
+        assert get_specialization_for_category("Интернет") == "electrician"
+        assert get_specialization_for_category("Интернет/ТВ") == "electrician"
+
+    def test_engineer_required_label_goes_to_repair(self):
+        assert get_specialization_for_category("Инженерный разбор") == "repair"
 
     def test_unknown_key_returns_repair(self):
         assert get_specialization_for_category("unknown_category") == "repair"
@@ -62,31 +73,3 @@ class TestGetSpecializationForCategory:
     def test_case_sensitive_mismatch_returns_repair(self):
         # "plumbing" is known but "Plumbing" (capitalised) is not
         assert get_specialization_for_category("Plumbing") == "repair"
-
-    def test_all_internal_keys_map_into_the_canon(self):
-        """Проверка `!= "other"` больше ничего не значила: дефолт стал `repair`,
-        а `hvac`/`maintenance`/`installation` ушли из карты — они никогда и не
-        были значениями `request.category`, только формой специализации.
-        Сверяем по реальным ключам и против канона."""
-        from uk_management_bot.constants.specializations import CANONICAL_SET
-
-        internal_keys = [
-            "plumbing", "electricity", "landscaping", "cleaning",
-            "security", "heating", "ventilation", "elevator", "internet",
-            "repair", "other",
-        ]
-        for key in internal_keys:
-            assert key in CATEGORY_TO_SPECIALIZATION, f"нет записи для {key!r}"
-            assert CATEGORY_TO_SPECIALIZATION[key] in CANONICAL_SET, key
-
-    def test_all_russian_keys_map_into_the_canon(self):
-        from uk_management_bot.constants.specializations import CANONICAL_SET
-
-        russian_keys = [
-            "Сантехника", "Электрика", "Благоустройство", "Уборка",
-            "Безопасность", "Охрана", "Ремонт", "Установка",
-            "Обслуживание", "HVAC", "Отопление", "Вентиляция", "Лифт", "Интернет/ТВ",
-        ]
-        for key in russian_keys:
-            assert key in CATEGORY_TO_SPECIALIZATION, f"нет записи для {key!r}"
-            assert CATEGORY_TO_SPECIALIZATION[key] in CANONICAL_SET, key

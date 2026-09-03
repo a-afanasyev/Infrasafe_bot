@@ -784,7 +784,8 @@
     "security": "Xavfsizlik",
     "internet_tv": "Internet/TV",
     "repair": "Ta'mirlash",
-    "other": "Boshqa"
+    "other": "Boshqa",
+    "engineering": "Muhandislik tekshiruvi"
   },
   "specialization": {
     "electrician": "Elektrika",

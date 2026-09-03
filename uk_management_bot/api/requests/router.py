@@ -408,10 +408,10 @@ async def update_request(
         if "manager" not in _parse_user_roles(user):
             raise HTTPException(
                 status_code=403, detail="Not permitted for this transition")
-        from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
+        from uk_management_bot.constants.categories import get_specialization_for_category
         category = await svc.category_of(db, request_number)
         if category:
-            duty_group_spec = CATEGORY_TO_SPECIALIZATION.get(category)
+            duty_group_spec = get_specialization_for_category(category)
 
     # ═══════════════════ WORKFLOW-переход → единый canonical-writer ═══════════════════
     if target_status is not None or assign_executor_id is not None:

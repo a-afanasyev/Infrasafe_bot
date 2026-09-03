@@ -3,7 +3,12 @@
 // These arrays contain values as they appear in the API — do NOT translate them.
 // For display, use apiMaps.ts helpers (tStatus, tCategory, tUrgency, etc.)
 
-/** Request categories — canonical EN keys sent to backend (FS-04). Display via tCategory(). */
+/**
+ * Request categories a person can PICK — canonical EN keys sent to backend
+ * (FS-04). Mirrors `keyboards/requests.py:SELECTABLE_CATEGORY_KEYS` (canon
+ * minus service categories such as `engineering`, the InfraSafe queue) —
+ * change both together. Display via tCategory().
+ */
 export const CATEGORIES = [
   'electricity',
   'plumbing',
@@ -14,6 +19,7 @@ export const CATEGORIES = [
   'landscaping',
   'security',
   'internet',
+  'repair',
   'other',
 ] as const
 

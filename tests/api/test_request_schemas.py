@@ -283,3 +283,31 @@ class TestCommentModels:
 
     def test_comment_out_from_attributes(self):
         assert CommentOut.model_config["from_attributes"] is True
+
+
+# ═══════════════════════ Selectable-гейт категории ═══════════════════════
+
+
+class TestSelectableCategoryGate:
+    """`engineering` («Инженерный разбор») — служебная очередь InfraSafe: в каноне
+    есть, но человек её не выбирает. Пользовательские write-схемы гейтят по
+    SELECTABLE_CATEGORY_KEYS; `repair`/`ventilation` при этом проходят."""
+
+    @pytest.mark.parametrize("category", ["engineering", "Инженерный разбор"])
+    def test_create_request_rejects_engineering(self, category):
+        with pytest.raises(ValidationError):
+            CreateRequestBody(category=category, urgency="low", description="x", **_ADDR)
+
+    @pytest.mark.parametrize("category", ["engineering", "Инженерный разбор"])
+    def test_inspector_request_rejects_engineering(self, category):
+        with pytest.raises(ValidationError):
+            CreateInspectorRequestBody(
+                category=category, urgency="low", description="x",
+                address_type="building", address_id=1,
+            )
+
+    @pytest.mark.parametrize("category", ["repair", "ventilation", "Ремонт", "Вентиляция"])
+    def test_create_request_accepts_all_selectable(self, category):
+        body = CreateRequestBody(category=category, urgency="low", description="x", **_ADDR)
+        from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
+        assert body.category in SELECTABLE_CATEGORY_KEYS

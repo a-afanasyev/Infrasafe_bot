@@ -119,21 +119,8 @@ async def handle_infrasafe_alert(
                     "ladder, falling back to severity mapping (event_id=%s)",
                     alert.uk_urgency_override, payload.event_id,
                 )
-    # Sprint 10 follow-up (InfraSafe PR #56, 2026-05-24): `uk_category_override`
-    # — if present and non-empty, replaces whichever category we derived above
-    # (TYPE_TO_CATEGORY mapping OR engineer-required hardcode). InfraSafe owns
-    # the chain transitions; UK trusts their resolved category. Empty/whitespace
-    # → fall back to the derived value (same SHOULD-not-MUST principle).
-    if alert.uk_category_override is not None:
-        normalized = alert.uk_category_override.strip()
-        if normalized:
-            category = normalized
-        else:
-            logger.warning(
-                "inbound alert: uk_category_override is blank, "
-                "falling back to derived category (event_id=%s)",
-                payload.event_id,
-            )
+    category = _apply_category_override(category, alert.uk_category_override,
+                                        payload.event_id)
     # Sprint 10 / INT-120: reopen-marker. Deployed wire sends `reopen_sequence=1`
     # for first-time alerts (per alertForwarder.js:222 `|| 1` default); we only
     # prefix when ≥ 2 — that's the actual reopen signal.
@@ -253,3 +240,39 @@ async def _create_request(
             if attempt == 1:
                 raise
     raise RuntimeError("unreachable")
+
+
+def _apply_category_override(derived: str, override: str | None, event_id: str) -> str:
+    """`uk_category_override` (InfraSafe PR #56): заменяет derived-категорию
+    (TYPE_TO_CATEGORY или engineer-required hardcode) — InfraSafe владеет
+    переходами цепочки. Решение владельца 2026-09-03: override принимается,
+    только если резолвится в канон категорий (`resolve_category_key` ∈
+    CANONICAL_CATEGORY_KEYS); произвольная строка раньше ложилась в
+    `requests.category` как есть и ломала диспетч/аналитику.
+
+    Хранится КАК ПРИСЛАЛИ (без конвертации в EN-ключ): outbound
+    `request.created` по контракту отдаёт русскую категорию
+    (docs/integrations/UK-WEBHOOK-SENDER-SERVICE-TZ.md §3.5.1) — pass-through
+    держит контракт неизменным для партнёра, который шлёт RU-лейблы.
+    Пустой/невалидный override → derived (SHOULD-not-MUST, как у urgency).
+    """
+    if override is None:
+        return derived
+    normalized = override.strip()
+    if not normalized:
+        logger.warning(
+            "inbound alert: uk_category_override is blank, "
+            "falling back to derived category (event_id=%s)", event_id,
+        )
+        return derived
+    from uk_management_bot.keyboards.requests import (
+        CANONICAL_CATEGORY_KEYS,
+        resolve_category_key,
+    )
+    if resolve_category_key(normalized) not in CANONICAL_CATEGORY_KEYS:
+        logger.warning(
+            "inbound alert: uk_category_override=%r outside category canon, "
+            "falling back to derived category (event_id=%s)", normalized, event_id,
+        )
+        return derived
+    return normalized

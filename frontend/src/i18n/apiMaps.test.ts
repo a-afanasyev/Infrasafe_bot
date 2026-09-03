@@ -40,3 +40,23 @@ describe('apiMaps unknown values → raw + console.warn', () => {
     expect(warn).toHaveBeenCalledTimes(4)
   })
 })
+
+describe('categories: selectable list vs canon', () => {
+  it('every CATEGORIES entry is translatable without a warning', async () => {
+    const { CATEGORIES } = await import('../constants')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    for (const c of CATEGORIES) {
+      expect(tCategory(c, t)).toMatch(/^T:category\./)
+    }
+    expect(warn).not.toHaveBeenCalled()
+    // repair принимается бэком и есть в бот-меню — раньше отсутствовал в TWA/колл-центре
+    expect(CATEGORIES).toContain('repair')
+    // engineering — служебная очередь InfraSafe, человек её не выбирает
+    expect(CATEGORIES).not.toContain('engineering')
+  })
+
+  it('engineering (InfraSafe queue) is displayable in both spellings', () => {
+    expect(tCategory('engineering', t)).toBe('T:category.engineering')
+    expect(tCategory('Инженерный разбор', t)).toBe('T:category.engineering')
+  })
+})
