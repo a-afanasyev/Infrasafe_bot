@@ -160,7 +160,7 @@ def _parse_response(
     горячей воды» → heating, а словарь сказал бы plumbing).
     """
     from uk_management_bot.keyboards.requests import (
-        CANONICAL_CATEGORY_KEYS,
+        SELECTABLE_CATEGORY_KEYS,
         resolve_category_key,
     )
     from uk_management_bot.utils.constants import normalize_urgency
@@ -184,9 +184,12 @@ def _parse_response(
         return _NOT_REQUEST
 
     # resolve_category_key возвращает ОРИГИНАЛ для неизвестных значений —
-    # ужесточаем: всё, что не канон-ключ после резолва, становится "other".
+    # ужесточаем: всё, что не SELECTABLE-ключ после резолва, становится "other".
+    # Именно SELECTABLE, а не полный канон: служебная `engineering` (очередь
+    # InfraSafe) в схеме модели отсутствует, и «протёкшее» значение не должно
+    # становиться категорией заявки из группы (ревью 2026-09-03).
     category = resolve_category_key(raw_category)
-    if category not in CANONICAL_CATEGORY_KEYS:
+    if category not in SELECTABLE_CATEGORY_KEYS:
         category = "other"
     category_source = "llm"
     if category == "other" and keyword_category:

@@ -993,7 +993,8 @@
     "categoryUnchanged": "Категория не изменилась",
     "categoryRedispatchedExecutor": "Заявка передана дежурному: {{name}}",
     "categoryRedispatchedGroup": "Заявка адресована группе «{{spec}}» — дежурного сейчас нет",
-    "categorySpecMismatch": "Специализация текущего исполнителя не соответствует новой категории"
+    "categorySpecMismatch": "Специализация текущего исполнителя не соответствует новой категории",
+    "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",

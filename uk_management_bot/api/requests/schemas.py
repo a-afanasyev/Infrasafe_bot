@@ -246,6 +246,10 @@ class CategoryChangeOut(BaseModel):
     old_specialization: Optional[str] = None
     new_specialization: Optional[str] = None
     redispatched: bool
+    # Исход передиспетча «Новой»: assigned | grouped | disabled | failed | no_spec;
+    # None — передиспетч не требовался (специализация та же / не «Новая» / no_op).
+    # disabled/failed/no_spec = заявка осталась «Новая» без группы.
+    dispatch_kind: Optional[str] = None
     executor_id: Optional[int] = None
     executor_name: Optional[str] = None
     executor_spec_mismatch: bool

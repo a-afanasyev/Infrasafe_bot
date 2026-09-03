@@ -425,6 +425,7 @@ async def change_request_category(
         old_specialization=result.old_specialization,
         new_specialization=result.new_specialization,
         redispatched=result.redispatched,
+        dispatch_kind=result.dispatch.kind if result.dispatch is not None else None,
         executor_id=result.executor_id,
         executor_name=card.executor_name,
         executor_spec_mismatch=result.executor_spec_mismatch,

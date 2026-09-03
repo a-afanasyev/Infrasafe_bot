@@ -982,6 +982,7 @@
       "category_redispatched_executor": "👤 Заявка передана дежурному: {executor}",
       "category_redispatched_group": "👥 Заявка адресована группе «{spec}» — дежурного сейчас нет",
       "category_spec_mismatch": "⚠️ Специализация текущего исполнителя не соответствует новой категории",
+      "category_left_unassigned": "⚠️ Заявка осталась «Новая» без группы — назначьте исполнителя",
       "category_bad_status": "Категорию завершённой или отменённой заявки менять нельзя",
       "category_manager_only": "Смена категории доступна менеджеру",
       "category_unknown": "Такой категории нет",

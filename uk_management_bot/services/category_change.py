@@ -65,6 +65,13 @@ class CategoryChangeResult:
     def redispatched(self) -> bool:
         return self.dispatch is not None and self.dispatch.kind in ("assigned", "grouped")
 
+    @property
+    def left_unassigned(self) -> bool:
+        """Канон снял старую группу, а диспетч новую не поставил (выключен,
+        упал, нет специализации): заявка «Новая» без группы — пул дежурных её
+        не видит, менеджеру об этом надо сказать (ревью 2026-09-03)."""
+        return self.dispatch is not None and self.dispatch.kind in ("disabled", "failed", "no_spec")
+
 
 @dataclass(frozen=True)
 class _Fresh:
@@ -89,7 +96,12 @@ def _can_reassign(status: str) -> bool:
 
 
 def _fresh_sync(db: Session, request_number: str) -> _Fresh:
+    from uk_management_bot.services.workflow_runner import RequestNotFound
+
     req = db.query(Request).filter(Request.request_number == request_number).first()
+    if req is None:
+        # Окно между commit и свежим чтением узкое, но исход на обоих путях один.
+        raise RequestNotFound(request_number)
     specs: frozenset[str] = frozenset()
     if req.executor_id is not None:
         user = db.get(User, req.executor_id)
@@ -98,8 +110,12 @@ def _fresh_sync(db: Session, request_number: str) -> _Fresh:
 
 
 async def _fresh_async(db: AsyncSession, request_number: str) -> _Fresh:
+    from uk_management_bot.services.workflow_runner import RequestNotFound
+
     req = (await db.execute(
-        select(Request).where(Request.request_number == request_number))).scalar_one()
+        select(Request).where(Request.request_number == request_number))).scalar_one_or_none()
+    if req is None:
+        raise RequestNotFound(request_number)
     specs: frozenset[str] = frozenset()
     if req.executor_id is not None:
         user = await db.get(User, req.executor_id)

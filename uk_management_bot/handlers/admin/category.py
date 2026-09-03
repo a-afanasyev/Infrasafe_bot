@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -47,6 +48,16 @@ SET_PREFIX = "req_category_set_"
 # Коммит-вход — строгий регекс (урок BUG-179: открытый префикс перехватывает
 # соседей). Ключ категории — только [a-z_], как в SELECTABLE_CATEGORY_KEYS.
 SET_PATTERN = rf"^{SET_PREFIX}{REQUEST_NUMBER_CORE}_[a-z_]+$"
+# Разбор якорится на форме номера заявки, а не на «последнем `_`»: ключ с
+# подчёркиванием (гипотетический `internet_tv`) `rpartition` разобрал бы
+# неправильно и молча отклонил (ревью 2026-09-03).
+_SET_RE = re.compile(rf"^{SET_PREFIX}(?P<number>{REQUEST_NUMBER_CORE})_(?P<key>[a-z_]+)$")
+
+
+def parse_set_callback(data: str) -> Optional[tuple[str, str]]:
+    """`req_category_set_<номер>_<ключ>` → (номер, ключ) или None."""
+    m = _SET_RE.match(data or "")
+    return (m.group("number"), m.group("key")) if m else None
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -185,6 +196,11 @@ def _result_text(result, after: CategoryAftermath, lang: str) -> str:
         parts.append(get_text("admin.handlers.category_redispatched_group",
                               language=lang).format(
             spec=html.escape(_spec_label(dispatch.specialization, lang))))
+    elif result.left_unassigned:
+        # старая группа снята, новой нет (автоназначение выключено/упало) —
+        # без этого текста менеджер видел бы чистый «изменена» при тихой
+        # потере адресации заявки
+        parts.append(get_text("admin.handlers.category_left_unassigned", language=lang))
     if result.executor_spec_mismatch:
         parts.append(get_text("admin.handlers.category_spec_mismatch", language=lang))
     return "\n\n".join(parts)
@@ -206,7 +222,9 @@ async def _deliver(callback: CallbackQuery, result, after: CategoryAftermath, la
         except Exception as e:
             logger.debug("realtime publish для %s пропущен: %s", result.request_number, e)
 
-    with_reassign = result.executor_spec_mismatch and result.can_reassign
+    # «Переназначить»/«Назначить» — одна кнопка `req_reassign_menu_`: в
+    # «Новой» без группы канон пускает MANAGER_ASSIGN так же, как в «В работе».
+    with_reassign = (result.executor_spec_mismatch or result.left_unassigned) and result.can_reassign
     await _edit(callback, _result_text(result, after, lang),
                 _back_to_card_keyboard(result.request_number, lang, with_reassign))
 
@@ -262,7 +280,8 @@ async def handle_category_set(callback: CallbackQuery, roles: list = None,
     try:
         if not await _guard(callback, roles, user, lang):
             return
-        request_number, _, key = callback.data[len(SET_PREFIX):].rpartition("_")
+        parsed = parse_set_callback(callback.data)
+        request_number, key = parsed if parsed else ("", "")
         # callback_data шлёт КЛИЕНТ — набор ключей проверяется сервером.
         if key not in SELECTABLE_CATEGORY_KEYS:
             await callback.answer(

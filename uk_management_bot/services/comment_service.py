@@ -17,6 +17,7 @@ from uk_management_bot.utils.constants import (
     COMMENT_TYPE_CLARIFICATION,
     COMMENT_TYPE_PURCHASE,
     COMMENT_TYPE_REPORT,
+    COMMENT_TYPE_CATEGORY_CHANGE,
     COMMENT_TYPES,
     AUDIT_ACTION_REQUEST_STATUS_CHANGED
 )
@@ -307,7 +308,8 @@ class CommentService:
             COMMENT_TYPE_STATUS_CHANGE: "🔄",
             COMMENT_TYPE_CLARIFICATION: "❓",
             COMMENT_TYPE_PURCHASE: "🛒",
-            COMMENT_TYPE_REPORT: "📋"
+            COMMENT_TYPE_REPORT: "📋",
+            COMMENT_TYPE_CATEGORY_CHANGE: "🏷",
         }
         return emoji_map.get(comment_type, "💬")
     

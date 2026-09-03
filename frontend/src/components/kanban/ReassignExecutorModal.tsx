@@ -23,6 +23,8 @@ interface Props {
   currentExecutorId: number | null
   currentExecutorName: string | null
   onClose: () => void
+  /** Успешная смена исполнителя — в отличие от onClose, не зовётся при отмене. */
+  onReassigned?: () => void
 }
 
 /**
@@ -45,6 +47,7 @@ export default function ReassignExecutorModal({
   currentExecutorId,
   currentExecutorName,
   onClose,
+  onReassigned,
 }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
@@ -65,6 +68,7 @@ export default function ReassignExecutorModal({
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
       queryClient.invalidateQueries({ queryKey: ['employees'] })
+      onReassigned?.()
       onClose()
     },
     onError: (err: unknown) => {

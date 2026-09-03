@@ -280,10 +280,14 @@ stateDiagram-v2
 В «Новой» с групповым назначением при смене специализации группа снимается, а
 оркестратор `services/category_change.py` переигрывает диспетч (дежурный →
 «В работе», иначе новая группа, при выключенном автоназначении — «Новая» без
-группы). В «В работе» и далее исполнитель остаётся; ответ несёт
-`executor_spec_mismatch` и `can_reassign` (MANAGER_ASSIGN пускает только из
-«Новая»/«В работе»). Уведомление — только исполнителю «В работе» при смене
-специализации. Поверхности: `PATCH /api/v2/requests/{n}/category` (дашборд,
+группы). Исход передиспетча — `dispatch_kind` в ответе API
+(`assigned|grouped|disabled|failed|no_spec`, `null` — не требовался);
+`disabled/failed/no_spec` = заявка осталась «Новая» без группы, обе поверхности
+предупреждают об этом и предлагают «Назначить». В «В работе» и далее
+исполнитель остаётся; ответ несёт `executor_spec_mismatch` и `can_reassign`
+(MANAGER_ASSIGN пускает только из «Новая»/«В работе»); баннер в дашборде
+гаснет после успешного (пере)назначения и при no-op. Уведомление — только
+исполнителю «В работе» при смене специализации. Поверхности: `PATCH /api/v2/requests/{n}/category` (дашборд,
 дропдаун в заголовке карточки) и бот (`req_category_menu_/req_category_set_`
 в менеджерской карточке).
 
@@ -468,8 +472,9 @@ scripts/group_intake_eval.sample.jsonl --keywords-only` (без API).
 - **Медиа завершения** — `completion_media`, грузятся в Media Service с
   `report_type` (`completion_photo/video/document`, `executor.py:498-543`).
 - **Комментарии** — `RequestComment` с типами `status_change`, `clarification`,
-  `purchase`, `report`, а также `material` (списание материалов). Изменения
-  статуса могут нести `previous_status`/`new_status`.
+  `purchase`, `report`, `category_change` (смена категории менеджером, 🏷),
+  а также `material` (списание материалов). Изменения статуса могут нести
+  `previous_status`/`new_status`.
 
 ## 12. Что где в коде
 
