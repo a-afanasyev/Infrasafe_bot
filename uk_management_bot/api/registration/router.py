@@ -69,7 +69,7 @@ async def start(request: Request, body: StartIn, db: AsyncSession = Depends(get_
     )
 
 
-def registration_ticket_telegram_id(authorization: str | None = Header(default=None)) -> int:
+def require_registration_ticket(authorization: str | None = Header(default=None)) -> int:
     """Зависимость: telegram_id из Bearer-тикета регистрации (спека §4.1)."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing registration ticket")
@@ -86,7 +86,7 @@ def registration_ticket_telegram_id(authorization: str | None = Header(default=N
 async def contact_status(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    telegram_id: int = Depends(registration_ticket_telegram_id),
+    telegram_id: int = Depends(require_registration_ticket),
 ):
     """TWA опрашивает после requestContact: контакт Telegram шлёт боту, бот
     пишет users.phone — здесь он и появляется."""
@@ -99,7 +99,7 @@ async def contact_status(
 async def yards(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    _telegram_id: int = Depends(registration_ticket_telegram_id),
+    _telegram_id: int = Depends(require_registration_ticket),
 ):
     return await list_yards_out(db)
 
@@ -110,7 +110,7 @@ async def yard_buildings(
     request: Request,
     yard_id: int,
     db: AsyncSession = Depends(get_db),
-    _telegram_id: int = Depends(registration_ticket_telegram_id),
+    _telegram_id: int = Depends(require_registration_ticket),
 ):
     rows = await list_buildings_out(db, yard_id)
     if rows is None:
@@ -124,7 +124,7 @@ async def building_apartments(
     request: Request,
     building_id: int,
     db: AsyncSession = Depends(get_db),
-    _telegram_id: int = Depends(registration_ticket_telegram_id),
+    _telegram_id: int = Depends(require_registration_ticket),
 ):
     rows = await list_apartments_out(db, building_id)
     if rows is None:
@@ -138,7 +138,7 @@ async def register_applicant(
     request: Request,
     body: RegisterApplicantIn,
     db: AsyncSession = Depends(get_db),
-    telegram_id: int = Depends(registration_ticket_telegram_id),
+    telegram_id: int = Depends(require_registration_ticket),
 ):
     full_name = body.full_name.strip()
     if not full_name:
