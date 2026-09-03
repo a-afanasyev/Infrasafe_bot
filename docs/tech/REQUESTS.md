@@ -273,8 +273,10 @@ stateDiagram-v2
 (`request_workflow.py:387-401,479-481`).
 
 **Смена категории (2026-09-03).** `MANAGER_CHANGE_CATEGORY` меняет ярлык, не
-статус: patch `category`, комментарий в историю (`comment_type=category_change`,
-«Категория: A → B»), `AuditLog.action=request_category_changed` — одной
+статус: patch `category`, внутренний комментарий в историю
+(`comment_type=category_change`, `is_internal=True`, «Категория: A → B» —
+заявителю не показывается, решение владельца 2026-09-03),
+`AuditLog.action=request_category_changed` — одной
 транзакцией. Старое значение нормализуется (`resolve_category_key`): legacy
 «Сантехника» → `plumbing` считается той же категорией (no-op без записи).
 В «Новой» с групповым назначением при смене специализации группа снимается, а
