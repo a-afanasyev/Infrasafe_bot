@@ -2,9 +2,11 @@
 Tests for the WebApp registration button on the new-user welcome keyboard.
 
 Task 9: a pending user with an incomplete profile should see an ADDITIONAL
-reply-keyboard button whose web_app.url points at the React register Mini App
-(f"{settings.FRONTEND_URL}/uk/register"). When FRONTEND_URL is empty the button
-must be omitted (no crash).
+reply-keyboard button «Регистрация (форма)». Since 2026-09-03 it is a PLAIN text
+button (no web_app): Telegram passes empty initData to Mini Apps opened from a
+keyboard button, so the handler in handlers/webapp_buttons.py answers with an
+inline web_app button instead (see tests/test_webapp_buttons.py). When
+FRONTEND_URL is empty the button must be omitted (no crash).
 """
 
 import pytest
@@ -71,8 +73,8 @@ class TestRegisterWebAppButton:
 
     @pytest.mark.asyncio
     async def test_webapp_button_present_when_frontend_url_set(self, monkeypatch):
-        """When FRONTEND_URL is set, onboarding keyboard contains a WebApp
-        button whose web_app.url ends with /register."""
+        """When FRONTEND_URL is set, onboarding keyboard contains the
+        «Регистрация (форма)» button as PLAIN text (web_app is None)."""
         from uk_management_bot.handlers import base
         from uk_management_bot.handlers.base import handle_regular_start
 
@@ -90,18 +92,17 @@ class TestRegisterWebAppButton:
         reply_markup = msg.answer.call_args.kwargs.get("reply_markup")
         assert reply_markup is not None
 
-        webapp_urls = [
-            btn.web_app.url
-            for btn in _iter_buttons(reply_markup)
-            if getattr(btn, "web_app", None) is not None
-        ]
-        assert any(url.endswith("/register") for url in webapp_urls), (
-            f"expected a web_app button ending in /register, got {webapp_urls}"
+        from uk_management_bot.utils.helpers import get_text
+        text = get_text("base.handlers.btn_register_webapp", language="ru")
+        matches = [btn for btn in _iter_buttons(reply_markup) if btn.text == text]
+        assert len(matches) == 1, f"expected one register button, got {matches}"
+        assert matches[0].web_app is None, (
+            "reply web_app carries no initData — the button must be plain text"
         )
 
     @pytest.mark.asyncio
     async def test_webapp_button_absent_when_frontend_url_empty(self, monkeypatch):
-        """When FRONTEND_URL is empty, no WebApp button is emitted and no crash."""
+        """When FRONTEND_URL is empty, the register button is omitted and no crash."""
         from uk_management_bot.handlers import base
         from uk_management_bot.handlers.base import handle_regular_start
 
@@ -119,11 +120,7 @@ class TestRegisterWebAppButton:
         reply_markup = msg.answer.call_args.kwargs.get("reply_markup")
         assert reply_markup is not None
 
-        webapp_buttons = [
-            btn
-            for btn in _iter_buttons(reply_markup)
-            if getattr(btn, "web_app", None) is not None
-        ]
-        assert webapp_buttons == [], (
-            f"expected no web_app buttons when FRONTEND_URL empty, got {webapp_buttons}"
-        )
+        from uk_management_bot.utils.helpers import get_text
+        text = get_text("base.handlers.btn_register_webapp", language="ru")
+        texts = [btn.text for btn in _iter_buttons(reply_markup)]
+        assert text not in texts, f"expected no register button when FRONTEND_URL empty, got {texts}"

@@ -59,6 +59,7 @@ from uk_management_bot.handlers.user_apartments import router as user_apartments
 # Обработчики управления дворами пользователей
 from uk_management_bot.handlers.user_yards_management import router as user_yards_router
 from uk_management_bot.handlers.feedback import router as feedback_router  # Обратная связь
+from uk_management_bot.handlers.webapp_buttons import router as webapp_buttons_router  # reply-текст → inline web_app
 from uk_management_bot.handlers.access_control import router as access_control_router  # Контроль доступа (ТЗ §6.4)
 from uk_management_bot.handlers._role_gate import deny_router as address_deny_router  # Внятный отказ по адресным callback (аудит 2026-08-18)
 
@@ -352,6 +353,7 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(feedback_router)  # Обратная связь (перед base_router)
     dp.include_router(access_control_router)  # Контроль доступа жителя (ТЗ §6.4, перед base_router)
     dp.include_router(address_deny_router)  # Отказ по адресным callback, не взятым гейтованными роутерами
+    dp.include_router(webapp_buttons_router)  # «Регистрация (форма)»/«Ввод показаний» → inline web_app (перед base_router)
     dp.include_router(base_router)  # base в конце как fallback для общих команд
 
 

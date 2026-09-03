@@ -1,6 +1,6 @@
 import logging
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.callback_factories import RoleSwitchCB, RatingCB
@@ -190,12 +190,11 @@ def get_main_keyboard_for_role(
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
 
     # Ввод показаний (Mini App «Учёт ресурсов») — капабилити-роль контролёра,
-    # показываем по факту наличия роли, независимо от active_role.
+    # показываем по факту наличия роли, независимо от active_role. Кнопка
+    # текстовая, БЕЗ web_app (reply web_app не передаёт initData) — ссылку
+    # шлёт handlers/webapp_buttons.py inline-кнопкой по нажатию.
     if METER_ENTRY_ROLE in unique_roles and settings.FRONTEND_URL:
-        builder.add(KeyboardButton(
-            text=get_text("base.handlers.btn_meter_entry", language=language),
-            web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/twa/meter-entry"),
-        ))
+        builder.add(KeyboardButton(text=get_text("base.handlers.btn_meter_entry", language=language)))
 
     # Обратная связь — доступна всем авторизованным ролям
     builder.add(KeyboardButton(text=get_text("main_menu.feedback", language=language)))

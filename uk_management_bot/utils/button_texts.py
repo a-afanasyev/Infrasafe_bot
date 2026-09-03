@@ -202,6 +202,17 @@ def _init_button_texts() -> dict:
         fallback_text="🔑 Войти"
     )
 
+    # WebApp-кнопки (reply-текст → inline web_app; см. handlers/webapp_buttons.py).
+    # Ключи ТЕ ЖЕ, что рисуют handlers/base.py и keyboards/base.py.
+    button_texts['register_webapp'] = get_button_texts_for_all_languages(
+        "base.handlers.btn_register_webapp",
+        fallback_text="📝 Регистрация (форма)"
+    )
+    button_texts['meter_entry'] = get_button_texts_for_all_languages(
+        "base.handlers.btn_meter_entry",
+        fallback_text="📊 Ввод показаний"
+    )
+
     # Onboarding
     button_texts['specify_phone'] = get_button_texts_for_all_languages(
         "onboarding.handlers.btn_specify_phone",
@@ -544,6 +555,16 @@ def get_select_apartment_texts() -> List[str]:
 
 def get_specify_phone_texts() -> List[str]:
     return BUTTON_TEXTS.get('specify_phone', ["📱 Указать телефон"])
+
+
+def get_register_webapp_texts() -> List[str]:
+    """Тексты кнопки «📝 Регистрация (форма)» для всех языков."""
+    return BUTTON_TEXTS.get('register_webapp', ["📝 Регистрация (форма)"])
+
+
+def get_meter_entry_texts() -> List[str]:
+    """Тексты кнопки «📊 Ввод показаний» для всех языков."""
+    return BUTTON_TEXTS.get('meter_entry', ["📊 Ввод показаний"])
 
 
 def get_complete_without_docs_texts() -> List[str]:
