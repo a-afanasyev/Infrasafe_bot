@@ -61,8 +61,8 @@ def fake_initdata():
 @pytest.fixture
 def seed_user(async_db):
     from uk_management_bot.database.models.user import User
-    async def _make(telegram_id: int, status: str = "pending"):
-        u = User(telegram_id=telegram_id, status=status)
+    async def _make(telegram_id: int, status: str = "pending", phone: str | None = None):
+        u = User(telegram_id=telegram_id, status=status, phone=phone)
         async_db.add(u)
         await async_db.flush()
         return u

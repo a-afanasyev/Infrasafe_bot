@@ -1,18 +1,15 @@
 import pytest
 from httpx import AsyncClient
-from uk_management_bot.api.registration.catalog import list_apartments, is_apartment_selectable
+from uk_management_bot.api.registration.catalog import list_yards_out, is_apartment_selectable
 
 
 @pytest.mark.asyncio
-async def test_list_apartments_returns_active_rows(async_db, seed_apartment):
+async def test_list_yards_returns_active_rows(async_db, seed_apartment):
     # seed_apartment suffixes yard_name with a uuid (Yard.name is UNIQUE),
     # so match on the prefix rather than exact equality.
     await seed_apartment(number="12", yard_name="Двор-1", address="ул. Ленина 1")
-    rows = await list_apartments(async_db)
-    assert any(
-        a.apartment_number == "12" and a.yard_name.startswith("Двор-1")
-        for a in rows
-    )
+    rows = await list_yards_out(async_db)
+    assert any(y.name.startswith("Двор-1") for y in rows)
 
 
 @pytest.mark.asyncio
@@ -39,7 +36,8 @@ async def test_start_new_user_returns_ticket_and_catalog(api_client, fake_initda
     assert r.status_code == 200
     body = r.json()
     assert body["registration_ticket"]
-    assert isinstance(body["apartments"], list)
+    assert "apartments" not in body  # каскад — отдельными GET под тикетом (§4.2)
+    assert body["prefill"]["phone"] is None
 
 
 @pytest.mark.asyncio

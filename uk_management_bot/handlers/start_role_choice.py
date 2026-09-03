@@ -22,7 +22,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
-from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.auth import start_invite_registration
 from uk_management_bot.handlers.base import send_onboarding_screen  # noqa: F401 — реэкспорт для тестов/колбэков
 from uk_management_bot.keyboards.base import get_no_invite_token_inline

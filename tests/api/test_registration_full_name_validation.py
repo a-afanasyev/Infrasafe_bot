@@ -13,7 +13,7 @@ from uk_management_bot.api.registration.schemas import RegisterApplicantIn
 
 
 def _mk(full_name: str) -> RegisterApplicantIn:
-    return RegisterApplicantIn(full_name=full_name, phone="+998901234567", apartment_id=1)
+    return RegisterApplicantIn(full_name=full_name, apartment_id=1)
 
 
 def test_valid_cyrillic_name_accepted():
