@@ -15,12 +15,12 @@ class StartIn(BaseModel):
     init_data: str = Field(..., min_length=1)
 
 
-class YardOut(BaseModel):
+class RegistrationYardOut(BaseModel):
     id: int
     name: str
 
 
-class BuildingOut(BaseModel):
+class RegistrationBuildingOut(BaseModel):
     id: int
     address: str
 

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.yard import Yard
-from uk_management_bot.api.registration.schemas import ApartmentOut, BuildingOut, YardOut
+from uk_management_bot.api.registration.schemas import ApartmentOut, RegistrationBuildingOut, RegistrationYardOut
 from uk_management_bot.services.addresses.queries import (
     list_apartments_for_building,
     list_buildings_for_yard,
@@ -18,19 +18,19 @@ from uk_management_bot.services.addresses.queries import (
 # Только активные записи по всей цепочке — то же условие, что и в
 # is_apartment_selectable ниже. Родитель неактивен/отсутствует → None → 404.
 
-async def list_yards_out(db: AsyncSession) -> list[YardOut]:
+async def list_yards_out(db: AsyncSession) -> list[RegistrationYardOut]:
     yards, _counts = await list_yards(db, include_inactive=False)
-    return [YardOut(id=y.id, name=y.name) for y in yards]
+    return [RegistrationYardOut(id=y.id, name=y.name) for y in yards]
 
 
-async def list_buildings_out(db: AsyncSession, yard_id: int) -> list[BuildingOut] | None:
+async def list_buildings_out(db: AsyncSession, yard_id: int) -> list[RegistrationBuildingOut] | None:
     yard = await db.get(Yard, yard_id)
     if yard is None or not yard.is_active:
         return None
     buildings, _counts = await list_buildings_for_yard(
         db, yard_id=yard_id, include_inactive=False, yard_name=yard.name
     )
-    return [BuildingOut(id=b.id, address=b.address) for b in buildings]
+    return [RegistrationBuildingOut(id=b.id, address=b.address) for b in buildings]
 
 
 def _apartment_sort_key(number: str):

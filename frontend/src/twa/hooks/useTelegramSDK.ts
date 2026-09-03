@@ -23,6 +23,9 @@ export interface TelegramWebApp {
   colorScheme: 'light' | 'dark'
   HapticFeedback?: TelegramHapticFeedback
   BackButton?: TelegramBackButton
+  /** Bot API 6.9+: системный попап «поделиться номером». Контакт уходит БОТУ
+   * сообщением, Mini App получает только факт отправки (спека 2026-09-03). */
+  requestContact?: (cb: (sent: boolean) => void) => void
 }
 
 function getTg(): TelegramWebApp | null {

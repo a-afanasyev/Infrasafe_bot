@@ -23,8 +23,8 @@ from uk_management_bot.api.registration.catalog import (
 )
 from uk_management_bot.api.registration.schemas import (
     StartIn, StartOut, Prefill, RegisterApplicantIn, RegistrationResult,
-    YardOut,
-    BuildingOut,
+    RegistrationYardOut,
+    RegistrationBuildingOut,
     ApartmentOut,
     ContactStatusOut,
 )
@@ -94,7 +94,7 @@ async def contact_status(
     return ContactStatusOut(phone=existing.phone if existing else None)
 
 
-@router.get("/yards", response_model=list[YardOut])
+@router.get("/yards", response_model=list[RegistrationYardOut])
 @limiter.limit("60/minute")
 async def yards(
     request: Request,
@@ -104,7 +104,7 @@ async def yards(
     return await list_yards_out(db)
 
 
-@router.get("/yards/{yard_id}/buildings", response_model=list[BuildingOut])
+@router.get("/yards/{yard_id}/buildings", response_model=list[RegistrationBuildingOut])
 @limiter.limit("60/minute")
 async def yard_buildings(
     request: Request,
