@@ -188,7 +188,7 @@ async def test_single_match_prompts_confirm_without_other_button(env, db):
     markup = message.reply.await_args.kwargs["reply_markup"]
     assert "ул. Тестовая, 12" in prompt
     buttons = [b.callback_data for row in markup.inline_keyboard for b in row]
-    assert buttons == ["gint:yes", "gint:no"], "у staff-промпта нет «Другой адрес»"
+    assert buttons == ["gint:yes", "gint:no", "gint:cat"], "у staff-промпта нет «Другой адрес»"
 
     payload = env.store_candidate.await_args.args[2]
     assert payload["kind"] == "staff"
@@ -742,7 +742,7 @@ async def test_addr_pick_stores_selection_and_shows_confirm(cb_env, db):
         for row in edited.kwargs["reply_markup"].inline_keyboard
         for b in row
     ]
-    assert buttons == ["gint:yes", "gint:no"]
+    assert buttons == ["gint:yes", "gint:no", "gint:cat"]
 
 
 @pytest.mark.parametrize("action", ["addr:5", "addr:-1", "addr:x"])
@@ -934,3 +934,134 @@ def test_real_save_staff_group_rejects_apartment_level(db, _no_dispatch):
         STAFF_ID, db, source="group", role="staff_group",
     )
     assert saved is None
+
+
+# ───────────────────────── callback-фаза: смена категории (staff) ─────────────────────────
+# Решение владельца 2026-09-03: в менеджерской приёмке (staff-группы) перед «Да»
+# можно поменять категорию; жительские группы не трогаем.
+
+
+from uk_management_bot.utils.helpers import get_text  # noqa: E402
+
+
+def _buttons(markup):
+    return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+
+def test_residents_confirm_keyboard_has_no_category_button():
+    assert "gint:cat" not in _buttons(gi._confirm_keyboard("ru"))
+
+
+def test_staff_confirm_keyboard_offers_category():
+    assert _buttons(gi._staff_confirm_keyboard("ru")) == ["gint:yes", "gint:no", "gint:cat"]
+
+
+async def test_cat_opens_picker_with_selectable_keys_and_back(cb_env, db):
+    from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
+
+    cb_env.get_candidate.return_value = make_staff_candidate(category="other")
+    callback = make_callback("cat")
+    await run_cb(callback, db)
+
+    callback.answer.assert_awaited_once_with()
+    cb_env.store_candidate.assert_not_awaited()
+    edited = callback.message.edit_text.await_args
+    buttons = _buttons(edited.kwargs["reply_markup"])
+    for key in SELECTABLE_CATEGORY_KEYS:
+        assert f"gint:cat:{key}" in buttons, key
+    assert "gint:cat:engineering" not in buttons
+    assert buttons[-1] == "gint:cat:back"
+    texts = [b.text for row in edited.kwargs["reply_markup"].inline_keyboard for b in row]
+    assert any(t.startswith("• ") and "Другое" in t for t in texts)
+
+
+async def test_cat_pick_updates_candidate_and_rerenders_confirm(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(category="other")
+    callback = make_callback("cat:plumbing")
+    await run_cb(callback, db)
+
+    cb_env.store_candidate.assert_awaited_once()
+    updated = cb_env.store_candidate.await_args.args[2]
+    assert updated["category"] == "plumbing"
+    assert updated["category_source"] == "manual"
+    assert "v" not in updated
+    edited = callback.message.edit_text.await_args
+    assert "Сантехника" in edited.args[0]
+    assert _buttons(edited.kwargs["reply_markup"]) == ["gint:yes", "gint:no", "gint:cat"]
+
+
+@pytest.mark.parametrize("action", ["cat:engineering", "cat:nope", "cat:Plumbing"])
+async def test_cat_pick_unknown_key_is_noop(cb_env, db, action):
+    cb_env.get_candidate.return_value = make_staff_candidate()
+    callback = make_callback(action)
+    await run_cb(callback, db)
+    cb_env.store_candidate.assert_not_awaited()
+    callback.message.edit_text.assert_not_awaited()
+
+
+async def test_cat_on_residents_candidate_is_noop(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(kind="residents", author_id=STAFF_ID)
+    callback = make_callback("cat:plumbing")
+    await run_cb(callback, db)
+    cb_env.store_candidate.assert_not_awaited()
+    callback.message.edit_text.assert_not_awaited()
+
+
+async def test_cat_without_selected_address_is_noop(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(
+        selected_address=None, address_options=OPTIONS)
+    callback = make_callback("cat")
+    await run_cb(callback, db)
+    callback.message.edit_text.assert_not_awaited()
+
+
+async def test_cat_back_rerenders_confirm_without_store(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(category="other")
+    callback = make_callback("cat:back")
+    await run_cb(callback, db)
+    cb_env.store_candidate.assert_not_awaited()
+    edited = callback.message.edit_text.await_args
+    assert "Другое" in edited.args[0]
+    assert _buttons(edited.kwargs["reply_markup"]) == ["gint:yes", "gint:no", "gint:cat"]
+
+
+async def test_cat_same_key_rerenders_without_store(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(category="plumbing")
+    callback = make_callback("cat:plumbing")
+    await run_cb(callback, db)
+    cb_env.store_candidate.assert_not_awaited()
+    callback.message.edit_text.assert_awaited_once()
+
+
+async def test_cat_store_failure_shows_expired(cb_env, db):
+    cb_env.get_candidate.return_value = make_staff_candidate(category="other")
+    cb_env.store_candidate.return_value = False
+    callback = make_callback("cat:plumbing")
+    await run_cb(callback, db)
+    edited = callback.message.edit_text.await_args.args[0]
+    assert edited == get_text("group_intake.expired", language="ru")
+
+
+async def test_yes_after_cat_uses_updated_category(cb_env, db):
+    seed_staff_group(db)
+    seed_staff_user(db)
+    cb_env.pop_candidate.return_value = make_staff_candidate(
+        category="plumbing", category_source="manual")
+    callback = make_callback("yes")
+    await run_cb(callback, db)
+    data = cb_env.save_request.await_args.args[0]
+    assert data["category"] == "plumbing"
+
+
+def test_audit_details_carry_category_source(db):
+    """`category_source` (llm|keyword|manual) — в аудит создания из группы."""
+    from uk_management_bot.database.models.audit import AuditLog
+
+    seed_staff_group(db)
+    user = seed_staff_user(db)
+    db.add(Request(request_number="260903-009", user_id=user.id, category="plumbing",
+                   description="d", status="Новая", urgency="low", address="x"))
+    db.commit()
+    gi._audit_created_sync(db, "260903-009", CHAT_ID, 42, STAFF_ID, category_source="manual")
+    row = db.query(AuditLog).filter_by(action="request.created_from_group").one()
+    assert row.details["category_source"] == "manual"

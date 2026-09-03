@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -92,6 +93,9 @@ MAX_TEXT_LEN = 2000
 CB_YES = "gint:yes"
 CB_NO = "gint:no"
 CB_OTHER = "gint:other"
+# Staff-приёмка: сменить категорию до «Да» (решение владельца 2026-09-03).
+# ``gint:cat`` — открыть picker, ``gint:cat:<key>`` — выбрать, ``gint:cat:back``.
+CB_CAT = "gint:cat"
 
 # Роли-репортёры staff-групп (решение владельца из планирования v1).
 _STAFF_ROLES = frozenset({ROLE_EXECUTOR, ROLE_INSPECTOR, ROLE_MANAGER})
@@ -450,18 +454,24 @@ def _regate_sync(db, chat_id: int, telegram_id: int, candidate: dict) -> Optiona
     return {"user_id": user.id}
 
 
-def _audit_created_sync(db, number: str, chat_id: int, source_message_id: int, telegram_id: int) -> None:
+def _audit_created_sync(db, number: str, chat_id: int, source_message_id: int,
+                        telegram_id: int, category_source: Optional[str] = None) -> None:
     request = db.query(Request).filter(Request.request_number == number).first()
+    details = {
+        "request_number": number,
+        "chat_id": chat_id,
+        "source_message_id": source_message_id,
+    }
+    if category_source:
+        # llm | keyword | manual — откуда взялась категория (метрика качества
+        # классификатора и след ручной правки в приёмке).
+        details["category_source"] = category_source
     db.add(
         AuditLog(
             user_id=request.user_id if request else None,
             telegram_user_id=telegram_id,
             action="request.created_from_group",
-            details={
-                "request_number": number,
-                "chat_id": chat_id,
-                "source_message_id": source_message_id,
-            },
+            details=details,
         )
     )
     db.commit()
@@ -533,7 +543,8 @@ def _confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 def _staff_confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
-    """Staff-промпт без «Другой адрес»: замена — выбор из кандидатов."""
+    """Staff-промпт без «Другой адрес»: замена — выбор из кандидатов.
+    Третий ряд — смена категории перед подтверждением (только staff)."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -543,9 +554,44 @@ def _staff_confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=get_text("group_intake.btn_no", language=lang), callback_data=CB_NO
                 ),
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text=get_text("group_intake.btn_category", language=lang),
+                    callback_data=CB_CAT,
+                )
+            ],
         ]
     )
+
+
+def _category_pick_keyboard(lang: str, current: Optional[str]) -> InlineKeyboardMarkup:
+    """Picker категорий для staff-приёмки: SELECTABLE (служебная `engineering`
+    не предлагается), 2 в ряд, текущая помечена «• », внизу «Назад».
+    Префикс свой (``gint:cat:``): ``category_`` ловит create_callbacks
+    личного бота с 9 меню-ключами."""
+    from uk_management_bot.keyboards.requests import (
+        SELECTABLE_CATEGORY_KEYS,
+        get_category_display,
+    )
+
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for key in SELECTABLE_CATEGORY_KEYS:
+        label = get_category_display(key, lang)
+        if key == current:
+            label = f"• {label}"
+        row.append(InlineKeyboardButton(text=label, callback_data=f"{CB_CAT}:{key}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(
+        text=get_text("group_intake.btn_back", language=lang),
+        callback_data=f"{CB_CAT}:back",
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _address_options_keyboard(options: list[dict]) -> InlineKeyboardMarkup:
@@ -614,6 +660,7 @@ async def _handle_staff_request(message: Message, result: ClassificationResult,
         "text": text,
         "truncated": truncated,
         "category": result.category,
+        "category_source": result.category_source,
         "urgency": result.urgency,
         "confidence": result.confidence,
         "location_scope": result.location_scope,
@@ -781,6 +828,7 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
             "text": text,
             "truncated": truncated,
             "category": result.category,
+            "category_source": result.category_source,
             "urgency": result.urgency,
             "confidence": result.confidence,
             "location_scope": result.location_scope,
@@ -855,6 +903,63 @@ async def _handle_address_pick(callback: CallbackQuery, candidate: dict,
     )
 
 
+async def _handle_category_pick(callback: CallbackQuery, candidate: dict,
+                                action: str, lang: str) -> None:
+    """``gint:cat`` / ``gint:cat:<key>`` / ``gint:cat:back`` — смена категории
+    staff-кандидата до подтверждения.
+
+    Только staff (residents клавиатуры не имеют — crafted callback no-op) и
+    только после выбора адреса. Кандидат обновляется под тем же ключом; сбой
+    записи → expired (fail-closed, как у выбора адреса). callback_data шлёт
+    КЛИЕНТ: ключ проверяется по SELECTABLE серверно.
+    """
+    from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
+
+    if candidate.get("kind") != GROUP_KIND_STAFF:
+        return
+    if candidate.get("selected_address") is None:
+        return
+    selected = candidate["selected_address"]["label_public"]
+    truncated = bool(candidate.get("truncated"))
+    current = candidate.get("category")
+
+    async def _rerender(candidate_like: dict) -> None:
+        try:
+            await callback.message.edit_text(
+                _staff_confirm_prompt(candidate_like, selected, lang, truncated),
+                reply_markup=_staff_confirm_keyboard(lang),
+            )
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e):
+                raise
+
+    if action == "cat":
+        await callback.message.edit_text(
+            get_text("group_intake.pick_category", language=lang),
+            reply_markup=_category_pick_keyboard(lang, current),
+        )
+        return
+    key = action.split(":", 1)[1]
+    if key == "back":
+        await _rerender(candidate)
+        return
+    if key not in SELECTABLE_CATEGORY_KEYS:
+        return
+    if key == current:
+        await _rerender(candidate)
+        return
+
+    updated = {k: v for k, v in candidate.items() if k != "v"}
+    updated["category"] = key
+    updated["category_source"] = "manual"
+    chat_id = callback.message.chat.id
+    prompt_message_id = callback.message.message_id
+    if not await pending.store_candidate(chat_id, prompt_message_id, updated):
+        await callback.message.edit_text(get_text("group_intake.expired", language=lang))
+        return
+    await _rerender(updated)
+
+
 @router.callback_query()
 async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) -> None:
     """Кнопки промпта. Контракт: ровно один callback.answer() на нажатие."""
@@ -903,6 +1008,9 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
     action = (callback.data or "").split(":", 1)[-1]
     if action.startswith("addr:"):
         await _handle_address_pick(callback, candidate, action, lang)
+        return
+    if action == "cat" or action.startswith("cat:"):
+        await _handle_category_pick(callback, candidate, action, lang)
         return
     if action == "no":
         await pending.pop_candidate(chat_id, prompt_message_id)
@@ -986,6 +1094,7 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
                 chat_id,
                 candidate.get("source_message_id"),
                 callback.from_user.id,
+                category_source=candidate.get("category_source"),
             ),
             db=_db,
         )
