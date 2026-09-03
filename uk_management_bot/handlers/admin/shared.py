@@ -5,7 +5,7 @@ from aiogram.fsm.state import StatesGroup, State
 from sqlalchemy.orm import Session
 
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
-from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
+from uk_management_bot.constants.categories import get_specialization_for_category
 
 import logging
 from uk_management_bot.utils.helpers import get_text
@@ -98,14 +98,16 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
     try:
         logger.info(f"[AUTO_ASSIGN] Начало автоматического назначения для заявки {request.request_number}, категория: {request.category}")
 
-        category_to_specialization = CATEGORY_TO_SPECIALIZATION
-
-        # Определяем специализацию по категории заявки
-        specialization = category_to_specialization.get(request.category)
+        # Специализация по категории — только через хелпер: legacy RU-лейблы
+        # резолвятся, неизвестная категория уходит к разнорабочему. Пустая
+        # категория — единственный путь в ASSIGN_NO_SPECIALIZATION.
+        specialization = (
+            get_specialization_for_category(request.category) if request.category else None
+        )
         logger.info(f"[AUTO_ASSIGN] Категория '{request.category}' → специализация: {specialization}")
 
         if not specialization:
-            logger.warning(f"[AUTO_ASSIGN] Неизвестная категория заявки: {request.category}, доступные: {list(category_to_specialization.keys())}")
+            logger.warning(f"[AUTO_ASSIGN] Пустая категория заявки {request.request_number}")
             return ASSIGN_NO_SPECIALIZATION
         
         # Находим исполнителей с нужной специализацией

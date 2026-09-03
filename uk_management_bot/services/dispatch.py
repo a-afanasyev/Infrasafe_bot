@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from uk_management_bot.constants.categories import CATEGORY_TO_SPECIALIZATION
+from uk_management_bot.constants.categories import get_specialization_for_category
 from uk_management_bot.utils.request_workflow import (
     Action,
     ActionCommand,
@@ -107,9 +107,11 @@ def pick_duty_executor_id(specialization: str, db=None,
 
 
 def _specialization_for(category: Optional[str]) -> Optional[str]:
+    """Спец по категории через единый хелпер: legacy RU-лейблы резолвятся,
+    неизвестная категория → `repair` (как «Другое»), пустая → None."""
     if not category:
         return None
-    return CATEGORY_TO_SPECIALIZATION.get(category)
+    return get_specialization_for_category(category)
 
 
 def _auto_assign_enabled_sync(db=None) -> bool:

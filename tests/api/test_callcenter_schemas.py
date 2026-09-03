@@ -95,3 +95,13 @@ class TestCallCenterCreateRequest:
     def test_unknown_urgency_raises(self):
         with pytest.raises(ValidationError):
             CallCenterCreateRequest(category="Электрика", urgency="nope", description="x")
+
+
+class TestCallCenterSelectableCategoryGate:
+    @pytest.mark.parametrize("category", ["engineering", "Инженерный разбор"])
+    def test_rejects_engineering(self, category):
+        with pytest.raises(ValidationError):
+            CallCenterCreateRequest(category=category, urgency="low", description="x")
+
+    def test_accepts_repair(self):
+        assert CallCenterCreateRequest(category="Ремонт", urgency="low", description="x").category == "repair"

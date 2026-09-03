@@ -98,25 +98,26 @@ class TestCategoryMapping:
         ("internet", "electrician"),
         ("repair", "repair"),
         ("other", "repair"),             # «Другое» больше не проваливается
+        ("engineering", "repair"),       # служебная очередь InfraSafe → универсал
     ])
     def test_canonical_categories_map_to_themselves_where_possible(self, category, expected):
         assert CATEGORY_TO_SPECIALIZATION[category] == expected
 
     def test_every_canonical_category_is_mapped(self):
-        """Без записи в карте `dispatch` получает None и заявка молча
-        остаётся «Новая» — он зовёт `.get()` напрямую, мимо хелпера."""
+        """Без записи в карте неизвестная категория ушла бы к дефолту `repair`
+        молча — держим равенство карта ↔ канон в обе стороны."""
         from uk_management_bot.keyboards.requests import CANONICAL_CATEGORY_KEYS
 
-        for category in CANONICAL_CATEGORY_KEYS:
-            assert category in CATEGORY_TO_SPECIALIZATION, category
+        assert set(CATEGORY_TO_SPECIALIZATION) == set(CANONICAL_CATEGORY_KEYS)
 
     def test_unknown_category_falls_back_to_repair(self):
         assert get_specialization_for_category("нет-такой") == "repair"
 
     def test_legacy_russian_labels_still_resolve(self):
-        assert CATEGORY_TO_SPECIALIZATION["Лифт"] == "elevator"
-        assert CATEGORY_TO_SPECIALIZATION["Отопление"] == "heating"
-        assert CATEGORY_TO_SPECIALIZATION["Вентиляция"] == "ventilation"
+        # legacy — только через хелпер: карта их больше не хранит
+        assert get_specialization_for_category("Лифт") == "elevator"
+        assert get_specialization_for_category("Отопление") == "heating"
+        assert get_specialization_for_category("Вентиляция") == "ventilation"
 
 
 class TestLocalesCoverCanon:

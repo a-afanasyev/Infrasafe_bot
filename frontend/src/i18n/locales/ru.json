@@ -784,7 +784,8 @@
     "security": "Безопасность",
     "internet_tv": "Интернет/ТВ",
     "repair": "Ремонт",
-    "other": "Другое"
+    "other": "Другое",
+    "engineering": "Инженерный разбор"
   },
   "specialization": {
     "electrician": "Электрика",

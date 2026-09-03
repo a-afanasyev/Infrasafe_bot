@@ -71,6 +71,9 @@ export const CATEGORY_MAP = {
   'Интернет/ТВ':     'category.internet_tv',
   'Ремонт':          'category.repair',
   'Другое':          'category.other',
+  // Служебная очередь InfraSafe (alert.engineer_required) — только отображение
+  'Инженерный разбор': 'category.engineering',
+  'engineering':     'category.engineering',
   // English keys (from bot)
   'electricity':     'category.electrical',
   'plumbing':        'category.plumbing',

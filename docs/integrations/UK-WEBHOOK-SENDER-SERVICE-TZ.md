@@ -215,6 +215,15 @@ InfraSafe payload: building.id=1, building.name="Yangi Olmazor, 12V",
 }
 ```
 
+> **`category` для заявок из InfraSafe-алертов (2026-09-03).** Хранится и
+> отдаётся так, как её вывел inbound-обработчик: RU-лейбл из `TYPE_TO_CATEGORY`
+> («Сантехника», «Электрика», …) или «Инженерный разбор» для
+> `alert.engineer_required`. `uk_category_override` проходит **pass-through**
+> после проверки по канону категорий UK (RU-лейбл или EN-ключ, резолвящийся в
+> канон): валидное значение сохраняется как прислали, невалидное — игнорируется
+> с warning, категория остаётся выведенной. Конвертации RU→EN на этом пути нет,
+> формат `request.created.category` для партнёра не меняется.
+
 #### 3.5.2. `request.status_changed`
 
 ```json

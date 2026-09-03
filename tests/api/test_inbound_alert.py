@@ -522,13 +522,13 @@ async def test_uk_category_override_wins_on_engineer_required(
         "evt-cat-override-engreq", _expected_external_id(building.id),
         event="alert.engineer_required",
         reopen_sequence=4,
-        uk_category_override="Особый разбор",  # not the hardcoded value
+        uk_category_override="Безопасность",  # not the hardcoded value
         engineer_required_reason="max_reopens_per_24h",
     )
     r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.20"))
     assert r.status_code == 202
     req = await db_session.get(Request, r.json()["request_number"])
-    assert req.category == "Особый разбор"
+    assert req.category == "Безопасность"
     # Urgency hardcode still applies (no urgency override sent here).
     assert req.urgency == "critical"
 
@@ -548,3 +548,45 @@ async def test_uk_category_override_blank_falls_back(
     assert r.status_code == 202
     req = await db_session.get(Request, r.json()["request_number"])
     assert req.category == "Сантехника"  # fell back to TYPE_TO_CATEGORY
+
+
+# ── Валидация uk_category_override по канону категорий ───────────────
+# Решение владельца 2026-09-03: override принимается, только если резолвится
+# в канон (`resolve_category_key` ∈ CANONICAL_CATEGORY_KEYS); хранится КАК
+# ПРИСЛАЛИ (RU-лейбл остаётся RU — outbound `request.created` по контракту
+# отдаёт русскую категорию). Невалидный override игнорируется с warning.
+
+@pytest.mark.asyncio
+async def test_uk_category_override_outside_canon_falls_back(
+    webhook_client, building, db_session, monkeypatch, caplog,
+):
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-cat-override-bad", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        uk_category_override="Особый разбор",  # нет ни в каноне, ни в legacy
+    )
+    with caplog.at_level("WARNING"):
+        r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.31"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category == "Сантехника"          # derived: LEAK_DETECTED → Сантехника
+    assert any("uk_category_override" in rec.getMessage() and "canon" in rec.getMessage()
+               for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_uk_category_override_accepts_canonical_key_as_is(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """Партнёр после миграции шлёт EN-ключ — сохраняем как прислали (pass-through)."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body(
+        "evt-cat-override-key", _expected_external_id(building.id),
+        alert_type="LEAK_DETECTED", severity="WARNING",
+        uk_category_override="security",
+    )
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.32"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category == "security"

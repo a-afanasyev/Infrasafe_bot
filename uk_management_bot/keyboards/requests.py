@@ -36,11 +36,12 @@ CATEGORY_DEFINITIONS = {
     },
     "heating": {
         "locale_key": "categories.heating",
-        "legacy_texts": ["Отопление"]
+        # HVAC — старое имя специализации, встречалось и как категория
+        "legacy_texts": ["Отопление", "HVAC"]
     },
     "elevator": {
         "locale_key": "categories.elevator",
-        "legacy_texts": ["Лифт"]
+        "legacy_texts": ["Лифт", "Обслуживание"]
     },
     "cleaning": {
         "locale_key": "categories.cleaning",
@@ -70,7 +71,15 @@ CATEGORY_DEFINITIONS = {
     },
     "repair": {
         "locale_key": "categories.repair",
-        "legacy_texts": ["Ремонт"]
+        "legacy_texts": ["Ремонт", "Установка"]
+    },
+    # Служебная очередь InfraSafe: `alert.engineer_required` пишет RU-лейбл
+    # (api/webhooks/mappings.py:ENGINEER_REQUIRED_CATEGORY). В каноне — чтобы
+    # автодиспетчер раздавал и UI локализовал; в SELECTABLE не входит — человек
+    # эту категорию не выбирает ни в одной форме.
+    "engineering": {
+        "locale_key": "categories.engineering",
+        "legacy_texts": ["Инженерный разбор"]
     },
 }
 
@@ -81,6 +90,17 @@ CATEGORY_INTERNAL_KEYS = list(CATEGORY_KEYS.keys())
 # которых нет в бот-меню). Источник истины для нормализации/валидации категории
 # на всех каналах записи (бот + web/API) и для миграции legacy RU-лейблов.
 CANONICAL_CATEGORY_KEYS = list(CATEGORY_DEFINITIONS.keys())
+
+# Служебные категории: в каноне (нормализация/отображение/диспетч), но не для
+# выбора человеком.
+_SERVICE_CATEGORY_KEYS = frozenset({"engineering"})
+
+# Что человек может ВЫБРАТЬ (бот-клавиатуры, TWA, колл-центр, смена категории,
+# picker в приёмке групп). Фронтовый `frontend/src/constants.ts:CATEGORIES`
+# зеркалит этот список — менять парой.
+SELECTABLE_CATEGORY_KEYS = [
+    key for key in CANONICAL_CATEGORY_KEYS if key not in _SERVICE_CATEGORY_KEYS
+]
 
 
 # TASK 17 Этап A: Helper функции для работы с категориями
