@@ -408,7 +408,7 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
 
     # Создаём клавиатуру онбординга
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     missing_items = []
     if not ctx.phone:
         missing_items.append(get_text("base.handlers.btn_specify_phone", language=lang))
@@ -419,13 +419,12 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
         return welcome_text, None
 
     keyboard_rows = [[KeyboardButton(text=item)] for item in missing_items]
-    # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL)
+    # Дополнительная кнопка: регистрация через WebApp-форму (если задан FRONTEND_URL).
+    # Текстовая, БЕЗ web_app: reply web_app не передаёт initData — ссылку шлёт
+    # handlers/webapp_buttons.py inline-кнопкой по нажатию.
     if settings.FRONTEND_URL:
         keyboard_rows.append([
-            KeyboardButton(
-                text=get_text("base.handlers.btn_register_webapp", language=lang),
-                web_app=WebAppInfo(url=f"{settings.FRONTEND_URL}/uk/register"),
-            )
+            KeyboardButton(text=get_text("base.handlers.btn_register_webapp", language=lang))
         ])
     return welcome_text, ReplyKeyboardMarkup(
         keyboard=keyboard_rows,

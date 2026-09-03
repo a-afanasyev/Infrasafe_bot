@@ -189,8 +189,9 @@ class TestStartFork:
 class TestChoiceCallbacks:
     @pytest.mark.asyncio
     async def test_resident_shows_existing_onboarding_screen(self, monkeypatch):
-        """Житель получает ТОТ ЖЕ экран, включая WebApp-кнопку регистрации:
-        собственная сборка экрана незаметно потеряла бы её."""
+        """Житель получает ТОТ ЖЕ экран, включая кнопку «Регистрация (форма)»:
+        собственная сборка экрана незаметно потеряла бы её. Кнопка текстовая
+        (без web_app — reply web_app не передаёт initData, BUG-187)."""
         from uk_management_bot.handlers import base
         from uk_management_bot.handlers.start_role_choice import choose_resident
 
@@ -204,12 +205,13 @@ class TestChoiceCallbacks:
 
         markup = cb.message.answer.call_args.kwargs.get("reply_markup")
         assert isinstance(markup, ReplyKeyboardMarkup)
-        webapp_urls = [
-            btn.web_app.url
-            for row in markup.keyboard for btn in row
-            if getattr(btn, "web_app", None) is not None
+        from uk_management_bot.utils.helpers import get_text
+        register_text = get_text("base.handlers.btn_register_webapp", language="ru")
+        register_buttons = [
+            btn for row in markup.keyboard for btn in row if btn.text == register_text
         ]
-        assert any(url.endswith("/register") for url in webapp_urls)
+        assert len(register_buttons) == 1
+        assert register_buttons[0].web_app is None
         state.set_state.assert_not_awaited()
 
     @pytest.mark.asyncio

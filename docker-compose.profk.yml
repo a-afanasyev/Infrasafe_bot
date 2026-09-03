@@ -49,7 +49,7 @@ services:
   api:
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
-      - FRONTEND_URL=https://profk.uz/uk
+      - FRONTEND_URL=https://profk.uz
     networks: !override
       - uk-network
       - uk-internal
