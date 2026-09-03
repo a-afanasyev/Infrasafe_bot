@@ -8,7 +8,7 @@
 
 **Tech Stack:** aiogram 3, FastAPI + SQLAlchemy async, React + vitest, i18next. Спека: `docs/superpowers/specs/2026-09-03-registration-contact-cascade-design.md`.
 
-**Правила:** TDD (RED → GREEN), `PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider <file>` для быстрой петли; `settings` в тестах патчить через модуль-потребитель; эталон — `make test-ci`; OpenAPI-снапшот регенерировать из CI-образа. Коммит после каждой задачи.
+**Правила:** ветка `feat/registration-contact-cascade` (создана до A1). TDD (RED → GREEN), `PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider <file>` для быстрой петли (для `tests/registration/*` нужен живой Postgres: `DATABASE_URL` из `.env` с хостом `localhost` + `DEBUG=true`, локальный `uk-postgres` на голове миграций подходит); `settings` в тестах патчить через модуль-потребитель; эталон — `make test-ci`; OpenAPI-снапшот регенерировать из CI-образа. Коммит после каждой задачи.
 
 ---
 
@@ -32,7 +32,7 @@
 - Modify `uk_management_bot/api/registration/schemas.py` — `YardOut`, `BuildingOut`, `ApartmentOut` (id, apartment_number, floor, entrance), `ContactStatusOut`; убрать `phone` и `apartments`.
 - Modify `uk_management_bot/api/registration/catalog.py` — `list_yards_out`, `list_buildings_out(yard_id)`, `list_apartments_out(building_id)` с 404-семантикой (возврат `None` при неактивном/отсутствующем родителе), `sort_key`.
 - Tests: `uk_management_bot/tests/registration/test_registration_cascade.py` (new), `test_registration_start.py`, `test_registration_applicant.py`, `tests/api/test_registration_full_name_validation.py`.
-- Snapshot: `docs/api/openapi.json` (или где лежит снапшот — см. `scripts/` / CI job) — регенерировать из CI-образа.
+- Snapshot: `docs/tech/openapi.json` — `scripts/dump_openapi.py` внутри образа `uk-app:ci-local` (пересобрать `docker build -t uk-app:ci-local .`). Имена схем — с префиксом `Registration*Out`: `YardOut`/`BuildingOut` уже есть в адресном API, коллизия имён раздувает снапшот.
 
 **Фронт**
 - Modify `frontend/src/hooks/useRegistration.ts` — новые методы и типы.
@@ -61,7 +61,7 @@
       return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, one_time_keyboard=True)
   ```
   В `_build_onboarding_screen`: если `not ctx.phone` → строка `KeyboardButton(text=get_text("base.handlers.btn_share_contact"), request_contact=True)`; иначе если `not ctx.has_approved_apartment` → `btn_select_apartment`; затем форма. Локали: `base.handlers.btn_share_contact` ru «📱 Поделиться контактом» / uz «📱 Kontaktni ulashish»; `onboarding.phone_required` ru «Сначала поделитесь контактом — нажмите кнопку ниже.» / uz «Avval kontaktni ulashing — quyidagi tugmani bosing.». `button_texts.py`: удалить `specify_phone` запись и `get_specify_phone_texts`.
-- [ ] Обновить `test_base_register_button.py` (ожидания кнопок) и `tests/handlers/test_start_role_choice.py::test_resident_shows_existing_onboarding_screen` (две кнопки: контакт + форма).
+- [ ] Обновить `test_base_register_button.py` (ожидания кнопок) и `tests/handlers/test_start_role_choice.py::test_resident_shows_existing_onboarding_screen` (две кнопки: контакт + форма). A1 и A2 — ОДИН коммит: `onboarding.py` импортирует `get_specify_phone_texts`, удаление в A1 без A2 ломает импорт.
 - [ ] Run оба файла → PASS. Commit `feat(bot): экран онбординга — контакт вместо ручного телефона`.
 
 ### Task A2: удалить ручной ввод телефона в онбординге
@@ -97,7 +97,7 @@
 
 - [ ] **RED.** (1) `choose_employee` → `state.set_state(waiting_for_employee_contact)`, ответ с клавиатурой `request_contact` + cancel; (2) свой контакт в этом состоянии → `state.update_data(employee_phone="+998…")`, `set_state(waiting_for_invite_token)`, текст `start_role.token_prompt`; (3) чужой контакт → `phone_request_flow.foreign_contact`, состояние не меняется; (4) текст «abc» → `employee_contact_required`; (5) текст из `CANCEL_TEXTS` → `state.clear()` + `auth.registration_cancelled`; (6) роутинг: `resolve_ctx(MAIN, make_message(text), "message", raw_state="RegistrationStates:waiting_for_employee_contact", roles=["applicant"], user=None)` → `("…start_role_choice", "employee_contact_text")`, и контакт (сделать `Message` с `contact=Contact(...)`) → `("…start_role_choice", "employee_contact")`.
 - [ ] Run → FAIL.
-- [ ] **GREEN.** Хендлеры `employee_contact` (`StateFilter(waiting_for_employee_contact), F.contact`) и `employee_contact_text` (`StateFilter(waiting_for_employee_contact)`), клавиатура из `keyboards/contact.py` с cancel.
+- [ ] **GREEN.** Хендлеры `employee_contact` (`StateFilter(waiting_for_employee_contact), F.contact`) и `employee_contact_text` (`StateFilter(waiting_for_employee_contact)`), клавиатура из `keyboards/contact.py` с cancel. В этой же задаче поправить `tests/handlers/test_start_role_choice.py::test_employee_asks_for_token_without_touching_rate_limiter` (ожидаемое состояние → `waiting_for_employee_contact`).
 - [ ] Run → PASS. Commit `feat(bot): сотрудник делится контактом до ввода токена`.
 
 ### Task A6: анкета сотрудника — контакт вместо ручного телефона
@@ -106,7 +106,7 @@
 
 - [ ] **RED.** (1) `handle_full_name_input` при `employee_phone` в FSM → экран подтверждения и `waiting_for_position_confirmation`; без него → `auth.phone_contact_prompt` с клавиатурой контакта + cancel и `waiting_for_phone`; (2) в `waiting_for_phone` свой контакт → `employee_phone`, экран подтверждения; текст «+99890…» → `phone_contact_required`; cancel → `state.clear()`; (3) `handle_position_confirmation` без `employee_phone` → `auth.phone_contact_required`, `_apply_registration` не вызван; с ним → вызван с `phone="+998…"`.
 - [ ] Run → FAIL.
-- [ ] **GREEN.** Заменить `handle_phone_input` на `handle_phone_contact` (`F.contact`) + `handle_phone_text`; читать `employee_phone` везде вместо `phone`.
+- [ ] **GREEN.** Заменить `handle_phone_input` на `handle_phone_contact` (`F.contact`) + `handle_phone_text`; читать `employee_phone` везде вместо `phone`; в `auth.py` импортировать `get_cancel_texts`. Поправить `tests/handlers/test_invite_pending_applicant.py` (FSM-ключ `phone` → `employee_phone`). `tests/test_bug149_151_batch.py::handle_phone_input` — это `profile_editing`, НЕ трогать.
 - [ ] Run `pytest uk_management_bot/tests -q -k "auth or invite or employee"` → PASS. Commit `feat(bot): анкета сотрудника принимает телефон только контактом`.
 
 ### Task A7: развилка — регрессионные тесты + прогон набора бота
@@ -121,6 +121,7 @@
 
 **Files:** Modify `api/registration/router.py`, `schemas.py`; New `tests/registration/test_registration_cascade.py`.
 
+- [ ] Расширить фикстуру `seed_user` (`tests/registration/conftest.py`) параметром `phone`.
 - [ ] **RED.** `GET /api/v2/registration/contact-status` без заголовка → 401; с тикетом пользователя без строки → `{"phone": null}`; с `seed_user(phone="+998…")` → `{"phone": "+998…"}`.
 - [ ] Run → FAIL (404).
 - [ ] **GREEN.** `async def registration_ticket_telegram_id(authorization: str | None = Header(default=None)) -> int` (тело `_ticket_telegram_id`); `ContactStatusOut(phone: str | None)`; эндпоинт `@limiter.limit("60/minute")`.
@@ -141,7 +142,7 @@
 
 - [ ] **RED.** `/start` → в теле нет `apartments`; `/applicant` с телом `{full_name, apartment_id}` и пользователем без телефона → 409 detail «Сначала поделитесь контактом в Telegram»; с телефоном в БД → 200 и `users.phone` не изменился; тело с `phone` → игнорируется/422 (extra=forbid не включаем, просто не читаем).
 - [ ] Run → FAIL.
-- [ ] **GREEN.** Схемы; в роутере телефон из `get_user_by_telegram_id`; `upsert_pending_applicant(..., phone=existing.phone)`.
+- [ ] **GREEN.** Схемы; в роутере телефон из `get_user_by_telegram_id`; порядок проверок: blocked 403 → approved 409 → нет телефона 409 → квартира 400; `upsert_pending_applicant(..., phone=existing.phone)`. Существующие тесты `/applicant` пересеять телефоном через `seed_user(phone=…)`; `test_applicant_bad_phone_400` → `test_applicant_without_phone_409`.
 - [ ] Run `pytest uk_management_bot/tests/registration tests/api/test_registration_full_name_validation.py` → PASS. Commit `feat(api): телефон регистрации только из подтверждённого контакта`.
 
 ### Task B4: OpenAPI-снапшот
