@@ -39,6 +39,11 @@ CANON_STATUSES = (
 )
 TERMINAL_STATUSES = frozenset({REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED})
 
+# Сентинел `to_status` для действий, которые статус НЕ меняют (смена категории):
+# никогда не совпадёт ни с одним канон-статусом, поэтому `check_repeat` не
+# сочтёт их повтором, а `resolve_command` — целью status-based входа.
+SAME_STATUS = "__same__"
+
 
 def is_terminal(status: str) -> bool:
     return status in TERMINAL_STATUSES
@@ -143,6 +148,13 @@ class Action(str, Enum):
     APPLICANT_RETURN = "applicant_return"
     MANAGER_FORCE_ACCEPT = "manager_force_accept"
     CANCEL = "cancel"
+    # Менеджер меняет категорию заявки (решение владельца 2026-09-03). Статус
+    # не меняется (`to_status=SAME_STATUS`); в «Новой» с групповым назначением
+    # и сменой специализации группа снимается (передиспетч делает оркестратор
+    # `services/category_change`), в «В работе» исполнитель остаётся. Через
+    # канон, а не edit-ветку PATCH: аудит, комментарий в историю и снятие
+    # назначения обязаны идти одной транзакцией под FOR UPDATE.
+    MANAGER_CHANGE_CATEGORY = "manager_change_category"
 
 
 class RepeatPolicy(str, Enum):
@@ -211,6 +223,9 @@ class RequestState:
     # приёмка/возврат закрыты гардами). Дефолт покрывает все существующие
     # места сборки и тест-фикстуры.
     acceptance_mode: str = ACCEPTANCE_MODE_RESIDENT
+    # Категория как в БД (канон-ключ ИЛИ legacy RU-лейбл) — нужна
+    # MANAGER_CHANGE_CATEGORY для no-op и сравнения специализаций.
+    category: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -254,7 +269,7 @@ class DomainOp:
     """Операция по связанной таблице — применяется адаптером в той же tx."""
     kind: Literal["create_rating", "cancel_active_assignments",
                   "create_assignment", "claim_group_assignment",
-                  "promote_group_assignment"]
+                  "promote_group_assignment", "add_comment"]
     data: Mapping[str, object] = field(default_factory=dict)
 
 

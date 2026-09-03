@@ -36,6 +36,7 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.request_assignment import RequestAssignment
+from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.webhook_payloads import (
     emit_request_status_changed,
@@ -135,6 +136,7 @@ def _new_state_from(req: Request) -> RequestState:
         apartment_id=req.apartment_id,
         executor_id=req.executor_id,
         acceptance_mode=req.acceptance_mode or ACCEPTANCE_MODE_RESIDENT,
+        category=req.category,
     )
 
 
@@ -148,7 +150,9 @@ def _build_audit(ev: EventIntent, req: Request, actor: ActorContext) -> AuditLog
     details["actor"] = ev.data.get("action")
     return AuditLog(
         user_id=actor.user_id if actor.kind == "user" else None,
-        action="request_status_changed",
+        # Смена категории пишет свой action (request_category_changed):
+        # статус не менялся, и запись «status_changed» врала бы preflight-ам.
+        action=ev.data.get("audit_action", "request_status_changed"),
         details=details,
     )
 
@@ -253,10 +257,26 @@ def _apply_sync(db: Session, req: Request, result: TransitionResult,
                 identity=EventIdentity(version=req.status_version))
 
 
+def _comment_row(req: Request, dop, actor: ActorContext) -> RequestComment:
+    """`add_comment` → строка истории заявки. Автор — актор-человек
+    (единственный эмитент — MANAGER_CHANGE_CATEGORY, authorize=_is_manager)."""
+    if actor.kind != "user" or actor.user_id is None:
+        raise WorkflowError("add_comment: требуется актор-пользователь")
+    return RequestComment(
+        request_number=req.request_number,
+        user_id=actor.user_id,
+        comment_text=dop.data["text"],
+        comment_type=dop.data["comment_type"],
+        is_internal=False,
+    )
+
+
 def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -> None:
     if dop.kind == "create_rating":
         db.add(Rating(request_number=req.request_number,
                       user_id=actor.user_id, rating=dop.data["rating"]))
+    elif dop.kind == "add_comment":
+        db.add(_comment_row(req, dop, actor))
     elif dop.kind == "cancel_active_assignments":
         db.query(RequestAssignment).filter(
             RequestAssignment.request_number == req.request_number,
@@ -431,6 +451,8 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
     if dop.kind == "create_rating":
         db.add(Rating(request_number=req.request_number,
                       user_id=actor.user_id, rating=dop.data["rating"]))
+    elif dop.kind == "add_comment":
+        db.add(_comment_row(req, dop, actor))
     elif dop.kind == "cancel_active_assignments":
         await db.execute(sa_update(RequestAssignment).where(
             RequestAssignment.request_number == req.request_number,

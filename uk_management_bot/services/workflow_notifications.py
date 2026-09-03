@@ -102,7 +102,13 @@ _NOTIFY_MATRIX: dict[Action, object] = {
     # API/TWA-пути возврат жителя не уведомлял никого (бот слал через легаси).
     Action.APPLICANT_RETURN: ((EXECUTOR,), "notifications.workflow.returned_to_work"),
     Action.CANCEL: ((APPLICANT,), "notifications.workflow.cancelled"),
+    # Смена категории: только исполнителю (решение владельца 2026-09-03) —
+    # житель ярлыка не видит. Интент планировщик выпускает лишь для
+    # «В работе» с исполнителем при смене специализации.
+    Action.MANAGER_CHANGE_CATEGORY: ((EXECUTOR,), "notifications.workflow.category_changed"),
 }
+
+_CATEGORY_CHANGED_KEY = "notifications.workflow.category_changed"
 
 # Менеджерская приёмка (Group Intake фаза 2): владелец staff-репорта принять
 # или вернуть работу НЕ может (гарды канона), поэтому тексты с призывом
@@ -266,6 +272,22 @@ def _render_text(
             )),
             address=html.escape(_clip(request.address, _MAX_ADDRESS)),
             description=html.escape(_clip(request.description, _MAX_DESCRIPTION)),
+        )
+    if text_key == _CATEGORY_CHANGED_KEY:
+        # Новая категория — уже записана в заявку к моменту post-commit сбора;
+        # локализуем тем же хелпером и экранируем (fallback для неизвестного
+        # ключа отдаёт сырую строку из БД).
+        from uk_management_bot.keyboards.requests import (
+            get_category_display, resolve_category_key,
+        )
+        return get_text(
+            text_key,
+            language=language,
+            request_number=request.request_number,
+            category=html.escape(get_category_display(
+                resolve_category_key(request.category), language=language
+            )),
+            address=html.escape(_clip(request.address, _MAX_ADDRESS)),
         )
     if action is Action.MANAGER_RETURN_TO_WORK:
         # Причина обязательна на уровне ядра, но уведомление — post-commit

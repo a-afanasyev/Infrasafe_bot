@@ -27,8 +27,10 @@ from uk_management_bot.api.requests import service as svc
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
     CreateRequestBody, CreateInspectorRequestBody, UpdateRequestBody,
+    ChangeCategoryBody, CategoryChangeOut,
     CommentBody, CommentOut,
 )
+from uk_management_bot.services.category_change import change_category_async
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
@@ -361,9 +363,73 @@ def _build_workflow_payload(target_status: str, updates: dict) -> dict:
 # FEAT-группы: executor_id УБРАН — назначение исполнителя идёт только через
 # канонический MANAGER_ASSIGN (см. трансляцию executor_id-only PATCH выше), а не
 # прямым setattr в обход RequestAssignment/assignment_type/assigned_group/audit.
-_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description", "category"}
+# `category` УБРАНА (2026-09-03): смена категории — своё действие канона
+# (MANAGER_CHANGE_CATEGORY) через PATCH /{number}/category; схема PATCH её и
+# раньше не пропускала (extra=forbid), ключ здесь был мёртвым.
+_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description"}
 # Контент-поля исполнителя без смены статуса.
 _EXECUTOR_EDIT_FIELDS = {"completion_report", "requested_materials", "notes"}
+
+
+@router.patch("/{request_number}/category", response_model=CategoryChangeOut)
+@limiter.limit("30/minute")
+async def change_request_category(
+    request: Request,
+    request_number: str,
+    body: ChangeCategoryBody,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("manager")),
+):
+    """Смена категории менеджером (решение владельца 2026-09-03).
+
+    Канон MANAGER_CHANGE_CATEGORY: patch + комментарий в историю + аудит +
+    снятие группового назначения одной транзакцией; «Новая» со сменой
+    специализации — передиспетч; «В работе» — исполнитель остаётся, ответ несёт
+    `executor_spec_mismatch`/`can_reassign` для кнопки «Переназначить».
+    """
+    principal = PrincipalRef(kind="user", user_id=user.id, source="api")
+    try:
+        result = await change_category_async(
+            AsyncSessionLocal, request_number, principal, body.category,
+            command_id=f"api:category:{request_number}")
+    except RequestNotFound:
+        raise HTTPException(status_code=404, detail="Request not found")
+    except NotAuthorized:
+        raise HTTPException(status_code=403, detail="Not permitted for this transition")
+    except (InvalidTransition, RepeatRejected, RepeatConflict, PayloadInvalid) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except WorkflowError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if not result.no_op:
+        # Карточка изменилась без смены публичного статуса (передиспетч в
+        # «В работе» публикует свой status_changed сам, внутри диспетча).
+        await publish_request_event("request.updated", {"number": request_number})
+        if result.post_commit_intents:
+            background.add_task(
+                dispatch_notify_intents_detached,
+                request_number, result.post_commit_intents)
+
+    row = await svc.request_with_executor(db, request_number)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req, exec_user = row
+    card = _make_request_card(req, exec_user)
+    return CategoryChangeOut(
+        request=card,
+        no_op=result.no_op,
+        old_category=result.old_category,
+        new_category=result.new_category,
+        specialization_changed=result.specialization_changed,
+        old_specialization=result.old_specialization,
+        new_specialization=result.new_specialization,
+        redispatched=result.redispatched,
+        executor_id=result.executor_id,
+        executor_name=card.executor_name,
+        executor_spec_mismatch=result.executor_spec_mismatch,
+        can_reassign=result.can_reassign,
+    )
 
 
 @router.patch("/{request_number}", response_model=RequestCard)

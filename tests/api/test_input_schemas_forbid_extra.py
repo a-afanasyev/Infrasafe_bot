@@ -176,6 +176,20 @@ def test_known_keys_in_request_patch_still_accepted(payload):
     assert UpdateRequestBody(**payload) is not None
 
 
+def test_category_is_not_a_patch_key_and_change_body_forbids_extra():
+    """Категория меняется своим эндпоинтом (PATCH …/category, канон
+    MANAGER_CHANGE_CATEGORY); в теле общего PATCH это по-прежнему лишний ключ."""
+    from pydantic import ValidationError
+
+    from uk_management_bot.api.requests.schemas import ChangeCategoryBody, UpdateRequestBody
+
+    with pytest.raises(ValidationError):
+        UpdateRequestBody(category="plumbing")
+    assert ChangeCategoryBody(category="Сантехника").category == "plumbing"
+    with pytest.raises(ValidationError):
+        ChangeCategoryBody(category="plumbing", urgency="high")
+
+
 # ── Вход: PUT /api/v2/work-reports/settings ──────────────────────────────
 
 

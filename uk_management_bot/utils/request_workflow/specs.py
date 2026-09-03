@@ -33,6 +33,7 @@ from .guards import (
 from .projections import normalize_status
 from .types import (
     CANON_STATUSES,
+    SAME_STATUS,
     STATUS_RETURNED,
     TERMINAL_STATUSES,
     Action,
@@ -157,6 +158,13 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
         REQUEST_STATUS_CANCELLED,
         _can_cancel, RepeatPolicy.REJECT),
+    # Смена категории: из любого нетерминального статуса, статус не меняется
+    # (SAME_STATUS никогда не равен канону → check_repeat всегда None,
+    # resolve_command никогда не выберет). REJECT — формальный дефолт.
+    Action.MANAGER_CHANGE_CATEGORY: ActionSpec(
+        frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
+        SAME_STATUS,
+        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
 }
 
 

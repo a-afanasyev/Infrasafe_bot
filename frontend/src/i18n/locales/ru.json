@@ -988,7 +988,12 @@
     "noOtherExecutors": "Других подходящих исполнителей нет — текущий в список не входит",
     "noExecutorsAvailable": "Нет доступных исполнителей",
     "reassignConfirm": "Переназначить",
-    "assignConfirm": "Назначить"
+    "assignConfirm": "Назначить",
+    "changeCategory": "Изменить категорию",
+    "categoryUnchanged": "Категория не изменилась",
+    "categoryRedispatchedExecutor": "Заявка передана дежурному: {{name}}",
+    "categoryRedispatchedGroup": "Заявка адресована группе «{{spec}}» — дежурного сейчас нет",
+    "categorySpecMismatch": "Специализация текущего исполнителя не соответствует новой категории"
   },
   "callcenter": {
     "title": "Создание заявки по звонку",
@@ -2030,6 +2035,8 @@
   },
   "toast": {
     "requestUpdated": "Заявка обновлена",
+    "categoryUpdated": "Категория изменена",
+    "categoryUpdateFailed": "Не удалось изменить категорию",
     "requestUpdateFailed": "Не удалось обновить заявку",
     "workPhotosUploaded": "Фото работ загружены",
     "workPhotosUploadFailed": "Не удалось загрузить фото работ",

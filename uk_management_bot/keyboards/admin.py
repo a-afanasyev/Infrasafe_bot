@@ -414,3 +414,60 @@ def get_unaccepted_request_actions_keyboard(request_number: str, language: str =
     ))
 
     return builder.as_markup()
+
+
+def get_change_category_button_row(
+    request_number: str,
+    *,
+    status: str,
+    roles: Optional[list] = None,
+    language: str = "ru",
+) -> list:
+    """Строка «Категория» для карточки менеджера — или пустой список.
+
+    Условия совпадают с каноном MANAGER_CHANGE_CATEGORY: любой нетерминальный
+    статус и роль именно `manager` (`has_admin_access` пропускает чистого
+    `admin`, а канон его отправил бы в отказ).
+    """
+    from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES
+
+    if status in TERMINAL_STATUSES:
+        return []
+    if "manager" not in set(roles or []):
+        return []
+    return [InlineKeyboardButton(
+        text=get_text("admin.keyboards.change_category", language=language),
+        callback_data=f"req_category_menu_{request_number}",
+    )]
+
+
+def get_category_picker_keyboard(
+    request_number: str,
+    current_key: Optional[str],
+    language: str = "ru",
+) -> InlineKeyboardMarkup:
+    """Picker категорий по SELECTABLE (служебная `engineering` не предлагается),
+    2 в ряд, текущая помечена «• », внизу — назад к карточке."""
+    from uk_management_bot.keyboards.requests import (
+        SELECTABLE_CATEGORY_KEYS,
+        get_category_display,
+    )
+
+    rows: list = []
+    row: list = []
+    for key in SELECTABLE_CATEGORY_KEYS:
+        label = get_category_display(key, language)
+        if key == current_key:
+            label = f"• {label}"
+        row.append(InlineKeyboardButton(
+            text=label, callback_data=f"req_category_set_{request_number}_{key}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(
+        text=get_text("admin.keyboards.back_to_request", language=language),
+        callback_data=f"mview_{request_number}",
+    )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

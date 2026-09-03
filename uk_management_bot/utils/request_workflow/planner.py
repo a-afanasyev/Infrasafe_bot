@@ -12,9 +12,12 @@ from typing import Mapping, Optional
 
 from uk_management_bot.utils.constants import (
     ACCEPTANCE_MODE_MANAGER,
+    AUDIT_ACTION_REQUEST_CATEGORY_CHANGED,
+    COMMENT_TYPE_CATEGORY_CHANGE,
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_IN_PROGRESS,
+    REQUEST_STATUS_NEW,
 )
 
 from .payloads import PAYLOAD_SCHEMAS
@@ -197,7 +200,7 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
 # заявителя/исполнителя (completion_report, notes, return_reason/_media,
 # confirmation_notes) сюда НЕ попадают.
 _SAFE_PAYLOAD_KEYS = frozenset({
-    "rating", "executor_id", "group", "reason", "question",
+    "rating", "executor_id", "group", "reason", "question", "category",
 })
 
 
@@ -295,6 +298,11 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
         raise SameExecutor(
             f"{action.value}: заявка уже назначена этому исполнителю")
 
+    if action is Action.MANAGER_CHANGE_CATEGORY:
+        # Статус не меняется — общий путь (status в patch, инвариант
+        # «В работе ⟺ исполнитель», проекции/webhook) здесь неприменим.
+        return _plan_category_change(snap, command, principal, canon)
+
     to_status = _effective_to_status(action, spec.to_status, snap)
     patch = _build_patch(action, to_status, actor, command.payload)
     _enforce_in_progress_has_executor(action, to_status, snap, patch)
@@ -304,6 +312,83 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     return TransitionResult(
         old_state=snap.request, new_canon_status=to_status,
         patch=patch, domain_ops=domain_ops, events=events,
+    )
+
+
+def _plan_category_change(snap: WorkflowSnapshot, command: ActionCommand,
+                          principal: PrincipalRef, canon: str) -> TransitionResult:
+    """MANAGER_CHANGE_CATEGORY — смена ярлыка без смены статуса.
+
+    Старое значение из БД всегда нормализуется (`resolve_category_key`): там
+    живут legacy RU-лейблы («Сантехника», «Интернет»), и без нормализации
+    «Сантехника → plumbing» выглядело бы сменой. Legacy-эквивалент = no-op
+    без записи: строка в БД остаётся как была.
+
+    Группа снимается ТОЛЬКО у «Новой» с групповым назначением и при смене
+    специализации — дальше её переиграет оркестратор (`services/category_change`).
+    Из «В работе» и далее исполнитель остаётся: его смена — отдельное
+    решение менеджера (MANAGER_ASSIGN там, где канон пускает).
+    """
+    from uk_management_bot.constants.categories import get_specialization_for_category
+    from uk_management_bot.keyboards.requests import (
+        CANONICAL_CATEGORY_KEYS,
+        get_category_display,
+        resolve_category_key,
+    )
+
+    action = Action.MANAGER_CHANGE_CATEGORY
+    new = command.payload["category"].strip()
+    if new not in CANONICAL_CATEGORY_KEYS:
+        raise PayloadInvalid(f"{action.value}: неизвестная категория {new!r}")
+    raw_old = snap.request.category
+    old = resolve_category_key(raw_old) if raw_old else None
+    if old == new:
+        return TransitionResult(
+            old_state=snap.request, new_canon_status=canon,
+            patch=(), domain_ops=(), events=(), no_op=True,
+        )
+
+    old_spec = get_specialization_for_category(old) if old else None
+    new_spec = get_specialization_for_category(new)
+    spec_changed = old_spec != new_spec
+
+    patch: list[tuple[str, Op, object]] = [("category", Op.SET, new)]
+    domain_ops: list[DomainOp] = []
+    if (canon == REQUEST_STATUS_NEW and spec_changed
+            and snap.active_assignment_type == "group"):
+        patch += [("assigned_group", Op.CLEAR, None),
+                  ("assignment_type", Op.CLEAR, None)]
+        domain_ops.append(DomainOp("cancel_active_assignments"))
+
+    old_label = get_category_display(old, "ru") if old else "—"
+    new_label = get_category_display(new, "ru")
+    domain_ops.append(DomainOp("add_comment", {
+        "comment_type": COMMENT_TYPE_CATEGORY_CHANGE,
+        "text": f"Категория: {old_label} → {new_label}",
+    }))
+
+    events: list[EventIntent] = [EventIntent("audit", {
+        "action": action.value,
+        "audit_action": AUDIT_ACTION_REQUEST_CATEGORY_CHANGED,
+        "old_canon": canon, "new_canon": canon,
+        "old_raw_status": snap.request.status,
+        "old_category": old, "new_category": new,
+        "old_specialization": old_spec, "new_specialization": new_spec,
+        "principal_kind": principal.kind,
+        "principal_id": principal.user_id or principal.system_actor,
+        "source": principal.source,
+        "payload": _safe_payload(command.payload),
+    })]
+    # Уведомление — только исполнителю «В работе», и только если заявка стала
+    # другого профиля (решение владельца 2026-09-03). Webhook/realtime не
+    # эмитим: публичный статус не менялся.
+    if (canon == REQUEST_STATUS_IN_PROGRESS and spec_changed
+            and snap.request.executor_id is not None):
+        events.append(EventIntent("notify", {
+            "action": action.value, "request_number": snap.request.request_number}))
+    return TransitionResult(
+        old_state=snap.request, new_canon_status=canon,
+        patch=tuple(patch), domain_ops=tuple(domain_ops), events=tuple(events),
     )
 
 
@@ -399,7 +484,10 @@ def check_repeat(snap: WorkflowSnapshot, command: ActionCommand,
 # resolve_command на практике, но исключение держит инвариант явным (same-
 # canon В работе→В работе не должен резолвиться в system-only действие).
 _STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM,
-                                     Action.SYSTEM_AUTO_PROMOTE})
+                                     Action.SYSTEM_AUTO_PROMOTE,
+                                     # to_status=SAME_STATUS никогда не равен
+                                     # target; исключение держит инвариант явным
+                                     Action.MANAGER_CHANGE_CATEGORY})
 
 
 def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
@@ -449,7 +537,9 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
 # Edits вне workflow (urgency/notes/description) — общий валидатор
 # ---------------------------------------------------------------------------
 
-EDITABLE_FIELDS = frozenset({"urgency", "notes", "description", "category"})
+# `category` здесь больше нет: смена категории — действие канона
+# (MANAGER_CHANGE_CATEGORY), а не правка поля.
+EDITABLE_FIELDS = frozenset({"urgency", "notes", "description"})
 
 
 def validate_edits(state: RequestState, edits: Mapping[str, object]) -> None:

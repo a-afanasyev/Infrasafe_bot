@@ -97,7 +97,11 @@ COMMENT_TYPE_REPORT = "report"
 # BUG-171 (решение владельца 2026-08-19): «Общий комментарий» — полноправный
 # тип; локали comments.type_general / request_comments.keyboards.type_general.
 COMMENT_TYPE_GENERAL = "general"
-COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT, COMMENT_TYPE_GENERAL]
+# Смена категории менеджером: запись в историю заявки «Категория: A → B»
+COMMENT_TYPE_CATEGORY_CHANGE = "category_change"
+COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT, COMMENT_TYPE_GENERAL, COMMENT_TYPE_CATEGORY_CHANGE]
+# AuditLog.action для смены категории (остальные переходы — request_status_changed)
+AUDIT_ACTION_REQUEST_CATEGORY_CHANGED = "request_category_changed"
 
 # ─── Срочность заявок: КАНОН — внутренние ключи (TASK 17 завершён) ───
 # Хранимые значения urgency во всём стеке: low/medium/high/critical.
