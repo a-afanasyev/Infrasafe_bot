@@ -579,6 +579,11 @@ def save_request_sync(
             # Для остальных путей data этих ключей не несёт — дефолты.
             reported_by_user_id=data.get('reported_by_user_id'),
             acceptance_mode=data.get('acceptance_mode') or ACCEPTANCE_MODE_RESIDENT,
+            # Модуль «Лифты» (Ф4a-1): FSM-шаг выбора лифта — T7; здесь только
+            # протаскивание значений из data. Инвариант Р11 проверяет
+            # create_request_record (ElevatorValidationError → общий except → None).
+            elevator_id=data.get('elevator_id'),
+            elevator_operational=data.get('elevator_operational'),
         )
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan

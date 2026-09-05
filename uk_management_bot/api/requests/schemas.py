@@ -68,6 +68,13 @@ class RequestCard(BaseModel):
     metric_normal_min: Optional[float] = None
     metric_normal_max: Optional[float] = None
     infrastructure_label: Optional[str] = None
+    # Модуль «Лифты» (Ф4a-1): привязка заявки к лифту. elevator_id — колонка;
+    # elevator_label («д. …, подъезд N, лифт M», язык пользователя) и
+    # elevator_status (канон-ключ статуса лифта) заполняет роутер одним
+    # batch-запросом на страницу (api/requests/elevator_fields.py), не N+1.
+    elevator_id: Optional[int] = None
+    elevator_label: Optional[str] = None
+    elevator_status: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -124,12 +131,46 @@ def _validate_request_category(v: str) -> str:
     return key
 
 
-class CreateRequestBody(BaseModel):
+def validate_elevator_fields(
+    category: str, elevator_id: Optional[int], elevator_operational: Optional[bool]
+) -> None:
+    """Р11 на границе схемы: категория «лифт» при включённом флаге требует оба поля.
+
+    Общая для TWA/инспектора/колл-центра. Флаг читается через объект settings
+    (тесты патчат атрибут). Пригодность самого лифта (существует, введён,
+    не архивирован) проверяет сервис в БД — здесь только наличие полей.
+    """
+    from uk_management_bot.config.settings import settings
+    from uk_management_bot.services.elevator_service import (
+        ElevatorValidationError,
+        require_elevator_for_category,
+    )
+    try:
+        require_elevator_for_category(
+            category, elevator_id, elevator_operational, enabled=settings.ELEVATORS_ENABLED
+        )
+    except ElevatorValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+class _ElevatorFieldsMixin(BaseModel):
+    """``elevator_id``/``elevator_operational`` + Р11-проверка после полей."""
+
+    elevator_id: Optional[int] = None
+    elevator_operational: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _require_elevator_for_category(self):
+        validate_elevator_fields(self.category, self.elevator_id, self.elevator_operational)
+        return self
+
+
+class CreateRequestBody(_ElevatorFieldsMixin):
     """Структурный контракт жителя (план «Обходчик», пилот — один шаг).
 
     Клиент передаёт уровень + id записи; адрес/FK/source считает сервер через
     resolve_request_address. Legacy-поля (apartment_id/address/source в body)
-    исключены — под пилот без переходного окна.
+    исключены — под пилот без переходного окна. Лифт — см. _ElevatorFieldsMixin.
     """
 
     category: str
@@ -151,7 +192,7 @@ class CreateRequestBody(BaseModel):
         return validate_canonical_urgency(v)
 
 
-class CreateInspectorRequestBody(BaseModel):
+class CreateInspectorRequestBody(_ElevatorFieldsMixin):
     """Контракт обходчика — building-only (двор/квартира → 422 на уровне схемы)."""
 
     category: str

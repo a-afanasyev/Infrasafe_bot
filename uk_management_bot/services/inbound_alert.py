@@ -29,6 +29,11 @@ from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
+from uk_management_bot.services.elevator_service import (
+    ElevatorValidationError,
+    RequestElevator,
+    resolve_request_elevator_async,
+)
 from uk_management_bot.services.reconciliation import _expected_external_id
 from uk_management_bot.services.webhook_sender import queue_webhook
 
@@ -128,6 +133,14 @@ async def handle_infrasafe_alert(
     if alert.reopen_sequence is not None and alert.reopen_sequence >= 2:
         description = f"Повторное обращение №{alert.reopen_sequence}. {alert.message}"
 
+    # Модуль «Лифты» (Р11/Р14): категория «лифт» обязана резолвиться в лифт дома.
+    try:
+        elevator = await _resolve_alert_elevator(
+            db, category=category, uk_elevator_id=alert.uk_elevator_id, building_id=building.id,
+        )
+    except ElevatorValidationError as exc:
+        return await _reject_elevator(db, payload, source_ip, error=str(exc))
+
     try:
         system_user_id = await _system_user_id(db)
     except RuntimeError as exc:
@@ -138,6 +151,7 @@ async def handle_infrasafe_alert(
     request_number = await _create_request(
         db, user_id=system_user_id, category=category, urgency=urgency,
         description=description, address=building.address, building_id=building.id,
+        elevator_id=elevator.elevator_id, elevator_operational=elevator.elevator_operational,
     )
     await queue_webhook(db, "request.created", REQUEST_WEBHOOK_ENDPOINT, {
         "request_number": request_number,
@@ -210,14 +224,55 @@ async def _system_user_id(db: AsyncSession) -> int:
     return user_id
 
 
+async def _resolve_alert_elevator(
+    db: AsyncSession, *, category: str, uk_elevator_id: int | None, building_id: int,
+) -> RequestElevator:
+    """Р11 для InfraSafe: категория сравнивается по канон-ключу (override
+    хранится как прислали — RU-лейбл «Лифт» тоже «лифт»); лифт обязан быть
+    пригодным и принадлежать дому `external_id`. Присланный лифт означает
+    неисправность → `elevator_operational=False`. Флаг выключен → NULL-ы.
+    """
+    from uk_management_bot.keyboards.requests import resolve_category_key
+
+    operational = False if uk_elevator_id is not None else None
+    return await resolve_request_elevator_async(
+        db, category=resolve_category_key(category), elevator_id=uk_elevator_id,
+        elevator_operational=operational, enabled=settings.ELEVATORS_ENABLED,
+        building_id=building_id,
+    )
+
+
+async def _reject_elevator(
+    db: AsyncSession, payload: InfrasafeAlertIn, source_ip: str, *, error: str,
+) -> InboundResult:
+    """422 + `webhook_inbox(outcome="rejected", error=…)` — аудит отказа по лифту.
+
+    Гонка с параллельной доставкой того же event_id (unique index) — откат и
+    тот же 422: строку аудита уже записал конкурент.
+    """
+    db.add(WebhookInbox(
+        event_id=payload.event_id, event=payload.event, source_ip=source_ip,
+        payload=payload.model_dump(), outcome="rejected", error=f"elevator: {error}",
+    ))
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+    logger.warning("inbound alert rejected: elevator binding invalid (event_id=%s): %s",
+                   payload.event_id, error)
+    return InboundResult(422, {"detail": "elevator category requires a valid uk_elevator_id"})
+
+
 async def _create_request(
     db: AsyncSession, *, user_id: int, category: str, urgency: str,
     description: str, address: str, building_id: int,
+    elevator_id: int | None = None, elevator_operational: bool | None = None,
 ) -> str:
     """Insert a building-level request. Retries once on request_number collision.
 
     План «Обходчик»: пишем структурный building_id + address_type='building'
     (раньше InfraSafe-заявка несла только текстовый address с apartment_id=NULL).
+    Лифт (Ф4a-1): значения уже проверены `_resolve_alert_elevator`.
     """
     # PR5: атомарный счётчик дня вместо COUNT(*)+1 (переиспользовал номер
     # после удаления строки). Retry сохранён как defense-in-depth.
@@ -229,6 +284,7 @@ async def _create_request(
             urgency=urgency, description=description, address=address,
             apartment_id=None, building_id=building_id, address_type="building",
             status="Новая", source="infrasafe", media_files=[],
+            elevator_id=elevator_id, elevator_operational=elevator_operational,
         )
         try:
             # SAVEPOINT: a request_number collision rolls back only this insert,

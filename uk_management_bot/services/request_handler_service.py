@@ -25,7 +25,9 @@ from typing import List, Optional, Tuple
 from sqlalchemy import case, false, or_
 from sqlalchemy.orm import Session, aliased
 
+from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.services.elevator_service import resolve_request_elevator_sync
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.shift import Shift
@@ -87,6 +89,8 @@ class RequestHandlerService:
         source_message_id=None,
         reported_by_user_id=None,
         acceptance_mode: str = ACCEPTANCE_MODE_RESIDENT,
+        elevator_id: int | None = None,
+        elevator_operational: bool | None = None,
     ) -> Request:
         """Создать строку заявки и положить в сессию (без commit — коммитит
         вызывающий после emit, как в исходном коде).
@@ -94,7 +98,15 @@ class RequestHandlerService:
         source_chat_id/source_message_id — provenance группового источника
         (Group Intake); для остальных путей остаются None.
         reported_by_user_id/acceptance_mode — staff-репорт с менеджерской
-        приёмкой (фаза 2); дефолты сохраняют поведение прочих путей."""
+        приёмкой (фаза 2); дефолты сохраняют поведение прочих путей.
+        elevator_id/elevator_operational — модуль «Лифты» (Р11, Ф4a-1): единая
+        точка проверки для всех sync-путей (житель, группы, инспектор, лифтёр) —
+        ``resolve_request_elevator_sync`` бросает ``ElevatorValidationError``
+        (категория «лифт» без полей / непригодный лифт); флаг выключен → NULL."""
+        elevator = resolve_request_elevator_sync(
+            self.db, category=category, elevator_id=elevator_id,
+            elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
+        )
         request = Request(
             request_number=request_number,
             category=category,
@@ -113,6 +125,8 @@ class RequestHandlerService:
             source_message_id=source_message_id,
             reported_by_user_id=reported_by_user_id,
             acceptance_mode=acceptance_mode,
+            elevator_id=elevator.elevator_id,
+            elevator_operational=elevator.elevator_operational,
         )
         self.db.add(request)
         return request

@@ -9,7 +9,8 @@ async для API (``AsyncSession``). Сети нет: ``set_status`` возвр�
 DB-модули: ``reads`` (лифт/журнал/график/заявки), ``registry`` (реестр с
 фильтрами и сводка), ``metrics`` (доступность поверх журнала), ``status``,
 ``recipients``, ``passport``, ``calendar``, ``config``, ``validation_db``
-(границы: длины колонок, номер заявки, URL). ``grouping`` (групповая приёмка
+(границы: длины колонок, номер заявки, URL; ``resolve_request_elevator_*`` —
+Р11 с запросом в БД, единая точка для всех конструкторов заявок). ``grouping`` (групповая приёмка
 через ``run_command_async``) НЕ реэкспортируется — импортировать модулем, иначе
 пакет тянет runner/httpx и получает цикл с хендлерами (гейт
 ``tests/services/test_elevator_service_imports.py``).
@@ -74,6 +75,7 @@ from .reads import (
     get_elevator_including_archived_async,
     get_elevator_including_archived_sync,
     get_elevator_sync,
+    get_elevators_by_ids_async,
     get_occurrence_async,
     get_occurrence_sync,
     list_active_for_building_async,
@@ -113,6 +115,12 @@ from .status import (
 )
 from .validation_db import (
     MAX_REASON_LEN,
+    UNBOUND_ELEVATOR,
+    RequestElevator,
+    ensure_elevator_usable_async,
+    ensure_elevator_usable_sync,
+    resolve_request_elevator_async,
+    resolve_request_elevator_sync,
     validate_passport_values,
     validate_reason,
     validate_request_number,
@@ -173,6 +181,7 @@ __all__ = [
     "PASSPORT_REQUIRED_FIELDS",
     "PUBLIC_CODE_MAX_LEN",
     "REGISTRY_FLAGS",
+    "UNBOUND_ELEVATOR",
     "ElevatorConflictError",
     "ElevatorCounters",
     "ElevatorNotFoundError",
@@ -182,6 +191,7 @@ __all__ = [
     "ElevatorValidationError",
     "Message",
     "Recipient",
+    "RequestElevator",
     "StatusChange",
     "StatusInterval",
     "YardElevatorSummary",
@@ -209,6 +219,8 @@ __all__ = [
     "date_to_business_midnight_utc",
     "downtime_threshold_reached",
     "elevator_label",
+    "ensure_elevator_usable_async",
+    "ensure_elevator_usable_sync",
     "generate_occurrence_dates",
     "generate_occurrences_async",
     "generate_occurrences_sync",
@@ -217,6 +229,7 @@ __all__ = [
     "get_elevator_including_archived_async",
     "get_elevator_including_archived_sync",
     "get_elevator_sync",
+    "get_elevators_by_ids_async",
     "get_occurrence_async",
     "get_occurrence_sync",
     "is_overdue",
@@ -237,6 +250,8 @@ __all__ = [
     "require_aware",
     "require_elevator_for_category",
     "reschedule_occurrence_async",
+    "resolve_request_elevator_async",
+    "resolve_request_elevator_sync",
     "resident_notify_key",
     "residents_of_entrance_async",
     "residents_of_entrance_sync",

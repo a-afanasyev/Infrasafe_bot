@@ -4,7 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.callcenter import service
+from uk_management_bot.api.elevators.errors import http_error as elevator_http_error
+from uk_management_bot.api.requests.elevator_fields import card_language, card_with_elevator
 from uk_management_bot.api.requests.schemas import RequestCard
+from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
     AddressResolutionError,
@@ -91,15 +94,22 @@ async def create_call_center_request(
     if body.caller_name or body.caller_phone:
         notes = f"Звонок: {body.caller_name or ''} {body.caller_phone or ''}".strip()
 
-    req = await service.persist_call_center_request(
-        db,
-        owner_id=owner_id,
-        category=body.category,
-        urgency=body.urgency,
-        description=body.description,
-        apartment_id=apartment_id,
-        address=address,
-        address_type=address_type,
-        notes=notes,
-    )
-    return RequestCard.model_validate(req)
+    try:
+        req = await service.persist_call_center_request(
+            db,
+            owner_id=owner_id,
+            category=body.category,
+            urgency=body.urgency,
+            description=body.description,
+            apartment_id=apartment_id,
+            address=address,
+            address_type=address_type,
+            notes=notes,
+            elevator_id=body.elevator_id,
+            elevator_operational=body.elevator_operational,
+            acceptance_mode=body.acceptance_mode,
+        )
+    except ElevatorValidationError as exc:
+        # Лифт не найден / архивирован / не введён — некорректный ввод менеджера → 422.
+        raise elevator_http_error(exc)
+    return await card_with_elevator(db, req, language=card_language(user))

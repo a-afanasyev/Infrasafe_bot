@@ -10,7 +10,7 @@ Sync-варианты — для бота (``Session``), async — для API (`
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import date
 
 from sqlalchemy import Select, func, select
@@ -139,6 +139,25 @@ async def get_elevator_including_archived_async(
 async def list_active_for_building_async(db: AsyncSession, building_id: int) -> list[Elevator]:
     """Async-зеркало ``list_active_for_building_sync``."""
     return list((await db.execute(_active_for_building_stmt(building_id))).scalars().all())
+
+
+async def get_elevators_by_ids_async(
+    db: AsyncSession, elevator_ids: Iterable[int]
+) -> dict[int, Elevator]:
+    """``{id: лифт с домом}`` для страницы заявок — один запрос, включая архивные.
+
+    Карточка заявки обязана показать подпись лифта и после его архивации:
+    привязка ``requests.elevator_id`` историческая, а не «текущий реестр».
+    """
+    ids = {int(i) for i in elevator_ids}
+    if not ids:
+        return {}
+    stmt = (
+        select(Elevator)
+        .options(selectinload(Elevator.building))
+        .where(Elevator.id.in_(ids))
+    )
+    return {e.id: e for e in (await db.execute(stmt)).scalars().all()}
 
 
 async def get_occurrence_async(
