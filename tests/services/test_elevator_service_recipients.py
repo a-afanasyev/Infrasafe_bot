@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 
 import pytest
@@ -23,11 +22,11 @@ def _objects(seed):
     return [
         seed.yard(),
         seed.building(),
-        seed.apartment(1, entrance=1, number="1"),
-        seed.apartment(2, entrance=1, number="2"),
-        seed.apartment(3, entrance=2, number="3"),
-        seed.apartment(4, entrance=None, number="4"),
-        seed.apartment(5, entrance=1, number="5", is_active=False),
+        seed.apartment(1, entrance=1),
+        seed.apartment(2, entrance=1),
+        seed.apartment(3, entrance=2),
+        seed.apartment(4, entrance=None),
+        seed.apartment(5, entrance=1, is_active=False),
         # 10 — одобрен в двух квартирах подъезда 1 (DISTINCT)
         seed.user(10, language="uz"),
         seed.belonging(10, 1),
@@ -80,12 +79,10 @@ def test_sync_other_entrance(el_db, el_seed):
     assert residents_of_entrance_sync(el_db, 99, 1) == []
 
 
-def test_async_parity(el_async_factory, el_seed):
-    async def run():
-        async with el_async_factory() as s:
-            s.add_all(_objects(el_seed))
-            await s.commit()
-        async with el_async_factory() as s:
-            return await residents_of_entrance_async(s, 1, 1)
-
-    assert [r.user_id for r in asyncio.run(run())] == [10, 18]
+async def test_async_parity(el_async_factory, el_seed):
+    async with el_async_factory() as s:
+        s.add_all(_objects(el_seed))
+        await s.commit()
+    async with el_async_factory() as s:
+        result = await residents_of_entrance_async(s, 1, 1)
+    assert [r.user_id for r in result] == [10, 18]

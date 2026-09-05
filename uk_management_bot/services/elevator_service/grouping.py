@@ -6,6 +6,13 @@
 прерывает остальные. Иные исключения (инфраструктура) пробрасываются.
 Post-commit intents (уведомления/realtime) возвращаются вызывающему — он
 диспетчит их после ответа, как остальные адаптеры runner'а.
+
+Модуль НЕ реэкспортируется из пакета и импортирует ``workflow_runner`` лениво
+(внутри ``bulk_confirm_async``): runner тянет webhook-стек (httpx), а сам
+``set_status(source="request_hint")`` вызывается из хендлеров рядом с runner'ом
+— модульный импорт дал бы цикл. Потребитель — API-роутер:
+``from uk_management_bot.services.elevator_service.grouping import bulk_confirm_async``.
+Гейт: ``tests/services/test_elevator_service_imports.py``.
 """
 
 from __future__ import annotations
@@ -14,7 +21,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from uk_management_bot.services.workflow_runner import run_command_async
 from uk_management_bot.utils.request_workflow import (
     Action,
     ActionCommand,
@@ -63,13 +69,17 @@ async def bulk_confirm_async(
     command_prefix: str = DEFAULT_COMMAND_PREFIX,
 ) -> tuple[BulkItemResult, ...]:
     """Последовательно подтвердить заявки (в порядке номеров); частичный сбой изолирован."""
+    from uk_management_bot.services import workflow_runner  # lazy: см. докстринг модуля
+
     results: list[BulkItemResult] = []
     for number in _normalize_numbers(request_numbers):
         command = ActionCommand(
             command_id=f"{command_prefix}:{number}", action=Action.MANAGER_CONFIRM, payload={}
         )
         try:
-            outcome = await run_command_async(session_factory, number, principal, command, now)
+            outcome = await workflow_runner.run_command_async(
+                session_factory, number, principal, command, now
+            )
         except WorkflowError as exc:
             results.append(BulkItemResult(
                 request_number=number, ok=False, error_kind=type(exc).__name__, error=str(exc),

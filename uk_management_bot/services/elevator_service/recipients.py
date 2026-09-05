@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Select, exists, select
+from collections.abc import Iterable
+
+from sqlalchemy import Row, Select, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,8 @@ from uk_management_bot.database.models.user_apartment import (
     UserApartment,
     UserApartmentStatus,
 )
+
+from ._shared import DEFAULT_LANGUAGE
 
 # Статус пользователя, при котором уведомления не шлём
 USER_STATUS_BLOCKED = "blocked"
@@ -57,9 +61,9 @@ def _residents_stmt(building_id: int, entrance_number: int) -> Select:
     )
 
 
-def _to_recipients(rows) -> list[Recipient]:
+def _to_recipients(rows: Iterable[Row]) -> list[Recipient]:
     return [
-        Recipient(user_id=user_id, telegram_id=telegram_id, language=language or "ru")
+        Recipient(user_id=user_id, telegram_id=telegram_id, language=language or DEFAULT_LANGUAGE)
         for user_id, telegram_id, language in rows
     ]
 

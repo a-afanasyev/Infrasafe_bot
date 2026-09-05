@@ -20,6 +20,7 @@ os.environ["ADMIN_PASSWORD"] = "test_admin_password"
 # импорта uk_management_bot.
 # ---------------------------------------------------------------------------
 import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
 
 
 @pytest.fixture()
@@ -53,11 +54,10 @@ def el_db(el_factory):
     session.close()
 
 
-@pytest.fixture()
-def el_async_factory():
-    """async_sessionmaker на sqlite+aiosqlite (in-memory, StaticPool) + dispose."""
-    import asyncio
-
+@pytest_asyncio.fixture
+async def el_async_factory():
+    """async_sessionmaker на sqlite+aiosqlite (in-memory, StaticPool) в loop теста
+    (паттерн tests/api/conftest.py — без asyncio.run)."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.pool import StaticPool
 
@@ -67,14 +67,10 @@ def el_async_factory():
     engine = create_async_engine(
         "sqlite+aiosqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
-
-    async def _create():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    asyncio.run(_create())
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    asyncio.run(engine.dispose())
+    await engine.dispose()
 
 
 class ElevatorSeed:

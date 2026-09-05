@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -18,6 +17,7 @@ from uk_management_bot.services.elevator_service import (
     set_status_async,
     set_status_sync,
 )
+from uk_management_bot.services.elevator_service import status as status_module
 
 pytestmark = pytest.mark.integration
 
@@ -26,8 +26,8 @@ SINCE = NOW - timedelta(days=3)
 ACTOR = 50
 
 
-def _seed(db, seed, **elevator_kwargs):
-    db.add_all([
+def _objects(seed, **elevator_kwargs):
+    return [
         seed.yard(),
         seed.building(address="ул. Мира, д. 5"),
         seed.apartment(1, entrance=1),
@@ -41,7 +41,11 @@ def _seed(db, seed, **elevator_kwargs):
         seed.user(ACTOR, roles='["manager"]'),
         seed.elevator(1, entrance=1, number=1, status_since=SINCE, downtime_reminded_at=SINCE,
                       **{"status": "working", **elevator_kwargs}),
-    ])
+    ]
+
+
+def _seed(db, seed, **elevator_kwargs):
+    db.add_all(_objects(seed, **elevator_kwargs))
     db.commit()
 
 
@@ -115,6 +119,20 @@ class TestGuards:
         with pytest.raises(ElevatorValidationError):
             set_status_sync(el_db, 1, "working", actor_user_id=ACTOR, source="telepathy", now=NOW)
 
+    @pytest.mark.parametrize("bad", ["abc", "26090-001", "260905_001", "260905-001; drop"])
+    def test_invalid_request_number(self, el_db, el_seed, bad):
+        _seed(el_db, el_seed)
+        with pytest.raises(ElevatorValidationError):
+            set_status_sync(el_db, 1, "not_working", actor_user_id=ACTOR, source="request_hint",
+                            request_number=bad, now=NOW)
+        assert _events(el_db) == []
+
+    def test_reason_too_long(self, el_db, el_seed):
+        _seed(el_db, el_seed)
+        with pytest.raises(ElevatorValidationError):
+            set_status_sync(el_db, 1, "not_working", actor_user_id=ACTOR, source="manual",
+                            reason="x" * 501, now=NOW)
+
     def test_not_commissioned(self, el_db, el_seed):
         _seed(el_db, el_seed, commissioned=False)
         with pytest.raises(ElevatorStateError):
@@ -157,16 +175,25 @@ class TestResidentMessages:
         result = set_status_sync(el_db, 1, target, actor_user_id=ACTOR, source="manual", now=NOW)
         assert len(result.resident_messages) == 2
 
-    def test_config_can_disable(self, el_db, el_seed):
+    def test_config_can_disable_and_skips_recipients_query(self, el_db, el_seed, monkeypatch):
         _seed(el_db, el_seed)
         config = {
             **DEFAULT_ELEVATORS_CONFIG,
             "resident_notifications": {"repair_started": False, "maintenance_started": True,
                                        "back_in_service": True},
         }
+        monkeypatch.setattr(status_module, "residents_of_entrance_sync",
+                            lambda *a, **k: pytest.fail("адресаты не должны запрашиваться"))
         result = set_status_sync(el_db, 1, "under_repair", actor_user_id=ACTOR, source="manual",
                                  now=NOW, config=config)
         assert result.resident_messages == ()
+
+    def test_not_working_skips_recipients_query(self, el_db, el_seed, monkeypatch):
+        _seed(el_db, el_seed)
+        monkeypatch.setattr(status_module, "residents_of_entrance_sync",
+                            lambda *a, **k: pytest.fail("адресаты не должны запрашиваться"))
+        result = set_status_sync(el_db, 1, "not_working", actor_user_id=ACTOR, source="manual", now=NOW)
+        assert result.changed is True and result.resident_messages == ()
 
     def test_address_is_html_escaped(self, el_db, el_seed):
         el_db.add_all([
@@ -182,41 +209,28 @@ class TestResidentMessages:
 
 
 class TestAsyncParity:
-    def test_async_mirrors_sync(self, el_db, el_seed, el_async_factory):
+    async def test_async_mirrors_sync(self, el_db, el_seed, el_async_factory):
         _seed(el_db, el_seed)
         sync_result = set_status_sync(
             el_db, 1, "under_repair", actor_user_id=ACTOR, source="manual", now=NOW, reason="r")
         el_db.commit()
 
-        async def run():
-            async with el_async_factory() as s:
-                s.add_all([
-                    el_seed.yard(), el_seed.building(address="ул. Мира, д. 5"),
-                    el_seed.apartment(1, entrance=1), el_seed.apartment(2, entrance=2),
-                    el_seed.user(10, language="ru"), el_seed.belonging(10, 1),
-                    el_seed.user(11, language="uz"), el_seed.belonging(11, 1),
-                    el_seed.user(12), el_seed.belonging(12, 2),
-                    el_seed.user(ACTOR, roles='["manager"]'),
-                    el_seed.elevator(1, status="working", status_since=SINCE, downtime_reminded_at=SINCE),
-                ])
-                await s.commit()
-            async with el_async_factory() as s:
-                result = await set_status_async(
-                    s, 1, "under_repair", actor_user_id=ACTOR, source="manual", now=NOW, reason="r")
-                await s.commit()
-                events = (await s.execute(select(ElevatorStatusEvent))).scalars().all()
-                row = await s.get(Elevator, 1)
-                return result, events, (row.current_status, row.version, row.downtime_reminded_at)
+        async with el_async_factory() as s:
+            s.add_all(_objects(el_seed))
+            await s.commit()
+        async with el_async_factory() as s:
+            async_result = await set_status_async(
+                s, 1, "under_repair", actor_user_id=ACTOR, source="manual", now=NOW, reason="r")
+            await s.commit()
+            events = (await s.execute(select(ElevatorStatusEvent))).scalars().all()
+            row = await s.get(Elevator, 1)
+            row_state = (row.current_status, row.version, row.downtime_reminded_at)
 
-        async_result, events, row_state = asyncio.run(run())
         assert async_result == sync_result
         assert len(events) == 1 and events[0].new_status == "under_repair"
         assert row_state == ("under_repair", 2, None)
 
-    def test_async_not_found(self, el_async_factory):
-        async def run():
-            async with el_async_factory() as s:
-                with pytest.raises(ElevatorNotFoundError):
-                    await set_status_async(s, 1, "working", actor_user_id=ACTOR, source="manual", now=NOW)
-
-        asyncio.run(run())
+    async def test_async_not_found(self, el_async_factory):
+        async with el_async_factory() as s:
+            with pytest.raises(ElevatorNotFoundError):
+                await set_status_async(s, 1, "working", actor_user_id=ACTOR, source="manual", now=NOW)

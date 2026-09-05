@@ -1,13 +1,21 @@
-"""Общие хелперы DB-слоя сервиса «Лифты» (T3): время, JSON-снимки, события журнала.
+"""Общие хелперы DB-слоя сервиса «Лифты» (T3): время, JSON-снимки, события
+журнала, единый контракт ``IntegrityError → ElevatorConflictError``.
 
-Без сессий: строители возвращают новые объекты, ``session.add`` делают обёртки.
+Без сессий в строителях: они возвращают новые объекты, ``session.add`` делают
+обёртки. Единственное исключение — ``flush_or_conflict_*``: точка записи,
+которая переводит нарушение уникального констрейнта в доменный 409.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TypeVar
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.elevator import (
     ELEVATOR_EVENT_KINDS,
@@ -17,10 +25,16 @@ from uk_management_bot.database.models.elevator import (
 from uk_management_bot.utils.business_time import business_today
 from uk_management_bot.utils.datetime_utils import utc_now
 
-from ._core import ElevatorValidationError, require_aware
+from ._core import ElevatorConflictError, ElevatorValidationError, require_aware
 
 # Источник событий, порождённых действиями персонала над паспортом/графиком
 MANUAL_SOURCE = "manual"
+# Язык уведомлений, если у пользователя не задан
+DEFAULT_LANGUAGE = "ru"
+
+T = TypeVar("T")
+# Резолвер: какая доменная ошибка соответствует IntegrityError; None = не наша
+ConflictResolver = Callable[[IntegrityError], ElevatorConflictError | None]
 
 
 def now_or_utc(now: datetime | None) -> datetime:
@@ -77,3 +91,89 @@ def new_event(
         reason=reason,
         payload=dict(payload) if payload is not None else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# IntegrityError → ElevatorConflictError
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class UniqueRule:
+    """Уникальный констрейнт/индекс: имя в каталоге PG и маркер sqlite-сообщения.
+
+    psycopg2 отдаёт имя в ``exc.orig.diag.constraint_name``; sqlite — только
+    текст ``UNIQUE constraint failed: table.col, table.col``.
+    """
+
+    name: str
+    sqlite_marker: str
+
+
+# Имена — из alembic/versions/0016_elevators.py и моделей (elevator.py)
+PUBLIC_CODE_UNIQUE = UniqueRule("elevators_public_code_key", "elevators.public_code")
+PLACE_UNIQUE = UniqueRule(
+    "uq_elevators_building_entrance_number_active",
+    "elevators.building_id, elevators.entrance_number, elevators.elevator_number",
+)
+OCCURRENCE_UNIQUE = UniqueRule(
+    "uq_elevator_maintenance_occurrences_active",
+    "elevator_maintenance_occurrences.elevator_id, elevator_maintenance_occurrences.kind, "
+    "elevator_maintenance_occurrences.due_on",
+)
+
+
+def violates(exc: IntegrityError, rule: UniqueRule) -> bool:
+    """Нарушен ли именно этот констрейнт (имя из диагностики PG или текст sqlite)."""
+    diag = getattr(exc.orig, "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None)
+    if constraint_name:
+        return constraint_name == rule.name
+    text = str(exc.orig)
+    return rule.name in text or rule.sqlite_marker in text
+
+
+def conflict_for(rule: UniqueRule, error: ElevatorConflictError) -> ConflictResolver:
+    """Резолвер «одно правило → одна ошибка»; остальные IntegrityError — не наши."""
+    return lambda exc: error if violates(exc, rule) else None
+
+
+def _resolve_or_reraise(exc: IntegrityError, on_conflict: ConflictResolver) -> ElevatorConflictError:
+    conflict = on_conflict(exc)
+    if conflict is None:
+        raise exc
+    return conflict
+
+
+def flush_or_conflict_sync(
+    db: Session, apply: Callable[[], Sequence[T]], *, on_conflict: ConflictResolver
+) -> Sequence[T]:
+    """Выполнить ``apply`` (мутации + новые объекты) и flush внутри savepoint.
+
+    ``apply`` обязан вызываться ВНУТРИ savepoint: ``begin_nested()`` сначала
+    сбрасывает уже накопленные изменения (autoflush), и мутация, сделанная до
+    него, ушла бы в БД вне savepoint — отказ констрейнта убил бы всю
+    транзакцию. Уникальный конфликт → доменный 409 (сессия пригодна дальше:
+    ретрай ``public_code``); неопознанная ``IntegrityError`` пробрасывается.
+    """
+    try:
+        with db.begin_nested():
+            objects = apply()
+            db.add_all(objects)
+            db.flush()
+        return objects
+    except IntegrityError as exc:
+        raise _resolve_or_reraise(exc, on_conflict) from exc
+
+
+async def flush_or_conflict_async(
+    db: AsyncSession, apply: Callable[[], Sequence[T]], *, on_conflict: ConflictResolver
+) -> Sequence[T]:
+    """Async-зеркало ``flush_or_conflict_sync``."""
+    try:
+        async with db.begin_nested():
+            objects = apply()
+            db.add_all(objects)
+            await db.flush()
+        return objects
+    except IntegrityError as exc:
+        raise _resolve_or_reraise(exc, on_conflict) from exc

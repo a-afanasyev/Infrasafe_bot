@@ -1,18 +1,22 @@
-"""`bulk_confirm_async`: порядок, изоляция сбоев, лимит (runner подменён на уровне вызова)."""
+"""`bulk_confirm_async`: порядок, изоляция сбоев, лимит (runner подменён на уровне вызова).
+
+Патчится ``uk_management_bot.services.workflow_runner.run_command_async``:
+grouping импортирует runner лениво внутри функции (см. докстринг модуля).
+"""
 
 from __future__ import annotations
 
-import asyncio
+from datetime import datetime, timezone
 
 import pytest
 
-from uk_management_bot.services.elevator_service import (
+import uk_management_bot.services.workflow_runner as workflow_runner
+from uk_management_bot.services.elevator_service import ElevatorValidationError
+from uk_management_bot.services.elevator_service.grouping import (
     MAX_BULK_CONFIRM,
     BulkItemResult,
-    ElevatorValidationError,
     bulk_confirm_async,
 )
-from uk_management_bot.services.elevator_service import grouping
 from uk_management_bot.utils.request_workflow import (
     Action,
     EventIntent,
@@ -42,12 +46,19 @@ def _fake_runner(calls, failures=(), boom=None):
     return run_command_async
 
 
-def test_sorted_order_and_partial_failure_isolated(monkeypatch):
-    calls = []
-    monkeypatch.setattr(grouping, "run_command_async", _fake_runner(calls, failures={"260905-002"}))
+@pytest.fixture()
+def calls(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(workflow_runner, "run_command_async", _fake_runner(recorded))
+    return recorded
 
-    results = asyncio.run(bulk_confirm_async(
-        "factory", ["260905-003", "260905-001", "260905-002"], principal=PRINCIPAL))
+
+async def test_sorted_order_and_partial_failure_isolated(monkeypatch):
+    calls = []
+    monkeypatch.setattr(workflow_runner, "run_command_async", _fake_runner(calls, failures={"260905-002"}))
+
+    results = await bulk_confirm_async(
+        "factory", ["260905-003", "260905-001", "260905-002"], principal=PRINCIPAL)
 
     assert [c[0] for c in calls] == ["260905-001", "260905-002", "260905-003"]
     assert all(c[1] is PRINCIPAL and c[2] is Action.MANAGER_CONFIRM for c in calls)
@@ -59,38 +70,30 @@ def test_sorted_order_and_partial_failure_isolated(monkeypatch):
     )
 
 
-def test_non_workflow_error_propagates(monkeypatch):
+async def test_non_workflow_error_propagates(monkeypatch):
     calls = []
-    monkeypatch.setattr(grouping, "run_command_async", _fake_runner(calls, boom="260905-002"))
+    monkeypatch.setattr(workflow_runner, "run_command_async", _fake_runner(calls, boom="260905-002"))
     with pytest.raises(RuntimeError):
-        asyncio.run(bulk_confirm_async("factory", ["260905-001", "260905-002", "260905-003"], principal=PRINCIPAL))
+        await bulk_confirm_async("factory", ["260905-001", "260905-002", "260905-003"], principal=PRINCIPAL)
     assert [c[0] for c in calls] == ["260905-001", "260905-002"]
 
 
-def test_now_and_prefix_passed_through(monkeypatch):
-    from datetime import datetime, timezone
-
-    calls = []
+async def test_now_and_prefix_passed_through(calls):
     now = datetime(2026, 9, 5, tzinfo=timezone.utc)
-    monkeypatch.setattr(grouping, "run_command_async", _fake_runner(calls))
-    asyncio.run(bulk_confirm_async("factory", ["260905-001"], principal=PRINCIPAL, now=now, command_prefix="api"))
+    await bulk_confirm_async("factory", ["260905-001"], principal=PRINCIPAL, now=now, command_prefix="api")
     assert calls == [("260905-001", PRINCIPAL, Action.MANAGER_CONFIRM, "api:260905-001", now)]
 
 
 @pytest.mark.parametrize("numbers", [
     [], [""], ["  "], ["a", "a"], "260905-001", [f"26090{i:04d}" for i in range(MAX_BULK_CONFIRM + 1)],
 ])
-def test_invalid_input_rejected_before_runner(monkeypatch, numbers):
-    calls = []
-    monkeypatch.setattr(grouping, "run_command_async", _fake_runner(calls))
+async def test_invalid_input_rejected_before_runner(calls, numbers):
     with pytest.raises(ElevatorValidationError):
-        asyncio.run(bulk_confirm_async("factory", numbers, principal=PRINCIPAL))
+        await bulk_confirm_async("factory", numbers, principal=PRINCIPAL)
     assert calls == []
 
 
-def test_max_is_accepted(monkeypatch):
-    calls = []
-    monkeypatch.setattr(grouping, "run_command_async", _fake_runner(calls))
+async def test_max_is_accepted(calls):
     numbers = [f"260905-{i:03d}" for i in range(MAX_BULK_CONFIRM)]
-    results = asyncio.run(bulk_confirm_async("factory", numbers, principal=PRINCIPAL))
+    results = await bulk_confirm_async("factory", numbers, principal=PRINCIPAL)
     assert len(results) == MAX_BULK_CONFIRM and all(r.ok for r in results)

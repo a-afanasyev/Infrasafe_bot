@@ -140,7 +140,8 @@ def _apply_registry_filters(
     return stmt
 
 
-def _registry_base(selection) -> Select:
+def _registry_base(selection: Any) -> Select:
+    """``select(selection)`` с JOIN дома (фильтр по двору и сортировка по адресу)."""
     return select(selection).join(Building, Elevator.building_id == Building.id)
 
 

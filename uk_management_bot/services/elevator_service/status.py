@@ -1,9 +1,10 @@
 """``set_status``: единственный путь смены статуса лифта (бот sync / API async).
 
 Строитель ``_build_status_change`` общий; обёртки различаются только загрузкой
-лифта (``FOR UPDATE``) и адресатов. Сообщения возвращаются, не отправляются;
-текст HTML-безопасен (адрес дома экранирован) — слать с parse_mode=HTML.
-Commit — у вызывающего.
+лифта (``FOR UPDATE``) и адресатов. Адресаты запрашиваются только когда для
+нового статуса есть уведомление и оно включено в конфиге. Сообщения
+возвращаются, не отправляются; текст HTML-безопасен (адрес дома экранирован)
+— слать с parse_mode=HTML. Commit — у вызывающего.
 """
 
 from __future__ import annotations
@@ -22,11 +23,12 @@ from uk_management_bot.utils.address_helpers import localize_address
 from uk_management_bot.utils.helpers import get_text
 
 from ._core import Message, StatusChange
-from ._shared import new_event, now_or_utc, validate_source
+from ._shared import DEFAULT_LANGUAGE, new_event, now_or_utc, validate_source
 from .reads import get_elevator_async, get_elevator_sync
 from .recipients import Recipient, residents_of_entrance_async, residents_of_entrance_sync
 from .reminder_rules import DEFAULT_ELEVATORS_CONFIG
 from .validation import can_set_status, validate_status
+from .validation_db import validate_reason, validate_request_number
 
 # Новый статус → флаг конфига resident_notifications и ключ локали
 _RESIDENT_NOTIFY_KEYS: Mapping[str, str] = {
@@ -35,13 +37,16 @@ _RESIDENT_NOTIFY_KEYS: Mapping[str, str] = {
     "working": "back_in_service",
 }
 _LOCALE_PREFIX = "elevators.notify."
-DEFAULT_LANGUAGE = "ru"
 
 
-def _notification_enabled(config: Mapping[str, Any] | None, key: str) -> bool:
+def resident_notify_key(new_status: str | None, config: Mapping[str, Any] | None) -> str | None:
+    """Ключ уведомления жителям для статуса, если оно есть и включено; иначе ``None``."""
+    key = _RESIDENT_NOTIFY_KEYS.get(new_status or "")
+    if key is None:
+        return None
     source = config if config is not None else DEFAULT_ELEVATORS_CONFIG
     flags = source.get("resident_notifications") or {}
-    return bool(flags.get(key, True))
+    return key if bool(flags.get(key, True)) else None
 
 
 def _resident_text(elevator: Elevator, notify_key: str, language: str) -> str:
@@ -61,9 +66,9 @@ def build_resident_messages(
     recipients: Sequence[Recipient],
     config: Mapping[str, Any] | None,
 ) -> tuple[Message, ...]:
-    """Сообщения жителям подъезда по новому статусу (пусто для ``not_working``)."""
-    notify_key = _RESIDENT_NOTIFY_KEYS.get(new_status)
-    if notify_key is None or not _notification_enabled(config, notify_key):
+    """Сообщения жителям подъезда по новому статусу (пусто для ``not_working``/выключенного)."""
+    notify_key = resident_notify_key(new_status, config)
+    if notify_key is None:
         return ()
     return tuple(
         Message(
@@ -90,6 +95,8 @@ def _build_status_change(
     """
     status = validate_status(new_status)
     validate_source(source)
+    validate_reason(reason)
+    validate_request_number(request_number)
     can_set_status(
         status, is_commissioned=bool(elevator.is_commissioned),
         archived=elevator.archived_at is not None,
@@ -152,6 +159,8 @@ def set_status_sync(
         return change
     db.add(event)
     db.flush()
+    if resident_notify_key(change.new_status, config) is None:
+        return change
     recipients = residents_of_entrance_sync(db, elevator.building_id, elevator.entrance_number)
     return _with_messages(change, elevator, recipients, config)
 
@@ -179,6 +188,8 @@ async def set_status_async(
         return change
     db.add(event)
     await db.flush()
+    if resident_notify_key(change.new_status, config) is None:
+        return change
     recipients = await residents_of_entrance_async(
         db, elevator.building_id, elevator.entrance_number
     )

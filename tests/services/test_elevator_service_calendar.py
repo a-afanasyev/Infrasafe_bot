@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date, datetime, timezone
 
 import pytest
@@ -33,10 +32,15 @@ pytestmark = pytest.mark.integration
 NOW = datetime(2026, 9, 5, 12, 0, tzinfo=timezone.utc)
 ACTOR = 50
 START = date(2026, 10, 31)
+CERT = {"cert_number": "C-2", "cert_valid_until": date(2027, 9, 1)}
+
+
+def _base(seed, *extra):
+    return [seed.yard(), seed.building(), seed.user(ACTOR), seed.elevator(1), *extra]
 
 
 def _seed(db, seed, *extra):
-    db.add_all([seed.yard(), seed.building(), seed.user(ACTOR), seed.elevator(1), *extra])
+    db.add_all(_base(seed, *extra))
     db.commit()
 
 
@@ -80,14 +84,16 @@ class TestGenerate:
 
 
 class TestCreate:
-    def test_create_and_duplicate(self, el_db, el_seed):
+    def test_create_and_duplicate_via_constraint(self, el_db, el_seed):
         _seed(el_db, el_seed)
         occurrence = create_occurrence_sync(el_db, 1, kind="certification", due_on=START, actor_user_id=ACTOR)
         assert (occurrence.kind, occurrence.state, occurrence.due_on) == ("certification", "planned", START)
-        with pytest.raises(ElevatorConflictError):
+        with pytest.raises(ElevatorConflictError, match="уже есть"):
             create_occurrence_sync(el_db, 1, kind="certification", due_on=START, actor_user_id=ACTOR)
-        # другой вид на ту же дату — не дубль
+        # другой вид на ту же дату — не дубль; сессия пригодна после отказа
         create_occurrence_sync(el_db, 1, kind="maintenance", due_on=START, actor_user_id=ACTOR)
+        el_db.commit()
+        assert len(_rows(el_db)) == 2
 
 
 class TestComplete:
@@ -103,31 +109,45 @@ class TestComplete:
         assert el_db.execute(select(ElevatorStatusEvent)).scalars().all() == []
         assert el_db.get(Elevator, 1).version == 1
 
+    def test_invalid_request_number(self, el_db, el_seed):
+        _seed(el_db, el_seed, _occ(1, START))
+        with pytest.raises(ElevatorValidationError):
+            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, request_number="nope", now=NOW)
+        assert el_db.get(ElevatorMaintenanceOccurrence, 1).state == "planned"
+
     def test_done_is_frozen(self, el_db, el_seed):
         _seed(el_db, el_seed, _occ(1, START, state="done"))
         with pytest.raises(ElevatorStateError):
             complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW)
 
+    def test_missing_occurrence(self, el_db, el_seed):
+        _seed(el_db, el_seed)
+        with pytest.raises(ElevatorNotFoundError):
+            complete_occurrence_sync(el_db, 9, actor_user_id=ACTOR, comment=None, now=NOW)
+
     def test_cert_fields_forbidden_for_maintenance(self, el_db, el_seed):
         _seed(el_db, el_seed, _occ(1, START))
         with pytest.raises(ElevatorValidationError):
-            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW,
-                                     cert_fields={"cert_number": "C-1", "cert_valid_until": date(2027, 1, 1)})
+            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW, cert_fields=CERT)
 
-    def test_certification_requires_fields(self, el_db, el_seed):
+    @pytest.mark.parametrize("cert", [
+        None,
+        {"cert_number": "C-1"},
+        {**CERT, "cert_number": "c" * 101},
+        {**CERT, "cert_act_url": "javascript:alert(1)"},
+        {**CERT, "extra": 1},
+    ])
+    def test_certification_requires_valid_fields(self, el_db, el_seed, cert):
         _seed(el_db, el_seed, _occ(1, START, kind="certification"))
         with pytest.raises(ElevatorValidationError):
-            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW)
-        with pytest.raises(ElevatorValidationError):
-            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW,
-                                     cert_fields={"cert_number": "C-1"})
+            complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment=None, now=NOW, cert_fields=cert)
         assert el_db.get(ElevatorMaintenanceOccurrence, 1).state == "planned"
 
     def test_certification_updates_passport(self, el_db, el_seed):
         _seed(el_db, el_seed, _occ(1, START, kind="certification"))
         el_db.get(Elevator, 1).cert_reminder_stage = 7
         el_db.commit()
-        cert = {"cert_number": "C-2", "cert_valid_until": date(2027, 9, 1), "cert_act_url": "https://x/act.pdf"}
+        cert = {**CERT, "cert_act_url": "https://x/act.pdf"}
 
         complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment="акт", now=NOW, cert_fields=cert,
                                  done_at=NOW)
@@ -149,60 +169,54 @@ class TestComplete:
 
 
 class TestAsync:
-    def test_generate_reschedule_cancel_complete(self, el_async_factory, el_seed):
-        async def run():
-            async with el_async_factory() as s:
-                s.add_all([el_seed.yard(), el_seed.building(), el_seed.user(ACTOR), el_seed.elevator(1),
-                           _occ(1, START), _occ(2, date(2026, 12, 1), state="done")])
-                await s.commit()
-            async with el_async_factory() as s:
-                created = await generate_occurrences_async(
-                    s, 1, kind="maintenance", start=START, every_months=1, count=2, actor_user_id=ACTOR)
-                assert [o.due_on for o in created] == [date(2026, 11, 30)]
-                with pytest.raises(ElevatorConflictError):
-                    await create_occurrence_async(s, 1, kind="maintenance", due_on=START, actor_user_id=ACTOR)
+    async def test_generate_reschedule_cancel_complete(self, el_async_factory, el_seed):
+        async with el_async_factory() as s:
+            s.add_all(_base(el_seed, _occ(1, START), _occ(2, date(2026, 12, 1), state="done")))
+            await s.commit()
+        async with el_async_factory() as s:
+            created = await generate_occurrences_async(
+                s, 1, kind="maintenance", start=START, every_months=1, count=2, actor_user_id=ACTOR)
+            assert [o.due_on for o in created] == [date(2026, 11, 30)]
+            with pytest.raises(ElevatorConflictError):
+                await create_occurrence_async(s, 1, kind="maintenance", due_on=START, actor_user_id=ACTOR)
 
-                moved = await reschedule_occurrence_async(s, 1, due_on=date(2026, 11, 15), actor_user_id=ACTOR)
-                assert (moved.due_on, moved.reminder_stage, moved.overdue_reminded_at) == (
-                    date(2026, 11, 15), 0, None)
-                with pytest.raises(ElevatorConflictError):
-                    await reschedule_occurrence_async(s, 1, due_on=date(2026, 11, 30), actor_user_id=ACTOR)
-                with pytest.raises(ElevatorStateError):
-                    await reschedule_occurrence_async(s, 2, due_on=date(2026, 11, 1), actor_user_id=ACTOR)
-                with pytest.raises(ElevatorNotFoundError):
-                    await cancel_occurrence_async(s, 99, actor_user_id=ACTOR)
+            moved = await reschedule_occurrence_async(s, 1, due_on=date(2026, 11, 15), actor_user_id=ACTOR)
+            assert (moved.due_on, moved.reminder_stage, moved.overdue_reminded_at) == (
+                date(2026, 11, 15), 0, None)
+            same = await reschedule_occurrence_async(s, 1, due_on=date(2026, 11, 15), actor_user_id=ACTOR)
+            assert same.due_on == date(2026, 11, 15)
+            with pytest.raises(ElevatorConflictError):  # дубль даты → констрейнт → 409
+                await reschedule_occurrence_async(s, 1, due_on=date(2026, 11, 30), actor_user_id=ACTOR)
+            with pytest.raises(ElevatorStateError):
+                await reschedule_occurrence_async(s, 2, due_on=date(2026, 11, 1), actor_user_id=ACTOR)
+            with pytest.raises(ElevatorNotFoundError):
+                await cancel_occurrence_async(s, 99, actor_user_id=ACTOR)
 
-                cancelled = await cancel_occurrence_async(s, created[0].id, actor_user_id=ACTOR)
-                assert cancelled.state == "cancelled"
-                with pytest.raises(ElevatorStateError):
-                    await cancel_occurrence_async(s, created[0].id, actor_user_id=ACTOR)
+            cancelled = await cancel_occurrence_async(s, created[0].id, actor_user_id=ACTOR)
+            assert cancelled.state == "cancelled"
+            with pytest.raises(ElevatorStateError):
+                await cancel_occurrence_async(s, created[0].id, actor_user_id=ACTOR)
 
-                done = await complete_occurrence_async(s, 1, actor_user_id=ACTOR, comment="ок", now=NOW)
-                await s.commit()
-                return done.state, done.done_by_user_id
+            done = await complete_occurrence_async(s, 1, actor_user_id=ACTOR, comment="ок", now=NOW)
+            await s.commit()
+            assert (done.state, done.done_by_user_id) == ("done", ACTOR)
 
-        assert asyncio.run(run()) == ("done", ACTOR)
-
-    def test_complete_certification_parity(self, el_db, el_seed, el_async_factory):
-        cert = {"cert_number": "C-2", "cert_valid_until": date(2027, 9, 1)}
+    async def test_complete_certification_parity(self, el_db, el_seed, el_async_factory):
         _seed(el_db, el_seed, _occ(1, START, kind="certification"))
-        complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment="акт", now=NOW, cert_fields=cert)
+        complete_occurrence_sync(el_db, 1, actor_user_id=ACTOR, comment="акт", now=NOW, cert_fields=CERT)
         el_db.commit()
         sync_elevator = el_db.get(Elevator, 1)
         sync_state = (sync_elevator.cert_number, sync_elevator.cert_valid_until, sync_elevator.version)
 
-        async def run():
-            async with el_async_factory() as s:
-                s.add_all([el_seed.yard(), el_seed.building(), el_seed.user(ACTOR), el_seed.elevator(1),
-                           _occ(1, START, kind="certification")])
-                await s.commit()
-            async with el_async_factory() as s:
-                await complete_occurrence_async(s, 1, actor_user_id=ACTOR, comment="акт", now=NOW, cert_fields=cert)
-                await s.commit()
-                elevator = await s.get(Elevator, 1)
-                events = (await s.execute(select(ElevatorStatusEvent.event_kind))).scalars().all()
-                return (elevator.cert_number, elevator.cert_valid_until, elevator.version), events
+        async with el_async_factory() as s:
+            s.add_all(_base(el_seed, _occ(1, START, kind="certification")))
+            await s.commit()
+        async with el_async_factory() as s:
+            await complete_occurrence_async(s, 1, actor_user_id=ACTOR, comment="акт", now=NOW, cert_fields=CERT)
+            await s.commit()
+            elevator = await s.get(Elevator, 1)
+            events = (await s.execute(select(ElevatorStatusEvent.event_kind))).scalars().all()
+            async_state = (elevator.cert_number, elevator.cert_valid_until, elevator.version)
 
-        async_state, events = asyncio.run(run())
         assert async_state == sync_state == ("C-2", date(2027, 9, 1), 2)
         assert events == ["cert_changed"]

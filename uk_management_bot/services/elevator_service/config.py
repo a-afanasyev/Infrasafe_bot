@@ -46,21 +46,28 @@ def resolve_stored_config(stored: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def load_config_sync(db: Session) -> dict[str, Any]:
-    """Конфиг модуля для бота; при недоступности таблицы — дефолты."""
+    """Конфиг модуля для бота; при недоступности таблицы — дефолты.
+
+    После ``OperationalError``/``ProgrammingError`` транзакция сессии
+    сломана (PG: «current transaction is aborted») — откатываем, чтобы
+    вызывающий мог продолжить работу в той же сессии.
+    """
     try:
         row = db.get(ElevatorsConfig, CONFIG_ROW_ID)
     except (OperationalError, ProgrammingError) as exc:
         logger.warning("elevators_config недоступен, отдаю дефолты: %s", exc)
+        db.rollback()
         return _defaults()
     return resolve_stored_config(row.data if row is not None else None)
 
 
 async def load_config_async(db: AsyncSession) -> dict[str, Any]:
-    """Async-зеркало ``load_config_sync``."""
+    """Async-зеркало ``load_config_sync`` (с ``rollback`` после ошибки БД)."""
     try:
         row = await db.get(ElevatorsConfig, CONFIG_ROW_ID)
     except (OperationalError, ProgrammingError) as exc:
         logger.warning("elevators_config недоступен, отдаю дефолты: %s", exc)
+        await db.rollback()
         return _defaults()
     return resolve_stored_config(row.data if row is not None else None)
 

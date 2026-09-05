@@ -7,10 +7,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import Row, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.elevator import Elevator, ElevatorStatusEvent
@@ -28,7 +28,7 @@ def date_to_business_midnight_utc(day: date) -> datetime:
     return business_day_window(day)[0]
 
 
-def _intervals_stmt(elevator_ids: Sequence[int]):
+def _intervals_stmt(elevator_ids: Sequence[int]) -> Select:
     return (
         select(
             ElevatorStatusEvent.elevator_id,
@@ -44,7 +44,7 @@ def _intervals_stmt(elevator_ids: Sequence[int]):
     )
 
 
-def _group_intervals(rows) -> dict[int, tuple[StatusInterval, ...]]:
+def _group_intervals(rows: Iterable[Row]) -> dict[int, tuple[StatusInterval, ...]]:
     grouped: dict[int, list[StatusInterval]] = {}
     for elevator_id, new_status, occurred_at in rows:
         grouped.setdefault(elevator_id, []).append(

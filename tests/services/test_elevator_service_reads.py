@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -78,15 +77,12 @@ def _request(number, *, category="elevator", elevator_id=None, status=C.REQUEST_
                    urgency="low", status=status, elevator_id=elevator_id)
 
 
-def _run(factory, seed_objects, coro_factory):
-    async def run():
-        async with factory() as s:
-            s.add_all(seed_objects)
-            await s.commit()
-        async with factory() as s:
-            return await coro_factory(s)
-
-    return asyncio.run(run())
+async def _seeded(factory, objects):
+    """Залить объекты и вернуть свежую сессию для чтения."""
+    async with factory() as s:
+        s.add_all(objects)
+        await s.commit()
+    return factory()
 
 
 # ---------------------------------------------------------------------------
@@ -123,39 +119,33 @@ class TestReadsSync:
 # ---------------------------------------------------------------------------
 
 class TestReadsAsync:
-    def test_get_and_list_parity(self, el_async_factory, el_seed):
-        async def body(s):
+    async def test_get_and_list_parity(self, el_async_factory, el_seed):
+        async with await _seeded(el_async_factory, _base(el_seed)) as s:
             elevator = await get_elevator_async(s, 1)
             active = await list_active_for_building_async(s, 1)
             with pytest.raises(ElevatorNotFoundError):
                 await get_elevator_async(s, 5)
-            return elevator.building.address, [e.id for e in active]
+        assert (elevator.building.address, [e.id for e in active]) == ("ул. А, д. 1", [2, 1])
 
-        assert _run(el_async_factory, _base(el_seed), body) == ("ул. А, д. 1", [2, 1])
-
-    def test_events_cursor_pagination(self, el_async_factory, el_seed):
+    async def test_events_cursor_pagination(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             _event(i, 1, "working", NOW - (10 - i) * D) for i in range(1, 6)
         ] + [_event(9, 2, "not_working", NOW)]
-
-        async def body(s):
+        async with await _seeded(el_async_factory, objects) as s:
             first = await list_events_async(s, 1, limit=2)
             second = await list_events_async(s, 1, limit=2, before_id=first[-1].id)
             with pytest.raises(ElevatorValidationError):
                 await list_events_async(s, 1, limit=0)
-            return [e.id for e in first], [e.id for e in second]
+        assert ([e.id for e in first], [e.id for e in second]) == ([5, 4], [3, 2])
 
-        assert _run(el_async_factory, objects, body) == ([5, 4], [3, 2])
-
-    def test_occurrences_filters(self, el_async_factory, el_seed):
+    async def test_occurrences_filters(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             _occ(1, 1, TODAY - 30 * D, state="done"),
             _occ(2, 1, TODAY + 5 * D),
             _occ(3, 1, TODAY + 40 * D, kind="certification"),
             _occ(4, 2, TODAY + 5 * D),
         ]
-
-        async def body(s):
+        async with await _seeded(el_async_factory, objects) as s:
             all_for_1 = await list_occurrences_async(s, 1)
             planned = await list_occurrences_async(s, 1, state="planned")
             cert = await list_occurrences_async(s, 1, kind="certification")
@@ -165,16 +155,15 @@ class TestReadsAsync:
                 await list_occurrences_async(s, 1, kind="repair")
             with pytest.raises(ElevatorValidationError):
                 await list_all_occurrences_async(s, from_date=TODAY, to_date=TODAY - D)
-            return (
-                [o.id for o in all_for_1], [o.id for o in planned], [o.id for o in cert],
-                [o.id for o in window], [(o.id, o.elevator.building.address) for o in calendar],
-            )
+            calendar_view = [(o.id, o.elevator.building.address) for o in calendar]
 
-        assert _run(el_async_factory, objects, body) == (
-            [1, 2, 3], [2, 3], [3], [2], [(2, "ул. А, д. 1"), (4, "ул. А, д. 1")],
-        )
+        assert [o.id for o in all_for_1] == [1, 2, 3]
+        assert [o.id for o in planned] == [2, 3]
+        assert [o.id for o in cert] == [3]
+        assert [o.id for o in window] == [2]
+        assert calendar_view == [(2, "ул. А, д. 1"), (4, "ул. А, д. 1")]
 
-    def test_requests_for_elevator_and_orphans(self, el_async_factory, el_seed):
+    async def test_requests_for_elevator_and_orphans(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             _request("260901-001", elevator_id=1),
             _request("260901-002", elevator_id=1, status=C.REQUEST_STATUS_APPROVED),
@@ -183,30 +172,24 @@ class TestReadsAsync:
             _request("260901-005", status=C.REQUEST_STATUS_CANCELLED),  # закрытая — не считается
             _request("260901-006", category="plumbing"),
         ]
-
-        async def body(s):
+        async with await _seeded(el_async_factory, objects) as s:
             open_only = await list_requests_for_elevator_async(s, 1)
             with_closed = await list_requests_for_elevator_async(s, 1, include_closed=True)
             summary = await summary_async(s, now=NOW)
-            return (
-                sorted(r.request_number for r in open_only),
-                sorted(r.request_number for r in with_closed),
-                summary.requests_without_elevator,
-            )
 
-        assert _run(el_async_factory, objects, body) == (
-            ["260901-001"], ["260901-001", "260901-002", "260901-003"], 1,
-        )
+        assert sorted(r.request_number for r in open_only) == ["260901-001"]
+        assert sorted(r.request_number for r in with_closed) == ["260901-001", "260901-002", "260901-003"]
+        assert summary.requests_without_elevator == 1
 
-    def test_count_apartments_without_entrance(self, el_async_factory, el_seed):
+    async def test_count_apartments_without_entrance(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             el_seed.apartment(1, building_id=1, entrance=None),
             el_seed.apartment(2, building_id=1, entrance=None, is_active=False),
             el_seed.apartment(3, building_id=1, entrance=1),
             el_seed.apartment(4, building_id=2, entrance=None),
         ]
-        assert _run(el_async_factory, objects,
-                    lambda s: count_building_apartments_without_entrance_async(s, 1)) == 1
+        async with await _seeded(el_async_factory, objects) as s:
+            assert await count_building_apartments_without_entrance_async(s, 1) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -214,16 +197,14 @@ class TestReadsAsync:
 # ---------------------------------------------------------------------------
 
 class TestRegistry:
-    def test_default_list_excludes_archived_and_sorts(self, el_async_factory, el_seed):
-        async def body(s):
+    async def test_default_list_excludes_archived_and_sorts(self, el_async_factory, el_seed):
+        async with await _seeded(el_async_factory, _base(el_seed)) as s:
             rows = await list_elevators_async(s, now=NOW)
-            return [(e.id, e.building.address) for e in rows], await count_elevators_async(s, now=NOW)
-
-        rows, total = _run(el_async_factory, _base(el_seed), body)
-        assert [r[0] for r in rows] == [2, 1, 3, 4]
+            total = await count_elevators_async(s, now=NOW)
+        assert [e.id for e in rows] == [2, 1, 3, 4]
         assert total == 4
 
-    def test_filters(self, el_async_factory, el_seed):
+    async def test_filters(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             _occ(1, 3, TODAY - 8 * D),  # просрочено (с 8-го дня)
             _occ(2, 1, TODAY - 7 * D),  # ещё в grace
@@ -233,14 +214,15 @@ class TestRegistry:
         async def ids(s, **kw):
             return [e.id for e in await list_elevators_async(s, now=NOW, **kw)]
 
-        async def body(s):
-            return {
+        async with await _seeded(el_async_factory, objects) as s:
+            result = {
                 "yard": await ids(s, yard_id=2),
                 "building": await ids(s, building_id=1),
                 "status": await ids(s, status="not_working"),
                 "uncommissioned": await ids(s, only_commissioned=False),
                 "commissioned": await ids(s, only_commissioned=True),
                 "archived": await ids(s, include_archived=True),
+                "archived_no_contract": await ids(s, include_archived=True, flags={"no_contract"}),
                 "no_contract": await ids(s, flags={"no_contract"}),
                 "cert_expired": await ids(s, flags={"cert_expired"}),
                 "overdue": await ids(s, flags={"maintenance_overdue"}),
@@ -249,7 +231,6 @@ class TestRegistry:
                 "count_no_contract": await count_elevators_async(s, flags={"no_contract"}, now=NOW),
             }
 
-        result = _run(el_async_factory, objects, body)
         assert result == {
             "yard": [4],
             "building": [2, 1],
@@ -257,6 +238,7 @@ class TestRegistry:
             "uncommissioned": [4],
             "commissioned": [2, 1, 3],
             "archived": [2, 1, 5, 3, 4],
+            "archived_no_contract": [2, 5, 3, 4],  # архивный 5 без договора попадает
             "no_contract": [2, 3, 4],
             "cert_expired": [3, 4],  # у лифта 2 срок = сегодня, ещё действует
             "overdue": [3],
@@ -265,22 +247,19 @@ class TestRegistry:
             "count_no_contract": 3,
         }
 
-    def test_invalid_inputs(self, el_async_factory, el_seed):
-        async def body(s):
+    async def test_invalid_inputs(self, el_async_factory, el_seed):
+        async with await _seeded(el_async_factory, _base(el_seed)) as s:
             with pytest.raises(ElevatorValidationError):
                 await list_elevators_async(s, flags={"broken"})
             with pytest.raises(ElevatorValidationError):
                 await list_elevators_async(s, status="broken")
             with pytest.raises(ElevatorValidationError):
                 await list_elevators_async(s, limit=0)
-            return True
 
-        assert _run(el_async_factory, _base(el_seed), body)
-
-    def test_summary_by_yard(self, el_async_factory, el_seed):
+    async def test_summary_by_yard(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [_occ(1, 3, TODAY - 8 * D)]
-
-        summary = _run(el_async_factory, objects, lambda s: summary_async(s, now=NOW))
+        async with await _seeded(el_async_factory, objects) as s:
+            summary = await summary_async(s, now=NOW)
 
         assert summary.today == TODAY
         totals = summary.totals
@@ -292,11 +271,10 @@ class TestRegistry:
         assert [(y.yard_name, y.counters.total) for y in summary.yards] == [("Альфа", 3), ("Бета", 1)]
         assert summary.yards[1].counters.by_status == {}
 
-    def test_summary_thresholds_param(self, el_async_factory, el_seed):
-        summary = _run(
-            el_async_factory, _base(el_seed),
-            lambda s: summary_async(s, now=NOW, downtime_thresholds={"not_working": 30, "under_repair": 30}),
-        )
+    async def test_summary_thresholds_param(self, el_async_factory, el_seed):
+        async with await _seeded(el_async_factory, _base(el_seed)) as s:
+            summary = await summary_async(
+                s, now=NOW, downtime_thresholds={"not_working": 30, "under_repair": 30})
         assert summary.totals.downtime_over_threshold == 1  # только under_repair 40 дней
 
 
@@ -305,21 +283,18 @@ class TestRegistry:
 # ---------------------------------------------------------------------------
 
 class TestMetrics:
-    def test_intervals_and_availability(self, el_async_factory, el_seed):
+    async def test_intervals_and_availability(self, el_async_factory, el_seed):
         objects = _base(el_seed) + [
             _event(1, 1, "working", NOW - 60 * D),
             _event(2, 1, "not_working", NOW - 15 * D, old_status="working"),
             _event(3, 1, "working", NOW - 12 * D, old_status="not_working"),
             _event(4, 2, "working", NOW - 5 * D),
         ]
-
-        async def body(s):
+        async with await _seeded(el_async_factory, objects) as s:
             intervals = await status_intervals_async(s, [1, 2, 3])
             elevators = await list_elevators_async(s, now=NOW)
             availability = await availability_30d_for_page_async(s, elevators, now=NOW)
-            return intervals, availability
 
-        intervals, availability = _run(el_async_factory, objects, body)
         assert [i.status for i in intervals[1]] == ["working", "not_working", "working"]
         assert intervals[1][0].started_at.tzinfo is not None
         assert 2 in intervals and 3 not in intervals
@@ -328,5 +303,6 @@ class TestMetrics:
         assert availability[3] is None  # журнал пуст
         assert availability[4] is None  # не введён в эксплуатацию
 
-    def test_empty_ids(self, el_async_factory, el_seed):
-        assert _run(el_async_factory, _base(el_seed), lambda s: status_intervals_async(s, [])) == {}
+    async def test_empty_ids(self, el_async_factory, el_seed):
+        async with await _seeded(el_async_factory, _base(el_seed)) as s:
+            assert await status_intervals_async(s, []) == {}

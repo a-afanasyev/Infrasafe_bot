@@ -8,8 +8,11 @@ async для API (``AsyncSession``). Сети нет: ``set_status`` возвр�
 
 DB-модули: ``reads`` (лифт/журнал/график/заявки), ``registry`` (реестр с
 фильтрами и сводка), ``metrics`` (доступность поверх журнала), ``status``,
-``recipients``, ``passport``, ``calendar``, ``config``, ``grouping``
-(групповая приёмка через ``run_command_async``).
+``recipients``, ``passport``, ``calendar``, ``config``, ``validation_db``
+(границы: длины колонок, номер заявки, URL). ``grouping`` (групповая приёмка
+через ``run_command_async``) НЕ реэкспортируется — импортировать модулем, иначе
+пакет тянет runner/httpx и получает цикл с хендлерами (гейт
+``tests/services/test_elevator_service_imports.py``).
 
 Инварианты (см. модели database/models/elevator.py):
 
@@ -99,7 +102,20 @@ from .registry import (
     list_elevators_async,
     summary_async,
 )
-from .status import build_resident_messages, set_status_async, set_status_sync
+from .status import (
+    build_resident_messages,
+    resident_notify_key,
+    set_status_async,
+    set_status_sync,
+)
+from .validation_db import (
+    MAX_REASON_LEN,
+    validate_passport_values,
+    validate_reason,
+    validate_request_number,
+    validate_string_lengths,
+    validate_url,
+)
 from .passport import (
     EDITABLE_FIELDS,
     archive_async,
@@ -128,7 +144,6 @@ from .config import (
     resolve_stored_config,
     save_config_async,
 )
-from .grouping import MAX_BULK_CONFIRM, BulkItemResult, bulk_confirm_async
 from .reminder_rules import (
     DEFAULT_ELEVATORS_CONFIG,
     DOWNTIME_STATUSES,
@@ -151,11 +166,10 @@ __all__ = [
     "DOWNTIME_STATUSES",
     "EDITABLE_FIELDS",
     "ELEVATOR_CATEGORY",
-    "MAX_BULK_CONFIRM",
+    "MAX_REASON_LEN",
     "PASSPORT_REQUIRED_FIELDS",
     "PUBLIC_CODE_MAX_LEN",
     "REGISTRY_FLAGS",
-    "BulkItemResult",
     "ElevatorConflictError",
     "ElevatorCounters",
     "ElevatorNotFoundError",
@@ -174,7 +188,6 @@ __all__ = [
     "availability_30d",
     "availability_30d_for_page_async",
     "build_resident_messages",
-    "bulk_confirm_async",
     "can_set_status",
     "cancel_occurrence_async",
     "commission_async",
@@ -218,6 +231,7 @@ __all__ = [
     "require_aware",
     "require_elevator_for_category",
     "reschedule_occurrence_async",
+    "resident_notify_key",
     "residents_of_entrance_async",
     "residents_of_entrance_sync",
     "resolve_stored_config",
@@ -231,6 +245,11 @@ __all__ = [
     "update_passport_async",
     "update_passport_sync",
     "validate_passport_required",
+    "validate_passport_values",
+    "validate_reason",
+    "validate_request_number",
     "validate_reminder_stages",
     "validate_status",
+    "validate_string_lengths",
+    "validate_url",
 ]

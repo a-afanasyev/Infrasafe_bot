@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -25,6 +24,7 @@ from uk_management_bot.services.elevator_service import (
     create_elevator_sync,
     get_elevator_sync,
     is_valid_public_code,
+    update_passport_async,
     update_passport_sync,
 )
 from uk_management_bot.services.elevator_service import passport as passport_module
@@ -41,12 +41,16 @@ DATA = {
 }
 
 
-def _seed(db, seed, *extra):
-    db.add_all([
+def _base(seed, *extra):
+    return [
         seed.yard(), seed.building(1, entrance_count=4),
         seed.building(2, entrance_count=2, is_active=False),
         seed.user(ACTOR, roles='["manager"]'), *extra,
-    ])
+    ]
+
+
+def _seed(db, seed, *extra):
+    db.add_all(_base(seed, *extra))
     db.commit()
 
 
@@ -87,6 +91,27 @@ class TestCreate:
         with pytest.raises(ElevatorValidationError):
             create_elevator_sync(el_db, {**DATA, "commissioned_at": date(2026, 1, 1)}, actor_user_id=ACTOR)
 
+    @pytest.mark.parametrize("field, value", [
+        ("passport_number", "x" * 101),   # String(100)
+        ("manufacturer", "x" * 201),      # String(200)
+        ("service_org_phone", "7" * 51),  # String(50)
+        ("cert_act_url", "https://x/" + "a" * 500),  # String(500)
+        ("passport_number", 12345),       # не строка
+    ])
+    def test_field_longer_than_column_or_not_string(self, el_db, el_seed, field, value):
+        _seed(el_db, el_seed)
+        with pytest.raises(ElevatorValidationError):
+            create_elevator_sync(el_db, {**DATA, field: value}, actor_user_id=ACTOR)
+        assert el_db.execute(select(Elevator.id)).all() == []
+
+    @pytest.mark.parametrize("url", ["javascript:alert(1)", "ftp://x/act.pdf", "x/act.pdf", "data:text/html,1"])
+    def test_cert_act_url_scheme(self, el_db, el_seed, url):
+        _seed(el_db, el_seed)
+        with pytest.raises(ElevatorValidationError):
+            create_elevator_sync(el_db, {**DATA, "cert_act_url": url}, actor_user_id=ACTOR)
+        elevator = create_elevator_sync(el_db, {**DATA, "cert_act_url": "HTTPS://x/act.pdf"}, actor_user_id=ACTOR)
+        assert elevator.cert_act_url == "HTTPS://x/act.pdf"
+
     @pytest.mark.parametrize("building_id", [2, 99])
     def test_inactive_or_missing_building(self, el_db, el_seed, building_id):
         _seed(el_db, el_seed)
@@ -98,11 +123,14 @@ class TestCreate:
         with pytest.raises(ElevatorValidationError, match="4 подъезд"):
             create_elevator_sync(el_db, {**DATA, "entrance_number": 5}, actor_user_id=ACTOR)
 
-    def test_duplicate_place_conflict(self, el_db, el_seed):
+    def test_duplicate_place_conflict_via_constraint(self, el_db, el_seed):
         _seed(el_db, el_seed)
         create_elevator_sync(el_db, DATA, actor_user_id=ACTOR)
-        with pytest.raises(ElevatorConflictError):
+        with pytest.raises(ElevatorConflictError, match="уже есть"):
             create_elevator_sync(el_db, DATA, actor_user_id=ACTOR)
+        # сессия пригодна после отказа (savepoint)
+        el_db.commit()
+        assert len(el_db.execute(select(Elevator.id)).all()) == 1
 
     def test_archived_place_is_free(self, el_db, el_seed):
         _seed(el_db, el_seed, el_seed.elevator(1, entrance=2, number=1, archived_at=NOW))
@@ -120,23 +148,24 @@ class TestCreate:
         assert elevator.public_code == "fresh-code-0123456789"
         assert sorted(el_db.execute(select(Elevator.id)).scalars().all()) == sorted([1, elevator.id])
 
-    def test_async_parity(self, el_async_factory, el_seed):
-        async def run():
-            async with el_async_factory() as s:
-                s.add_all([el_seed.yard(), el_seed.building(1, entrance_count=4),
-                           el_seed.user(ACTOR, roles='["manager"]')])
-                await s.commit()
-            async with el_async_factory() as s:
-                elevator = await create_elevator_async(s, DATA, actor_user_id=ACTOR)
-                await s.commit()
-                with pytest.raises(ElevatorConflictError):
-                    await create_elevator_async(s, DATA, actor_user_id=ACTOR)
-                with pytest.raises(ElevatorValidationError):
-                    await create_elevator_async(s, {**DATA, "entrance_number": 9}, actor_user_id=ACTOR)
-                return elevator.public_code, elevator.is_commissioned
+    def test_public_code_attempts_exhausted(self, el_db, el_seed, monkeypatch):
+        _seed(el_db, el_seed, el_seed.elevator(1, entrance=1, number=1, public_code="taken-code-0123456789"))
+        monkeypatch.setattr(passport_module, "generate_public_code", lambda: "taken-code-0123456789")
+        with pytest.raises(ElevatorConflictError, match="public_code"):
+            create_elevator_sync(el_db, DATA, actor_user_id=ACTOR)
 
-        code, commissioned = asyncio.run(run())
-        assert is_valid_public_code(code) and commissioned is False
+    async def test_async_parity(self, el_async_factory, el_seed):
+        async with el_async_factory() as s:
+            s.add_all(_base(el_seed))
+            await s.commit()
+        async with el_async_factory() as s:
+            elevator = await create_elevator_async(s, DATA, actor_user_id=ACTOR)
+            await s.commit()
+            with pytest.raises(ElevatorConflictError):
+                await create_elevator_async(s, DATA, actor_user_id=ACTOR)
+            with pytest.raises(ElevatorValidationError):
+                await create_elevator_async(s, {**DATA, "entrance_number": 9}, actor_user_id=ACTOR)
+        assert is_valid_public_code(elevator.public_code) and elevator.is_commissioned is False
 
 
 class TestUpdate:
@@ -148,23 +177,25 @@ class TestUpdate:
         elevator = update_passport_sync(el_db, 1, {}, actor_user_id=ACTOR, expected_version=1, now=NOW)
         assert elevator.version == 1 and _events(el_db, 1) == []
 
-    def test_same_values_noop(self, el_db, el_seed):
+    def test_empty_patch_with_stale_version_is_noop_not_conflict(self, el_db, el_seed):
         self._elevator(el_db, el_seed)
-        elevator = update_passport_sync(el_db, 1, {"manufacturer": "OTIS"}, actor_user_id=ACTOR,
-                                        expected_version=None, now=NOW)
+        elevator = update_passport_sync(el_db, 1, {}, actor_user_id=ACTOR, expected_version=99, now=NOW)
         assert elevator.version == 1 and _events(el_db, 1) == []
+        same = update_passport_sync(el_db, 1, {"manufacturer": "OTIS"}, actor_user_id=ACTOR,
+                                    expected_version=99, now=NOW)
+        assert same.version == 1
 
     def test_version_conflict(self, el_db, el_seed):
         self._elevator(el_db, el_seed)
         with pytest.raises(ElevatorConflictError):
             update_passport_sync(el_db, 1, {"model": "X"}, actor_user_id=ACTOR, expected_version=7, now=NOW)
 
-    def test_unknown_and_blank_required(self, el_db, el_seed):
+    def test_unknown_blank_required_and_too_long(self, el_db, el_seed):
         self._elevator(el_db, el_seed)
-        with pytest.raises(ElevatorValidationError):
-            update_passport_sync(el_db, 1, {"version": 5}, actor_user_id=ACTOR, expected_version=None, now=NOW)
-        with pytest.raises(ElevatorValidationError):
-            update_passport_sync(el_db, 1, {"serial_number": ""}, actor_user_id=ACTOR, expected_version=None, now=NOW)
+        for patch in ({"version": 5}, {"serial_number": ""}, {"model": "m" * 201},
+                      {"cert_act_url": "javascript:alert(1)"}):
+            with pytest.raises(ElevatorValidationError):
+                update_passport_sync(el_db, 1, patch, actor_user_id=ACTOR, expected_version=None, now=NOW)
 
     def test_changes_write_diff_and_reset_stages(self, el_db, el_seed):
         self._elevator(el_db, el_seed, contract_reminder_stage=14, cert_reminder_stage=7,
@@ -204,13 +235,25 @@ class TestUpdate:
         _seed(el_db, el_seed,
               el_seed.elevator(1, entrance=1, number=1, commissioned=False),
               el_seed.elevator(2, entrance=2, number=1, commissioned=False))
-        with pytest.raises(ElevatorConflictError):
+        # гонка/дубль места → констрейнт → 409; сессия жива (savepoint), без rollback
+        with pytest.raises(ElevatorConflictError, match="уже есть"):
             update_passport_sync(el_db, 1, {"entrance_number": 2}, actor_user_id=ACTOR, expected_version=None, now=NOW)
         with pytest.raises(ElevatorValidationError):
             update_passport_sync(el_db, 1, {"entrance_number": 9}, actor_user_id=ACTOR, expected_version=None, now=NOW)
         elevator = update_passport_sync(el_db, 1, {"entrance_number": 3}, actor_user_id=ACTOR,
                                         expected_version=None, now=NOW)
-        assert elevator.entrance_number == 3
+        el_db.commit()
+        assert el_db.get(Elevator, 1).entrance_number == 3 and elevator.id == 1
+
+    async def test_place_race_async_conflict(self, el_async_factory, el_seed):
+        async with el_async_factory() as s:
+            s.add_all(_base(el_seed, el_seed.elevator(1, entrance=1, number=1, commissioned=False),
+                            el_seed.elevator(2, entrance=2, number=1, commissioned=False)))
+            await s.commit()
+        async with el_async_factory() as s:
+            with pytest.raises(ElevatorConflictError):
+                await update_passport_async(s, 1, {"entrance_number": 2}, actor_user_id=ACTOR,
+                                            expected_version=None, now=NOW)
 
     def test_archived_not_found(self, el_db, el_seed):
         self._elevator(el_db, el_seed, archived_at=NOW)
@@ -248,28 +291,25 @@ class TestCommission:
         with pytest.raises(ElevatorValidationError):
             commission_sync(el_db, 1, actor_user_id=ACTOR, now=NOW)
 
-    def test_async_parity(self, el_db, el_seed, el_async_factory):
+    async def test_async_parity(self, el_db, el_seed, el_async_factory):
         _seed(el_db, el_seed, el_seed.elevator(1, commissioned=False))
         sync_elevator = commission_sync(el_db, 1, actor_user_id=ACTOR, commissioned_at=date(2026, 9, 1), now=NOW)
         el_db.commit()
         sync_state = (sync_elevator.current_status, sync_elevator.commissioned_at, sync_elevator.version)
         sync_events = _events(el_db, 1)
 
-        async def run():
-            async with el_async_factory() as s:
-                s.add_all([el_seed.yard(), el_seed.building(), el_seed.user(ACTOR),
-                           el_seed.elevator(1, commissioned=False)])
-                await s.commit()
-            async with el_async_factory() as s:
-                elevator = await commission_async(s, 1, actor_user_id=ACTOR, commissioned_at=date(2026, 9, 1), now=NOW)
-                await s.commit()
-                with pytest.raises(ElevatorStateError):
-                    await commission_async(s, 1, actor_user_id=ACTOR, now=NOW)
-                rows = (await s.execute(select(ElevatorStatusEvent).order_by(ElevatorStatusEvent.id))).scalars().all()
-                return (elevator.current_status, elevator.commissioned_at, elevator.version), [
-                    (e.event_kind, e.old_status, e.new_status, e.payload) for e in rows]
+        async with el_async_factory() as s:
+            s.add_all(_base(el_seed, el_seed.elevator(1, commissioned=False)))
+            await s.commit()
+        async with el_async_factory() as s:
+            elevator = await commission_async(s, 1, actor_user_id=ACTOR, commissioned_at=date(2026, 9, 1), now=NOW)
+            await s.commit()
+            with pytest.raises(ElevatorStateError):
+                await commission_async(s, 1, actor_user_id=ACTOR, now=NOW)
+            rows = (await s.execute(select(ElevatorStatusEvent).order_by(ElevatorStatusEvent.id))).scalars().all()
+            async_state = (elevator.current_status, elevator.commissioned_at, elevator.version)
+            async_events = [(e.event_kind, e.old_status, e.new_status, e.payload) for e in rows]
 
-        async_state, async_events = asyncio.run(run())
         assert async_state == sync_state and async_events == sync_events
 
 
@@ -299,7 +339,8 @@ class TestArchive:
         with pytest.raises(ElevatorStateError):
             archive_sync(el_db, 1, actor_user_id=ACTOR, reason="x", now=NOW)
 
-    def test_reason_required(self, el_db, el_seed):
+    @pytest.mark.parametrize("reason", ["  ", "x" * 501])
+    def test_reason_required_and_bounded(self, el_db, el_seed, reason):
         _seed(el_db, el_seed, el_seed.elevator(1))
         with pytest.raises(ElevatorValidationError):
-            archive_sync(el_db, 1, actor_user_id=ACTOR, reason="  ", now=NOW)
+            archive_sync(el_db, 1, actor_user_id=ACTOR, reason=reason, now=NOW)
