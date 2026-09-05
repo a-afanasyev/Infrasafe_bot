@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "docker-compose.yml"
 PROFK = ROOT / "docker-compose.profk.yml"
 MEDIA = ROOT / "docker-compose.media.yml"
+PAYMENTS = ROOT / "docker-compose.payments.yml"
 
 # Секрет -> сервисы, которым он обязан быть проброшен, в базовом и profk-файлах.
 # app/api/access-api/migrate импортируют общий settings.py — его эагерная prod-валидация
@@ -120,12 +121,19 @@ def _service_blocks(path: Path) -> dict[str, list[str]]:
     return blocks
 
 
+# Овощи двух форм: `- VAR=${VAR:?}` (базовые файлы) и `VAR: ${VAR:?}` (payments-overlay).
+# Гейт обязан понимать обе, иначе новый overlay проходит мимо проверки целиком.
+_MAPPING_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*:\s")
+
+
 def _mapping_for(lines: list[str], var: str) -> str | None:
     """Строка `environment:`-маппинга, подставляющая ${var}, или None."""
     pattern = re.compile(r"\$\{" + re.escape(var) + r"[:}]")
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("#") or not stripped.startswith("- "):
+        if stripped.startswith("#"):
+            continue
+        if not (stripped.startswith("- ") or _MAPPING_KEY_RE.match(stripped)):
             continue
         if pattern.search(stripped):
             return stripped
@@ -207,3 +215,21 @@ def test_redis_url_built_from_password_not_taken_whole():
         "REDIS_URL берётся из .env целиком — пароль перестаёт приходить из Doppler: "
         + "; ".join(offenders)
     )
+
+
+# ── Контроль платежей: overlay с отдельной БД и сервисным токеном ────────────
+# Файл подключается третьим `-f`, объявляет свои сервисы и доливает секрет в api.
+# Формат маппингов здесь `VAR: ${VAR:?}` — гейт понимает обе формы (см. _mapping_for).
+PAYMENTS_EXPECTED = {
+    "api": ("PAYMENT_SERVICE_TOKEN",),
+    "payment-postgres": ("PAYMENT_OWNER_PASSWORD", "PAYMENT_APP_PASSWORD"),
+    "payment-migrate": ("PAYMENT_OWNER_PASSWORD",),
+    "payment-api": ("PAYMENT_APP_PASSWORD", "PAYMENT_SERVICE_TOKEN"),
+}
+
+
+def test_payment_overlay_secrets_mapped():
+    problems = []
+    for service, variables in PAYMENTS_EXPECTED.items():
+        problems += _check(PAYMENTS, service, variables)
+    assert not problems, "Payment control SSOT: " + "; ".join(problems)

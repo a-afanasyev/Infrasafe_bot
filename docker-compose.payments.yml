@@ -1,0 +1,61 @@
+# Optional overlay: docker compose -f docker-compose.yml -f docker-compose.payments.yml ...
+# Secrets are injected by Doppler. Each deployment has its own DB volume and token.
+services:
+  api:
+    environment:
+      PAYMENT_SERVICE_URL: http://payment-api.internal:8101/v1
+      PAYMENT_SERVICE_TOKEN: ${PAYMENT_SERVICE_TOKEN:?Set PAYMENT_SERVICE_TOKEN in Doppler}
+  payment-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_control
+      POSTGRES_USER: payment_owner
+      POSTGRES_PASSWORD: ${PAYMENT_OWNER_PASSWORD:?Set PAYMENT_OWNER_PASSWORD in Doppler}
+      PAYMENT_APP_PASSWORD: ${PAYMENT_APP_PASSWORD:?Set PAYMENT_APP_PASSWORD in Doppler}
+    volumes:
+      - payment_pg_data:/var/lib/postgresql/data
+      - ./payment_control/provision.sql:/docker-entrypoint-initdb.d/01-runtime-role.sql:ro
+    networks: [uk-network]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U payment_owner -d payment_control"]
+      interval: 5s
+      retries: 10
+  payment-migrate:
+    build:
+      context: .
+      dockerfile: payment_control/Dockerfile
+    profiles: [tools]
+    command: [alembic, -c, payment_control/alembic.ini, upgrade, head]
+    environment:
+      PAYMENT_DB_USER: payment_owner
+      PAYMENT_DB_PASSWORD: ${PAYMENT_OWNER_PASSWORD:?Set PAYMENT_OWNER_PASSWORD in Doppler}
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+    networks: [uk-network]
+  payment-api:
+    build:
+      context: .
+      dockerfile: payment_control/Dockerfile
+    restart: unless-stopped
+    environment:
+      PAYMENT_DB_USER: payment_app
+      PAYMENT_DB_PASSWORD: ${PAYMENT_APP_PASSWORD:?Set PAYMENT_APP_PASSWORD in Doppler}
+      PAYMENT_SERVICE_TOKEN: ${PAYMENT_SERVICE_TOKEN:?Set PAYMENT_SERVICE_TOKEN in Doppler}
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+    networks:
+      uk-network:
+        aliases: [payment-api.internal]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8101/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+volumes:
+  payment_pg_data:

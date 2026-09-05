@@ -278,6 +278,18 @@
       },
       "ApartmentCreate": {
         "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
           "apartment_number": {
             "maxLength": 20,
             "minLength": 1,
@@ -361,6 +373,18 @@
       },
       "ApartmentDetailOut": {
         "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
           "apartment_number": {
             "title": "Apartment Number",
             "type": "string"
@@ -486,6 +510,18 @@
       },
       "ApartmentUpdate": {
         "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
           "apartment_number": {
             "anyOf": [
               {
@@ -746,6 +782,42 @@
           "text"
         ],
         "title": "Body_create_feedback_api_v2_feedback_post",
+        "type": "object"
+      },
+      "Body_preview_api_v2_payment_control_imports_preview_post": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "balances",
+              "payments"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "as_of",
+          "source",
+          "file"
+        ],
+        "title": "Body_preview_api_v2_payment_control_imports_preview_post",
         "type": "object"
       },
       "Body_proxy_media_upload_api_v2_media_upload_post": {
@@ -1929,6 +2001,21 @@
           "closed"
         ],
         "title": "DayStats",
+        "type": "object"
+      },
+      "Deactivate": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "Deactivate",
         "type": "object"
       },
       "DeleteEmployeeRequest": {
@@ -7902,6 +7989,18 @@
       },
       "uk_management_bot__api__addresses__schemas__ApartmentOut": {
         "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
           "apartment_number": {
             "title": "Apartment Number",
             "type": "string"
@@ -11828,6 +11927,345 @@
         "summary": "Update Group",
         "tags": [
           "group-intake"
+        ]
+      }
+    },
+    "/api/v2/payment-control/account": {
+      "get": {
+        "operationId": "account_api_v2_payment_control_account_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_number",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Account Number",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Account",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/apartments/{apartment_id}": {
+      "get": {
+        "operationId": "apartment_balance_api_v2_payment_control_apartments__apartment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "apartment_id",
+            "required": true,
+            "schema": {
+              "title": "Apartment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Apartment Balance",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/imports": {
+      "get": {
+        "operationId": "imports_api_v2_payment_control_imports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Imports",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/imports/preview": {
+      "post": {
+        "operationId": "preview_api_v2_payment_control_imports_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_api_v2_payment_control_imports_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/imports/{batch_id}": {
+      "get": {
+        "operationId": "import_detail_api_v2_payment_control_imports__batch_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Detail",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/imports/{batch_id}/activate": {
+      "post": {
+        "operationId": "activate_api_v2_payment_control_imports__batch_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Activate",
+        "tags": [
+          "payment-control"
+        ]
+      }
+    },
+    "/api/v2/payment-control/imports/{batch_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_api_v2_payment_control_imports__batch_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Deactivate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate",
+        "tags": [
+          "payment-control"
         ]
       }
     },

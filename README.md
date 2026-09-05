@@ -132,6 +132,8 @@ docker exec uk-management-bot ruff check .
 
 ## Документация
 
+- [docs/tech/PAYMENT_CONTROL.md](docs/tech/PAYMENT_CONTROL.md) — контроль платежей: CSV/XLSX, активные снимки долга/предоплаты, лицевой счёт квартиры и подключение отдельного сервиса.
+
 - [docs/README.md](docs/README.md) — индекс документации (быстрый старт, архитектура, БД, безопасность, руководства).
 - [docs/audit/2026-05-20-backlog.md](docs/audit/2026-05-20-backlog.md) — рабочий бэклог (источник истины по задачам).
 - [docs/audit/2026-06-12-closure-plan.md](docs/audit/2026-06-12-closure-plan.md) — план закрытия бэклога по волнам/PR.

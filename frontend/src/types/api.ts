@@ -180,6 +180,7 @@ export interface BuildingBrief {
 }
 
 export interface ApartmentBrief {
+  account_number?: string | null
   id: number
   building_id: number
   apartment_number: string
@@ -211,6 +212,7 @@ export interface ApartmentResidentBrief {
 }
 
 export interface ApartmentDetail {
+  account_number?: string | null
   id: number
   building_id: number
   apartment_number: string

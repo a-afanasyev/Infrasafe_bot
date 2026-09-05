@@ -52,6 +52,8 @@
 
 ## Update Rule
 
+- **Контроль платежей**: отдельный `payment_control/`, overlay `docker-compose.payments.yml`, миграции через `payment-migrate`, ключи из Doppler. Связь квартиры по `account_number`; правила и запуск → `docs/tech/PAYMENT_CONTROL.md`.
+
 При существенных изменениях в архитектуре, стеке или рабочих процессах — обнови этот файл. Не раздувай: убирай устаревшее, держи < 100 строк.
 
 

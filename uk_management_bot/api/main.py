@@ -50,6 +50,7 @@ from uk_management_bot.api.registration.router import router as registration_rou
 from uk_management_bot.api.feedback.router import router as feedback_router
 from uk_management_bot.api.group_intake.router import router as monitored_groups_router
 from uk_management_bot.api.materials.router import router as materials_router
+from uk_management_bot.api.payment_control.router import router as payment_control_router
 from uk_management_bot.api.resource_accounting.router import router as resource_accounting_router
 from uk_management_bot.api.routes.health import router as health_router
 from uk_management_bot.api.routes.announcements import router as announcements_router
@@ -152,6 +153,10 @@ app.include_router(feedback_router, prefix="/api/v2/feedback", tags=["feedback"]
 # ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist.
 app.include_router(monitored_groups_router, prefix="/api/v2/monitored-groups", tags=["group-intake"])
 app.include_router(materials_router, prefix="/api/v2/materials", tags=["materials"])
+# ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist
+# (см. docs/audit/2026-06-07-infrasafe-edge-allowlist-contract.md) — до заявки
+# раздел отвечает 404 на обеих площадках.
+app.include_router(payment_control_router, prefix="/api/v2/payment-control", tags=["payment-control"])
 app.include_router(work_reports_router, prefix="/api/v2/work-reports", tags=["work-reports"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
