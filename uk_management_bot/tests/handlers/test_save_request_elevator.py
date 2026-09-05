@@ -70,16 +70,26 @@ def world(db):
     raw = Elevator(building_id=building.id, entrance_number=1, elevator_number=2,
                    passport_number="P-2", manufacturer="OTIS", serial_number="S-2",
                    public_code=generate_public_code(), is_commissioned=False)
-    db.add_all([ok, raw])
+    other = Building(address="ул. Чужая, 9", yard=yard, is_active=True)
+    db.add(other)
     db.commit()
-    return {"user": user, "apt": apt, "ok": ok, "raw": raw}
+    foreign = Elevator(building_id=other.id, entrance_number=1, elevator_number=1,
+                       passport_number="P-9", manufacturer="OTIS", serial_number="S-9",
+                       public_code=generate_public_code(), is_commissioned=True,
+                       commissioned_at=date(2020, 1, 1), current_status="working")
+    db.add_all([ok, raw, foreign])
+    db.commit()
+    return {"user": user, "apt": apt, "building": building, "ok": ok, "raw": raw, "foreign": foreign}
 
 
-def _record(service: RequestHandlerService, number: str, *, category: str, user_id: int, **extra):
+def _record(service: RequestHandlerService, number: str, *, category: str, user_id: int,
+            building_id: int | None = None, apartment_id: int | None = None, **extra):
+    """Заявка уровня дома (building_id) / квартиры (apartment_id) — как отдаёт резолвер."""
+    address_type = "apartment" if apartment_id is not None else ("building" if building_id else None)
     return service.create_request_record(
         request_number=number, category=category, address="a", description="d",
-        urgency="high", apartment_id=None, building_id=None, yard_id=None,
-        address_type=None, media_files=[], user_id=user_id, source="bot", **extra,
+        urgency="high", apartment_id=apartment_id, building_id=building_id, yard_id=None,
+        address_type=address_type, media_files=[], user_id=user_id, source="bot", **extra,
     )
 
 
@@ -96,16 +106,45 @@ def test_elevator_category_without_fields_raises(db, world):
 def test_elevator_category_with_fields_persisted(db, world):
     service = RequestHandlerService(db)
     _record(service, "260905-002", category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id,
             elevator_id=world["ok"].id, elevator_operational=False)
     service.commit()
     req = db.query(Request).filter_by(request_number="260905-002").one()
     assert req.elevator_id == world["ok"].id and req.elevator_operational is False
 
 
+def test_building_derived_from_apartment(db, world):
+    """Уровень квартиры: building_id из резолвера None — дом выводится из квартиры."""
+    service = RequestHandlerService(db)
+    _record(service, "260905-012", category="elevator", user_id=world["user"].id,
+            apartment_id=world["apt"].id, elevator_id=world["ok"].id, elevator_operational=True)
+    service.commit()
+    req = db.query(Request).filter_by(request_number="260905-012").one()
+    assert req.elevator_id == world["ok"].id and req.building_id is None
+
+
+def test_elevator_of_other_building_raises(db, world):
+    """Security T6: лифт чужого дома к своей квартире не привязать."""
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorValidationError, match="другому дому"):
+        _record(service, "260905-013", category="elevator", user_id=world["user"].id,
+                apartment_id=world["apt"].id, elevator_id=world["foreign"].id,
+                elevator_operational=False)
+
+
+def test_elevator_without_building_raises(db, world):
+    """Без дома и квартиры (двор/legacy) лифт привязать нельзя."""
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorValidationError, match="нужен дом или квартира"):
+        _record(service, "260905-014", category="elevator", user_id=world["user"].id,
+                elevator_id=world["ok"].id, elevator_operational=False)
+
+
 def test_uncommissioned_elevator_raises(db, world):
     service = RequestHandlerService(db)
     with pytest.raises(ElevatorValidationError, match="не введён"):
         _record(service, "260905-003", category="elevator", user_id=world["user"].id,
+                building_id=world["building"].id,
                 elevator_id=world["raw"].id, elevator_operational=True)
 
 

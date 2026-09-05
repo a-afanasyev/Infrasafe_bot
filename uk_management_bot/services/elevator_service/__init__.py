@@ -115,6 +115,7 @@ from .status import (
 )
 from .validation_db import (
     MAX_REASON_LEN,
+    NO_BUILDING_FOR_ELEVATOR,
     UNBOUND_ELEVATOR,
     RequestElevator,
     ensure_elevator_usable_async,
@@ -178,6 +179,7 @@ __all__ = [
     "EDITABLE_FIELDS",
     "ELEVATOR_CATEGORY",
     "MAX_REASON_LEN",
+    "NO_BUILDING_FOR_ELEVATOR",
     "PASSPORT_REQUIRED_FIELDS",
     "PUBLIC_CODE_MAX_LEN",
     "REGISTRY_FLAGS",

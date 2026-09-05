@@ -17,10 +17,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import String, Table
+from sqlalchemy import String, Table, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_PATTERN
 
@@ -159,6 +160,36 @@ def _binding(elevator: Elevator, elevator_operational: bool | None) -> RequestEl
     )
 
 
+NO_BUILDING_FOR_ELEVATOR = "для заявки по лифту нужен дом или квартира"
+
+
+def _require_building(building_id: int | None) -> int:
+    """Лифт нельзя привязать без известного дома заявки — проверка принадлежности
+    (лифт ЭТОГО дома) не пропускается молча (security-ревью T6: IDOR/перебор)."""
+    if building_id is None:
+        raise ElevatorValidationError(NO_BUILDING_FOR_ELEVATOR)
+    return building_id
+
+
+def _apartment_building_stmt(apartment_id: int):
+    return select(Apartment.building_id).where(Apartment.id == apartment_id)
+
+
+def _request_building_sync(db: Session, building_id: int | None, apartment_id: int | None) -> int:
+    """Дом заявки: явный ``building_id`` или дом квартиры ``apartment_id``."""
+    if building_id is None and apartment_id is not None:
+        building_id = db.execute(_apartment_building_stmt(apartment_id)).scalar_one_or_none()
+    return _require_building(building_id)
+
+
+async def _request_building_async(
+    db: AsyncSession, building_id: int | None, apartment_id: int | None
+) -> int:
+    if building_id is None and apartment_id is not None:
+        building_id = (await db.execute(_apartment_building_stmt(apartment_id))).scalar_one_or_none()
+    return _require_building(building_id)
+
+
 def resolve_request_elevator_sync(
     db: Session,
     *,
@@ -167,19 +198,23 @@ def resolve_request_elevator_sync(
     elevator_operational: bool | None,
     enabled: bool,
     building_id: int | None = None,
+    apartment_id: int | None = None,
 ) -> RequestElevator:
     """Р11 для конструкторов заявок (sync, бот).
 
     Флаг выключен → поля игнорируются (``UNBOUND_ELEVATOR``, в БД NULL).
     Категория «лифт» без полей → ``ElevatorValidationError`` (чистый валидатор).
     Лифт указан (любая категория) → обязан быть пригодным
-    (``ensure_elevator_usable_sync``); ``building_id`` — доп. требование
-    «лифт этого дома» (InfraSafe).
+    (``ensure_elevator_usable_sync``) и принадлежать дому заявки: дом —
+    ``building_id`` либо дом квартиры ``apartment_id``; без дома (двор /
+    legacy-адрес) привязка лифта запрещена — проверка принадлежности не
+    пропускается молча.
     """
     require_elevator_for_category(category, elevator_id, elevator_operational, enabled=enabled)
     if not enabled or elevator_id is None:
         return UNBOUND_ELEVATOR
-    elevator = ensure_elevator_usable_sync(db, elevator_id, building_id=building_id)
+    request_building_id = _request_building_sync(db, building_id, apartment_id)
+    elevator = ensure_elevator_usable_sync(db, elevator_id, building_id=request_building_id)
     return _binding(elevator, elevator_operational)
 
 
@@ -191,10 +226,12 @@ async def resolve_request_elevator_async(
     elevator_operational: bool | None,
     enabled: bool,
     building_id: int | None = None,
+    apartment_id: int | None = None,
 ) -> RequestElevator:
-    """Async-зеркало ``resolve_request_elevator_sync`` (API, InfraSafe)."""
+    """Async-зеркало ``resolve_request_elevator_sync`` (API, колл-центр, InfraSafe)."""
     require_elevator_for_category(category, elevator_id, elevator_operational, enabled=enabled)
     if not enabled or elevator_id is None:
         return UNBOUND_ELEVATOR
-    elevator = await ensure_elevator_usable_async(db, elevator_id, building_id=building_id)
+    request_building_id = await _request_building_async(db, building_id, apartment_id)
+    elevator = await ensure_elevator_usable_async(db, elevator_id, building_id=request_building_id)
     return _binding(elevator, elevator_operational)

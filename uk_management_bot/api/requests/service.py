@@ -328,9 +328,12 @@ async def persist_request(
     выключенном флаге поля игнорируются. ``ElevatorValidationError`` — наверх,
     роутер мапит в 422. Проверка ДО выдачи номера — отказ не жжёт счётчик.
     """
+    # Дом заявки — из разрешённого адреса (уровень building) или дом квартиры
+    # (уровень apartment); двор → лифт привязать нельзя (security-ревью T6).
     binding = await resolve_request_elevator_async(
         db, category=category, elevator_id=elevator_id,
         elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
+        building_id=resolved.building_id, apartment_id=resolved.apartment_id,
     )
 
     async def _attempt(number: str) -> RequestModel:

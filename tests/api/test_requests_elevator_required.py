@@ -230,7 +230,43 @@ async def test_twa_flag_off_fields_ignored(make_client, applicant, addr_tree, el
         assert resp.json()["elevator_id"] is None
 
 
+@pytest.mark.asyncio
+async def test_twa_elevator_of_other_building_422(make_client, applicant, addr_tree, elevators,
+                                                  db_session):
+    """Security T6: лифт чужого дома к своей квартире не привязать (IDOR/перебор)."""
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["foreign"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 422, r.text
+    assert "другому дому" in r.json()["detail"]
+    assert (await db_session.execute(select(RequestModel))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_twa_elevator_category_on_yard_level_422(make_client, applicant, addr_tree, elevators):
+    """Двор — дома нет → лифт привязать нельзя (проверка принадлежности не пропускается)."""
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("yard", addr_tree["yard"].id,
+                                         elevator_id=elevators["ok"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 422, r.text
+    assert "нужен дом или квартира" in r.json()["detail"]
+
+
 # ── Инспектор ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_inspector_elevator_of_other_building_422(make_client, inspector, addr_tree, elevators):
+    async with make_client(inspector) as ac:
+        r = await ac.post(f"{URL}/inspector", json=_body(
+            "building", addr_tree["building"].id,
+            elevator_id=elevators["foreign"].id, elevator_operational=True,
+        ))
+    assert r.status_code == 422, r.text
+    assert "другому дому" in r.json()["detail"]
+
 
 @pytest.mark.asyncio
 async def test_inspector_elevator_without_fields_422(make_client, inspector, addr_tree, elevators):

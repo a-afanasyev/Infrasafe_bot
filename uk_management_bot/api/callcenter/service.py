@@ -87,9 +87,12 @@ async def persist_call_center_request(
     ДО выдачи номера; ``ElevatorValidationError`` наверх (роутер → 422).
     ``acceptance_mode=None`` → прежний дефолт ('resident').
     """
+    # Дом заявки выводится из квартиры жителя (apartment → building); при
+    # свободном legacy-адресе дома нет → лифт привязать нельзя (security-ревью T6).
     binding = await resolve_request_elevator_async(
         db, category=category, elevator_id=elevator_id,
         elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
+        apartment_id=apartment_id,
     )
     request_number = await RequestNumberService.next_number_async(db)
 

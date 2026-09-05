@@ -103,9 +103,12 @@ class RequestHandlerService:
         точка проверки для всех sync-путей (житель, группы, инспектор, лифтёр) —
         ``resolve_request_elevator_sync`` бросает ``ElevatorValidationError``
         (категория «лифт» без полей / непригодный лифт); флаг выключен → NULL."""
+        # Дом заявки — building_id (уровень дома) или дом квартиры apartment_id
+        # (оба из резолвера адреса); без дома лифт не привязывается.
         elevator = resolve_request_elevator_sync(
             self.db, category=category, elevator_id=elevator_id,
             elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
+            building_id=building_id, apartment_id=apartment_id,
         )
         request = Request(
             request_number=request_number,
