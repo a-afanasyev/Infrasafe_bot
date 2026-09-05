@@ -8497,5 +8497,12 @@
   "phone_request_flow": {
     "prompt": "📱 Boshqaruv kompaniyasi menejeri telefon raqamingizni so'ramoqda. Kontaktni ulashish uchun quyidagi tugmani bosing.",
     "foreign_contact": "Iltimos, o'zingizning kontaktingizni yuboring — «Kontakt ulashish» tugmasini bosing."
+  },
+  "elevators": {
+    "notify": {
+      "repair_started": "🛠 {entrance}-kirish ({building}) {elevator}-lift ta'mirlash uchun to'xtatildi. Qayta ishga tushganda xabar beramiz.",
+      "maintenance_started": "🔧 {entrance}-kirish ({building}) {elevator}-lift rejali texnik xizmat ko'rsatish uchun vaqtincha to'xtatildi.",
+      "back_in_service": "✅ {entrance}-kirish ({building}) {elevator}-lift yana ishlamoqda."
+    }
   }
 }
