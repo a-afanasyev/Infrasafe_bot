@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { useNameCaseStore } from '../stores/nameCaseStore'
 import { usePersonName } from '../hooks/usePersonName'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from '../constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, ELEVATORS_MODULE_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from '../constants/roles'
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
@@ -46,6 +46,7 @@ import {
   MessagesSquare,
   CaseUpper,
   Check,
+  ArrowUpDown,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -125,6 +126,11 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
+  // Лифты: реестр/карточка/календарь/конфиг. DARK за VITE_ELEVATORS_ENABLED;
+  // читают manager и executor (API), правки — только manager (кнопки по роли).
+  ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
+    ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, allowedRoles: ELEVATORS_MODULE_ROLES }]
+    : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.
   ...(import.meta.env.VITE_RESOURCES_ENABLED === 'true'

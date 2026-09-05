@@ -514,6 +514,8 @@ services:
         VITE_RESOURCES_ENABLED: "${VITE_RESOURCES_ENABLED:-}"
         # DARK-гейт модуля «Отчёты о работах»: пусто = OFF (dev/CI), прод .env ставит true.
         VITE_WORK_REPORTS_ENABLED: "${VITE_WORK_REPORTS_ENABLED:-}"
+        # DARK-гейт модуля «Лифты»: пусто = OFF (dev/CI), прод .env ставит true вместе с ELEVATORS_ENABLED.
+        VITE_ELEVATORS_ENABLED: "${VITE_ELEVATORS_ENABLED:-}"
     container_name: uk-frontend
     restart: unless-stopped
     ports:

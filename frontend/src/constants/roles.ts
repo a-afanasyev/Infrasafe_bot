@@ -71,3 +71,13 @@ export const RESOURCE_MODULE_ROLES: readonly UserRole[] = [
   'manager',
   'system_admin',
 ] as const
+
+/**
+ * Роли модуля «Лифты» (реестр, карточка, календарь). Читают manager и executor
+ * (API: require_roles executor/manager на GET); все записи паспорта/графика/
+ * конфига — только manager (кнопки скрыты по роли, API гейтит сам).
+ */
+export const ELEVATORS_MODULE_ROLES: readonly UserRole[] = [
+  'manager',
+  'executor',
+] as const

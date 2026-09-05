@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from './constants/roles'
+import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, ELEVATORS_MODULE_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from './constants/roles'
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
@@ -60,6 +60,15 @@ const WorkReportsPage = lazy(() => import('./pages/WorkReportsPage'))
 const WorkReportsArchivePage = lazy(() => import('./pages/WorkReportsArchivePage'))
 const WorkReportDetailPage = lazy(() => import('./pages/WorkReportDetailPage'))
 const WORK_REPORTS_ENABLED = import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
+
+// Модуль «Лифты»: реестр, карточка, форма, календарь, конфиг. DARK за
+// VITE_ELEVATORS_ENABLED (согласованно с backend ELEVATORS_ENABLED → 404).
+const ElevatorsPage = lazy(() => import('./pages/elevators/ElevatorsPage'))
+const ElevatorDetailPage = lazy(() => import('./pages/elevators/ElevatorDetailPage'))
+const ElevatorFormPage = lazy(() => import('./pages/elevators/ElevatorFormPage'))
+const ElevatorsCalendarPage = lazy(() => import('./pages/elevators/ElevatorsCalendarPage'))
+const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfigPage'))
+const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -181,6 +190,26 @@ export default function App() {
               <Route path="/dashboard/materials" element={<ProtectedRoute allowedRoles={[...MATERIALS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><MaterialsPage /></PageErrorBoundary>} />
               </Route>
+
+              {/* Лифты: реестр/карточка/форма/календарь — отдельный route group,
+                  т.к. общий /dashboard пускает только admin/manager, а реестр
+                  читает и executor (ELEVATORS_MODULE_ROLES). Конфиг — только
+                  manager, поэтому отдельным group'ом ниже (статический сегмент
+                  `config` ранжируется выше `:id`). DARK за VITE_ELEVATORS_ENABLED. */}
+              {ELEVATORS_ENABLED && (
+                <Route path="/dashboard/elevators" element={<ProtectedRoute allowedRoles={[...ELEVATORS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><ElevatorsPage /></PageErrorBoundary>} />
+                  <Route path="new" element={<PageErrorBoundary><ElevatorFormPage /></PageErrorBoundary>} />
+                  <Route path="calendar" element={<PageErrorBoundary><ElevatorsCalendarPage /></PageErrorBoundary>} />
+                  <Route path=":id" element={<PageErrorBoundary><ElevatorDetailPage /></PageErrorBoundary>} />
+                  <Route path=":id/edit" element={<PageErrorBoundary><ElevatorFormPage /></PageErrorBoundary>} />
+                </Route>
+              )}
+              {ELEVATORS_ENABLED && (
+                <Route path="/dashboard/elevators/config" element={<ProtectedRoute allowedRoles={['manager']}><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
+                </Route>
+              )}
 
               {/* Учёт ресурсов УК — нативный портируемый модуль (не iframe).
                   Splat-роут: внутренний <ResourceAccountingRoutes/> резолвит

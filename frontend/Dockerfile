@@ -27,6 +27,11 @@ ENV VITE_RESOURCES_ENABLED=$VITE_RESOURCES_ENABLED
 # --build-arg VITE_WORK_REPORTS_ENABLED=true (согласованно с backend WORK_REPORTS_ENABLED).
 ARG VITE_WORK_REPORTS_ENABLED=
 ENV VITE_WORK_REPORTS_ENABLED=$VITE_WORK_REPORTS_ENABLED
+# DARK-гейт модуля «Лифты» (реестр/карточка/календарь/конфиг в дашборде) — build-time.
+# Пусто = OFF (роуты и пункт меню не монтируются). Включение:
+# --build-arg VITE_ELEVATORS_ENABLED=true (согласованно с backend ELEVATORS_ENABLED).
+ARG VITE_ELEVATORS_ENABLED=
+ENV VITE_ELEVATORS_ENABLED=$VITE_ELEVATORS_ENABLED
 RUN npm run build
 
 FROM nginx:1.27-alpine
