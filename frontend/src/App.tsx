@@ -45,6 +45,7 @@ const AccessHistoryPage = lazy(() => import('./pages/access/AccessHistoryPage'))
 const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'))
 const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
 // Складской учёт материалов (приход/расход по заявкам). Гард — MATERIALS_MODULE_ROLES.
+const PaymentControlPage = lazy(() => import('./pages/PaymentControlPage'))
 const MaterialsPage = lazy(() => import('./pages/materials/MaterialsPage'))
 // Нативный раздел «Учёт ресурсов УК» (портируемый модуль). DARK за build-флагом
 // VITE_RESOURCES_ENABLED — пока партнёрский edge не проксирует resource-api.
@@ -134,6 +135,7 @@ export default function App() {
                 <Route path="employees" element={<PageErrorBoundary><EmployeesPage /></PageErrorBoundary>} />
                 <Route path="employees/:id" element={<PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary>} />
                 <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
+                <Route path="payment-control" element={<PageErrorBoundary><PaymentControlPage /></PageErrorBoundary>} />
                 <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
                 <Route path="residents" element={<PageErrorBoundary><ResidentsPage /></PageErrorBoundary>} />
                 <Route path="residents/:id" element={<PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary>} />

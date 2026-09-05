@@ -92,6 +92,12 @@ const NAV_ENTRIES: NavEntry[] = [
       { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
     ],
   },
+  // Контроль платежей — отдельный сервис за партнёрским edge. DARK за build-флагом
+  // VITE_PAYMENTS_ENABLED: пока overlay не поднят и префикс /api/v2/payment-control
+  // не заявлен в edge-allowlist, раздел отвечал бы 404/503 на весь экран.
+  ...(import.meta.env.VITE_PAYMENTS_ENABLED === 'true'
+    ? [{ to: '/dashboard/payment-control', labelKey: 'paymentControl.title', Icon: Table2, allowedRoles: ['manager', 'admin'] as const }]
+    : []),
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
   // Жители: список/карточка/модерация привязок. allowedRoles=['manager'] —
   // API раздела гейтит require_roles('manager'), и вести admin-без-manager

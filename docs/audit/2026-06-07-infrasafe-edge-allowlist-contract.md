@@ -93,6 +93,11 @@ Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix
 - `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **✅ live на обеих площадках, verified 2026-08-22** (на profk стоял с 25.07; на infrasafe был реальный пробел — закрыт). Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
 - `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **✅ live на обеих площадках, verified 2026-08-22**.
 - `/api/v2/residents` (раздел «Жители», manager-only) — **✅ live на обеих площадках, verified 2026-08-22** (пробел infrasafe.uz закрыт по встречному вопросу InfraSafe; наборы префиксов площадок сверены ими и идентичны, у них добавлена сборочная проверка на оба конфига).
+- `/api/v2/payment-control` (Контроль платежей, manager/admin, требует overlay
+  `docker-compose.payments.yml`) — **⏳ ожидает добавления InfraSafe, добавлено в
+  этот док 2026-09-05.** До заявки раздел отдаёт 404 на обеих площадках, поэтому
+  пункт меню закрыт build-флагом `VITE_PAYMENTS_ENABLED` (по умолчанию выключен):
+  фронт не показывает раздел, пока префикс не заявлен и overlay не поднят.
 
 ## Verification (2026-08-22, финал) — ✅ подтверждено на обеих площадках
 

@@ -1,0 +1,46 @@
+name: Payment control
+on:
+  pull_request:
+    paths: ['payment_control/**', '.github/workflows/payment-control.yml', 'docker-compose.payments.yml']
+  push:
+    branches: [main]
+    paths: ['payment_control/**', '.github/workflows/payment-control.yml', 'docker-compose.payments.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - run: pip install -r payment_control/requirements.txt pytest pytest-cov httpx
+      - run: python -m pytest payment_control/tests --cov=payment_control --cov-report=term --cov-fail-under=80
+
+  migration-drift:
+    # Дрейф проверяется на PostgreSQL, а не на sqlite: type affinity sqlite
+    # скрывает расхождения по типам, server_default и JSON/JSONB.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: payment_control
+          POSTGRES_USER: payment_owner
+          POSTGRES_PASSWORD: ci-owner-password
+        options: >-
+          --health-cmd "pg_isready -U payment_owner -d payment_control"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - run: pip install -r payment_control/requirements.txt
+      - name: Migration drift on PostgreSQL
+        env:
+          PAYMENT_DATABASE_URL: postgresql+psycopg2://payment_owner:ci-owner-password@localhost:5432/payment_control
+        run: |
+          alembic -c payment_control/alembic.ini upgrade head
+          alembic -c payment_control/alembic.ini check
+          alembic -c payment_control/alembic.ini downgrade base

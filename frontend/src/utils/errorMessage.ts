@@ -9,3 +9,11 @@ export function safeErrorMessage(error: unknown, fallback: string): string {
   }
   return fallback
 }
+
+/**
+ * Ответ-отказ по данным (400/404/409/422) против недоступности сервиса: без этого
+ * различия «неверный лицевой счёт» показывался как «сервис недоступен».
+ */
+export function isValidationError(error: unknown): boolean {
+  return axios.isAxiosError(error) && [400, 404, 409, 422].includes(error.response?.status ?? 0)
+}

@@ -290,6 +290,8 @@ class Settings:
         # Пусто = интеграция выключена (эндпоинт ticket отвечает 503 fail-closed).
         self.RESOURCE_SERVICE_URL = os.getenv("RESOURCE_SERVICE_URL", "https://resources-api.infrasafe.uz/v1")
         self.RESOURCE_SERVICE_TOKEN = os.getenv("RESOURCE_SERVICE_TOKEN", "")
+        self.PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://payment-api.internal:8101/v1")
+        self.PAYMENT_SERVICE_TOKEN = os.getenv("PAYMENT_SERVICE_TOKEN", "")
 
         # ── Work reports (visual before/after board) ───────────────────
         self.WORK_REPORTS_ENABLED = os.getenv("WORK_REPORTS_ENABLED", "False").lower() == "true"
@@ -362,6 +364,7 @@ class Settings:
         _require_safe_outbound_url("INFRASAFE_WEBHOOK_URL", self.INFRASAFE_WEBHOOK_URL)
         _require_safe_outbound_url("INFRASAFE_REQUESTS_INVENTORY_URL", self.INFRASAFE_REQUESTS_INVENTORY_URL)
         _require_safe_outbound_url("RESOURCE_SERVICE_URL", self.RESOURCE_SERVICE_URL)
+        _require_safe_outbound_url("PAYMENT_SERVICE_URL", self.PAYMENT_SERVICE_URL)
 
     @property
     def REDIS_PUBSUB_URL_RESOLVED(self) -> str:
