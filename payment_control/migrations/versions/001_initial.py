@@ -2,6 +2,36 @@
 from alembic import op
 import sqlalchemy as sa
 
+# Рантайм-роль: точные права выдаются здесь, а не в provision.sql, который
+# выполняется при инициализации пустой БД, когда этих таблиц ещё нет.
+# Импорты и журнал неизменяемы: UPDATE нужен только статусу импорта, DELETE —
+# только claims (снимаются при деактивации).
+RUNTIME_ROLE = "payment_app"
+RUNTIME_GRANTS = (
+    "GRANT SELECT, INSERT, UPDATE ON payment_imports TO payment_app",
+    "GRANT SELECT, INSERT ON payment_import_rows TO payment_app",
+    "GRANT SELECT, INSERT, DELETE ON payment_claims TO payment_app",
+    "GRANT SELECT, INSERT ON payment_audit TO payment_app",
+    "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO payment_app",
+)
+
+
+def _grant_runtime_privileges():
+    """Выдать права рантайм-роли, если это PostgreSQL и роль существует.
+
+    На sqlite (тесты, CI сервиса) и на БД без провижининга роли — no-op.
+    """
+    bind = op.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    exists = bind.execute(
+        sa.text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": RUNTIME_ROLE}
+    ).scalar()
+    if not exists:
+        return
+    for statement in RUNTIME_GRANTS:
+        op.execute(statement)
+
 revision = "payment_001"
 down_revision = None
 branch_labels = None
@@ -51,6 +81,7 @@ def upgrade():
                     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
                               server_default=sa.text("CURRENT_TIMESTAMP")))
     op.create_index("ix_payment_audit_batch_id", "payment_audit", ["batch_id"])
+    _grant_runtime_privileges()
 
 
 def downgrade():
