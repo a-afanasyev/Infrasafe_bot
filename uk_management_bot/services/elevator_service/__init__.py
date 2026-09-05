@@ -67,7 +67,7 @@ from .public_code import (
     generate_public_code,
     is_valid_public_code,
 )
-from .labels import elevator_label
+from .labels import elevator_label, status_label
 from .reads import (
     count_building_apartments_without_entrance_async,
     count_open_requests_by_elevator_async,
@@ -262,6 +262,7 @@ __all__ = [
     "set_status_async",
     "set_status_sync",
     "should_remind_overdue",
+    "status_label",
     "status_intervals_async",
     "summary_async",
     "unknown_config_keys",

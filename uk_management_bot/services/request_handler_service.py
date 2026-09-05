@@ -67,6 +67,26 @@ class RequestHandlerService:
         """Сбросить identity-map сессии (run_command коммитит в отдельной)."""
         self.db.expire_all()
 
+    # ── Модуль «Лифты» (Ф4a-2, T7): данные для шага выбора лифта ────────────
+
+    def get_apartment_location(self, apartment_id: int) -> Optional[Tuple[int, Optional[int]]]:
+        """(building_id, подъезд) квартиры для подбора лифтов дома; None — нет квартиры."""
+        from uk_management_bot.database.models.apartment import Apartment
+
+        apartment = self.db.get(Apartment, apartment_id)
+        if apartment is None:
+            return None
+        return (apartment.building_id, apartment.entrance)
+
+    def get_dispatch_phone(self) -> str:
+        """Телефон диспетчера из сохранённого board_config (id=1); дефолт-заглушку не подставляем."""
+        from uk_management_bot.database.models.board_config import BoardConfig
+
+        row = self.db.get(BoardConfig, 1)
+        data = row.data if row is not None and isinstance(row.data, dict) else {}
+        phone = data.get("dispatch_phone")
+        return phone.strip() if isinstance(phone, str) else ""
+
     # ── save_request: создание заявки (ctor:Request) ─────────────────────────
 
     def create_request_record(

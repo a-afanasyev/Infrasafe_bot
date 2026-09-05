@@ -32,6 +32,7 @@ from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 
 from ._router import router
+from .elevator_hint import send_elevator_hint
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +422,12 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
 
         await callback.message.edit_text(
             get_text("admin.handlers.request_confirmed", language=lang).format(request_number=request_number)
+        )
+
+        # Ф4a-2 (T7): у заявки по лифту — подсказка о статусе (best-effort, не бросает).
+        await send_elevator_hint(
+            callback.bot, callback.from_user.id,
+            elevator_id=getattr(request, "elevator_id", None), request_number=request_number, lang=lang,
         )
 
         logger.info(f"Заявка {request_number} подтверждена менеджером {user.id} (canon)")

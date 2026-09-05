@@ -6031,6 +6031,25 @@
     "no_available_addresses": "Ariza yaratish uchun mavjud manzilingiz yo'q. Kvartirani bog'lash uchun menejerga murojaat qiling.",
     "address_not_available": "❌ Bu manzil mavjud emas yoki faol emas. Ro'yxatdan tanlang.",
     "address_selected": "✅ Manzil: {address}",
+    "elevator": {
+      "pick_prompt": "🛗 Ariza qaysi lift haqida? Liftni tanlang:",
+      "pick_button": "{entrance}-kirish · {elevator}-lift",
+      "picked": "✅ Lift: {entrance}-kirish, {elevator}-lift",
+      "need_building": "🛗 Lift bo'yicha ariza uyga bog'lanadi: hovli emas, uy yoki kvartirani tanlang.",
+      "none_in_building": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan — dispetcherga murojaat qiling.\n\nBoshqa toifani tanlang:",
+      "none_in_building_phone": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan — dispetcherga murojaat qiling: {phone}\n\nBoshqa toifani tanlang:",
+      "works_hint": "ℹ️ Bu liftda hozir ishlar olib borilmoqda: {status}, {since} dan. Shunga qaramay ariza qoldirishingiz mumkin.",
+      "operational_prompt": "Lift hozir ishlayaptimi?",
+      "operational_yes_button": "✅ Ha, ishlaydi",
+      "operational_no_button": "⛔ Yo'q, ishlamaydi",
+      "operational_yes": "ishlaydi",
+      "operational_no": "ishlamaydi",
+      "operational_saved": "✅ Lift hozir {operational}",
+      "summary_line": "🛗 Lift: {entrance}-kirish, {elevator}-lift · {operational}",
+      "use_buttons": "⚠️ Iltimos, yuqoridagi tugmalardan foydalaning",
+      "invalid_choice": "❌ Bu lift ariza uchun mavjud emas. Ro'yxatdan tanlang.",
+      "error_generic": "❌ Lift bo'yicha arizani yaratib bo'lmadi. Lift tanlovini tekshirib, qayta urinib ko'ring; xato takrorlansa — dispetcherga murojaat qiling."
+    },
     "building_prefix": "Uy: {address}",
     "yard_prefix": "Hovli: {name}",
     "address_needs_improvement": "⚠️ Manzil yaxshilashga muhtoj:\n{suggestions}\n\nQayta urinib ko'ring:",
@@ -8500,6 +8519,22 @@
   },
   "elevators": {
     "label": "{building}, {entrance}-kirish, {elevator}-lift",
+    "status": {
+      "working": "Ishlaydi",
+      "not_working": "Ishlamaydi",
+      "under_repair": "Ta'mirda",
+      "maintenance": "Texnik xizmatda",
+      "none": "Foydalanishga topshirilmagan"
+    },
+    "hint": {
+      "prompt": "🛗 {label} lifti: hozir «{status}».\nLift ishlayaptimi? Holatni yangilang yoki o'zgarishsiz qoldiring:",
+      "keep_button": "O'zgarishsiz qoldirish",
+      "changed": "🛗 Lift holati o'zgartirildi: {old} → {new}",
+      "unchanged": "🛗 Lift holati o'zgarishsiz: {status}",
+      "kept": "🛗 Lift holati o'zgarishsiz qoldirildi.",
+      "rejected": "❌ Bu lift holatini o'zgartirib bo'lmaydi: lift arxivlangan yoki foydalanishga topshirilmagan.",
+      "not_found": "❌ Lift topilmadi."
+    },
     "notify": {
       "repair_started": "🛠 {entrance}-kirish ({building}) {elevator}-lift ta'mirlash uchun to'xtatildi. Qayta ishga tushganda xabar beramiz.",
       "maintenance_started": "🔧 {entrance}-kirish ({building}) {elevator}-lift rejali texnik xizmat ko'rsatish uchun vaqtincha to'xtatildi.",

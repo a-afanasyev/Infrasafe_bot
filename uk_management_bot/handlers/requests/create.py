@@ -55,6 +55,14 @@ from uk_management_bot.utils.helpers import get_text
 
 from ._router import router
 
+# Модуль «Лифты» (Ф4a-2, T7): шаги лифта между адресом и описанием. Импорт
+# односторонний (create_elevator не импортирует create на уровне модуля).
+from .create_elevator import (
+    begin_elevator_step,
+    elevator_summary_line,
+    is_elevator_flow,
+    save_failed_key,
+)
 from .shared import (
     _get_user_language,
     _deny_if_pending_message,
@@ -217,7 +225,7 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         )
         return
 
-    await state.update_data(
+    data = await state.update_data(
         address=resolved.canonical_address,
         address_type=resolved.address_type,
         address_id=address_id,
@@ -225,13 +233,19 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         building_id=resolved.building_id,
         yard_id=resolved.yard_id,
     )
-    await state.set_state(RequestStates.description)
     try:
         await callback.message.edit_text(
             get_text("requests.address_selected", language=lang, address=resolved.canonical_address)
         )
     except Exception:
         pass
+    if is_elevator_flow(data):
+        # Ф4a-2 (T7): категория «лифт» — сначала лифт дома и «работает?»,
+        # описание — после (create_elevator.py). Флаг выключен → штатный путь.
+        await begin_elevator_step(callback, state, lang, data)
+        await callback.answer()
+        return
+    await state.set_state(RequestStates.description)
     await callback.message.answer(
         get_text("requests.description", language=lang),
         reply_markup=get_cancel_keyboard(language=lang),
@@ -419,6 +433,12 @@ async def show_confirmation(message: Message, state: FSMContext):
         urgency=urgency_display,
         files_count=len(data.get('media_files', []))
     )
+    # Ф4a-2 (T7): строка лифта — внутри сводки, перед финальным призывом
+    # подтвердить (последний абзац шаблона confirmation_summary).
+    elevator_line = elevator_summary_line(data, lang)
+    if elevator_line:
+        head, sep, tail = summary.rpartition("\n\n")
+        summary = f"{head}\n{elevator_line}{sep}{tail}" if sep else f"{summary}\n{elevator_line}"
 
     await message.answer(
         summary,
@@ -462,7 +482,7 @@ async def process_confirmation(message: Message, state: FSMContext, roles: list 
             # Очищаем состояние, чтобы пользователь мог продолжить работу (например, открыть Мои заявки)
             await state.clear()
             await message.answer(
-                get_text("errors.request_save_failed", language=lang),
+                get_text(save_failed_key(data), language=lang),
                 reply_markup=await get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")

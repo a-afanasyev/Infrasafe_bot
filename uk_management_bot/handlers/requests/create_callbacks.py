@@ -27,6 +27,7 @@ from .shared import (
 )
 
 from .create import save_request
+from .create_elevator import save_failed_key
 
 logger = logging.getLogger(__name__)
 
@@ -265,13 +266,15 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                 await state.clear()
                 logger.info(f"Заявка создана пользователем {callback.from_user.id}")
             else:
-                # Очищаем состояние и показываем главное меню, чтобы пользователь мог продолжить
+                # Очищаем состояние и показываем главное меню, чтобы пользователь мог продолжить.
+                # Ф4a-2 (T7): для заявки по лифту (Р11 → None) текст свой, не общий.
+                failed_text = get_text(save_failed_key(data), language=lang)
                 await state.clear()
                 await callback.message.answer(
-                    get_text("errors.request_save_failed", language=lang),
+                    failed_text,
                     reply_markup=await get_user_contextual_keyboard(callback.from_user.id)
                 )
-                await callback.answer(get_text("errors.request_save_failed", language=lang), show_alert=True)
+                await callback.answer(failed_text, show_alert=True)
 
         elif action == "no":
             await callback.message.edit_text(

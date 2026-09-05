@@ -203,6 +203,11 @@ class RequestStates(StatesGroup):
     address_building = State()   # Выбор здания (шаг 2)
     address_apartment = State()  # Выбор квартиры (шаг 3)
     address = State()            # Устаревший: прямой выбор адреса
+    # Модуль «Лифты» (Ф4a-2, T7): только для категории elevator при
+    # settings.ELEVATORS_ENABLED — вставляются между адресом и описанием
+    # (дом известен только после адресного шага). Хендлеры — create_elevator.py.
+    elevator_pick = State()         # Выбор лифта дома (elv:pick:{id})
+    elevator_operational = State()  # «Лифт сейчас работает?» (elv:op:1|0)
     description = State()        # Описание проблемы
     urgency = State()           # Выбор срочности
     media = State()             # Медиафайлы
