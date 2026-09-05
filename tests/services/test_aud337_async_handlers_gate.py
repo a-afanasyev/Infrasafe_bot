@@ -150,6 +150,11 @@ CONVERTED = [
     # BUG-157 механика (2026-08-19): handle_confirmation перестал использовать
     # тестовый seam как прод-механизм (`_db_scope(None)` → сквозной `_db`).
     "uk_management_bot/handlers/requests/create_callbacks.py",
+    # Модуль «Лифты» (Ф4a-2, T7): рождены под run_db — общие шаги лифта, поток
+    # жителя, подсказка менеджеру о статусе.
+    "uk_management_bot/handlers/requests/create_elevator.py",
+    "uk_management_bot/handlers/requests/create_elevator_resident.py",
+    "uk_management_bot/handlers/admin/elevator_hint.py",
 ]
 
 # Вызовы, запрещённые в async-функциях конвертированных модулей.

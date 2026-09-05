@@ -1,7 +1,9 @@
 """Менеджер: просмотр заявок, медиа, подтверждение, пагинация."""
 from aiogram import F
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from aiogram.fsm.context import FSMContext
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
@@ -423,12 +425,9 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
         await callback.message.edit_text(
             get_text("admin.handlers.request_confirmed", language=lang).format(request_number=request_number)
         )
-
-        # Ф4a-2 (T7): у заявки по лифту — подсказка о статусе (best-effort, не бросает).
-        await send_elevator_hint(
-            callback.bot, callback.from_user.id,
-            elevator_id=getattr(request, "elevator_id", None), request_number=request_number, lang=lang,
-        )
+        # Ф4a-2 (T7): подсказка о лифте уходит ПОСЛЕ общего try — иначе её сбой
+        # дал бы rollback + «ошибка подтверждения» при уже закоммиченном MANAGER_CONFIRM.
+        hint_target = (getattr(request, "elevator_id", None), request_number)
 
         logger.info(f"Заявка {request_number} подтверждена менеджером {user.id} (canon)")
 
@@ -437,6 +436,28 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
         if db:
             AdminHandlerService(db).rollback()
         await callback.answer(get_text("admin.handlers.error_confirming", language=lang), show_alert=True)
+        return
+
+    await _safe_send_hint(callback, hint_target, lang)
+
+
+async def _safe_send_hint(callback: CallbackQuery, hint_target: tuple, lang: str) -> None:
+    """Best-effort подсказка о статусе лифта после подтверждения (Ф4a-2, T7).
+
+    ``send_elevator_hint`` сам глотает SQLAlchemy/Telegram-сбои; здесь узкий
+    перехват остального ожидаемого (ошибка данных/рантайма при сборке текста),
+    чтобы сбой подсказки не долетел до глобального error-хендлера как «ошибка»
+    уже успешного подтверждения. Текст исключения не логируем (соседство с Bot API).
+    """
+    elevator_id, request_number = hint_target
+    try:
+        await send_elevator_hint(
+            callback.bot, callback.from_user.id,
+            elevator_id=elevator_id, request_number=request_number, lang=lang,
+        )
+    except (SQLAlchemyError, TelegramAPIError, RuntimeError, ValueError) as exc:
+        logger.warning("Подсказка о лифте по заявке %s не отправлена: %s",
+                       request_number, type(exc).__name__)
 
 
 @router.callback_query(F.data.startswith("reconfirm_completed_"))

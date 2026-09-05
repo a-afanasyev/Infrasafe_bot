@@ -180,8 +180,8 @@ async def _edit(callback: CallbackQuery, text: str) -> None:
         logger.warning("Итог подсказки о лифте не показан: %s", type(exc).__name__)
     try:
         await callback.answer()
-    except TelegramAPIError:
-        pass
+    except TelegramAPIError as exc:
+        logger.debug("callback.answer после подсказки о лифте: %s", type(exc).__name__)
 
 
 @router.callback_query(F.data.regexp(STATUS_PATTERN))

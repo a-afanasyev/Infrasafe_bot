@@ -278,6 +278,27 @@ def _lookup(locale: dict, dotted: str):
     return node
 
 
+@pytest.mark.asyncio
+async def test_hint_failure_does_not_break_confirmation():
+    """Сбой подсказки (уже ПОСЛЕ commit MANAGER_CONFIRM) — не «ошибка подтверждения»:
+    экран успеха показан, алерта об ошибке и rollback нет, исключение не утекает."""
+    svc, outcome = _confirm_env(42)
+    cb = _callback(f"confirm_completed_{NUMBER}")
+    user = SimpleNamespace(id=MANAGER_ID)
+    with patch("uk_management_bot.services.workflow_runner.run_command_sync", return_value=outcome), \
+         patch.object(views, "AdminHandlerService", return_value=svc), \
+         patch.object(views, "dispatch_notify_intents_sync", AsyncMock()), \
+         patch.object(views, "notify_channel_status_changed", AsyncMock()), \
+         patch.object(views, "send_elevator_hint", AsyncMock(side_effect=RuntimeError("boom"))):
+        await views.handle_manager_confirm_completed(
+            cb, db=MagicMock(), roles=["manager"], user=user, language="ru")
+    shown = cb.message.edit_text.await_args.args[0]
+    assert shown == get_text("admin.handlers.request_confirmed", language="ru").format(request_number=NUMBER)
+    error_text = get_text("admin.handlers.error_confirming", language="ru")
+    assert not [c for c in cb.answer.await_args_list if c.args and c.args[0] == error_text]
+    svc.rollback.assert_not_called()
+
+
 @pytest.mark.parametrize("lang", ["ru", "uz"])
 def test_locale_keys_present(lang):
     for key in ("elevators.hint.prompt", "elevators.hint.keep_button", "elevators.hint.changed",

@@ -58,13 +58,13 @@ from ._router import router
 # Модуль «Лифты» (Ф4a-2, T7): шаги лифта между адресом и описанием. Импорт
 # односторонний (create_elevator не импортирует create на уровне модуля).
 from .create_elevator import (
-    RESIDENT_FLOW,
     begin_elevator_step,
     clear_elevator_data,
     elevator_summary_line,
     is_elevator_flow,
     save_failed_key,
 )
+from .create_elevator_resident import RESIDENT_FLOW
 from .shared import (
     _get_user_language,
     _deny_if_pending_message,

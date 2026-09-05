@@ -11,12 +11,13 @@
 2. ``elevator_operational`` — «Лифт сейчас работает?» (``elv:op:1|0``); при
    статусе «в ремонте»/«на ТО» перед вопросом мягкая подсказка, не блокирующая.
 
-Один код на два FSM. Житель (``handlers/requests``, адрес → категория уже
-выбрана) и обходчик (``handlers/inspector_requests``, категория после дома)
-различаются только состояниями, ролью, клавиатурой категорий и отменой —
-это описывает ``ElevatorFlow``; шаги (``begin_elevator_step``,
-``pick_elevator_step``, ``operational_step``, ``elevator_step_text``) общие,
-а хендлеры обоих роутеров — тонкие обёртки со своим ``StateFilter``.
+Один код на два FSM. Житель (``create_elevator_resident.py``, адрес →
+категория уже выбрана) и обходчик (``handlers/inspector_requests.py``,
+категория после дома) различаются только состояниями, ролью, клавиатурой
+категорий и отменой — это описывает ``ElevatorFlow``; шаги здесь
+(``begin_elevator_step``, ``pick_elevator_step``, ``operational_step``,
+``elevator_step_text``) общие, а хендлеры обоих роутеров — тонкие обёртки со
+своим ``StateFilter`` в своих модулях. Здесь хендлеров нет.
 
 Ключи FSM: ``elevator_id``, ``elevator_operational`` (их читает
 ``save_request_sync``), ``elevator_entrance``/``elevator_number`` (сводка),
@@ -42,7 +43,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from aiogram import F
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
@@ -58,11 +58,7 @@ from uk_management_bot.keyboards.elevators import (
     build_elevator_operational_keyboard,
     build_elevator_pick_keyboard,
 )
-from uk_management_bot.keyboards.requests import (
-    build_request_address_inline_keyboard,
-    get_cancel_keyboard,
-    get_categories_inline_keyboard_with_cancel,
-)
+from uk_management_bot.keyboards.requests import get_cancel_keyboard
 from uk_management_bot.services.elevator_service import (
     ELEVATOR_CATEGORY,
     ElevatorValidationError,
@@ -74,15 +70,6 @@ from uk_management_bot.services.request_handler_service import RequestHandlerSer
 from uk_management_bot.utils.auth_helpers import check_user_role_sync
 from uk_management_bot.utils.business_time import to_business
 from uk_management_bot.utils.helpers import get_text
-
-from ._router import router
-from .shared import (
-    RequestStates,
-    _deny_if_pending_callback,
-    _get_user_language,
-    _has_any_address,
-    _load_user_request_addresses,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -374,65 +361,3 @@ async def elevator_step_text(
         await flow.cancel(message, state, language)
         return
     await message.answer(get_text("requests.elevator.use_buttons", language=language))
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# Поток жителя
-# ══════════════════════════════════════════════════════════════════════════
-
-
-async def _resident_no_building(callback: CallbackQuery, language: str) -> None:
-    """Двор не годится: попросить дом/квартиру и переотправить кнопки адресов."""
-    await callback.message.answer(get_text("requests.elevator.need_building", language=language))
-    addresses = await run_db(lambda s: _load_user_request_addresses(s, callback.from_user.id))
-    if _has_any_address(addresses):
-        await callback.message.answer(
-            get_text("requests.choose_address_prompt", language=language),
-            reply_markup=build_request_address_inline_keyboard(addresses, page=0, language=language),
-        )
-
-
-async def _resident_cancel(message: Message, state: FSMContext, language: str) -> None:
-    from .create import cancel_request  # create импортирует этот модуль — цикл только на уровне функций
-
-    await cancel_request(message, state, lang=language)
-
-
-RESIDENT_FLOW = ElevatorFlow(
-    required_role="applicant",
-    pick_state=RequestStates.elevator_pick,
-    operational_state=RequestStates.elevator_operational,
-    description_state=RequestStates.description,
-    category_state=RequestStates.category,
-    forbidden_key="requests.applicant_only",
-    category_keyboard=lambda language: get_categories_inline_keyboard_with_cancel(language=language),
-    on_no_building=_resident_no_building,
-    cancel=_resident_cancel,
-)
-
-
-@router.callback_query(F.data.startswith(PICK_PREFIX), RequestStates.elevator_pick)
-async def handle_elevator_pick(
-    callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None
-) -> None:
-    lang = await _get_user_language(callback=callback)
-    if await _deny_if_pending_callback(callback, user_status, language=lang):
-        return
-    await pick_elevator_step(callback, state, lang, RESIDENT_FLOW)
-
-
-@router.callback_query(F.data.startswith(OPERATIONAL_PREFIX), RequestStates.elevator_operational)
-async def handle_elevator_operational(
-    callback: CallbackQuery, state: FSMContext, user_status: Optional[str] = None
-) -> None:
-    lang = await _get_user_language(callback=callback)
-    if await _deny_if_pending_callback(callback, user_status, language=lang):
-        return
-    await operational_step(callback, state, lang, RESIDENT_FLOW)
-
-
-@router.message(RequestStates.elevator_pick)
-@router.message(RequestStates.elevator_operational)
-async def process_elevator_step_text(message: Message, state: FSMContext) -> None:
-    lang = await _get_user_language(message=message)
-    await elevator_step_text(message, state, lang, RESIDENT_FLOW)

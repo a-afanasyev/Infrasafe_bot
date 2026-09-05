@@ -310,6 +310,16 @@ async def inspector_category_selected(callback: CallbackQuery, state: FSMContext
     await callback.answer()
 
 
+async def _cancel(message: Message, state: FSMContext, lang: str):
+    await state.clear()
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    await message.answer(
+        get_text("requests.request_creation_cancelled", language=lang),
+        reply_markup=await get_user_contextual_keyboard(message.chat.id),
+    )
+
+
 async def _inspector_no_building(callback: CallbackQuery, lang: str) -> None:
     """У обходчика адрес всегда уровня дома — ветка недостижима, отвечаем алертом."""
     await callback.answer(get_text("requests.elevator.need_building", language=lang), show_alert=True)
@@ -324,7 +334,7 @@ INSPECTOR_FLOW = ElevatorFlow(
     forbidden_key="inspector.only_approved",
     category_keyboard=_category_keyboard,
     on_no_building=_inspector_no_building,
-    cancel=lambda message, state, lang: _cancel(message, state, lang),
+    cancel=_cancel,
 )
 
 
@@ -470,13 +480,3 @@ async def inspector_cancel_cb(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "insp_noop")
 async def inspector_noop(callback: CallbackQuery):
     await callback.answer()
-
-
-async def _cancel(message: Message, state: FSMContext, lang: str):
-    await state.clear()
-    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-
-    await message.answer(
-        get_text("requests.request_creation_cancelled", language=lang),
-        reply_markup=await get_user_contextual_keyboard(message.chat.id),
-    )

@@ -32,6 +32,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
 from uk_management_bot.handlers.requests import create, create_callbacks
 from uk_management_bot.handlers.requests import create_elevator as mod
+from uk_management_bot.handlers.requests import create_elevator_resident as resident
 from uk_management_bot.handlers.requests.shared import RequestStates
 from uk_management_bot.services.elevator_service import generate_public_code
 from uk_management_bot.utils.helpers import get_text, load_locale
@@ -64,7 +65,7 @@ def _flag_on(monkeypatch):
 @pytest.fixture(autouse=True)
 def _lang_ru():
     with patch.object(create, "_get_user_language", AsyncMock(return_value="ru")), \
-         patch.object(mod, "_get_user_language", AsyncMock(return_value="ru")), \
+         patch.object(resident, "_get_user_language", AsyncMock(return_value="ru")), \
          patch.object(create_callbacks, "_get_user_language", AsyncMock(return_value="ru")):
         yield
 
@@ -77,7 +78,7 @@ def _run_db_on_sqlite(db):
         return unit(db if db is not None else session)
 
     with patch.object(create, "run_db", _run), patch.object(mod, "run_db", _run), \
-         patch.object(create_callbacks, "run_db", _run):
+         patch.object(resident, "run_db", _run), patch.object(create_callbacks, "run_db", _run):
         yield
 
 
@@ -319,7 +320,7 @@ async def test_operational_no_saves_false_and_moves_to_description(world):
     cb = _callback("elv:op:0")
     state = FakeState({"category": "elevator", "elevator_id": world["e11"].id},
                       RequestStates.elevator_operational)
-    await mod.handle_elevator_operational(cb, state)
+    await resident.handle_elevator_operational(cb, state)
     assert state.data["elevator_operational"] is False
     assert state.state is RequestStates.description
     assert get_text("requests.description", language="ru") in _answers(cb)
@@ -330,7 +331,7 @@ async def test_operational_yes_saves_true(world):
     cb = _callback("elv:op:1")
     state = FakeState({"category": "elevator", "elevator_id": world["e11"].id},
                       RequestStates.elevator_operational)
-    await mod.handle_elevator_operational(cb, state)
+    await resident.handle_elevator_operational(cb, state)
     assert state.data["elevator_operational"] is True
 
 
@@ -339,7 +340,7 @@ async def test_pick_under_repair_shows_soft_hint_before_question(world):
     cb = _callback(f"elv:pick:{world['e21'].id}")
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
-    await mod.handle_elevator_pick(cb, state)
+    await resident.handle_elevator_pick(cb, state)
     assert state.state is RequestStates.elevator_operational
     assert state.data["elevator_id"] == world["e21"].id
     hint = [t for t in _answers(cb) if get_text("elevators.status.under_repair", language="ru") in t]
@@ -355,7 +356,7 @@ async def test_pick_foreign_elevator_rejected(world):
     cb = _callback(f"elv:pick:{world['foreign'].id}")
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
-    await mod.handle_elevator_pick(cb, state)
+    await resident.handle_elevator_pick(cb, state)
     assert state.state is RequestStates.elevator_pick
     assert "elevator_id" not in state.data
     cb.answer.assert_awaited()
@@ -367,7 +368,7 @@ async def test_pick_uncommissioned_elevator_rejected(world):
     cb = _callback(f"elv:pick:{world['e12_raw'].id}")
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
-    await mod.handle_elevator_pick(cb, state)
+    await resident.handle_elevator_pick(cb, state)
     assert "elevator_id" not in state.data
 
 
@@ -376,7 +377,7 @@ async def test_pick_by_non_applicant_rejected(world):
     cb = _callback(f"elv:pick:{world['e11'].id}", tg_id=STRANGER_TG_ID)
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
-    await mod.handle_elevator_pick(cb, state)
+    await resident.handle_elevator_pick(cb, state)
     assert "elevator_id" not in state.data
     assert cb.answer.await_args.args[0] == get_text("requests.applicant_only", language="ru")
 
@@ -386,7 +387,7 @@ async def test_pick_garbage_id_rejected_without_db(world):
     cb = _callback("elv:pick:abc")
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
-    await mod.handle_elevator_pick(cb, state)
+    await resident.handle_elevator_pick(cb, state)
     assert "elevator_id" not in state.data
     cb.answer.assert_awaited()
 
