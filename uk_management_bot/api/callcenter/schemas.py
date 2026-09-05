@@ -1,6 +1,10 @@
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional
 
+from uk_management_bot.api.requests.schemas import (
+    _ElevatorFieldsMixin,
+    _validate_request_category,
+)
 from uk_management_bot.utils.constants import ACCEPTANCE_MODES, validate_canonical_urgency
 
 
@@ -15,19 +19,27 @@ class ResidentSearchResult(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CallCenterCreateRequest(BaseModel):
+class CallCenterCreateRequest(_ElevatorFieldsMixin):
+    """Заявка колл-центра. Адрес — один из трёх вариантов:
+
+    * ``user_id`` + ``apartment_id`` — квартира жителя (дом = дом квартиры);
+    * ``building_id`` — уровень дома (ремонт лифта из карточки, T5/T6): любой
+      активный дом, владелец — менеджер-актор, если ``user_id`` не задан;
+    * иначе свободный ``address`` (legacy) — лифт к такой заявке не привязать.
+
+    Лифт (``elevator_id``/``elevator_operational``) — ``_ElevatorFieldsMixin``:
+    обязателен для категории «лифт» при включённом флаге.
+    """
+
     category: str
     urgency: str
     description: str
     user_id: Optional[int] = None
     apartment_id: Optional[int] = None
+    building_id: Optional[int] = None
     caller_name: Optional[str] = None
     caller_phone: Optional[str] = None
     address: Optional[str] = None
-    # Модуль «Лифты» (Ф4a-1, Р11): привязка к лифту — обязательна для категории
-    # «лифт» при включённом флаге (validate_elevator_fields, как у TWA).
-    elevator_id: Optional[int] = None
-    elevator_operational: Optional[bool] = None
     # Кто принимает результат (Р3/Р9 — ремонт лифта из карточки: приёмка
     # менеджером). None → дефолт модели ('resident', как и раньше). Канон —
     # ACCEPTANCE_MODES (CHECK ck_requests_acceptance_mode).
@@ -38,7 +50,6 @@ class CallCenterCreateRequest(BaseModel):
     def validate_category(cls, v: str) -> str:
         # Та же валидация, что у applicant/inspector — менеджер не должен заводить
         # заявку с произвольной категорией (полонит Kanban/аналитику/webhook).
-        from uk_management_bot.api.requests.schemas import _validate_request_category
         return _validate_request_category(v)
 
     @field_validator("urgency")
@@ -55,7 +66,8 @@ class CallCenterCreateRequest(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _require_elevator_for_category(self):
-        from uk_management_bot.api.requests.schemas import validate_elevator_fields
-        validate_elevator_fields(self.category, self.elevator_id, self.elevator_operational)
+    def _one_address_level(self):
+        # Ровно один FK у заявки (CHECK ck_requests_address_type_fk).
+        if self.building_id is not None and self.apartment_id is not None:
+            raise ValueError("building_id and apartment_id are mutually exclusive")
         return self

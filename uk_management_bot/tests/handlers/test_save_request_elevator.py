@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -189,9 +190,18 @@ def test_save_request_sync_passes_elevator_fields(db, world):
     assert req.elevator_id == world["ok"].id and req.elevator_operational is False
 
 
-def test_save_request_sync_elevator_without_fields_not_saved(db, world):
-    """Без FSM-шага (T7) данных нет → инвариант не даёт записать заявку (None, как
-    у прочих ошибок сохранения)."""
-    saved = save_request_sync(_data(world), TELEGRAM_ID, db, source="bot", role="applicant")
+def test_save_request_sync_elevator_without_fields_not_saved(db, world, caplog):
+    """Без FSM-шага (T7) данных нет → инвариант не даёт записать заявку (None).
+
+    Отказ Р11 — ожидаемая валидация: WARNING без traceback, а не ERROR общего
+    `except Exception` (образец — ветка AddressResolutionError).
+    """
+    with caplog.at_level(logging.WARNING):
+        saved = save_request_sync(_data(world), TELEGRAM_ID, db, source="bot", role="applicant")
     assert saved is None
     assert db.query(Request).count() == 0
+    rejected = [r for r in caplog.records if "Лифт отклонён" in r.getMessage()]
+    assert len(rejected) == 1
+    assert rejected[0].levelno == logging.WARNING and rejected[0].exc_info is None
+    assert "elevator_id" in rejected[0].getMessage()
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]

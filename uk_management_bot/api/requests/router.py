@@ -28,8 +28,8 @@ from uk_management_bot.api.requests import service as svc
 from uk_management_bot.api.requests.elevator_fields import (
     attach_elevator,
     card_language,
-    card_with_elevator,
     load_elevators,
+    persisted_card,
 )
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
@@ -287,7 +287,7 @@ async def create_request(
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
     try:
-        req = await svc.persist_request(
+        persisted = await svc.persist_request(
             db,
             user_id=user.id,
             category=body.category,
@@ -302,7 +302,7 @@ async def create_request(
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)
-    return await card_with_elevator(db, req, language=card_language(user))
+    return persisted_card(persisted, language=card_language(user))
 
 
 @router.post("/inspector", response_model=RequestCard, status_code=201)
@@ -323,7 +323,7 @@ async def create_inspector_request(
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
     try:
-        req = await svc.persist_request(
+        persisted = await svc.persist_request(
             db,
             user_id=user.id,
             category=body.category,
@@ -338,7 +338,7 @@ async def create_inspector_request(
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)
-    return await card_with_elevator(db, req, language=card_language(user))
+    return persisted_card(persisted, language=card_language(user))
 
 
 # Транспортный маппер (PR2b, риск #20/#43): сырые/deprecated поля схемы PATCH →

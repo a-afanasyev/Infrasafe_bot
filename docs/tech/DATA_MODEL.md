@@ -314,7 +314,7 @@ erDiagram
 
 **Инварианты / правила:**
 - **`webhook_outbox`** — transactional outbox: событие пишется в одной транзакции с бизнес-изменением, доставляется воркером по claim/lease-модели (`claim_token`+`claimed_at`, CODE-01), финализация compare-and-set. Статус — закрытое множество (CHECK).
-- **`webhook_inbox`** — durable-дедуп входящих InfraSafe-вебхуков (UNIQUE `event_id`); `outcome=accepted` ⇒ создана заявка (`request_number`).
+- **`webhook_inbox`** — durable-дедуп входящих InfraSafe-вебхуков (UNIQUE `event_id`); `outcome=accepted` ⇒ создана заявка (`request_number`). `outcome=rejected` (модуль «Лифты»: категория «лифт» без пригодного `uk_elevator_id` дома) ⇒ заявки нет, причина в `error`; `event_id` при этом занят — повтор того же события даёт 409 duplicate, партнёр шлёт исправленный алерт с новым `event_id`.
 - `audit_logs.telegram_user_id` (BigInteger) хранится отдельно от FK, чтобы аудит переживал удаление пользователя.
 - `board_config` — singleton (id=1), `updated_by` FK→users `ON DELETE SET NULL`.
 

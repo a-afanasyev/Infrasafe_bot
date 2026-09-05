@@ -20,6 +20,8 @@
     уровни yard/apartment запрещены (building-only);
   * staff_group — staff-репорт из группы (Group Intake фаза 2): любой активный
     дом или двор справочника, принадлежность не требуется; квартиры запрещены.
+  * manager — колл-центр уровня дома (ремонт лифта из карточки, T6): любой
+    активный дом (двор активен), принадлежность не требуется; building-only.
 """
 from __future__ import annotations
 
@@ -49,11 +51,12 @@ ROLE_ALLOWED_LEVELS: dict[str, tuple[str, ...]] = {
     "applicant": ("yard", "building", "apartment"),
     "inspector": ("building",),
     "staff_group": ("yard", "building"),
+    "manager": ("building",),
 }
 
 # Роли без требования принадлежности: судим по активной сущности справочника
 # (403 «чужой» для них не существует — есть только 422 «нет/неактивен»).
-UNSCOPED_ROLES = frozenset({"inspector", "staff_group"})
+UNSCOPED_ROLES = frozenset({"inspector", "staff_group", "manager"})
 
 ADDRESS_TYPES = ("yard", "building", "apartment")
 

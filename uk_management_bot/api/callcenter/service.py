@@ -6,6 +6,7 @@ HTTPException, парсинг и сериализация — в router.py.
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
@@ -71,28 +72,32 @@ async def persist_call_center_request(
     urgency: str,
     description: str,
     apartment_id: int | None,
+    building_id: int | None = None,
     address: str,
     address_type: str,
     notes: str | None,
     elevator_id: int | None = None,
     elevator_operational: bool | None = None,
     acceptance_mode: str | None = None,
-) -> Request:
+) -> PersistedRequest:
     """Создание заявки call-центра: атомарный номер, insert, авто-dispatch.
 
     PR5: атомарный счётчик дня (раньше COUNT(*)+1 без retry — коллизия
     после удаления строки роняла запрос 500-кой).
 
+    Адрес — ровно один FK (CHECK ck_requests_address_type_fk): ``apartment_id``
+    (уровень квартиры) ИЛИ ``building_id`` (уровень дома, ремонт лифта из
+    карточки) ИЛИ ни одного (legacy) — роутер даёт согласованный ``address_type``.
     Лифт (Р11, Ф4a-1) — единая проверка ``resolve_request_elevator_async``
     ДО выдачи номера; ``ElevatorValidationError`` наверх (роутер → 422).
     ``acceptance_mode=None`` → прежний дефолт ('resident').
     """
-    # Дом заявки выводится из квартиры жителя (apartment → building); при
+    # Дом заявки: building_id (уровень дома) или дом квартиры жителя; при
     # свободном legacy-адресе дома нет → лифт привязать нельзя (security-ревью T6).
     binding = await resolve_request_elevator_async(
         db, category=category, elevator_id=elevator_id,
         elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
-        apartment_id=apartment_id,
+        building_id=building_id, apartment_id=apartment_id,
     )
     request_number = await RequestNumberService.next_number_async(db)
 
@@ -103,6 +108,7 @@ async def persist_call_center_request(
         urgency=urgency,
         description=description,
         apartment_id=apartment_id,
+        building_id=building_id,
         address=address,
         address_type=address_type,
         status="Новая",
@@ -124,4 +130,4 @@ async def persist_call_center_request(
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
     await auto_dispatch_new_request_async(req.request_number, category)
     await db.refresh(req)
-    return req
+    return PersistedRequest(request=req, elevator=binding.elevator)

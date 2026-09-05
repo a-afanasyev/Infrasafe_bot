@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import _parse_user_roles
+from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request as RequestModel
@@ -311,7 +312,7 @@ async def persist_request(
     webhook_tag: str,
     elevator_id: Optional[int] = None,
     elevator_operational: Optional[bool] = None,
-) -> RequestModel:
+) -> PersistedRequest:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
     Транзакц. граница (ARCH-113): INSERT(request) + enqueue outbox эмитятся в
@@ -327,6 +328,8 @@ async def persist_request(
     (категория «лифт» требует оба поля; указанный лифт пригоден); при
     выключенном флаге поля игнорируются. ``ElevatorValidationError`` — наверх,
     роутер мапит в 422. Проверка ДО выдачи номера — отказ не жжёт счётчик.
+    Возвращает ``PersistedRequest`` — заявку вместе с уже загруженным лифтом,
+    чтобы ответ POST не перечитывал его.
     """
     # Дом заявки — из разрешённого адреса (уровень building) или дом квартиры
     # (уровень apartment); двор → лифт привязать нельзя (security-ревью T6).
@@ -378,7 +381,7 @@ async def persist_request(
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
     await auto_dispatch_new_request_async(req.request_number, category)
     await db.refresh(req)
-    return req
+    return PersistedRequest(request=req, elevator=binding.elevator)
 
 
 async def category_of(db: AsyncSession, request_number: str) -> Optional[str]:

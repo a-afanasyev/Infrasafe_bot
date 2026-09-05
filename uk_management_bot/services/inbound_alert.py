@@ -135,7 +135,7 @@ async def handle_infrasafe_alert(
 
     # Модуль «Лифты» (Р11/Р14): категория «лифт» обязана резолвиться в лифт дома.
     try:
-        elevator = await _resolve_alert_elevator(
+        binding = await _resolve_alert_elevator(
             db, category=category, uk_elevator_id=alert.uk_elevator_id, building_id=building.id,
         )
     except ElevatorValidationError as exc:
@@ -151,7 +151,7 @@ async def handle_infrasafe_alert(
     request_number = await _create_request(
         db, user_id=system_user_id, category=category, urgency=urgency,
         description=description, address=building.address, building_id=building.id,
-        elevator_id=elevator.elevator_id, elevator_operational=elevator.elevator_operational,
+        elevator_id=binding.elevator_id, elevator_operational=binding.elevator_operational,
     )
     await queue_webhook(db, "request.created", REQUEST_WEBHOOK_ENDPOINT, {
         "request_number": request_number,
@@ -247,8 +247,11 @@ async def _reject_elevator(
 ) -> InboundResult:
     """422 + `webhook_inbox(outcome="rejected", error=…)` — аудит отказа по лифту.
 
-    Гонка с параллельной доставкой того же event_id (unique index) — откат и
-    тот же 422: строку аудита уже записал конкурент.
+    Строка inbox занимает `event_id` навсегда (UNIQUE): повтор того же события
+    получит 409 duplicate, а не второй шанс — партнёру нужно прислать исправленный
+    алерт с НОВЫМ event_id (тот же контракт, что у accepted/ignored).
+    Гонка с параллельной доставкой того же event_id — откат и тот же 422:
+    строку аудита уже записал конкурент.
     """
     db.add(WebhookInbox(
         event_id=payload.event_id, event=payload.event, source_ip=source_ip,

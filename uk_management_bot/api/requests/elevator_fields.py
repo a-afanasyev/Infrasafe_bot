@@ -4,22 +4,35 @@
 ``elevator_label`` из домена. Используется роутерами заявок и колл-центра.
 Никакого relationship на ``Request``: в async-сессии lazy-load невозможен,
 явный словарь ``{id: Elevator}`` не даёт случайно наступить на него.
+
+``PersistedRequest`` — результат create-сервисов: заявка + лифт, уже
+загруженный валидатором Р11 (повторного запроса для ответа POST нет).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.database.models.elevator import Elevator
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.elevator_service import (
     elevator_label,
     get_elevators_by_ids_async,
 )
 
 DEFAULT_LANGUAGE = "ru"
+
+
+@dataclass(frozen=True)
+class PersistedRequest:
+    """Свежесозданная заявка и её лифт (``None``, если не привязан)."""
+
+    request: Request
+    elevator: Elevator | None
 
 
 def card_language(user) -> str:
@@ -43,7 +56,8 @@ def attach_elevator(card: RequestCard, elevator: Elevator | None, language: str)
     })
 
 
-async def card_with_elevator(db: AsyncSession, req, *, language: str) -> RequestCard:
-    """Карточка одной свежесозданной заявки с полями лифта (ответ POST)."""
-    elevators = await load_elevators(db, [req])
-    return attach_elevator(RequestCard.model_validate(req), elevators.get(req.elevator_id), language)
+def persisted_card(persisted: PersistedRequest, *, language: str) -> RequestCard:
+    """Карточка ответа POST: заявка + поля лифта из ``PersistedRequest``."""
+    return attach_elevator(
+        RequestCard.model_validate(persisted.request), persisted.elevator, language
+    )

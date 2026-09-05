@@ -5,7 +5,7 @@ from uk_management_bot.api.dependencies import get_db, require_roles, _parse_use
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.callcenter import service
 from uk_management_bot.api.elevators.errors import http_error as elevator_http_error
-from uk_management_bot.api.requests.elevator_fields import card_language, card_with_elevator
+from uk_management_bot.api.requests.elevator_fields import card_language, persisted_card
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.services.request_address import (
@@ -51,8 +51,13 @@ async def create_call_center_request(
       * квартира должна принадлежать именно target user (approved+активна) → иначе
         422 (resolver-ветка проверяет принадлежность к target user_id, не к актору);
       * при выбранной квартире клиентский address игнорируется → канонический;
-      * без квартиры свободный address обязателен и непустой → address_type='legacy';
-      * без user_id владелец — сам менеджер (legacy-адрес).
+      * building_id (T6, ремонт лифта из карточки) → любой активный дом (роль
+        `manager` в матрице request_address, building-only), address_type=
+        'building', клиентский address игнорируется; вместе с apartment_id → 422
+        (схема);
+      * без квартиры/дома свободный address обязателен и непустой →
+        address_type='legacy';
+      * без user_id владелец — сам менеджер.
     """
     # apartment_id без выбранного жителя — некому принадлежать.
     if body.apartment_id is not None and body.user_id is None:
@@ -78,16 +83,28 @@ async def create_call_center_request(
                 # некорректный ввод менеджера → всегда 422 (не 403).
                 raise HTTPException(status_code=422, detail=e.message)
 
+    if body.building_id is not None:
+        try:
+            # Уровень дома: любой активный дом, принадлежность не требуется.
+            resolved = await resolve_request_address_async(
+                db, user.id, "manager", "building", body.building_id
+            )
+        except AddressResolutionError as e:
+            raise HTTPException(status_code=422, detail=e.message)
+
     if resolved is not None:
+        # Резолвер отдаёт ровно один FK + уровень — согласовано с CHECK модели.
         address = resolved.canonical_address
         apartment_id = resolved.apartment_id
-        address_type = "apartment"
+        building_id = resolved.building_id
+        address_type = resolved.address_type
     else:
-        # Без квартиры — свободный адрес обязателен и непуст → legacy.
+        # Без квартиры/дома — свободный адрес обязателен и непуст → legacy.
         if not body.address or not body.address.strip():
             raise HTTPException(status_code=422, detail="address required when no apartment")
         address = body.address.strip()
         apartment_id = None
+        building_id = None
         address_type = "legacy"
 
     notes = None
@@ -95,13 +112,14 @@ async def create_call_center_request(
         notes = f"Звонок: {body.caller_name or ''} {body.caller_phone or ''}".strip()
 
     try:
-        req = await service.persist_call_center_request(
+        persisted = await service.persist_call_center_request(
             db,
             owner_id=owner_id,
             category=body.category,
             urgency=body.urgency,
             description=body.description,
             apartment_id=apartment_id,
+            building_id=building_id,
             address=address,
             address_type=address_type,
             notes=notes,
@@ -112,4 +130,4 @@ async def create_call_center_request(
     except ElevatorValidationError as exc:
         # Лифт не найден / архивирован / не введён — некорректный ввод менеджера → 422.
         raise elevator_http_error(exc)
-    return await card_with_elevator(db, req, language=card_language(user))
+    return persisted_card(persisted, language=card_language(user))

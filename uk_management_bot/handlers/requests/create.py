@@ -30,6 +30,7 @@ from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.session import run_db
+from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 
@@ -603,6 +604,11 @@ def save_request_sync(
         auto_dispatch_new_request_sync(request_number, data['category'])
 
         return request_number, user.id, media_file_ids
+    except ElevatorValidationError as e:
+        # Р11: лифт не указан / непригоден / чужого дома — ожидаемый отказ
+        # валидации, не сбой (образец — ветка AddressResolutionError выше).
+        logger.warning("[SAVE_REQUEST] Лифт отклонён: %s", e)
+        return None
     except Exception as e:
         logger.error(f"[SAVE_REQUEST] ❌ Ошибка сохранения заявки: {e}", exc_info=True)
         return None

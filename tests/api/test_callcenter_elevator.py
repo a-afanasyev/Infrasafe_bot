@@ -61,7 +61,8 @@ async def elevators(db_session: AsyncSession):
                        commissioned_at=date(2020, 1, 1), current_status="working")
     db_session.add_all([ok, raw, foreign])
     await db_session.commit()
-    return {"ok": ok, "raw": raw, "foreign": foreign, "resident": resident, "apt": apt}
+    return {"ok": ok, "raw": raw, "foreign": foreign, "resident": resident, "apt": apt,
+            "building": building}
 
 
 def _body(elevators=None, **extra) -> dict:
@@ -116,9 +117,71 @@ async def test_acceptance_mode_manager_persisted(client, db_session, elevators):
 
 @pytest.mark.asyncio
 async def test_acceptance_mode_invalid_422(client, elevators):
-    r = await client.post(URL, json=_body(elevator_id=elevators["ok"].id, elevator_operational=False,
-                                         acceptance_mode="robot"))
+    """Тело с валидной квартирой и лифтом — 422 именно от валидатора acceptance_mode."""
+    r = await client.post(URL, json=_body(elevators, elevator_id=elevators["ok"].id,
+                                         elevator_operational=False, acceptance_mode="robot"))
     assert r.status_code == 422, r.text
+    assert "acceptance_mode must be one of" in r.text
+
+
+# ── Уровень дома (ремонт лифта из карточки, T5 → колл-центр) ─────────
+
+def _repair_body(elevators, **extra) -> dict:
+    body = {"category": "elevator", "urgency": "high", "description": "Ремонт из карточки лифта",
+            "building_id": elevators["building"].id, "address": "ИГНОРИРУЕТСЯ",
+            "elevator_id": elevators["ok"].id, "elevator_operational": False,
+            "acceptance_mode": ACCEPTANCE_MODE_MANAGER}
+    body.update(extra)
+    return body
+
+
+@pytest.mark.asyncio
+async def test_building_level_repair_201(client, db_session, manager_user, elevators):
+    r = await client.post(URL, json=_repair_body(elevators))
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["address_type"] == "building"
+    assert data["building_id"] == elevators["building"].id and data["apartment_id"] is None
+    assert "ул. Садовая 3" in data["address"] and "ИГНОРИРУЕТСЯ" not in data["address"]
+    assert data["elevator_id"] == elevators["ok"].id and data["elevator_status"] == "not_working"
+    row = await _row(db_session, data["request_number"])
+    assert row.acceptance_mode == ACCEPTANCE_MODE_MANAGER
+    assert row.user_id == manager_user.id
+    assert row.building_id == elevators["building"].id and row.apartment_id is None
+
+
+@pytest.mark.asyncio
+async def test_building_level_with_foreign_elevator_422(client, db_session, elevators):
+    r = await client.post(URL, json=_repair_body(elevators, elevator_id=elevators["foreign"].id))
+    assert r.status_code == 422, r.text
+    assert "другому дому" in r.json()["detail"]
+    assert (await db_session.execute(select(RequestModel))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_building_and_apartment_together_422(client, elevators):
+    r = await client.post(URL, json=_repair_body(elevators, user_id=elevators["resident"].id,
+                                                apartment_id=elevators["apt"].id))
+    assert r.status_code == 422, r.text
+    assert "mutually exclusive" in r.text
+
+
+@pytest.mark.asyncio
+async def test_building_level_unknown_building_422(client, elevators):
+    r = await client.post(URL, json=_repair_body(elevators, building_id=999_999))
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_building_level_regular_category_201(client, db_session, elevators):
+    body = {"category": "Электрика", "urgency": "low", "description": "Свет в подъезде",
+            "building_id": elevators["building"].id}
+    r = await client.post(URL, json=body)
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["address_type"] == "building" and data["building_id"] == elevators["building"].id
+    row = await _row(db_session, data["request_number"])
+    assert row.elevator_id is None and row.acceptance_mode == ACCEPTANCE_MODE_RESIDENT
 
 
 @pytest.mark.asyncio
