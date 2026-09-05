@@ -58,7 +58,9 @@ from ._router import router
 # Модуль «Лифты» (Ф4a-2, T7): шаги лифта между адресом и описанием. Импорт
 # односторонний (create_elevator не импортирует create на уровне модуля).
 from .create_elevator import (
+    RESIDENT_FLOW,
     begin_elevator_step,
+    clear_elevator_data,
     elevator_summary_line,
     is_elevator_flow,
     save_failed_key,
@@ -156,6 +158,8 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
         return
 
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
+    # Ф4a-2 (T7): хвост брошенной лифтовой заявки не должен уехать в новую.
+    await clear_elevator_data(state)
     await state.set_state(RequestStates.category)
 
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
@@ -242,7 +246,7 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
     if is_elevator_flow(data):
         # Ф4a-2 (T7): категория «лифт» — сначала лифт дома и «работает?»,
         # описание — после (create_elevator.py). Флаг выключен → штатный путь.
-        await begin_elevator_step(callback, state, lang, data)
+        await begin_elevator_step(callback, state, lang, data, RESIDENT_FLOW)
         await callback.answer()
         return
     await state.set_state(RequestStates.description)

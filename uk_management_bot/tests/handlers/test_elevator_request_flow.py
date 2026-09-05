@@ -16,6 +16,7 @@ Sync-юниты гоняются на настоящем sqlite через по�
 """
 from __future__ import annotations
 
+import copy
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -75,7 +76,8 @@ def _run_db_on_sqlite(db):
     async def _run(unit, *, db=None):
         return unit(db if db is not None else session)
 
-    with patch.object(create, "run_db", _run), patch.object(mod, "run_db", _run):
+    with patch.object(create, "run_db", _run), patch.object(mod, "run_db", _run), \
+         patch.object(create_callbacks, "run_db", _run):
         yield
 
 
@@ -137,6 +139,9 @@ class FakeState:
     async def update_data(self, data=None, **kwargs):
         self.data = {**self.data, **(data or {}), **kwargs}
         return dict(self.data)
+
+    async def set_data(self, data):
+        self.data = dict(data)
 
     async def set_state(self, state=None):
         self.state = state
@@ -253,15 +258,45 @@ async def test_building_without_elevators_returns_to_category(world):
     assert get_text("requests.elevator.none_in_building", language="ru") in _answers(cb)
 
 
+def _stored_board_config(phone: str) -> dict:
+    """Строка board_config в РЕАЛЬНОЙ форме (contacts.dispatch_phone), через схему API."""
+    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+    from uk_management_bot.api.board_config.schemas import StoredBoardConfigData
+
+    raw = copy.deepcopy(DEFAULT_BOARD_CONFIG)
+    raw["contacts"]["dispatch_phone"] = phone
+    return StoredBoardConfigData.model_validate(raw).model_dump()
+
+
 @pytest.mark.asyncio
 async def test_building_without_elevators_mentions_dispatch_phone(world, db):
-    db.add(BoardConfig(id=1, data={"dispatch_phone": "+998 71 200-00-00"}))
+    db.add(BoardConfig(id=1, data=_stored_board_config("+998 71 200-00-00")))
     db.commit()
     cb, state = await _pick_address(world, "apt_no_lifts")
     assert state.state is RequestStates.category
     expected = get_text("requests.elevator.none_in_building_phone", language="ru",
                         phone="+998 71 200-00-00")
     assert expected in _answers(cb)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_phone_is_html_escaped(world, db):
+    db.add(BoardConfig(id=1, data=_stored_board_config("<b>+998</b>")))
+    db.commit()
+    cb, _ = await _pick_address(world, "apt_no_lifts")
+    texts = "\n".join(_answers(cb))
+    assert "&lt;b&gt;+998&lt;/b&gt;" in texts and "<b>+998</b>" not in texts
+
+
+@pytest.mark.asyncio
+async def test_default_board_config_phone_is_shown_as_stored(world, db):
+    """Сид миграции хранит дефолт целиком — читаем ровно то, что лежит в contacts."""
+    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+
+    db.add(BoardConfig(id=1, data=copy.deepcopy(DEFAULT_BOARD_CONFIG)))
+    db.commit()
+    cb, _ = await _pick_address(world, "apt_no_lifts")
+    assert DEFAULT_BOARD_CONFIG["contacts"]["dispatch_phone"] in "\n".join(_answers(cb))
 
 
 # ── 4. двор → укажите дом ────────────────────────────────────────────────
@@ -410,6 +445,47 @@ async def test_confirm_save_failed_other_category_keeps_generic_error(world):
          patch.object(create_callbacks, "get_user_contextual_keyboard", AsyncMock(return_value=None)):
         await create_callbacks.handle_confirmation(cb, state)
     assert get_text("errors.request_save_failed", language="ru") in _answers(cb)
+
+
+# ── брошенный лифтовой поток не протекает в новую заявку ─────────────────
+
+
+@pytest.mark.asyncio
+async def test_stale_elevator_keys_cleared_on_restart_and_recategory(world, db):
+    """Брошенная лифтовая заявка → новая заявка другой категории → в save_request_sync
+    уходит elevator_id=None (иначе Р11 «лифт указан не для лифта» валил бы сохранение)."""
+    stale = {
+        "category": "elevator", "elevator_id": world["e11"].id, "elevator_operational": False,
+        "elevator_entrance": 1, "elevator_number": 1, "elevator_building_id": world["with_lifts"].id,
+    }
+    # 1) повторный вход «Создать заявку»
+    message = MagicMock()
+    message.text = "x"
+    message.from_user.id = TG_ID
+    message.answer = AsyncMock()
+    state = FakeState(stale, RequestStates.confirm)
+    with patch.object(create, "_load_applicant_gate", lambda s, tg: "ok"):
+        await create.start_request_creation(message, state)
+    assert not any(k in state.data for k in mod.ELEVATOR_DATA_KEYS)
+    assert state.state is RequestStates.category
+
+    # 2) повторный выбор категории поверх хвоста
+    state = FakeState(stale, RequestStates.category)
+    cb = _callback("category_electricity")
+    await create_callbacks.handle_category_selection(cb, state)
+    assert state.data["category"] == "electricity"
+    assert not any(k in state.data for k in mod.ELEVATOR_DATA_KEYS)
+
+    # 3) итоговые data доходят до save_request_sync без лифта
+    data = {**state.data, "address_type": "apartment", "address_id": world["apt_single"].id,
+            "description": "Нет света", "urgency": "low", "media_files": []}
+    with patch("uk_management_bot.services.dispatch.auto_dispatch_new_request_sync", MagicMock()):
+        saved = create.save_request_sync(data, TG_ID, db, source="bot", role="applicant")
+    assert saved is not None
+    from uk_management_bot.database.models.request import Request
+
+    req = db.query(Request).filter(Request.request_number == saved[0]).one()
+    assert req.elevator_id is None and req.elevator_operational is None
 
 
 # ── локали: ключи есть в обоих языках ────────────────────────────────────

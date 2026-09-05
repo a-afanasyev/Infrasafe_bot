@@ -79,12 +79,14 @@ class RequestHandlerService:
         return (apartment.building_id, apartment.entrance)
 
     def get_dispatch_phone(self) -> str:
-        """Телефон диспетчера из сохранённого board_config (id=1); дефолт-заглушку не подставляем."""
+        """Телефон диспетчера из сохранённого board_config (id=1): ``data.contacts.dispatch_phone``
+        (форма — ``api/board_config/schemas.py:ContactsCfg``). Нет строки → пусто."""
         from uk_management_bot.database.models.board_config import BoardConfig
 
         row = self.db.get(BoardConfig, 1)
         data = row.data if row is not None and isinstance(row.data, dict) else {}
-        phone = data.get("dispatch_phone")
+        contacts = data.get("contacts")
+        phone = contacts.get("dispatch_phone") if isinstance(contacts, dict) else None
         return phone.strip() if isinstance(phone, str) else ""
 
     # ── save_request: создание заявки (ctor:Request) ─────────────────────────

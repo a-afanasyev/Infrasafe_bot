@@ -27,7 +27,7 @@ from .shared import (
 )
 
 from .create import save_request
-from .create_elevator import save_failed_key
+from .create_elevator import clear_elevator_data, save_failed_key
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,9 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext, 
             logger.warning(f"Неверная категория '{category_internal_key}' от пользователя {callback.from_user.id}")
             return
 
-        # Сохраняем внутренний ключ в FSM
+        # Сохраняем внутренний ключ в FSM. Ф4a-2 (T7): повторный выбор категории
+        # снимает ключи лифта предыдущего (брошенного) лифтового потока.
+        await clear_elevator_data(state)
         await state.update_data(category=category_internal_key)
         logger.info(f"Категория '{category_internal_key}' сохранена в state для пользователя {callback.from_user.id}")
 
