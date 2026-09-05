@@ -201,3 +201,49 @@ async def test_reminders_leave_the_thread_as_dto_not_orm_rows():
     )
     assert passed.start_time == starts_at
     assert sched.task_stats["notify_upcoming"]["success"] == 1
+
+
+@pytest.mark.asyncio
+async def test_elevator_reminders_db_phase_runs_in_worker_thread_and_commits_before_send():
+    """Лифты (Ф6): сбор+запись стадий в рабочем потоке одной транзакцией
+    (commit до закрытия сессии), рассылка — после закрытия и на event loop."""
+    from uk_management_bot.services.elevator_service import Message
+    from uk_management_bot.services.elevator_service import reminders as reminders_module
+    from uk_management_bot.services.elevator_service.reminders import RemindersBatch
+
+    sched = _make_scheduler()
+    sched._bot = object()
+    log: list = []
+    sessions: list[_TrackedSession] = []
+
+    class _CommittingSession(_TrackedSession):
+        def commit(self):
+            self._log.append(("commit", threading.get_ident()))
+
+    def _factory():
+        s = _CommittingSession(log)
+        sessions.append(s)
+        return s
+
+    batch = RemindersBatch(staff_messages=(Message(telegram_id=9, text="x"),))
+
+    async def _send(*_args, **_kwargs):
+        log.append(("sent", threading.get_ident()))
+        return 1
+
+    main_thread = threading.get_ident()
+    with patch(SESSION_LOCAL_PATH, side_effect=_factory), \
+            patch("uk_management_bot.services.elevator_service.load_config_sync", return_value={}), \
+            patch.object(reminders_module, "collect_reminders_sync", return_value=batch), \
+            patch.object(reminders_module, "apply_reminders_sync"), \
+            patch("uk_management_bot.services.workflow_notifications.send_notify_messages", _send):
+        await sched._elevator_reminders_tick()
+
+    assert len(sessions) == 1
+    session = sessions[0]
+    assert session.created_in != main_thread, "DB-фаза напоминаний осталась на event loop"
+    assert session.closed_in == session.created_in
+    kinds = [k for k, _ in log]
+    assert kinds == ["session_created", "commit", "session_closed", "sent"], kinds
+    assert dict(log)["sent"] == main_thread
+    assert sched.task_stats["elevator_reminders"]["success"] == 1

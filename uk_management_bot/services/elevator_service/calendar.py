@@ -113,6 +113,7 @@ def _apply_cert(
             changed[name] = [jsonable(getattr(elevator, name)), jsonable(fields[name])]
             setattr(elevator, name, fields[name])
     elevator.cert_reminder_stage = 0
+    elevator.cert_overdue_reminded_at = None
     elevator.version = (elevator.version or 1) + 1
     return new_event(elevator.id, "cert_changed", now=now, actor_user_id=actor_user_id,
                      request_number=request_number, payload={"changed": changed})

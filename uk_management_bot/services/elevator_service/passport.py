@@ -76,10 +76,11 @@ DOWNTIME_FIELDS: tuple[str, ...] = (
 EDITABLE_FIELDS: frozenset[str] = frozenset(
     (*PLACE_FIELDS, *PASSPORT_FIELDS, *CONTRACT_FIELDS, *CERT_FIELDS, *DOWNTIME_FIELDS, "is_public")
 )
-# Поле → (вид события, колонка стадии напоминаний), сбрасываемая при смене даты
-_DATE_EVENTS: Mapping[str, tuple[str, str]] = {
-    "contract_until": ("contract_changed", "contract_reminder_stage"),
-    "cert_valid_until": ("cert_changed", "cert_reminder_stage"),
+# Поле → (вид события, колонка стадии напоминаний, метка еженедельного
+# напоминания после истечения) — обе колонки сбрасываются при смене даты
+_DATE_EVENTS: Mapping[str, tuple[str, str, str]] = {
+    "contract_until": ("contract_changed", "contract_reminder_stage", "contract_overdue_reminded_at"),
+    "cert_valid_until": ("cert_changed", "cert_reminder_stage", "cert_overdue_reminded_at"),
 }
 COMMISSIONED_STATUS = "working"
 MAX_PUBLIC_CODE_ATTEMPTS = 5
@@ -174,7 +175,7 @@ def _passport_events(
     changed = {field: [jsonable(old), jsonable(new)] for field, (old, new) in diff.items()}
     events = [new_event(elevator_id, "passport_changed", now=now, actor_user_id=actor_user_id,
                         payload={"changed": changed})]
-    for field, (kind, _stage_attr) in _DATE_EVENTS.items():
+    for field, (kind, _stage_attr, _reminded_attr) in _DATE_EVENTS.items():
         if field in diff:
             events.append(new_event(elevator_id, kind, now=now, actor_user_id=actor_user_id,
                                     payload={field: changed[field]}))
@@ -187,9 +188,10 @@ def _apply_patch(
     """Применить diff, сбросить стадии напоминаний по изменённым датам, поднять версию."""
     for field, (_, new) in diff.items():
         setattr(elevator, field, new)
-    for field, (_kind, stage_attr) in _DATE_EVENTS.items():
+    for field, (_kind, stage_attr, reminded_attr) in _DATE_EVENTS.items():
         if field in diff:
             setattr(elevator, stage_attr, 0)
+            setattr(elevator, reminded_attr, None)
     elevator.version = (elevator.version or 1) + 1
     return _passport_events(elevator.id, diff, now=now, actor_user_id=actor_user_id)
 

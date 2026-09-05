@@ -120,6 +120,10 @@ class Elevator(Base):
         SmallInteger, nullable=False, server_default=text("0"), default=0
     )
     downtime_reminded_at = Column(DateTime(timezone=True), nullable=True)
+    # Еженедельные напоминания ПОСЛЕ истечения договора / освидетельствования
+    # (стадии выше — только до срока); сбрасываются при смене даты (0017, Ф6)
+    contract_overdue_reminded_at = Column(DateTime(timezone=True), nullable=True)
+    cert_overdue_reminded_at = Column(DateTime(timezone=True), nullable=True)
 
     # Публичность
     public_code = Column(String(32), nullable=False, unique=True)
