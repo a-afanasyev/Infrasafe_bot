@@ -4,6 +4,9 @@
 набор/nullable колонок, частичные уникальные индексы, FK-политики и две новые
 колонки на ``requests``. Поведения в этой фазе нет — тестировать больше нечего.
 """
+import importlib.util
+import pathlib
+
 from sqlalchemy import Boolean, Date, DateTime, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects import postgresql, sqlite
 
@@ -132,7 +135,7 @@ def test_elevators_status_check_allows_null():
 def test_status_events_columns():
     t = Base.metadata.tables["elevator_status_events"]
     c = t.c
-    assert _fk_targets(c.elevator_id) == {("elevators", "id", "CASCADE")}
+    assert _fk_targets(c.elevator_id) == {("elevators", "id", "RESTRICT")}
     assert c.elevator_id.nullable is False
     assert any([col.name for col in i.columns] == ["elevator_id"] for i in t.indexes)
     assert c.event_kind.nullable is False
@@ -153,7 +156,7 @@ def test_status_events_columns():
 def test_maintenance_occurrences_columns_and_partial_unique():
     t = Base.metadata.tables["elevator_maintenance_occurrences"]
     c = t.c
-    assert _fk_targets(c.elevator_id) == {("elevators", "id", "CASCADE")}
+    assert _fk_targets(c.elevator_id) == {("elevators", "id", "RESTRICT")}
     assert c.elevator_id.nullable is False
     assert c.kind.nullable is False
     assert isinstance(c.due_on.type, Date) and c.due_on.nullable is False
@@ -175,6 +178,41 @@ def test_maintenance_occurrences_columns_and_partial_unique():
     assert [col.name for col in idx.columns] == ["elevator_id", "kind", "due_on"]
     assert str(idx.dialect_options["postgresql"]["where"]) == "state <> 'cancelled'"
     assert str(idx.dialect_options["sqlite"]["where"]) == "state <> 'cancelled'"
+
+
+def test_children_relationships_restrict_and_ordered():
+    """RESTRICT на детях + passive_deletes: ORM не зануляет NOT NULL elevator_id,
+    удаление лифта с историей честно падает на FK. Порядок — журнал новейшими
+    вперёд, календарь по сроку."""
+    events = Elevator.status_events.property
+    assert events.passive_deletes is True
+    assert events.back_populates == "elevator"
+    assert str(events.order_by[0]) == "elevator_status_events.occurred_at DESC"
+    occurrences = Elevator.maintenance_occurrences.property
+    assert occurrences.passive_deletes is True
+    assert occurrences.back_populates == "elevator"
+    assert str(occurrences.order_by[0]) == "elevator_maintenance_occurrences.due_on"
+
+
+def _load_migration_0016():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    path = root / "alembic" / "versions" / "0016_elevators.py"
+    spec = importlib.util.spec_from_file_location("migration_0016_elevators", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_migration_check_literals_match_model_constants():
+    """Миграция не импортирует модели (правило alembic) и дублирует наборы;
+    расхождение = CHECK в БД строже/слабее канона Python молча."""
+    m = _load_migration_0016()
+    assert m.revision == "016" and m.down_revision == "015"
+    assert m.STATUSES == ELEVATOR_STATUSES
+    assert m.EVENT_KINDS == ELEVATOR_EVENT_KINDS
+    assert m.EVENT_SOURCES == ELEVATOR_EVENT_SOURCES
+    assert m.OCCURRENCE_KINDS == OCCURRENCE_KINDS
+    assert m.OCCURRENCE_STATES == OCCURRENCE_STATES
 
 
 def test_elevators_config_is_singleton_clone_of_auto_manager_config():

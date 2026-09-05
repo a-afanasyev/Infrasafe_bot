@@ -5,11 +5,12 @@
    договор обслуживания и освидетельствование (поля), ступени напоминаний,
    публичный код, архивация. Уникальность места лифта — частичный индекс
    ``WHERE archived_at IS NULL`` (архив не мешает завести лифт на его место).
-2. ``elevator_status_events`` — append-only журнал событий (ON DELETE CASCADE
-   от лифта). ``request_number`` БЕЗ FK: журнал переживает удаление заявки
-   (образец material_issues).
+2. ``elevator_status_events`` — append-only журнал событий. ``request_number``
+   БЕЗ FK: журнал переживает удаление заявки (образец material_issues).
 3. ``elevator_maintenance_occurrences`` — плановые ТО / освидетельствования;
    среди неотменённых не более одной записи на ``(elevator_id, kind, due_on)``.
+   Обе дочерние таблицы — FK на лифт ON DELETE RESTRICT: лифт архивируется
+   (``archived_at``), жёсткое удаление при наличии истории БД запрещает.
 4. ``elevators_config`` — singleton id=1, клон auto_manager_config (0005);
    строка-seed не создаётся, дефолты несёт сервисный слой.
 5. ``requests.elevator_id`` (FK SET NULL, индекс) + ``requests.elevator_operational``
@@ -34,14 +35,24 @@ down_revision: Union[str, None] = "015"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_STATUSES = "'working', 'not_working', 'under_repair', 'maintenance'"
-_EVENT_KINDS = (
-    "'status_changed', 'commissioned', 'archived', "
-    "'contract_changed', 'cert_changed', 'passport_changed'"
+# Канон-наборы дублируют константы models/elevator.py (миграция не импортирует
+# модели по правилам alembic); паритет закреплён test_elevator_models.py.
+STATUSES = ("working", "not_working", "under_repair", "maintenance")
+EVENT_KINDS = (
+    "status_changed",
+    "commissioned",
+    "archived",
+    "contract_changed",
+    "cert_changed",
+    "passport_changed",
 )
-_EVENT_SOURCES = "'manual', 'request_hint', 'infrasafe', 'system'"
-_OCCURRENCE_KINDS = "'maintenance', 'certification'"
-_OCCURRENCE_STATES = "'planned', 'done', 'cancelled'"
+EVENT_SOURCES = ("manual", "request_hint", "infrasafe", "system")
+OCCURRENCE_KINDS = ("maintenance", "certification")
+OCCURRENCE_STATES = ("planned", "done", "cancelled")
+
+
+def _in_clause(column: str, values: tuple) -> str:
+    return "{} IN ({})".format(column, ", ".join(f"'{v}'" for v in values))
 
 
 def _create_elevators() -> None:
@@ -111,7 +122,7 @@ def _create_elevators() -> None:
         ),
         sa.Column("version", sa.Integer(), server_default=sa.text("1"), nullable=False),
         sa.CheckConstraint(
-            f"current_status IS NULL OR current_status IN ({_STATUSES})",
+            "current_status IS NULL OR " + _in_clause("current_status", STATUSES),
             name="ck_elevators_current_status",
         ),
         sa.ForeignKeyConstraint(["building_id"], ["buildings.id"]),
@@ -147,12 +158,12 @@ def _create_status_events() -> None:
             nullable=True,
         ),
         sa.CheckConstraint(
-            f"event_kind IN ({_EVENT_KINDS})", name="ck_elevator_status_events_event_kind"
+            _in_clause("event_kind", EVENT_KINDS), name="ck_elevator_status_events_event_kind"
         ),
         sa.CheckConstraint(
-            f"source IN ({_EVENT_SOURCES})", name="ck_elevator_status_events_source"
+            _in_clause("source", EVENT_SOURCES), name="ck_elevator_status_events_source"
         ),
-        sa.ForeignKeyConstraint(["elevator_id"], ["elevators.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["elevator_id"], ["elevators.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -188,13 +199,14 @@ def _create_maintenance_occurrences() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            f"kind IN ({_OCCURRENCE_KINDS})", name="ck_elevator_maintenance_occurrences_kind"
+            _in_clause("kind", OCCURRENCE_KINDS),
+            name="ck_elevator_maintenance_occurrences_kind",
         ),
         sa.CheckConstraint(
-            f"state IN ({_OCCURRENCE_STATES})",
+            _in_clause("state", OCCURRENCE_STATES),
             name="ck_elevator_maintenance_occurrences_state",
         ),
-        sa.ForeignKeyConstraint(["elevator_id"], ["elevators.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["elevator_id"], ["elevators.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["done_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),

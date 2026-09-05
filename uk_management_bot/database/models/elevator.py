@@ -16,8 +16,11 @@
 * ``request_number`` в журнале и графике — plain-строка БЕЗ FK на requests:
   история лифта обязана пережить удаление заявки (образец
   ``material_issues.request_number``).
-* Дочерние таблицы — ON DELETE CASCADE от лифта (удаление лифта = удаление
-  его истории; в проде вместо удаления — архивация).
+* Дочерние таблицы — ON DELETE RESTRICT от лифта: журнал append-only, лифт
+  архивируется (``archived_at``), а жёсткое удаление при наличии истории БД
+  запрещает. ``passive_deletes=True`` на relationship обязателен: без него ORM
+  при ``session.delete(elevator)`` попытался бы занулить NOT NULL
+  ``elevator_id`` у детей вместо честного отказа FK.
 """
 
 from sqlalchemy import (
@@ -134,12 +137,21 @@ class Elevator(Base):
     )
     version = Column(Integer, nullable=False, server_default=text("1"), default=1)
 
+    # Lazy по умолчанию: списочные запросы сервиса ОБЯЗАНЫ грузить дом через
+    # selectinload(Elevator.building), иначе N+1 на каждой карточке.
     building = relationship("Building")
+    # passive_deletes=True — см. docstring модуля (RESTRICT вместо зануления).
     status_events = relationship(
-        "ElevatorStatusEvent", back_populates="elevator", passive_deletes=True
+        "ElevatorStatusEvent",
+        back_populates="elevator",
+        passive_deletes=True,
+        order_by="ElevatorStatusEvent.occurred_at.desc()",
     )
     maintenance_occurrences = relationship(
-        "ElevatorMaintenanceOccurrence", back_populates="elevator", passive_deletes=True
+        "ElevatorMaintenanceOccurrence",
+        back_populates="elevator",
+        passive_deletes=True,
+        order_by="ElevatorMaintenanceOccurrence.due_on",
     )
 
     __table_args__ = (
@@ -178,7 +190,7 @@ class ElevatorStatusEvent(Base):
 
     id = Column(Integer, primary_key=True)
     elevator_id = Column(
-        Integer, ForeignKey("elevators.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("elevators.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     event_kind = Column(String(30), nullable=False)
     old_status = Column(String(20), nullable=True)
@@ -225,7 +237,7 @@ class ElevatorMaintenanceOccurrence(Base):
 
     id = Column(Integer, primary_key=True)
     elevator_id = Column(
-        Integer, ForeignKey("elevators.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("elevators.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     kind = Column(String(20), nullable=False)
     due_on = Column(Date, nullable=False)
