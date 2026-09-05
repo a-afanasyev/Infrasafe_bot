@@ -8498,6 +8498,7 @@
     "foreign_contact": "Пожалуйста, отправьте свой собственный контакт — нажмите кнопку «Поделиться контактом»."
   },
   "elevators": {
+    "label": "{building}, подъезд {entrance}, лифт {elevator}",
     "notify": {
       "repair_started": "🛠 Лифт №{elevator} в подъезде {entrance} ({building}) остановлен на ремонт. Сообщим, когда он снова заработает.",
       "maintenance_started": "🔧 Лифт №{elevator} в подъезде {entrance} ({building}) временно остановлен на плановое техобслуживание.",

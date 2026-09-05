@@ -260,6 +260,25 @@ async def _load_overdue_ids(db: AsyncSession, today: date) -> frozenset[int]:
     return frozenset((await db.execute(stmt)).scalars().all())
 
 
+async def maintenance_overdue_ids_async(
+    db: AsyncSession, elevator_ids: Sequence[int], *, today: date
+) -> frozenset[int]:
+    """Лифты страницы с просроченным ТО (planned старше grace-периода) — одним запросом.
+
+    Тот же критерий, что у фильтра ``maintenance_overdue`` и сводки; для
+    флагов карточек реестра (без N+1).
+    """
+    if not elevator_ids:
+        return frozenset()
+    stmt = select(ElevatorMaintenanceOccurrence.elevator_id.distinct()).where(
+        ElevatorMaintenanceOccurrence.elevator_id.in_(list(elevator_ids)),
+        ElevatorMaintenanceOccurrence.kind == "maintenance",
+        ElevatorMaintenanceOccurrence.state == "planned",
+        ElevatorMaintenanceOccurrence.due_on < _overdue_cutoff(today),
+    )
+    return frozenset((await db.execute(stmt)).scalars().all())
+
+
 async def count_elevator_requests_without_elevator_async(db: AsyncSession) -> int:
     """Открытые заявки категории «лифт» без привязанного лифта (дефицит данных)."""
     stmt = select(func.count(Request.request_number)).where(

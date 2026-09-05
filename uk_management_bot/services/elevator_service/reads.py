@@ -10,6 +10,7 @@ Sync-варианты — для бота (``Session``), async — для API (`
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 from sqlalchemy import Select, func, select
@@ -228,6 +229,23 @@ async def list_requests_for_elevator_async(
         stmt = stmt.where(Request.status.not_in(list(TERMINAL_STATUSES)))
     stmt = stmt.order_by(Request.created_at.desc(), Request.request_number.desc())
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def count_open_requests_by_elevator_async(
+    db: AsyncSession, elevator_ids: Sequence[int]
+) -> dict[int, int]:
+    """``{elevator_id: число нетерминальных заявок}`` для страницы лифтов (один запрос)."""
+    if not elevator_ids:
+        return {}
+    stmt = (
+        select(Request.elevator_id, func.count(Request.request_number))
+        .where(
+            Request.elevator_id.in_(list(elevator_ids)),
+            Request.status.not_in(list(TERMINAL_STATUSES)),
+        )
+        .group_by(Request.elevator_id)
+    )
+    return {int(elevator_id): int(count) for elevator_id, count in (await db.execute(stmt)).all()}
 
 
 async def count_building_apartments_without_entrance_async(

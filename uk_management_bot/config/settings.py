@@ -295,6 +295,11 @@ class Settings:
         self.WORK_REPORTS_ENABLED = os.getenv("WORK_REPORTS_ENABLED", "False").lower() == "true"
         self.PUBLIC_MEDIA_MAX_BYTES = int(os.getenv("PUBLIC_MEDIA_MAX_BYTES", str(8 * 1024 * 1024)))
 
+        # ── Elevators (модуль «Лифты», Ф3a) ────────────────────────────
+        # DARK-гейт: роутер /api/v2/elevators смонтирован всегда, но отвечает
+        # единым 404 пока флаг выключен (паттерн WORK_REPORTS_ENABLED).
+        self.ELEVATORS_ENABLED = os.getenv("ELEVATORS_ENABLED", "False").lower() == "true"
+
         # ── Group Intake (выделенный бот, план rev.3) ──────────────────
         # Классификация «заявка/нет» — Anthropic API (structured outputs),
         # модель — pinned snapshot. Ключ и токен — ТОЛЬКО из Doppler.

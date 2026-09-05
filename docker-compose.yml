@@ -47,6 +47,9 @@ services:
       # Настройки логирования
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      # DARK-гейт модуля «Лифты» (Ф3a): API /api/v2/elevators отвечает единым 404,
+      # пока флаг выключен; бот читает тот же флаг. Несекретная переменная.
+      - ELEVATORS_ENABLED=${ELEVATORS_ENABLED:-false}
 
       # ARCH-106 (Doppler cutover, Phase 1): секреты приходят из Doppler через
       # `doppler run -- docker compose ...` (см. .claude/skills/uk-deploy/SKILL.md), не из
@@ -201,6 +204,8 @@ services:
       # `workreports`. Зеркалит фронтовый VITE_WORK_REPORTS_ENABLED — синхронизация
       # ручная (автосвязи нет), для рабочей фичи должны быть выставлены оба.
       - WORK_REPORTS_ENABLED=${WORK_REPORTS_ENABLED:-false}
+      # DARK-гейт модуля «Лифты» (Ф3a): весь /api/v2/elevators → 404 при выключенном флаге.
+      - ELEVATORS_ENABLED=${ELEVATORS_ENABLED:-false}
       # ARCH-106 (Doppler cutover, Phase 1) — обязательные (см. app для объяснения :?):
       - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN is required — set it in Doppler (project uk-management)}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required — set it in Doppler (project uk-management)}
