@@ -135,6 +135,78 @@ describe('CreatePage — шаг «Лифт»', () => {
     expect(mockGet.mock.calls.some(([url]) => String(url).includes('for-building'))).toBe(false)
   })
 
+  it('ошибка загрузки лифтов: «Повторить» перезапрашивает, «К выбору адреса» возвращает', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockApi()
+    let attempts = 0
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('request-addresses')) return Promise.resolve({ data: ADDRESSES })
+      attempts += 1
+      return attempts === 1 ? Promise.reject(new Error('network')) : Promise.resolve({ data: ELEVATORS_12 })
+    })
+    const user = userEvent.setup()
+    render(<CreatePage />)
+
+    await goToAddress(user)
+    await user.click(screen.getByRole('button', { name: /Кв\. 7, Дом 12/ }))
+
+    expect(await screen.findByText('Не удалось загрузить список лифтов')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'К выбору адреса' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Повторить' }))
+    expect(await screen.findByRole('button', { name: /Подъезд 2 · лифт 1/ })).toBeInTheDocument()
+    expect(attempts).toBe(2)
+  })
+
+  it('черновик с индексом шага за пределами набора (флаг выключен) — показывает последний шаг, не пустоту', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'false')
+    mockApi()
+    sessionStorage.setItem('twa.create.draft.v2', JSON.stringify({
+      step: 6, category: 'elevator', addressType: 'apartment', addressId: 5, addressLabel: 'Кв. 7, Дом 12',
+      description: 'Лифт стоит', urgency: 'low',
+    }))
+    render(<CreatePage />)
+
+    expect(await screen.findByText('Подтверждение')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отправить заявку' })).toBeInTheDocument()
+  })
+
+  it('черновик «лифта» с полем elevator при выключенном флаге — возврат к шагу адреса', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'false')
+    mockApi()
+    sessionStorage.setItem('twa.create.draft.v2', JSON.stringify({
+      step: 3, category: 'elevator', addressType: 'apartment', addressId: 5, addressLabel: 'Кв. 7, Дом 12',
+      description: '', urgency: 'low',
+      elevator: { elevatorId: 7, elevatorLabel: 'Лифт 1, подъезд 2', elevatorStatus: 'working', operational: true },
+    }))
+    render(<CreatePage />)
+
+    expect(await screen.findByText('Выберите адрес')).toBeInTheDocument()
+  })
+
+  it('черновик восстанавливает выбор лифта; смена адреса сбрасывает его', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockApi()
+    sessionStorage.setItem('twa.create.draft.v2', JSON.stringify({
+      step: 2, category: 'elevator', addressType: 'apartment', addressId: 5, addressLabel: 'Кв. 7, Дом 12',
+      description: '', urgency: 'low',
+      elevator: { elevatorId: 7, elevatorLabel: 'Лифт 1, подъезд 2', elevatorStatus: 'under_repair', operational: true },
+    }))
+    const user = userEvent.setup()
+    render(<CreatePage />)
+
+    expect(await screen.findByRole('button', { name: /Подъезд 2 · лифт 1/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Да, работает' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Далее' })).toBeEnabled()
+
+    // Назад к адресу и выбор дома (тот же дом, но другой уровень адреса):
+    // единственный лифт автовыберется снова, а ответ «работает?» сброшен.
+    await user.click(screen.getByRole('button', { name: /← Назад/ }))
+    await user.click(await screen.findByRole('button', { name: /^🏢 Дом 12$/ }))
+    expect(await screen.findByRole('button', { name: /Подъезд 2 · лифт 1/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Да, работает' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Далее' })).toBeDisabled()
+  })
+
   it('другая категория при включённом флаге: шага «Лифт» нет', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
     mockApi()

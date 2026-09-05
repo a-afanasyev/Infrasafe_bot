@@ -152,11 +152,7 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: st
           {elevatorLabel && (
             <span
               data-testid="elevator-badge"
-              aria-label={t('kanban.elevator.ariaLabel', {
-                label: elevatorLabel,
-                status: t(card.elevator_status ? `elevators.status.${card.elevator_status}` : 'elevators.status.none'),
-              })}
-              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-bg-surface text-text-secondary font-[family-name:var(--font-display)] max-w-full"
+              className="inline-flex items-center gap-1 min-w-0 max-w-full text-[10px] font-bold px-2 py-0.5 rounded-full bg-bg-surface text-text-secondary font-[family-name:var(--font-display)]"
             >
               <ElevatorStatusDot status={card.elevator_status} />
               <span className="overflow-hidden text-ellipsis whitespace-nowrap">🛗 {elevatorLabel}</span>

@@ -1,24 +1,28 @@
 import { useTranslation } from 'react-i18next'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useAllBuildings } from '../../hooks/useAddresses'
+import { useBuildings, useYards } from '../../hooks/useAddresses'
 import { useElevatorsForBuilding } from '../../hooks/useElevators'
 import type { CallCenterElevatorValue } from './callCenterElevator'
 
 /**
- * Поля формы колл-центра для категории «Лифт»: дом из справочника (адрес
- * уровня дома → `building_id`, без него лифт не привязать), лифт этого дома
- * (`GET /elevators/for-building/{id}`), «работает?». Все три обязательны —
- * иначе сервер отвечает 422 (Р11). Значение и проверка — `callCenterElevator.ts`.
+ * Поля формы колл-центра для категории «Лифт»: каскад двор → дом из
+ * справочника (адрес уровня дома → `building_id`, без него лифт не
+ * привязать), лифт этого дома (`GET /elevators/for-building/{id}`),
+ * «работает?». Дом/лифт/работает обязательны — иначе сервер отвечает 422
+ * (Р11). Значение и проверка — `callCenterElevator.ts`.
  */
 interface Props {
   value: CallCenterElevatorValue
   onChange: (next: CallCenterElevatorValue) => void
 }
 
+const parseId = (raw: string): number | null => (raw ? Number(raw) : null)
+
 export default function CallCenterElevatorFields({ value, onChange }: Props) {
   const { t } = useTranslation()
-  const buildings = useAllBuildings()
+  const yards = useYards()
+  const buildings = useBuildings(value.yardId)
   const elevators = useElevatorsForBuilding(value.buildingId)
   const elevatorList = elevators.data ?? []
   const noElevators = value.buildingId !== null && elevators.isSuccess && elevatorList.length === 0
@@ -26,13 +30,26 @@ export default function CallCenterElevatorFields({ value, onChange }: Props) {
   return (
     <>
       <div className="space-y-1.5">
+        <Label htmlFor="cc-yard">{t('callcenter.elevator.yard')}</Label>
+        <Select
+          id="cc-yard"
+          value={value.yardId ?? ''}
+          onChange={(e) => onChange({ ...value, yardId: parseId(e.target.value), buildingId: null, elevatorId: null })}
+        >
+          <option value="">{t('callcenter.elevator.yardPlaceholder')}</option>
+          {(yards.data ?? []).map((y) => (
+            <option key={y.id} value={y.id}>{y.name}</option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
         <Label htmlFor="cc-building">{t('callcenter.elevator.building')}</Label>
         <Select
           id="cc-building"
           value={value.buildingId ?? ''}
-          onChange={(e) =>
-            onChange({ ...value, buildingId: e.target.value ? Number(e.target.value) : null, elevatorId: null })
-          }
+          disabled={value.yardId === null}
+          onChange={(e) => onChange({ ...value, buildingId: parseId(e.target.value), elevatorId: null })}
         >
           <option value="">{t('callcenter.elevator.buildingPlaceholder')}</option>
           {(buildings.data ?? []).map((b) => (
@@ -47,7 +64,7 @@ export default function CallCenterElevatorFields({ value, onChange }: Props) {
           id="cc-elevator"
           value={value.elevatorId ?? ''}
           disabled={value.buildingId === null || elevatorList.length === 0}
-          onChange={(e) => onChange({ ...value, elevatorId: e.target.value ? Number(e.target.value) : null })}
+          onChange={(e) => onChange({ ...value, elevatorId: parseId(e.target.value) })}
         >
           <option value="">{t('callcenter.elevator.elevatorPlaceholder')}</option>
           {elevatorList.map((el) => (

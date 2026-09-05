@@ -1012,13 +1012,12 @@
     "categoryRedispatchedExecutor": "Заявка передана дежурному: {{name}}",
     "categoryRedispatchedGroup": "Заявка адресована группе «{{spec}}» — дежурного сейчас нет",
     "categorySpecMismatch": "Специализация текущего исполнителя не соответствует новой категории",
-    "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя",
-    "elevator": {
-      "ariaLabel": "Лифт: {{label}}, статус: {{status}}"
-    }
+    "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя"
   },
   "callcenter": {
     "elevator": {
+      "yard": "Двор *",
+      "yardPlaceholder": "Выберите двор...",
       "building": "Дом *",
       "buildingPlaceholder": "Выберите дом...",
       "elevator": "Лифт *",
@@ -1899,6 +1898,7 @@
         "needBuilding": "Для заявки по лифту выберите дом или квартиру, а не двор.",
         "backToAddress": "К выбору адреса",
         "loadError": "Не удалось загрузить список лифтов",
+        "retry": "Повторить",
         "summaryLabel": "Лифт",
         "summaryWorking": "работает",
         "summaryNotWorking": "не работает"
@@ -2668,7 +2668,7 @@
       "current": "текущий",
       "keep": "Оставить как есть",
       "reason": "подтверждение заявки {{number}}",
-      "reasonMany": "подтверждение заявок {{numbers}}"
+      "reasonMany": "подтверждение {{count}} заявок: {{numbers}}"
     },
     "calendar": {
       "title": "Календарь ТО и освидетельствований",

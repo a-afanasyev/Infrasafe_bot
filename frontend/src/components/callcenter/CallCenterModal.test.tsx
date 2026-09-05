@@ -5,9 +5,13 @@ import { render, screen, waitFor } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
 import CallCenterModal from './CallCenterModal'
 
-// Форма колл-центра для категории «Лифт» (Ф4a-3): дом из справочника →
-// building_id, лифт дома (for-building), «работает?»; свободный адрес скрыт.
+// Форма колл-центра для категории «Лифт» (Ф4a-3): каскад двор → дом из
+// справочника → building_id, лифт дома (for-building), «работает?»;
+// свободный адрес скрыт.
 
+const YARDS = [
+  { id: 3, name: 'Двор 3', description: null, gps_latitude: null, gps_longitude: null, is_active: true },
+]
 const BUILDINGS = [
   { id: 12, address: 'ул. Мирзо-Улугбека, 12', yard_id: 3, yard_name: 'Двор 3', entrance_count: 4, floor_count: 9, description: null, gps_latitude: null, gps_longitude: null, is_active: true },
 ]
@@ -18,20 +22,34 @@ const ELEVATORS = [
 
 function mockDirectories() {
   server.use(
-    http.get('*/api/v2/addresses/buildings', () => HttpResponse.json(BUILDINGS)),
+    http.get('*/api/v2/addresses/yards', () => HttpResponse.json(YARDS)),
+    http.get('*/api/v2/addresses/yards/3/buildings', () => HttpResponse.json(BUILDINGS)),
     http.get('*/api/v2/elevators/for-building/12', () => HttpResponse.json(ELEVATORS)),
   )
 }
 
-async function fillBase(user: ReturnType<typeof userEvent.setup>, category: string) {
+type User = ReturnType<typeof userEvent.setup>
+
+async function fillBase(user: User, category: string) {
   await user.selectOptions(screen.getByLabelText('Категория'), category)
   await user.type(screen.getByLabelText('Описание проблемы'), 'Не едет')
+}
+
+/** Каскад двор → дом → лифт до выбора лифта с id. */
+async function pickElevator(user: User, elevatorId: string) {
+  await screen.findByRole('option', { name: 'Двор 3' })
+  expect(screen.getByLabelText('Дом *')).toBeDisabled()
+  await user.selectOptions(screen.getByLabelText('Двор *'), '3')
+  await screen.findByRole('option', { name: 'ул. Мирзо-Улугбека, 12' })
+  await user.selectOptions(screen.getByLabelText('Дом *'), '12')
+  await screen.findByRole('option', { name: 'Лифт 1, подъезд 3 — Не работает' })
+  await user.selectOptions(screen.getByLabelText('Лифт *'), elevatorId)
 }
 
 afterEach(() => vi.unstubAllEnvs())
 
 describe('CallCenterModal — категория «Лифт»', () => {
-  it('флаг включён: дом/лифт/работает вместо адреса; body с building_id и полями лифта', async () => {
+  it('флаг включён: двор/дом/лифт/работает вместо адреса; body с building_id и полями лифта, без двора', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
     mockDirectories()
     let body: Record<string, unknown> | null = null
@@ -51,10 +69,7 @@ describe('CallCenterModal — категория «Лифт»', () => {
     const submit = screen.getByRole('button', { name: 'Создать заявку' })
     expect(submit).toBeDisabled()
 
-    await screen.findByRole('option', { name: 'ул. Мирзо-Улугбека, 12' })
-    await user.selectOptions(screen.getByLabelText('Дом *'), '12')
-    await screen.findByRole('option', { name: 'Лифт 1, подъезд 3 — Не работает' })
-    await user.selectOptions(screen.getByLabelText('Лифт *'), '8')
+    await pickElevator(user, '8')
     expect(submit).toBeDisabled()
     await user.click(screen.getByLabelText('Нет'))
     expect(submit).toBeEnabled()
@@ -73,21 +88,18 @@ describe('CallCenterModal — категория «Лифт»', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
-  it('смена дома сбрасывает выбранный лифт', async () => {
+  it('смена двора сбрасывает дом и лифт', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
     mockDirectories()
-    server.use(http.get('*/api/v2/elevators/for-building/13', () => HttpResponse.json([])))
     const user = userEvent.setup()
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'elevator')
-    await screen.findByRole('option', { name: 'ул. Мирзо-Улугбека, 12' })
-    await user.selectOptions(screen.getByLabelText('Дом *'), '12')
-    await screen.findByRole('option', { name: 'Лифт 1, подъезд 2 — Работает' })
-    await user.selectOptions(screen.getByLabelText('Лифт *'), '7')
+    await pickElevator(user, '7')
     await user.click(screen.getByLabelText('Да'))
     expect(screen.getByRole('button', { name: 'Создать заявку' })).toBeEnabled()
 
-    await user.selectOptions(screen.getByLabelText('Дом *'), '')
+    await user.selectOptions(screen.getByLabelText('Двор *'), '')
+    expect(screen.getByLabelText<HTMLSelectElement>('Дом *').value).toBe('')
     expect(screen.getByLabelText<HTMLSelectElement>('Лифт *').value).toBe('')
     expect(screen.getByRole('button', { name: 'Создать заявку' })).toBeDisabled()
   })
@@ -104,7 +116,7 @@ describe('CallCenterModal — категория «Лифт»', () => {
     const user = userEvent.setup()
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'elevator')
-    expect(screen.queryByLabelText('Дом *')).toBeNull()
+    expect(screen.queryByLabelText('Двор *')).toBeNull()
     await user.type(screen.getByLabelText('Адрес / квартира *'), 'ул. Тестовая, 1')
     await user.click(screen.getByRole('button', { name: 'Создать заявку' }))
     await waitFor(() =>
@@ -118,7 +130,7 @@ describe('CallCenterModal — категория «Лифт»', () => {
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'plumbing')
     expect(screen.getByLabelText('Адрес / квартира *')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Дом *')).toBeNull()
+    expect(screen.queryByLabelText('Двор *')).toBeNull()
   })
 
   it('422 от сервера показывается текстом ошибки', async () => {
@@ -131,10 +143,7 @@ describe('CallCenterModal — категория «Лифт»', () => {
     const user = userEvent.setup()
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'elevator')
-    await screen.findByRole('option', { name: 'ул. Мирзо-Улугбека, 12' })
-    await user.selectOptions(screen.getByLabelText('Дом *'), '12')
-    await screen.findByRole('option', { name: 'Лифт 1, подъезд 2 — Работает' })
-    await user.selectOptions(screen.getByLabelText('Лифт *'), '7')
+    await pickElevator(user, '7')
     await user.click(screen.getByLabelText('Да'))
     await user.click(screen.getByRole('button', { name: 'Создать заявку' }))
     expect(await screen.findByText('elevator does not belong to building')).toBeInTheDocument()

@@ -72,7 +72,14 @@ export default function ElevatorStep({ buildingId, value, onChange, onNext, onBa
     return <div className="text-[13px] text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
   }
   if (query.isError) {
-    return <div className="text-[13px] text-red-600 dark:text-red-400">{t('twa.create.elevator.loadError')}</div>
+    return (
+      <div>
+        <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.elevator.title')}</h2>
+        <div className="text-[13px] text-red-600 dark:text-red-400">{t('twa.create.elevator.loadError')}</div>
+        <button onClick={() => query.refetch()} className={PRIMARY}>{t('twa.create.elevator.retry')}</button>
+        <button onClick={onBackToAddress} className={SECONDARY}>{t('twa.create.elevator.backToAddress')}</button>
+      </div>
+    )
   }
   if (elevators.length === 0) {
     return (

@@ -1012,13 +1012,12 @@
     "categoryRedispatchedExecutor": "Ariza navbatchiga topshirildi: {{name}}",
     "categoryRedispatchedGroup": "Ariza «{{spec}}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
     "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi",
-    "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang",
-    "elevator": {
-      "ariaLabel": "Lift: {{label}}, holat: {{status}}"
-    }
+    "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang"
   },
   "callcenter": {
     "elevator": {
+      "yard": "Hovli *",
+      "yardPlaceholder": "Hovlini tanlang...",
       "building": "Uy *",
       "buildingPlaceholder": "Uyni tanlang...",
       "elevator": "Lift *",
@@ -1888,6 +1887,7 @@
         "needBuilding": "Lift bo'yicha ariza uchun hovli emas, uy yoki kvartirani tanlang.",
         "backToAddress": "Manzil tanlashga",
         "loadError": "Liftlar ro'yxatini yuklab bo'lmadi",
+        "retry": "Qayta urinish",
         "summaryLabel": "Lift",
         "summaryWorking": "ishlayapti",
         "summaryNotWorking": "ishlamayapti"
@@ -2657,7 +2657,7 @@
       "current": "joriy",
       "keep": "O'zgarishsiz qoldirish",
       "reason": "{{number}} arizasini tasdiqlash",
-      "reasonMany": "{{numbers}} arizalarini tasdiqlash"
+      "reasonMany": "{{count}} ta arizani tasdiqlash: {{numbers}}"
     },
     "calendar": {
       "title": "Texnik xizmat va tekshiruv kalendari",

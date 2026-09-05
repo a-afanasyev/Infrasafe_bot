@@ -136,11 +136,16 @@ export function useElevatorRequests(id: number, includeClosed: boolean) {
 
 // ── MUTATIONS ───────────────────────────────────────────────────────
 
+/**
+ * Единая инвалидация после мутаций лифта: реестр, сводка, канбан (карточки
+ * несут elevator_status) и, при известном id, карточка + журнал.
+ */
 function useElevatorInvalidator(id?: number) {
   const queryClient = useQueryClient()
   return () => {
     queryClient.invalidateQueries({ queryKey: elevatorKeys.list })
     queryClient.invalidateQueries({ queryKey: elevatorKeys.summary })
+    queryClient.invalidateQueries({ queryKey: elevatorKeys.kanban })
     if (id !== undefined) {
       queryClient.invalidateQueries({ queryKey: elevatorKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: elevatorKeys.events(id) })

@@ -44,8 +44,9 @@ describe('RequestCard — бейдж лифта (Ф4a-3)', () => {
     render(<RequestCard card={WITH_ELEVATOR} onClick={() => {}} />)
 
     expect(screen.getByTestId('elevator-badge')).toHaveTextContent('д. 12, подъезд 2, лифт 1')
-    expect(screen.getByTestId('elevator-status-dot')).toHaveAttribute('data-status', 'not_working')
-    expect(screen.getByLabelText('Лифт: д. 12, подъезд 2, лифт 1, статус: Не работает')).toBeInTheDocument()
+    const dot = screen.getByTestId('elevator-status-dot')
+    expect(dot).toHaveAttribute('data-status', 'not_working')
+    expect(dot).toHaveAttribute('title', 'Не работает')
   })
 
   it('без elevator_label бейджа нет', () => {

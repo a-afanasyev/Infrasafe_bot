@@ -581,4 +581,36 @@ describe('RequestDetailModal — подсказка «Лифт работает?
 
     expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull()
   })
+
+  it('приёмка за жителя («Исполнено» → «Принято») тоже открывает диалог', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockHasRole.mockReturnValue(true)
+    const req = makeRequest({ status: 'Исполнено', ...ELEVATOR_FIELDS })
+    let patchBody: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/requests/:number/comments', () => HttpResponse.json([])),
+      http.get('*/api/v2/requests/:number', () => HttpResponse.json(req)),
+      http.patch('*/api/v2/requests/:number', async ({ request }) => {
+        patchBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ ...req, status: 'Принято' })
+      }),
+    )
+    render(<RequestDetailModal requestNumber={String(req.request_number)} onClose={noop} />)
+    await waitFor(() => expect(screen.getByText('Срочная')).toBeInTheDocument())
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /✓ Принять за жителя/ }))
+    await user.type(screen.getByPlaceholderText(/Минимум 10 символов/), 'житель недоступен три дня')
+    await user.click(screen.getByRole('button', { name: 'Принять за жителя' }))
+
+    await waitFor(() => expect(patchBody).toEqual({ status: 'Принято', manager_confirmation_notes: 'житель недоступен три дня' }))
+    expect(await screen.findByRole('dialog', { name: 'Лифт работает?' })).toBeInTheDocument()
+  })
+
+  it('label лифта отсутствует — в диалоге fallback «#id»', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    await confirmCompletion(makeRequest({ status: 'Выполнена', elevator_id: 7, elevator_label: null, elevator_status: null }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Лифт работает?' })
+    expect(dialog).toHaveTextContent('Лифт #7: сейчас «Не введён». Лифт работает?')
+  })
 })

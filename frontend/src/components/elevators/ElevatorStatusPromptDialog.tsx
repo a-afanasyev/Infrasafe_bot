@@ -5,15 +5,16 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ElevatorStatusDot } from './ElevatorStatusBadge'
+import { buildStatusReason } from './statusReason'
 import { elevatorKeys, useSetElevatorStatus } from '../../hooks/useElevators'
 import { ELEVATOR_STATUSES, type ElevatorStatus } from '../../types/elevators'
 
 /**
  * Подсказка менеджеру после подтверждения заявки по лифту: «Лифт {label}:
  * сейчас «{статус}». Лифт работает?» — четыре статуса + «Оставить как есть».
- * Выбор → PUT /elevators/{id}/status с reason «подтверждение заявки N» и
- * request_number (при одной заявке); toast и инвалидацию реестра/карточки
- * делает useSetElevatorStatus, канбан и заявки — этот диалог. Тот же статус,
+ * Выбор → PUT /elevators/{id}/status с reason (statusReason.ts, ≤ 500) и
+ * request_number (при одной заявке); toast и инвалидацию реестра/карточки/
+ * канбана делает useSetElevatorStatus, заявки — этот диалог. Тот же статус,
  * что и текущий, — «без изменений» без запроса.
  */
 interface Props {
@@ -25,17 +26,15 @@ interface Props {
   onClose: () => void
 }
 
+/** Префикс кэша карточек заявок (`['request', number]`). */
+const REQUEST_QUERY_PREFIX = ['request'] as const
+
 export default function ElevatorStatusPromptDialog({
   open, elevatorId, elevatorLabel, currentStatus, requestNumbers, onClose,
 }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const mutation = useSetElevatorStatus(elevatorId)
-
-  const reason =
-    requestNumbers.length === 1
-      ? t('elevators.prompt.reason', { number: requestNumbers[0] })
-      : t('elevators.prompt.reasonMany', { numbers: requestNumbers.join(', ') })
 
   const choose = (status: ElevatorStatus) => {
     if (status === currentStatus) {
@@ -44,14 +43,15 @@ export default function ElevatorStatusPromptDialog({
       return
     }
     mutation.mutate(
-      { status, reason, request_number: requestNumbers.length === 1 ? requestNumbers[0] : null },
+      {
+        status,
+        reason: buildStatusReason(t, requestNumbers),
+        request_number: requestNumbers.length === 1 ? requestNumbers[0] : null,
+      },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: elevatorKeys.kanban })
           queryClient.invalidateQueries({ queryKey: elevatorKeys.requests(elevatorId) })
-          for (const number of requestNumbers) {
-            queryClient.invalidateQueries({ queryKey: ['request', number] })
-          }
+          queryClient.invalidateQueries({ queryKey: REQUEST_QUERY_PREFIX })
           onClose()
         },
       },

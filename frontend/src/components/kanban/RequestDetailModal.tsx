@@ -273,13 +273,21 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     setPendingTargetStatus(null)
   }
 
-  // Подтверждение менеджером («Выполнена» → «Исполнено»). У заявки по лифту —
-  // после успеха спрашиваем, работает ли лифт (только при включённом модуле).
+  // У заявки по лифту после успешной приёмки менеджером спрашиваем, работает
+  // ли лифт (только при включённом модуле). Общий хвост для обоих путей:
+  // подтверждение «Выполнена» → «Исполнено» и приёмка за жителя → «Принято».
+  const openElevatorPromptIfNeeded = () => {
+    if (isElevatorsEnabled() && request?.elevator_id) setElevatorPromptOpen(true)
+  }
+
   const confirmCompletion = () =>
     updateRequest.mutate(
       { status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) },
-      { onSuccess: () => { if (isElevatorsEnabled() && request?.elevator_id) setElevatorPromptOpen(true) } },
+      { onSuccess: openElevatorPromptIfNeeded },
     )
+
+  const forceAcceptWithNote = () =>
+    forceAccept.mutate(forceAcceptNote, { onSuccess: openElevatorPromptIfNeeded })
 
   if (!requestNumber) return null
 
@@ -760,7 +768,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                           onClick={() => { setShowForceAcceptSection(false); setForceAcceptNote('') }}
                         >{t('common.cancel')}</Button>
                         <Button
-                          onClick={() => forceAccept.mutate(forceAcceptNote)}
+                          onClick={forceAcceptWithNote}
                           disabled={forceAccept.isPending || forceAcceptNote.trim().length < 10}
                           className="flex-1 bg-[#d97706] hover:bg-[#d97706]/90 text-white font-[family-name:var(--font-display)]"
                         >
@@ -848,7 +856,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
       <ElevatorStatusPromptDialog
         open
         elevatorId={request.elevator_id}
-        elevatorLabel={request.elevator_label ?? ''}
+        elevatorLabel={request.elevator_label ?? `#${request.elevator_id}`}
         currentStatus={request.elevator_status ?? null}
         requestNumbers={[requestNumber]}
         onClose={() => setElevatorPromptOpen(false)}

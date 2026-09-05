@@ -28,6 +28,19 @@ import { CATEGORIES, URGENCIES } from '../../constants'
 
 const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '' }
 
+/** Тело POST /api/v2/callcenter/requests (CallCenterCreateRequest): адрес —
+ *  либо свободный `address`, либо `building_id` (+ поля лифта). */
+interface CallCenterBody {
+  category: string
+  urgency: string
+  description: string
+  user_id?: number
+  address?: string
+  building_id?: number | null
+  elevator_id?: number | null
+  elevator_operational?: boolean | null
+}
+
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
@@ -67,8 +80,8 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
 
   const canSubmit = elevatorMode ? isElevatorValueComplete(elevator) : form.address.trim().length > 0
 
-  const buildBody = (): Record<string, unknown> => {
-    const base = { category: form.category, urgency: form.urgency, description: form.description, user_id: selected || undefined }
+  const buildBody = (): CallCenterBody => {
+    const base: CallCenterBody = { category: form.category, urgency: form.urgency, description: form.description, user_id: selected || undefined }
     if (!elevatorMode) return { ...base, address: form.address }
     return {
       ...base,
