@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { render, screen, waitFor, within } from '../../test/test-utils'
@@ -518,5 +518,67 @@ describe('RequestDetailModal — баннер после смены катего
     await waitFor(() => expect(spy).toHaveBeenCalled())
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     spy.mockRestore()
+  })
+})
+
+describe('RequestDetailModal — подсказка «Лифт работает?» после подтверждения (Ф4a-3)', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  const ELEVATOR_FIELDS = { elevator_id: 7, elevator_label: 'д. 12, подъезд 2, лифт 1', elevator_status: 'working' }
+
+  async function confirmCompletion(req: Record<string, unknown>) {
+    mockHasRole.mockReturnValue(true)
+    let putBody: Record<string, unknown> | null = null
+    let patched = false
+    server.use(
+      http.get('*/api/v2/requests/:number/comments', () => HttpResponse.json([])),
+      http.get('*/api/v2/requests/:number', () => HttpResponse.json(req)),
+      http.patch('*/api/v2/requests/:number', () => {
+        patched = true
+        return HttpResponse.json({ ...req, status: 'Исполнено', manager_confirmed: true })
+      }),
+      http.put('*/api/v2/elevators/7/status', async ({ request }) => {
+        putBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ changed: true, old_status: 'working', new_status: 'not_working', status_since: null, notified_residents: 2 })
+      }),
+    )
+    render(<RequestDetailModal requestNumber={String(req.request_number)} onClose={noop} />)
+    await waitFor(() => expect(screen.getByText('Срочная')).toBeInTheDocument())
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /✓ Подтвердить/ }))
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }))
+    await waitFor(() => expect(patched).toBe(true))
+    return { user, getPut: () => putBody }
+  }
+
+  it('заявка с elevator_id: после подтверждения открывается диалог, выбор шлёт PUT с request_number', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    const { user, getPut } = await confirmCompletion(makeRequest({ status: 'Выполнена', ...ELEVATOR_FIELDS }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Лифт работает?' })
+    expect(dialog).toHaveTextContent('Лифт д. 12, подъезд 2, лифт 1: сейчас «Работает». Лифт работает?')
+    await user.click(within(dialog).getByRole('button', { name: 'Не работает' }))
+    await waitFor(() =>
+      expect(getPut()).toEqual({
+        status: 'not_working',
+        reason: 'подтверждение заявки 260101-001',
+        request_number: '260101-001',
+      }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull())
+  })
+
+  it('заявка без elevator_id: диалога нет', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    await confirmCompletion(makeRequest({ status: 'Выполнена', elevator_id: null, elevator_label: null, elevator_status: null }))
+
+    expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull()
+  })
+
+  it('модуль выключен: диалога нет даже у заявки с лифтом', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'false')
+    await confirmCompletion(makeRequest({ status: 'Выполнена', ...ELEVATOR_FIELDS }))
+
+    expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull()
   })
 })

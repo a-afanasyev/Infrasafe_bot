@@ -1012,9 +1012,23 @@
     "categoryRedispatchedExecutor": "Ariza navbatchiga topshirildi: {{name}}",
     "categoryRedispatchedGroup": "Ariza «{{spec}}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
     "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi",
-    "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang"
+    "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang",
+    "elevator": {
+      "ariaLabel": "Lift: {{label}}, holat: {{status}}"
+    }
   },
   "callcenter": {
+    "elevator": {
+      "building": "Uy *",
+      "buildingPlaceholder": "Uyni tanlang...",
+      "elevator": "Lift *",
+      "elevatorPlaceholder": "Liftni tanlang...",
+      "noElevators": "Bu uy uchun liftlar kiritilmagan",
+      "operational": "Lift ishlayaptimi? *",
+      "yes": "Ha",
+      "no": "Yo'q",
+      "required": "Lift bo'yicha ariza uchun uy, lift va u ishlayotganini ko'rsating"
+    },
     "title": "Qo'ng'iroq orqali ariza yaratish",
     "searchPlaceholder": "Telefon yoki aholi FIO",
     "find": "Topish",
@@ -1859,7 +1873,25 @@
       "submitted": "Ariza yaratildi",
       "submitFailed": "Ariza yaratib bo'lmadi",
       "addressChanged": "Manzil o'zgardi — qaytadan tanlang",
-      "noAddresses": "Mavjud manzillar yo'q. Menejerga murojaat qiling."
+      "noAddresses": "Mavjud manzillar yo'q. Menejerga murojaat qiling.",
+      "elevator": {
+        "title": "Lift",
+        "selectElevator": "Qaysi lift?",
+        "item": "{{entrance}}-kirish · {{number}}-lift",
+        "operationalQuestion": "Lift hozir ishlayaptimi?",
+        "yes": "Ha, ishlayapti",
+        "no": "Yo'q, ishlamayapti",
+        "hintUnderRepair": "Lift allaqachon ta'mirda — ariza joriy ta'mirga qo'shiladi.",
+        "hintMaintenance": "Lift texnik xizmatda — ariza xizmat ko'rsatuvchi tashkilotga yuboriladi.",
+        "noElevators": "Bu uy uchun liftlar kiritilmagan — dispetcherga murojaat qiling.",
+        "backToCategory": "Toifaga qaytish",
+        "needBuilding": "Lift bo'yicha ariza uchun hovli emas, uy yoki kvartirani tanlang.",
+        "backToAddress": "Manzil tanlashga",
+        "loadError": "Liftlar ro'yxatini yuklab bo'lmadi",
+        "summaryLabel": "Lift",
+        "summaryWorking": "ishlayapti",
+        "summaryNotWorking": "ishlamayapti"
+      }
     },
     "inspector": {
       "selectYard": "Hovlini tanlang",
@@ -2618,6 +2650,14 @@
       "descriptionPlaceholder": "Lift bilan nima bo'ldi",
       "urgency": "Shoshilinchlik",
       "submit": "Ariza yaratish"
+    },
+    "prompt": {
+      "title": "Lift ishlayaptimi?",
+      "body": "Lift {{label}}: hozir «{{status}}». Lift ishlayaptimi?",
+      "current": "joriy",
+      "keep": "O'zgarishsiz qoldirish",
+      "reason": "{{number}} arizasini tasdiqlash",
+      "reasonMany": "{{numbers}} arizalarini tasdiqlash"
     },
     "calendar": {
       "title": "Texnik xizmat va tekshiruv kalendari",

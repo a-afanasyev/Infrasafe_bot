@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { render } from '../../test/test-utils'
 import RequestCard from './RequestCard'
@@ -24,7 +24,45 @@ const CARD: TCard = {
   created_at: '2026-08-16T09:00:00Z',
   updated_at: '2026-08-16T10:00:00Z',
   manager_confirmed: false,
+  elevator_id: null,
+  elevator_label: null,
+  elevator_status: null,
 }
+
+const WITH_ELEVATOR: TCard = {
+  ...CARD,
+  elevator_id: 7,
+  elevator_label: 'д. 12, подъезд 2, лифт 1',
+  elevator_status: 'not_working',
+}
+
+describe('RequestCard — бейдж лифта (Ф4a-3)', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('с elevator_label и включённым модулем показывает бейдж с точкой статуса', () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    render(<RequestCard card={WITH_ELEVATOR} onClick={() => {}} />)
+
+    expect(screen.getByTestId('elevator-badge')).toHaveTextContent('д. 12, подъезд 2, лифт 1')
+    expect(screen.getByTestId('elevator-status-dot')).toHaveAttribute('data-status', 'not_working')
+    expect(screen.getByLabelText('Лифт: д. 12, подъезд 2, лифт 1, статус: Не работает')).toBeInTheDocument()
+  })
+
+  it('без elevator_label бейджа нет', () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    render(<RequestCard card={CARD} onClick={() => {}} />)
+
+    expect(screen.queryByTestId('elevator-badge')).not.toBeInTheDocument()
+  })
+
+  it('при выключенном модуле бейджа нет даже с label — карточка как раньше', () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'false')
+    render(<RequestCard card={{ ...WITH_ELEVATOR, urgency: null }} onClick={() => {}} />)
+
+    expect(screen.queryByTestId('elevator-badge')).not.toBeInTheDocument()
+    expect(document.querySelector('.flex.gap-1.flex-wrap')).toBeNull()
+  })
+})
 
 describe('RequestCard — индикатор непрочитанного', () => {
   it('без пропа unread точки нет', () => {

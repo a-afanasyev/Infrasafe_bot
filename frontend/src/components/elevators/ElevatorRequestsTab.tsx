@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import EmptyState from '../shared/EmptyState'
 import CreateRepairDialog from './CreateRepairDialog'
+import ElevatorStatusPromptDialog from './ElevatorStatusPromptDialog'
 import { BodyRow, HeadRow, TableShell, Td, Th } from './TableCells'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useBulkConfirmRequests, useElevatorRequests } from '../../hooks/useElevators'
@@ -34,6 +35,9 @@ export default function ElevatorRequestsTab({ elevator, canWrite }: Props) {
   const [selected, setSelected] = useState<readonly string[]>([])
   const [results, setResults] = useState<ElevatorBulkConfirmItem[] | null>(null)
   const [repairOpen, setRepairOpen] = useState(false)
+  // Подсказка «Лифт работает?» — один раз после групповой приёмки, только если
+  // хоть одна заявка подтвердилась (номера уходят в reason смены статуса).
+  const [promptNumbers, setPromptNumbers] = useState<readonly string[] | null>(null)
   const requests = useElevatorRequests(elevator.id, includeClosed)
   const bulk = useBulkConfirmRequests(elevator.id)
 
@@ -45,6 +49,8 @@ export default function ElevatorRequestsTab({ elevator, canWrite }: Props) {
       onSuccess: (items) => {
         setResults(items)
         setSelected([])
+        const confirmed = items.filter((i) => i.ok).map((i) => i.request_number)
+        if (confirmed.length > 0) setPromptNumbers(confirmed)
       },
     })
 
@@ -147,6 +153,16 @@ export default function ElevatorRequestsTab({ elevator, canWrite }: Props) {
       )}
 
       <CreateRepairDialog elevator={elevator} open={repairOpen} onClose={() => setRepairOpen(false)} />
+      {promptNumbers && (
+        <ElevatorStatusPromptDialog
+          open
+          elevatorId={elevator.id}
+          elevatorLabel={elevator.label}
+          currentStatus={elevator.current_status}
+          requestNumbers={promptNumbers}
+          onClose={() => setPromptNumbers(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
+import type { ElevatorStatus } from '../types/elevators'
 
 export interface RequestCard {
   request_number: string
@@ -21,6 +22,11 @@ export interface RequestCard {
   created_at: string
   updated_at: string | null
   manager_confirmed: boolean
+  /** Модуль «Лифты» (Ф4a): привязка заявки к лифту — null у обычных заявок.
+   *  label локализован сервером по `lang`, status — канон-ключ. */
+  elevator_id: number | null
+  elevator_label: string | null
+  elevator_status: ElevatorStatus | null
 }
 
 export interface KanbanColumn {

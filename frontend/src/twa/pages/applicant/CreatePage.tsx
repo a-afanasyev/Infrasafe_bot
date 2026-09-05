@@ -10,6 +10,9 @@ import { CATEGORIES, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
 import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
+import ElevatorStep from '../../components/ElevatorStep'
+import { EMPTY_ELEVATOR_SELECTION, resolveBuildingId, type ElevatorSelection } from '../../components/elevatorSelection'
+import { isElevatorsEnabled } from '../../../utils/featureFlags'
 
 // FS-04: category — канон-EN-ключ, шлём как есть (CATEGORIES из общего constants).
 // urgency — тоже канон-ключи (TASK 17). Преобразование EN→RU удалено.
@@ -19,6 +22,8 @@ type AddressType = 'yard' | 'building' | 'apartment'
 interface AddressItem {
   id: number
   label: string
+  /** Только у квартир — дом для шага «Лифт» (RequestAddressApartment). */
+  building_id?: number
 }
 interface RequestAddresses {
   yards: AddressItem[]
@@ -51,6 +56,7 @@ export default function CreatePage() {
     addressLabel: string
     description: string
     urgency: string
+    elevator?: ElevatorSelection
   }
   const loadDraft = (): Partial<Draft> => {
     try {
@@ -79,7 +85,12 @@ export default function CreatePage() {
   const [addressLabel, setAddressLabel] = useState<string>(draft.addressLabel ?? '')
   const [description, setDescription] = useState<string>(draft.description ?? '')
   const [urgency, setUrgency] = useState<string>(draft.urgency ?? 'low')
+  const [elevator, setElevator] = useState<ElevatorSelection>(draft.elevator ?? EMPTY_ELEVATOR_SELECTION)
   const [photos, setPhotos] = useState<File[]>([])
+
+  // Шаг «Лифт» — только для категории elevator при включённом модуле; без
+  // флага мастер выглядит как раньше. Смена категории/адреса сбрасывает выбор.
+  const elevatorStepOn = category === 'elevator' && isElevatorsEnabled()
 
   // Persist text-field draft on every change so a backgrounded WebApp can
   // resume where the user left off.
@@ -87,10 +98,10 @@ export default function CreatePage() {
     try {
       sessionStorage.setItem(
         DRAFT_KEY,
-        JSON.stringify({ step, category, addressType, addressId, addressLabel, description, urgency } satisfies Draft)
+        JSON.stringify({ step, category, addressType, addressId, addressLabel, description, urgency, elevator } satisfies Draft)
       )
     } catch { /* sessionStorage может быть недоступен (private mode) — черновик не сохраняем */ }
-  }, [step, category, addressType, addressId, addressLabel, description, urgency])
+  }, [step, category, addressType, addressId, addressLabel, description, urgency, elevator])
   // TWA-16: track per-photo upload progress.
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
 
@@ -120,12 +131,22 @@ export default function CreatePage() {
     }
   }, [addressesLoaded, addresses, addressType, addressId, t])
 
+  const next = () => setStep((s) => s + 1)
+
+  function selectCategory(c: string) {
+    if (c !== category) setElevator(EMPTY_ELEVATOR_SELECTION)
+    setCategory(c)
+    haptic('selection')
+    setStep(1)
+  }
+
   function selectAddress(type: AddressType, item: AddressItem) {
+    if (type !== addressType || item.id !== addressId) setElevator(EMPTY_ELEVATOR_SELECTION)
     setAddressType(type)
     setAddressId(item.id)
     setAddressLabel(item.label)
     haptic('selection')
-    setStep(2)
+    next()
   }
 
   async function uploadPhotos(requestNumber: string): Promise<number[]> {
@@ -167,6 +188,8 @@ export default function CreatePage() {
         address_id: addressId,
         description,
         urgency: urgency,
+        // Р11: для «лифта» при включённом модуле оба поля обязательны (иначе 422).
+        ...(elevatorStepOn ? { elevator_id: elevator.elevatorId, elevator_operational: elevator.operational } : {}),
       })
       const requestNumber: string | undefined = res.data?.request_number
       let photoFailures: number[] = []
@@ -211,13 +234,27 @@ export default function CreatePage() {
       </div>
     )
 
+  // Шаг «Лифт» вставляется после адреса; остальные шаги ходят через next(),
+  // поэтому их индексы от него не зависят.
+  const elevatorStep = elevatorStepOn && (
+    <ElevatorStep
+      key="elevator"
+      buildingId={resolveBuildingId(addressType, addressId, addresses.apartments)}
+      value={elevator}
+      onChange={setElevator}
+      onNext={next}
+      onBackToCategory={() => setStep(0)}
+      onBackToAddress={() => setStep(1)}
+    />
+  )
+
   const steps = [
     // Step 0: Category
     <div key="cat" className="space-y-2">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectCategory')}</h2>
       <div className="grid grid-cols-2 gap-2">
         {CATEGORIES.map((c) => (
-          <button key={c} onClick={() => { setCategory(c); haptic('selection'); setStep(1) }}
+          <button key={c} onClick={() => selectCategory(c)}
             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] font-medium text-left active:scale-[0.97] transition-transform">
             {tCategory(c, t)}
           </button>
@@ -234,6 +271,7 @@ export default function CreatePage() {
       {addressSection('building', '🏢', addresses.buildings)}
       {addressSection('yard', '🏘️', addresses.yards)}
     </div>,
+    ...(elevatorStep ? [elevatorStep] : []),
     // Step 2: Description
     <div key="desc">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.describe')}</h2>
@@ -245,7 +283,7 @@ export default function CreatePage() {
       />
       <button
         disabled={!description.trim()}
-        onClick={() => setStep(3)}
+        onClick={next}
         className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium disabled:opacity-40"
       >{t('twa.create.next')}</button>
     </div>,
@@ -254,7 +292,7 @@ export default function CreatePage() {
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.photo.add')}</h2>
       <PhotoUploader files={photos} onChange={setPhotos} maxFiles={5} />
       <button
-        onClick={() => setStep(4)}
+        onClick={next}
         className="w-full mt-3 bg-emerald-500 text-white py-3 rounded-xl font-medium"
       >{t('twa.create.next')}</button>
     </div>,
@@ -262,7 +300,7 @@ export default function CreatePage() {
     <div key="urg" className="space-y-2">
       <h2 className="font-semibold text-[15px] mb-3">{t('twa.create.selectUrgency')}</h2>
       {URGENCIES.map((u) => (
-        <button key={u} onClick={() => { setUrgency(u); haptic('selection'); setStep(5) }}
+        <button key={u} onClick={() => { setUrgency(u); haptic('selection'); next() }}
           className={`w-full bg-white dark:bg-gray-800 border rounded-xl p-3 text-[13px] text-left active:scale-[0.97] transition-transform ${
             u === 'critical' ? 'border-red-300 dark:border-red-700' : 'border-gray-200 dark:border-gray-700'
           }`}>
@@ -276,12 +314,18 @@ export default function CreatePage() {
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-[13px]">
         <div><span className="text-gray-500">{t('twa.create.categoryLabel')}:</span> {tCategory(category, t)}</div>
         <div><span className="text-gray-500">{t('twa.create.addressLabel')}:</span> {addressLabel}</div>
+        {elevatorStepOn && elevator.elevatorId !== null && (
+          <div>
+            <span className="text-gray-500">{t('twa.create.elevator.summaryLabel')}:</span> {elevator.elevatorLabel}
+            {' · '}{t(elevator.operational ? 'twa.create.elevator.summaryWorking' : 'twa.create.elevator.summaryNotWorking')}
+          </div>
+        )}
         <div><span className="text-gray-500">{t('twa.create.descriptionLabel')}:</span> {description}</div>
         <div><span className="text-gray-500">{t('twa.create.urgencyLabel')}:</span> {t(`twa.create.urgency.${urgency}`)}</div>
       </div>
       <button
         onClick={() => createMutation.mutate()}
-        disabled={createMutation.isPending || addressId == null}
+        disabled={createMutation.isPending || addressId == null || (elevatorStepOn && (elevator.elevatorId === null || elevator.operational === null))}
         className="w-full mt-4 bg-emerald-500 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
       {uploadProgress && uploadProgress.total > 0 && (

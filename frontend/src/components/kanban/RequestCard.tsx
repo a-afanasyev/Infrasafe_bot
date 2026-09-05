@@ -6,6 +6,8 @@ import { CSS } from '@dnd-kit/utilities'
 import type { RequestCard as TCard } from '../../hooks/useKanban'
 import { tUrgency, tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
+import { isElevatorsEnabled } from '../../utils/featureFlags'
+import { ElevatorStatusDot } from '../elevators/ElevatorStatusBadge'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
@@ -92,6 +94,9 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: st
   // конкретное событие (житель ответил). В «Закупе» смысл индикатора другой
   // («новая заявка на закуп»), и достаточно точки.
   const showUnreadReply = Boolean(unread) && card.status === 'Уточнение'
+  // Бейдж лифта — только при включённом модуле: без флага карточка выглядит
+  // как раньше, даже если бэкенд уже отдаёт elevator_label.
+  const elevatorLabel = isElevatorsEnabled() ? card.elevator_label : null
   return (
     <>
       {/* Header row */}
@@ -142,8 +147,21 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: st
           проглатывался бы у карточки без срочности и без подтверждения. И
           именно его, а не голый `unread`: у непрочитанной карточки в «Закупе»
           бейджа нет, и контейнер остался бы пустым (лишний отступ). */}
-      {(card.urgency || card.manager_confirmed || showUnreadReply) && (
+      {(card.urgency || card.manager_confirmed || showUnreadReply || elevatorLabel) && (
         <div className="flex gap-1 flex-wrap mt-1">
+          {elevatorLabel && (
+            <span
+              data-testid="elevator-badge"
+              aria-label={t('kanban.elevator.ariaLabel', {
+                label: elevatorLabel,
+                status: t(card.elevator_status ? `elevators.status.${card.elevator_status}` : 'elevators.status.none'),
+              })}
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-bg-surface text-text-secondary font-[family-name:var(--font-display)] max-w-full"
+            >
+              <ElevatorStatusDot status={card.elevator_status} />
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">🛗 {elevatorLabel}</span>
+            </span>
+          )}
           {showUnreadReply && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber/12 text-[#d97706] font-[family-name:var(--font-display)]">
               💬 {t('kanban.unreadReply')}

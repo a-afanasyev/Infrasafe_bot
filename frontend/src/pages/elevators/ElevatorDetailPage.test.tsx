@@ -156,6 +156,57 @@ describe('ElevatorDetailPage', () => {
     expect(await screen.findByText(/260905-001 — подтверждена/)).toBeInTheDocument()
   })
 
+  it('после bulk-confirm один раз спрашивает «Лифт работает?»; выбор шлёт PUT с номером заявки', async () => {
+    let putBody: Record<string, unknown> | null = null
+    mockDetail(ELEVATOR_DETAIL)
+    server.use(
+      http.post('*/api/v2/elevators/requests/bulk-confirm', () =>
+        HttpResponse.json([
+          { request_number: '260905-001', ok: true, error_kind: null, error: null },
+        ])),
+      http.put('*/api/v2/elevators/7/status', async ({ request }) => {
+        putBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ changed: true, old_status: 'working', new_status: 'not_working', status_since: null, notified_residents: 1 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Лифт 1, подъезд 2' })
+    await user.click(screen.getByRole('button', { name: /Заявки/ }))
+    await user.click(await screen.findByRole('checkbox', { name: '260905-001' }))
+    await user.click(screen.getByRole('button', { name: 'Подтвердить выбранные' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Лифт работает?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Не работает' }))
+    await waitFor(() =>
+      expect(putBody).toEqual({
+        status: 'not_working',
+        reason: 'подтверждение заявки 260905-001',
+        request_number: '260905-001',
+      }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull())
+  })
+
+  it('bulk-confirm без успешных заявок — подсказки нет, ошибки списком', async () => {
+    mockDetail(ELEVATOR_DETAIL)
+    server.use(
+      http.post('*/api/v2/elevators/requests/bulk-confirm', () =>
+        HttpResponse.json([
+          { request_number: '260905-001', ok: false, error_kind: 'invalid_transition', error: 'уже подтверждена' },
+        ])),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Лифт 1, подъезд 2' })
+    await user.click(screen.getByRole('button', { name: /Заявки/ }))
+    await user.click(await screen.findByRole('checkbox', { name: '260905-001' }))
+    await user.click(screen.getByRole('button', { name: 'Подтвердить выбранные' }))
+
+    expect(await screen.findByText(/260905-001 — ошибка: уже подтверждена/)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Лифт работает?' })).toBeNull()
+  })
+
   it('«Создать ремонт» шлёт колл-центровый payload с elevator_id', async () => {
     let body: Record<string, unknown> | null = null
     mockDetail(ELEVATOR_DETAIL)

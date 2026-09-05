@@ -24,6 +24,12 @@ export const REGISTRY_FLAGS: readonly RegistryFlag[] = [
   'maintenance_overdue',
 ] as const
 
+/** База API модуля; путь `for-building` нужен и TWA (свой axios-клиент). */
+export const ELEVATORS_API_BASE = '/api/v2/elevators'
+export function elevatorsForBuildingPath(buildingId: number): string {
+  return `${ELEVATORS_API_BASE}/for-building/${buildingId}`
+}
+
 /** Максимум номеров в одном bulk-confirm (MAX_BULK_CONFIRM на бэке). */
 export const MAX_BULK_CONFIRM = 50
 /** Максимум длины причины (MAX_REASON_LEN на бэке). */
@@ -199,6 +205,15 @@ export interface ElevatorDetail extends ElevatorCard {
   version: number
   created_at: string | null
   updated_at: string | null
+}
+
+/** GET /for-building/{building_id} — лифт для выбора в заявке. */
+export interface ElevatorMiniOut {
+  id: number
+  entrance_number: number
+  elevator_number: number
+  label: string
+  current_status: ElevatorStatus | null
 }
 
 export interface ElevatorListOut {

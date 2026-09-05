@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
+import { useApiLang, type ApiLang } from '../utils/apiLang'
 import type {
   ElevatorBulkConfirmItem,
   ElevatorCreateIn,
@@ -11,6 +12,7 @@ import type {
   ElevatorEvent,
   ElevatorListFilters,
   ElevatorListOut,
+  ElevatorMiniOut,
   ElevatorPatchIn,
   ElevatorRepairIn,
   ElevatorRequestRow,
@@ -18,6 +20,7 @@ import type {
   ElevatorStatusIn,
   ElevatorSummary,
 } from '../types/elevators'
+import { elevatorsForBuildingPath } from '../types/elevators'
 
 /**
  * React-Query хуки реестра лифтов (/api/v2/elevators): список, сводка,
@@ -33,17 +36,9 @@ export const STALE_MS = 15_000
 /** FastAPI читает списки как `flag=a&flag=b` (без `[]` axios-дефолта). */
 export const REPEAT_PARAMS = { indexes: null } as const
 
-export type ApiLang = 'ru' | 'uz'
-
-/** Язык интерфейса → `lang` API (`ru|uz`; всё, что не uz, — ru). */
-export function normalizeApiLang(language: string | undefined): ApiLang {
-  return language?.toLowerCase().startsWith('uz') ? 'uz' : 'ru'
-}
-
-export function useApiLang(): ApiLang {
-  const { i18n } = useTranslation()
-  return normalizeApiLang(i18n.language)
-}
+// Язык API живёт в utils/apiLang (нужен и TWA без apiClient); реэкспорт —
+// чтобы существующие импорты из этого модуля не менять.
+export { normalizeApiLang, useApiLang, type ApiLang } from '../utils/apiLang'
 
 export function cleanParams<T extends object>(filters: T): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -63,6 +58,7 @@ export const elevatorKeys = {
   requests: (id: number) => ['elevator-requests', id] as const,
   occurrences: (id: number) => ['elevator-occurrences', id] as const,
   allOccurrences: ['elevators-occurrences'] as const,
+  forBuilding: (buildingId: number, lang: ApiLang) => ['elevators-for-building', buildingId, lang] as const,
   kanban: ['kanban'] as const,
 }
 
@@ -111,6 +107,18 @@ export function useElevatorEvents(id: number, limit = 200) {
     queryKey: ['elevator-events', id, limit],
     queryFn: () =>
       apiClient.get(`${ELEVATORS_BASE}/${id}/events`, { params: { limit } }).then((r) => r.data),
+    staleTime: STALE_MS,
+  })
+}
+
+/** Лифты дома для выбора в заявке (дашборд: форма колл-центра). */
+export function useElevatorsForBuilding(buildingId: number | null) {
+  const lang = useApiLang()
+  return useQuery<ElevatorMiniOut[]>({
+    queryKey: elevatorKeys.forBuilding(buildingId ?? 0, lang),
+    queryFn: () =>
+      apiClient.get(elevatorsForBuildingPath(buildingId as number), { params: { lang } }).then((r) => r.data),
+    enabled: buildingId !== null,
     staleTime: STALE_MS,
   })
 }
