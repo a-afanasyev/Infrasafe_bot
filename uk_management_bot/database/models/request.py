@@ -91,6 +91,12 @@ class Request(Base):
     building_obj = relationship("Building", foreign_keys=[building_id])
     yard_obj = relationship("Yard", foreign_keys=[yard_id])
 
+    # Модуль «Лифты» (Ф1): привязка заявки к лифту и отметка «лифт работает?»
+    # со слов заявителя. Без CHECK на категорию — любая заявка может быть о лифте.
+    # SET NULL: удаление лифта не должно трогать заявки.
+    elevator_id = Column(Integer, ForeignKey("elevators.id", ondelete="SET NULL"), nullable=True, index=True)
+    elevator_operational = Column(Boolean, nullable=True)
+
     # Медиафайлы (JSON массив с file_ids)
     media_files = Column(JSON, default=list)
     
