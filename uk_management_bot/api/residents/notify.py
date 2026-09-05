@@ -39,7 +39,12 @@ class PlainMessage(Protocol):
 
 async def _send(
     chat_id: int, text: str, reply_markup: dict | None = None, *, parse_mode: str | None = None,
-) -> None:
+) -> bool:
+    """Один ``sendMessage``; ``True`` — Telegram принял (HTTP 200), иначе ``False`` (в лог).
+
+    Не-200 (403 «бот заблокирован», 400 «чат не найден») — штатный прод-кейс,
+    не исключение: вызывающий по возвращаемому значению считает доставленных.
+    """
     url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
     payload: dict = {"chat_id": chat_id, "text": text}
     if reply_markup is not None:
@@ -53,6 +58,8 @@ async def _send(
                 "Telegram отклонил уведомление жителю %s: HTTP %s",
                 chat_id, response.status_code,
             )
+            return False
+        return True
 
 
 async def _safe_send(resident: User, text: str, reply_markup: dict | None = None) -> None:
@@ -65,23 +72,26 @@ async def _safe_send(resident: User, text: str, reply_markup: dict | None = None
 async def send_plain_messages(
     messages: Iterable[PlainMessage], *, parse_mode: str | None = "HTML",
 ) -> int:
-    """Разослать готовые сообщения (например, жителям подъезда о лифте); вернуть число доставленных.
+    """Разослать готовые сообщения (например, жителям подъезда о лифте); вернуть число ДОСТАВЛЕННЫХ.
 
-    Best-effort: вызывать строго ПОСЛЕ commit; сбой одного адресата не
-    останавливает остальных и не поднимается наружу. Текст исключения httpx
-    не логируется — он несёт URL с токеном бота (``describe_http_error``).
+    Считаются только принятые Telegram (HTTP 200): отказ 400/403 (бот
+    заблокирован жителем) — не доставка. Best-effort: вызывать строго ПОСЛЕ
+    commit; сбой одного адресата не останавливает остальных и не поднимается
+    наружу. Текст исключения httpx не логируется — он несёт URL с токеном
+    бота (``describe_http_error``).
     """
     delivered = 0
     for message in messages:
         try:
-            await _send(message.telegram_id, message.text, parse_mode=parse_mode)
+            accepted = await _send(message.telegram_id, message.text, parse_mode=parse_mode)
         except httpx.HTTPError as exc:
             logger.error(
                 "Не удалось доставить сообщение %s: %s",
                 message.telegram_id, describe_http_error(exc),
             )
             continue
-        delivered += 1
+        if accepted:
+            delivered += 1
     return delivered
 
 

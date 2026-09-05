@@ -25,6 +25,7 @@ from uk_management_bot.services.elevator_service import (
 )
 from uk_management_bot.services.elevator_service.grouping import BulkItemResult
 from uk_management_bot.utils.datetime_utils import as_utc
+from uk_management_bot.utils.request_workflow import normalize_status
 from uk_management_bot.utils.user_names import full_name
 
 from .schemas import (
@@ -40,6 +41,7 @@ from .schemas import (
     ElevatorSummaryOut,
     ElevatorYardSummaryOut,
     ElevatorsConfigOut,
+    ElevatorsDowntimeThresholdsOut,
 )
 
 # Поля карточки-детали, копируемые из ORM как есть
@@ -65,7 +67,7 @@ class CardContext:
     yard_names: Mapping[int, str]
 
 
-def _aware(value: datetime | None) -> datetime | None:
+def aware_utc(value: datetime | None) -> datetime | None:
     return as_utc(value) if value is not None else None
 
 
@@ -90,9 +92,9 @@ def _card_fields(elevator: Elevator, ctx: CardContext) -> dict[str, Any]:
         "elevator_number": elevator.elevator_number,
         "label": elevator_label(elevator, ctx.language),
         "current_status": elevator.current_status,
-        "status_since": _aware(elevator.status_since),
+        "status_since": aware_utc(elevator.status_since),
         "is_commissioned": bool(elevator.is_commissioned),
-        "archived_at": _aware(elevator.archived_at),
+        "archived_at": aware_utc(elevator.archived_at),
         "is_public": bool(elevator.is_public),
         "flags": compute_flags(elevator, today=ctx.today, overdue_ids=ctx.overdue_ids),
         "availability_30d": ctx.availability.get(elevator.id),
@@ -111,8 +113,8 @@ def build_detail(
         **_card_fields(elevator, ctx),
         **{name: getattr(elevator, name) for name in DETAIL_PLAIN_FIELDS},
         apartments_without_entrance_count=apartments_without_entrance_count,
-        created_at=_aware(elevator.created_at),
-        updated_at=_aware(elevator.updated_at),
+        created_at=aware_utc(elevator.created_at),
+        updated_at=aware_utc(elevator.updated_at),
     )
 
 
@@ -139,22 +141,22 @@ def build_occurrence(occurrence: ElevatorMaintenanceOccurrence, label: str) -> E
         kind=occurrence.kind,
         due_on=occurrence.due_on,
         state=occurrence.state,
-        done_at=_aware(occurrence.done_at),
+        done_at=aware_utc(occurrence.done_at),
         done_by_user_id=occurrence.done_by_user_id,
         comment=occurrence.comment,
         request_number=occurrence.request_number,
-        created_at=_aware(occurrence.created_at),
+        created_at=aware_utc(occurrence.created_at),
     )
 
 
 def build_request_row(request: Request, users: Mapping[int, User]) -> ElevatorRequestRowOut:
-    """Строка заявки лифта; ФИО — staff-only (эндпоинт закрыт от жителей)."""
+    """Строка заявки лифта; статус — канон (``normalize_status``), ФИО — staff-only."""
     return ElevatorRequestRowOut(
         request_number=request.request_number,
-        status=request.status,
+        status=normalize_status(request),
         category=request.category,
         urgency=request.urgency,
-        created_at=_aware(request.created_at),
+        created_at=aware_utc(request.created_at),
         elevator_operational=request.elevator_operational,
         executor_name=full_name(users.get(request.executor_id)) if request.executor_id else None,
         applicant_name=full_name(users.get(request.user_id)),
@@ -180,6 +182,7 @@ def _counters(counters: ElevatorCounters) -> ElevatorCountersOut:
 
 
 def build_summary(summary: ElevatorSummary, thresholds: Mapping[str, int | None]) -> ElevatorSummaryOut:
+    """Сводка + пороги простоя из конфига (по ним посчитан ``downtime_over_threshold``)."""
     return ElevatorSummaryOut(
         today=summary.today,
         totals=_counters(summary.totals),
@@ -190,14 +193,10 @@ def build_summary(summary: ElevatorSummary, thresholds: Mapping[str, int | None]
             for yard in summary.yards
         ],
         requests_without_elevator=summary.requests_without_elevator,
-        downtime_threshold_days=dict(thresholds),
+        downtime_threshold_days=ElevatorsDowntimeThresholdsOut(**thresholds),
     )
 
 
 def build_config(config: Mapping[str, Any]) -> ElevatorsConfigOut:
-    return ElevatorsConfigOut(
-        module_public=bool(config["module_public"]),
-        downtime_threshold_days=dict(config["downtime_threshold_days"]),
-        resident_notifications=dict(config["resident_notifications"]),
-        staff_reminders=dict(config["staff_reminders"]),
-    )
+    """Полный конфиг модуля (``merge_config`` гарантирует состав ключей)."""
+    return ElevatorsConfigOut.model_validate(dict(config))

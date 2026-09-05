@@ -1,11 +1,15 @@
 """Групповая приёмка заявок менеджером: ``MANAGER_CONFIRM`` по списку номеров.
 
 Каждый номер — отдельная команда ``run_command_async`` (runner сам владеет
-транзакцией и коммитит); отказ одной заявки (доменная ``WorkflowError``:
-неверный переход, нет прав, не найдена…) фиксируется в результате и не
-прерывает остальные. Иные исключения (инфраструктура) пробрасываются.
-Post-commit intents (уведомления/realtime) возвращаются вызывающему — он
-диспетчит их после ответа, как остальные адаптеры runner'а.
+транзакцией и коммитит); отказ одной заявки фиксируется в результате и не
+прерывает остальные: доменная ``WorkflowError`` (неверный переход, нет прав,
+не найдена…) → ``error_kind`` = класс ошибки; инфраструктурный отказ БД
+(``SQLAlchemyError`` — runner откатил свою транзакцию) →
+``error_kind="InfrastructureError"``. Уже подтверждённые заявки остаются
+подтверждёнными (каждая — своя транзакция). Прочие исключения
+(программные) пробрасываются. Post-commit intents (уведомления/realtime) и
+``old_state`` возвращаются вызывающему — он диспетчит их после ответа, как
+остальные адаптеры runner'а.
 
 Модуль НЕ реэкспортируется из пакета и импортирует ``workflow_runner`` лениво
 (внутри ``bulk_confirm_async``): runner тянет webhook-стек (httpx), а сам
@@ -21,11 +25,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from uk_management_bot.utils.request_workflow import (
     Action,
     ActionCommand,
     EventIntent,
     PrincipalRef,
+    RequestState,
     WorkflowError,
 )
 
@@ -33,17 +40,23 @@ from ._core import ElevatorValidationError
 
 MAX_BULK_CONFIRM = 50
 DEFAULT_COMMAND_PREFIX = "bulk-confirm"
+INFRASTRUCTURE_ERROR_KIND = "InfrastructureError"
 
 
 @dataclass(frozen=True)
 class BulkItemResult:
-    """Итог по одной заявке: ``ok`` либо ``error_kind``/``error`` (класс и текст WorkflowError)."""
+    """Итог по одной заявке: ``ok`` (+ ``old_state`` до перехода) либо ``error_kind``/``error``.
+
+    ``error_kind`` — класс ``WorkflowError`` или ``InfrastructureError`` (отказ БД);
+    ``error`` — текст (для API/JSON; в HTML экранировать).
+    """
 
     request_number: str
     ok: bool
     error_kind: str | None = None
     error: str | None = None
     post_commit_intents: tuple[EventIntent, ...] = ()
+    old_state: RequestState | None = None
 
 
 def _normalize_numbers(request_numbers: Sequence[str]) -> tuple[str, ...]:
@@ -85,7 +98,17 @@ async def bulk_confirm_async(
                 request_number=number, ok=False, error_kind=type(exc).__name__, error=str(exc),
             ))
             continue
+        except SQLAlchemyError as exc:
+            # Runner уже сделал rollback своей сессии; текст ошибки БД наружу не
+            # отдаём (может нести SQL/значения) — только класс.
+            results.append(BulkItemResult(
+                request_number=number, ok=False, error_kind=INFRASTRUCTURE_ERROR_KIND,
+                error=f"ошибка базы данных ({type(exc).__name__})",
+            ))
+            continue
         results.append(BulkItemResult(
-            request_number=number, ok=True, post_commit_intents=tuple(outcome.post_commit_intents),
+            request_number=number, ok=True,
+            post_commit_intents=tuple(outcome.post_commit_intents),
+            old_state=getattr(outcome, "old_state", None),
         ))
     return tuple(results)

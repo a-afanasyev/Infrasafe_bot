@@ -171,7 +171,7 @@ class ElevatorCardOut(BaseModel):
     entrance_number: int
     elevator_number: int
     label: str
-    current_status: Optional[str] = None
+    current_status: Optional[ElevatorStatus] = None
     status_since: Optional[datetime] = None
     is_commissioned: bool
     archived_at: Optional[datetime] = None
@@ -223,13 +223,13 @@ class ElevatorMiniOut(BaseModel):
     entrance_number: int
     elevator_number: int
     label: str
-    current_status: Optional[str] = None
+    current_status: Optional[ElevatorStatus] = None
 
 
 class ElevatorStatusChangeOut(BaseModel):
     changed: bool
-    old_status: Optional[str] = None
-    new_status: Optional[str] = None
+    old_status: Optional[ElevatorStatus] = None
+    new_status: Optional[ElevatorStatus] = None
     status_since: Optional[datetime] = None
     notified_residents: int
 
@@ -252,9 +252,9 @@ class ElevatorOccurrenceOut(BaseModel):
     id: int
     elevator_id: int
     elevator_label: str
-    kind: str
+    kind: OccurrenceKind
     due_on: date
-    state: str
+    state: OccurrenceState
     done_at: Optional[datetime] = None
     done_by_user_id: Optional[int] = None
     comment: Optional[str] = None
@@ -280,6 +280,26 @@ class ElevatorBulkConfirmItemOut(BaseModel):
     error: Optional[str] = None
 
 
+class ElevatorsDowntimeThresholdsOut(BaseModel):
+    not_working: Optional[int] = None
+    under_repair: Optional[int] = None
+
+
+class ElevatorsResidentNotificationsOut(BaseModel):
+    repair_started: bool
+    maintenance_started: bool
+    back_in_service: bool
+
+
+class ElevatorsStaffRemindersOut(BaseModel):
+    """Стадии напоминаний персоналу в днях до срока (убывающие) + еженедельный повтор просрочки."""
+
+    maintenance: list[int]
+    certification: list[int]
+    contract: list[int]
+    overdue_weekly: bool
+
+
 class ElevatorCountersOut(BaseModel):
     total: int
     by_status: dict[str, int]
@@ -300,11 +320,11 @@ class ElevatorSummaryOut(BaseModel):
     totals: ElevatorCountersOut
     yards: list[ElevatorYardSummaryOut]
     requests_without_elevator: int
-    downtime_threshold_days: dict[str, Optional[int]]
+    downtime_threshold_days: ElevatorsDowntimeThresholdsOut
 
 
 class ElevatorsConfigOut(BaseModel):
     module_public: bool
-    downtime_threshold_days: dict[str, Optional[int]]
-    resident_notifications: dict[str, bool]
-    staff_reminders: dict[str, Any]
+    downtime_threshold_days: ElevatorsDowntimeThresholdsOut
+    resident_notifications: ElevatorsResidentNotificationsOut
+    staff_reminders: ElevatorsStaffRemindersOut

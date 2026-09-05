@@ -24,4 +24,7 @@ def http_error(exc: ElevatorServiceError) -> HTTPException:
         return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, ElevatorValidationError):
         return HTTPException(status_code=422, detail=str(exc))
-    return HTTPException(status_code=500, detail=str(exc))
+    # Базовый ElevatorServiceError напрямую домен не бросает; появится новый
+    # подкласс — маппить явно выше, а не полагаться на эту ветку. Текст ошибки
+    # наружу не отдаём: неизвестная ошибка может нести внутренние детали.
+    return HTTPException(status_code=500, detail="Internal error in elevators service")

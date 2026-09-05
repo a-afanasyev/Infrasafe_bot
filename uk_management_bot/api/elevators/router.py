@@ -53,7 +53,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.services.elevator_service import ElevatorServiceError
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.workflow_notifications import dispatch_notify_intents_detached
-from uk_management_bot.utils.request_workflow import PrincipalRef
+from uk_management_bot.utils.request_workflow import PrincipalRef, normalize_status
 
 
 async def _require_elevators_enabled() -> None:
@@ -156,7 +156,9 @@ async def list_for_building(
 
 
 @router.post("/requests/bulk-confirm", response_model=list[ElevatorBulkConfirmItemOut])
+@limiter.limit("10/minute")
 async def bulk_confirm_requests(
+    request: Request,
     body: ElevatorBulkConfirmIn,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -176,11 +178,12 @@ async def bulk_confirm_requests(
     for item in results:
         if not item.ok or not item.post_commit_intents:
             continue
+        old_status = normalize_status(item.old_state) if item.old_state is not None else None
         for intent in item.post_commit_intents:
             if intent.kind == "realtime":
                 await publish_request_event("request.status_changed", {
                     "number": item.request_number,
-                    "old_status": None,
+                    "old_status": old_status,
                     "new_status": intent.data.get("status"),
                 })
         background.add_task(

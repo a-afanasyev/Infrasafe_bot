@@ -27,7 +27,8 @@ CREATE_BODY = {
     "building_id": 1, "entrance_number": 1, "elevator_number": 1,
     "passport_number": "P-1", "manufacturer": "OTIS", "serial_number": "S-1",
 }
-CERT = {"cert_number": "C-2", "cert_valid_until": "2027-09-01",
+# Дата в далёком будущем: тест не должен «протухнуть», когда календарь дойдёт до неё.
+CERT = {"cert_number": "C-2", "cert_valid_until": "2099-01-01",
         "cert_act_url": "https://example.org/act.pdf"}
 
 
@@ -165,6 +166,23 @@ async def test_status_notification_disabled_by_config(client: AsyncClient, seede
 
 
 @pytest.mark.asyncio
+async def test_status_saved_even_if_notification_sender_crashes(client: AsyncClient, seeded,
+                                                                 monkeypatch, caplog):
+    eid = (await _commissioned(client))["id"]
+
+    async def broken(messages, **_kwargs):
+        raise RuntimeError("bot api down https://api.telegram.org/botSECRET/sendMessage")
+
+    monkeypatch.setattr(api_service, "send_plain_messages", broken)
+    with caplog.at_level("ERROR", logger=api_service.__name__):
+        resp = await client.put(f"{BASE}/{eid}/status", json={"status": "under_repair"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["changed"] is True and resp.json()["notified_residents"] == 0
+    assert (await client.get(f"{BASE}/{eid}")).json()["current_status"] == "under_repair"
+    assert "RuntimeError" in caplog.text and "SECRET" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_executor_can_set_status(client: AsyncClient, seeded, sent, db_session: AsyncSession):
     eid = (await _commissioned(client))["id"]
     executor = await _executor(db_session)
@@ -235,7 +253,7 @@ async def test_complete_certification_updates_passport(client: AsyncClient, seed
         assert resp.status_code == 403
 
     detail = (await client.get(f"{BASE}/{eid}")).json()
-    assert (detail["cert_number"], detail["cert_valid_until"]) == ("C-2", "2027-09-01")
+    assert (detail["cert_number"], detail["cert_valid_until"]) == ("C-2", "2099-01-01")
     assert detail["flags"]["cert_expired"] is False
     kinds = [e["event_kind"] for e in (await client.get(f"{BASE}/{eid}/events")).json()]
     assert kinds[0] == "cert_changed"

@@ -274,3 +274,25 @@ async def test_for_building_applicant_scope(client: AsyncClient, seeded, db_sess
     executor = await _mk_user(db_session, 700004, '["executor"]')
     with _as_user(executor):
         assert (await client.get(f"{BASE}/for-building/2")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_inspector_sees_for_building_only(client: AsyncClient, seeded,
+                                                db_session: AsyncSession):
+    working = await _commissioned(client)
+    inspector = await _mk_user(db_session, 700005, '["inspector"]')
+    with _as_user(inspector):
+        resp = await client.get(f"{BASE}/for-building/1")
+        assert resp.status_code == 200 and [r["id"] for r in resp.json()] == [working["id"]]
+        assert (await client.get(f"{BASE}/for-building/2")).json() == []
+        for method, path, body in [
+            ("GET", BASE, None), ("GET", f"{BASE}/summary", None),
+            ("GET", f"{BASE}/{working['id']}", None),
+            ("GET", f"{BASE}/{working['id']}/events", None),
+            ("GET", f"{BASE}/occurrences", None),
+            ("PUT", f"{BASE}/{working['id']}/status", {"status": "working"}),
+            ("POST", BASE, CREATE_BODY), ("GET", f"{BASE}/config", None),
+            ("POST", f"{BASE}/requests/bulk-confirm", {"request_numbers": ["260905-001"]}),
+        ]:
+            resp = await client.request(method, path, json=body)
+            assert resp.status_code == 403, f"{method} {path}: {resp.status_code}"

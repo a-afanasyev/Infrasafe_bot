@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.config.settings import settings
@@ -14,11 +15,13 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.services import workflow_runner
+from uk_management_bot.utils.constants import REQUEST_STATUS_EXECUTED
 from uk_management_bot.utils.request_workflow import (
     TERMINAL_STATUSES,
     EventIntent,
     InvalidTransition,
     PrincipalRef,
+    RequestState,
 )
 
 BASE = "/api/v2/elevators"
@@ -104,38 +107,63 @@ async def test_bulk_confirm_partial_failure_per_item(client: AsyncClient, seeded
                                                      manager_user: User, monkeypatch):
     calls: list[tuple] = []
 
+    def _old_state(number: str) -> RequestState:
+        # legacy-кодировка «Выполнена» без подтверждения → канон тот же «Выполнена»
+        return RequestState(request_number=number, user_id=1, status=REQUEST_STATUS_EXECUTED,
+                            manager_confirmed=False, is_returned=False)
+
     async def fake_run(session_factory, number, principal, command, now=None):
         calls.append((number, principal, command.action))
         if number == "260905-002":
             raise InvalidTransition("заявка не в статусе «Исполнено»")
-        return SimpleNamespace(post_commit_intents=[
-            EventIntent(kind="notify", data={"status": "approved"}),
-            EventIntent(kind="realtime", data={"status": "approved"}),
-        ])
+        if number == "260905-004":
+            raise OperationalError("SELECT 1", {}, Exception("connection reset"))
+        return SimpleNamespace(
+            old_state=_old_state(number),
+            post_commit_intents=[
+                EventIntent(kind="notify", data={"status": "approved"}),
+                EventIntent(kind="realtime", data={"status": "approved"}),
+            ],
+        )
 
     published: list = []
+    dispatched: list = []
 
     async def fake_publish(event_type, data):
         published.append((event_type, data))
 
+    async def fake_dispatch(request_number, intents, *args, **kwargs):
+        dispatched.append((request_number, tuple(intents)))
+        return len(intents)
+
     monkeypatch.setattr(workflow_runner, "run_command_async", fake_run)
     from uk_management_bot.api.elevators import router as elevators_router
     monkeypatch.setattr(elevators_router, "publish_request_event", fake_publish)
+    monkeypatch.setattr(elevators_router, "dispatch_notify_intents_detached", fake_dispatch)
 
-    resp = await client.post(f"{BASE}/requests/bulk-confirm",
-                             json={"request_numbers": ["260905-003", "260905-001", "260905-002"]})
+    resp = await client.post(f"{BASE}/requests/bulk-confirm", json={
+        "request_numbers": ["260905-003", "260905-001", "260905-002", "260905-004"]})
     assert resp.status_code == 200, resp.text
     items = resp.json()
     assert [(i["request_number"], i["ok"]) for i in items] == [
-        ("260905-001", True), ("260905-002", False), ("260905-003", True)]
+        ("260905-001", True), ("260905-002", False), ("260905-003", True), ("260905-004", False)]
     failed = items[1]
     assert failed["error_kind"] == "InvalidTransition" and "Исполнено" in failed["error"]
     assert items[0]["error"] is None
+    # инфраструктурный отказ БД на одном элементе не роняет ответ и не прячется
+    infra = items[3]
+    assert infra["error_kind"] == "InfrastructureError"
+    assert "OperationalError" in infra["error"] and "connection reset" not in infra["error"]
 
     assert all(p == PrincipalRef(kind="user", user_id=manager_user.id, source="api") for _, p, _ in calls)
     assert {a.name for _, _, a in calls} == {"MANAGER_CONFIRM"}
     assert [n for t, d in published for n in [d["number"]]] == ["260905-001", "260905-003"]
     assert all(t == "request.status_changed" for t, _ in published)
+    assert all(d["old_status"] == REQUEST_STATUS_EXECUTED and d["new_status"] == "approved"
+               for _, d in published)
+    # notify-интенты удачных элементов уехали в BackgroundTasks (автор заявки уведомляется)
+    assert [n for n, _ in dispatched] == ["260905-001", "260905-003"]
+    assert all(len(intents) == 2 for _, intents in dispatched)
 
 
 # ── Конфиг ───────────────────────────────────────────────────────────

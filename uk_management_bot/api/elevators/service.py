@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +26,7 @@ from uk_management_bot.services import elevator_service as domain
 from uk_management_bot.services.elevator_service.grouping import BulkItemResult, bulk_confirm_async
 from uk_management_bot.utils.business_time import business_today
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.utils.request_workflow import PrincipalRef
 
 from . import presenters, queries
@@ -38,6 +40,8 @@ from .schemas import (
     ElevatorSummaryOut,
     ElevatorsConfigOut,
 )
+
+logger = logging.getLogger(__name__)
 
 # Роли, видящие лифты любого дома (жителю — только дома с одобренной квартирой)
 STAFF_ROLES: frozenset[str] = frozenset({"executor", "inspector", "manager"})
@@ -205,13 +209,29 @@ async def set_status_tx(
         reason=reason, request_number=request_number, config=config,
     )
     await db.commit()
-    notified = 0
-    if change.resident_messages:
-        notified = await send_plain_messages(change.resident_messages)
+    notified = await _notify_residents(change.resident_messages, elevator_id=elevator_id)
     return ElevatorStatusChangeOut(
         changed=change.changed, old_status=change.old_status, new_status=change.new_status,
-        status_since=change.status_since, notified_residents=notified,
+        status_since=presenters.aware_utc(change.status_since), notified_residents=notified,
     )
+
+
+async def _notify_residents(messages: Sequence[Any], *, elevator_id: int) -> int:
+    """Рассылка после commit: любой сбой — в лог, статус уже сохранён, 500 недопустим.
+
+    Broad except осознанно (best-effort уведомление, см. правило ратчета
+    AUD5-ARCH-5); текст исключения не логируется — httpx-ошибки несут URL с
+    токеном бота, поэтому только класс/HTTP-статус (``describe_http_error``).
+    """
+    if not messages:
+        return 0
+    try:
+        return await send_plain_messages(messages)
+    except Exception as exc:  # noqa: BLE001 — best-effort после commit
+        logger.error(
+            "Рассылка жителям о лифте %s не выполнена: %s", elevator_id, describe_http_error(exc)
+        )
+        return 0
 
 
 # ── Конфиг ───────────────────────────────────────────────────────────

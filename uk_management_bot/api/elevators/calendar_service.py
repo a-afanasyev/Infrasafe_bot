@@ -55,12 +55,13 @@ async def calendar(
     db: AsyncSession, *, from_date: date, to_date: date, state: str | None, kind: str | None,
     language: str,
 ) -> list[ElevatorOccurrenceOut]:
-    """Календарь всех лифтов за период; ``kind`` фильтруется по загруженным строкам."""
-    rows = await domain.list_all_occurrences_async(db, from_date=from_date, to_date=to_date, state=state)
+    """Календарь всех лифтов за период; фильтры ``state``/``kind`` — в SQL."""
+    rows = await domain.list_all_occurrences_async(
+        db, from_date=from_date, to_date=to_date, state=state, kind=kind
+    )
     return [
         presenters.build_occurrence(row, domain.elevator_label(row.elevator, language))
         for row in rows
-        if kind is None or row.kind == kind
     ]
 
 

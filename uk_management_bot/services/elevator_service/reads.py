@@ -198,10 +198,14 @@ async def list_occurrences_async(
 
 
 async def list_all_occurrences_async(
-    db: AsyncSession, *, from_date: date, to_date: date, state: str | None = "planned"
+    db: AsyncSession, *, from_date: date, to_date: date, state: str | None = "planned",
+    kind: str | None = None,
 ) -> list[ElevatorMaintenanceOccurrence]:
-    """Календарь всех лифтов за период (включительно), лифт с домом подгружен."""
-    _validate_occurrence_filters(None, state)
+    """Календарь всех лифтов за период (включительно), лифт с домом подгружен.
+
+    ``state``/``kind`` — фильтры в SQL; ``None`` = без фильтра.
+    """
+    _validate_occurrence_filters(kind, state)
     if from_date > to_date:
         raise ElevatorValidationError("from_date не может быть позже to_date")
     stmt = (
@@ -216,6 +220,8 @@ async def list_all_occurrences_async(
     )
     if state is not None:
         stmt = stmt.where(ElevatorMaintenanceOccurrence.state == state)
+    if kind is not None:
+        stmt = stmt.where(ElevatorMaintenanceOccurrence.kind == kind)
     stmt = stmt.order_by(ElevatorMaintenanceOccurrence.due_on, ElevatorMaintenanceOccurrence.id)
     return list((await db.execute(stmt)).scalars().all())
 
