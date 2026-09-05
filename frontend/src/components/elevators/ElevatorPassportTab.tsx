@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { fmtDateOnly, fmtInstant } from '../../utils/elevatorsFormat'
+import FormSection from './FormSection'
+import { DASH, fmtDateOnly, fmtInstant, isHttpUrl } from '../../utils/elevatorsFormat'
 import type { ElevatorDetail } from '../../types/elevators'
 
 /**
@@ -20,21 +21,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[11px] uppercase tracking-wider text-text-muted">{label}</span>
-      <span className="text-[13px] text-text-primary break-words">{value ?? '—'}</span>
+      <span className="text-[13px] text-text-primary break-words">{value ?? DASH}</span>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const dash = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? DASH : String(v))
+
+/** Ссылка на акт — кликабельна только для http(s); `javascript:` и прочее — текстом. */
+function ActUrl({ url }: { url: string | null }) {
+  if (!url) return DASH
+  if (!isHttpUrl(url)) return <>{url}</>
   return (
-    <div className="bg-bg-card border border-border-default rounded-default p-4 flex flex-col gap-3">
-      <h3 className="text-[13px] font-semibold text-text-primary">{title}</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{children}</div>
-    </div>
+    <a href={url} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">{url}</a>
   )
 }
-
-const dash = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? '—' : String(v))
 
 export default function ElevatorPassportTab({ elevator: e, canWrite, onCommission, onArchive, commissionPending }: Props) {
   const { t } = useTranslation()
@@ -59,7 +60,7 @@ export default function ElevatorPassportTab({ elevator: e, canWrite, onCommissio
         </div>
       )}
 
-      <Section title={t('elevators.form.sectionRequired')}>
+      <FormSection title={t('elevators.form.sectionRequired')}>
         <Row label={t('elevators.form.building')} value={e.building_address} />
         <Row label={t('elevators.form.yard')} value={dash(e.yard_name)} />
         <Row label={t('elevators.form.entrance')} value={e.entrance_number} />
@@ -67,9 +68,9 @@ export default function ElevatorPassportTab({ elevator: e, canWrite, onCommissio
         <Row label={t('elevators.form.passportNumber')} value={e.passport_number} />
         <Row label={t('elevators.form.manufacturer')} value={e.manufacturer} />
         <Row label={t('elevators.form.serialNumber')} value={e.serial_number} />
-      </Section>
+      </FormSection>
 
-      <Section title={t('elevators.form.sectionPassport')}>
+      <FormSection title={t('elevators.form.sectionPassport')}>
         <Row label={t('elevators.form.factoryNumber')} value={dash(e.factory_number)} />
         <Row label={t('elevators.form.model')} value={dash(e.model)} />
         <Row label={t('elevators.form.productionYear')} value={dash(e.production_year)} />
@@ -82,27 +83,22 @@ export default function ElevatorPassportTab({ elevator: e, canWrite, onCommissio
         <Row label={t('elevators.detail.publicCode')} value={e.public_code} />
         <Row label={t('elevators.form.isPublic')} value={yesNo(e.is_public)} />
         <Row label={t('elevators.detail.version')} value={e.version} />
-      </Section>
+      </FormSection>
 
-      <Section title={t('elevators.form.sectionContract')}>
+      <FormSection title={t('elevators.form.sectionContract')}>
         <Row label={t('elevators.form.serviceOrgName')} value={dash(e.service_org_name)} />
         <Row label={t('elevators.form.serviceOrgPhone')} value={dash(e.service_org_phone)} />
         <Row label={t('elevators.form.contractNumber')} value={dash(e.contract_number)} />
         <Row label={t('elevators.form.contractUntil')} value={fmtDateOnly(e.contract_until)} />
-      </Section>
+      </FormSection>
 
-      <Section title={t('elevators.form.sectionCert')}>
+      <FormSection title={t('elevators.form.sectionCert')}>
         <Row label={t('elevators.form.certNumber')} value={dash(e.cert_number)} />
         <Row label={t('elevators.form.certValidUntil')} value={fmtDateOnly(e.cert_valid_until)} />
-        <Row
-          label={t('elevators.form.certActUrl')}
-          value={e.cert_act_url ? (
-            <a href={e.cert_act_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">{e.cert_act_url}</a>
-          ) : '—'}
-        />
-      </Section>
+        <Row label={t('elevators.form.certActUrl')} value={<ActUrl url={e.cert_act_url} />} />
+      </FormSection>
 
-      <Section title={t('elevators.form.sectionDowntime')}>
+      <FormSection title={t('elevators.form.sectionDowntime')}>
         <Row label={t('elevators.form.downtimeReason')} value={dash(e.downtime_reason)} />
         <Row label={t('elevators.form.sparePartExpectedOn')} value={fmtDateOnly(e.spare_part_expected_on)} />
         <Row label={t('elevators.form.publishDowntimeDetails')} value={yesNo(e.publish_downtime_details)} />
@@ -112,7 +108,7 @@ export default function ElevatorPassportTab({ elevator: e, canWrite, onCommissio
             <Row label={t('elevators.detail.archivedReason')} value={dash(e.archived_reason)} />
           </>
         )}
-      </Section>
+      </FormSection>
     </div>
   )
 }

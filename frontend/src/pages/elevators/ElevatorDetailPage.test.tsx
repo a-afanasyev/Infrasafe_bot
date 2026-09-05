@@ -55,6 +55,23 @@ describe('ElevatorDetailPage', () => {
     expect(screen.getByText('OTIS')).toBeInTheDocument()
   })
 
+  it('ссылка на акт: http(s) — <a>, javascript: — просто текст', async () => {
+    mockDetail({ ...ELEVATOR_DETAIL, cert_act_url: 'javascript:alert(1)' })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Лифт 1, подъезд 2' })
+    expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).toBeNull()
+  })
+
+  it('ссылка на акт https — кликабельна с rel=noreferrer', async () => {
+    mockDetail(ELEVATOR_DETAIL)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Лифт 1, подъезд 2' })
+    const link = screen.getByRole('link', { name: 'https://example.org/act.pdf' })
+    expect(link).toHaveAttribute('href', 'https://example.org/act.pdf')
+    expect(link.getAttribute('rel')).toContain('noreferrer')
+  })
+
   it('кнопки статусов disabled, если лифт не введён в эксплуатацию', async () => {
     mockDetail({ ...ELEVATOR_DETAIL, is_commissioned: false, current_status: null })
     const user = userEvent.setup()
@@ -158,7 +175,7 @@ describe('ElevatorDetailPage', () => {
     await waitFor(() =>
       expect(body).toEqual({
         category: 'elevator', urgency: 'high', description: 'Не едет',
-        address: ELEVATOR_DETAIL.building_address, elevator_id: 7,
+        building_id: 12, address: ELEVATOR_DETAIL.building_address, elevator_id: 7,
         elevator_operational: false, acceptance_mode: 'manager',
       }),
     )

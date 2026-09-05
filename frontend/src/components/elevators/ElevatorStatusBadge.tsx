@@ -9,7 +9,7 @@ import type { ElevatorStatus } from '../../types/elevators'
 const STATUS_CLASS: Record<ElevatorStatus, string> = {
   working: 'bg-green/15 text-green',
   not_working: 'bg-red/15 text-red',
-  under_repair: 'bg-orange-500/15 text-orange-500',
+  under_repair: 'bg-orange/15 text-orange',
   maintenance: 'bg-blue/15 text-blue',
 }
 

@@ -1,4 +1,4 @@
-import { emptyToNull, toIntOrNull } from './elevatorsFormat'
+import { emptyToNull, isHttpUrl, toIntOrNull } from './elevatorsFormat'
 import type { ElevatorCreateIn, ElevatorDetail, ElevatorPatchIn } from '../types/elevators'
 
 /**
@@ -33,6 +33,22 @@ export interface ElevatorFormState {
 }
 
 export type ElevatorFormTextKey = Exclude<keyof ElevatorFormState, 'publish_downtime_details' | 'is_public'>
+
+/** Ширины колонок бэка (models/elevator.py) — maxLength инпутов. */
+export const ELEVATOR_FIELD_MAX: Partial<Record<ElevatorFormTextKey, number>> = {
+  passport_number: 100,
+  serial_number: 100,
+  factory_number: 100,
+  contract_number: 100,
+  cert_number: 100,
+  floors_served: 100,
+  manufacturer: 200,
+  model: 200,
+  service_org_name: 200,
+  service_org_phone: 50,
+  cert_act_url: 500,
+  downtime_reason: 500,
+}
 
 export const EMPTY_ELEVATOR_FORM: ElevatorFormState = {
   yard_id: '',
@@ -109,9 +125,9 @@ export function copyPassportFrom(current: ElevatorFormState, source: ElevatorDet
   }
 }
 
-export type ElevatorFormError = 'required' | 'positiveInt'
+export type ElevatorFormError = 'required' | 'positiveInt' | 'invalidUrl'
 
-/** Клиентская валидация обязательных полей; null = ок. */
+/** Клиентская валидация обязательных полей и ссылки на акт; null = ок. */
 export function validateElevatorForm(f: ElevatorFormState): ElevatorFormError | null {
   const requiredFilled =
     f.building_id !== '' &&
@@ -124,6 +140,8 @@ export function validateElevatorForm(f: ElevatorFormState): ElevatorFormError | 
   const entrance = toIntOrNull(f.entrance_number)
   const number = toIntOrNull(f.elevator_number)
   if (entrance === null || entrance <= 0 || number === null || number <= 0) return 'positiveInt'
+  const url = f.cert_act_url.trim()
+  if (url !== '' && !isHttpUrl(url)) return 'invalidUrl'
   return null
 }
 

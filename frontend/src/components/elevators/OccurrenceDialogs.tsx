@@ -1,64 +1,29 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DialogShell, Field } from './DialogShell'
+import { useOpenReset } from '../../hooks/useOpenReset'
 import {
   useCompleteOccurrence,
   useCreateOccurrence,
   useGenerateOccurrences,
   useRescheduleOccurrence,
 } from '../../hooks/useElevatorCalendar'
-import { emptyToNull } from '../../utils/elevatorsFormat'
-import { OCCURRENCE_KINDS, type ElevatorOccurrence, type OccurrenceKind } from '../../types/elevators'
+import { emptyToNull, isHttpUrl } from '../../utils/elevatorsFormat'
+import { ELEVATOR_FIELD_MAX } from '../../utils/elevatorForm'
+import {
+  MAX_REASON_LEN,
+  OCCURRENCE_KINDS,
+  type ElevatorOccurrence,
+  type OccurrenceKind,
+} from '../../types/elevators'
 
 /**
  * Диалоги графика ТО/освидетельствований: создать / сгенерировать / перенести /
- * выполнено. Один файл — четыре маленьких диалога с общим каркасом.
+ * выполнено. Общий каркас — `DialogShell`.
  */
-
-interface ShellProps {
-  open: boolean
-  title: string
-  onClose: () => void
-  onSubmit: () => void
-  canSubmit: boolean
-  pending: boolean
-  submitLabel: string
-  children: React.ReactNode
-}
-
-function DialogShell({ open, title, onClose, onSubmit, canSubmit, pending, submitLabel, children }: ShellProps) {
-  const { t } = useTranslation()
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">{children}</div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={pending}>{t('common.cancel')}</Button>
-          <Button onClick={onSubmit} disabled={!canSubmit || pending}>
-            {pending ? t('common.saving') : submitLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-    </div>
-  )
-}
 
 function KindSelect({ id, value, onChange }: { id: string; value: OccurrenceKind; onChange: (k: OccurrenceKind) => void }) {
   const { t } = useTranslation()
@@ -69,15 +34,6 @@ function KindSelect({ id, value, onChange }: { id: string; value: OccurrenceKind
       ))}
     </Select>
   )
-}
-
-/** Render-time reset формы при открытии (паттерн MaterialFormDialog). */
-function useOpenReset(open: boolean, reset: () => void) {
-  const [prevOpen, setPrevOpen] = useState(false)
-  if (open !== prevOpen) {
-    setPrevOpen(open)
-    if (open) reset()
-  }
 }
 
 // ── Создать пункт ────────────────────────────────────────────────────
@@ -133,10 +89,10 @@ export function GenerateOccurrencesDialog({ elevatorId, open, onClose }: { eleva
         <Input id="occ-gen-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
       </Field>
       <Field id="occ-gen-every" label={t('elevators.occurrences.everyMonths')}>
-        <Input id="occ-gen-every" type="number" min="1" value={everyMonths} onChange={(e) => setEveryMonths(e.target.value)} />
+        <Input id="occ-gen-every" type="number" min={1} value={everyMonths} onChange={(e) => setEveryMonths(e.target.value)} />
       </Field>
       <Field id="occ-gen-count" label={t('elevators.occurrences.count')}>
-        <Input id="occ-gen-count" type="number" min="1" value={count} onChange={(e) => setCount(e.target.value)} />
+        <Input id="occ-gen-count" type="number" min={1} value={count} onChange={(e) => setCount(e.target.value)} />
       </Field>
     </DialogShell>
   )
@@ -188,6 +144,10 @@ export function CompleteOccurrenceDialog({ elevatorId, occurrence, onClose }: { 
       setError(t('elevators.occurrences.certRequired'))
       return
     }
+    if (isCert && !isHttpUrl(certActUrl.trim())) {
+      setError(t('elevators.form.invalidUrl'))
+      return
+    }
     setError(null)
     mutation.mutate(
       {
@@ -208,7 +168,7 @@ export function CompleteOccurrenceDialog({ elevatorId, occurrence, onClose }: { 
       canSubmit pending={mutation.isPending} submitLabel={t('elevators.actions.complete')} onSubmit={submit}
     >
       <Field id="occ-done-comment" label={t('elevators.occurrences.comment')}>
-        <Textarea id="occ-done-comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+        <Textarea id="occ-done-comment" value={comment} maxLength={MAX_REASON_LEN} onChange={(e) => setComment(e.target.value)} />
       </Field>
       <Field id="occ-done-request" label={t('elevators.occurrences.requestNumber')}>
         <Input id="occ-done-request" value={requestNumber} onChange={(e) => setRequestNumber(e.target.value)} />
@@ -217,13 +177,13 @@ export function CompleteOccurrenceDialog({ elevatorId, occurrence, onClose }: { 
         <>
           <p className="text-[12px] text-text-muted">{t('elevators.occurrences.certFieldsHint')}</p>
           <Field id="occ-done-cert-number" label={t('elevators.form.certNumber')}>
-            <Input id="occ-done-cert-number" value={certNumber} onChange={(e) => setCertNumber(e.target.value)} />
+            <Input id="occ-done-cert-number" maxLength={ELEVATOR_FIELD_MAX.cert_number} value={certNumber} onChange={(e) => setCertNumber(e.target.value)} />
           </Field>
           <Field id="occ-done-cert-until" label={t('elevators.form.certValidUntil')}>
             <Input id="occ-done-cert-until" type="date" value={certValidUntil} onChange={(e) => setCertValidUntil(e.target.value)} />
           </Field>
           <Field id="occ-done-cert-url" label={t('elevators.form.certActUrl')}>
-            <Input id="occ-done-cert-url" type="url" value={certActUrl} onChange={(e) => setCertActUrl(e.target.value)} />
+            <Input id="occ-done-cert-url" type="url" maxLength={ELEVATOR_FIELD_MAX.cert_act_url} value={certActUrl} onChange={(e) => setCertActUrl(e.target.value)} />
           </Field>
         </>
       )}

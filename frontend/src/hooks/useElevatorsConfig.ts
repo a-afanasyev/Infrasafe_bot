@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
-import { ELEVATORS_BASE, elevatorKeys } from './useElevators'
+import { ELEVATORS_BASE, STALE_MS, elevatorKeys } from './useElevators'
 import type { ElevatorsConfigIn, ElevatorsConfigOut } from '../types/elevators'
 
 /**
@@ -18,7 +18,7 @@ export function useElevatorsConfig() {
   return useQuery<ElevatorsConfigOut>({
     queryKey: CONFIG_KEY,
     queryFn: () => apiClient.get(`${ELEVATORS_BASE}/config`).then((r) => r.data),
-    staleTime: 15_000,
+    staleTime: STALE_MS,
   })
 }
 

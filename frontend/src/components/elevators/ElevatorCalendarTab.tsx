@@ -13,7 +13,7 @@ import {
   RescheduleOccurrenceDialog,
 } from './OccurrenceDialogs'
 import { useCancelOccurrence, useElevatorOccurrences } from '../../hooks/useElevatorCalendar'
-import { fmtDateOnly, fmtInstant } from '../../utils/elevatorsFormat'
+import { DASH, fmtDateOnly, fmtInstant } from '../../utils/elevatorsFormat'
 import {
   OCCURRENCE_KINDS,
   type CalendarState,
@@ -97,7 +97,7 @@ export default function ElevatorCalendarTab({ elevatorId, canWrite }: Props) {
               <Th>{t('elevators.occurrences.doneAt')}</Th>
               <Th>{t('elevators.occurrences.comment')}</Th>
               <Th>{t('elevators.occurrences.request')}</Th>
-              <Th />
+              <Th><span className="sr-only">{t('elevators.columns.actions')}</span></Th>
             </HeadRow>
           </thead>
           <tbody>
@@ -107,13 +107,13 @@ export default function ElevatorCalendarTab({ elevatorId, canWrite }: Props) {
                 <Td>{t(`elevators.occurrences.kind.${o.kind}`)}</Td>
                 <Td>{t(`elevators.occurrences.state.${o.state}`)}</Td>
                 <Td className="whitespace-nowrap">{fmtInstant(o.done_at)}</Td>
-                <Td className="max-w-64 truncate">{o.comment ?? '—'}</Td>
+                <Td className="max-w-64 truncate">{o.comment ?? DASH}</Td>
                 <Td>
                   {o.request_number ? (
                     <Link to={`/dashboard?request=${o.request_number}`} className="font-semibold text-accent hover:underline">
                       №{o.request_number}
                     </Link>
-                  ) : '—'}
+                  ) : DASH}
                 </Td>
                 <Td>
                   {o.state === 'planned' && (

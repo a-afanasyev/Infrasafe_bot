@@ -18,13 +18,19 @@ function FlagIcons({ flags }: { flags: ElevatorFlags }) {
   return (
     <span className="flex items-center gap-1.5">
       {flags.no_contract && (
-        <span title={t('elevators.flags.no_contract')} className="text-orange-500"><FileX2 size={15} /></span>
+        <span role="img" aria-label={t('elevators.flags.no_contract')} title={t('elevators.flags.no_contract')} className="text-orange">
+          <FileX2 size={15} aria-hidden />
+        </span>
       )}
       {flags.cert_expired && (
-        <span title={t('elevators.flags.cert_expired')} className="text-red"><ShieldAlert size={15} /></span>
+        <span role="img" aria-label={t('elevators.flags.cert_expired')} title={t('elevators.flags.cert_expired')} className="text-red">
+          <ShieldAlert size={15} aria-hidden />
+        </span>
       )}
       {flags.maintenance_overdue && (
-        <span title={t('elevators.flags.maintenance_overdue')} className="text-red"><Wrench size={15} /></span>
+        <span role="img" aria-label={t('elevators.flags.maintenance_overdue')} title={t('elevators.flags.maintenance_overdue')} className="text-red">
+          <Wrench size={15} aria-hidden />
+        </span>
       )}
     </span>
   )

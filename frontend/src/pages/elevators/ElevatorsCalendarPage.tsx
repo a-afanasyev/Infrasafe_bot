@@ -9,12 +9,13 @@ import { usePageTitle } from '../../hooks/usePageTitle'
 import { useAllOccurrences } from '../../hooks/useElevatorCalendar'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import EmptyState from '../../components/shared/EmptyState'
-import { fmtDateOnly, isoDatePlusDays } from '../../utils/elevatorsFormat'
+import { displayTodayPlusDays, fmtDateOnly } from '../../utils/elevatorsFormat'
 import type { ElevatorOccurrence } from '../../types/elevators'
 
 /**
  * Общий календарь (/dashboard/elevators/calendar): все planned записи графика
- * на диапазон дат (по умолчанию 60 дней вперёд), сгруппированные по дате.
+ * на диапазон дат (по умолчанию 60 дней вперёд от «сегодня» в display-зоне
+ * проекта, не в зоне браузера), сгруппированные по дате.
  */
 const DEFAULT_WINDOW_DAYS = 60
 
@@ -29,8 +30,8 @@ function groupByDate(items: ElevatorOccurrence[]): Array<[string, ElevatorOccurr
 export default function ElevatorsCalendarPage() {
   const { t } = useTranslation()
   usePageTitle(t('elevators.calendar.title'))
-  const [from, setFrom] = useState(() => isoDatePlusDays(0))
-  const [to, setTo] = useState(() => isoDatePlusDays(DEFAULT_WINDOW_DAYS))
+  const [from, setFrom] = useState(() => displayTodayPlusDays(0))
+  const [to, setTo] = useState(() => displayTodayPlusDays(DEFAULT_WINDOW_DAYS))
   const occurrences = useAllOccurrences({ from, to, state: 'planned' })
   const groups = groupByDate(occurrences.data ?? [])
 

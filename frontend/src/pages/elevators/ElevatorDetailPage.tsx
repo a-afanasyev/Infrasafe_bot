@@ -69,7 +69,7 @@ export default function ElevatorDetailPage() {
             </p>
             {e.apartments_without_entrance_count > 0 && (
               <p
-                className="text-[12px] text-orange-500 flex items-center gap-1.5"
+                className="text-[12px] text-orange flex items-center gap-1.5"
                 title={t('elevators.detail.apartmentsWithoutEntranceHint')}
               >
                 <TriangleAlert size={13} />

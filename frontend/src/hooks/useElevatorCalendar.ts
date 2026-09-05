@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
-import { ELEVATORS_BASE, cleanParams, elevatorKeys } from './useElevators'
+import { ELEVATORS_BASE, STALE_MS, cleanParams, elevatorKeys, useApiLang } from './useElevators'
 import type {
   ElevatorOccurrence,
   ElevatorOccurrenceCompleteIn,
@@ -16,28 +16,28 @@ import type {
  * График ТО/освидетельствований: записи одного лифта и общий календарь
  * (`GET /occurrences`), мутации создания/генерации/переноса/отмены/закрытия.
  * Все мутации инвалидируют оба списка + карточку (флаги maintenance_overdue,
- * cert_* пересчитываются на бэке) и сводку.
+ * cert_* пересчитываются на бэке) и сводку. GET'ы несут `lang` (elevator_label).
  */
 
-const STALE_MS = 15_000
-
 export function useElevatorOccurrences(elevatorId: number, filters: OccurrenceFilters = {}) {
+  const lang = useApiLang()
   return useQuery<ElevatorOccurrence[]>({
-    queryKey: ['elevator-occurrences', elevatorId, filters],
+    queryKey: ['elevator-occurrences', elevatorId, filters, lang],
     queryFn: () =>
       apiClient
-        .get(`${ELEVATORS_BASE}/${elevatorId}/occurrences`, { params: cleanParams(filters) })
+        .get(`${ELEVATORS_BASE}/${elevatorId}/occurrences`, { params: { ...cleanParams(filters), lang } })
         .then((r) => r.data),
     staleTime: STALE_MS,
   })
 }
 
 export function useAllOccurrences(filters: OccurrenceFilters) {
+  const lang = useApiLang()
   return useQuery<ElevatorOccurrence[]>({
-    queryKey: ['elevators-occurrences', filters],
+    queryKey: ['elevators-occurrences', filters, lang],
     queryFn: () =>
       apiClient
-        .get(`${ELEVATORS_BASE}/occurrences`, { params: cleanParams(filters) })
+        .get(`${ELEVATORS_BASE}/occurrences`, { params: { ...cleanParams(filters), lang } })
         .then((r) => r.data),
     staleTime: STALE_MS,
   })

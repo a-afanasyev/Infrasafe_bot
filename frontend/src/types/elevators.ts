@@ -130,11 +130,16 @@ export interface ElevatorsConfigIn {
   staff_reminders?: Partial<ElevatorsStaffReminders>
 }
 
-/** Поля колл-центра для «Создать ремонт» (elevator_* и acceptance_mode — T6). */
+/**
+ * Поля колл-центра для «Создать ремонт» (Ф4a-1): адрес уровня дома —
+ * `building_id` (без него сервер отвечает 422), `address` — только для
+ * читаемости, сервер его игнорирует при заданном доме.
+ */
 export interface ElevatorRepairIn {
   category: 'elevator'
   urgency: string
   description: string
+  building_id: number
   address: string
   elevator_id: number
   elevator_operational: false

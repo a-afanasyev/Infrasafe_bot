@@ -1,5 +1,5 @@
-import { format, parseISO } from 'date-fns'
-import { formatDateTime as formatInstant } from './timezone'
+import { addDays, format, parseISO } from 'date-fns'
+import { formatDateTime as formatInstant, todayInDisplayTz } from './timezone'
 
 /**
  * Форматтеры модуля «Лифты» (без JSX). Даты-инстанты (ISO с временем) — через
@@ -7,7 +7,8 @@ import { formatDateTime as formatInstant } from './timezone'
  * (due_on, contract_until…) — как есть, без сдвига по зоне.
  */
 
-const DASH = '—'
+/** Единый прочерк для пустых значений. */
+export const DASH = '—'
 
 /** Доля 0..1 → «97 %»; null → «—». */
 export function fmtAvailability(value: number | null | undefined): string {
@@ -30,10 +31,22 @@ export function fmtInstant(value: string | null | undefined): string {
   return formatInstant(value)
 }
 
-/** `YYYY-MM-DD` для сегодняшнего дня + сдвиг в днях (для окон календаря). */
-export function isoDatePlusDays(days: number, from: Date = new Date()): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days)
-  return format(d, 'yyyy-MM-dd')
+/**
+ * `YYYY-MM-DD` «сегодня» в display-зоне проекта + сдвиг в днях — для окон
+ * календаря. Зона браузера не участвует (ARCH-137).
+ */
+export function displayTodayPlusDays(days: number): string {
+  return format(addDays(parseISO(todayInDisplayTz()), days), 'yyyy-MM-dd')
+}
+
+/** Только http(s)-ссылки: `javascript:`/`data:`/относительные — нет. */
+export function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 /** Пустая строка → null (для опциональных текстовых полей формы). */
@@ -54,6 +67,7 @@ export function toIntOrNull(value: string): number | null {
 export function parseIntList(value: string): number[] {
   return value
     .split(/[,\s;]+/)
+    .filter((s) => s !== '')
     .map((s) => Number(s))
     .filter((n) => Number.isInteger(n) && n >= 0)
 }

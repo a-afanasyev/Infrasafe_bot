@@ -5,9 +5,16 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { apiClient } from '../../api/client'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { ELEVATORS_BASE, useCreateElevator, useElevator, useElevators, usePatchElevator } from '../../hooks/useElevators'
+import {
+  elevatorKeys,
+  fetchElevator,
+  useApiLang,
+  useCreateElevator,
+  useElevator,
+  useElevators,
+  usePatchElevator,
+} from '../../hooks/useElevators'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import EmptyState from '../../components/shared/EmptyState'
 import ElevatorFormFields from '../../components/elevators/ElevatorFormFields'
@@ -29,11 +36,16 @@ import type { ElevatorDetail } from '../../types/elevators'
  * «Скопировать предыдущий» — паспортные/договорные поля последнего созданного
  * лифта (max id из списка), кроме номера/серийника/паспорта/подъезда.
  * PATCH несёт expected_version; 409 → toast (хук).
+ *
+ * Сид формы из карточки — ОДИН раз. Фоновый рефетч (staleTime/фокус окна)
+ * приносит новый объект `detail.data` с тем же `version` — ввод не трогаем;
+ * если `version` вырос (кто-то сохранил карточку), пересиживаем и предупреждаем.
  */
 export default function ElevatorFormPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const lang = useApiLang()
   const { id: idParam } = useParams<{ id: string }>()
   const editId = idParam !== undefined ? Number(idParam) : null
   const isEdit = editId !== null && Number.isFinite(editId)
@@ -49,11 +61,12 @@ export default function ElevatorFormPage() {
   const [error, setError] = useState<ElevatorFormError | null>(null)
   const [copying, setCopying] = useState(false)
 
-  // Сид формы из карточки — один раз, когда detail пришёл (render-time, без useEffect)
-  const [seededFrom, setSeededFrom] = useState<ElevatorDetail | null>(null)
-  if (isEdit && detail.data && detail.data !== seededFrom) {
-    setSeededFrom(detail.data)
+  const [seededVersion, setSeededVersion] = useState<number | null>(null)
+  if (isEdit && detail.data && detail.data.version !== seededVersion) {
+    const firstSeed = seededVersion === null
+    setSeededVersion(detail.data.version)
     setForm(formFromDetail(detail.data))
+    if (!firstSeed) toast.info(t('elevators.form.reloaded'))
   }
 
   const patchForm = (p: Partial<ElevatorFormState>) => setForm((prev) => ({ ...prev, ...p }))
@@ -68,8 +81,8 @@ export default function ElevatorFormPage() {
     setCopying(true)
     try {
       const full = await queryClient.fetchQuery<ElevatorDetail>({
-        queryKey: ['elevator', source.id],
-        queryFn: () => apiClient.get(`${ELEVATORS_BASE}/${source.id}`).then((r) => r.data),
+        queryKey: [...elevatorKeys.detail(source.id), lang],
+        queryFn: () => fetchElevator(source.id, lang),
       })
       setForm((prev) => copyPassportFrom(prev, full))
       toast.success(t('elevators.form.copied', { label: full.label }))

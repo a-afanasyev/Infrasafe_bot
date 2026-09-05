@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router'
-import { render, screen, waitFor } from '../../test/test-utils'
+import { render as rtlRender } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { I18nextProvider } from 'react-i18next'
+import { MemoryRouter } from 'react-router'
+import { toast } from 'sonner'
+import { render, screen, testI18n, waitFor } from '../../test/test-utils'
 import { server } from '../../test/msw/server'
 import { useAuthStore } from '../../stores/authStore'
 import { ELEVATOR_CARD, ELEVATOR_DETAIL } from '../../test/fixtures/elevators'
@@ -39,6 +44,7 @@ function renderCreate() {
 
 beforeEach(() => {
   useAuthStore.setState({ user: { id: 1, roles: ['manager'] }, isAuthenticated: true, hydrating: false })
+  vi.mocked(toast.info).mockClear()
 })
 
 describe('ElevatorFormPage (создание)', () => {
@@ -119,6 +125,51 @@ describe('ElevatorFormPage (создание)', () => {
   })
 })
 
+describe('ElevatorFormPage (правка): сид формы один раз', () => {
+  function renderEditWithClient(qc: QueryClient) {
+    return rtlRender(
+      <QueryClientProvider client={qc}>
+        <I18nextProvider i18n={testI18n}>
+          <MemoryRouter initialEntries={['/dashboard/elevators/7/edit']}>
+            <Routes>
+              <Route path="/dashboard/elevators/:id/edit" element={<ElevatorFormPage />} />
+            </Routes>
+          </MemoryRouter>
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+  }
+
+  it('рефетч с тем же version не затирает ввод; новый version — пересид + toast', async () => {
+    let version = 3
+    mockAddresses()
+    server.use(
+      http.get('*/api/v2/elevators/7', () => HttpResponse.json({ ...ELEVATOR_DETAIL, version })),
+    )
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 }, mutations: { retry: false } },
+    })
+    const user = userEvent.setup()
+    renderEditWithClient(qc)
+    const manufacturer = await screen.findByLabelText(/^Производитель/)
+    await waitFor(() => expect(manufacturer).toHaveValue('OTIS'))
+    await user.clear(manufacturer)
+    await user.type(manufacturer, 'KONE')
+
+    // фоновый рефетч: тот же version → форма не тронута, предупреждения нет
+    await qc.refetchQueries({ queryKey: ['elevator', 7] })
+    await waitFor(() => expect(qc.getQueryState(['elevator', 7, 'ru'])?.dataUpdateCount).toBeGreaterThan(1))
+    expect(screen.getByLabelText(/^Производитель/)).toHaveValue('KONE')
+    expect(toast.info).not.toHaveBeenCalled()
+
+    // кто-то сохранил карточку: version вырос → пересид + toast.info
+    version = 4
+    await qc.refetchQueries({ queryKey: ['elevator', 7] })
+    await waitFor(() => expect(screen.getByLabelText(/^Производитель/)).toHaveValue('OTIS'))
+    expect(toast.info).toHaveBeenCalledWith(testI18n.t('elevators.form.reloaded'))
+  })
+})
+
 describe('ElevatorFormPage (правка)', () => {
   it('PATCH несёт expected_version из карточки', async () => {
     let body: Record<string, unknown> | null = null
@@ -159,6 +210,17 @@ describe('elevatorForm (чистые функции)', () => {
     }
     expect(validateElevatorForm(filled)).toBe('positiveInt')
     expect(validateElevatorForm({ ...filled, entrance_number: '2' })).toBeNull()
+  })
+
+  it('validateElevatorForm: cert_act_url только http(s)', () => {
+    const ok = {
+      ...EMPTY_ELEVATOR_FORM, building_id: '12', entrance_number: '2', elevator_number: '1',
+      passport_number: 'P', manufacturer: 'M', serial_number: 'S',
+    }
+    expect(validateElevatorForm({ ...ok, cert_act_url: 'https://example.org/act.pdf' })).toBeNull()
+    expect(validateElevatorForm({ ...ok, cert_act_url: 'javascript:alert(1)' })).toBe('invalidUrl')
+    expect(validateElevatorForm({ ...ok, cert_act_url: 'example.org/act.pdf' })).toBe('invalidUrl')
+    expect(validateElevatorForm({ ...ok, cert_act_url: '   ' })).toBeNull()
   })
 
   it('copyPassportFrom не трогает номер/серийник/паспорт/подъезд', () => {

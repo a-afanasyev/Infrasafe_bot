@@ -2422,7 +2422,8 @@
       "maintenanceOverdue": "Texnik xizmat muddati o'tgan",
       "downtimeOverThreshold": "Uzoq to'xtab qolish",
       "requestsWithoutElevator": "Liftga bog'lanmagan lift arizalari",
-      "byStatus": "Holatlar bo'yicha"
+      "byStatus": "Holatlar bo'yicha",
+      "byYard": "Hovlilar bo'yicha"
     },
     "filters": {
       "yard": "Hovli",
@@ -2505,7 +2506,9 @@
       "required": "Majburiy maydonlarni to'ldiring: hovli va uy, kirish, lift raqami, pasport raqami, ishlab chiqaruvchi, seriya raqami",
       "positiveInt": "Kirish va lift raqami — musbat butun sonlar",
       "copied": "Pasport maydonlari {{label}} liftidan nusxalandi",
-      "copyNone": "Nusxa olish uchun liftlar yo'q"
+      "copyNone": "Nusxa olish uchun liftlar yo'q",
+      "reloaded": "Kartani boshqa foydalanuvchi yangiladi — forma qayta yuklandi",
+      "invalidUrl": "Dalolatnoma havolasi http:// yoki https:// bilan boshlanishi kerak"
     },
     "detail": {
       "notCommissioned": "Ishga tushirilmagan",
@@ -2521,7 +2524,6 @@
       "availability": "30 kunlik ishlash",
       "statusNeedsCommission": "Holatni o'zgartirish mumkin emas: lift ishga tushirilmagan",
       "openRequests": "Ochiq arizalar",
-      "address": "Manzil",
       "notFound": "Lift topilmadi"
     },
     "statusDialog": {
@@ -2658,7 +2660,6 @@
       "rescheduled": "Band ko'chirildi",
       "cancelled": "Band bekor qilindi",
       "completed": "Band bajarilgan deb belgilandi",
-      "bulkDone": "{{total}} dan {{ok}} tasdiqlandi",
       "repairCreated": "Ta'mir arizasi yaratildi",
       "configSaved": "Sozlamalar saqlandi"
     }

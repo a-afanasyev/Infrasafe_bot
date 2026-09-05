@@ -10,6 +10,7 @@ import { renderHook, testI18n } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import {
   useBulkConfirmRequests,
+  useElevator,
   useElevators,
   usePatchElevator,
   useSetElevatorStatus,
@@ -68,6 +69,44 @@ describe('useElevators (список)', () => {
     expect(params.get('limit')).toBe('50')
     expect(params.get('offset')).toBe('0')
     expect(result.current.data?.total).toBe(0)
+    expect(params.get('lang')).toBe('ru')
+  })
+
+  it('lang следует за языком интерфейса (uz) и входит в queryKey', async () => {
+    const langs: string[] = []
+    server.use(
+      http.get('*/api/v2/elevators', ({ request }) => {
+        langs.push(new URL(request.url).searchParams.get('lang') ?? '')
+        return HttpResponse.json({ items: [], total: 0 })
+      }),
+    )
+    const qc = makeClient()
+    const { result } = rawRenderHook(() => useElevators({ limit: 10 }), { wrapper: wrapperFor(qc) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    await testI18n.changeLanguage('uz-UZ')
+    try {
+      await waitFor(() => expect(langs).toEqual(['ru', 'uz']))
+      // активный ключ сменился на uz (ru-запись без наблюдателя ушла по gcTime=0)
+      const keys = qc.getQueryCache().getAll().map((q) => q.queryKey)
+      expect(keys).toContainEqual(['elevators', { limit: 10 }, 'uz'])
+    } finally {
+      await testI18n.changeLanguage('ru')
+    }
+  })
+})
+
+describe('useElevator (карточка)', () => {
+  it('передаёт lang', async () => {
+    let url: URL | null = null
+    server.use(
+      http.get('*/api/v2/elevators/7', ({ request }) => {
+        url = new URL(request.url)
+        return HttpResponse.json({ id: 7, label: 'x' })
+      }),
+    )
+    const { result } = renderHook(() => useElevator(7))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(url!.searchParams.get('lang')).toBe('ru')
   })
 })
 
@@ -105,12 +144,19 @@ describe('useBulkConfirmRequests', () => {
         ]),
       ),
     )
-    const { result } = renderHook(() => useBulkConfirmRequests(7))
+    const qc = makeClient()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = rawRenderHook(() => useBulkConfirmRequests(7), { wrapper: wrapperFor(qc) })
     result.current.mutate(['260905-001', '260905-002'])
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toHaveLength(2)
     expect(result.current.data?.[1].ok).toBe(false)
     expect(result.current.data?.[1].error_kind).toBe('wrong_status')
+    const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey)
+    expect(keys).toContainEqual(['elevator-requests', 7])
+    expect(keys).toContainEqual(['elevator', 7])
+    expect(keys).toContainEqual(['kanban'])
+    expect(keys).toContainEqual(['elevators'])
   })
 })
 

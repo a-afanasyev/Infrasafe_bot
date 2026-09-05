@@ -24,13 +24,26 @@ import type {
  * карточка, журнал, заявки + мутации паспорта/статуса/приёмки. График —
  * `useElevatorCalendar.ts`, конфиг — `useElevatorsConfig.ts`.
  * Паттерн useMaterials: `cleanParams`, инвалидация ключей после мутаций,
- * `toast` + `safeErrorMessage`.
+ * `toast` + `safeErrorMessage`. GET'ы, несущие `label`, получают `lang`
+ * (бэк локализует адрес), и язык входит в queryKey.
  */
 
 export const ELEVATORS_BASE = '/api/v2/elevators'
-const STALE_MS = 15_000
+export const STALE_MS = 15_000
 /** FastAPI читает списки как `flag=a&flag=b` (без `[]` axios-дефолта). */
 export const REPEAT_PARAMS = { indexes: null } as const
+
+export type ApiLang = 'ru' | 'uz'
+
+/** Язык интерфейса → `lang` API (`ru|uz`; всё, что не uz, — ru). */
+export function normalizeApiLang(language: string | undefined): ApiLang {
+  return language?.toLowerCase().startsWith('uz') ? 'uz' : 'ru'
+}
+
+export function useApiLang(): ApiLang {
+  const { i18n } = useTranslation()
+  return normalizeApiLang(i18n.language)
+}
 
 export function cleanParams<T extends object>(filters: T): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -50,16 +63,25 @@ export const elevatorKeys = {
   requests: (id: number) => ['elevator-requests', id] as const,
   occurrences: (id: number) => ['elevator-occurrences', id] as const,
   allOccurrences: ['elevators-occurrences'] as const,
+  kanban: ['kanban'] as const,
+}
+
+export function fetchElevator(id: number, lang: ApiLang): Promise<ElevatorDetail> {
+  return apiClient.get(`${ELEVATORS_BASE}/${id}`, { params: { lang } }).then((r) => r.data)
 }
 
 // ── READ ────────────────────────────────────────────────────────────
 
 export function useElevators(filters: ElevatorListFilters = {}, enabled = true) {
+  const lang = useApiLang()
   return useQuery<ElevatorListOut>({
-    queryKey: ['elevators', filters],
+    queryKey: ['elevators', filters, lang],
     queryFn: () =>
       apiClient
-        .get(ELEVATORS_BASE, { params: cleanParams(filters), paramsSerializer: REPEAT_PARAMS })
+        .get(ELEVATORS_BASE, {
+          params: { ...cleanParams(filters), lang },
+          paramsSerializer: REPEAT_PARAMS,
+        })
         .then((r) => r.data),
     staleTime: STALE_MS,
     enabled,
@@ -75,9 +97,10 @@ export function useElevatorsSummary() {
 }
 
 export function useElevator(id: number | null) {
+  const lang = useApiLang()
   return useQuery<ElevatorDetail>({
-    queryKey: ['elevator', id],
-    queryFn: () => apiClient.get(`${ELEVATORS_BASE}/${id}`).then((r) => r.data),
+    queryKey: ['elevator', id, lang],
+    queryFn: () => fetchElevator(id as number, lang),
     enabled: id !== null && Number.isFinite(id),
     staleTime: STALE_MS,
   })
@@ -211,7 +234,11 @@ export function useSetElevatorStatus(id: number) {
   })
 }
 
-/** Групповая приёмка: per-item результат — показывает вызывающий компонент. */
+/**
+ * Групповая приёмка: per-item результат — показывает вызывающий компонент.
+ * Инвалидирует заявки лифта, карточку (open_requests_count), реестр, сводку
+ * и канбан (статусы заявок сменились).
+ */
 export function useBulkConfirmRequests(elevatorId: number) {
   const queryClient = useQueryClient()
   const onError = useErrorToast()
@@ -222,17 +249,18 @@ export function useBulkConfirmRequests(elevatorId: number) {
         .then((r) => r.data as ElevatorBulkConfirmItem[]),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: elevatorKeys.requests(elevatorId) })
+      queryClient.invalidateQueries({ queryKey: elevatorKeys.detail(elevatorId) })
       queryClient.invalidateQueries({ queryKey: elevatorKeys.list })
       queryClient.invalidateQueries({ queryKey: elevatorKeys.summary })
+      queryClient.invalidateQueries({ queryKey: elevatorKeys.kanban })
     },
     onError,
   })
 }
 
 /**
- * «Создать ремонт» из карточки — колл-центровый эндпоинт. Поля `elevator_id`,
- * `elevator_operational`, `acceptance_mode` бэкенд начнёт читать в T6; до
- * этого заявка создаётся без привязки к лифту.
+ * «Создать ремонт» из карточки — колл-центровый эндпоинт с `elevator_id`,
+ * `elevator_operational`, `acceptance_mode` (бэкенд читает их с Ф4a-1/T6).
  */
 export function useCreateElevatorRepair(elevatorId: number) {
   const { t } = useTranslation()
@@ -245,8 +273,9 @@ export function useCreateElevatorRepair(elevatorId: number) {
         .then((r) => r.data as { request_number?: string }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: elevatorKeys.requests(elevatorId) })
+      queryClient.invalidateQueries({ queryKey: elevatorKeys.detail(elevatorId) })
       queryClient.invalidateQueries({ queryKey: elevatorKeys.list })
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      queryClient.invalidateQueries({ queryKey: elevatorKeys.kanban })
       toast.success(t('elevators.toast.repairCreated'))
     },
     onError,

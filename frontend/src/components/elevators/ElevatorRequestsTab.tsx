@@ -9,7 +9,7 @@ import { BodyRow, HeadRow, TableShell, Td, Th } from './TableCells'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useBulkConfirmRequests, useElevatorRequests } from '../../hooks/useElevators'
 import { tCategory, tStatus, tUrgency } from '../../i18n/apiMaps'
-import { fmtInstant } from '../../utils/elevatorsFormat'
+import { DASH, fmtInstant } from '../../utils/elevatorsFormat'
 import {
   CONFIRMABLE_REQUEST_STATUSES,
   MAX_BULK_CONFIRM,
@@ -97,7 +97,7 @@ export default function ElevatorRequestsTab({ elevator, canWrite }: Props) {
         <TableShell>
           <thead>
             <HeadRow>
-              {canWrite && <Th />}
+              {canWrite && <Th><span className="sr-only">{t('elevators.actions.confirmSelected')}</span></Th>}
               <Th>{t('elevators.requests.number')}</Th>
               <Th>{t('elevators.requests.status')}</Th>
               <Th>{t('elevators.requests.category')}</Th>
@@ -135,10 +135,10 @@ export default function ElevatorRequestsTab({ elevator, canWrite }: Props) {
                   <Td>{tUrgency(r.urgency, t)}</Td>
                   <Td className="whitespace-nowrap">{fmtInstant(r.created_at)}</Td>
                   <Td>
-                    {r.elevator_operational === null ? '—' : r.elevator_operational ? t('elevators.requests.yes') : t('elevators.requests.no')}
+                    {r.elevator_operational === null ? DASH : r.elevator_operational ? t('elevators.requests.yes') : t('elevators.requests.no')}
                   </Td>
-                  <Td>{r.executor_name ? personName(r.executor_name) : '—'}</Td>
-                  <Td>{r.applicant_name ? personName(r.applicant_name) : '—'}</Td>
+                  <Td>{r.executor_name ? personName(r.executor_name) : DASH}</Td>
+                  <Td>{r.applicant_name ? personName(r.applicant_name) : DASH}</Td>
                 </BodyRow>
               )
             })}
