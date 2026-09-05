@@ -8500,7 +8500,17 @@
     "staff_pick_address": "🛠 Bu ariza kabi ko'rinadi: {category}, shoshilinchlik — {urgency}.\nManzilni tanlang:",
     "staff_no_address": "Manzilni aniqlab bo'lmadi. Xabar matnida uy yoki hovlini ko'rsating va uni qayta yuboring.",
     "photo_only": "📷 Video va video-xabarlar arizaga biriktirilmaydi. Iltimos, o'sha tavsif bilan foto yuboring.",
-    "staff_only": "Arizalarni faqat xodim tasdiqlashi mumkin"
+    "staff_only": "Arizalarni faqat xodim tasdiqlashi mumkin",
+    "elevator": {
+      "pick_prompt": "🛗 Lift bo'yicha ariza. Qaysi lift haqida gap ketmoqda? Tanlang:",
+      "operational_prompt": "🛗 Lift: {entrance}-kirish, {elevator}-lift.\nLift hozir ishlayaptimi?",
+      "works_hint": "ℹ️ Hozir liftda ishlar olib borilmoqda: {status}.",
+      "need_building": "🛗 Lift bo'yicha ariza uyga bog'lanadi. Uyni aniqlashtiring:",
+      "no_buildings": "🛗 Lift bo'yicha ariza uyga bog'lanadi. Xabar matnida uyni ko'rsating va uni qayta yuboring.",
+      "none_in_building": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan, dispetcherga murojaat qiling. Ariza yaratilmadi.",
+      "none_in_building_phone": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan, dispetcherga murojaat qiling: {phone}. Ariza yaratilmadi.",
+      "timeout": "Ariza rasmiylashtirilmadi: lift tanlanmadi / ishlashi haqida javob yo'q. Qayta yozing yoki botga shaxsiy xabar yuboring: {link}"
+    }
   },
   "user_rename": {
     "button": "✏️ F.I.Sh. ni tuzatish",

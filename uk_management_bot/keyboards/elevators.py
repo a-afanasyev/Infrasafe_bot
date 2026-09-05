@@ -26,6 +26,10 @@ OPERATIONAL_PREFIX = "elv:op:"
 STATUS_PREFIX = "elv:st:"
 KEEP_CALLBACK = "elv:keep"
 CANCEL_CREATE_CALLBACK = "cancel_create"  # хендлер — requests/create_callbacks.py
+# Групповой приём (Ф4b): те же кнопки под корневым фильтром ``gint:`` роутера
+# group_intake, без ряда «Отмена» (в группе отмены нет — есть таймаут).
+GROUP_PICK_PREFIX = "gint:elv:"
+GROUP_OPERATIONAL_PREFIX = "gint:op:"
 
 
 class ElevatorChoice(Protocol):
@@ -42,37 +46,63 @@ def _cancel_row(language: str) -> list[InlineKeyboardButton]:
     )]
 
 
-def build_elevator_pick_keyboard(
-    options: Sequence[ElevatorChoice], language: str = "ru"
-) -> InlineKeyboardMarkup:
+def _pick_rows(
+    options: Sequence[ElevatorChoice], language: str, prefix: str
+) -> list[list[InlineKeyboardButton]]:
     """Кнопка на каждый введённый лифт дома: «Подъезд N · лифт M»."""
-    rows = [
+    return [
         [InlineKeyboardButton(
             text=get_text("requests.elevator.pick_button", language=language,
                           entrance=option.entrance, elevator=option.number),
-            callback_data=f"{PICK_PREFIX}{option.id}",
+            callback_data=f"{prefix}{option.id}",
         )]
         for option in options
     ]
-    rows.append(_cancel_row(language))
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _operational_row(language: str, prefix: str) -> list[InlineKeyboardButton]:
+    """«Да, работает» / «Нет, не работает»."""
+    return [
+        InlineKeyboardButton(
+            text=get_text("requests.elevator.operational_yes_button", language=language),
+            callback_data=f"{prefix}1",
+        ),
+        InlineKeyboardButton(
+            text=get_text("requests.elevator.operational_no_button", language=language),
+            callback_data=f"{prefix}0",
+        ),
+    ]
+
+
+def build_elevator_pick_keyboard(
+    options: Sequence[ElevatorChoice], language: str = "ru"
+) -> InlineKeyboardMarkup:
+    """Личный бот: лифты дома + отмена создания."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[*_pick_rows(options, language, PICK_PREFIX), _cancel_row(language)]
+    )
 
 
 def build_elevator_operational_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    """«Да, работает» / «Нет, не работает» + отмена создания."""
+    """Личный бот: «Да, работает» / «Нет, не работает» + отмена создания."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=get_text("requests.elevator.operational_yes_button", language=language),
-                callback_data=f"{OPERATIONAL_PREFIX}1",
-            ),
-            InlineKeyboardButton(
-                text=get_text("requests.elevator.operational_no_button", language=language),
-                callback_data=f"{OPERATIONAL_PREFIX}0",
-            ),
-        ],
+        _operational_row(language, OPERATIONAL_PREFIX),
         _cancel_row(language),
     ])
+
+
+def build_group_elevator_pick_keyboard(
+    options: Sequence[ElevatorChoice], language: str = "ru"
+) -> InlineKeyboardMarkup:
+    """Групповой приём: лифты дома под ``gint:elv:{id}``, без отмены."""
+    return InlineKeyboardMarkup(inline_keyboard=_pick_rows(options, language, GROUP_PICK_PREFIX))
+
+
+def build_group_elevator_operational_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    """Групповой приём: «работает?» под ``gint:op:1|0``, без отмены."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[_operational_row(language, GROUP_OPERATIONAL_PREFIX)]
+    )
 
 
 def build_elevator_status_hint_keyboard(

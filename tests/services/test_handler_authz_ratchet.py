@@ -91,7 +91,12 @@ BASELINE = {
     # Redis-pending, авторство сверяется с candidate.author_id, а «Да»
     # проходит ре-гейт _regate_sync (группа активна+residents, автор approved
     # applicant с телефоном) и re-резолв адреса внутри save_request_sync.
-    ("group_intake.py", "group_intake_callback"): "OWNER-CHECK@candidate.author_id (+ re-гейт _regate_sync при создании)",
+    # Ф4b (лифты): gint:bld:<n> — индекс в серверном списке домов; gint:elv:{id}
+    # — лифт сверяется с домом ИЗ КАНДИДАТА (ensure_elevator_usable_sync(
+    # building_id=…) в group_intake_elevator), gint:op — флаг; все три — только
+    # автор сообщения (и в staff-группе), ответ «работает?» проходит тот же
+    # ре-гейт _regate_sync перед созданием.
+    ("group_intake.py", "group_intake_callback"): "OWNER-CHECK@candidate.author_id (+ re-гейт _regate_sync при создании; лифт — по дому из кандидата, не из callback)",
     # Обходчик: все четыре под StateFilter, а единственный вход в цепочку
     # (start_inspector_request) и сохранение (inspector_confirm) гейтованы
     # _approved_inspector; сами id — публичный справочник дворов/домов.

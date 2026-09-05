@@ -72,11 +72,17 @@ def _cand_key(chat_id: int, prompt_message_id: int) -> str:
     return f"gint:cand:{chat_id}:{prompt_message_id}"
 
 
-async def store_candidate(chat_id: int, prompt_message_id: int, payload: dict) -> bool:
-    """Сохранить кандидата под message_id ОТПРАВЛЕННОГО промпта. False = сбой."""
+async def store_candidate(
+    chat_id: int, prompt_message_id: int, payload: dict, *, ttl: int = CANDIDATE_TTL
+) -> bool:
+    """Сохранить кандидата под message_id ОТПРАВЛЕННОГО промпта. False = сбой.
+
+    ``ttl`` — время жизни в секундах; фаза лифта (Ф4b) хранит кандидата
+    короче общего часа, чтобы ответ после таймаута не создал заявку даже при
+    потере in-process таймера (рестарт бота)."""
     try:
         body = json.dumps({"v": PAYLOAD_VERSION, **payload}, ensure_ascii=False)
-        await _get_client().setex(_cand_key(chat_id, prompt_message_id), CANDIDATE_TTL, body)
+        await _get_client().setex(_cand_key(chat_id, prompt_message_id), ttl, body)
         return True
     except Exception as e:
         logger.warning("group_intake: store_candidate failed: %s", type(e).__name__)
