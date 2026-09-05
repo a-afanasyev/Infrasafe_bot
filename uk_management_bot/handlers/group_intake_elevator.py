@@ -6,7 +6,7 @@
 тот же механизм, что у выбора адреса ``gint:addr:<n>`` (pending.store_candidate
 под ключом нажатого сообщения); промпт редактируется на месте.
 
-Фазы (``candidate["phase"]``):
+Фазы (``candidate[FIELD_PHASE]``):
   * ``elevator_building`` — адрес автора на уровне двора: «уточните дом»,
     кнопки ``gint:bld:<n>`` (индекс в серверном ``building_options``; житель —
     дома двора с его approved-квартирами, staff — дома двора из справочника);
@@ -21,13 +21,19 @@
 заявки нет. Отвечает ТОЛЬКО автор сообщения (проверка в group_intake_callback —
 и в staff-группе, где «Да» может нажать коллега).
 
-Таймаут (``ELEVATOR_ANSWER_TIMEOUT``): one-shot ``asyncio``-задача, поставленная
-на «Да»; по истечении, если кандидат всё ещё в фазе лифта — GETDEL и правка
-промпта «заявка не оформлена». Страховка на рестарт процесса — Redis-TTL фазы
-(``ELEVATOR_PHASE_TTL``, чуть длиннее таймера): ответ после срока получает
-«устарело», заявки нет. Двухшаговый расчёт (дом, подъезд → лифты) переиспользует
-``_load_elevator_step`` личного бота (T7): ``selected_address`` приводится к
-форме FSM-``data``. Флаг выключен / категория не «лифт» — модуль не участвует.
+Единый дедлайн: на «Да» в кандидата пишется ``phase_deadline`` (epoch, now +
+``ELEVATOR_ANSWER_TIMEOUT``). Его описывают ТРИ согласованных механизма:
+  * one-shot ``asyncio``-задача (реестр по ключу промпта, отменяется при ответе
+    или завершении без заявки) — по истечении GETDEL + правка промпта
+    «заявка не оформлена»;
+  * Redis-TTL каждой записи фазы = остаток до дедлайна + ``TTL_GRACE`` (шаги
+    внутри фазы окно НЕ продлевают); страховка на потерю таймера (рестарт);
+  * ленивая проверка ``is_expired`` на нажатии — после дедлайна «устарело»,
+    заявки нет, даже если запись ещё жива за счёт grace.
+
+Двухшаговый расчёт (дом, подъезд → лифты) переиспользует ``load_elevator_step``
+личного бота (T7): ``selected_address`` приводится к форме FSM-``data``. Флаг
+выключен / категория не «лифт» — модуль не участвует.
 """
 
 from __future__ import annotations
@@ -35,13 +41,13 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
-from collections.abc import Sequence
+import time
 from dataclasses import dataclass
 from typing import Optional
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery
 from sqlalchemy import select
 from sqlalchemy.orm import Session, contains_eager
 
@@ -52,13 +58,15 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.requests.create_elevator import (
     WORKS_STATUSES,
     ElevatorOption,
-    _load_elevator_step,
-    _option,
+    load_elevator_step,
+    parse_int,
+    to_option,
 )
 from uk_management_bot.keyboards.elevators import (
     build_group_elevator_operational_keyboard,
     build_group_elevator_pick_keyboard,
 )
+from uk_management_bot.keyboards.group_intake import build_options_keyboard
 from uk_management_bot.services.elevator_service import (
     ELEVATOR_CATEGORY,
     ElevatorValidationError,
@@ -66,6 +74,7 @@ from uk_management_bot.services.elevator_service import (
     status_label,
 )
 from uk_management_bot.services.group_intake import pending
+from uk_management_bot.services.group_intake.links import bot_link
 from uk_management_bot.services.request_address import format_building_address
 from uk_management_bot.utils.helpers import get_text
 
@@ -76,14 +85,25 @@ PHASE_PICK = "elevator_pick"
 PHASE_OPERATIONAL = "elevator_operational"
 ELEVATOR_PHASES = frozenset({PHASE_BUILDING, PHASE_PICK, PHASE_OPERATIONAL})
 
+# Поля кандидата, которыми владеет фаза лифта.
+FIELD_PHASE = "phase"
+FIELD_DEADLINE = "phase_deadline"
+FIELD_BUILDING_OPTIONS = "building_options"
+FIELD_BUILDING_ID = "elevator_building_id"
+FIELD_ELEVATOR_ID = "elevator_id"
+FIELD_ENTRANCE = "elevator_entrance"
+FIELD_NUMBER = "elevator_number"
+FIELD_OPERATIONAL = "elevator_operational"
+
 # Ждём ответа автора (дом → лифт → «работает?») с момента «Да».
 ELEVATOR_ANSWER_TIMEOUT = 30 * 60
-# Redis-TTL кандидата в фазе лифта: длиннее таймера, чтобы проснувшийся таймер
-# ещё застал кандидата и отредактировал промпт; при потере таймера истекает сам.
-ELEVATOR_PHASE_TTL = ELEVATOR_ANSWER_TIMEOUT + 60
+# Запас Redis-TTL сверх дедлайна: проснувшийся таймер ещё застаёт кандидата и
+# редактирует промпт; нажатие в окне grace ловит is_expired.
+TTL_GRACE = 60
+# TTL первой записи фазы (на «Да»); дальше — остаток до дедлайна + grace.
+ELEVATOR_PHASE_TTL = ELEVATOR_ANSWER_TIMEOUT + TTL_GRACE
 # Домов двора в выборе (staff — справочник целиком может быть большим).
 _MAX_BUILDING_OPTIONS = 8
-_BTN_LABEL_LIMIT = 60
 # action-части callback_data (после ``gint:``).
 _ACTION_BUILDING = "bld:"
 _ACTION_ELEVATOR = "elv:"
@@ -107,7 +127,7 @@ class GroupElevatorStep:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Предикаты (без БД)
+# Предикаты и дедлайн (без БД)
 # ══════════════════════════════════════════════════════════════════════════
 
 
@@ -122,7 +142,7 @@ def is_elevator_action(action: str) -> bool:
 
 def parse_operational(candidate: dict, action: str) -> Optional[bool]:
     """``op:1|0`` в фазе «работает?» → bool; иначе None (crafted / не та фаза)."""
-    if candidate.get("phase") != PHASE_OPERATIONAL:
+    if candidate.get(FIELD_PHASE) != PHASE_OPERATIONAL:
         return None
     value = action[len(_ACTION_OPERATIONAL):]
     if value not in ("0", "1"):
@@ -130,12 +150,26 @@ def parse_operational(candidate: dict, action: str) -> Optional[bool]:
     return value == "1"
 
 
-def _parse_int(raw: str) -> Optional[int]:
-    return int(raw) if raw.isdigit() else None
+def _now() -> float:
+    return time.time()
 
 
-def _bot_link() -> str:
-    return f"https://t.me/{settings.BOT_USERNAME}"
+def _deadline_of(candidate: dict) -> Optional[float]:
+    deadline = candidate.get(FIELD_DEADLINE)
+    return float(deadline) if isinstance(deadline, (int, float)) else None
+
+
+def is_expired(candidate: dict) -> bool:
+    """Нажатие после дедлайна фазы — «устарело», даже если запись ещё жива (grace)."""
+    deadline = _deadline_of(candidate)
+    return deadline is not None and _now() > deadline
+
+
+def _phase_ttl(payload: dict) -> int:
+    """Redis-TTL записи фазы: остаток до дедлайна + grace; окно не продлевается."""
+    deadline = _deadline_of(payload)
+    remaining = ELEVATOR_ANSWER_TIMEOUT if deadline is None else deadline - _now()
+    return max(1, int(remaining)) + TTL_GRACE
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -190,8 +224,18 @@ def _staff_building_options(db: Session, yard_id: int) -> list[dict]:
     return [_building_option(building.id, "building", building) for building in rows]
 
 
+def _yard_building_options(
+    db: Session, candidate: dict, user_db_id: Optional[int], yard_id: int
+) -> list[dict]:
+    if candidate.get("kind") == GROUP_KIND_STAFF:
+        return _staff_building_options(db, yard_id)
+    if user_db_id is None:
+        return []  # житель без внутреннего id — домов не подобрать
+    return _resident_building_options(db, user_db_id, yard_id)
+
+
 def _step_data(address: dict) -> dict:
-    """``selected_address`` → ``data`` в форме FSM для ``_load_elevator_step``."""
+    """``selected_address`` → ``data`` в форме FSM для ``load_elevator_step``."""
     if address["type"] == "apartment":
         return {"address_type": "apartment", "apartment_id": address["id"]}
     return {"address_type": address["type"], "address_id": address["id"]}
@@ -203,14 +247,11 @@ def load_group_elevator_step_sync(
     """Двор → дома на выбор (один — берётся сразу); дом/квартира → лифты."""
     address = candidate["selected_address"]
     if address["type"] == "yard":
-        if candidate.get("kind") == GROUP_KIND_STAFF:
-            options = _staff_building_options(db, address["id"])
-        else:
-            options = _resident_building_options(db, user_db_id or 0, address["id"])
+        options = _yard_building_options(db, candidate, user_db_id, address["id"])
         if len(options) != 1:
             return GroupElevatorStep("building", address, building_options=tuple(options))
         address = options[0]
-    step = _load_elevator_step(db, _step_data(address))
+    step = load_elevator_step(db, _step_data(address))
     return GroupElevatorStep(
         step.verdict, address, step.building_id, step.options, step.auto, step.dispatch_phone
     )
@@ -228,7 +269,7 @@ def pick_group_elevator_sync(
         logger.info("group_intake.elevator: лифт %s отклонён для дома %s: %s",
                     elevator_id, building_id, exc)
         return None
-    return _option(elevator)
+    return to_option(elevator)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -242,18 +283,6 @@ def _phase_payload(candidate: dict, **changes) -> dict:
     return {**base, **changes}
 
 
-def _clip(label: str) -> str:
-    return label if len(label) <= _BTN_LABEL_LIMIT else label[: _BTN_LABEL_LIMIT - 1] + "…"
-
-
-def _building_keyboard(options: Sequence[dict]) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=_clip(option["label_public"]),
-                              callback_data=f"gint:{_ACTION_BUILDING}{index}")]
-        for index, option in enumerate(options)
-    ])
-
-
 def _none_text(step: GroupElevatorStep, lang: str) -> str:
     if step.verdict != "none":
         return get_text(_TEXT + "no_buildings", language=lang)
@@ -263,13 +292,34 @@ def _none_text(step: GroupElevatorStep, lang: str) -> str:
     return get_text(_TEXT + "none_in_building", language=lang)
 
 
+def _need_building_text(step: GroupElevatorStep, lang: str) -> str:
+    text = get_text(_TEXT + "need_building", language=lang)
+    if len(step.building_options) >= _MAX_BUILDING_OPTIONS:
+        # Список упёрся в кап — нужного дома в нём может не быть.
+        text += get_text(_TEXT + "need_building_more", language=lang)
+    return text
+
+
+async def _finish_without_request(callback: CallbackQuery, text: str) -> None:
+    """Фаза закончилась без заявки: кандидат снят, таймер отменён, промпт — текст."""
+    chat_id, message_id = callback.message.chat.id, callback.message.message_id
+    await pending.pop_candidate(chat_id, message_id)
+    cancel_elevator_timeout(chat_id, message_id)
+    await callback.message.edit_text(text)
+
+
+async def reject_expired(callback: CallbackQuery, lang: str) -> None:
+    """Нажатие после дедлайна: «устарело», заявки нет."""
+    await _finish_without_request(callback, get_text("group_intake.expired", language=lang))
+
+
 async def _store_phase(callback: CallbackQuery, payload: dict, lang: str) -> bool:
-    """Сохранить фазу под ключом промпта; сбой → «устарело» (fail-closed)."""
+    """Сохранить фазу под ключом промпта с TTL до дедлайна; сбой → «устарело»."""
     stored = await pending.store_candidate(
-        callback.message.chat.id, callback.message.message_id, payload, ttl=ELEVATOR_PHASE_TTL,
+        callback.message.chat.id, callback.message.message_id, payload, ttl=_phase_ttl(payload),
     )
     if not stored:
-        await callback.message.edit_text(get_text("group_intake.expired", language=lang))
+        await reject_expired(callback, lang)
     return stored
 
 
@@ -277,10 +327,10 @@ async def _show_operational(
     callback: CallbackQuery, base: dict, option: ElevatorOption, lang: str
 ) -> bool:
     """Зафиксировать лифт в кандидате и спросить «работает?» (+ подсказка о работах)."""
-    payload = _phase_payload(
-        base, phase=PHASE_OPERATIONAL, building_options=None,
-        elevator_id=option.id, elevator_entrance=option.entrance, elevator_number=option.number,
-    )
+    payload = _phase_payload(base, **{
+        FIELD_PHASE: PHASE_OPERATIONAL, FIELD_BUILDING_OPTIONS: None,
+        FIELD_ELEVATOR_ID: option.id, FIELD_ENTRANCE: option.entrance, FIELD_NUMBER: option.number,
+    })
     if not await _store_phase(callback, payload, lang):
         return False
     text = get_text(_TEXT + "operational_prompt", language=lang,
@@ -295,9 +345,22 @@ async def _show_operational(
     return True
 
 
-async def _finish_without_request(callback: CallbackQuery, text: str) -> None:
-    await pending.pop_candidate(callback.message.chat.id, callback.message.message_id)
-    await callback.message.edit_text(text)
+async def _show_building_choice(
+    callback: CallbackQuery, candidate: dict, step: GroupElevatorStep, lang: str
+) -> bool:
+    if not step.building_options:
+        await _finish_without_request(callback, _none_text(step, lang))
+        return False
+    payload = _phase_payload(candidate, **{
+        FIELD_PHASE: PHASE_BUILDING, FIELD_BUILDING_OPTIONS: list(step.building_options),
+    })
+    if not await _store_phase(callback, payload, lang):
+        return False
+    await callback.message.edit_text(
+        _need_building_text(step, lang),
+        reply_markup=build_options_keyboard(step.building_options, f"gint:{_ACTION_BUILDING}"),
+    )
+    return True
 
 
 async def _apply_step(
@@ -305,29 +368,17 @@ async def _apply_step(
 ) -> bool:
     """Показать шаг по вердикту; True — ждём ответа автора (кандидат в фазе)."""
     if step.verdict == "building":
-        if not step.building_options:
-            await _finish_without_request(callback, _none_text(step, lang))
-            return False
-        payload = _phase_payload(
-            candidate, phase=PHASE_BUILDING, building_options=list(step.building_options)
-        )
-        if not await _store_phase(callback, payload, lang):
-            return False
-        await callback.message.edit_text(
-            get_text(_TEXT + "need_building", language=lang),
-            reply_markup=_building_keyboard(step.building_options),
-        )
-        return True
+        return await _show_building_choice(callback, candidate, step, lang)
     if step.verdict not in ("auto", "ok"):
         await _finish_without_request(callback, _none_text(step, lang))
         return False
-    base = _phase_payload(
-        candidate, selected_address=step.address, elevator_building_id=step.building_id,
-        building_options=None,
-    )
+    base = _phase_payload(candidate, **{
+        "selected_address": step.address, FIELD_BUILDING_ID: step.building_id,
+        FIELD_BUILDING_OPTIONS: None,
+    })
     if step.verdict == "auto":
         return await _show_operational(callback, base, step.auto, lang)
-    if not await _store_phase(callback, {**base, "phase": PHASE_PICK}, lang):
+    if not await _store_phase(callback, {**base, FIELD_PHASE: PHASE_PICK}, lang):
         return False
     await callback.message.edit_text(
         get_text(_TEXT + "pick_prompt", language=lang),
@@ -345,11 +396,12 @@ async def start_elevator_phase(
     callback: CallbackQuery, bot: Bot, candidate: dict, user_db_id: int, lang: str,
     *, _db=None,
 ) -> None:
-    """После «Да» и ре-гейта: вычислить шаг, показать, поставить таймер ожидания."""
+    """После «Да» и ре-гейта: дедлайн, шаг, таймер ожидания."""
     step = await run_db(
         lambda s: load_group_elevator_step_sync(s, candidate, user_db_id), db=_db
     )
-    if await _apply_step(callback, candidate, step, lang):
+    armed = {**candidate, FIELD_DEADLINE: int(_now()) + ELEVATOR_ANSWER_TIMEOUT}
+    if await _apply_step(callback, armed, step, lang):
         schedule_elevator_timeout(
             bot, callback.message.chat.id, callback.message.message_id, lang
         )
@@ -359,10 +411,10 @@ async def handle_building_pick(
     callback: CallbackQuery, candidate: dict, action: str, lang: str, *, _db=None
 ) -> None:
     """``gint:bld:<n>`` — индекс в серверном списке домов; id клиент не шлёт."""
-    if candidate.get("phase") != PHASE_BUILDING:
+    if candidate.get(FIELD_PHASE) != PHASE_BUILDING:
         return
-    options = candidate.get("building_options") or []
-    index = _parse_int(action[len(_ACTION_BUILDING):])
+    options = candidate.get(FIELD_BUILDING_OPTIONS) or []
+    index = parse_int(action[len(_ACTION_BUILDING):])
     if index is None or not 0 <= index < len(options):
         return
     narrowed = {**candidate, "selected_address": options[index]}
@@ -374,13 +426,13 @@ async def handle_elevator_pick(
     callback: CallbackQuery, candidate: dict, action: str, lang: str, *, _db=None
 ) -> None:
     """``gint:elv:{id}`` — лифт проверяется сервером по дому из кандидата."""
-    if candidate.get("phase") != PHASE_PICK:
+    if candidate.get(FIELD_PHASE) != PHASE_PICK:
         return
-    elevator_id = _parse_int(action[len(_ACTION_ELEVATOR):])
+    elevator_id = parse_int(action[len(_ACTION_ELEVATOR):])
     if elevator_id is None:
         return
     option = await run_db(
-        lambda s: pick_group_elevator_sync(s, candidate.get("elevator_building_id"), elevator_id),
+        lambda s: pick_group_elevator_sync(s, candidate.get(FIELD_BUILDING_ID), elevator_id),
         db=_db,
     )
     if option is None:
@@ -392,29 +444,44 @@ async def handle_elevator_pick(
 # Таймаут ожидания ответа
 # ══════════════════════════════════════════════════════════════════════════
 
-_timeout_tasks: set[asyncio.Task] = set()
+_timeout_tasks: dict[tuple[int, int], asyncio.Task] = {}
+
+
+def _forget_task(key: tuple[int, int], task: asyncio.Task) -> None:
+    if _timeout_tasks.get(key) is task:
+        del _timeout_tasks[key]
 
 
 def schedule_elevator_timeout(bot: Bot, chat_id: int, message_id: int, lang: str) -> asyncio.Task:
-    """One-shot задача: ссылка держится в реестре до завершения (иначе GC)."""
+    """One-shot задача по ключу промпта; реестр держит ссылку до завершения."""
+    key = (chat_id, message_id)
     task = asyncio.create_task(_expire_elevator_prompt(bot, chat_id, message_id, lang))
-    _timeout_tasks.add(task)
-    task.add_done_callback(_timeout_tasks.discard)
+    _timeout_tasks[key] = task
+    task.add_done_callback(lambda done: _forget_task(key, done))
     return task
+
+
+def cancel_elevator_timeout(chat_id: int, message_id: int) -> bool:
+    """Ответ пришёл (или фаза закрыта) — таймер больше не нужен. True = отменён."""
+    task = _timeout_tasks.pop((chat_id, message_id), None)
+    if task is None:
+        return False
+    task.cancel()
+    return True
 
 
 async def _expire_elevator_prompt(bot: Bot, chat_id: int, message_id: int, lang: str) -> None:
     """Нет ответа за таймаут → кандидат снят (GETDEL), промпт: «не оформлена»."""
     await asyncio.sleep(ELEVATOR_ANSWER_TIMEOUT)
     candidate = await pending.get_candidate(chat_id, message_id)
-    if candidate is None or candidate.get("phase") not in ELEVATOR_PHASES:
+    if candidate is None or candidate.get(FIELD_PHASE) not in ELEVATOR_PHASES:
         return
     if await pending.pop_candidate(chat_id, message_id) is None:
         return  # ответ успел прийти параллельно — заявку создаёт он
     try:
         await bot.edit_message_text(
             chat_id=chat_id, message_id=message_id,
-            text=get_text(_TEXT + "timeout", language=lang, link=_bot_link()),
+            text=get_text(_TEXT + "timeout", language=lang, link=bot_link()),
         )
     except TelegramAPIError as exc:
         logger.debug("group_intake.elevator: промпт таймаута не отредактирован: %s",

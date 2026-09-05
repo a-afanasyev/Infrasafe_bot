@@ -8507,6 +8507,7 @@
       "works_hint": "ℹ️ Hozir liftda ishlar olib borilmoqda: {status}.",
       "need_building": "🛗 Lift bo'yicha ariza uyga bog'lanadi. Uyni aniqlashtiring:",
       "no_buildings": "🛗 Lift bo'yicha ariza uyga bog'lanadi. Xabar matnida uyni ko'rsating va uni qayta yuboring.",
+      "need_building_more": "\nKerakli uy ro'yxatda yo'q — xabar matnida uyni ko'rsating va uni qayta yuboring.",
       "none_in_building": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan, dispetcherga murojaat qiling. Ariza yaratilmadi.",
       "none_in_building_phone": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan, dispetcherga murojaat qiling: {phone}. Ariza yaratilmadi.",
       "timeout": "Ariza rasmiylashtirilmadi: lift tanlanmadi / ishlashi haqida javob yo'q. Qayta yozing yoki botga shaxsiy xabar yuboring: {link}"

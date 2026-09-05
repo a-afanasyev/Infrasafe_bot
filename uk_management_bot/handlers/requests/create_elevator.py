@@ -82,6 +82,14 @@ ELEVATOR_DATA_KEYS: tuple[str, ...] = (
 )
 _SINCE_FORMAT = "%d.%m.%Y %H:%M"
 
+# Публичный контракт шага лифта (его переиспользует групповой приём, Ф4b).
+__all__ = [
+    "ELEVATOR_DATA_KEYS", "ElevatorFlow", "ElevatorOption", "ElevatorStep", "WORKS_STATUSES",
+    "begin_elevator_step", "clear_elevator_data", "elevator_step_text", "elevator_summary_line",
+    "is_elevator_flow", "load_elevator_step", "operational_step", "parse_int",
+    "pick_elevator_step", "save_failed_key", "to_option",
+]
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # DTO — пересекают границу run_db (ORM за неё не выходит)
@@ -164,7 +172,7 @@ def elevator_summary_line(data: dict, language: str) -> str:
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def _option(elevator: Elevator) -> ElevatorOption:
+def to_option(elevator: Elevator) -> ElevatorOption:
     return ElevatorOption(
         id=elevator.id, entrance=elevator.entrance_number, number=elevator.elevator_number,
         status=elevator.current_status, status_since=elevator.status_since,
@@ -190,14 +198,14 @@ def _request_building(
     return (None, None)
 
 
-def _load_elevator_step(db: Session, data: dict) -> ElevatorStep:
+def load_elevator_step(db: Session, data: dict) -> ElevatorStep:
     """Что показать после адреса: список лифтов, автоподстановку или отказ."""
     service = RequestHandlerService(db)
     building_id, entrance = _request_building(service, data)
     if building_id is None:
         return ElevatorStep("no_building")
     options = tuple(
-        _option(e) for e in list_active_for_building_sync(db, building_id) if e.is_commissioned
+        to_option(e) for e in list_active_for_building_sync(db, building_id) if e.is_commissioned
     )
     if not options:
         return ElevatorStep("none", building_id, dispatch_phone=service.get_dispatch_phone())
@@ -224,7 +232,7 @@ def _pick_elevator(
     except ElevatorValidationError as exc:
         logger.info("Лифт %s отклонён для дома %s: %s", elevator_id, building_id, exc)
         return ("invalid", None)
-    return ("ok", _option(elevator))
+    return ("ok", to_option(elevator))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -280,7 +288,7 @@ async def begin_elevator_step(
     callback: CallbackQuery, state: FSMContext, language: str, data: dict, flow: ElevatorFlow
 ) -> None:
     """Точка входа после адреса+категории: ``data`` — актуальные данные FSM."""
-    step = await run_db(lambda s: _load_elevator_step(s, data))
+    step = await run_db(lambda s: load_elevator_step(s, data))
     if step.verdict == "no_building":
         await flow.on_no_building(callback, language)
         return
@@ -298,7 +306,7 @@ async def begin_elevator_step(
     )
 
 
-def _parse_int(raw: str) -> Optional[int]:
+def parse_int(raw: str) -> Optional[int]:
     return int(raw) if raw.isdigit() else None
 
 
@@ -306,7 +314,7 @@ async def pick_elevator_step(
     callback: CallbackQuery, state: FSMContext, language: str, flow: ElevatorFlow
 ) -> None:
     """``elv:pick:{id}``: id проверяется сервером (роль потока + лифт своего дома)."""
-    elevator_id = _parse_int(callback.data[len(PICK_PREFIX):])
+    elevator_id = parse_int(callback.data[len(PICK_PREFIX):])
     if elevator_id is None:
         await callback.answer(get_text("errors.default", language=language), show_alert=True)
         return
