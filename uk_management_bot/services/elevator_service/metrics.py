@@ -12,6 +12,7 @@ from datetime import date, datetime
 
 from sqlalchemy import Row, Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.elevator import Elevator, ElevatorStatusEvent
 from uk_management_bot.utils.business_time import business_day_window
@@ -51,6 +52,15 @@ def _group_intervals(rows: Iterable[Row]) -> dict[int, tuple[StatusInterval, ...
             StatusInterval(status=new_status, started_at=as_utc(occurred_at))
         )
     return {key: tuple(value) for key, value in grouped.items()}
+
+
+def status_intervals_sync(
+    db: Session, elevator_ids: Sequence[int]
+) -> dict[int, tuple[StatusInterval, ...]]:
+    """Sync-зеркало ``status_intervals_async`` (карточка лифта в боте, Ф5)."""
+    if not elevator_ids:
+        return {}
+    return _group_intervals(db.execute(_intervals_stmt(elevator_ids)).all())
 
 
 async def status_intervals_async(

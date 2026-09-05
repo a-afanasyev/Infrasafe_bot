@@ -17,6 +17,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 STATE_MODULES = [
     "uk_management_bot.states.address_management",
+    "uk_management_bot.states.elevators",
     "uk_management_bot.states.employee_management",
     "uk_management_bot.states.invite_creation",
     "uk_management_bot.states.my_shifts",

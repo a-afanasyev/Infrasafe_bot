@@ -110,6 +110,28 @@ def get_occurrence_sync(
     return row
 
 
+def list_occurrences_sync(
+    db: Session,
+    elevator_id: int,
+    *,
+    kind: str | None = None,
+    state: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> list[ElevatorMaintenanceOccurrence]:
+    """Sync-зеркало ``list_occurrences_async`` (бот лифтёра, Ф5)."""
+    stmt = _occurrences_stmt(elevator_id, kind=kind, state=state, from_date=from_date, to_date=to_date)
+    return list(db.execute(stmt).scalars().all())
+
+
+def count_open_requests_by_elevator_sync(db: Session, elevator_ids: Sequence[int]) -> dict[int, int]:
+    """Sync-зеркало ``count_open_requests_by_elevator_async`` (карточка лифта в боте)."""
+    if not elevator_ids:
+        return {}
+    rows = db.execute(_open_requests_count_stmt(elevator_ids)).all()
+    return {int(elevator_id): int(count) for elevator_id, count in rows}
+
+
 # ---------------------------------------------------------------------------
 # ASYNC (API)
 # ---------------------------------------------------------------------------
@@ -190,15 +212,10 @@ def _validate_occurrence_filters(kind: str | None, state: str | None) -> None:
         raise ElevatorValidationError(f"неизвестное состояние записи графика {state!r}")
 
 
-async def list_occurrences_async(
-    db: AsyncSession,
-    elevator_id: int,
-    *,
-    kind: str | None = None,
-    state: str | None = None,
-    from_date: date | None = None,
-    to_date: date | None = None,
-) -> list[ElevatorMaintenanceOccurrence]:
+def _occurrences_stmt(
+    elevator_id: int, *, kind: str | None, state: str | None,
+    from_date: date | None, to_date: date | None,
+) -> Select:
     """График одного лифта по фильтрам, порядок по ``due_on``; даты включительно."""
     _validate_occurrence_filters(kind, state)
     stmt = select(ElevatorMaintenanceOccurrence).where(
@@ -212,7 +229,20 @@ async def list_occurrences_async(
         stmt = stmt.where(ElevatorMaintenanceOccurrence.due_on >= from_date)
     if to_date is not None:
         stmt = stmt.where(ElevatorMaintenanceOccurrence.due_on <= to_date)
-    stmt = stmt.order_by(ElevatorMaintenanceOccurrence.due_on, ElevatorMaintenanceOccurrence.id)
+    return stmt.order_by(ElevatorMaintenanceOccurrence.due_on, ElevatorMaintenanceOccurrence.id)
+
+
+async def list_occurrences_async(
+    db: AsyncSession,
+    elevator_id: int,
+    *,
+    kind: str | None = None,
+    state: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> list[ElevatorMaintenanceOccurrence]:
+    """График одного лифта по фильтрам (см. ``_occurrences_stmt``)."""
+    stmt = _occurrences_stmt(elevator_id, kind=kind, state=state, from_date=from_date, to_date=to_date)
     return list((await db.execute(stmt)).scalars().all())
 
 
@@ -256,13 +286,8 @@ async def list_requests_for_elevator_async(
     return list((await db.execute(stmt)).scalars().all())
 
 
-async def count_open_requests_by_elevator_async(
-    db: AsyncSession, elevator_ids: Sequence[int]
-) -> dict[int, int]:
-    """``{elevator_id: число нетерминальных заявок}`` для страницы лифтов (один запрос)."""
-    if not elevator_ids:
-        return {}
-    stmt = (
+def _open_requests_count_stmt(elevator_ids: Sequence[int]) -> Select:
+    return (
         select(Request.elevator_id, func.count(Request.request_number))
         .where(
             Request.elevator_id.in_(list(elevator_ids)),
@@ -270,7 +295,16 @@ async def count_open_requests_by_elevator_async(
         )
         .group_by(Request.elevator_id)
     )
-    return {int(elevator_id): int(count) for elevator_id, count in (await db.execute(stmt)).all()}
+
+
+async def count_open_requests_by_elevator_async(
+    db: AsyncSession, elevator_ids: Sequence[int]
+) -> dict[int, int]:
+    """``{elevator_id: число нетерминальных заявок}`` для страницы лифтов (один запрос)."""
+    if not elevator_ids:
+        return {}
+    rows = (await db.execute(_open_requests_count_stmt(elevator_ids))).all()
+    return {int(elevator_id): int(count) for elevator_id, count in rows}
 
 
 async def count_building_apartments_without_entrance_async(

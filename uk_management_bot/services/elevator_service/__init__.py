@@ -71,6 +71,7 @@ from .labels import elevator_label, status_label
 from .reads import (
     count_building_apartments_without_entrance_async,
     count_open_requests_by_elevator_async,
+    count_open_requests_by_elevator_sync,
     get_elevator_async,
     get_elevator_including_archived_async,
     get_elevator_including_archived_sync,
@@ -83,6 +84,7 @@ from .reads import (
     list_all_occurrences_async,
     list_events_async,
     list_occurrences_async,
+    list_occurrences_sync,
     list_requests_for_elevator_async,
 )
 from .recipients import (
@@ -95,6 +97,7 @@ from .metrics import (
     availability_30d_for_page_async,
     date_to_business_midnight_utc,
     status_intervals_async,
+    status_intervals_sync,
 )
 from .registry import (
     REGISTRY_FLAGS,
@@ -214,6 +217,7 @@ __all__ = [
     "count_elevator_requests_without_elevator_async",
     "count_elevators_async",
     "count_open_requests_by_elevator_async",
+    "count_open_requests_by_elevator_sync",
     "create_elevator_async",
     "create_elevator_sync",
     "create_occurrence_async",
@@ -243,6 +247,7 @@ __all__ = [
     "list_elevators_async",
     "list_events_async",
     "list_occurrences_async",
+    "list_occurrences_sync",
     "list_requests_for_elevator_async",
     "load_config_async",
     "load_config_sync",
@@ -264,6 +269,7 @@ __all__ = [
     "should_remind_overdue",
     "status_label",
     "status_intervals_async",
+    "status_intervals_sync",
     "summary_async",
     "unknown_config_keys",
     "update_passport_async",

@@ -149,6 +149,12 @@ def _init_button_texts() -> dict:
         fallback_text="My Shifts"
     )
 
+    # Модуль «Лифты» (Ф5): меню лифтёра (handlers/elevators/menu.py)
+    button_texts['elevators'] = get_button_texts_for_all_languages(
+        "main_menu.elevators",
+        fallback_text="🛗 Лифты"
+    )
+
     button_texts['switch_role'] = get_button_texts_for_all_languages(
         "main_menu.switch_role",
         fallback_text="Switch Role"
@@ -449,6 +455,11 @@ def get_my_shifts_texts() -> List[str]:
         List[str]: Список текстов на всех поддерживаемых языках
     """
     return BUTTON_TEXTS.get('my_shifts', ["My Shifts"])
+
+
+def get_elevators_texts() -> List[str]:
+    """Тексты кнопки «🛗 Лифты» (меню лифтёра, модуль «Лифты») для всех языков."""
+    return BUTTON_TEXTS.get('elevators', ["🛗 Лифты"])
 
 
 def get_switch_role_texts() -> List[str]:
