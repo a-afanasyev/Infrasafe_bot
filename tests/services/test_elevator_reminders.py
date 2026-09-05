@@ -16,6 +16,7 @@ import pytest
 from uk_management_bot.database.models.elevator import Elevator, ElevatorMaintenanceOccurrence
 from uk_management_bot.services.elevator_service import (
     ElevatorValidationError,
+    complete_occurrence_sync,
     elevator_label,
     merge_config,
     status_label,
@@ -89,6 +90,11 @@ def _text(key, db, lang="ru", **params) -> str:
     return get_text(f"elevators.remind.{key}", language=lang, label=label, **params)
 
 
+def _when(days: int, lang: str = "ru") -> str:
+    key = "elevators.remind.when_today" if days == 0 else "elevators.remind.when_in_days"
+    return get_text(key, language=lang, days=days)
+
+
 def _aware(value):
     return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
@@ -103,8 +109,8 @@ class TestMaintenanceStages:
         assert _recipients(batch) == ALL_STAFF
         assert len(batch.staff_messages) == len(ALL_STAFF), "один адресат — одно сообщение"
         by_tg = {m.telegram_id: m.text for m in batch.staff_messages}
-        assert by_tg[TG[MGR_RU]] == _text("maintenance_due", el_db, date=fmt_date(due), days=20)
-        assert by_tg[TG[MGR_UZ]] == _text("maintenance_due", el_db, "uz", date=fmt_date(due), days=20)
+        assert by_tg[TG[MGR_RU]] == _text("maintenance_due", el_db, date=fmt_date(due), when=_when(20))
+        assert by_tg[TG[MGR_UZ]] == _text("maintenance_due", el_db, "uz", date=fmt_date(due), when=_when(20, "uz"))
         assert batch.advances == (StageAdvance("occurrence", 1, "reminder_stage", 30),)
         assert el_db.get(ElevatorMaintenanceOccurrence, 1).reminder_stage == 30
 
@@ -141,8 +147,19 @@ class TestMaintenanceStages:
         # ТО (30/14/7) ещё не в окне; освидетельствование по своему списку — уже
         assert batch.advances == (StageAdvance("occurrence", 2, "reminder_stage", 60),)
         assert {m.text for m in batch.staff_messages if m.telegram_id == TG[MGR_RU]} == {
-            _text("certification_due", el_db, date=fmt_date(due), days=50)
+            _text("certification_due", el_db, date=fmt_date(due), when=_when(50))
         }
+
+    def test_due_today_says_today_not_zero_days(self, el_db, el_seed):
+        _seed(el_db, el_seed, _occ(1, TODAY))
+
+        batch = _tick(el_db)
+
+        by_tg = {m.telegram_id: m.text for m in batch.staff_messages}
+        assert by_tg[TG[MGR_RU]] == _text("maintenance_due", el_db, date=fmt_date(TODAY), when=_when(0))
+        assert "сегодня" in by_tg[TG[MGR_RU]] and "0" not in by_tg[TG[MGR_RU]].split(fmt_date(TODAY))[1]
+        assert "bugun" in by_tg[TG[MGR_UZ]]
+        assert batch.advances == (StageAdvance("occurrence", 1, "reminder_stage", 7),)
 
     def test_stored_stage_survives_config_shrink(self, el_db, el_seed):
         _seed(el_db, el_seed, _occ(1, TODAY + timedelta(days=5), reminder_stage=60))
@@ -207,7 +224,7 @@ class TestContract:
         batch = _tick(el_db)
 
         assert _recipients(batch) == MANAGERS
-        assert batch.staff_messages[0].text == _text("contract_due", el_db, date=fmt_date(until), days=10)
+        assert batch.staff_messages[0].text == _text("contract_due", el_db, date=fmt_date(until), when=_when(10))
         assert batch.advances == (StageAdvance("elevator", 1, "contract_reminder_stage", 14),)
         assert el_db.get(Elevator, 1).contract_reminder_stage == 14
         assert _tick(el_db) == RemindersBatch()
@@ -250,8 +267,26 @@ class TestCertification:
         batch = _tick(el_db, config=_config(certification=[60, 7]))
 
         assert _recipients(batch) == MANAGERS
-        assert batch.staff_messages[0].text == _text("cert_due", el_db, date=fmt_date(until), days=45)
+        assert batch.staff_messages[0].text == _text("cert_due", el_db, date=fmt_date(until), when=_when(45))
         assert batch.advances == (StageAdvance("elevator", 1, "cert_reminder_stage", 60),)
+
+    def test_completing_certification_via_calendar_resets_weekly_marker(self, el_db, el_seed):
+        """Истёкшее освидетельствование → тик напомнил → освидетельствование
+        закрыто через календарь с новыми реквизитами → (0, None) → тик молчит."""
+        _seed(el_db, el_seed, _occ(1, TODAY, kind="certification"),
+              cert_valid_until=TODAY - timedelta(days=20), cert_reminder_stage=7)
+        first = _tick(el_db)
+        assert StageAdvance("elevator", 1, "cert_overdue_reminded_at", NOW) in first.advances
+
+        complete_occurrence_sync(
+            el_db, 1, actor_user_id=MGR_RU, comment=None, now=NOW,
+            cert_fields={"cert_number": "C-9", "cert_valid_until": TODAY + timedelta(days=400)},
+        )
+        el_db.commit()
+
+        elevator = el_db.get(Elevator, 1)
+        assert (elevator.cert_reminder_stage, elevator.cert_overdue_reminded_at) == (0, None)
+        assert _tick(el_db) == RemindersBatch()
 
     def test_expired_weekly(self, el_db, el_seed):
         until = TODAY - timedelta(days=20)
@@ -328,8 +363,10 @@ class TestBusinessDate:
         batch = _tick(el_db, now=evening)
 
         assert batch.advances == (StageAdvance("occurrence", 1, "reminder_stage", 7),)
-        assert batch.staff_messages[0].text.endswith(
-            _text("maintenance_due", el_db, date="13.09.2026", days=7)[-20:]
+        # первый адресат — MGR_RU (менеджеры идут первыми, по user.id)
+        assert batch.staff_messages[0].telegram_id == TG[MGR_RU]
+        assert batch.staff_messages[0].text == _text(
+            "maintenance_due", el_db, date="13.09.2026", when=_when(7)
         )
 
 
@@ -340,6 +377,16 @@ class TestApply:
             apply_reminders_sync(el_db, RemindersBatch(advances=(StageAdvance("elevator", 1, "version", 9),)))
         with pytest.raises(ElevatorValidationError):
             apply_reminders_sync(el_db, RemindersBatch(advances=(StageAdvance("request", 1, "reminder_stage", 9),)))
+
+    def test_elevator_version_is_not_bumped(self, el_db, el_seed):
+        """Метки напоминаний — не правка паспорта: менеджер не должен ловить 409 по версии."""
+        _seed(el_db, el_seed, contract_until=TODAY - timedelta(days=1),
+              status="not_working", status_since=NOW - timedelta(days=30))
+
+        batch = _tick(el_db)
+
+        assert {a.field for a in batch.advances} == {"contract_overdue_reminded_at", "downtime_reminded_at"}
+        assert el_db.get(Elevator, 1).version == 1
 
     def test_missing_row_is_skipped(self, el_db, el_seed):
         _seed(el_db, el_seed)

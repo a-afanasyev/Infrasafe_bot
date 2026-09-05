@@ -787,7 +787,10 @@ class TestShiftSchedulerBotSeam:
 
 class TestElevatorRemindersJob:
     """Регистрация только при включённом модуле; тик — DB-фаза в потоке, затем
-    рассылка; сбой считается в task_stats, планировщик живёт дальше."""
+    рассылка; сбой считается в task_stats, планировщик живёт дальше.
+
+    Тики гоняются через ``asyncio.run`` — ``get_event_loop()`` без текущего
+    loop'а на Python ≥3.12 хрупок (в 3.13 уже RuntimeError)."""
 
     REMINDERS = "uk_management_bot.services.elevator_service.reminders"
 
@@ -859,7 +862,7 @@ class TestElevatorRemindersJob:
         sched._bot = object()
         stack, sent = self._patched_tick(batch)
         with stack:
-            asyncio.get_event_loop().run_until_complete(sched._elevator_reminders_tick())
+            asyncio.run(sched._elevator_reminders_tick())
 
         sent.assert_awaited_once_with(sched._bot, [(5, "t")])
         assert sched.task_stats["elevator_reminders"]["success"] == 1
@@ -870,7 +873,7 @@ class TestElevatorRemindersJob:
         sched = _make_scheduler()
         stack, sent = self._patched_tick(RemindersBatch())
         with stack:
-            asyncio.get_event_loop().run_until_complete(sched._elevator_reminders_tick())
+            asyncio.run(sched._elevator_reminders_tick())
 
         sent.assert_not_awaited()
         assert sched.task_stats["elevator_reminders"]["success"] == 1
@@ -878,6 +881,6 @@ class TestElevatorRemindersJob:
     def test_db_failure_counts_as_failed_and_does_not_raise(self):
         sched = _make_scheduler()
         with patch(SESSION_LOCAL_PATH, side_effect=RuntimeError("db down")):
-            asyncio.get_event_loop().run_until_complete(sched._elevator_reminders_tick())
+            asyncio.run(sched._elevator_reminders_tick())
         assert sched.task_stats["elevator_reminders"]["failed"] == 1
         assert sched.task_stats["elevator_reminders"]["success"] == 0

@@ -8552,15 +8552,17 @@
       "back_in_service": "✅ Лифт №{elevator} в подъезде {entrance} ({building}) снова работает."
     },
     "remind": {
-      "maintenance_due": "🛗 Плановое ТО лифта {label}: {date} (через {days} дн.).",
-      "certification_due": "🛗 Освидетельствование лифта {label} по графику: {date} (через {days} дн.).",
+      "maintenance_due": "🛗 Плановое ТО лифта {label}: {date} ({when}).",
+      "certification_due": "🛗 Освидетельствование лифта {label} по графику: {date} ({when}).",
       "maintenance_overdue": "⚠️ ТО лифта {label} просрочено: срок был {date} ({days} дн. назад).",
       "certification_overdue": "⚠️ Освидетельствование лифта {label} по графику просрочено: срок был {date} ({days} дн. назад).",
-      "contract_due": "📄 Договор обслуживания лифта {label} истекает {date} (через {days} дн.).",
+      "contract_due": "📄 Договор обслуживания лифта {label} истекает {date} ({when}).",
       "contract_expired": "⚠️ У лифта {label} нет действующего договора обслуживания: истёк {date} ({days} дн. назад).",
-      "cert_due": "📋 Освидетельствование лифта {label} действительно до {date} (через {days} дн.).",
+      "cert_due": "📋 Освидетельствование лифта {label} действительно до {date} ({when}).",
       "cert_expired": "⚠️ Освидетельствование лифта {label} истекло {date} ({days} дн. назад).",
-      "downtime": "⏱ Лифт {label} в статусе «{status}» с {date} — уже {days} дн."
+      "downtime": "⏱ Лифт {label} в статусе «{status}» с {date} — уже {days} дн.",
+      "when_in_days": "через {days} дн.",
+      "when_today": "сегодня"
     },
     "bot": {
       "no_spec": "🛗 Раздел доступен сотрудникам со специализацией «лифты».",

@@ -10,13 +10,16 @@
 
 1. ТО / освидетельствование по графику — стадии из конфига
    (``staff_reminders.maintenance`` / ``certification``), менеджерам и лифтёрам.
-2. Просрочка записи графика — с 8-го дня, еженедельно
-   (``staff_reminders.overdue_weekly``), менеджерам и лифтёрам.
-3. Договор обслуживания лифта — стадии до срока, после истечения еженедельно;
-   менеджерам.
+2. Просрочка записи графика — с 8-го дня, еженедельно, менеджерам и лифтёрам.
+3. Договор обслуживания лифта — стадии до срока, после истечения (с 1-го дня)
+   еженедельно «нет действующего договора»; менеджерам.
 4. Освидетельствование лифта (``cert_valid_until``) — как договор; менеджерам.
 5. Длительный простой — порог по статусу из ``downtime_threshold_days``,
    еженедельно; менеджерам.
+
+Флаг ``staff_reminders.overdue_weekly`` гейтит ВСЕ еженедельные напоминания о
+просроченном (2, 3 и 4 после истечения) — один смысл у одного флага; простой
+(5) им не управляется, у него свои пороги.
 
 Лифтёры — исполнители со специализацией ``elevator`` (алиас ``maintenance``
 резолвит ``parse_specializations``); ``universal`` сюда не входит. Адресаты
@@ -33,7 +36,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
 from uk_management_bot.database.models.elevator import Elevator, ElevatorMaintenanceOccurrence
@@ -166,6 +169,15 @@ def _date_params(on: date, days: int) -> _Params:
     return lambda _language: {"date": fmt_date(on), "days": days}
 
 
+def _due_params(on: date, days: int) -> _Params:
+    """До срока: ``when`` = «через N дн.» либо «сегодня» при ``days == 0`` (ключи ``when_*``)."""
+    when_key = _LOCALE_PREFIX + ("when_today" if days == 0 else "when_in_days")
+    return lambda language: {
+        "date": fmt_date(on),
+        "when": get_text(when_key, language=language, days=days),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Адресаты
 # ---------------------------------------------------------------------------
@@ -177,7 +189,7 @@ def _to_recipients(users: Sequence[User]) -> tuple[Recipient, ...]:
     )
 
 
-def _active_users_stmt():
+def _active_users_stmt() -> Select:
     return select(User).where(
         User.deleted_at.is_(None),
         User.status == ACTIVE_USER_STATUS,
@@ -233,7 +245,7 @@ def _occurrence_reminder(
         if stage is None:
             return (), None
         days = (occ.due_on - today).days
-        messages = _render(f"{occ.kind}_due", audience.staff, occ.elevator, _date_params(occ.due_on, days))
+        messages = _render(f"{occ.kind}_due", audience.staff, occ.elevator, _due_params(occ.due_on, days))
         return messages, StageAdvance(OCCURRENCE_TARGET, occ.id, "reminder_stage", stage)
     if not _overdue_weekly(config) or not is_overdue(occ.due_on, today):
         return (), None
@@ -270,7 +282,7 @@ def _expiry_reminder(
         stage = next_reminder_stage(until, today, last_stage, _stages(config, rule.stages_kind))
         if stage is None:
             return (), None
-        messages = _render(f"{rule.key}_due", managers, elevator, _date_params(until, (until - today).days))
+        messages = _render(f"{rule.key}_due", managers, elevator, _due_params(until, (until - today).days))
         return messages, StageAdvance(ELEVATOR_TARGET, elevator.id, rule.stage_attr, stage)
     if not _overdue_weekly(config):
         return (), None
@@ -342,6 +354,13 @@ def apply_reminders_sync(db: Session, batch: RemindersBatch) -> int:
     Пишутся только поля напоминаний (``_TARGETS``), иное → ``ElevatorValidationError``.
     Исчезнувшая строка пропускается. ``version`` лифта не трогается: метки
     напоминаний — не правка паспорта, менеджер не должен ловить конфликт версий.
+
+    Гонка (осознанный компромисс): между ``collect`` и commit тика менеджер
+    может сменить дату (``update_passport`` сбрасывает стадию в 0) — тик
+    затем запишет стадию по СТАРОЙ дате поверх сброса, и одно напоминание
+    по новому сроку будет пропущено до следующей достигнутой стадии. Цена —
+    одно лишнее/пропущенное сообщение персоналу раз в год; блокировка всех
+    лифтов ``FOR UPDATE`` на время тика того не стоит.
     """
     applied = 0
     for advance in batch.advances:

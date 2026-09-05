@@ -7,7 +7,9 @@
 ``downtime_reminded_at`` (простой) и
 ``elevator_maintenance_occurrences.overdue_reminded_at`` (просрочка ТО).
 Обе колонки nullable timestamptz: NULL = после истечения ещё не напоминали.
-Сброс при смене даты — на стороне сервиса (``passport.update_passport_*``).
+Сброс при смене даты — на стороне сервиса: ``passport.update_passport_*``
+(обе колонки) и ``calendar._apply_cert`` (``cert_overdue_reminded_at`` при
+закрытии освидетельствования с новыми реквизитами).
 
 Revision ID: 017
 Revises: 016

@@ -213,11 +213,29 @@ class ShiftScheduler:
                 coalesce=True
             )
 
+            # 7. Еженедельное планирование (понедельник в 08:00)
+            self.scheduler.add_job(
+                self._weekly_planning,
+                CronTrigger(day_of_week=0, hour=8, minute=0),
+                id='weekly_planning',
+                name='Еженедельное планирование',
+                max_instances=1,
+                coalesce=True
+            )
+
             # 12. Лифты (Ф6): напоминания персоналу о ТО/освидетельствовании,
-            #     просрочках, договоре и длительном простое. Только при
-            #     включённом модуле. Интервал, а не cron: планировщик живёт в
-            #     UTC (см. №5), а «за N дней» считается по бизнес-дате внутри
-            #     тика — час запуска ни на что не влияет, тик идемпотентен.
+            #     просрочках, договоре и длительном простое. Интервал, а не
+            #     cron: планировщик живёт в UTC (см. №5), а «за N дней»
+            #     считается по бизнес-дате внутри тика — час запуска ни на что
+            #     не влияет, тик идемпотентен.
+            #     Флаг читается ОДИН раз, здесь: выключенный модуль = джобы
+            #     нет вовсе (а не пустой тик каждый час); включение требует
+            #     рестарта бота, как и остальные ELEVATORS_*-настройки.
+            #     TODO(multi-replica): max_instances=1 защищает от наложения
+            #     тиков только внутри ОДНОГО процесса; вторая реплика бота даст
+            #     дубли напоминаний (как и у всех джоб этого файла) — нужен
+            #     внешний лок (advisory lock / redis) при горизонтальном
+            #     масштабировании.
             from uk_management_bot.config.settings import settings
             if settings.ELEVATORS_ENABLED:
                 self.scheduler.add_job(
@@ -228,16 +246,6 @@ class ShiftScheduler:
                     max_instances=1,
                     coalesce=True
                 )
-
-            # 7. Еженедельное планирование (понедельник в 08:00)
-            self.scheduler.add_job(
-                self._weekly_planning,
-                CronTrigger(day_of_week=0, hour=8, minute=0),
-                id='weekly_planning',
-                name='Еженедельное планирование',
-                max_instances=1,
-                coalesce=True
-            )
 
             logger.info("Задачи планировщика смен настроены успешно")
 
@@ -774,7 +782,7 @@ class ShiftScheduler:
         self.task_stats[task_name]['failed' if failed else 'success'] += 1
         self.task_stats[task_name]['last_run'] = utc_now()
 
-    def _elevator_reminders_sync(self) -> tuple:
+    def _elevator_reminders_sync(self) -> tuple[tuple[int, str], ...]:
         """DB-фаза напоминаний по лифтам целиком в рабочем потоке.
 
         Сбор и запись стадий — в ОДНОЙ транзакции, commit до выхода: если сеть
@@ -814,10 +822,12 @@ class ShiftScheduler:
                 )
             self.task_stats[task_name]['success'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
-        except Exception as e:
+        except Exception:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
-            logger.error(f"Ошибка напоминаний по лифтам: {e}")
+            # Сюда долетают только ошибки DB-фазы: send_notify_messages не
+            # бросает, так что текста httpx (URL с токеном) в трейсе нет.
+            logger.exception("Ошибка напоминаний по лифтам")
 
 
 # Глобальный экземпляр планировщика

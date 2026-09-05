@@ -8553,15 +8553,17 @@
       "back_in_service": "✅ {entrance}-kirish ({building}) {elevator}-lift yana ishlamoqda."
     },
     "remind": {
-      "maintenance_due": "🛗 {label} liftining rejali texnik xizmati: {date} ({days} kundan keyin).",
-      "certification_due": "🛗 {label} liftini jadval bo'yicha tekshirish: {date} ({days} kundan keyin).",
+      "maintenance_due": "🛗 {label} liftining rejali texnik xizmati: {date} ({when}).",
+      "certification_due": "🛗 {label} liftini jadval bo'yicha tekshirish: {date} ({when}).",
       "maintenance_overdue": "⚠️ {label} liftining texnik xizmati muddati o'tgan: muddat {date} edi ({days} kun oldin).",
       "certification_overdue": "⚠️ {label} liftini jadval bo'yicha tekshirish muddati o'tgan: muddat {date} edi ({days} kun oldin).",
-      "contract_due": "📄 {label} liftiga xizmat ko'rsatish shartnomasi {date} da tugaydi ({days} kundan keyin).",
+      "contract_due": "📄 {label} liftiga xizmat ko'rsatish shartnomasi {date} da tugaydi ({when}).",
       "contract_expired": "⚠️ {label} liftida amaldagi xizmat ko'rsatish shartnomasi yo'q: {date} da tugagan ({days} kun oldin).",
-      "cert_due": "📋 {label} liftining tekshiruv guvohnomasi {date} gacha amal qiladi ({days} kundan keyin).",
+      "cert_due": "📋 {label} liftining tekshiruv guvohnomasi {date} gacha amal qiladi ({when}).",
       "cert_expired": "⚠️ {label} liftining tekshiruv guvohnomasi {date} da tugagan ({days} kun oldin).",
-      "downtime": "⏱ {label} lifti {date} dan beri «{status}» holatida — {days} kun."
+      "downtime": "⏱ {label} lifti {date} dan beri «{status}» holatida — {days} kun.",
+      "when_in_days": "{days} kundan keyin",
+      "when_today": "bugun"
     },
     "bot": {
       "no_spec": "🛗 Bo'lim «lift» mutaxassisligiga ega xodimlar uchun.",
