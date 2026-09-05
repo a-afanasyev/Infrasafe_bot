@@ -89,44 +89,63 @@ DUE = date(2026, 10, 1)
 
 
 class TestNextReminderStage:
+    """Стадия = дни последней отправленной стадии (0 = ничего)."""
+
     def test_too_early_none(self):
         assert next_reminder_stage(DUE, DUE - timedelta(days=31), 0) is None
 
-    def test_stage_1_at_30_days(self):
-        assert next_reminder_stage(DUE, DUE - timedelta(days=30), 0) == 1
+    def test_stage_30_at_30_days(self):
+        assert next_reminder_stage(DUE, DUE - timedelta(days=30), 0) == 30
 
-    def test_stage_1_between_30_and_14(self):
-        assert next_reminder_stage(DUE, DUE - timedelta(days=20), 0) == 1
+    def test_stage_30_between_30_and_14(self):
+        assert next_reminder_stage(DUE, DUE - timedelta(days=20), 0) == 30
 
     def test_idempotent_same_stage(self):
-        assert next_reminder_stage(DUE, DUE - timedelta(days=20), 1) is None
+        assert next_reminder_stage(DUE, DUE - timedelta(days=20), 30) is None
 
-    def test_stage_2_at_14_days(self):
-        assert next_reminder_stage(DUE, DUE - timedelta(days=14), 1) == 2
+    def test_stage_14_at_14_days(self):
+        assert next_reminder_stage(DUE, DUE - timedelta(days=14), 30) == 14
 
     def test_skips_missed_stages(self):
-        # тик впервые за 5 дней до срока: сразу стадия 3, одно сообщение
-        assert next_reminder_stage(DUE, DUE - timedelta(days=5), 0) == 3
+        # тик впервые за 5 дней до срока: сразу «за 7», одно сообщение
+        assert next_reminder_stage(DUE, DUE - timedelta(days=5), 0) == 7
 
-    def test_stage_3_on_due_day(self):
-        assert next_reminder_stage(DUE, DUE, 2) == 3
+    def test_stage_7_on_due_day(self):
+        assert next_reminder_stage(DUE, DUE, 14) == 7
 
     def test_all_sent_none(self):
-        assert next_reminder_stage(DUE, DUE, 3) is None
+        assert next_reminder_stage(DUE, DUE, 7) is None
 
     def test_after_due_none(self):
         assert next_reminder_stage(DUE, DUE + timedelta(days=1), 0) is None
 
     def test_custom_stages(self):
-        assert next_reminder_stage(DUE, DUE - timedelta(days=60), 0, stages=(90, 60)) == 2
+        assert next_reminder_stage(DUE, DUE - timedelta(days=60), 0, stages=(90, 60)) == 60
 
-    @pytest.mark.parametrize("stages", [(), (7, 14), (30, 30), (0, -1), (400,)])
+    def test_stages_compressed_after_send(self):
+        # отправили «за 14» при (30,14,7); список сжали до (30,7)
+        assert next_reminder_stage(DUE, DUE - timedelta(days=10), 14, stages=(30, 7)) is None
+        assert next_reminder_stage(DUE, DUE - timedelta(days=5), 14, stages=(30, 7)) == 7
+
+    def test_stored_stage_absent_from_list_is_not_error(self):
+        # отправили «за 60» при (90,60); список сжали до (30,14,7)
+        assert next_reminder_stage(DUE, DUE - timedelta(days=20), 60) == 30
+
+    def test_stages_extended_no_duplicate(self):
+        # отправили «за 7»; список расширили до (30,14,7,3): за 5 дней — дубля нет
+        assert next_reminder_stage(DUE, DUE - timedelta(days=5), 7, stages=(30, 14, 7, 3)) is None
+        assert next_reminder_stage(DUE, DUE - timedelta(days=2), 7, stages=(30, 14, 7, 3)) == 3
+
+    def test_stages_accept_any_sequence(self):
+        assert next_reminder_stage(DUE, DUE - timedelta(days=5), 0, stages=range(30, 0, -10)) == 10
+
+    @pytest.mark.parametrize("stages", [(), (7, 14), (30, 30), (0, -1), (400,), "30,14"])
     def test_bad_stages_rejected(self, stages):
         with pytest.raises(ElevatorValidationError):
             next_reminder_stage(DUE, DUE, 0, stages=stages)
 
-    @pytest.mark.parametrize("stage", [-1, 4])
-    def test_bad_current_stage_rejected(self, stage):
+    @pytest.mark.parametrize("stage", [-1, "7", True, None])
+    def test_bad_last_stage_days_rejected(self, stage):
         with pytest.raises(ElevatorValidationError):
             next_reminder_stage(DUE, DUE, stage)
 

@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from uk_management_bot.database.models.elevator import ELEVATOR_STATUSES
+
 from ._core import require_aware
 
 WORKING_STATUS = "working"
@@ -45,8 +47,11 @@ def _clipped_length(start: datetime, end: datetime, lo: datetime, hi: datetime) 
 
 
 def _validate_intervals(events: Sequence[StatusInterval]) -> None:
+    """Fail-fast по данным журнала: tz-aware, порядок, канонический статус."""
     previous: datetime | None = None
     for index, interval in enumerate(events):
+        if interval.status not in ELEVATOR_STATUSES:
+            raise ValueError(f"events[{index}].status: неизвестный статус {interval.status!r}")
         started_at = require_aware(interval.started_at, f"events[{index}].started_at")
         if previous is not None and started_at < previous:
             raise ValueError("интервалы статуса должны идти по возрастанию started_at")
@@ -72,7 +77,8 @@ def compute_availability_30d(
 
     Возвращает ``None``, когда данных нет: лифт не введён в эксплуатацию,
     период активности или знаменатель ≤ 0. Иначе 0.0–1.0 с округлением
-    до 4 знаков. Все datetime — tz-aware; naive → ``ValueError``.
+    до 4 знаков. Все datetime — tz-aware; naive, нарушенный порядок или
+    статус вне ``ELEVATOR_STATUSES`` → ``ValueError`` (дефект данных).
     """
     if window_days <= 0:
         raise ValueError("window_days должен быть положительным")

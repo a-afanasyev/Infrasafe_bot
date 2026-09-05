@@ -12,10 +12,16 @@
   архивируется (``archived_at``).
 * ``working`` (как и любой статус) — только после ввода в эксплуатацию:
   до ``is_commissioned`` статус NULL (``can_set_status``).
-* Напоминания — идемпотентный тик: у сущности хранится стадия
-  (0 → 1 «за 30» → 2 «за 14» → 3 «за 7»), пропущенные стадии схлопываются в
-  одно сообщение (``next_reminder_stage``); просрочка — с 8-го дня, повтор
-  еженедельно (``is_overdue``/``should_remind_overdue``).
+* Напоминания — идемпотентный тик: у сущности хранится стадия в колонке
+  ``*_reminder_stage`` (SmallInteger) со семантикой «ДНИ последней
+  отправленной стадии, 0 = ничего не отправлено» (30 → 14 → 7), а не индекс:
+  список стадий меняется в конфиге, и сохранённое значение обязано пережить
+  сжатие/расширение списка. Пропущенные стадии схлопываются в одно сообщение
+  (``next_reminder_stage``); просрочка — с 8-го дня, повтор еженедельно
+  (``is_overdue``/``should_remind_overdue``).
+* Конфиг ``elevators_config.data``: сохранённый — терпим к неизвестным
+  ключам (отбрасываются, ``unknown_config_keys`` для лога), патч — строгий
+  (``merge_config``).
 * Доступность за 30 дней считается только по времени, когда лифт введён в
   эксплуатацию и не архивирован; пробелы журнала в знаменатель не входят
   (``compute_availability_30d``).
@@ -32,6 +38,7 @@ from ._core import (
     ElevatorValidationError,
     Message,
     StatusChange,
+    is_strict_int,
     require_aware,
 )
 from .availability import StatusInterval, compute_availability_30d
@@ -54,6 +61,7 @@ from .reminder_rules import (
     DOWNTIME_STATUSES,
     downtime_threshold_reached,
     merge_config,
+    unknown_config_keys,
 )
 from .validation import (
     PASSPORT_REQUIRED_FIELDS,
@@ -85,12 +93,14 @@ __all__ = [
     "generate_occurrence_dates",
     "generate_public_code",
     "is_overdue",
+    "is_strict_int",
     "is_valid_public_code",
     "merge_config",
     "next_reminder_stage",
     "require_aware",
     "require_elevator_for_category",
     "should_remind_overdue",
+    "unknown_config_keys",
     "validate_passport_required",
     "validate_reminder_stages",
     "validate_status",

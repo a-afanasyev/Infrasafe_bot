@@ -8,7 +8,12 @@ from collections.abc import Mapping
 
 from uk_management_bot.database.models.elevator import ELEVATOR_STATUSES
 
-from ._core import ELEVATOR_CATEGORY, ElevatorStateError, ElevatorValidationError
+from ._core import (
+    ELEVATOR_CATEGORY,
+    ElevatorStateError,
+    ElevatorValidationError,
+    is_strict_int,
+)
 
 # Обязательные поля паспорта при создании лифта
 PASSPORT_REQUIRED_FIELDS: tuple[str, ...] = (
@@ -71,7 +76,7 @@ def _is_blank(value: object) -> bool:
 
 
 def _is_positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+    return is_strict_int(value) and value > 0  # type: ignore[operator]
 
 
 def validate_passport_required(fields: Mapping[str, object]) -> None:

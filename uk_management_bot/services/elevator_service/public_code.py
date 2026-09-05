@@ -19,6 +19,8 @@ _PUBLIC_CODE_RE = re.compile(
 
 def generate_public_code() -> str:
     """Случайный код ``[A-Za-z0-9_-]`` длиной 16..32 (фактически 22)."""
+    # Срез — страховка при смене _TOKEN_BYTES: код не должен превысить
+    # ширину колонки elevators.public_code (String(32)).
     return secrets.token_urlsafe(_TOKEN_BYTES)[:PUBLIC_CODE_MAX_LEN]
 
 

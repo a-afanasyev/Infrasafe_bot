@@ -5,12 +5,14 @@ from types import MappingProxyType
 
 import pytest
 
+from uk_management_bot.database.models.elevator import ELEVATOR_STATUSES
 from uk_management_bot.services.elevator_service import (
     DEFAULT_ELEVATORS_CONFIG,
     DOWNTIME_STATUSES,
     ElevatorValidationError,
     downtime_threshold_reached,
     merge_config,
+    unknown_config_keys,
 )
 
 pytestmark = pytest.mark.unit
@@ -49,6 +51,14 @@ class TestDowntimeThresholdReached:
     def test_naive_raises(self):
         with pytest.raises(ValueError):
             downtime_threshold_reached("not_working", datetime(2026, 1, 1), NOW, THRESHOLDS)
+
+    @pytest.mark.parametrize("bad", ["7", 7.5, True, [7]])
+    def test_non_int_threshold_rejected(self, bad):
+        with pytest.raises(ElevatorValidationError):
+            downtime_threshold_reached("not_working", NOW - D, NOW, {"not_working": bad})
+
+    def test_downtime_statuses_subset_of_canon(self):
+        assert set(DOWNTIME_STATUSES) <= set(ELEVATOR_STATUSES)
 
 
 # ---------------------------------------------------------------------------
@@ -154,10 +164,67 @@ class TestMergeConfig:
         with pytest.raises(ElevatorValidationError):
             merge_config(None, {key: value})
 
-    def test_unknown_top_level_key(self):
+    def test_unknown_top_level_key_in_patch_rejected(self):
         with pytest.raises(ElevatorValidationError):
-            merge_config(None, {"bogus": 1})
+            merge_config(None, {"legacy": 1})
+
+    def test_unknown_section_key_in_patch_rejected(self):
+        with pytest.raises(ElevatorValidationError):
+            merge_config(None, {"staff_reminders": {"legacy": [1]}})
+
+    def test_unknown_keys_in_stored_dropped(self):
+        stored = {"legacy": 1, "staff_reminders": {"legacy": "x", "maintenance": [60]}}
+        result = merge_config(stored, None)
+        assert "legacy" not in result
+        assert "legacy" not in result["staff_reminders"]
+        assert result["staff_reminders"]["maintenance"] == [60]
+
+    def test_stored_only_legacy_gives_defaults(self):
+        assert merge_config({"legacy": 1}, None) == merge_config(None, None)
+
+    def test_invalid_value_in_stored_still_rejected(self):
+        with pytest.raises(ElevatorValidationError):
+            merge_config({"downtime_threshold_days": {"not_working": 999}}, None)
 
     def test_non_mapping_input(self):
         with pytest.raises(ElevatorValidationError):
             merge_config([], None)  # type: ignore[arg-type]
+        with pytest.raises(ElevatorValidationError):
+            merge_config(None, "x")  # type: ignore[arg-type]
+
+    def test_too_deep_nesting_rejected(self):
+        deep: dict = {"x": 1}
+        for _ in range(50):
+            deep = {"x": deep}
+        with pytest.raises(ElevatorValidationError):
+            merge_config(None, {"downtime_threshold_days": deep})
+        # в stored глубина под ИЗВЕСТНЫМ ключом (под неизвестным её отбросит prune)
+        with pytest.raises(ElevatorValidationError):
+            merge_config({"downtime_threshold_days": {"not_working": deep}}, None)
+
+    def test_deep_junk_under_unknown_stored_key_is_pruned(self):
+        deep: dict = {"x": 1}
+        for _ in range(50):
+            deep = {"x": deep}
+        assert merge_config({"legacy": deep}, None) == merge_config(None, None)
+
+
+class TestUnknownConfigKeys:
+    def test_none_and_defaults(self):
+        assert unknown_config_keys(None) == ()
+        assert unknown_config_keys(merge_config(None, None)) == ()
+
+    def test_paths(self):
+        stored = {
+            "legacy": 1,
+            "staff_reminders": {"legacy": "x", "maintenance": [60]},
+            "downtime_threshold_days": {"working": 1},
+        }
+        assert unknown_config_keys(stored) == (
+            "legacy",
+            "staff_reminders.legacy",
+            "downtime_threshold_days.working",
+        )
+
+    def test_non_mapping_section_reported_by_merge_not_here(self):
+        assert unknown_config_keys({"staff_reminders": [1]}) == ()

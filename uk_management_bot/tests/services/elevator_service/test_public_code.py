@@ -3,6 +3,7 @@ import re
 
 import pytest
 
+from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.services.elevator_service import (
     PUBLIC_CODE_MAX_LEN,
     generate_public_code,
@@ -28,7 +29,7 @@ def test_unique_over_1000():
 
 
 def test_max_len_matches_column():
-    assert PUBLIC_CODE_MAX_LEN == 32
+    assert PUBLIC_CODE_MAX_LEN == Elevator.__table__.c.public_code.type.length
 
 
 @pytest.mark.parametrize(

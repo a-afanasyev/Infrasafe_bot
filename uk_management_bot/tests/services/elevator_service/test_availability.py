@@ -137,6 +137,42 @@ def test_naive_datetime_raises():
         )
 
 
+def test_interval_started_before_commissioning_is_clipped():
+    commissioned = NOW - 10 * D
+    events = [_iv("working", LONG_AGO), _iv("not_working", NOW - 5 * D)]
+    res = compute_availability_30d(
+        events, now=NOW, commissioned_at=commissioned, archived_at=None
+    )
+    assert res == 0.5
+
+
+def test_two_events_same_started_at_first_has_zero_length():
+    events = [
+        _iv("working", LONG_AGO),
+        _iv("not_working", NOW - 10 * D),
+        _iv("under_repair", NOW - 10 * D),
+    ]
+    res = compute_availability_30d(
+        events, now=NOW, commissioned_at=LONG_AGO, archived_at=None
+    )
+    assert res == 0.6667
+
+
+def test_future_event_ignored():
+    events = [_iv("working", LONG_AGO), _iv("not_working", NOW + D)]
+    res = compute_availability_30d(
+        events, now=NOW, commissioned_at=LONG_AGO, archived_at=None
+    )
+    assert res == 1.0
+
+
+def test_unknown_status_raises():
+    with pytest.raises(ValueError):
+        compute_availability_30d(
+            [_iv("broken", LONG_AGO)], now=NOW, commissioned_at=LONG_AGO, archived_at=None
+        )
+
+
 def test_unordered_events_raise():
     events = [_iv("working", NOW - 5 * D), _iv("not_working", NOW - 10 * D)]
     with pytest.raises(ValueError):
