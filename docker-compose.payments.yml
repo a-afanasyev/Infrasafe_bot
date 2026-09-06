@@ -7,6 +7,7 @@ services:
       PAYMENT_SERVICE_TOKEN: ${PAYMENT_SERVICE_TOKEN:?Set PAYMENT_SERVICE_TOKEN in Doppler}
   payment-postgres:
     image: postgres:16-alpine
+    container_name: uk-payment-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: payment_control
@@ -38,6 +39,7 @@ services:
     build:
       context: .
       dockerfile: payment_control/Dockerfile
+    container_name: uk-payment-api
     restart: unless-stopped
     environment:
       PAYMENT_DB_USER: payment_app
