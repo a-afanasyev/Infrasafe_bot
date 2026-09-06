@@ -18,6 +18,7 @@ interface Props {
 export default function ApartmentFormModal({ apartment, buildingId, onClose }: Props) {
   const { t } = useTranslation()
   const [apartmentNumber, setApartmentNumber] = useState(apartment?.apartment_number ?? '')
+  const [accountNumber, setAccountNumber] = useState(apartment?.account_number ?? '')
   const [entrance, setEntrance] = useState<string>(apartment?.entrance != null ? String(apartment.entrance) : '')
   const [floor, setFloor] = useState<string>(apartment?.floor != null ? String(apartment.floor) : '')
   const [roomsCount, setRoomsCount] = useState<string>(apartment?.rooms_count != null ? String(apartment.rooms_count) : '')
@@ -34,6 +35,7 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
     const payload = {
       building_id: buildingId,
       apartment_number: apartmentNumber.trim(),
+      account_number: accountNumber.trim() || null,
       entrance: entrance ? parseInt(entrance) || null : null,
       floor: floor ? parseInt(floor) || null : null,
       rooms_count: roomsCount ? parseInt(roomsCount) || null : null,
@@ -63,12 +65,26 @@ export default function ApartmentFormModal({ apartment, buildingId, onClose }: P
 
         <div className="flex flex-col gap-4">
           <div>
-            <Label className="mb-1 block text-xs text-text-muted">{t('addressForms.aptNumberLabel')}</Label>
+            <Label htmlFor="apartment-number" className="mb-1 block text-xs text-text-muted">{t('addressForms.aptNumberLabel')}</Label>
             <Input
+              id="apartment-number"
               value={apartmentNumber}
               onChange={e => setApartmentNumber(e.target.value)}
               autoFocus
             />
+          </div>
+
+          {/* Лицевой счёт «Mening uyim» — ключ связи квартиры со сервисом
+              контроля платежей (долг/предоплата подтягиваются по нему). */}
+          <div>
+            <Label htmlFor="apartment-account-number" className="mb-1 block text-xs text-text-muted">{t('addressForms.accountNumberLabel')}</Label>
+            <Input
+              id="apartment-account-number"
+              value={accountNumber}
+              maxLength={64}
+              onChange={e => setAccountNumber(e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-text-muted">{t('addressForms.accountNumberHint')}</p>
           </div>
 
           <div className="flex gap-3">

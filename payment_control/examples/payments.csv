@@ -1,0 +1,3 @@
+account_number;operation_id;paid_at;amount
+001;example-bank-001;2026-09-01;20000.00
+002;example-bank-002;2026-09-01;50000.00

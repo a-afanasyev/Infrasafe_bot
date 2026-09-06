@@ -32,6 +32,12 @@ ENV VITE_WORK_REPORTS_ENABLED=$VITE_WORK_REPORTS_ENABLED
 # --build-arg VITE_ELEVATORS_ENABLED=true (согласованно с backend ELEVATORS_ENABLED).
 ARG VITE_ELEVATORS_ENABLED=
 ENV VITE_ELEVATORS_ENABLED=$VITE_ELEVATORS_ENABLED
+
+# DARK-гейт раздела «Контроль платежей»: пусто = OFF (пункт меню не монтируется).
+# Включение: --build-arg VITE_PAYMENTS_ENABLED=true — только там, где поднят
+# overlay docker-compose.payments.yml и заявлен edge-префикс /api/v2/payment-control.
+ARG VITE_PAYMENTS_ENABLED=
+ENV VITE_PAYMENTS_ENABLED=$VITE_PAYMENTS_ENABLED
 RUN npm run build
 
 FROM nginx:1.27-alpine

@@ -71,6 +71,7 @@ class BuildingUpdate(BaseModel):
 
 # --- Apartment ---
 class ApartmentOut(BaseModel):
+    account_number: Optional[str] = Field(None, max_length=64)
     id: int
     building_id: int
     apartment_number: str
@@ -88,6 +89,7 @@ class ApartmentOut(BaseModel):
 
 
 class ApartmentCreate(BaseModel):
+    account_number: Optional[str] = Field(None, max_length=64)
     building_id: int
     apartment_number: str = Field(..., min_length=1, max_length=20)
     entrance: Optional[int] = Field(None, ge=1, le=50)
@@ -98,6 +100,7 @@ class ApartmentCreate(BaseModel):
 
 
 class ApartmentUpdate(BaseModel):
+    account_number: Optional[str] = Field(None, max_length=64)
     apartment_number: Optional[str] = Field(None, min_length=1, max_length=20)
     entrance: Optional[int] = Field(None, ge=1, le=50)
     floor: Optional[int] = Field(None, ge=1, le=100)
@@ -122,6 +125,7 @@ class ResidentOut(BaseModel):
 
 
 class ApartmentDetailOut(BaseModel):
+    account_number: Optional[str] = Field(None, max_length=64)
     id: int
     building_id: int
     apartment_number: str

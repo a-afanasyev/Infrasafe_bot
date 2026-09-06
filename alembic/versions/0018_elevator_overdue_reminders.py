@@ -11,8 +11,8 @@
 (обе колонки) и ``calendar._apply_cert`` (``cert_overdue_reminded_at`` при
 закрытии освидетельствования с новыми реквизитами).
 
-Revision ID: 017
-Revises: 016
+Revision ID: 018
+Revises: 017
 Create Date: 2026-09-06
 """
 from typing import Sequence, Union
@@ -20,8 +20,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "017"
-down_revision: Union[str, None] = "016"
+revision: str = "018"
+down_revision: Union[str, None] = "017"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

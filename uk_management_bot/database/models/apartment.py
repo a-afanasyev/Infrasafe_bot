@@ -16,6 +16,7 @@ class Apartment(Base):
     id = Column(Integer, primary_key=True)
     building_id = Column(Integer, ForeignKey("buildings.id", ondelete="CASCADE"), nullable=False, index=True)
     apartment_number = Column(String(20), nullable=False, index=True)  # Номер квартиры
+    account_number = Column(String(64), nullable=True)
 
     # Характеристики квартиры
     entrance = Column(Integer, nullable=True)  # Номер подъезда
@@ -39,6 +40,7 @@ class Apartment(Base):
     # Уникальность номера квартиры в рамках здания
     __table_args__ = (
         UniqueConstraint('building_id', 'apartment_number', name='uix_building_apartment'),
+        UniqueConstraint('account_number', name='uq_apartments_account_number'),
     )
 
     @property

@@ -50,8 +50,8 @@
 
 ## 3. Модель данных
 
-Миграции: `alembic/versions/0016_elevators.py` (4 таблицы + 2 колонки),
-`0017_elevator_overdue_reminders.py` (+2 колонки на `elevators`). Модели:
+Миграции: `alembic/versions/0017_elevators.py` (4 таблицы + 2 колонки),
+`0018_elevator_overdue_reminders.py` (+2 колонки на `elevators`). Модели:
 `database/models/elevator.py`, `elevators_config.py`, колонки в `request.py:97-98`.
 
 ```
@@ -96,7 +96,7 @@ elevators_config — singleton id=1 (JSON), как board_config/auto_manager_con
 - **`requests.elevator_id`/`elevator_operational` NULL допустимы в БД** (другие категории,
   исторические заявки); обязательность для `category='elevator'` — инвариант валидатора Р11,
   не CHECK.
-- Канон-наборы статусов/видов дублируются в миграции 016 (alembic не импортирует модели);
+- Канон-наборы статусов/видов дублируются в миграции 017 (alembic не импортирует модели);
   паритет закреплён `uk_management_bot/tests/test_elevator_models.py`.
 
 ## 4. Сервисный слой — `services/elevator_service/`

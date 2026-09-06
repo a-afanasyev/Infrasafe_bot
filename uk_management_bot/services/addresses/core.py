@@ -14,6 +14,7 @@ Each write follows the same shape:
   enqueue_outbox (same tx) -> commit -> refresh -> publish_realtime_after_commit.
 """
 import logging
+import re
 
 from sqlalchemy import select, func, and_
 from sqlalchemy.exc import IntegrityError
@@ -23,7 +24,7 @@ from uk_management_bot.database.models import (
     Yard, Building, Apartment, UserApartment,
 )
 from uk_management_bot.services.addresses.exceptions import (
-    AddressNotFound, AddressConflict, AddressPermissionError,
+    AddressNotFound, AddressConflict, AddressPermissionError, AddressValidationError,
 )
 from uk_management_bot.services.addresses.events import (
     enqueue_outbox, publish_realtime_after_commit,
@@ -311,6 +312,54 @@ async def delete_building(db: AsyncSession, building_id: int) -> None:
 
 # ───────────────────────── Apartments ─────────────────────────
 
+# Лицевой счёт «Mening uyim»: только ASCII. Юникодный \w пропускал гомоглифы —
+# кириллическая «О» и латинская «O» дают два визуально одинаковых, но разных
+# счёта, и карточка квартиры тихо показывала бы «нет данных».
+_ACCOUNT_NUMBER_RE = re.compile(r"[0-9A-Za-z.\-]+")
+_ACCOUNT_NUMBER_MAX_LEN = 64
+
+
+async def _validate_account_number(db, value, apartment_id=None):
+    value = value.strip() if isinstance(value, str) else value
+    if value == "" or value is None:
+        return None
+    if (not isinstance(value, str) or len(value) > _ACCOUNT_NUMBER_MAX_LEN
+            or not _ACCOUNT_NUMBER_RE.fullmatch(value)):
+        # Формат — это 422 (ошибка данных), а не 409 (конфликт с другой записью).
+        raise AddressValidationError(
+            "Некорректный лицевой счёт (до 64 символов: латинские буквы, цифры, точка, дефис)"
+        )
+    stmt = (
+        select(Apartment.apartment_number, Building.address)
+        .join(Building, Building.id == Apartment.building_id)
+        .where(Apartment.account_number == value)
+    )
+    if apartment_id is not None:
+        stmt = stmt.where(Apartment.id != apartment_id)
+    holder = (await db.execute(stmt)).first()
+    if holder is not None:
+        # Адрес держателя в тексте ошибки: иначе менеджер видит «счёт занят», не
+        # может найти какой квартирой (поиска по счёту в разделе нет) и встаёт.
+        raise AddressConflict(
+            f"Лицевой счёт уже связан с квартирой {holder[0]} ({holder[1] or 'адрес не указан'})"
+        )
+    return value
+
+
+async def _flush_apartment(db):
+    """Флаш квартиры в savepoint: конфликт откатывает только этот insert/update.
+
+    Раньше здесь был db.rollback(), который в транзакции с внешним владением
+    коммитом (паттерн commit=False из докстринга модуля) молча снёс бы весь
+    незакоммиченный стейт вызывающего.
+    """
+    try:
+        async with db.begin_nested():
+            await db.flush()
+    except IntegrityError as exc:
+        raise AddressConflict("Квартира или лицевой счёт уже существуют") from exc
+
+
 async def create_apartment(
     db: AsyncSession,
     *,
@@ -322,7 +371,9 @@ async def create_apartment(
     rooms_count: int | None = None,
     area: float | None = None,
     description: str | None = None,
+    account_number: str | None = None,
 ) -> Apartment:
+    account_number = await _validate_account_number(db, account_number)
     building = await _get_building_or_raise(db, building_id)
     if not building.is_active:
         raise AddressConflict("Здание неактивно", code="building_inactive")
@@ -341,6 +392,7 @@ async def create_apartment(
     apartment = Apartment(
         building_id=building_id,
         apartment_number=apartment_number,
+        account_number=account_number,
         entrance=entrance,
         floor=floor,
         rooms_count=rooms_count,
@@ -350,7 +402,7 @@ async def create_apartment(
         is_active=True,
     )
     db.add(apartment)
-    await db.flush()
+    await _flush_apartment(db)
 
     data = build_apartment_event_data(apartment)
     await enqueue_outbox(db, event="apartment.created", data=data)
@@ -428,6 +480,8 @@ async def bulk_create_apartments(
 
 async def update_apartment(db: AsyncSession, apartment_id: int, updates: dict) -> Apartment:
     apartment = await _get_apartment_or_raise(db, apartment_id)
+    if "account_number" in updates:
+        updates = {**updates, "account_number": await _validate_account_number(db, updates["account_number"], apartment_id)}
 
     # Canonical guard: block deactivation while approved residents exist.
     if updates.get("is_active") is False and apartment.is_active:
@@ -464,7 +518,7 @@ async def update_apartment(db: AsyncSession, apartment_id: int, updates: dict) -
 
     for field, value in updates.items():
         setattr(apartment, field, value)
-    await db.flush()
+    await _flush_apartment(db)
 
     data = build_apartment_event_data(apartment)
     await enqueue_outbox(db, event="apartment.updated", data=data)

@@ -194,10 +194,10 @@ def test_children_relationships_restrict_and_ordered():
     assert str(occurrences.order_by[0]) == "elevator_maintenance_occurrences.due_on"
 
 
-def _load_migration_0016():
+def _load_migration_0017():
     root = pathlib.Path(__file__).resolve().parents[2]
-    path = root / "alembic" / "versions" / "0016_elevators.py"
-    spec = importlib.util.spec_from_file_location("migration_0016_elevators", path)
+    path = root / "alembic" / "versions" / "0017_elevators.py"
+    spec = importlib.util.spec_from_file_location("migration_0017_elevators", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -206,8 +206,8 @@ def _load_migration_0016():
 def test_migration_check_literals_match_model_constants():
     """Миграция не импортирует модели (правило alembic) и дублирует наборы;
     расхождение = CHECK в БД строже/слабее канона Python молча."""
-    m = _load_migration_0016()
-    assert m.revision == "016" and m.down_revision == "015"
+    m = _load_migration_0017()
+    assert m.revision == "017" and m.down_revision == "016"
     assert m.STATUSES == ELEVATOR_STATUSES
     assert m.EVENT_KINDS == ELEVATOR_EVENT_KINDS
     assert m.EVENT_SOURCES == ELEVATOR_EVENT_SOURCES

@@ -233,6 +233,24 @@ describe('address mutations', () => {
   })
 })
 
+// Лицевой счёт «Mening uyim» живёт в apartment-detail (staleTime 30 c), а блок
+// платежей берёт номер оттуда: после правки квартиры обе выборки обязаны
+// обновиться, иначе карточка показывает старый счёт и суммы по новому.
+describe('useUpdateApartment: инвалидация карточки квартиры', () => {
+  it('обновляет apartments, apartment-detail и apartment-payment', async () => {
+    server.use(http.patch('*/api/v2/addresses/apartments/1', () => HttpResponse.json({ ok: true })))
+
+    const qc = makeClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = rawRenderHook(() => useUpdateApartment(), { wrapper: wrapperFor(qc) })
+    result.current.mutate({ id: 1, account_number: '770123456' } as never)
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const keys = invalidate.mock.calls.map(([arg]) => (arg as { queryKey: string[] }).queryKey[0])
+    expect(keys).toEqual(expect.arrayContaining(['apartments', 'apartment-detail', 'apartment-payment']))
+  })
+})
+
 // ── Real-time ────────────────────────────────────────────────────────
 
 describe('useAddressesWebSocket', () => {

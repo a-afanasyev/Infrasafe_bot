@@ -20,8 +20,8 @@
 Пользовательского поведения в этой фазе нет. Идемпотентность управляется
 alembic-версией; отдельных guard'ов не требуется.
 
-Revision ID: 016
-Revises: 015
+Revision ID: 017
+Revises: 016
 Create Date: 2026-09-05
 """
 from typing import Sequence, Union
@@ -30,8 +30,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "016"
-down_revision: Union[str, None] = "015"
+revision: str = "017"
+down_revision: Union[str, None] = "016"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

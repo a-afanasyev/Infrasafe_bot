@@ -295,6 +295,11 @@ export function useUpdateApartment() {
     onSuccess: () => {
       toast.success(i18n.t('toast.apartmentUpdated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      // Профиль квартиры и блок платежей читают лицевой счёт из apartment-detail
+      // (staleTime 30 c): без этих инвалидаций после правки счёта карточка минуту
+      // показывала старый номер, а суммы приходили уже по новому.
+      queryClient.invalidateQueries({ queryKey: ['apartment-detail'] })
+      queryClient.invalidateQueries({ queryKey: ['apartment-payment'] })
     },
     onError: (error: Error) => {
       console.error('Update apartment failed:', error)

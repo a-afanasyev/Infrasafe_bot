@@ -49,6 +49,7 @@ Derived from actual code, not assumptions:
 - `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (✅ live на ОБОИХ хостах, verified 2026-08-22; до деплоя фичи приложение отвечает 404 JSON — после деплоя ждём 401)
 - `/api/v2/residents` — раздел «Жители» дашборда (manager-only) (✅ live на ОБОИХ хостах, verified 2026-08-22 — пробел на infrasafe.uz закрыт, раздел «Жители» там снова работает)
 - `/api/v2/elevators` — модуль «Лифты»: реестр/карточка/статус/календарь (executor|manager), паспорт/конфиг/bulk-confirm (manager), `for-building/{id}` (любая approved-роль, житель — свои дома; вызывается TWA-формой заявки). Роуты `""`, `/{id}`, `/summary`, `/config`, `/occurrences`, `/requests/bulk-confirm` (⏳ **НЕ ЗАЯВЛЕН** InfraSafe, 2026-09-06; фича DARK за `ELEVATORS_ENABLED` на обеих площадках — приложение отвечает 404 JSON до включения флага; после включения ждём 401 на `GET /api/v2/elevators` без токена). Док модуля — `docs/ELEVATORS_MODULE.md` §5, §10
+- `/api/v2/payment-control` — раздел «Контроль платежей» дашборда (manager/admin, только `approved`; предпросмотр импорта 10/min, активация и деактивация 30/min в приложении). Роуты `/apartments/{id}`, `/account`, `/imports`, `/imports/preview` (multipart до 5 МБ), `/imports/{id}`, `/imports/{id}/activate`, `/imports/{id}/deactivate` (✅ live на ОБОИХ хостах, добавлено InfraSafe 2026-09-06 02:40 UTC без простоя, verified 2026-09-06)
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -94,7 +95,18 @@ Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix
 - `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **✅ live на обеих площадках, verified 2026-08-22** (на profk стоял с 25.07; на infrasafe был реальный пробел — закрыт). Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
 - `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **✅ live на обеих площадках, verified 2026-08-22**.
 - `/api/v2/residents` (раздел «Жители», manager-only) — **✅ live на обеих площадках, verified 2026-08-22** (пробел infrasafe.uz закрыт по встречному вопросу InfraSafe; наборы префиксов площадок сверены ими и идентичны, у них добавлена сборочная проверка на оба конфига).
-- `/api/v2/elevators` (модуль «Лифты», ветка `worktree-feat+elevators`, миграции 016/017) — добавлен в этот док 2026-09-06; **⏳ запрос InfraSafe ещё не отправлен**, на edge не стоит ни на одной площадке. Форма записи — `~^/uk/api/v2/elevators(/|$)` для ОБОИХ хостов. Порядок: заявить префикс → дождаться раскатки → проверить (без флага ожидается 404 **JSON** от приложения, HTML-404 nginx = edge режет) → только потом `ELEVATORS_ENABLED=true`. Отдельный пункт контракта данных: чтобы алерты категории «лифт» создавали заявки, InfraSafe должен передавать `alert.uk_elevator_id` = наш `elevators.id` (иначе 422 + `webhook_inbox.outcome=rejected`) — InfraSafe об этом ещё не уведомлён.
+- `/api/v2/elevators` (модуль «Лифты», ветка `worktree-feat+elevators`, миграции 017/018) — добавлен в этот док 2026-09-06; **⏳ запрос InfraSafe ещё не отправлен**, на edge не стоит ни на одной площадке. Форма записи — `~^/uk/api/v2/elevators(/|$)` для ОБОИХ хостов. Порядок: заявить префикс → дождаться раскатки → проверить (без флага ожидается 404 **JSON** от приложения, HTML-404 nginx = edge режет) → только потом `ELEVATORS_ENABLED=true`. Отдельный пункт контракта данных: чтобы алерты категории «лифт» создавали заявки, InfraSafe должен передавать `alert.uk_elevator_id` = наш `elevators.id` (иначе 422 + `webhook_inbox.outcome=rejected`) — InfraSafe об этом ещё не уведомлён.
+- `/api/v2/payment-control` (Контроль платежей, manager/admin, требует overlay
+  `docker-compose.payments.yml`) — **✅ live на обеих площадках, добавлено InfraSafe
+  2026-09-06 02:40 UTC (без простоя), verified 2026-09-06.** Пробы с нашей стороны:
+  `/uk/api/v2/payment-control/imports` → `401 application/json {"detail":"Not
+  authenticated"}` на infrasafe.uz и profk.uz; негативный контроль
+  `/uk/api/v2/payment-control-admin` → HTML-404 nginx на обеих — граница `(/|$)`
+  держит. Лимит тела на edge — 10 МБ на уровне http, на `/uk/api/` не
+  переопределён (на стенде InfraSafe: 6 МБ проходит, 11 МБ → 413), то есть наш
+  прикладной предел 5 МБ срабатывает раньше edge. Послаблений частоты не делали,
+  действует общая группа ~120 r/min/IP. Пункт меню остаётся закрытым build-флагом
+  `VITE_PAYMENTS_ENABLED`, пока не поднят overlay сервиса.
 
 ## Verification (2026-08-22, финал) — ✅ подтверждено на обеих площадках
 

@@ -109,7 +109,7 @@ class UniqueRule:
     sqlite_marker: str
 
 
-# Имена — из alembic/versions/0016_elevators.py и моделей (elevator.py)
+# Имена — из alembic/versions/0017_elevators.py и моделей (elevator.py)
 PUBLIC_CODE_UNIQUE = UniqueRule("elevators_public_code_key", "elevators.public_code")
 PLACE_UNIQUE = UniqueRule(
     "uq_elevators_building_entrance_number_active",

@@ -3,7 +3,7 @@
 > _Последнее редактирование: 2026-09-06_
 
 **Назначение:** обзор доменов данных, ERD по доменам, ключевые связи и инварианты.
-**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (история сжата в baseline PRC-05; **head = `017`** — 015 на main, 016/017 в ветке модуля «Лифты»).
+**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (история сжата в baseline PRC-05; **head = `018`** — 016 (`apartment_account_number`) на main, 017/018 в ветке модуля «Лифты»).
 **Актуальные ER-диаграммы всех четырёх хранилищ** (основная БД + access-домен + `uk_media` + ресурсы) — [ARCHITECTURE_DIAGRAMS.md §3](ARCHITECTURE_DIAGRAMS.md).
 
 ⚠️ Изменения после 2026-07-06, ещё не влитые в диаграммы ниже:
@@ -15,7 +15,7 @@
   из группы, 012), `reported_by_user_id` + `acceptance_mode`
   (CHECK resident|manager — менеджерская приёмка staff-репортов, 013).
 - Схемы новых сущностей — в [ARCHITECTURE_DIAGRAMS.md §3.2, §3.4](ARCHITECTURE_DIAGRAMS.md).
-- **Модуль «Лифты» (016/017, ветка `worktree-feat+elevators`)**: `elevators`,
+- **Модуль «Лифты» (017/018, ветка `worktree-feat+elevators`)**: `elevators`,
   `elevator_status_events`, `elevator_maintenance_occurrences`, `elevators_config`;
   `requests` +`elevator_id` (FK SET NULL, индекс) +`elevator_operational`. Раздел 7a.
 
@@ -366,7 +366,7 @@ erDiagram
 
 ---
 
-## 7a. Домен «Лифты» (миграции 016/017)
+## 7a. Домен «Лифты» (миграции 017/018)
 
 Полная модель, инварианты, сервис и API — в **[ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md)**. Схема агрегата:
 

@@ -1,3 +1,4 @@
+import ApartmentPaymentBlock from './ApartmentPaymentBlock'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useApartmentDetail } from '../../hooks/useAddresses'
@@ -78,6 +79,10 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
             <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">{t('apartmentProfile.yard')}</div>
             <div className="text-[13px] text-text-primary">{apartment.yard_name ?? '—'}</div>
           </div>
+          <div className="col-span-2">
+            <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">{t('apartmentProfile.accountNumber')}</div>
+            <div className="text-[13px] text-text-primary font-mono">{apartment.account_number || '—'}</div>
+          </div>
           {apartment.entrance != null && (
             <div>
               <div className="text-xs text-text-muted font-[family-name:var(--font-display)] mb-0.5">{t('apartmentProfile.entrance')}</div>
@@ -120,6 +125,8 @@ export default function ApartmentProfileModal({ apartmentId, onClose, onEdit }: 
             </div>
           </div>
         </div>
+
+        <ApartmentPaymentBlock apartmentId={apartmentId} accountNumber={apartment.account_number} />
 
         {/* Residents section */}
         <div className="font-[family-name:var(--font-display)] font-bold text-[15px] text-text-primary mb-3">

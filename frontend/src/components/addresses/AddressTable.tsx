@@ -1,15 +1,40 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Pencil, Power, PowerOff, Trash2 } from 'lucide-react'
 import type { YardBrief, BuildingBrief, ApartmentBrief } from '../../types/api'
 import EmptyState from '../shared/EmptyState'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import { Button } from '@/components/ui/button'
+import { useApartmentBalances, paymentsEnabled } from '@/hooks/useApartmentBalances'
+import { formatBalanceCell, formatBusinessDate } from '../payment/format'
 import { cn } from '@/lib/utils'
 
 // -- Table configs --------------------------------------------------------
 
 const YARD_COLS = '2fr 2.5fr 0.8fr 0.8fr 1fr'
 const BUILDING_COLS = '2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr'
-const APT_COLS = '0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr'
+// дом · номер · подъезд/этаж · площадь · жителей · счёт · [баланс] · статус · действия
+const APT_COLS = '0.7fr 0.7fr 0.9fr 0.7fr 0.5fr 1.1fr 1.1fr 0.35fr 0.9fr'
+const APT_COLS_NO_BALANCE = '0.7fr 0.7fr 0.9fr 0.7fr 0.5fr 1.1fr 0.35fr 0.9fr'
+
+/** «Yangi Olmazor, 1G» → «1G»: в колонке дома нужен различающий хвост адреса. */
+function houseLabel(address?: string | null): string {
+  if (!address) return '—'
+  const tail = address.split(',').pop()?.trim()
+  return tail || address
+}
+
+/**
+ * Номера квартир и домов — текст («1G», «10»), поэтому обычная сортировка даёт
+ * 1, 10, 100, 11, 2. Числовой коллатор восстанавливает человеческий порядок.
+ * Создаётся один раз на модуль: конструктор Intl дорогой.
+ */
+const naturalOrder = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+function byHouseThenNumber(a: ApartmentBrief, b: ApartmentBrief): number {
+  const house = naturalOrder.compare(houseLabel(a.building_address), houseLabel(b.building_address))
+  return house !== 0 ? house : naturalOrder.compare(a.apartment_number, b.apartment_number)
+}
 
 // -- Component ------------------------------------------------------------
 
@@ -38,21 +63,61 @@ interface AddressTableProps {
   onPurgeApartment?: (id: number) => void
 }
 
-function StatusDot({ active }: { active: boolean }) {
+/** `labelled={false}` — только кружок: в таблице квартир подпись повторялась бы
+ *  в каждой строке, значение цвета объясняет легенда над заголовками. */
+function StatusDot({ active, labelled = true }: { active: boolean; labelled?: boolean }) {
   const { t } = useTranslation()
+  const label = active ? t('addresses.active') : t('addresses.inactive')
   return (
     <div className="flex items-center gap-1.5">
-      <span className={cn(
-        'inline-block w-2 h-2 rounded-full shrink-0',
-        active ? 'bg-emerald' : 'bg-text-muted'
-      )} />
-      <span className={cn(
-        'text-[11px]',
-        active ? 'text-emerald' : 'text-text-muted'
-      )}>
-        {active ? t('addresses.active') : t('addresses.inactive')}
-      </span>
+      <span
+        role="img"
+        aria-label={label}
+        title={label}
+        className={cn(
+          'inline-block w-2 h-2 rounded-full shrink-0',
+          active ? 'bg-emerald' : 'bg-text-muted'
+        )}
+      />
+      {labelled && (
+        <span className={cn(
+          'text-[11px]',
+          active ? 'text-emerald' : 'text-text-muted'
+        )}>
+          {label}
+        </span>
+      )}
     </div>
+  )
+}
+
+function LegendSwatch({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={cn('inline-block w-2 h-2 rounded-full shrink-0', className)} />
+      {label}
+    </span>
+  )
+}
+
+/** Компактная кнопка-иконка строки таблицы: доступное имя обязательно —
+ *  без подписи иконка иначе неотличима для скринридера. */
+function RowAction({ label, onClick, className, children }: {
+  label: string
+  onClick: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <Button
+      variant="ghost"
+      className={cn('h-7 w-7 p-0', className)}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
   )
 }
 
@@ -297,6 +362,44 @@ function BuildingsTable({
   )
 }
 
+/**
+ * Баланс строки. Состояния РАЗДЕЛЕНЫ намеренно: недоступность сервиса и
+ * отсутствие выгрузки никогда не должны выглядеть как «долгов нет».
+ */
+function BalanceCell({ account, balances }: {
+  account?: string | null
+  balances: ReturnType<typeof useApartmentBalances>
+}) {
+  const { t } = useTranslation()
+  if (!account) return <span className="text-xs text-text-muted">—</span>
+  if (balances.state === 'loading') return <span className="inline-block h-3 w-16 rounded-sm bg-bg-surface animate-pulse" />
+  if (balances.state === 'error') return <span className="text-xs text-text-muted">{t('addresses.balanceUnavailable')}</span>
+
+  const snapshot = balances.map[account.trim()]
+  const cell = formatBalanceCell(snapshot)
+  if (!cell) return <span className="text-xs text-text-muted">{t('addresses.balanceNoData')}</span>
+
+  const stale = balances.asOf !== null && snapshot.as_of !== balances.asOf
+  return (
+    <span className="flex items-center gap-1 text-xs font-semibold" title={snapshot.filename}>
+      <span className={cn(
+        cell.tone === 'debt' && 'text-red',
+        cell.tone === 'prepayment' && 'text-emerald',
+        cell.tone === 'zero' && 'text-text-muted',
+      )}>
+        {cell.text}
+      </span>
+      {stale && (
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full bg-amber shrink-0"
+          title={formatBusinessDate(snapshot.as_of)}
+          aria-label={t('addresses.balanceMixedDates')}
+        />
+      )}
+    </span>
+  )
+}
+
 // -- Apartments -----------------------------------------------------------
 
 function ApartmentsTable({
@@ -311,7 +414,11 @@ function ApartmentsTable({
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
-  const items = apartments ?? []
+  const source = apartments ?? []
+  const items = useMemo(() => [...source].sort(byHouseThenNumber), [source])
+  const showBalance = paymentsEnabled()
+  const balances = useApartmentBalances(useMemo(() => items.map(a => a.account_number), [items]))
+  const cols = showBalance ? APT_COLS : APT_COLS_NO_BALANCE
 
   if (items.length === 0) {
     return (
@@ -323,11 +430,36 @@ function ApartmentsTable({
 
   return (
     <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2 border-b border-border-default text-[11px] text-text-muted">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <LegendSwatch className="bg-emerald" label={t('addresses.active')} />
+          <LegendSwatch className="bg-text-muted" label={t('addresses.inactive')} />
+          {showBalance && <LegendSwatch className="bg-red" label={t('paymentControl.debt')} />}
+          {showBalance && <LegendSwatch className="bg-emerald" label={t('paymentControl.prepayment')} />}
+        </div>
+        {showBalance && balances.state === 'ready' && balances.asOf && (
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span>{`${t('paymentControl.asOf')}: ${formatBusinessDate(balances.asOf)}${balances.source ? ` · ${balances.source}` : ''}`}</span>
+            {balances.mixedDates && <span className="text-amber">{t('addresses.balanceMixedDates')}</span>}
+          </div>
+        )}
+      </div>
+
       <div
         className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
-        style={{ gridTemplateColumns: APT_COLS }}
+        style={{ gridTemplateColumns: cols }}
       >
-        {[t('addresses.apartmentNumber'), t('addresses.entrance'), t('addresses.floor'), t('addresses.rooms'), t('addresses.area'), t('addresses.residentsCount'), t('addresses.status'), t('common.actions')].map(h => (
+        {[
+          t('addresses.building'),
+          t('addresses.apartmentNumber'),
+          t('addresses.entranceFloor'),
+          t('addresses.area'),
+          t('addresses.residentsCount'),
+          t('addresses.accountNumber'),
+          ...(showBalance ? [t('addresses.balance')] : []),
+          t('addresses.status'),
+          t('common.actions'),
+        ].map(h => (
           <HeaderCell key={h}>{h}</HeaderCell>
         ))}
       </div>
@@ -347,37 +479,40 @@ function ApartmentsTable({
               !isLast && 'border-b border-border-default',
               isHovered ? 'bg-bg-surface' : 'bg-transparent'
             )}
-            style={{ gridTemplateColumns: APT_COLS }}
+            style={{ gridTemplateColumns: cols }}
           >
+            <span className="text-xs text-text-muted truncate" title={apt.building_address ?? undefined}>
+              {houseLabel(apt.building_address)}
+            </span>
             <span className="text-xs text-text-primary font-semibold">{apt.apartment_number}</span>
-            <span className="text-xs text-text-muted">{apt.entrance ?? '—'}</span>
-            <span className="text-xs text-text-muted">{apt.floor ?? '—'}</span>
-            <span className="text-xs text-text-muted">{apt.rooms_count ?? '—'}</span>
+            <span className="text-xs text-text-muted">{`${apt.entrance ?? '—'} / ${apt.floor ?? '—'}`}</span>
             <span className="text-xs text-text-muted">{apt.area ? `${apt.area} м²` : '—'}</span>
             <span className="text-xs text-text-primary">{apt.residents_count}</span>
-            <StatusDot active={apt.is_active} />
-            <div onClick={e => e.stopPropagation()} className="flex items-center gap-2">
-              <button onClick={() => onEditApartment?.(apt)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-accent">
-                {t('common.edit')}
-              </button>
-              <button onClick={() => onToggleApartment?.(apt.id, !apt.is_active)} className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-amber">
-                {apt.is_active ? t('addresses.deactivate') : t('addresses.activate')}
-              </button>
-              {apt.is_active ? (
-                <button
-                  onClick={() => setConfirmDelete({ open: true, id: apt.id, number: apt.apartment_number })}
-                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
-                >
-                  {t('common.delete')}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setConfirmPurge({ open: true, id: apt.id, number: apt.apartment_number })}
-                  className="bg-transparent border-none cursor-pointer text-[11px] font-[family-name:var(--font-display)] text-red"
-                >
-                  {t('common.deletePermanently')}
-                </button>
-              )}
+            <span className="text-xs text-text-muted font-mono truncate" title={apt.account_number ?? undefined}>
+              {apt.account_number || '—'}
+            </span>
+            {showBalance && <BalanceCell account={apt.account_number} balances={balances} />}
+            <StatusDot active={apt.is_active} labelled={false} />
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
+              <RowAction label={t('common.edit')} className="text-accent" onClick={() => onEditApartment?.(apt)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </RowAction>
+              <RowAction
+                label={apt.is_active ? t('addresses.deactivate') : t('addresses.activate')}
+                className="text-amber"
+                onClick={() => onToggleApartment?.(apt.id, !apt.is_active)}
+              >
+                {apt.is_active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
+              </RowAction>
+              <RowAction
+                label={apt.is_active ? t('common.delete') : t('common.deletePermanently')}
+                className="text-red"
+                onClick={() => (apt.is_active
+                  ? setConfirmDelete({ open: true, id: apt.id, number: apt.apartment_number })
+                  : setConfirmPurge({ open: true, id: apt.id, number: apt.apartment_number }))}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </RowAction>
             </div>
           </div>
         )
