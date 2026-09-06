@@ -74,3 +74,31 @@ test('the section renders in Uzbek for a uz interface', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'To‘lovlar nazorati' })).toBeVisible()
   await expect(page.getByText('Bu hisob bo‘yicha faol ma’lumot yo‘q. Bu qarz nol ekanini anglatmaydi.')).toBeVisible()
 })
+
+test('the apartments table shows the balance without opening each card', async ({ page }) => {
+  // Табличный режим — предпочтение пользователя, по умолчанию раздел открывается плиткой.
+  await page.addInitScript(() => window.localStorage.setItem('addresses_view_mode', 'table'))
+  await page.goto('/uk/dashboard/payment-control')
+  await page.getByLabel('CSV / XLSX').setInputFiles({
+    name: 'table.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('account_number;debt;prepayment\n001;120000;0\n'),
+  })
+  await page.getByRole('button', { name: 'Проверить файл' }).click()
+  await page.getByRole('button', { name: 'Подтвердить и активировать' }).click()
+  await expect(page.getByRole('button', { name: 'Деактивировать' })).toBeVisible()
+  const activated = page.url()
+
+  await page.goto('/uk/dashboard/addresses')
+  await page.getByText('Тестовый двор', { exact: true }).click()
+  await page.getByText('Тестовая улица 1', { exact: true }).click()
+  // Долг виден прямо в строке, карточку открывать не нужно.
+  await expect(page.getByText(/−120\s*000,00/)).toBeVisible()
+  await page.screenshot({ path: 'artifacts/payment-control-apartments-table.png', fullPage: true })
+
+  await page.goto(activated)
+  await page.getByLabel('Причина деактивации').fill('Проверка таблицы квартир')
+  await page.getByRole('button', { name: 'Деактивировать', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Подтвердить и активировать' })).toBeVisible()
+  await page.goto('/uk/dashboard/payment-control?account=001')
+  await expect(page.getByText('Нет активных данных по этому лицевому счёту. Это не означает нулевой долг.')).toBeVisible()
+})

@@ -56,6 +56,7 @@ async def test_apartment_balance_uses_saved_account_and_unavailable_is_not_zero(
     ('get', '/account?account_number=001', None),
     ('post', '/imports/12/activate', None),
     ('post', '/imports/12/deactivate', {'reason': 'Wrong file'}),
+    ('post', '/accounts/balances', {'account_numbers': ['001', '002']}),
 ])
 async def test_gateway_routes(client, monkeypatch, method, path, payload):
     from uk_management_bot.api.payment_control import router as module
@@ -144,6 +145,7 @@ PAYMENT_ROUTES = [
     ("get", "/apartments/1", None),
     ("post", "/imports/12/activate", None),
     ("post", "/imports/12/deactivate", {"reason": "Wrong file"}),
+    ("post", "/accounts/balances", {"account_numbers": ["001"]}),
 ]
 
 
@@ -221,3 +223,35 @@ async def test_apartment_balance_validation_error_is_not_masked_as_unavailable(c
     response = await client.get(f"/api/v2/payment-control/apartments/{apt['id']}")
     assert response.status_code == 422
     assert response.json()["detail"] == "Некорректный лицевой счёт"
+
+
+async def test_bulk_balances_forwards_body_and_caps_the_batch(client, monkeypatch):
+    """Список счетов уходит телом (не в query — иначе номера осядут в логах edge),
+    а перебор потолка отсекается схемой до похода в сервис."""
+    from uk_management_bot.api.payment_control import router as module
+    mock = AsyncMock(return_value={"balances": {"001": {"debt": "10.00"}}})
+    monkeypatch.setattr(module, "service_request", mock)
+    response = await client.post("/api/v2/payment-control/accounts/balances",
+                                 json={"account_numbers": ["001", "002"]})
+    assert response.status_code == 200
+    assert mock.call_args.args[:2] == ("POST", "/accounts/balances")
+    assert mock.call_args.kwargs["json"] == {"account_numbers": ["001", "002"]}
+    mock.reset_mock()
+    over = await client.post("/api/v2/payment-control/accounts/balances",
+                             json={"account_numbers": [f"{i:06d}" for i in range(201)]})
+    assert over.status_code == 422
+    mock.assert_not_called()
+    empty = await client.post("/api/v2/payment-control/accounts/balances", json={"account_numbers": []})
+    assert empty.status_code == 422
+
+
+async def test_bulk_balances_unavailable_service_is_not_zeroes(client, monkeypatch):
+    """Недоступность сервиса обязана остаться ошибкой: пустой словарь балансов
+    в таблице квартир выглядел бы как «долгов нет»."""
+    from fastapi import HTTPException
+    from uk_management_bot.api.payment_control import router as module
+    monkeypatch.setattr(module, "service_request",
+                        AsyncMock(side_effect=HTTPException(503, "Сервис контроля платежей недоступен")))
+    response = await client.post("/api/v2/payment-control/accounts/balances",
+                                 json={"account_numbers": ["001"]})
+    assert response.status_code == 503

@@ -61,6 +61,9 @@ export default function PaymentControlPage() {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['payment-imports'] }), qc.invalidateQueries({ queryKey: ['payment-import'] }),
       qc.invalidateQueries({ queryKey: ['payment-account'] }), qc.invalidateQueries({ queryKey: ['apartment-payment'] }),
+      // Список квартир в разделе «Адреса» показывает те же суммы — активация
+      // импорта обязана обновить и его, иначе таблица останется на старой дате.
+      qc.invalidateQueries({ queryKey: ['apartment-balances'] }),
     ])
   }
   const upload = useMutation({
