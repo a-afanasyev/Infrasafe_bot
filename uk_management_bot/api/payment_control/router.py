@@ -64,6 +64,23 @@ async def account(account_number: str = Query(..., min_length=1, max_length=64),
     return await service_request("GET", "/account", user, params={"account_number": account_number})
 
 
+class PaymentAccountsIn(BaseModel):
+    # Зеркало потолка сервиса (payment_control.app.MAX_ACCOUNTS): отсекаем
+    # перебор до сетевого похода. Импортировать оттуда нельзя — это отдельный
+    # сервис в своём контейнере.
+    account_numbers: list[str] = Field(min_length=1, max_length=200)
+
+
+# POST, а не GET с повторяющимися параметрами: 200 номеров в URL осели бы в
+# access-логах edge. Счёт без данных в ответе отсутствует — вызывающий обязан
+# показать «нет данных», а не ноль.
+@router.post("/accounts/balances")
+@limiter.limit("60/minute")
+async def account_balances(request: Request, body: PaymentAccountsIn, user: User = Depends(staff)):
+    """Текущие снимки балансов сразу по нескольким лицевым счетам."""
+    return await service_request("POST", "/accounts/balances", user, json=body.model_dump())
+
+
 @router.get("/imports")
 async def imports(offset: int = Query(0, ge=0), user: User = Depends(staff)):
     return await service_request("GET", "/imports", user, params={"offset": offset})

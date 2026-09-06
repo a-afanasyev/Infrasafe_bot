@@ -21,6 +21,9 @@ from payment_control.imports import MAX_BYTES, account_number, parse_file
 from payment_control.database import database_url as configured_database_url
 from payment_control.models import AuditEvent, Base, ImportBatch, ImportEntry, PaymentClaim
 
+# Потолок счетов в одном пакетном запросе балансов.
+MAX_ACCOUNTS = 200
+
 
 def create_app(database_url=None, service_token=None, *, initialize=False):
     url = database_url or configured_database_url()
@@ -174,27 +177,72 @@ def create_app(database_url=None, service_token=None, *, initialize=False):
 
     @app.get("/v1/account")
     def account(account_number: str = Query(..., min_length=1, max_length=64), who=Depends(actor), db=Depends(db_session)):
-        try:
-            number = normalize_account(account_number)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        stmt = select(ImportEntry, ImportBatch).join(ImportBatch, ImportEntry.batch_id == ImportBatch.id).where(
-            ImportEntry.account_number == number, ImportBatch.status == "active")
-        snapshots = db.execute(stmt.where(ImportBatch.kind == "balances").order_by(ImportBatch.as_of.desc(), ImportBatch.id.desc()).limit(50)).all()
+        number = _normalized_or_422(account_number)
+        stmt = _active_entries_stmt([number])
+        snapshots = db.execute(_balances_ordered(stmt).limit(50)).all()
         payments = db.execute(stmt.where(ImportBatch.kind == "payments").order_by(
             ImportEntry.paid_at.desc().nullslast(), ImportEntry.id.desc()).limit(200)).all()
 
-        def row_out(row, batch):
-            return {**{k: v for k, v in row.data.items() if k != "raw"}, "import_id": batch.id,
-                    "source": batch.source, "filename": batch.filename, "as_of": batch.as_of,
-                    "imported_at": batch.created_at, "line": row.line, "currency": "UZS"}
-
-        current = row_out(*snapshots[0]) if snapshots else None
+        current = _row_out(*snapshots[0]) if snapshots else None
         return {"account_number": number, "status": "available" if current else "no_data", "current": current,
-                "history": [row_out(*r) for r in snapshots], "payments": [row_out(*r) for r in payments],
+                "history": [_row_out(*r) for r in snapshots], "payments": [_row_out(*r) for r in payments],
                 "history_limit": 50, "payments_limit": 200}
 
+    class AccountsIn(BaseModel):
+        # Потолок держит запрос предсказуемым: дом в этой инсталляции — 140 квартир,
+        # список квартир режется на куски на стороне вызывающего.
+        account_numbers: list[str] = Field(min_length=1, max_length=MAX_ACCOUNTS)
+
+    @app.post("/v1/accounts/balances")
+    def balances(body: AccountsIn, who=Depends(actor), db=Depends(db_session)):
+        """Текущий снимок сразу по многим счетам — для списков квартир.
+
+        Счёт без активной строки в ответе ОТСУТСТВУЕТ. Это не ноль: пустая
+        выдача означает «данных нет», и вызывающий обязан показать именно это.
+        """
+        numbers, seen = [], set()
+        for raw in body.account_numbers:
+            number = _normalized_or_422(raw)
+            if number not in seen:
+                seen.add(number)
+                numbers.append(number)
+        rows = db.execute(_balances_ordered(_active_entries_stmt(numbers))).all()
+        # Порядок тот же, что у одиночного счёта, поэтому первая встреченная
+        # строка счёта — это и есть его текущий снимок.
+        current = {}
+        for row, batch in rows:
+            current.setdefault(row.account_number, _row_out(row, batch))
+        return {"balances": current}
+
     return app
+
+
+def _normalized_or_422(value):
+    try:
+        return normalize_account(value)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+def _active_entries_stmt(numbers):
+    """Строки указанных счетов из активных импортов (любого вида)."""
+    return select(ImportEntry, ImportBatch).join(
+        ImportBatch, ImportEntry.batch_id == ImportBatch.id
+    ).where(ImportEntry.account_number.in_(numbers), ImportBatch.status == "active")
+
+
+def _balances_ordered(stmt):
+    """Порядок текущего снимка. ОДИН на одиночное и пакетное чтение: разъехавшись,
+    два читателя показали бы разный долг по одному и тому же счёту."""
+    return stmt.where(ImportBatch.kind == "balances").order_by(
+        ImportBatch.as_of.desc(), ImportBatch.id.desc())
+
+
+def _row_out(row, batch):
+    """Снимок наружу: данные строки плюс происхождение её партии."""
+    return {**{k: v for k, v in row.data.items() if k != "raw"}, "import_id": batch.id,
+            "source": batch.source, "filename": batch.filename, "as_of": batch.as_of,
+            "imported_at": batch.created_at, "line": row.line, "currency": "UZS"}
 
 
 def _paid_at(data):

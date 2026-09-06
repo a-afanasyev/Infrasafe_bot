@@ -306,3 +306,47 @@ def test_declared_zip_size_is_not_trusted(client):
     response = upload(client, "bomb.xlsx", stream.getvalue())
     assert response.status_code == 422
     assert "слишком большой" in response.json()["detail"]
+
+
+def bulk(client, accounts):
+    return client.post("/v1/accounts/balances", json={"account_numbers": accounts})
+
+
+def test_bulk_balances_match_the_single_account_reader(client):
+    activate(client, preview(client, "account_number;debt;prepayment\n001;120,50;0\n002;0;300\n"))
+    # Тот же снимок, что у одиночной ручки — защита от расхождения правил выбора.
+    result = bulk(client, ["001", "002", "missing"])
+    assert result.status_code == 200, result.text
+    payload = result.json()["balances"]
+    assert payload["001"] == balance(client, "001")["current"]
+    assert payload["002"] == balance(client, "002")["current"]
+    # Счёт без данных отсутствует в ответе — это не ноль.
+    assert "missing" not in payload
+
+
+def test_bulk_balances_follow_effective_date_and_deactivation(client):
+    old = preview(client, "account_number;debt;prepayment\n001;100;0\n", as_of="2026-08-01")
+    new = preview(client, "account_number;debt;prepayment\n001;0;50\n")
+    activate(client, new)
+    activate(client, old)
+    assert bulk(client, ["001"]).json()["balances"]["001"]["prepayment"] == "50.00"
+    client.post(f"/v1/imports/{new.json()['id']}/deactivate", json={"reason": "Wrong export"})
+    assert bulk(client, ["001"]).json()["balances"]["001"]["debt"] == "100.00"
+    client.post(f"/v1/imports/{old.json()['id']}/deactivate", json={"reason": "Wrong export"})
+    assert bulk(client, ["001"]).json()["balances"] == {}
+
+
+def test_bulk_balances_reject_oversized_and_malformed_input(client):
+    assert bulk(client, [f"{i:06d}" for i in range(201)]).status_code == 422
+    assert bulk(client, []).status_code == 422
+    assert bulk(client, ["../bad"]).status_code == 422
+    assert bulk(client, ["счёт"]).status_code == 422
+    activate(client, preview(client, "account_number;debt;prepayment\n001;7;0\n"))
+    # Дубликаты в запросе не ломают выдачу и не удваивают работу.
+    assert bulk(client, ["001", "001", " 001 "]).json()["balances"]["001"]["debt"] == "7.00"
+
+
+def test_bulk_balances_ignore_payments_and_previews(client):
+    preview(client, "account_number;debt;prepayment\n001;99;0\n")  # не активирован
+    activate(client, preview(client, "account_number;operation_id;paid_at;amount\n001;op-1;2026-09-01;10\n", kind="payments"))
+    assert bulk(client, ["001"]).json()["balances"] == {}
