@@ -16,6 +16,17 @@
   * ``elevator_operational`` — ``gint:op:1|0``: «лифт сейчас работает?»; ответ →
     GETDEL + ре-гейт + штатное создание с ``elevator_id``/``elevator_operational``.
 
+Р18/Р18a: самообслуживанием считается ЖИЛАЯ группа. Пока запрет включён
+(тумблер ``allow_resident_requests_under_works`` выключен), лифт «В ремонте»/
+«На ТО» до вопроса «работает?» не доходит: в группу уходит тот же блокирующий
+текст, что в личном боте, кандидат снимается, заявка не создаётся. Тумблер
+включён — прежнее поведение: мягкая подсказка и обычный вопрос.
+
+**Staff-группа (``GROUP_KIND_STAFF``) — персонал**: тот же признак, что уже
+включает ``acceptance_mode=manager`` и роль ``staff_group``, снимает и запрет
+Р18 (``allow_under_works=True`` в ``_create_from_candidate``). Иначе сотрудник
+не смог бы доложить о происшествии в кабине лифта, который уже в ремонте.
+
 Автоподстановка: ровно один введённый лифт в подъезде квартиры автора (или
 единственный в доме) — сразу вопрос «работает?». Дом без лифтов — сообщение,
 заявки нет. Отвечает ТОЛЬКО автор сообщения (проверка в group_intake_callback —
@@ -56,11 +67,15 @@ from uk_management_bot.database.models import Apartment, Building, UserApartment
 from uk_management_bot.database.models.monitored_group import GROUP_KIND_STAFF
 from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers.requests.create_elevator import (
-    WORKS_STATUSES,
     ElevatorOption,
     load_elevator_step,
     parse_int,
     to_option,
+)
+from uk_management_bot.handlers.requests.elevator_works_block import (
+    WorksBlock,
+    works_blocked_sync,
+    works_blocked_text,
 )
 from uk_management_bot.keyboards.elevators import (
     build_group_elevator_operational_keyboard,
@@ -71,6 +86,7 @@ from uk_management_bot.services.elevator_service import (
     ELEVATOR_CATEGORY,
     ElevatorValidationError,
     ensure_elevator_usable_sync,
+    is_under_works,
     status_label,
 )
 from uk_management_bot.services.group_intake import pending
@@ -124,6 +140,8 @@ class GroupElevatorStep:
     auto: Optional[ElevatorOption] = None
     dispatch_phone: str = ""
     building_options: tuple[dict, ...] = ()
+    # Р18a: автолифт под работами И запрет включён.
+    works_blocked: bool = False
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -134,6 +152,16 @@ class GroupElevatorStep:
 def is_group_elevator_flow(candidate: dict) -> bool:
     """Фаза лифта — только для категории «лифт» при включённом флаге."""
     return bool(settings.ELEVATORS_ENABLED) and candidate.get("category") == ELEVATOR_CATEGORY
+
+
+def is_staff_candidate(candidate: dict) -> bool:
+    """Staff-группа = персонал: тот же признак, что даёт менеджерскую приёмку."""
+    return candidate.get("kind") == GROUP_KIND_STAFF
+
+
+def blocks_under_works(candidate: dict) -> bool:
+    """Р18 применяется только к жилой группе (самообслуживание)."""
+    return not is_staff_candidate(candidate)
 
 
 def is_elevator_action(action: str) -> bool:
@@ -227,7 +255,7 @@ def _staff_building_options(db: Session, yard_id: int) -> list[dict]:
 def _yard_building_options(
     db: Session, candidate: dict, user_db_id: Optional[int], yard_id: int
 ) -> list[dict]:
-    if candidate.get("kind") == GROUP_KIND_STAFF:
+    if is_staff_candidate(candidate):
         return _staff_building_options(db, yard_id)
     if user_db_id is None:
         return []  # житель без внутреннего id — домов не подобрать
@@ -251,25 +279,34 @@ def load_group_elevator_step_sync(
         if len(options) != 1:
             return GroupElevatorStep("building", address, building_options=tuple(options))
         address = options[0]
-    step = load_elevator_step(db, _step_data(address))
+    step = load_elevator_step(
+        db, _step_data(address), blocks_under_works=blocks_under_works(candidate)
+    )
     return GroupElevatorStep(
-        step.verdict, address, step.building_id, step.options, step.auto, step.dispatch_phone
+        step.verdict, address, step.building_id, step.options, step.auto, step.dispatch_phone,
+        works_blocked=step.works_blocked,
     )
 
 
 def pick_group_elevator_sync(
-    db: Session, building_id: Optional[int], elevator_id: int
-) -> Optional[ElevatorOption]:
-    """Лифт по id из callback — только введённый и ТОГО дома, что в кандидате."""
+    db: Session, building_id: Optional[int], elevator_id: int, *, blocks: bool = True
+) -> tuple[Optional[ElevatorOption], bool, str]:
+    """Лифт по id из callback (введённый и ТОГО дома) + вердикт Р18a + телефон.
+
+    ``blocks=False`` — staff-группа (персонал): не блокируем и конфиг не читаем.
+    Конфиг и телефон вообще читаются только когда лифт под работами.
+    """
     if building_id is None:
-        return None
+        return (None, False, "")
     try:
         elevator = ensure_elevator_usable_sync(db, elevator_id, building_id=building_id)
     except ElevatorValidationError as exc:
         logger.info("group_intake.elevator: лифт %s отклонён для дома %s: %s",
                     elevator_id, building_id, exc)
-        return None
-    return to_option(elevator)
+        return (None, False, "")
+    option = to_option(elevator)
+    blocked, phone = works_blocked_sync(db, option.status) if blocks else (False, "")
+    return (option, blocked, phone)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -323,10 +360,29 @@ async def _store_phase(callback: CallbackQuery, payload: dict, lang: str) -> boo
     return stored
 
 
+def _blocked_text(option: ElevatorOption, dispatch_phone: str, lang: str) -> str:
+    return works_blocked_text(
+        WorksBlock(
+            entrance=option.entrance, number=option.number, status=option.status,
+            status_since=option.status_since, dispatch_phone=dispatch_phone,
+        ),
+        lang,
+    )
+
+
 async def _show_operational(
-    callback: CallbackQuery, base: dict, option: ElevatorOption, lang: str
+    callback: CallbackQuery, base: dict, option: ElevatorOption, lang: str,
+    *, works_blocked: bool = False, dispatch_phone: str = "",
 ) -> bool:
-    """Зафиксировать лифт в кандидате и спросить «работает?» (+ подсказка о работах)."""
+    """Зафиксировать лифт в кандидате и спросить «работает?».
+
+    Р18: пока запрет включён, по лифту в работах заявка самообслуживания не
+    создаётся — отвечаем в группу блокирующим текстом и снимаем кандидата.
+    Запрет выключен — прежняя мягкая подсказка перед вопросом.
+    """
+    if works_blocked:
+        await _finish_without_request(callback, _blocked_text(option, dispatch_phone, lang))
+        return False
     payload = _phase_payload(base, **{
         FIELD_PHASE: PHASE_OPERATIONAL, FIELD_BUILDING_OPTIONS: None,
         FIELD_ELEVATOR_ID: option.id, FIELD_ENTRANCE: option.entrance, FIELD_NUMBER: option.number,
@@ -335,7 +391,8 @@ async def _show_operational(
         return False
     text = get_text(_TEXT + "operational_prompt", language=lang,
                     entrance=option.entrance, elevator=option.number)
-    if option.status in WORKS_STATUSES:
+    if is_under_works(option.status):
+        # Запрет выключен тумблером — прежняя мягкая подсказка (Р18a).
         hint = get_text(_TEXT + "works_hint", language=lang,
                         status=html.escape(status_label(option.status, lang)))
         text = f"{hint}\n{text}"
@@ -377,7 +434,10 @@ async def _apply_step(
         FIELD_BUILDING_OPTIONS: None,
     })
     if step.verdict == "auto":
-        return await _show_operational(callback, base, step.auto, lang)
+        return await _show_operational(
+            callback, base, step.auto, lang,
+            works_blocked=step.works_blocked, dispatch_phone=step.dispatch_phone,
+        )
     if not await _store_phase(callback, {**base, FIELD_PHASE: PHASE_PICK}, lang):
         return False
     await callback.message.edit_text(
@@ -431,13 +491,19 @@ async def handle_elevator_pick(
     elevator_id = parse_int(action[len(_ACTION_ELEVATOR):])
     if elevator_id is None:
         return
-    option = await run_db(
-        lambda s: pick_group_elevator_sync(s, candidate.get(FIELD_BUILDING_ID), elevator_id),
+    option, works_blocked, dispatch_phone = await run_db(
+        lambda s: pick_group_elevator_sync(
+            s, candidate.get(FIELD_BUILDING_ID), elevator_id,
+            blocks=blocks_under_works(candidate),
+        ),
         db=_db,
     )
     if option is None:
         return
-    await _show_operational(callback, candidate, option, lang)
+    await _show_operational(
+        callback, candidate, option, lang,
+        works_blocked=works_blocked, dispatch_phone=dispatch_phone,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════

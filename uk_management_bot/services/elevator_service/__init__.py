@@ -47,6 +47,7 @@ from ._core import (
     ElevatorNotFoundError,
     ElevatorServiceError,
     ElevatorStateError,
+    ElevatorUnderWorksError,
     ElevatorValidationError,
     Message,
     StatusChange,
@@ -130,6 +131,7 @@ from .validation_db import (
     RequestElevator,
     ensure_elevator_usable_async,
     ensure_elevator_usable_sync,
+    resident_requests_allowed,
     resolve_request_elevator_async,
     resolve_request_elevator_sync,
     validate_passport_values,
@@ -167,6 +169,7 @@ from .config import (
     save_config_async,
 )
 from .reminder_rules import (
+    ALLOW_RESIDENT_UNDER_WORKS_KEY,
     DEFAULT_ELEVATORS_CONFIG,
     DOWNTIME_STATUSES,
     downtime_threshold_reached,
@@ -175,13 +178,17 @@ from .reminder_rules import (
 )
 from .validation import (
     PASSPORT_REQUIRED_FIELDS,
+    WORKS_STATUSES,
     can_set_status,
+    is_under_works,
     require_elevator_for_category,
+    resident_requests_blocked,
     validate_passport_required,
     validate_status,
 )
 
 __all__ = [
+    "ALLOW_RESIDENT_UNDER_WORKS_KEY",
     "CONFIG_ROW_ID",
     "DEFAULT_ELEVATORS_CONFIG",
     "DEFAULT_REMINDER_STAGES",
@@ -194,12 +201,14 @@ __all__ = [
     "PUBLIC_CODE_MAX_LEN",
     "REGISTRY_FLAGS",
     "UNBOUND_ELEVATOR",
+    "WORKS_STATUSES",
     "ElevatorConflictError",
     "ElevatorCounters",
     "ElevatorNotFoundError",
     "ElevatorServiceError",
     "ElevatorStateError",
     "ElevatorSummary",
+    "ElevatorUnderWorksError",
     "ElevatorValidationError",
     "Message",
     "Recipient",
@@ -247,6 +256,7 @@ __all__ = [
     "get_occurrence_sync",
     "is_overdue",
     "is_strict_int",
+    "is_under_works",
     "is_valid_public_code",
     "last_maintenance_by_elevator_async",
     "last_maintenance_by_elevator_sync",
@@ -267,6 +277,8 @@ __all__ = [
     "next_reminder_stage",
     "require_aware",
     "require_elevator_for_category",
+    "resident_requests_allowed",
+    "resident_requests_blocked",
     "reschedule_occurrence_async",
     "resolve_request_elevator_async",
     "resolve_request_elevator_sync",

@@ -138,8 +138,11 @@ async def handle_urgency(callback: CallbackQuery, state: FSMContext, language: s
         building_id=int(building_id), elevator_id=int(elevator_id), description=str(description),
         urgency=urgency, reporter_id=access.user_id,
     )
+    # Р18: лифтёр создаёт ремонт ИМЕННО по лифту, который уже «В ремонте»/«На ТО» —
+    # запрет самообслуживания к этому каналу не применяется.
     number = await save_request(request_data, callback.from_user.id, None, callback.bot,
-                                source=REPAIR_SOURCE, role=REPAIR_ROLE)
+                                source=REPAIR_SOURCE, role=REPAIR_ROLE,
+                                allow_under_works=True)
     if not number:
         await _common.edit(callback, t("repair_failed", language))
         return

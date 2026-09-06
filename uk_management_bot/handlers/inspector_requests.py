@@ -457,6 +457,9 @@ async def inspector_confirm(callback: CallbackQuery, state: FSMContext, *, _db=N
     request_number = await save_request(
         data, callback.from_user.id, _db, callback.bot,
         source="inspector", role="inspector",
+        # Р18: обходчик — персонал на объекте (как и его TWA-эндпоинт),
+        # лифт «В ремонте»/«На ТО» ему не запрещён.
+        allow_under_works=True,
     )
 
     await state.clear()

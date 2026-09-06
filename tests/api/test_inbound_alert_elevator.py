@@ -104,9 +104,12 @@ async def world(db_session):
     ok = _elevator(building.id, number=1)
     raw = _elevator(building.id, number=2, commissioned=False)
     foreign = _elevator(other.id, number=1)
-    db_session.add_all([ok, raw, foreign])
+    repairing = _elevator(building.id, number=3)
+    repairing.current_status = "under_repair"
+    db_session.add_all([ok, raw, foreign, repairing])
     await db_session.commit()
-    return {"building": building, "ok": ok, "raw": raw, "foreign": foreign}
+    return {"building": building, "ok": ok, "raw": raw, "foreign": foreign,
+            "repairing": repairing}
 
 
 async def _inbox(db_session, event_id: str) -> WebhookInbox | None:
@@ -197,3 +200,19 @@ async def test_flag_off_elevator_category_behaves_as_before(webhook_client, worl
     req = await db_session.get(Request, r.json()["request_number"])
     assert req.category == "elevator"
     assert req.elevator_id is None and req.elevator_operational is None
+
+
+@pytest.mark.asyncio
+async def test_alert_on_elevator_under_works_still_creates_request(
+    webhook_client, world, db_session,
+):
+    """Р18: машинный алерт терять нельзя — по лифту в ремонте заявка создаётся."""
+    raw = _alert_body("evt-lift-under-works", _expected_external_id(world["building"].id),
+                      uk_elevator_id=world["repairing"].id)
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw))
+    assert r.status_code == 202, r.text
+
+    requests = await _requests(db_session)
+    assert len(requests) == 1
+    assert requests[0].elevator_id == world["repairing"].id
+    assert requests[0].elevator_operational is False

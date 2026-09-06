@@ -3,8 +3,8 @@
 Общие шаги, DTO и sync-юниты — в ``create_elevator.py``; здесь только то, чем
 житель отличается от обходчика: состояния ``RequestStates.elevator_pick`` /
 ``elevator_operational``, роль ``applicant``, клавиатура категорий жителя,
-реакция на двор («укажите дом» + переотправка адресов) и отмена через
-``create.cancel_request``. Регистрируется в пакете ``handlers/requests``
+реакция на двор («укажите дом» + переотправка адресов), запрет Р18 на лифт
+в работах (``blocks_under_works``) и отмена через ``create.cancel_request``. Регистрируется в пакете ``handlers/requests``
 (``__init__``); фильтры по состоянию — перехвата чужих ``elv:*`` нет.
 """
 
@@ -70,6 +70,8 @@ RESIDENT_FLOW = ElevatorFlow(
     category_keyboard=lambda language: get_categories_inline_keyboard_with_cancel(language=language),
     on_no_building=_resident_no_building,
     cancel=_resident_cancel,
+    # Р18: житель — самообслуживание, по лифту в работах заявка не создаётся.
+    blocks_under_works=True,
 )
 
 

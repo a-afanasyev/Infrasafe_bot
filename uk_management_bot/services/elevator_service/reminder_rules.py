@@ -23,9 +23,15 @@ MAX_CONFIG_DEPTH = 4
 _RESIDENT_NOTIFICATION_KEYS = ("repair_started", "maintenance_started", "back_in_service")
 _STAFF_REMINDER_KINDS = ("maintenance", "certification", "contract")
 
+# Р18a: тумблер менеджера «разрешить заявки жителей по лифту в работах».
+# Дефолт False = запрет включён (выбор владельца); True возвращает прежнее
+# поведение — мягкая подсказка и обычный поток.
+ALLOW_RESIDENT_UNDER_WORKS_KEY = "allow_resident_requests_under_works"
+
 DEFAULT_ELEVATORS_CONFIG: Mapping[str, Any] = MappingProxyType(
     {
         "module_public": False,
+        ALLOW_RESIDENT_UNDER_WORKS_KEY: False,
         "downtime_threshold_days": MappingProxyType({"not_working": 7, "under_repair": None}),
         "resident_notifications": MappingProxyType(
             {key: True for key in _RESIDENT_NOTIFICATION_KEYS}
@@ -179,6 +185,9 @@ def _validate_staff_reminders(section: Any) -> None:
 def _validate_config(config: Mapping[str, Any]) -> None:
     _require_known_keys(config, tuple(DEFAULT_ELEVATORS_CONFIG), "конфиг лифтов")
     _require_bool(config["module_public"], "module_public")
+    _require_bool(
+        config[ALLOW_RESIDENT_UNDER_WORKS_KEY], ALLOW_RESIDENT_UNDER_WORKS_KEY
+    )
     _validate_thresholds(config["downtime_threshold_days"])
     _validate_resident_notifications(config["resident_notifications"])
     _validate_staff_reminders(config["staff_reminders"])

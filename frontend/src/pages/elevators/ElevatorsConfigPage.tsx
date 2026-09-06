@@ -20,7 +20,8 @@ import {
  * Настройки модуля (/dashboard/elevators/config, manager): пороги простоя
  * (пусто = «не напоминать» → null), тумблеры уведомлений жителям, стадии
  * напоминаний персоналу (списки дней), overdue_weekly, module_public
- * (публичный виджет на табло жителей, T16). Черновик сидится из GET один раз
+ * (публичный виджет на табло жителей, T16), запрет заявок жителей по лифту в
+ * работах (Р18a, выключен = запрет действует). Черновик сидится из GET один раз
  * и пересиживается из ответа PUT (паттерн AutoManagerCard).
  */
 type Draft = ElevatorsConfigDraft
@@ -115,6 +116,16 @@ export default function ElevatorsConfigPage() {
         {listField('certification', 'elevators.config.certification')}
         {listField('contract', 'elevators.config.contract')}
         <Toggle id="cfg-overdue_weekly" label={t('elevators.config.overdueWeekly')} checked={draft.overdue_weekly} onChange={(v) => patch({ overdue_weekly: v })} />
+      </FormSection>
+
+      <FormSection title={t('elevators.config.residentRequests')} grid={false}>
+        <Toggle
+          id="cfg-allow_resident_requests_under_works"
+          label={t('elevators.config.allowUnderWorks')}
+          checked={draft.allow_resident_requests_under_works}
+          onChange={(v) => patch({ allow_resident_requests_under_works: v })}
+          hint={t('elevators.config.allowUnderWorksHint')}
+        />
       </FormSection>
 
       <FormSection title={t('elevators.config.modulePublic')} grid={false}>

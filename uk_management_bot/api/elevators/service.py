@@ -132,9 +132,25 @@ async def can_view_building(db: AsyncSession, user: User, building_id: int) -> b
 async def list_for_building(
     db: AsyncSession, building_id: int, *, language: str
 ) -> list[ElevatorMiniOut]:
-    """Активные и введённые в эксплуатацию лифты дома — для выбора в заявке."""
-    elevators = await domain.list_active_for_building_async(db, building_id)
-    return [presenters.build_mini(e, language) for e in elevators if e.is_commissioned]
+    """Активные и введённые в эксплуатацию лифты дома — для выбора в заявке.
+
+    Р18a: вердикт «жителю запрещено» считает сервер (статус + тумблер конфига),
+    чтобы TWA не тянула менеджерский ``/config``. Конфиг читается максимум один
+    раз на страницу и ТОЛЬКО если в доме есть лифт под работами — на штатном
+    пути (все лифты работают) запроса к ``elevators_config`` нет вовсе.
+    """
+    elevators = [e for e in await domain.list_active_for_building_async(db, building_id)
+                 if e.is_commissioned]
+    under_works = any(domain.is_under_works(e.current_status) for e in elevators)
+    allowed = (
+        domain.resident_requests_allowed(await domain.load_config_async(db))
+        if under_works
+        else False
+    )
+    return [
+        presenters.build_mini(e, language, resident_requests_under_works_allowed=allowed)
+        for e in elevators
+    ]
 
 
 async def list_events(

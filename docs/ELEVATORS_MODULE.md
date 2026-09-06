@@ -47,6 +47,8 @@
 | Р13 | Паспорта — ручной ввод, форма с «скопировать предыдущий»; импорт отложен |
 | Р14 | InfraSafe передаёт **наш `elevators.id`** в `alert.uk_elevator_id`; отдельной колонки маппинга нет |
 | Р15 | Групповой приём: дом из квартиры автора, лифт — inline-кнопками в чате, автовыбор при единственном лифте в подъезде; нет ответа — нет заявки |
+| Р18 | Заявка **самообслуживания** по лифту «В ремонте»/«На ТО» запрещена: житель (бот, TWA, групповой приём) получает объяснение и телефон диспетчера вместо заявки. Персонал (лифтёр, обходчик, колл-центр, InfraSafe) не ограничен — иначе можно потерять сообщение о застрявшем в кабине. Риск озвучен владельцу, решение подтверждено |
+| Р18a | Запрет Р18 — **тумблер менеджера**, а не жёсткое правило: `elevators_config.allow_resident_requests_under_works`, дефолт `false` (запрет включён). Включённый тумблер возвращает прежнее поведение — мягкая подсказка и обычный поток. Лазейка персонала (`allow_under_works=True`) от тумблера не зависит |
 | Р16 | Из отложенного п. 3.3 — только публичный виджет статусов на табло жителей (§5, «Публичный виджет»). Без QR, без публичной карточки по коду, без печати; `public_code` зарезервирован и наружу не выдаётся |
 
 ## 3. Модель данных
@@ -126,6 +128,43 @@ elevators_config — singleton id=1 (JSON), как board_config/auto_manager_con
   эксплуатацию и, если задан `building_id`, принадлежит дому заявки». Вызывают **все четыре
   конструктора** заявок (§6). Параметр `enabled=settings.ELEVATORS_ENABLED`: при выключенном
   флаге лифт не требуется, поля NULL.
+- **Запрет Р18/Р18a в том же резолвере**: канон «идут работы» — `validation.WORKS_STATUSES`
+  (`under_repair`, `maintenance`) + `is_under_works(status)`; копий кортежа нигде нет.
+  Последней проверкой резолвер бросает `ElevatorUnderWorksError` (подкласс
+  `ElevatorValidationError`, несёт `elevator_id`/`status`/`status_since`/`label`), если
+  `allow_under_works=False` **и** тумблер конфига выключен.
+
+  **Тумблер (Р18a)** — `elevators_config.allow_resident_requests_under_works`, дефолт
+  `false` = запрет действует; строгий bool в `merge_config`, терпимый в сохранённом
+  конфиге (старая строка без ключа читается как `false`). Менеджер правит его на
+  `/dashboard/elevators/config`. Конфиг читается в DB-слое валидатора
+  (`ensure_not_under_works_{sync,async}` → `load_config_{sync,async}`, та же сессия) и
+  ТОЛЬКО когда канал не персональный и лифт действительно под работами — чистое ядро
+  остаётся без I/O, на штатном пути лишнего запроса нет. Чистый предикат —
+  `validation.resident_requests_blocked(status, allowed_by_config=…)`.
+
+  Кто как вызывает (лазейка персонала от тумблера НЕ зависит):
+
+  | Канал | Точка | `allow_under_works` |
+  |---|---|---|
+  | Бот жителя (FSM) | `request_handler_service.create_request_record` через `save_request` | **False** |
+  | TWA-житель | `api/requests/service.persist_request` (`POST /api/v2/requests`) | **False** |
+  | Обходчик — TWA и бот | `POST /api/v2/requests/inspector`, `handlers/inspector_requests.py` | **True** |
+  | Колл-центр и «Создать ремонт» из карточки | `api/callcenter/service.persist_call_center_request` | **True** |
+  | Лифтёр «Создать ремонт» (бот) | `handlers/elevators/repair.py` | **True** |
+  | InfraSafe-вебхук | `services/inbound_alert.py` | **True** |
+  | Групповой приём, ЖИЛАЯ группа | `handlers/group_intake_elevator.py` | **False** |
+  | Групповой приём, STAFF-группа | `group_intake.py::_create_from_candidate` (`GROUP_KIND_STAFF` — тот же признак, что даёт `acceptance_mode=manager`) | **True** |
+
+  Статусы `working` и `not_working` не блокируются никогда; при выключенном
+  `ELEVATORS_ENABLED` Р18 не применяется (поля лифта вообще игнорируются).
+  `GET /for-building/{id}` отдаёт готовый вердикт `resident_request_blocked` (статус ×
+  тумблер), чтобы TWA не тянула менеджерский `/config`; конфиг читается максимум один раз
+  на страницу и только если в доме есть лифт под работами — на штатном пути запроса к
+  `elevators_config` нет вовсе. Подпись лифта в теле 409 (`label`) строится на языке
+  запросившего: `resolve_request_elevator_async(..., language=…)` ← `persist_request` ←
+  `card_language(user)`. У sync-пути параметра нет осознанно — бот рендерит свой
+  локализованный текст и `label` из ошибки не читает.
 - **Импорт-гейт** `tests/services/test_elevator_service_imports.py`: чистый интерпретатор
   импортирует пакет и `grouping`; в `sys.modules` не должно быть `workflow_runner`, `httpx`,
   `aiogram`, `fastapi`.
@@ -248,7 +287,7 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 
 | Поверхность | Файлы | Callback-префиксы | Поведение |
 |---|---|---|---|
-| Житель — шаг лифта при создании | `handlers/requests/create_elevator.py` (общие шаги, `ElevatorFlow`), `create_elevator_resident.py` (тонкие хендлеры под `RequestStates.elevator_pick/elevator_operational`), `keyboards/elevators.py` | `elv:pick:{id}`, `elv:op:1|0` | Для `category=elevator` при включённом флаге и известном доме: список введённых лифтов дома → «Лифт сейчас работает?». Ровно один пригодный лифт в доме или в подъезде квартиры жителя — автоподстановка. Двор — «укажите дом». Дом без лифтов — Р11 не обойти: телефон диспетчера (`board_config.contacts.dispatch_phone`) и возврат к категории. Статус «в ремонте»/«на ТО» — мягкая подсказка, не блокирует. Сервер проверяет принадлежность лифта дому (`ensure_elevator_usable_sync(building_id=…)`); `clear_elevator_data` снимает ключи при смене категории |
+| Житель — шаг лифта при создании | `handlers/requests/create_elevator.py` (общие шаги, `ElevatorFlow`), `create_elevator_resident.py` (тонкие хендлеры под `RequestStates.elevator_pick/elevator_operational`), `keyboards/elevators.py` | `elv:pick:{id}`, `elv:op:1|0` | Для `category=elevator` при включённом флаге и известном доме: список введённых лифтов дома → «Лифт сейчас работает?». Ровно один пригодный лифт в доме или в подъезде квартиры жителя — автоподстановка. Двор — «укажите дом». Дом без лифтов — Р11 не обойти: телефон диспетчера (`board_config.contacts.dispatch_phone`) и возврат к категории. Статус «в ремонте»/«на ТО» у жителя — **блокирующий отказ** (Р18, `requests.elevator.works_blocked*`, текст и телефон строит `handlers/requests/elevator_works_block.py`): лифт в FSM не пишется, шаг выбора остаётся; тот же текст показывается на подтверждении, если статус сменился в гонке. У обходчика (`blocks_under_works=False`) и при включённом тумблере Р18a остаётся прежняя мягкая подсказка. Сервер проверяет принадлежность лифта дому (`ensure_elevator_usable_sync(building_id=…)`); `clear_elevator_data` снимает ключи при смене категории |
 | Инспектор | `handlers/inspector_requests.py` (`InspectorRequestStates.elevator_pick/elevator_operational`, `INSPECTOR_FLOW`) | те же `elv:*` | Те же шаги после выбора категории; отличается ролью, клавиатурой категорий и отменой |
 | Менеджер — подсказка после подтверждения | `handlers/admin/elevator_hint.py`, вызов из `admin/views.py` **после** try подтверждения | `elv:st:{elevator_id}:{status}:{номер}`, `elv:keep` | После `MANAGER_CONFIRM` заявки с `elevator_id`: «Лифт {label}: сейчас «{статус}». Лифт работает?» — четыре статуса + «Оставить как есть». Нажатие → `set_status_sync(source="request_hint", request_number)`; повтор статуса — no-op; жителям — после commit. Сбой подсказки не откатывает подтверждение |
 | Групповой приём | `handlers/group_intake_elevator.py`, вклинивание в `group_intake.py` после «Да» автора | `gint:bld:{n}`, `gint:elv:{id}`, `gint:op:1|0` | Кандидат остаётся под тем же Redis-ключом промпта; фазы: `elevator_building` (адрес автора на уровне двора → выбор дома), `elevator_pick`, `elevator_operational`. Автоподстановка при единственном лифте в подъезде квартиры автора/в доме. Отвечает **только автор** (и в staff-группе). **Единый дедлайн 30 мин** (`ELEVATOR_ANSWER_TIMEOUT`): one-shot asyncio-таймер + Redis-TTL записи (остаток + `TTL_GRACE`=60 с, шаги окно не продлевают) + ленивая проверка `is_expired` на нажатии; истёк — промпт правится «заявка не оформлена», заявки нет |
@@ -272,14 +311,23 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
   журнал / календарь `OccurrenceDialogs` / заявки с чекбоксами и «Подтвердить выбранные» →
   после bulk один раз `ElevatorStatusPromptDialog`; «Создать ремонт» `CreateRepairDialog`;
   архив `ArchiveDialog`), `/calendar` (`ElevatorsCalendarPage` — все лифты за период),
-  `/config` (`ElevatorsConfigPage`, manager; маршрут объявлен отдельно, чтобы `config`
+  `/config` (`ElevatorsConfigPage`, manager; там же тумблер Р18a «Разрешить заявки жителей при ремонте и ТО» — секция «Заявки жителей», через `utils/elevatorsConfigForm.ts`; маршрут объявлен отдельно, чтобы `config`
   ранжировался выше `:id`). Пункт меню — `DashboardLayout.tsx` (`nav.elevators`).
   Хуки `useElevators`, `useElevatorCalendar`, `useElevatorsConfig`; типы `types/elevators.ts`.
 - **TWA** — `twa/components/ElevatorStep.tsx` в мастере `twa/pages/applicant/CreatePage.tsx`:
   список лифтов дома (`GET /for-building/{id}`) → выбор → «Лифт сейчас работает?».
   Автовыбор при единственном лифте дома (подъезд квартиры API не отдаёт). Без лифтов —
-  только назад к категории (Р11). Мягкая подсказка при `under_repair`/`maintenance`.
+  только назад к категории (Р11). При `under_repair`/`maintenance` лифт в списке виден, но его
+  выбор даёт блок `ElevatorBlockedNotice` (статус, «с …», телефон диспетчерской ссылкой `tel:`
+  из `/api/v2/announcements`) и «Далее» выключено — но только если сервер прислал
+  `resident_request_blocked=true` (Р18a: клиент про конфиг не знает); иначе прежняя мягкая
+  подсказка. Серверный 409 `{code: elevator_under_works}` в гонке статусов рендерится тем же
+  блоком, а не общим тостом (`twa/components/elevatorUnderWorks.ts`).
+  `GET /for-building/{id}` отдаёт `status_since` и `resident_request_blocked`.
   Черновик хранит `elevator`; при несовпадении с флагом — сброс шага.
+- **«Создать ремонт» из карточки лифта** — `components/elevators/CreateRepairDialog.tsx`:
+  персоналу Р18 не запрещает, но при `under_repair`/`maintenance` показывается предупреждение
+  «Лифт уже {статус} с {дата}» (`elevators.repair.alreadyUnderWorks*`); кнопка активна.
 - **Колл-центр** — `components/callcenter/CallCenterElevatorFields.tsx` в `CallCenterModal.tsx`:
   для категории «Лифт» каскад двор → дом из справочника (→ `building_id`), лифт дома,
   «работает?»; всё обязательно, иначе 422.

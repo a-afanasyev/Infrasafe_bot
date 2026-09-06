@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,11 +15,13 @@ from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models import Apartment, Building, UserApartment, Yard
 from uk_management_bot.database.models.elevator import Elevator
+from uk_management_bot.database.models.elevators_config import ElevatorsConfig
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
 from uk_management_bot.handlers.requests.create import save_request_sync
 from uk_management_bot.services.elevator_service import (
+    ElevatorUnderWorksError,
     ElevatorValidationError,
     generate_public_code,
 )
@@ -71,8 +73,21 @@ def world(db):
     raw = Elevator(building_id=building.id, entrance_number=1, elevator_number=2,
                    passport_number="P-2", manufacturer="OTIS", serial_number="S-2",
                    public_code=generate_public_code(), is_commissioned=False)
+    repairing = Elevator(building_id=building.id, entrance_number=2, elevator_number=1,
+                         passport_number="P-3", manufacturer="OTIS", serial_number="S-3",
+                         public_code=generate_public_code(), is_commissioned=True,
+                         commissioned_at=date(2020, 1, 1), current_status="under_repair",
+                         status_since=datetime(2026, 9, 1, 7, 30, tzinfo=timezone.utc))
+    maintained = Elevator(building_id=building.id, entrance_number=2, elevator_number=2,
+                          passport_number="P-4", manufacturer="OTIS", serial_number="S-4",
+                          public_code=generate_public_code(), is_commissioned=True,
+                          commissioned_at=date(2020, 1, 1), current_status="maintenance")
+    broken = Elevator(building_id=building.id, entrance_number=3, elevator_number=1,
+                      passport_number="P-5", manufacturer="OTIS", serial_number="S-5",
+                      public_code=generate_public_code(), is_commissioned=True,
+                      commissioned_at=date(2020, 1, 1), current_status="not_working")
     other = Building(address="ул. Чужая, 9", yard=yard, is_active=True)
-    db.add(other)
+    db.add_all([repairing, maintained, broken, other])
     db.commit()
     foreign = Elevator(building_id=other.id, entrance_number=1, elevator_number=1,
                        passport_number="P-9", manufacturer="OTIS", serial_number="S-9",
@@ -80,7 +95,9 @@ def world(db):
                        commissioned_at=date(2020, 1, 1), current_status="working")
     db.add_all([ok, raw, foreign])
     db.commit()
-    return {"user": user, "apt": apt, "building": building, "ok": ok, "raw": raw, "foreign": foreign}
+    return {"user": user, "apt": apt, "building": building, "ok": ok, "raw": raw,
+            "foreign": foreign, "repairing": repairing, "maintained": maintained,
+            "broken": broken}
 
 
 def _record(service: RequestHandlerService, number: str, *, category: str, user_id: int,
@@ -205,3 +222,138 @@ def test_save_request_sync_elevator_without_fields_not_saved(db, world, caplog):
     assert rejected[0].levelno == logging.WARNING and rejected[0].exc_info is None
     assert "elevator_id" in rejected[0].getMessage()
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+# ── Р18: лифт «В ремонте»/«На ТО» ────────────────────────────────────
+
+
+def test_under_repair_elevator_blocked_for_self_service(db, world):
+    """Житель: заявка по лифту в ремонте не создаётся (Р18)."""
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorUnderWorksError) as exc:
+        _record(service, "260906-001", category="elevator", user_id=world["user"].id,
+                building_id=world["building"].id,
+                elevator_id=world["repairing"].id, elevator_operational=False)
+    db.rollback()
+    assert exc.value.elevator_id == world["repairing"].id
+    assert exc.value.status == "under_repair"
+    assert exc.value.status_since is not None
+    assert "подъезд 2" in exc.value.label and "лифт 1" in exc.value.label
+    assert db.query(Request).count() == 0
+
+
+def test_maintenance_elevator_blocked_for_self_service(db, world):
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorUnderWorksError):
+        _record(service, "260906-002", category="elevator", user_id=world["user"].id,
+                building_id=world["building"].id,
+                elevator_id=world["maintained"].id, elevator_operational=True)
+    db.rollback()
+
+
+def test_under_works_error_is_catchable_as_validation_error(db, world):
+    """Существующие обработчики ловят базовый класс — контракт не сломан."""
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorValidationError):
+        _record(service, "260906-003", category="elevator", user_id=world["user"].id,
+                building_id=world["building"].id,
+                elevator_id=world["repairing"].id, elevator_operational=False)
+    db.rollback()
+
+
+def test_staff_escape_hatch_allows_under_works(db, world):
+    """allow_under_works=True (лифтёр, обходчик, колл-центр, InfraSafe) — заявка создаётся."""
+    service = RequestHandlerService(db)
+    _record(service, "260906-004", category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id, elevator_id=world["repairing"].id,
+            elevator_operational=False, allow_under_works=True)
+    service.commit()
+    req = db.query(Request).filter_by(request_number="260906-004").one()
+    assert req.elevator_id == world["repairing"].id
+
+
+@pytest.mark.parametrize("key", ["ok", "broken"])
+def test_operable_statuses_never_blocked(db, world, key):
+    """working / not_working Р18 не трогает ни для кого."""
+    service = RequestHandlerService(db)
+    number = f"260906-01{0 if key == 'ok' else 1}"
+    _record(service, number, category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id, elevator_id=world[key].id,
+            elevator_operational=False)
+    service.commit()
+    assert db.query(Request).filter_by(request_number=number).one().elevator_id == world[key].id
+
+
+def test_flag_off_does_not_block_under_works(db, world, monkeypatch):
+    """Модуль выключен — Р18 не применяется (поля лифта вообще игнорируются)."""
+    monkeypatch.setattr(settings, "ELEVATORS_ENABLED", False)
+    service = RequestHandlerService(db)
+    _record(service, "260906-005", category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id, elevator_id=world["repairing"].id,
+            elevator_operational=False)
+    service.commit()
+    assert db.query(Request).filter_by(request_number="260906-005").one().elevator_id is None
+
+
+def test_save_request_sync_blocks_under_works_by_default(db, world):
+    saved = save_request_sync(
+        _data(world, elevator_id=world["repairing"].id, elevator_operational=False),
+        TELEGRAM_ID, db, source="bot", role="applicant",
+    )
+    assert saved is None
+    assert db.query(Request).count() == 0
+
+
+def test_save_request_sync_allows_under_works_for_staff(db, world):
+    saved = save_request_sync(
+        _data(world, elevator_id=world["repairing"].id, elevator_operational=False),
+        TELEGRAM_ID, db, source="bot", role="applicant", allow_under_works=True,
+    )
+    assert saved is not None
+    req = db.query(Request).filter(Request.request_number == saved[0]).one()
+    assert req.elevator_id == world["repairing"].id
+
+
+def _allow_under_works(db, allowed: bool) -> None:
+    """Записать тумблер Р18a в elevators_config (id=1) как это делает менеджер."""
+    from uk_management_bot.services.elevator_service import merge_config
+
+    db.add(ElevatorsConfig(
+        id=1, data=merge_config(None, {"allow_resident_requests_under_works": allowed}),
+    ))
+    db.commit()
+
+
+def test_toggle_on_lets_resident_create_request_under_works(db, world):
+    """Р18a: менеджер разрешил — прежнее поведение, заявка создаётся."""
+    _allow_under_works(db, True)
+    service = RequestHandlerService(db)
+    _record(service, "260906-020", category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id, elevator_id=world["repairing"].id,
+            elevator_operational=False)
+    service.commit()
+    req = db.query(Request).filter_by(request_number="260906-020").one()
+    assert req.elevator_id == world["repairing"].id
+
+
+def test_toggle_off_explicitly_blocks(db, world):
+    """Строка конфига есть, тумблер выключен — запрет тот же, что по дефолту."""
+    _allow_under_works(db, False)
+    service = RequestHandlerService(db)
+    with pytest.raises(ElevatorUnderWorksError):
+        _record(service, "260906-021", category="elevator", user_id=world["user"].id,
+                building_id=world["building"].id, elevator_id=world["repairing"].id,
+                elevator_operational=False)
+    db.rollback()
+
+
+def test_toggle_on_does_not_disable_staff_hatch(db, world):
+    """Тумблер и лазейка персонала независимы: персоналу можно в любом случае."""
+    _allow_under_works(db, True)
+    service = RequestHandlerService(db)
+    _record(service, "260906-022", category="elevator", user_id=world["user"].id,
+            building_id=world["building"].id, elevator_id=world["maintained"].id,
+            elevator_operational=False, allow_under_works=True)
+    service.commit()
+    assert db.query(Request).filter_by(request_number="260906-022").one().elevator_id \
+        == world["maintained"].id

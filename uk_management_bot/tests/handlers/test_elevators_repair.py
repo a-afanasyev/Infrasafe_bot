@@ -138,6 +138,8 @@ async def test_urgency_calls_save_request_with_elevator_contract(world):
     assert data["urgency"] == "high"
     assert data["description"] == "Лифт застревает между этажами"
     assert data["reported_by_user_id"] == world["tech"].id
+    # Р18: лифтёр — персонал, лифт «В ремонте»/«На ТО» ему не запрещён.
+    assert save.await_args.kwargs["allow_under_works"] is True
     # состояние снято, предложение статуса
     assert state.state is None
     shown = cb.message.edit_text.await_args.args[0]

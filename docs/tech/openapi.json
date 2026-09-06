@@ -3134,7 +3134,7 @@
         "type": "object"
       },
       "ElevatorMiniOut": {
-        "description": "Лифт для выбора в заявке (жителю: только свои дома).",
+        "description": "Лифт для выбора в заявке (жителю: только свои дома).\n\n``status_since`` нужен шагу «Лифт» в TWA: по лифту «В ремонте»/«На ТО»\nзаявка жителя запрещена (Р18), и в отказе показывается, с какого момента.\n``resident_request_blocked`` — готовый вердикт самообслуживания: сервер уже\nучёл статус и тумблер ``allow_resident_requests_under_works`` (Р18a), клиенту\nне нужно знать про конфиг. Персонала (колл-центр, обходчик, лифтёр) запрет\nне касается — этот флаг про поток жителя.",
         "properties": {
           "current_status": {
             "anyOf": [
@@ -3168,6 +3168,23 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "resident_request_blocked": {
+            "default": false,
+            "title": "Resident Request Blocked",
+            "type": "boolean"
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
           }
         },
         "required": [
@@ -3960,6 +3977,17 @@
       "ElevatorsConfigIn": {
         "additionalProperties": false,
         "properties": {
+          "allow_resident_requests_under_works": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Resident Requests Under Works"
+          },
           "downtime_threshold_days": {
             "anyOf": [
               {
@@ -4007,6 +4035,10 @@
       },
       "ElevatorsConfigOut": {
         "properties": {
+          "allow_resident_requests_under_works": {
+            "title": "Allow Resident Requests Under Works",
+            "type": "boolean"
+          },
           "downtime_threshold_days": {
             "$ref": "#/components/schemas/ElevatorsDowntimeThresholdsOut"
           },
@@ -4023,6 +4055,7 @@
         },
         "required": [
           "module_public",
+          "allow_resident_requests_under_works",
           "downtime_threshold_days",
           "resident_notifications",
           "staff_reminders"

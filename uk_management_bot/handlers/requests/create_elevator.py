@@ -9,7 +9,10 @@
    обойти: сообщение с телефоном диспетчера (``board_config.contacts.
    dispatch_phone``, если строка сохранена) и возврат к выбору категории.
 2. ``elevator_operational`` — «Лифт сейчас работает?» (``elv:op:1|0``); при
-   статусе «в ремонте»/«на ТО» перед вопросом мягкая подсказка, не блокирующая.
+   статусе «в ремонте»/«на ТО» самообслуживание (житель) сюда не доходит, если
+   включён запрет Р18/Р18a (``flow.blocks_under_works`` × тумблер конфига
+   ``allow_resident_requests_under_works``). Персоналу (обходчик) и при
+   выключенном запрете остаётся прежняя мягкая подсказка.
 
 Один код на два FSM. Житель (``create_elevator_resident.py``, адрес →
 категория уже выбрана) и обходчик (``handlers/inspector_requests.py``,
@@ -63,6 +66,7 @@ from uk_management_bot.services.elevator_service import (
     ELEVATOR_CATEGORY,
     ElevatorValidationError,
     ensure_elevator_usable_sync,
+    is_under_works,
     list_active_for_building_sync,
     status_label,
 )
@@ -71,10 +75,15 @@ from uk_management_bot.utils.auth_helpers import check_user_role_sync
 from uk_management_bot.utils.business_time import to_business
 from uk_management_bot.utils.helpers import get_text
 
+from .elevator_works_block import (
+    WorksBlock,
+    works_block_sync,
+    works_blocked_sync,
+    works_blocked_text,
+)
+
 logger = logging.getLogger(__name__)
 
-# Статусы, при которых перед вопросом «работает?» показывается мягкая подсказка.
-WORKS_STATUSES: tuple[str, ...] = ("under_repair", "maintenance")
 # Ключи FSM лифтового шага — снимаются при старте / повторном выборе категории.
 ELEVATOR_DATA_KEYS: tuple[str, ...] = (
     "elevator_id", "elevator_operational", "elevator_entrance", "elevator_number",
@@ -84,10 +93,10 @@ _SINCE_FORMAT = "%d.%m.%Y %H:%M"
 
 # Публичный контракт шага лифта (его переиспользует групповой приём, Ф4b).
 __all__ = [
-    "ELEVATOR_DATA_KEYS", "ElevatorFlow", "ElevatorOption", "ElevatorStep", "WORKS_STATUSES",
-    "begin_elevator_step", "clear_elevator_data", "elevator_step_text", "elevator_summary_line",
-    "is_elevator_flow", "load_elevator_step", "operational_step", "parse_int",
-    "pick_elevator_step", "save_failed_key", "to_option",
+    "ELEVATOR_DATA_KEYS", "ElevatorFlow", "ElevatorOption", "ElevatorStep", "PickedElevator",
+    "begin_elevator_step", "clear_elevator_data", "elevator_save_failed_text",
+    "elevator_step_text", "elevator_summary_line", "is_elevator_flow", "load_elevator_step",
+    "operational_step", "parse_int", "pick_elevator_step", "save_failed_key", "to_option",
 ]
 
 
@@ -112,6 +121,18 @@ class ElevatorStep:
     options: tuple[ElevatorOption, ...] = ()
     auto: Optional[ElevatorOption] = None
     dispatch_phone: str = ""
+    # Р18a: автолифт под работами И запрет включён — подставлять его нельзя.
+    works_blocked: bool = False
+
+
+@dataclass(frozen=True)
+class PickedElevator:
+    """Результат ``elv:pick``: вердикт доступа + сам лифт + вердикт Р18a."""
+
+    verdict: str  # ok | forbidden | invalid
+    option: Optional[ElevatorOption] = None
+    works_blocked: bool = False
+    dispatch_phone: str = ""
 
 
 @dataclass(frozen=True)
@@ -127,6 +148,9 @@ class ElevatorFlow:
     category_keyboard: Callable[[str], InlineKeyboardMarkup]
     on_no_building: Callable[[CallbackQuery, str], Awaitable[None]]
     cancel: Callable[[Message, FSMContext, str], Awaitable[None]]
+    # Р18: самообслуживанию (житель) лифт «В ремонте»/«На ТО» запрещён;
+    # обходчик — персонал, ему остаётся прежняя мягкая подсказка.
+    blocks_under_works: bool = False
 
 
 def is_elevator_flow(data: dict) -> bool:
@@ -198,8 +222,14 @@ def _request_building(
     return (None, None)
 
 
-def load_elevator_step(db: Session, data: dict) -> ElevatorStep:
-    """Что показать после адреса: список лифтов, автоподстановку или отказ."""
+def load_elevator_step(
+    db: Session, data: dict, *, blocks_under_works: bool = True
+) -> ElevatorStep:
+    """Что показать после адреса: список лифтов, автоподстановку или отказ.
+
+    ``blocks_under_works`` — блокирует ли запрет Р18 этот канал (житель и
+    групповой приём — да, обходчик — нет).
+    """
     service = RequestHandlerService(db)
     building_id, entrance = _request_building(service, data)
     if building_id is None:
@@ -214,25 +244,40 @@ def load_elevator_step(db: Session, data: dict) -> ElevatorStep:
     if len(options) == 1:
         candidates = list(options)
     if len(candidates) == 1:
-        return ElevatorStep("auto", building_id, options, auto=candidates[0])
+        # Конфиг и телефон читаются только когда автолифт под работами (Р18a).
+        blocked, phone = (
+            works_blocked_sync(db, candidates[0].status) if blocks_under_works else (False, "")
+        )
+        return ElevatorStep(
+            "auto", building_id, options, auto=candidates[0],
+            dispatch_phone=phone, works_blocked=blocked,
+        )
     return ElevatorStep("ok", building_id, options)
 
 
 def _pick_elevator(
-    db: Session, telegram_id: int, role: str, building_id: Optional[int], elevator_id: int
-) -> tuple[str, Optional[ElevatorOption]]:
-    """-> ('forbidden'|'invalid'|'ok', option). Approved-роль потока; лифт своего дома."""
+    db: Session,
+    telegram_id: int,
+    role: str,
+    building_id: Optional[int],
+    elevator_id: int,
+    *,
+    blocks_under_works: bool,
+) -> PickedElevator:
+    """Approved-роль потока + лифт своего дома + вердикт Р18a для этого канала."""
     user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
     if user is None or user.status != "approved" or not check_user_role_sync(user.id, role, db):
-        return ("forbidden", None)
+        return PickedElevator("forbidden")
     if building_id is None:
-        return ("invalid", None)
+        return PickedElevator("invalid")
     try:
         elevator = ensure_elevator_usable_sync(db, elevator_id, building_id=building_id)
     except ElevatorValidationError as exc:
         logger.info("Лифт %s отклонён для дома %s: %s", elevator_id, building_id, exc)
-        return ("invalid", None)
-    return ("ok", to_option(elevator))
+        return PickedElevator("invalid")
+    option = to_option(elevator)
+    blocked, phone = works_blocked_sync(db, option.status) if blocks_under_works else (False, "")
+    return PickedElevator("ok", option, works_blocked=blocked, dispatch_phone=phone)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -245,6 +290,16 @@ def _works_hint(option: ElevatorOption, language: str) -> str:
     return get_text(
         "requests.elevator.works_hint", language=language,
         status=status_label(option.status, language), since=since,
+    )
+
+
+def _blocked_text(option: ElevatorOption, dispatch_phone: str, language: str) -> str:
+    return works_blocked_text(
+        WorksBlock(
+            entrance=option.entrance, number=option.number, status=option.status,
+            status_since=option.status_since, dispatch_phone=dispatch_phone,
+        ),
+        language,
     )
 
 
@@ -263,7 +318,8 @@ async def _ask_operational(
         elevator_id=option.id, elevator_entrance=option.entrance, elevator_number=option.number,
     )
     await state.set_state(flow.operational_state)
-    if option.status in WORKS_STATUSES:
+    if is_under_works(option.status):
+        # Сюда доходит только неблокирующий поток (персонал) — мягкая подсказка.
         await message.answer(_works_hint(option, language))
     await message.answer(
         get_text("requests.elevator.operational_prompt", language=language),
@@ -288,7 +344,9 @@ async def begin_elevator_step(
     callback: CallbackQuery, state: FSMContext, language: str, data: dict, flow: ElevatorFlow
 ) -> None:
     """Точка входа после адреса+категории: ``data`` — актуальные данные FSM."""
-    step = await run_db(lambda s: load_elevator_step(s, data))
+    step = await run_db(
+        lambda s: load_elevator_step(s, data, blocks_under_works=flow.blocks_under_works)
+    )
     if step.verdict == "no_building":
         await flow.on_no_building(callback, language)
         return
@@ -296,9 +354,15 @@ async def begin_elevator_step(
         await _back_to_category(callback, state, language, step.dispatch_phone, flow)
         return
     await state.update_data(elevator_building_id=step.building_id)
-    if step.verdict == "auto":
+    if step.verdict == "auto" and not step.works_blocked:
         await _ask_operational(callback.message, state, language, step.auto, flow)
         return
+    if step.verdict == "auto":
+        # Р18: автолифт под работами — не подставляем его молча, объясняем и
+        # оставляем житель у клавиатуры лифтов дома (вдруг лифт не тот).
+        await callback.message.answer(
+            _blocked_text(step.auto, step.dispatch_phone, language)
+        )
     await state.set_state(flow.pick_state)
     await callback.message.answer(
         get_text("requests.elevator.pick_prompt", language=language),
@@ -319,9 +383,11 @@ async def pick_elevator_step(
         await callback.answer(get_text("errors.default", language=language), show_alert=True)
         return
     data = await state.get_data()
-    verdict, option = await run_db(lambda s: _pick_elevator(
+    picked = await run_db(lambda s: _pick_elevator(
         s, callback.from_user.id, flow.required_role, data.get("elevator_building_id"), elevator_id,
+        blocks_under_works=flow.blocks_under_works,
     ))
+    verdict, option = picked.verdict, picked.option
     if verdict == "forbidden":
         await callback.answer(get_text(flow.forbidden_key, language=language), show_alert=True)
         return
@@ -329,6 +395,12 @@ async def pick_elevator_step(
         await callback.answer(
             get_text("requests.elevator.invalid_choice", language=language), show_alert=True,
         )
+        return
+    if picked.works_blocked:
+        # Р18: лифт в FSM НЕ пишем, состояние остаётся ``pick_state``, клавиатура
+        # лифтов дома на экране не тронута — житель может выбрать другой лифт.
+        await callback.message.answer(_blocked_text(option, picked.dispatch_phone, language))
+        await callback.answer()
         return
     await _edit_quietly(callback, get_text(
         "requests.elevator.picked", language=language,
@@ -359,6 +431,23 @@ async def operational_step(
         reply_markup=get_cancel_keyboard(language=language),
     )
     await callback.answer()
+
+
+async def elevator_save_failed_text(data: dict, language: str, flow: ElevatorFlow) -> str:
+    """Текст отказа сохранения заявки: гонка Р18 → блок-текст, иначе общий.
+
+    Статус лифта мог смениться между выбором и «Подтвердить» — тогда
+    ``create_request_record`` отказал именно из-за работ, и житель должен
+    увидеть тот же текст, что на шаге выбора, а не «не удалось создать».
+    Запрос делается только на пути отказа.
+    """
+    elevator_id = data.get("elevator_id")
+    if not (flow.blocks_under_works and is_elevator_flow(data) and elevator_id is not None):
+        return get_text(save_failed_key(data), language=language)
+    block = await run_db(lambda s: works_block_sync(s, int(elevator_id)))
+    if block is None:
+        return get_text(save_failed_key(data), language=language)
+    return works_blocked_text(block, language)
 
 
 async def elevator_step_text(

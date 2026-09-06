@@ -8,6 +8,7 @@ import type { ElevatorsConfigIn, ElevatorsConfigOut } from '../types/elevators'
 
 export interface ElevatorsConfigDraft {
   module_public: boolean
+  allow_resident_requests_under_works: boolean
   not_working: string
   under_repair: string
   repair_started: boolean
@@ -24,6 +25,7 @@ const listToStr = (xs: number[]) => xs.join(', ')
 export function configDraftFrom(c: ElevatorsConfigOut): ElevatorsConfigDraft {
   return {
     module_public: c.module_public,
+    allow_resident_requests_under_works: c.allow_resident_requests_under_works ?? false,
     not_working: c.downtime_threshold_days.not_working?.toString() ?? '',
     under_repair: c.downtime_threshold_days.under_repair?.toString() ?? '',
     repair_started: c.resident_notifications.repair_started,
@@ -46,6 +48,7 @@ export function isValidStages(value: string): boolean {
 export function configDraftToPayload(d: ElevatorsConfigDraft): ElevatorsConfigIn {
   return {
     module_public: d.module_public,
+    allow_resident_requests_under_works: d.allow_resident_requests_under_works,
     downtime_threshold_days: {
       not_working: toIntOrNull(d.not_working),
       under_repair: toIntOrNull(d.under_repair),

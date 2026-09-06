@@ -17,6 +17,17 @@ export const ELEVATOR_STATUSES: readonly ElevatorStatus[] = [
   'maintenance',
 ] as const
 
+/**
+ * Р18: статусы «по лифту идут работы». Канон бэкенда —
+ * `services/elevator_service/validation.py::WORKS_STATUSES`: по такому лифту
+ * заявка самообслуживания (житель) запрещена, персоналу — разрешена.
+ */
+export const ELEVATOR_WORKS_STATUSES: readonly ElevatorStatus[] = ['under_repair', 'maintenance'] as const
+
+export function isElevatorUnderWorks(status: ElevatorStatus | null | undefined): boolean {
+  return status != null && (ELEVATOR_WORKS_STATUSES as readonly string[]).includes(status)
+}
+
 export const OCCURRENCE_KINDS: readonly OccurrenceKind[] = ['maintenance', 'certification'] as const
 export const REGISTRY_FLAGS: readonly RegistryFlag[] = [
   'no_contract',
@@ -123,6 +134,8 @@ export interface ElevatorsStaffReminders {
 
 export interface ElevatorsConfigOut {
   module_public: boolean
+  /** Р18a: разрешить жителю заявку по лифту «В ремонте»/«На ТО» (дефолт false). */
+  allow_resident_requests_under_works: boolean
   downtime_threshold_days: ElevatorsDowntimeThresholds
   resident_notifications: ElevatorsResidentNotifications
   staff_reminders: ElevatorsStaffReminders
@@ -131,6 +144,7 @@ export interface ElevatorsConfigOut {
 /** PUT /config — все секции опциональны (частичное обновление). */
 export interface ElevatorsConfigIn {
   module_public?: boolean
+  allow_resident_requests_under_works?: boolean
   downtime_threshold_days?: Partial<ElevatorsDowntimeThresholds>
   resident_notifications?: Partial<ElevatorsResidentNotifications>
   staff_reminders?: Partial<ElevatorsStaffReminders>
@@ -214,6 +228,14 @@ export interface ElevatorMiniOut {
   elevator_number: number
   label: string
   current_status: ElevatorStatus | null
+  /** С какого момента текущий статус — показывается в отказе Р18. */
+  status_since?: string | null
+  /**
+   * Р18a: готовый вердикт сервера «жителю по этому лифту заявку нельзя»
+   * (статус × тумблер `allow_resident_requests_under_works`). Клиент про
+   * конфиг не знает; поле опционально ради совместимости со старым ответом.
+   */
+  resident_request_blocked?: boolean
 }
 
 export interface ElevatorListOut {

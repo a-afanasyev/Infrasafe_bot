@@ -6039,6 +6039,8 @@
       "none_in_building": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan — dispetcherga murojaat qiling.\n\nBoshqa toifani tanlang:",
       "none_in_building_phone": "🛗 Bu uy uchun liftlar reyestrga kiritilmagan — dispetcherga murojaat qiling: {phone}\n\nBoshqa toifani tanlang:",
       "works_hint": "ℹ️ Bu liftda hozir ishlar olib borilmoqda: {status}, {since} dan. Shunga qaramay ariza qoldirishingiz mumkin.",
+      "works_blocked": "⛔ Lift ({entrance}-kirish, {elevator}-lift) hozir ishda: {status}, {since} dan.\nAriza kerak emas — usta allaqachon u bilan shug'ullanmoqda.\n\nAgar boshqa hodisa yuz bergan bo'lsa (masalan, kimdir kabinada qolib ketgan bo'lsa) — dispetcherga qo'ng'iroq qiling: {phone}",
+      "works_blocked_no_phone": "⛔ Lift ({entrance}-kirish, {elevator}-lift) hozir ishda: {status}, {since} dan.\nAriza kerak emas — usta allaqachon u bilan shug'ullanmoqda.\n\nAgar boshqa hodisa yuz bergan bo'lsa (masalan, kimdir kabinada qolib ketgan bo'lsa) — zudlik bilan dispetcherga qo'ng'iroq qiling.",
       "operational_prompt": "Lift hozir ishlayaptimi?",
       "operational_yes_button": "✅ Ha, ishlaydi",
       "operational_no_button": "⛔ Yo'q, ishlamaydi",

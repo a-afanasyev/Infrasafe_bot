@@ -59,10 +59,14 @@ async def elevators(db_session: AsyncSession):
                        passport_number="P-9", manufacturer="OTIS", serial_number="S-9",
                        public_code=generate_public_code(), is_commissioned=True,
                        commissioned_at=date(2020, 1, 1), current_status="working")
-    db_session.add_all([ok, raw, foreign])
+    repairing = Elevator(building_id=building.id, entrance_number=1, elevator_number=3,
+                         passport_number="P-3", manufacturer="OTIS", serial_number="S-3",
+                         public_code=generate_public_code(), is_commissioned=True,
+                         commissioned_at=date(2020, 1, 1), current_status="under_repair")
+    db_session.add_all([ok, raw, foreign, repairing])
     await db_session.commit()
-    return {"ok": ok, "raw": raw, "foreign": foreign, "resident": resident, "apt": apt,
-            "building": building}
+    return {"ok": ok, "raw": raw, "foreign": foreign, "repairing": repairing,
+            "resident": resident, "apt": apt, "building": building}
 
 
 def _body(elevators=None, **extra) -> dict:
@@ -230,3 +234,26 @@ async def test_flag_off_fields_ignored(client, db_session, elevators, monkeypatc
     for resp in (r1, r2):
         row = await _row(db_session, resp.json()["request_number"])
         assert row.elevator_id is None and row.elevator_operational is None
+
+
+@pytest.mark.asyncio
+async def test_under_works_elevator_201_for_call_center(client, db_session, elevators):
+    """Р18: колл-центр — канал персонала, лифт «В ремонте» его не блокирует."""
+    r = await client.post(URL, json=_body(elevators, elevator_id=elevators["repairing"].id,
+                                          elevator_operational=False))
+    assert r.status_code == 201, r.text
+    row = await _row(db_session, r.json()["request_number"])
+    assert row.elevator_id == elevators["repairing"].id
+
+
+@pytest.mark.asyncio
+async def test_dashboard_repair_from_card_201_for_under_works_elevator(
+    client, db_session, elevators,
+):
+    """«Создать ремонт» из карточки лифта (адрес уровня дома) — тот же канал."""
+    r = await client.post(URL, json=_repair_body(
+        elevators, elevator_id=elevators["repairing"].id,
+    ))
+    assert r.status_code == 201, r.text
+    row = await _row(db_session, r.json()["request_number"])
+    assert row.elevator_id == elevators["repairing"].id

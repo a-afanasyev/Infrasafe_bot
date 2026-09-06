@@ -27,7 +27,8 @@ from .shared import (
 )
 
 from .create import save_request
-from .create_elevator import clear_elevator_data, save_failed_key
+from .create_elevator import clear_elevator_data, elevator_save_failed_text
+from .create_elevator_resident import RESIDENT_FLOW
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,9 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
             else:
                 # Очищаем состояние и показываем главное меню, чтобы пользователь мог продолжить.
                 # Ф4a-2 (T7): для заявки по лифту (Р11 → None) текст свой, не общий.
-                failed_text = get_text(save_failed_key(data), language=lang)
+                # Р18: гонка статусов (лифт ушёл в работы после выбора) — тот же
+                # блокирующий текст, что на шаге выбора.
+                failed_text = await elevator_save_failed_text(data, lang, RESIDENT_FLOW)
                 await state.clear()
                 await callback.message.answer(
                     failed_text,

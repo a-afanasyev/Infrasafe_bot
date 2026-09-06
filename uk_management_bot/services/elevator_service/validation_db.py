@@ -8,6 +8,17 @@
 конструкторов заявок (бот sync, API TWA/инспектор, колл-центр, InfraSafe):
 чистый ``require_elevator_for_category`` + «лифт существует, не архивирован,
 введён в эксплуатацию (и, если задано, принадлежит дому заявки)».
+
+Р18/Р18a (решение владельца 2026-09-06): по лифту, который «В ремонте» / «На ТО»,
+самообслуживание заявку НЕ создаёт (``ElevatorUnderWorksError`` → 409). Запрет —
+**тумблер менеджера** ``elevators_config.allow_resident_requests_under_works``
+(дефолт False = запрет включён; True возвращает прежнее поведение). Независимо
+от тумблера действует лазейка персонала ``allow_under_works=True``: её передают
+колл-центр, InfraSafe-алерт, лифтёр и инспектор, чтобы застрявшего в кабине не
+потеряли из-за запрета. Владельцу этот риск озвучен, решение подтверждено.
+
+Конфиг читается ЗДЕСЬ (DB-слой, та же сессия) и только когда запрет вообще
+может сработать: чистое ядро остаётся без I/O.
 """
 
 from __future__ import annotations
@@ -25,12 +36,20 @@ from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_PATTERN
 
-from ._core import ElevatorNotFoundError, ElevatorValidationError
+from ._core import (
+    ElevatorNotFoundError,
+    ElevatorUnderWorksError,
+    ElevatorValidationError,
+)
+from ._shared import DEFAULT_LANGUAGE
+from .config import load_config_async, load_config_sync
+from .labels import elevator_label
 from .reads import (
     get_elevator_including_archived_async,
     get_elevator_including_archived_sync,
 )
-from .validation import require_elevator_for_category
+from .reminder_rules import ALLOW_RESIDENT_UNDER_WORKS_KEY
+from .validation import is_under_works, require_elevator_for_category
 
 MAX_REASON_LEN = 500
 ALLOWED_URL_SCHEMES: tuple[str, ...] = ("http://", "https://")
@@ -159,6 +178,56 @@ async def ensure_elevator_usable_async(
     return _check_usable(elevator, building_id=building_id)
 
 
+def _needs_works_check(elevator: Elevator, *, allow_under_works: bool) -> bool:
+    """Стоит ли вообще читать конфиг: канал не персонала И лифт под работами."""
+    return not allow_under_works and is_under_works(elevator.current_status)
+
+
+def _under_works_error(elevator: Elevator, language: str) -> ElevatorUnderWorksError:
+    """Подпись строится сразу (``building`` в выборках лифта загружен eager) —
+    исключение переживает закрытие сессии. Язык — вызывающего (API отдаёт
+    ``label`` наружу; бот подпись из ошибки не берёт и остаётся на ``ru``)."""
+    return ElevatorUnderWorksError(
+        elevator_id=elevator.id,
+        status=elevator.current_status,
+        status_since=elevator.status_since,
+        label=elevator_label(elevator, language),
+    )
+
+
+def resident_requests_allowed(config: Mapping[str, Any]) -> bool:
+    """Значение тумблера Р18a из конфига модуля (нет ключа → запрет включён)."""
+    return bool(config.get(ALLOW_RESIDENT_UNDER_WORKS_KEY, False))
+
+
+def ensure_not_under_works_sync(
+    db: Session, elevator: Elevator, *, allow_under_works: bool,
+    language: str = DEFAULT_LANGUAGE,
+) -> Elevator:
+    """Р18: лифт «В ремонте»/«На ТО» → ``ElevatorUnderWorksError``, если запрет включён.
+
+    ``allow_under_works=True`` — канал персонала (колл-центр, лифтёр, инспектор,
+    InfraSafe): проверка не выполняется и конфиг не читается.
+    """
+    if not _needs_works_check(elevator, allow_under_works=allow_under_works):
+        return elevator
+    if resident_requests_allowed(load_config_sync(db)):
+        return elevator
+    raise _under_works_error(elevator, language)
+
+
+async def ensure_not_under_works_async(
+    db: AsyncSession, elevator: Elevator, *, allow_under_works: bool,
+    language: str = DEFAULT_LANGUAGE,
+) -> Elevator:
+    """Async-зеркало ``ensure_not_under_works_sync``."""
+    if not _needs_works_check(elevator, allow_under_works=allow_under_works):
+        return elevator
+    if resident_requests_allowed(await load_config_async(db)):
+        return elevator
+    raise _under_works_error(elevator, language)
+
+
 def _binding(elevator: Elevator, elevator_operational: bool | None) -> RequestElevator:
     return RequestElevator(
         elevator_id=elevator.id, elevator_operational=elevator_operational, elevator=elevator
@@ -204,8 +273,9 @@ def resolve_request_elevator_sync(
     enabled: bool,
     building_id: int | None = None,
     apartment_id: int | None = None,
+    allow_under_works: bool = False,
 ) -> RequestElevator:
-    """Р11 для конструкторов заявок (sync, бот).
+    """Р11 + Р18 для конструкторов заявок (sync, бот).
 
     Флаг выключен → поля игнорируются (``UNBOUND_ELEVATOR``, в БД NULL).
     Категория «лифт» без полей → ``ElevatorValidationError`` (чистый валидатор).
@@ -213,13 +283,14 @@ def resolve_request_elevator_sync(
     (``ensure_elevator_usable_sync``) и принадлежать дому заявки: дом —
     ``building_id`` либо дом квартиры ``apartment_id``; без дома (двор /
     legacy-адрес) привязка лифта запрещена — проверка принадлежности не
-    пропускается молча.
+    пропускается молча. Последней — Р18 (``allow_under_works``).
     """
     require_elevator_for_category(category, elevator_id, elevator_operational, enabled=enabled)
     if not enabled or elevator_id is None:
         return UNBOUND_ELEVATOR
     request_building_id = _request_building_sync(db, building_id, apartment_id)
     elevator = ensure_elevator_usable_sync(db, elevator_id, building_id=request_building_id)
+    ensure_not_under_works_sync(db, elevator, allow_under_works=allow_under_works)
     return _binding(elevator, elevator_operational)
 
 
@@ -232,11 +303,21 @@ async def resolve_request_elevator_async(
     enabled: bool,
     building_id: int | None = None,
     apartment_id: int | None = None,
+    allow_under_works: bool = False,
+    language: str = DEFAULT_LANGUAGE,
 ) -> RequestElevator:
-    """Async-зеркало ``resolve_request_elevator_sync`` (API, колл-центр, InfraSafe)."""
+    """Async-зеркало ``resolve_request_elevator_sync`` (API, колл-центр, InfraSafe).
+
+    ``language`` — язык подписи лифта в ``ElevatorUnderWorksError.label``: она
+    уходит в тело 409 и показывается жителю. У sync-пути (бот) параметра нет
+    осознанно: бот строит свой локализованный текст и ``label`` не читает.
+    """
     require_elevator_for_category(category, elevator_id, elevator_operational, enabled=enabled)
     if not enabled or elevator_id is None:
         return UNBOUND_ELEVATOR
     request_building_id = await _request_building_async(db, building_id, apartment_id)
     elevator = await ensure_elevator_usable_async(db, elevator_id, building_id=request_building_id)
+    await ensure_not_under_works_async(
+        db, elevator, allow_under_works=allow_under_works, language=language
+    )
     return _binding(elevator, elevator_operational)

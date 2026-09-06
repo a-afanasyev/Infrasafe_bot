@@ -147,6 +147,9 @@ class ElevatorsStaffRemindersIn(_StrictIn):
 
 class ElevatorsConfigIn(_StrictIn):
     module_public: Optional[bool] = None
+    # Р18a: тумблер менеджера. False (дефолт) — житель не создаст заявку по
+    # лифту «В ремонте»/«На ТО»; персонала запрет не касается никогда.
+    allow_resident_requests_under_works: Optional[bool] = None
     downtime_threshold_days: Optional[ElevatorsDowntimeThresholdsIn] = None
     resident_notifications: Optional[ElevatorsResidentNotificationsIn] = None
     staff_reminders: Optional[ElevatorsStaffRemindersIn] = None
@@ -217,13 +220,23 @@ class ElevatorListOut(BaseModel):
 
 
 class ElevatorMiniOut(BaseModel):
-    """Лифт для выбора в заявке (жителю: только свои дома)."""
+    """Лифт для выбора в заявке (жителю: только свои дома).
+
+    ``status_since`` нужен шагу «Лифт» в TWA: по лифту «В ремонте»/«На ТО»
+    заявка жителя запрещена (Р18), и в отказе показывается, с какого момента.
+    ``resident_request_blocked`` — готовый вердикт самообслуживания: сервер уже
+    учёл статус и тумблер ``allow_resident_requests_under_works`` (Р18a), клиенту
+    не нужно знать про конфиг. Персонала (колл-центр, обходчик, лифтёр) запрет
+    не касается — этот флаг про поток жителя.
+    """
 
     id: int
     entrance_number: int
     elevator_number: int
     label: str
     current_status: Optional[ElevatorStatus] = None
+    status_since: Optional[datetime] = None
+    resident_request_blocked: bool = False
 
 
 class ElevatorStatusChangeOut(BaseModel):
@@ -325,6 +338,7 @@ class ElevatorSummaryOut(BaseModel):
 
 class ElevatorsConfigOut(BaseModel):
     module_public: bool
+    allow_resident_requests_under_works: bool
     downtime_threshold_days: ElevatorsDowntimeThresholdsOut
     resident_notifications: ElevatorsResidentNotificationsOut
     staff_reminders: ElevatorsStaffRemindersOut

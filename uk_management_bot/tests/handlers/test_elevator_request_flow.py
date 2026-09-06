@@ -8,6 +8,8 @@
 4. Двор → «укажите дом», адресный шаг остаётся.
 5. ``elv:op:0`` → ``elevator_operational is False``, переход в description.
 6. Чужой/невведённый лифт в ``elv:pick`` → отказ; не-applicant → отказ.
+6a. Р18: лифт «В ремонте»/«На ТО» → блокирующий отказ, шаг выбора остаётся;
+   тот же текст на подтверждении, если статус сменился в гонке.
 7. Сводка confirm несёт строку лифта; None от save_request → локализованная
    ошибка лифта, а не общий текст.
 
@@ -27,6 +29,7 @@ from sqlalchemy.orm import sessionmaker
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models import Apartment, Building, UserApartment, Yard
 from uk_management_bot.database.models.board_config import BoardConfig
+from uk_management_bot.database.models.elevators_config import ElevatorsConfig
 from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
@@ -335,17 +338,92 @@ async def test_operational_yes_saves_true(world):
     assert state.data["elevator_operational"] is True
 
 
+def _blocked_text(entrance, number, status_key, since, *, phone=""):
+    """Ожидаемый блок-текст Р18 ровно из локали (ключ с телефоном / без него)."""
+    common = {"entrance": entrance, "elevator": number,
+              "status": get_text(f"elevators.status.{status_key}", language="ru"),
+              "since": since}
+    if phone:
+        return get_text("requests.elevator.works_blocked", language="ru", phone=phone, **common)
+    return get_text("requests.elevator.works_blocked_no_phone", language="ru", **common)
+
+
 @pytest.mark.asyncio
-async def test_pick_under_repair_shows_soft_hint_before_question(world):
+async def test_pick_under_repair_blocks_and_keeps_pick_step(world):
+    """Р18: житель выбрал лифт в ремонте → отказ, лифт в FSM не записан, шаг тот же."""
+    cb = _callback(f"elv:pick:{world['e21'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
+                      RequestStates.elevator_pick)
+    await resident.handle_elevator_pick(cb, state)
+    assert state.state is RequestStates.elevator_pick
+    assert "elevator_id" not in state.data
+    assert _blocked_text(2, 1, "under_repair", "01.09.2026 12:30") in _answers(cb)
+    # клавиатуру лифтов не затираем — житель выбирает другой лифт
+    cb.message.edit_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pick_under_maintenance_blocks_too(world, db):
+    world["e22"].current_status = "maintenance"
+    world["e22"].status_since = SINCE
+    db.commit()
+    cb = _callback(f"elv:pick:{world['e22'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
+                      RequestStates.elevator_pick)
+    await resident.handle_elevator_pick(cb, state)
+    assert "elevator_id" not in state.data
+    assert _blocked_text(2, 2, "maintenance", "01.09.2026 12:30") in _answers(cb)
+
+
+@pytest.mark.asyncio
+async def test_blocked_text_carries_dispatch_phone(world, db):
+    db.add(BoardConfig(id=1, data=_stored_board_config("+998 71 200-00-00")))
+    db.commit()
+    cb = _callback(f"elv:pick:{world['e21'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
+                      RequestStates.elevator_pick)
+    await resident.handle_elevator_pick(cb, state)
+    assert _blocked_text(2, 1, "under_repair", "01.09.2026 12:30",
+                         phone="+998 71 200-00-00") in _answers(cb)
+
+
+@pytest.mark.asyncio
+async def test_blocked_text_escapes_dispatch_phone(world, db):
+    db.add(BoardConfig(id=1, data=_stored_board_config("<b>+998</b>")))
+    db.commit()
+    cb = _callback(f"elv:pick:{world['e21'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
+                      RequestStates.elevator_pick)
+    await resident.handle_elevator_pick(cb, state)
+    texts = "\n".join(_answers(cb))
+    assert "&lt;b&gt;+998&lt;/b&gt;" in texts and "<b>+998</b>" not in texts
+
+
+@pytest.mark.asyncio
+async def test_not_working_elevator_is_not_blocked(world, db):
+    """Р18 трогает только «в ремонте»/«на ТО»: «не работает» — штатный вопрос."""
+    world["e21"].current_status = "not_working"
+    db.commit()
     cb = _callback(f"elv:pick:{world['e21'].id}")
     state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
                       RequestStates.elevator_pick)
     await resident.handle_elevator_pick(cb, state)
     assert state.state is RequestStates.elevator_operational
     assert state.data["elevator_id"] == world["e21"].id
-    hint = [t for t in _answers(cb) if get_text("elevators.status.under_repair", language="ru") in t]
-    assert hint, "подсказка о работах по лифту не показана"
-    assert "01.09.2026" in hint[0]
+    assert get_text("requests.elevator.operational_prompt", language="ru") in _answers(cb)
+
+
+@pytest.mark.asyncio
+async def test_autopicked_elevator_under_works_falls_back_to_pick(world, db):
+    """Автоподстановка единственного лифта подъезда: в работах → отказ + клавиатура."""
+    world["e11"].current_status = "under_repair"
+    world["e11"].status_since = SINCE
+    db.commit()
+    cb, state = await _pick_address(world, "apt_single")
+    assert state.state is RequestStates.elevator_pick
+    assert "elevator_id" not in state.data
+    assert _blocked_text(1, 1, "under_repair", "01.09.2026 12:30") in _answers(cb)
+    assert any(c.startswith("elv:pick:") for c in _callbacks(_last_markup(cb)))
 
 
 # ── 6. отказы elv:pick ───────────────────────────────────────────────────
@@ -439,6 +517,20 @@ async def test_confirm_save_failed_shows_elevator_error(world):
 
 
 @pytest.mark.asyncio
+async def test_confirm_save_failed_shows_blocked_text_when_elevator_went_under_works(world):
+    """Р18-гонка: статус сменился между выбором и «Подтвердить» → тот же отказ."""
+    cb = _callback("confirm_yes")
+    state = FakeState({"category": "elevator", "urgency": "low", "elevator_id": world["e21"].id,
+                       "elevator_operational": True})
+    with patch.object(create_callbacks, "save_request", AsyncMock(return_value=None)), \
+         patch.object(create_callbacks, "get_user_contextual_keyboard", AsyncMock(return_value=None)):
+        await create_callbacks.handle_confirmation(cb, state)
+    expected = _blocked_text(2, 1, "under_repair", "01.09.2026 12:30")
+    assert expected in _answers(cb)
+    assert cb.answer.await_args.args[0] == expected
+
+
+@pytest.mark.asyncio
 async def test_confirm_save_failed_other_category_keeps_generic_error(world):
     cb = _callback("confirm_yes")
     state = FakeState({"category": "electricity", "urgency": "low"})
@@ -514,9 +606,62 @@ def test_locale_keys_present(lang):
         "requests.elevator.operational_saved", "requests.elevator.summary_line",
         "requests.elevator.use_buttons", "requests.elevator.invalid_choice",
         "requests.elevator.error_generic",
+        "requests.elevator.works_blocked", "requests.elevator.works_blocked_no_phone",
         "elevators.status.working", "elevators.status.not_working",
         "elevators.status.under_repair", "elevators.status.maintenance",
     ]
     locale = load_locale(lang)
     for key in keys:
         assert _lookup(locale, key) is not None, (lang, key)
+
+
+# ── Р18a: тумблер менеджера включает/выключает запрет ────────────────────
+
+
+def _allow_under_works(db, allowed: bool) -> None:
+    from uk_management_bot.services.elevator_service import merge_config
+
+    db.add(ElevatorsConfig(
+        id=1, data=merge_config(None, {"allow_resident_requests_under_works": allowed}),
+    ))
+    db.commit()
+
+
+@pytest.mark.asyncio
+async def test_toggle_on_restores_soft_hint_for_resident(world, db):
+    """Тумблер включён — прежнее поведение: подсказка и вопрос «работает?»."""
+    _allow_under_works(db, True)
+    cb = _callback(f"elv:pick:{world['e21'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["with_lifts"].id},
+                      RequestStates.elevator_pick)
+    await resident.handle_elevator_pick(cb, state)
+    assert state.state is RequestStates.elevator_operational
+    assert state.data["elevator_id"] == world["e21"].id
+    texts = "\n".join(_answers(cb))
+    assert get_text("requests.elevator.operational_prompt", language="ru") in texts
+    assert get_text("elevators.status.under_repair", language="ru") in texts
+    assert "Заявка не нужна" not in texts
+
+
+@pytest.mark.asyncio
+async def test_toggle_on_autopick_under_works_proceeds(world, db):
+    _allow_under_works(db, True)
+    world["e11"].current_status = "under_repair"
+    world["e11"].status_since = SINCE
+    db.commit()
+    _, state = await _pick_address(world, "apt_single")
+    assert state.state is RequestStates.elevator_operational
+    assert state.data["elevator_id"] == world["e11"].id
+
+
+@pytest.mark.asyncio
+async def test_toggle_on_confirm_failure_falls_back_to_generic_error(world, db):
+    """Запрет выключен — отказ сохранения снова общий лифтовой текст."""
+    _allow_under_works(db, True)
+    cb = _callback("confirm_yes")
+    state = FakeState({"category": "elevator", "urgency": "low", "elevator_id": world["e21"].id,
+                       "elevator_operational": True})
+    with patch.object(create_callbacks, "save_request", AsyncMock(return_value=None)), \
+         patch.object(create_callbacks, "get_user_contextual_keyboard", AsyncMock(return_value=None)):
+        await create_callbacks.handle_confirmation(cb, state)
+    assert get_text("requests.elevator.error_generic", language="ru") in _answers(cb)

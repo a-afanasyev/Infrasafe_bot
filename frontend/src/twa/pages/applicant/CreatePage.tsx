@@ -11,6 +11,8 @@ import { notifyError } from '../../utils/errors'
 import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
 import ElevatorStep from '../../components/ElevatorStep'
+import ElevatorBlockedNotice from '../../components/ElevatorBlockedNotice'
+import { parseUnderWorksError } from '../../components/elevatorUnderWorks'
 import {
   EMPTY_ELEVATOR_SELECTION,
   isElevatorSelectionComplete,
@@ -229,9 +231,15 @@ export default function CreatePage() {
     },
     onError: (err: unknown) => {
       setUploadProgress(null)
+      // Р18: 409 «по лифту идут работы» (статус сменился после выбора) —
+      // объясняем блоком под кнопкой, а не общим тостом «не удалось».
+      if (parseUnderWorksError(err)) return
       notifyError(err, 'Не удалось создать заявку')
     },
   })
+
+  // Р18: отказ сервера «по лифту идут работы» — отдельная ветка ошибки.
+  const underWorks = createMutation.isError ? parseUnderWorksError(createMutation.error) : null
 
   const hasAnyAddress = addresses.apartments.length > 0 || addresses.buildings.length > 0 || addresses.yards.length > 0
 
@@ -346,7 +354,8 @@ export default function CreatePage() {
           Загрузка фото {uploadProgress.done}/{uploadProgress.total}
         </div>
       )}
-      {createMutation.isError && (
+      {createMutation.isError && underWorks && <ElevatorBlockedNotice info={underWorks} />}
+      {createMutation.isError && !underWorks && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
           {(() => {
             const err = createMutation.error as { response?: { data?: { detail?: unknown } }; message?: string }

@@ -33,6 +33,32 @@ class ElevatorValidationError(ElevatorServiceError):
     """Некорректные входные данные (→ 422)."""
 
 
+class ElevatorUnderWorksError(ElevatorValidationError):
+    """По лифту идут работы — самообслуживание заявку не создаёт (Р18, → 409).
+
+    Подкласс ``ElevatorValidationError``: обработчики, ловящие базовый класс
+    (бот, роутеры), продолжают работать без правок. Презентационный слой
+    маппит ЭТОТ класс раньше базового — иначе получит 422 вместо 409.
+
+    Поля — для сообщения жителю: ``label`` уже локализован (язык по умолчанию
+    сервиса) и НЕ экранирован для HTML.
+    """
+
+    def __init__(
+        self,
+        *,
+        elevator_id: int,
+        status: str,
+        status_since: datetime | None,
+        label: str,
+    ) -> None:
+        super().__init__(f"по лифту {elevator_id} идут работы: {status}")
+        self.elevator_id = elevator_id
+        self.status = status
+        self.status_since = status_since
+        self.label = label
+
+
 class ElevatorNotFoundError(ElevatorServiceError):
     """Лифт / запись графика не найдены (→ 404)."""
 

@@ -6,6 +6,7 @@ import { useApiLang } from '../../utils/apiLang'
 import { ElevatorStatusDot } from '../../components/elevators/ElevatorStatusBadge'
 import { elevatorsForBuildingPath, type ElevatorMiniOut, type ElevatorStatus } from '../../types/elevators'
 import { EMPTY_ELEVATOR_SELECTION, isElevatorSelectionComplete, type ElevatorSelection } from './elevatorSelection'
+import ElevatorBlockedNotice from './ElevatorBlockedNotice'
 
 /**
  * Шаг «Лифт» мастера создания заявки (категория elevator, флаг включён):
@@ -13,6 +14,14 @@ import { EMPTY_ELEVATOR_SELECTION, isElevatorSelectionComplete, type ElevatorSel
  * единственном лифте в доме (подъезд квартиры API не отдаёт). Без лифтов в
  * доме заявку по лифту создать нельзя (Р11) — только назад к категории.
  * Значение/дефолт/resolveBuildingId — `elevatorSelection.ts`.
+ *
+ * Р18/Р18a: лифт «В ремонте»/«На ТО» в списке ВИДЕН (житель должен понимать,
+ * что происходит). Запрещать ли по нему заявку, решает СЕРВЕР — вердикт
+ * приходит полем `resident_request_blocked` (статус × тумблер менеджера
+ * `allow_resident_requests_under_works`), клиент про конфиг не знает. Запрет
+ * включён → блокирующий блок вместо вопроса «работает?», «Далее» недоступно
+ * (сервер держит тот же запрет сам, 409). Запрет выключен → прежняя мягкая
+ * подсказка и обычный поток.
  */
 const SOFT_HINT: Partial<Record<ElevatorStatus, string>> = {
   under_repair: 'twa.create.elevator.hintUnderRepair',
@@ -44,6 +53,8 @@ export default function ElevatorStep({ buildingId, value, onChange, onNext, onBa
 
   const select = (el: ElevatorMiniOut) =>
     onChange({ ...value, elevatorId: el.id, elevatorLabel: el.label, elevatorStatus: el.current_status })
+
+  const selected = elevators.find((e) => e.id === value.elevatorId)
 
   // Автовыбор единственного лифта; выбор из черновика, которого в доме больше
   // нет (сменили адрес между сессиями), сбрасываем.
@@ -91,7 +102,8 @@ export default function ElevatorStep({ buildingId, value, onChange, onNext, onBa
     )
   }
 
-  const hintKey = value.elevatorStatus ? SOFT_HINT[value.elevatorStatus] : undefined
+  const blocked = selected?.resident_request_blocked === true
+  const hintKey = !blocked && value.elevatorStatus ? SOFT_HINT[value.elevatorStatus] : undefined
 
   return (
     <div className="space-y-2">
@@ -111,7 +123,18 @@ export default function ElevatorStep({ buildingId, value, onChange, onNext, onBa
         </button>
       ))}
 
-      {value.elevatorId !== null && (
+      {value.elevatorId !== null && blocked && (
+        <ElevatorBlockedNotice
+          showPickAnother
+          info={{
+            status: value.elevatorStatus,
+            statusSince: selected?.status_since ?? null,
+            label: value.elevatorLabel,
+          }}
+        />
+      )}
+
+      {value.elevatorId !== null && !blocked && (
         <div className="pt-3">
           <h3 className="font-semibold text-[14px] mb-2">{t('twa.create.elevator.operationalQuestion')}</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -134,9 +157,12 @@ export default function ElevatorStep({ buildingId, value, onChange, onNext, onBa
         </div>
       )}
 
-      <button disabled={!isElevatorSelectionComplete(value)} onClick={onNext} className={PRIMARY}>
+      <button disabled={blocked || !isElevatorSelectionComplete(value)} onClick={onNext} className={PRIMARY}>
         {t('twa.create.next')}
       </button>
+      {blocked && (
+        <button onClick={onBackToCategory} className={SECONDARY}>{t('twa.create.elevator.backToCategory')}</button>
+      )}
     </div>
   )
 }
