@@ -1130,7 +1130,19 @@
         "type": "object"
       },
       "CallCenterCreateRequest": {
+        "description": "Заявка колл-центра. Адрес — один из трёх вариантов:\n\n* ``user_id`` + ``apartment_id`` — квартира жителя (дом = дом квартиры);\n* ``building_id`` — уровень дома (ремонт лифта из карточки, T5/T6): любой\n  активный дом, владелец — менеджер-актор, если ``user_id`` не задан;\n* иначе свободный ``address`` (legacy) — лифт к такой заявке не привязать.\n\nЛифт (``elevator_id``/``elevator_operational``) — ``_ElevatorFieldsMixin``:\nобязателен для категории «лифт» при включённом флаге.",
         "properties": {
+          "acceptance_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Mode"
+          },
           "address": {
             "anyOf": [
               {
@@ -1152,6 +1164,17 @@
               }
             ],
             "title": "Apartment Id"
+          },
+          "building_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Id"
           },
           "caller_name": {
             "anyOf": [
@@ -1182,6 +1205,28 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "elevator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Id"
+          },
+          "elevator_operational": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Operational"
           },
           "urgency": {
             "title": "Urgency",
@@ -1517,6 +1562,28 @@
             "title": "Description",
             "type": "string"
           },
+          "elevator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Id"
+          },
+          "elevator_operational": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Operational"
+          },
           "media_files": {
             "anyOf": [
               {
@@ -1603,7 +1670,7 @@
         "type": "object"
       },
       "CreateRequestBody": {
-        "description": "Структурный контракт жителя (план «Обходчик», пилот — один шаг).\n\nКлиент передаёт уровень + id записи; адрес/FK/source считает сервер через\nresolve_request_address. Legacy-поля (apartment_id/address/source в body)\nисключены — под пилот без переходного окна.",
+        "description": "Структурный контракт жителя (план «Обходчик», пилот — один шаг).\n\nКлиент передаёт уровень + id записи; адрес/FK/source считает сервер через\nresolve_request_address. Legacy-поля (apartment_id/address/source в body)\nисключены — под пилот без переходного окна. Лифт — см. _ElevatorFieldsMixin.",
         "properties": {
           "address_id": {
             "title": "Address Id",
@@ -1625,6 +1692,28 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "elevator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Id"
+          },
+          "elevator_operational": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Operational"
           },
           "media_files": {
             "anyOf": [
@@ -1954,6 +2043,2097 @@
           "reason"
         ],
         "title": "DeleteEmployeeRequest",
+        "type": "object"
+      },
+      "ElevatorArchiveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ElevatorArchiveIn",
+        "type": "object"
+      },
+      "ElevatorBulkConfirmIn": {
+        "additionalProperties": false,
+        "properties": {
+          "request_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Request Numbers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_numbers"
+        ],
+        "title": "ElevatorBulkConfirmIn",
+        "type": "object"
+      },
+      "ElevatorBulkConfirmItemOut": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "ok"
+        ],
+        "title": "ElevatorBulkConfirmItemOut",
+        "type": "object"
+      },
+      "ElevatorCardOut": {
+        "description": "Строка реестра. ``label`` собирается бэком (``elevator_label``) — бот и фронт печатают одинаково.",
+        "properties": {
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "availability_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability 30D"
+          },
+          "building_address": {
+            "title": "Building Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "current_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working",
+                  "not_working",
+                  "under_repair",
+                  "maintenance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Status"
+          },
+          "elevator_number": {
+            "title": "Elevator Number",
+            "type": "integer"
+          },
+          "entrance_number": {
+            "title": "Entrance Number",
+            "type": "integer"
+          },
+          "flags": {
+            "$ref": "#/components/schemas/ElevatorFlagsOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_commissioned": {
+            "title": "Is Commissioned",
+            "type": "boolean"
+          },
+          "is_public": {
+            "title": "Is Public",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "open_requests_count": {
+            "title": "Open Requests Count",
+            "type": "integer"
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          },
+          "yard_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Name"
+          }
+        },
+        "required": [
+          "id",
+          "building_id",
+          "building_address",
+          "yard_id",
+          "entrance_number",
+          "elevator_number",
+          "label",
+          "is_commissioned",
+          "is_public",
+          "flags",
+          "open_requests_count"
+        ],
+        "title": "ElevatorCardOut",
+        "type": "object"
+      },
+      "ElevatorCommissionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "commissioned_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioned At"
+          }
+        },
+        "title": "ElevatorCommissionIn",
+        "type": "object"
+      },
+      "ElevatorCountersOut": {
+        "properties": {
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "cert_expired": {
+            "title": "Cert Expired",
+            "type": "integer"
+          },
+          "downtime_over_threshold": {
+            "title": "Downtime Over Threshold",
+            "type": "integer"
+          },
+          "maintenance_overdue": {
+            "title": "Maintenance Overdue",
+            "type": "integer"
+          },
+          "no_contract": {
+            "title": "No Contract",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_status",
+          "no_contract",
+          "cert_expired",
+          "maintenance_overdue",
+          "downtime_over_threshold"
+        ],
+        "title": "ElevatorCountersOut",
+        "type": "object"
+      },
+      "ElevatorCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "building_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "capacity_kg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Kg"
+          },
+          "cert_act_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Act Url"
+          },
+          "cert_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Number"
+          },
+          "cert_valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Valid Until"
+          },
+          "contract_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Number"
+          },
+          "contract_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Until"
+          },
+          "downtime_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downtime Reason"
+          },
+          "elevator_number": {
+            "exclusiveMinimum": 0.0,
+            "title": "Elevator Number",
+            "type": "integer"
+          },
+          "entrance_number": {
+            "exclusiveMinimum": 0.0,
+            "title": "Entrance Number",
+            "type": "integer"
+          },
+          "factory_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Number"
+          },
+          "floors_served": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floors Served"
+          },
+          "is_public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Public"
+          },
+          "manufacturer": {
+            "minLength": 1,
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "passport_number": {
+            "minLength": 1,
+            "title": "Passport Number",
+            "type": "string"
+          },
+          "production_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Year"
+          },
+          "publish_downtime_details": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Downtime Details"
+          },
+          "serial_number": {
+            "minLength": 1,
+            "title": "Serial Number",
+            "type": "string"
+          },
+          "service_org_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Name"
+          },
+          "service_org_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Phone"
+          },
+          "spare_part_expected_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spare Part Expected On"
+          }
+        },
+        "required": [
+          "building_id",
+          "entrance_number",
+          "elevator_number",
+          "passport_number",
+          "manufacturer",
+          "serial_number"
+        ],
+        "title": "ElevatorCreateIn",
+        "type": "object"
+      },
+      "ElevatorDetailOut": {
+        "description": "Карточка + паспорт + договор/освидетельствование + простой (staff-only).",
+        "properties": {
+          "apartments_without_entrance_count": {
+            "title": "Apartments Without Entrance Count",
+            "type": "integer"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "archived_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived Reason"
+          },
+          "availability_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability 30D"
+          },
+          "building_address": {
+            "title": "Building Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "capacity_kg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Kg"
+          },
+          "cert_act_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Act Url"
+          },
+          "cert_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Number"
+          },
+          "cert_valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Valid Until"
+          },
+          "commissioned_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commissioned At"
+          },
+          "contract_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Number"
+          },
+          "contract_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Until"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "current_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working",
+                  "not_working",
+                  "under_repair",
+                  "maintenance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Status"
+          },
+          "downtime_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downtime Reason"
+          },
+          "elevator_number": {
+            "title": "Elevator Number",
+            "type": "integer"
+          },
+          "entrance_number": {
+            "title": "Entrance Number",
+            "type": "integer"
+          },
+          "factory_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Number"
+          },
+          "flags": {
+            "$ref": "#/components/schemas/ElevatorFlagsOut"
+          },
+          "floors_served": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floors Served"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_commissioned": {
+            "title": "Is Commissioned",
+            "type": "boolean"
+          },
+          "is_public": {
+            "title": "Is Public",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "open_requests_count": {
+            "title": "Open Requests Count",
+            "type": "integer"
+          },
+          "passport_number": {
+            "title": "Passport Number",
+            "type": "string"
+          },
+          "production_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Year"
+          },
+          "public_code": {
+            "title": "Public Code",
+            "type": "string"
+          },
+          "publish_downtime_details": {
+            "title": "Publish Downtime Details",
+            "type": "boolean"
+          },
+          "serial_number": {
+            "title": "Serial Number",
+            "type": "string"
+          },
+          "service_org_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Name"
+          },
+          "service_org_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Phone"
+          },
+          "spare_part_expected_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spare Part Expected On"
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          },
+          "yard_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Name"
+          }
+        },
+        "required": [
+          "id",
+          "building_id",
+          "building_address",
+          "yard_id",
+          "entrance_number",
+          "elevator_number",
+          "label",
+          "is_commissioned",
+          "is_public",
+          "flags",
+          "open_requests_count",
+          "passport_number",
+          "manufacturer",
+          "serial_number",
+          "publish_downtime_details",
+          "public_code",
+          "apartments_without_entrance_count",
+          "version"
+        ],
+        "title": "ElevatorDetailOut",
+        "type": "object"
+      },
+      "ElevatorEventOut": {
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "elevator_id": {
+            "title": "Elevator Id",
+            "type": "integer"
+          },
+          "event_kind": {
+            "title": "Event Kind",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "new_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Status"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "old_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Status"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "elevator_id",
+          "event_kind",
+          "occurred_at",
+          "source"
+        ],
+        "title": "ElevatorEventOut",
+        "type": "object"
+      },
+      "ElevatorFlagsOut": {
+        "properties": {
+          "cert_expired": {
+            "title": "Cert Expired",
+            "type": "boolean"
+          },
+          "maintenance_overdue": {
+            "title": "Maintenance Overdue",
+            "type": "boolean"
+          },
+          "no_contract": {
+            "title": "No Contract",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "no_contract",
+          "cert_expired",
+          "maintenance_overdue"
+        ],
+        "title": "ElevatorFlagsOut",
+        "type": "object"
+      },
+      "ElevatorListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ElevatorCardOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ElevatorListOut",
+        "type": "object"
+      },
+      "ElevatorMiniOut": {
+        "description": "Лифт для выбора в заявке (жителю: только свои дома).",
+        "properties": {
+          "current_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working",
+                  "not_working",
+                  "under_repair",
+                  "maintenance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Status"
+          },
+          "elevator_number": {
+            "title": "Elevator Number",
+            "type": "integer"
+          },
+          "entrance_number": {
+            "title": "Entrance Number",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entrance_number",
+          "elevator_number",
+          "label"
+        ],
+        "title": "ElevatorMiniOut",
+        "type": "object"
+      },
+      "ElevatorOccurrenceCompleteIn": {
+        "additionalProperties": false,
+        "description": "Закрытие записи; для освидетельствования обязательны ``cert_number`` и ``cert_valid_until``.",
+        "properties": {
+          "cert_act_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Act Url"
+          },
+          "cert_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Number"
+          },
+          "cert_valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Valid Until"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          }
+        },
+        "title": "ElevatorOccurrenceCompleteIn",
+        "type": "object"
+      },
+      "ElevatorOccurrenceCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "maintenance",
+              "certification"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "due_on"
+        ],
+        "title": "ElevatorOccurrenceCreateIn",
+        "type": "object"
+      },
+      "ElevatorOccurrenceGenerateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "every_months": {
+            "title": "Every Months",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "maintenance",
+              "certification"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "start",
+          "every_months",
+          "count"
+        ],
+        "title": "ElevatorOccurrenceGenerateIn",
+        "type": "object"
+      },
+      "ElevatorOccurrenceOut": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "done_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done By User Id"
+          },
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "elevator_id": {
+            "title": "Elevator Id",
+            "type": "integer"
+          },
+          "elevator_label": {
+            "title": "Elevator Label",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "maintenance",
+              "certification"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          },
+          "state": {
+            "enum": [
+              "planned",
+              "done",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "elevator_id",
+          "elevator_label",
+          "kind",
+          "due_on",
+          "state"
+        ],
+        "title": "ElevatorOccurrenceOut",
+        "type": "object"
+      },
+      "ElevatorOccurrenceRescheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "due_on"
+        ],
+        "title": "ElevatorOccurrenceRescheduleIn",
+        "type": "object"
+      },
+      "ElevatorPatchIn": {
+        "additionalProperties": false,
+        "description": "Все поля опциональны; ``expected_version`` — оптимистичная блокировка (409 при гонке).",
+        "properties": {
+          "building_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Id"
+          },
+          "capacity_kg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Kg"
+          },
+          "cert_act_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Act Url"
+          },
+          "cert_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Number"
+          },
+          "cert_valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Valid Until"
+          },
+          "contract_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Number"
+          },
+          "contract_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Until"
+          },
+          "downtime_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downtime Reason"
+          },
+          "elevator_number": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Number"
+          },
+          "entrance_number": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entrance Number"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "factory_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factory Number"
+          },
+          "floors_served": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floors Served"
+          },
+          "is_public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Public"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "passport_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passport Number"
+          },
+          "production_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Year"
+          },
+          "publish_downtime_details": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish Downtime Details"
+          },
+          "serial_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial Number"
+          },
+          "service_org_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Name"
+          },
+          "service_org_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Phone"
+          },
+          "spare_part_expected_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spare Part Expected On"
+          }
+        },
+        "title": "ElevatorPatchIn",
+        "type": "object"
+      },
+      "ElevatorRequestRowOut": {
+        "properties": {
+          "applicant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Name"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "elevator_operational": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Operational"
+          },
+          "executor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Name"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "status",
+          "category",
+          "urgency"
+        ],
+        "title": "ElevatorRequestRowOut",
+        "type": "object"
+      },
+      "ElevatorStatusChangeOut": {
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "new_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working",
+                  "not_working",
+                  "under_repair",
+                  "maintenance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Status"
+          },
+          "notified_residents": {
+            "title": "Notified Residents",
+            "type": "integer"
+          },
+          "old_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working",
+                  "not_working",
+                  "under_repair",
+                  "maintenance"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Status"
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
+          }
+        },
+        "required": [
+          "changed",
+          "notified_residents"
+        ],
+        "title": "ElevatorStatusChangeOut",
+        "type": "object"
+      },
+      "ElevatorStatusIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          },
+          "status": {
+            "enum": [
+              "working",
+              "not_working",
+              "under_repair",
+              "maintenance"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ElevatorStatusIn",
+        "type": "object"
+      },
+      "ElevatorSummaryOut": {
+        "properties": {
+          "downtime_threshold_days": {
+            "$ref": "#/components/schemas/ElevatorsDowntimeThresholdsOut"
+          },
+          "requests_without_elevator": {
+            "title": "Requests Without Elevator",
+            "type": "integer"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ElevatorCountersOut"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/ElevatorYardSummaryOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "today",
+          "totals",
+          "yards",
+          "requests_without_elevator",
+          "downtime_threshold_days"
+        ],
+        "title": "ElevatorSummaryOut",
+        "type": "object"
+      },
+      "ElevatorYardSummaryOut": {
+        "properties": {
+          "counters": {
+            "$ref": "#/components/schemas/ElevatorCountersOut"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          },
+          "yard_name": {
+            "title": "Yard Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "yard_id",
+          "yard_name",
+          "counters"
+        ],
+        "title": "ElevatorYardSummaryOut",
+        "type": "object"
+      },
+      "ElevatorsConfigIn": {
+        "additionalProperties": false,
+        "properties": {
+          "downtime_threshold_days": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElevatorsDowntimeThresholdsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "module_public": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module Public"
+          },
+          "resident_notifications": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElevatorsResidentNotificationsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "staff_reminders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ElevatorsStaffRemindersIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ElevatorsConfigIn",
+        "type": "object"
+      },
+      "ElevatorsConfigOut": {
+        "properties": {
+          "downtime_threshold_days": {
+            "$ref": "#/components/schemas/ElevatorsDowntimeThresholdsOut"
+          },
+          "module_public": {
+            "title": "Module Public",
+            "type": "boolean"
+          },
+          "resident_notifications": {
+            "$ref": "#/components/schemas/ElevatorsResidentNotificationsOut"
+          },
+          "staff_reminders": {
+            "$ref": "#/components/schemas/ElevatorsStaffRemindersOut"
+          }
+        },
+        "required": [
+          "module_public",
+          "downtime_threshold_days",
+          "resident_notifications",
+          "staff_reminders"
+        ],
+        "title": "ElevatorsConfigOut",
+        "type": "object"
+      },
+      "ElevatorsDowntimeThresholdsIn": {
+        "additionalProperties": false,
+        "description": "Пороги простоя в днях; явный ``null`` = не напоминать.",
+        "properties": {
+          "not_working": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Working"
+          },
+          "under_repair": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Under Repair"
+          }
+        },
+        "title": "ElevatorsDowntimeThresholdsIn",
+        "type": "object"
+      },
+      "ElevatorsDowntimeThresholdsOut": {
+        "properties": {
+          "not_working": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Working"
+          },
+          "under_repair": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Under Repair"
+          }
+        },
+        "title": "ElevatorsDowntimeThresholdsOut",
+        "type": "object"
+      },
+      "ElevatorsResidentNotificationsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "back_in_service": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Back In Service"
+          },
+          "maintenance_started": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Started"
+          },
+          "repair_started": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Started"
+          }
+        },
+        "title": "ElevatorsResidentNotificationsIn",
+        "type": "object"
+      },
+      "ElevatorsResidentNotificationsOut": {
+        "properties": {
+          "back_in_service": {
+            "title": "Back In Service",
+            "type": "boolean"
+          },
+          "maintenance_started": {
+            "title": "Maintenance Started",
+            "type": "boolean"
+          },
+          "repair_started": {
+            "title": "Repair Started",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repair_started",
+          "maintenance_started",
+          "back_in_service"
+        ],
+        "title": "ElevatorsResidentNotificationsOut",
+        "type": "object"
+      },
+      "ElevatorsStaffRemindersIn": {
+        "additionalProperties": false,
+        "properties": {
+          "certification": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certification"
+          },
+          "contract": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract"
+          },
+          "maintenance": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance"
+          },
+          "overdue_weekly": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overdue Weekly"
+          }
+        },
+        "title": "ElevatorsStaffRemindersIn",
+        "type": "object"
+      },
+      "ElevatorsStaffRemindersOut": {
+        "description": "Стадии напоминаний персоналу в днях до срока (убывающие) + еженедельный повтор просрочки.",
+        "properties": {
+          "certification": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Certification",
+            "type": "array"
+          },
+          "contract": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Contract",
+            "type": "array"
+          },
+          "maintenance": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Maintenance",
+            "type": "array"
+          },
+          "overdue_weekly": {
+            "title": "Overdue Weekly",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maintenance",
+          "certification",
+          "contract",
+          "overdue_weekly"
+        ],
+        "title": "ElevatorsStaffRemindersOut",
         "type": "object"
       },
       "EmployeeBrief": {
@@ -4447,6 +6627,39 @@
               }
             ],
             "title": "Description"
+          },
+          "elevator_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Id"
+          },
+          "elevator_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Label"
+          },
+          "elevator_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevator Status"
           },
           "engineer_required_reason": {
             "anyOf": [
@@ -10035,7 +12248,7 @@
     },
     "/api/v2/callcenter/requests": {
       "post": {
-        "description": "Менеджер заводит заявку (call-центр) — от имени жителя или от себя.\n\nМодель доступа (план «Обходчик»):\n  * apartment_id без user_id → 422;\n  * несуществующий target user → 404; не-житель → 422;\n  * квартира должна принадлежать именно target user (approved+активна) → иначе\n    422 (resolver-ветка проверяет принадлежность к target user_id, не к актору);\n  * при выбранной квартире клиентский address игнорируется → канонический;\n  * без квартиры свободный address обязателен и непустой → address_type='legacy';\n  * без user_id владелец — сам менеджер (legacy-адрес).",
+        "description": "Менеджер заводит заявку (call-центр) — от имени жителя или от себя.\n\nМодель доступа (план «Обходчик»):\n  * apartment_id без user_id → 422;\n  * несуществующий target user → 404; не-житель → 422;\n  * квартира должна принадлежать именно target user (approved+активна) → иначе\n    422 (resolver-ветка проверяет принадлежность к target user_id, не к актору);\n  * при выбранной квартире клиентский address игнорируется → канонический;\n  * building_id (T6, ремонт лифта из карточки) → любой активный дом (роль\n    `manager` в матрице request_address, building-only), address_type=\n    'building', клиентский address игнорируется; вместе с apartment_id → 422\n    (схема);\n  * без квартиры/дома свободный address обязателен и непустой →\n    address_type='legacy';\n  * без user_id владелец — сам менеджер.",
         "operationId": "create_call_center_request_api_v2_callcenter_requests_post",
         "requestBody": {
           "content": {
@@ -10129,6 +12342,1515 @@
         "summary": "Search Resident",
         "tags": [
           "callcenter"
+        ]
+      }
+    },
+    "/api/v2/elevators": {
+      "get": {
+        "operationId": "list_elevators_api_v2_elevators_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "yard_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Yard Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "building_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Building Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "working",
+                    "not_working",
+                    "under_repair",
+                    "maintenance"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "flag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "no_contract",
+                      "cert_expired",
+                      "maintenance_overdue"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Elevators",
+        "tags": [
+          "elevators"
+        ]
+      },
+      "post": {
+        "operationId": "create_elevator_api_v2_elevators_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Elevator",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/config": {
+      "get": {
+        "operationId": "get_config_api_v2_elevators_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorsConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config",
+        "tags": [
+          "elevators"
+        ]
+      },
+      "put": {
+        "description": "Патч конфига (строгий: неизвестный ключ → 422); ответ — реально сохранённый мёрж.",
+        "operationId": "update_config_api_v2_elevators_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorsConfigIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorsConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Config",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/for-building/{building_id}": {
+      "get": {
+        "description": "Лифты дома для выбора в заявке; жителю — только дома с одобренной квартирой.",
+        "operationId": "list_for_building_api_v2_elevators_for_building__building_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "title": "Building Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorMiniOut"
+                  },
+                  "title": "Response List For Building Api V2 Elevators For Building  Building Id  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List For Building",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/occurrences": {
+      "get": {
+        "description": "Календарь всех лифтов за период (даты включительно); ``state=all`` — без фильтра.",
+        "operationId": "calendar_all_api_v2_elevators_occurrences_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "planned",
+              "enum": [
+                "planned",
+                "done",
+                "cancelled",
+                "all"
+              ],
+              "title": "State",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "maintenance",
+                    "certification"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                  },
+                  "title": "Response Calendar All Api V2 Elevators Occurrences Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Calendar All",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/occurrences/{occurrence_id}": {
+      "patch": {
+        "operationId": "reschedule_occurrence_api_v2_elevators_occurrences__occurrence_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occurrence_id",
+            "required": true,
+            "schema": {
+              "title": "Occurrence Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorOccurrenceRescheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reschedule Occurrence",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/occurrences/{occurrence_id}/cancel": {
+      "post": {
+        "operationId": "cancel_occurrence_api_v2_elevators_occurrences__occurrence_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occurrence_id",
+            "required": true,
+            "schema": {
+              "title": "Occurrence Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Occurrence",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/occurrences/{occurrence_id}/complete": {
+      "post": {
+        "description": "Закрыть запись; освидетельствование обновляет паспорт (номер/срок/акт).",
+        "operationId": "complete_occurrence_api_v2_elevators_occurrences__occurrence_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occurrence_id",
+            "required": true,
+            "schema": {
+              "title": "Occurrence Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorOccurrenceCompleteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Occurrence",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/requests/bulk-confirm": {
+      "post": {
+        "description": "Групповая приёмка (``MANAGER_CONFIRM``) с per-item результатом.\n\nPost-commit intents каждой удачной заявки диспетчатся так же, как при\nодиночном подтверждении в ``api/requests/router.py``: realtime — сразу,\nnotify — в ``BackgroundTasks`` (автор заявки получает уведомление).",
+        "operationId": "bulk_confirm_requests_api_v2_elevators_requests_bulk_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorBulkConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorBulkConfirmItemOut"
+                  },
+                  "title": "Response Bulk Confirm Requests Api V2 Elevators Requests Bulk Confirm Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Confirm Requests",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/summary": {
+      "get": {
+        "operationId": "get_summary_api_v2_elevators_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Summary",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}": {
+      "get": {
+        "operationId": "get_elevator_api_v2_elevators__elevator_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Elevator",
+        "tags": [
+          "elevators"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_elevator_api_v2_elevators__elevator_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Elevator",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/archive": {
+      "post": {
+        "operationId": "archive_elevator_api_v2_elevators__elevator_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorArchiveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Archive Elevator",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/commission": {
+      "post": {
+        "operationId": "commission_elevator_api_v2_elevators__elevator_id__commission_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorCommissionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Commission Elevator",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/events": {
+      "get": {
+        "operationId": "list_events_api_v2_elevators__elevator_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorEventOut"
+                  },
+                  "title": "Response List Events Api V2 Elevators  Elevator Id  Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Events",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/occurrences": {
+      "get": {
+        "operationId": "list_occurrences_api_v2_elevators__elevator_id__occurrences_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "maintenance",
+                    "certification"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "planned",
+                    "done",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                  },
+                  "title": "Response List Occurrences Api V2 Elevators  Elevator Id  Occurrences Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Occurrences",
+        "tags": [
+          "elevators"
+        ]
+      },
+      "post": {
+        "operationId": "create_occurrence_api_v2_elevators__elevator_id__occurrences_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorOccurrenceCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Occurrence",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/occurrences/generate": {
+      "post": {
+        "description": "Сгенерировать график с шагом в месяцах; существующие даты пропускаются (идемпотентно).",
+        "operationId": "generate_occurrences_api_v2_elevators__elevator_id__occurrences_generate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorOccurrenceGenerateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorOccurrenceOut"
+                  },
+                  "title": "Response Generate Occurrences Api V2 Elevators  Elevator Id  Occurrences Generate Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Generate Occurrences",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/requests": {
+      "get": {
+        "operationId": "list_requests_api_v2_elevators__elevator_id__requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_closed",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Closed",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ElevatorRequestRowOut"
+                  },
+                  "title": "Response List Requests Api V2 Elevators  Elevator Id  Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Requests",
+        "tags": [
+          "elevators"
+        ]
+      }
+    },
+    "/api/v2/elevators/{elevator_id}/status": {
+      "put": {
+        "description": "Смена статуса; ``request_number`` → источник ``request_hint``. Жителям — после commit.",
+        "operationId": "set_status_api_v2_elevators__elevator_id__status_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "elevator_id",
+            "required": true,
+            "schema": {
+              "title": "Elevator Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElevatorStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElevatorStatusChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Status",
+        "tags": [
+          "elevators"
         ]
       }
     },
