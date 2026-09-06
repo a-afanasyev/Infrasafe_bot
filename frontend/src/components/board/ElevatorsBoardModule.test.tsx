@@ -1,131 +1,117 @@
 import { describe, it, expect } from 'vitest'
-import { http, HttpResponse } from 'msw'
 import { render, screen } from '../../test/test-utils'
-import { server } from '../../test/msw/server'
 import ElevatorsBoardModule from './ElevatorsBoardModule'
-import type { PublicElevator, PublicElevatorsData } from '../../hooks/usePublicElevators'
+import {
+  EMPTY_PUBLIC_DATA,
+  makePublicData,
+  makePublicElevator,
+  servePublicElevators,
+} from '../../test/fixtures/publicElevators'
 
-// T16 — модуль читает GET /api/v2/public/elevators через msw (не мок хука):
-// проверяем и ?lang, и рендер групп из реального JSON-ответа.
+// T17 (Р17) — модуль табло стал СВОДКОЙ: «N из M работают», чипы со счётчиками,
+// до 5 проблемных лифтов, ссылка «Все лифты →» на /elevators. Данные — через
+// msw (не мок хука): проверяем и ?lang, и рендер из реального JSON.
 
-function makeElevator(over: Partial<PublicElevator> = {}): PublicElevator {
-  return {
-    entrance_number: 1,
-    elevator_number: 1,
-    label: 'ул. Мира, д. 5, подъезд 1, лифт 1',
-    status: 'working',
-    status_since: '2026-09-03T12:00:00Z',
-    availability_30d: 0.98,
-    last_maintenance_on: '2026-08-01',
-    cert_valid_until: '2027-01-15',
-    cert_expired: false,
-    service_org_name: 'ЛифтСервис',
-    service_org_phone: '+998 71 000-00-00',
-    manufacturer: 'OTIS',
-    model: 'Gen2',
-    production_year: 2015,
-    capacity_kg: 630,
-    downtime_reason: null,
-    spare_part_expected_on: null,
-    ...over,
-  }
+function chips() {
+  return screen.getAllByTestId('elevator-status-chip').map((c) => [c.getAttribute('data-status'), c.textContent?.replace(/\s+/g, ' ').trim()])
 }
 
-function makeData(elevators: PublicElevator[], over: Partial<PublicElevatorsData> = {}): PublicElevatorsData {
-  return {
-    yards: [
-      {
-        id: 1,
-        name: 'Двор 1',
-        buildings: [{ id: 1, address: 'ул. Мира, д. 5', elevators }],
-      },
-    ],
-    dispatch_phone: '+998 71 123-45-67',
-    generated_at: '2026-09-06T10:00:00Z',
-    ...over,
-  }
-}
-
-function serve(data: PublicElevatorsData, seenLang: { value: string | null } = { value: null }) {
-  server.use(
-    http.get('*/api/v2/public/elevators', ({ request }) => {
-      seenLang.value = new URL(request.url).searchParams.get('lang')
-      return HttpResponse.json(data)
-    }),
-  )
-}
-
-describe('ElevatorsBoardModule', () => {
-  it('рендерит дом → подъезды → лифты со статус-пилюлями, «с {дата}» и телефоном диспетчера', async () => {
+describe('ElevatorsBoardModule (сводка)', () => {
+  it('крупная строка «N из M работают», чипы только ненулевые (Работают — всегда), телефон диспетчерской', async () => {
     const seen = { value: null as string | null }
-    serve(
-      makeData([
-        makeElevator(),
-        makeElevator({ elevator_number: 2, status: 'under_repair', status_since: '2026-09-01T09:00:00Z' }),
-        makeElevator({ entrance_number: 2, status: 'not_working' }),
+    servePublicElevators(
+      makePublicData([
+        makePublicElevator(),
+        makePublicElevator({ elevator_number: 2, status: 'under_repair', status_since: '2026-09-01T09:00:00Z', label: 'ул. Мира, д. 5, подъезд 1, лифт 2' }),
+        makePublicElevator({ entrance_number: 2, status: 'not_working', label: 'ул. Мира, д. 5, подъезд 2, лифт 1' }),
       ]),
       seen,
     )
     render(<ElevatorsBoardModule />)
 
-    expect(await screen.findByText('ул. Мира, д. 5')).toBeInTheDocument()
-    expect(screen.getByText('Подъезд 1')).toBeInTheDocument()
-    expect(screen.getByText('Подъезд 2')).toBeInTheDocument()
-    expect(screen.getAllByText('Лифт 1')).toHaveLength(2)
-    expect(screen.getByText('Лифт 2')).toBeInTheDocument()
-
-    const pills = screen.getAllByTestId('elevator-status-pill')
-    expect(pills.map((p) => p.getAttribute('data-status'))).toEqual(['working', 'under_repair', 'not_working'])
-    expect(screen.getByText('В ремонте')).toBeInTheDocument()
-    expect(screen.getByText('Не работает')).toBeInTheDocument()
-    expect(screen.getByText('с 01.09.2026')).toBeInTheDocument()
-
+    expect(await screen.findByText('1 из 3 работает')).toBeInTheDocument()
+    expect(chips()).toEqual([
+      ['working', 'Работают 1'],
+      ['not_working', 'Не работают 1'],
+      ['under_repair', 'В ремонте 1'],
+    ])
     expect(screen.getByText(/Диспетчерская: \+998 71 123-45-67/)).toBeInTheDocument()
     expect(screen.getByText('Лифты')).toBeInTheDocument() // board.sections.elevators
     expect(seen.value).toBe('ru')
   })
 
-  it('пустой ответ → модуль НЕ пропадает, показывает заглушку без телефона', async () => {
-    serve({ yards: [], dispatch_phone: null, generated_at: '2026-09-06T10:00:00Z' })
+  it('чип «Работают» показывается даже при нуле; нулевые остальные скрыты', async () => {
+    servePublicElevators(makePublicData([makePublicElevator({ status: 'not_working' })]))
+    render(<ElevatorsBoardModule />)
+    expect(await screen.findByText('0 из 1 работает')).toBeInTheDocument()
+    expect(chips()).toEqual([
+      ['working', 'Работают 0'],
+      ['not_working', 'Не работают 1'],
+    ])
+  })
+
+  it('проблемные лифты (not_working/under_repair) — короткие строки «подпись — статус с DD.MM», без рабочих', async () => {
+    servePublicElevators(
+      makePublicData([
+        makePublicElevator(),
+        makePublicElevator({ elevator_number: 2, status: 'under_repair', status_since: '2026-09-01T09:00:00Z', label: 'ул. Мира, д. 5, подъезд 1, лифт 2' }),
+        makePublicElevator({ entrance_number: 2, status: 'not_working', status_since: null, label: 'ул. Мира, д. 5, подъезд 2, лифт 1' }),
+        makePublicElevator({ entrance_number: 3, status: 'maintenance', label: 'ул. Мира, д. 5, подъезд 3, лифт 1' }),
+      ]),
+    )
+    render(<ElevatorsBoardModule />)
+
+    const rows = await screen.findAllByTestId('elevator-problem-row')
+    expect(rows.map((r) => r.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'ул. Мира, д. 5, подъезд 1, лифт 2 В ремонте с 01.09',
+      'ул. Мира, д. 5, подъезд 2, лифт 1 Не работает',
+    ])
+    expect(screen.queryByText(/и ещё/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Все лифты работают')).not.toBeInTheDocument()
+  })
+
+  it('больше 5 проблемных → ровно 5 строк и «и ещё K»', async () => {
+    const problems = Array.from({ length: 7 }, (_, i) =>
+      makePublicElevator({ entrance_number: i + 1, status: i % 2 ? 'not_working' : 'under_repair', label: `лифт-${i + 1}` }),
+    )
+    servePublicElevators(makePublicData([makePublicElevator({ entrance_number: 9 }), ...problems]))
+    render(<ElevatorsBoardModule />)
+
+    expect(await screen.findByText('1 из 8 работает')).toBeInTheDocument()
+    expect(screen.getAllByTestId('elevator-problem-row')).toHaveLength(5)
+    expect(screen.getByText('лифт-5')).toBeInTheDocument()
+    expect(screen.queryByText('лифт-6')).not.toBeInTheDocument()
+    expect(screen.getByText('и ещё 2')).toBeInTheDocument()
+  })
+
+  it('без проблемных → «Все лифты работают»; ссылка «Все лифты →» ведёт на /elevators', async () => {
+    servePublicElevators(makePublicData([makePublicElevator(), makePublicElevator({ elevator_number: 2 })]))
+    render(<ElevatorsBoardModule />)
+
+    expect(await screen.findByText('2 из 2 работают')).toBeInTheDocument()
+    expect(screen.getByText('Все лифты работают')).toBeInTheDocument()
+    expect(screen.queryByTestId('elevator-problem-row')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Все лифты →' })).toHaveAttribute('href', '/elevators')
+  })
+
+  it('старый ответ API без summary → сводка досчитывается по yards', async () => {
+    servePublicElevators({ ...makePublicData([makePublicElevator(), makePublicElevator({ elevator_number: 2, status: 'maintenance' })]), summary: undefined })
+    render(<ElevatorsBoardModule />)
+    expect(await screen.findByText('1 из 2 работает')).toBeInTheDocument()
+    expect(chips()).toEqual([
+      ['working', 'Работают 1'],
+      ['maintenance', 'На ТО 1'],
+    ])
+  })
+
+  it('пустой ответ → модуль НЕ пропадает: заглушка, без телефона, чипов и ссылки', async () => {
+    servePublicElevators(EMPTY_PUBLIC_DATA)
     render(<ElevatorsBoardModule title="Наши лифты" />)
 
     expect(await screen.findByText('Данные о лифтах пока не опубликованы')).toBeInTheDocument()
     expect(screen.getByText('Наши лифты')).toBeInTheDocument()
     expect(screen.queryByText(/Диспетчерская/)).not.toBeInTheDocument()
-  })
-
-  it('детали простоя показаны только когда пришли; строка обслуживания — только заполненное', async () => {
-    serve(
-      makeData([
-        makeElevator({ status: 'under_repair', downtime_reason: 'Ждём лебёдку', spare_part_expected_on: '2026-09-20' }),
-        makeElevator({
-          elevator_number: 2, status: 'not_working', downtime_reason: null, spare_part_expected_on: null,
-          service_org_name: null, service_org_phone: null, last_maintenance_on: null,
-          cert_valid_until: '2020-01-01', cert_expired: true, availability_30d: null,
-        }),
-      ]),
-    )
-    render(<ElevatorsBoardModule />)
-
-    expect(await screen.findByText('Причина: Ждём лебёдку · Запчасть ожидается 20.09.2026')).toBeInTheDocument()
-    // availability_30d=0.98 → «доступность 98 %»; у второго лифта availability null → части нет.
-    expect(screen.getByText('Обслуживает: ЛифтСервис · +998 71 000-00-00 · ТО 01.08.2026 · освид. до 15.01.2027 · доступность 98 %')).toBeInTheDocument()
-    expect(screen.getByText('освид. до 01.01.2020 · освидетельствование просрочено')).toBeInTheDocument()
-    expect(screen.getAllByText(/доступность/)).toHaveLength(1)
-    expect(screen.getAllByText(/Причина:/)).toHaveLength(1)
-  })
-
-  it('имя двора показывается только при нескольких дворах', async () => {
-    const one = makeData([makeElevator()])
-    serve({
-      ...one,
-      yards: [
-        ...one.yards,
-        { id: 2, name: 'Двор 2', buildings: [{ id: 2, address: 'ул. Садовая, д. 1', elevators: [makeElevator()] }] },
-      ],
-    })
-    render(<ElevatorsBoardModule />)
-    expect(await screen.findByText('Двор 1')).toBeInTheDocument()
-    expect(screen.getByText('Двор 2')).toBeInTheDocument()
+    expect(screen.queryByTestId('elevator-status-chip')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Все лифты →' })).not.toBeInTheDocument()
   })
 })

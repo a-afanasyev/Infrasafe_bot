@@ -1771,7 +1771,19 @@
       "certUntil": "tekshiruv {{date}} gacha",
       "certExpired": "tekshiruv muddati o'tgan",
       "lastMaintenance": "Texnik xizmat {{date}}",
-      "availability": "mavjudlik {{pct}} %"
+      "availability": "mavjudlik {{pct}} %",
+      "workingOf_one": "{{total}} tadan {{count}} tasi ishlayapti",
+      "workingOf_other": "{{total}} tadan {{count}} tasi ishlayapti",
+      "allWorking": "Barcha liftlar ishlayapti",
+      "andMore": "yana {{count}} ta",
+      "viewAll": "Barcha liftlar →",
+      "chips": {
+        "all": "Barchasi",
+        "working": "Ishlayapti",
+        "not_working": "Ishlamayapti",
+        "under_repair": "Ta'mirda",
+        "maintenance": "Texnik xizmatda"
+      }
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
@@ -2323,6 +2335,17 @@
       "settingsUpdated": "Sozlamalar saqlandi"
     }
   },
+  "publicElevators": {
+    "title": "Liftlar",
+    "backToBoard": "← Tabloga",
+    "searchLabel": "Qidiruv",
+    "searchPlaceholder": "Manzil yoki hovli bo'yicha qidirish",
+    "yardLabel": "Hovli",
+    "yardAll": "Barcha hovlilar",
+    "notFound": "Hech narsa topilmadi",
+    "resetFilters": "Filtrlarni tozalash",
+    "updatedAt": "Ma'lumotlar {{time}} ga dolzarb"
+  },
   "workReportsArchive": {
     "title": "Bajarilgan ishlar hisobotlari",
     "backToBoard": "← Taxtaga",
@@ -2759,7 +2782,7 @@
       "stagesHint": "Masalan: 30, 7, 1 — uchta eslatma",
       "overdueWeekly": "Muddati o'tganlar haqida har hafta eslatish",
       "modulePublic": "Liftlarni aholiga ko'rsatish",
-      "modulePublicHint": "Aholilar tablosidagi ommaviy vidjet «Liftlarni aholiga ko'rsatish» yoqilgan liftlarni ko'rsatadi",
+      "modulePublicHint": "Aholilar tablosidagi xulosa va /elevators ommaviy sahifasi «Liftlarni aholiga ko'rsatish» yoqilgan liftlarni ko'rsatadi",
       "invalidStages": "Eslatma bosqichlari — manfiy bo'lmagan butun sonlar"
     },
     "toast": {

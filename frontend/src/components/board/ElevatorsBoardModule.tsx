@@ -1,150 +1,73 @@
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
+import { usePublicElevators, type PublicElevator, type PublicElevatorYard, type PublicLang } from '../../hooks/usePublicElevators'
+import PublicElevatorsSummary from '../elevators-public/PublicElevatorsSummary'
+import { StatusPill } from '../elevators-public/PublicElevatorRow'
+import { summaryOf } from '../elevators-public/publicElevatorsFilter'
 import {
-  usePublicElevators,
-  type PublicElevator,
-  type PublicElevatorBuilding,
-  type PublicElevatorYard,
-  type PublicLang,
-} from '../../hooks/usePublicElevators'
-import { formatCompletedOn } from './formatCompletedOn'
-import type { ElevatorStatus } from '../../types/elevators'
+  cardStyle,
+  formatSinceShort,
+  headerStyle,
+  isProblemStatus,
+  monoStyle,
+  pillStyle,
+  statusStyle,
+  titleStyle,
+} from '../elevators-public/publicElevatorStyles'
 
-// T16 (Р16) — публичный виджет статусов лифтов на табло жителей: дома →
-// подъезды → строки «Лифт N» со статус-пилюлей. Оформление — стиль Resident
-// Board (inline-стили, Nunito/#f7f5f0), поэтому cardStyle/headerStyle/titleStyle
-// — та же осознанная дубликация литералов, что и в WorkReportsModule.tsx.
-// Пустой ответ НЕ прячет модуль (в отличие от ленты отчётов): превью в
-// редакторе витрины должно быть видно — показываем заглушку.
+// T17 (Р17) — модуль табло жителей стал СВОДКОЙ: «84 из 100 работают», чипы со
+// счётчиками, до MAX_PROBLEM_ROWS проблемных лифтов и ссылка «Все лифты →» на
+// публичную страницу /elevators (полный список; при 100 лифтах список на табло
+// неудобен). Пустой ответ НЕ прячет модуль: превью в редакторе витрины должно
+// быть видно — показываем заглушку.
 
-const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', overflow: 'hidden' }
-const headerStyle: React.CSSProperties = { padding: '20px 28px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#f0ede6' }
-const titleStyle: React.CSSProperties = { fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.1rem' }
-const monoStyle: React.CSSProperties = { fontFamily: "'IBM Plex Mono',monospace" }
+const MAX_PROBLEM_ROWS = 5
 
-// Палитра ElevatorStatusBadge (green / red / orange / blue) в hex-цветах табло.
-const STATUS_STYLE: Record<ElevatorStatus, { color: string; bg: string }> = {
-  working: { color: '#059669', bg: '#ecfdf5' },
-  not_working: { color: '#dc2626', bg: '#fef2f2' },
-  under_repair: { color: '#d97706', bg: '#fef9e7' },
-  maintenance: { color: '#2563eb', bg: '#eff3ff' },
+// Проблемные (not_working/under_repair) в порядке ответа: двор → дом → подъезд → номер.
+function problemElevators(yards: PublicElevatorYard[]): PublicElevator[] {
+  return yards.flatMap((y) => y.buildings.flatMap((b) => b.elevators.filter((e) => isProblemStatus(e.status))))
 }
 
-// ISO datetime → "DD.MM.YYYY" по локальному времени; date-only строки
-// (cert_valid_until и т.п.) идут через formatCompletedOn, не сюда.
-function formatSince(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
-}
-
-function groupByEntrance(elevators: PublicElevator[]): Array<{ entrance: number; elevators: PublicElevator[] }> {
-  const groups: Array<{ entrance: number; elevators: PublicElevator[] }> = []
-  for (const e of elevators) {
-    const last = groups[groups.length - 1]
-    if (last && last.entrance === e.entrance_number) groups[groups.length - 1] = { ...last, elevators: [...last.elevators, e] }
-    else groups.push({ entrance: e.entrance_number, elevators: [e] })
-  }
-  return groups
-}
-
-function StatusPill({ status, t }: { status: ElevatorStatus; t: TFunction }) {
-  const style = STATUS_STYLE[status] ?? { color: '#6b7280', bg: '#f0ede6' }
+function ProblemRow({ e }: { e: PublicElevator }) {
+  const { t } = useTranslation()
   return (
-    <span
-      data-testid="elevator-status-pill"
-      data-status={status}
-      style={{ ...monoStyle, fontSize: '0.72rem', fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: style.bg, color: style.color, whiteSpace: 'nowrap' }}
+    <div
+      data-testid="elevator-problem-row"
+      style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${statusStyle(e.status).color}` }}
     >
-      {t(`elevators.status.${status}`)}
-    </span>
-  )
-}
-
-// Детали простоя приходят только при publish_downtime_details — иначе оба null.
-function downtimeLine(e: PublicElevator, t: TFunction): string {
-  const parts: string[] = []
-  if (e.downtime_reason) parts.push(t('board.elevators.downtimeReason', { reason: e.downtime_reason }))
-  if (e.spare_part_expected_on) parts.push(t('board.elevators.sparePartExpected', { date: formatCompletedOn(e.spare_part_expected_on) }))
-  return parts.join(' · ')
-}
-
-// Свёрнутая строка «Обслуживает: {org} · {phone} · ТО {дата} · освид. до {дата} · доступность N %» —
-// только заполненные части.
-function serviceLine(e: PublicElevator, t: TFunction): string {
-  const parts: string[] = []
-  if (e.service_org_name) parts.push(t('board.elevators.servicedBy', { org: e.service_org_name }))
-  if (e.service_org_phone) parts.push(e.service_org_phone)
-  if (e.last_maintenance_on) parts.push(t('board.elevators.lastMaintenance', { date: formatCompletedOn(e.last_maintenance_on) }))
-  if (e.cert_valid_until) {
-    parts.push(t('board.elevators.certUntil', { date: formatCompletedOn(e.cert_valid_until) }))
-    if (e.cert_expired) parts.push(t('board.elevators.certExpired'))
-  }
-  if (e.availability_30d != null) parts.push(t('board.elevators.availability', { pct: Math.round(e.availability_30d * 100) }))
-  return parts.join(' · ')
-}
-
-function ElevatorRow({ e, t }: { e: PublicElevator; t: TFunction }) {
-  const downtime = downtimeLine(e, t)
-  const service = serviceLine(e, t)
-  return (
-    <div title={e.label} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', borderLeft: `3px solid ${(STATUS_STYLE[e.status] ?? { color: '#9ca3af' }).color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1a1a1a' }}>
-          {t('board.elevators.elevator', { elevator: e.elevator_number })}
-        </span>
-        <StatusPill status={e.status} t={t} />
-        {e.status_since && (
+      <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1a1a1a', flex: '1 1 auto', minWidth: 0 }}>{e.label}</span>{' '}
+      <StatusPill status={e.status} />
+      {e.status_since && (
+        <>
+          {' '}
           <span style={{ ...monoStyle, fontSize: '0.72rem', color: '#9ca3af' }}>
-            {t('board.elevators.since', { date: formatSince(e.status_since) })}
+            {t('board.elevators.since', { date: formatSinceShort(e.status_since) })}
           </span>
-        )}
-      </div>
-      {downtime && (
-        <div style={{ fontSize: '0.82rem', color: '#b45309', marginTop: 6 }}>{downtime}</div>
-      )}
-      {service && (
-        <div style={{ fontSize: '0.74rem', color: '#9ca3af', marginTop: 4 }}>{service}</div>
+        </>
       )}
     </div>
   )
 }
 
-function BuildingBlock({ building, t }: { building: PublicElevatorBuilding; t: TFunction }) {
-  return (
-    <div>
-      <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.95rem', marginBottom: 8 }}>
-        {building.address}
+function ProblemList({ problems }: { problems: PublicElevator[] }) {
+  const { t } = useTranslation()
+  if (problems.length === 0) {
+    return (
+      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: statusStyle('working').color }}>
+        {t('board.elevators.allWorking')}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-        {groupByEntrance(building.elevators).map((group) => (
-          <div key={group.entrance}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#6b7280', marginBottom: 6 }}>
-              {t('board.elevators.entrance', { entrance: group.entrance })}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {group.elevators.map((e) => (
-                <ElevatorRow key={`${e.entrance_number}-${e.elevator_number}`} e={e} t={t} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function YardBlock({ yard, showName, t }: { yard: PublicElevatorYard; showName: boolean; t: TFunction }) {
+    )
+  }
+  const shown = problems.slice(0, MAX_PROBLEM_ROWS)
+  const rest = problems.length - shown.length
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {showName && (
-        <div style={{ ...monoStyle, fontSize: '0.75rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          {yard.name}
-        </div>
-      )}
-      {yard.buildings.map((b) => (
-        <BuildingBlock key={b.id} building={b} t={t} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {shown.map((e) => (
+        <ProblemRow key={e.label} e={e} />
       ))}
+      {rest > 0 && (
+        <div style={{ fontSize: '0.82rem', color: '#6b7280', paddingLeft: 12 }}>{t('board.elevators.andMore', { count: rest })}</div>
+      )}
     </div>
   )
 }
@@ -160,26 +83,36 @@ export default function ElevatorsBoardModule({ title }: ElevatorsBoardModuleProp
   const { t, i18n } = useTranslation()
   const lang: PublicLang = i18n.language?.startsWith('uz') ? 'uz' : 'ru'
   const { data } = usePublicElevators(lang)
-  const yards = (data?.yards ?? []).filter((y) => y.buildings.some((b) => b.elevators.length > 0))
+  const summary = summaryOf(data)
   const dispatchPhone = data?.dispatch_phone ?? null
+  const isEmpty = summary.total === 0
 
   return (
     <div style={cardStyle}>
       <div style={{ ...headerStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={titleStyle}>{title || t('board.sections.elevators')}</div>
         {dispatchPhone && (
-          <div style={{ ...monoStyle, fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#eff3ff', color: '#2563eb' }}>
+          <div style={{ ...pillStyle, background: '#eff3ff', color: '#2563eb' }}>
             {'\u{1F4DE}'} {t('board.elevators.dispatch')}: {dispatchPhone}
           </div>
         )}
       </div>
-      <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {yards.length === 0 ? (
+      <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {isEmpty ? (
           <div style={{ textAlign: 'center', padding: '14px 4px', color: '#9ca3af', fontSize: '0.9rem' }}>
             {t('board.elevators.empty')}
           </div>
         ) : (
-          yards.map((yard) => <YardBlock key={yard.id} yard={yard} showName={yards.length > 1} t={t} />)
+          <>
+            <PublicElevatorsSummary summary={summary} hideZero />
+            <ProblemList problems={problemElevators(data?.yards ?? [])} />
+            <div>
+              {/* Роутер с base /uk — Link сам подставит basename, как соседние публичные ссылки табло. */}
+              <Link to="/elevators" style={{ ...monoStyle, fontSize: '0.85rem', fontWeight: 700, color: '#2563eb', textDecoration: 'none' }}>
+                {t('board.elevators.viewAll')}
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </div>

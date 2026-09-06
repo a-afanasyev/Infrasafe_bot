@@ -19,12 +19,17 @@
 * ``settings.ELEVATORS_ENABLED=False`` — модуль тёмный;
 * ``elevators_config.module_public=False`` — менеджер не включил витрину.
 
+Сводка ``summary`` (T17, Р17): счётчики по статусам по тем же отобранным лифтам,
+что и в ``yards`` — табло показывает «84 из 100 работают», полный список живёт на
+публичной странице ``/elevators`` фронта (тот же ответ, нового эндпоинта нет).
+
 Схемы ответа — inline (конвенция маленьких публичных роутеров).
 """
 from __future__ import annotations
 
 import logging
 import time
+from collections import Counter
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -37,7 +42,7 @@ from uk_management_bot.api.board_config.service import load_dispatch_phone
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.models.elevator import Elevator
+from uk_management_bot.database.models.elevator import ELEVATOR_STATUSES, Elevator
 from uk_management_bot.services import elevator_service as domain
 from uk_management_bot.utils.business_time import business_today
 from uk_management_bot.utils.datetime_utils import as_utc
@@ -92,14 +97,36 @@ class PublicElevatorYardOut(BaseModel):
     buildings: list[PublicElevatorBuildingOut]
 
 
+class PublicElevatorsSummaryOut(BaseModel):
+    """Счётчики по статусам — по тем же лифтам, что и в ``yards`` (Р17)."""
+
+    total: int
+    working: int
+    not_working: int
+    under_repair: int
+    maintenance: int
+
+
 class PublicElevatorsOut(BaseModel):
     yards: list[PublicElevatorYardOut]
+    summary: PublicElevatorsSummaryOut
     dispatch_phone: Optional[str]
     generated_at: datetime
 
 
+def _summary(outs: list[PublicElevatorOut]) -> PublicElevatorsSummaryOut:
+    """Пустой список → нули; ключи — канон ``ELEVATOR_STATUSES`` модели."""
+    counts = Counter(out.status for out in outs)
+    return PublicElevatorsSummaryOut(
+        total=len(outs), **{status: counts.get(status, 0) for status in ELEVATOR_STATUSES}
+    )
+
+
 def _empty() -> PublicElevatorsOut:
-    return PublicElevatorsOut(yards=[], dispatch_phone=None, generated_at=datetime.now(timezone.utc))
+    return PublicElevatorsOut(
+        yards=[], summary=_summary([]), dispatch_phone=None,
+        generated_at=datetime.now(timezone.utc),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +201,7 @@ async def _build(db: AsyncSession, lang: str) -> PublicElevatorsOut:
     ]
     return PublicElevatorsOut(
         yards=_group_by_yard_and_building(elevators, outs),
+        summary=_summary(outs),
         dispatch_phone=await load_dispatch_phone(db),
         generated_at=datetime.now(timezone.utc),
     )

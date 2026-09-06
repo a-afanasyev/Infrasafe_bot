@@ -300,3 +300,45 @@ async def test_module_public_off_bypasses_warm_cache(anon_client, seeded, enable
     row.data = {"module_public": True}
     await db_session.commit()
     assert len(_all_elevators((await anon_client.get(URL)).json())) == 4
+
+
+# ── Сводка (T17, Р17) ────────────────────────────────────────────────
+
+SUMMARY_KEYS = {"total", "working", "not_working", "under_repair", "maintenance"}
+ZERO_SUMMARY = {"total": 0, "working": 0, "not_working": 0, "under_repair": 0, "maintenance": 0}
+
+
+@pytest.mark.asyncio
+async def test_summary_counts_match_listed_elevators(anon_client, seeded, enabled):
+    """Сводка считается по тем же отобранным лифтам, что и список: 1 и 2 работают,
+    3 в ремонте, 4 не работает; 5/6/7 (не публичный, архив, не введён) — не в счёте."""
+    body = (await anon_client.get(URL)).json()
+    summary = body["summary"]
+    assert set(summary.keys()) == SUMMARY_KEYS
+    assert summary == {"total": 4, "working": 2, "not_working": 1, "under_repair": 1, "maintenance": 0}
+    listed = _all_elevators(body)
+    assert summary["total"] == len(listed)
+    assert sum(summary[k] for k in SUMMARY_KEYS - {"total"}) == len(listed)
+    for status in SUMMARY_KEYS - {"total"}:
+        assert summary[status] == sum(1 for e in listed if e["status"] == status)
+
+
+@pytest.mark.asyncio
+async def test_summary_is_zero_when_gates_closed(anon_client, seeded, monkeypatch, db_session):
+    monkeypatch.setattr(settings, "ELEVATORS_ENABLED", False)
+    assert (await anon_client.get(URL)).json()["summary"] == ZERO_SUMMARY
+
+    monkeypatch.setattr(settings, "ELEVATORS_ENABLED", True)
+    row = await db_session.get(ElevatorsConfig, 1)
+    row.data = {"module_public": False}
+    await db_session.commit()
+    assert (await anon_client.get(URL)).json()["summary"] == ZERO_SUMMARY
+
+
+@pytest.mark.asyncio
+async def test_summary_adds_no_elevator_fields_and_no_forbidden_keys(anon_client, seeded, enabled):
+    body = (await anon_client.get(URL)).json()
+    assert _walk_keys(body) & FORBIDDEN_ANYWHERE == set()
+    assert set(body.keys()) == {"yards", "dispatch_phone", "generated_at", "summary"}
+    for elevator in _all_elevators(body):
+        assert set(elevator.keys()) == ELEVATOR_KEYS

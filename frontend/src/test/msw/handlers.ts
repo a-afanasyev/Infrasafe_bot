@@ -11,7 +11,12 @@ export const handlers = [
   http.get('*/api/v2/public/board-config', () => HttpResponse.json({})),
   // Виджет лифтов на табло (T16): дефолт — «ничего не опубликовано».
   http.get('*/api/v2/public/elevators', () =>
-    HttpResponse.json({ yards: [], dispatch_phone: null, generated_at: '2026-09-06T00:00:00Z' }),
+    HttpResponse.json({
+      yards: [],
+      summary: { total: 0, working: 0, not_working: 0, under_repair: 0, maintenance: 0 },
+      dispatch_phone: null,
+      generated_at: '2026-09-06T00:00:00Z',
+    }),
   ),
   http.get('*/api/v2/announcements', ({ request }) => {
     const lang = new URL(request.url).searchParams.get('lang') ?? 'ru'

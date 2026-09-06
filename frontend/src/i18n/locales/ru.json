@@ -1782,7 +1782,21 @@
       "certUntil": "освид. до {{date}}",
       "certExpired": "освидетельствование просрочено",
       "lastMaintenance": "ТО {{date}}",
-      "availability": "доступность {{pct}} %"
+      "availability": "доступность {{pct}} %",
+      "workingOf_zero": "{{count}} из {{total}} работает",
+      "workingOf_one": "{{count}} из {{total}} работает",
+      "workingOf_few": "{{count}} из {{total}} работают",
+      "workingOf_many": "{{count}} из {{total}} работают",
+      "allWorking": "Все лифты работают",
+      "andMore": "и ещё {{count}}",
+      "viewAll": "Все лифты →",
+      "chips": {
+        "all": "Все",
+        "working": "Работают",
+        "not_working": "Не работают",
+        "under_repair": "В ремонте",
+        "maintenance": "На ТО"
+      }
     },
     "footer": {
       "realtime": "Обновление в реальном времени · Данные актуальны на {{time}}"
@@ -2334,6 +2348,17 @@
       "settingsUpdated": "Настройки сохранены"
     }
   },
+  "publicElevators": {
+    "title": "Лифты",
+    "backToBoard": "← На табло",
+    "searchLabel": "Поиск",
+    "searchPlaceholder": "Поиск по адресу или двору",
+    "yardLabel": "Двор",
+    "yardAll": "Все дворы",
+    "notFound": "Ничего не найдено",
+    "resetFilters": "Сбросить фильтры",
+    "updatedAt": "Данные актуальны на {{time}}"
+  },
   "workReportsArchive": {
     "title": "Отчёты о выполненных работах",
     "backToBoard": "← На табло",
@@ -2770,7 +2795,7 @@
       "stagesHint": "Например: 30, 7, 1 — три напоминания",
       "overdueWeekly": "Еженедельно напоминать о просроченном",
       "modulePublic": "Показывать лифты жителям",
-      "modulePublicHint": "Публичный виджет на табло жителей показывает лифты, у которых включено «Показывать жителям»",
+      "modulePublicHint": "Сводка на табло жителей и публичная страница /elevators показывают лифты, у которых включено «Показывать жителям»",
       "invalidStages": "Стадии напоминаний — целые неотрицательные числа"
     },
     "toast": {

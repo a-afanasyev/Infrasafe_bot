@@ -69,6 +69,8 @@ const ElevatorDetailPage = lazy(() => import('./pages/elevators/ElevatorDetailPa
 const ElevatorFormPage = lazy(() => import('./pages/elevators/ElevatorFormPage'))
 const ElevatorsCalendarPage = lazy(() => import('./pages/elevators/ElevatorsCalendarPage'))
 const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfigPage'))
+// Публичная страница «Лифты» (T17, Р17) — полный список к сводке на табло.
+const ResidentElevatorsPage = lazy(() => import('./pages/ResidentElevatorsPage'))
 const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
 const queryClient = new QueryClient({
@@ -247,6 +249,14 @@ export default function App() {
               {WORK_REPORTS_ENABLED && (
                 <Route path="/work-reports/:reportId" element={<PageErrorBoundary><WorkReportDetailPage /></PageErrorBoundary>} />
               )}
+
+              {/* Публичная страница «Лифты» (T17, Р17): полный список к сводке
+                  «N из M работают» на табло; фильтры в ?status=&q=&yard=.
+                  Публичный top-level роут, вне ProtectedRoute — как
+                  /resident-board. Роут объявлен всегда: при выключенном
+                  VITE_ELEVATORS_ENABLED страница сама редиректит на
+                  /resident-board (isElevatorsEnabled()). */}
+              <Route path="/elevators" element={<PageErrorBoundary><ResidentElevatorsPage /></PageErrorBoundary>} />
 
               {/* Applicant registration - public Telegram Mini App page */}
               <Route path="/register" element={<PageErrorBoundary><RegisterPage /></PageErrorBoundary>} />

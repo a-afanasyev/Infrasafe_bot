@@ -204,8 +204,16 @@ RBAC только по роли (`require_approved_roles`): `_staff` = executor|
 последнего `done` ТО; без `done_at` — `due_on`), `cert_valid_until`, `cert_expired` (канон реестра: нет освидетельствования == истекло),
 `service_org_name`, `service_org_phone`, `manufacturer`, `model`, `production_year`, `capacity_kg`;
 `downtime_reason` и `spare_part_expected_on` — **только** при `publish_downtime_details=true`,
-иначе `null`. Корень: `yards`, `dispatch_phone` (сохранённая строка `board_config.contacts.dispatch_phone`,
-канон бота `get_dispatch_phone`: нет строки → `null`), `generated_at`.
+иначе `null`. Корень: `yards`, `summary`, `dispatch_phone` (сохранённая строка
+`board_config.contacts.dispatch_phone`, канон бота `get_dispatch_phone`: нет строки → `null`),
+`generated_at`.
+
+**Сводка `summary` (Р17, T17)** — `PublicElevatorsSummaryOut`: `total`, `working`, `not_working`,
+`under_repair`, `maintenance`; считается по тем же отобранным лифтам, что и `yards` (ключи —
+канон `ELEVATOR_STATUSES` модели), при закрытых калитках — нули. Нового эндпоинта нет: табло
+берёт из ответа сводку («84 из 100 работают»), публичная страница фронта `/uk/elevators` — тот же
+ответ целиком (см. §8). Edge: `/uk/elevators` — SPA-роут фронта, API-префиксов не добавляет
+(запись у T16 в allowlist-контракте).
 
 **Запрещено отдавать** (тест `tests/api/test_public_elevators.py` обходит весь JSON): `id`
 лифта, `public_code`, `passport_number`, `serial_number`, `factory_number`, `contract_number`,
@@ -281,11 +289,30 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 - **Подсказка после подтверждения** — `components/elevators/ElevatorStatusPromptDialog.tsx`:
   четыре статуса + «Оставить как есть» → `PUT /{id}/status` с `reason` (`statusReason.ts`, ≤500)
   и `request_number` при одной заявке; тот же статус — «без изменений» без запроса.
-- **Табло жителей (Р16)** — `components/board/ElevatorsBoardModule.tsx` + хук
+- **Табло жителей (Р16/Р17)** — `components/board/ElevatorsBoardModule.tsx` + хук
   `hooks/usePublicElevators.ts` (`publicClient`, `?lang`, поллинг 60 с). Регистрируется в
   `ResidentBoardPage.tsx` как `MODULES.elevators` только при `isElevatorsEnabled()`; заголовок
   из `board_config.elevators.title`, пустой ответ → заглушка «Данные о лифтах пока не
-  опубликованы» (модуль не пропадает — превью в редакторе видно). Строки i18n `board.elevators.*`.
+  опубликованы» (модуль не пропадает — превью в редакторе видно). С Р17 модуль — **сводка**,
+  не список: крупная строка «N из M работают» (i18next `count`-формы `board.elevators.workingOf_*`,
+  ru `_zero/_one/_few/_many`, uz `_one/_other`) из `summary` ответа (без поля — старый API при
+  раскате фронта раньше API — досчёт по `yards`, `summaryOf()`), чипы со счётчиками
+  (`ElevatorStatusChips`, нулевые скрыты, «Работают» всегда), до 5 проблемных лифтов
+  (`not_working`/`under_repair`, «и ещё K»), «Все лифты работают», ссылка «Все лифты →»
+  на `/elevators` (`Link`, base `/uk` подставляет роутер). Строки i18n `board.elevators.*`.
+- **Публичная страница `/elevators` (Р17)** — `pages/ResidentElevatorsPage.tsx`, роут в
+  `App.tsx` рядом с `/resident-board` (объявлен всегда; при выключенном `VITE_ELEVATORS_ENABLED`
+  страница сама редиректит на `/resident-board`). Тот же ответ и хук (поллинг 60 с). Компоненты
+  `components/elevators-public/`: `PublicElevatorsSummary` (та же строка и чипы, что на табло;
+  на странице чипы — фильтр по статусу), `PublicElevatorsFilters` (поиск по адресу дома/имени
+  двора без регистра, селект двора при > 1 двора), `PublicElevatorsList` (двор → карточка дома
+  с мини-счётчиком «N из M работают» по всем лифтам дома → подъезды → `PublicElevatorRow`),
+  чистые фильтры `publicElevatorsFilter.ts`. Состояние фильтров — в URL `?status=&q=&yard=`
+  (ссылку можно переслать); строка «N из M работают» и счётчики чипов — в ОДНОМ масштабе
+  двора/поиска (чип статуса строку не меняет), без фильтров совпадают с серверной сводкой;
+  мини-счётчик дома — по всем его лифтам. Левая рамка строки лифта — цвет статуса (ТО —
+  синий), у рабочих нейтральная. Пусто после фильтра → «Ничего не найдено» + сброс; пустой
+  ответ → заглушка. Мобильная вёрстка ≤ 600px одной колонкой. Строки i18n `publicElevators.*`.
 
 ## 9. Напоминания и уведомления
 
@@ -377,7 +404,8 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 - DB-слой (sqlite-conftest): `tests/services/test_elevator_service_{status,passport,calendar,reads,recipients,config,grouping,public}.py`,
   `test_elevator_reminders.py`, импорт-гейт `test_elevator_service_imports.py`.
 - API: `tests/api/test_elevators_{registry,status_calendar,requests_config}.py`,
-  `test_public_elevators.py` (виджет Р16: калитки, запрещённые ключи, кэш),
+  `test_public_elevators.py` (виджет Р16: калитки, запрещённые ключи, кэш; сводка Р17: суммы сходятся
+  со списком, нули при закрытых калитках),
   `test_board_config_elevators.py` (модуль табло за флагом),
   `test_requests_elevator_required.py` (Р11 в TWA/инспекторе), `test_callcenter_elevator.py`,
   `test_inbound_alert_elevator.py` (422 + inbox), `test_residents_notify_plain.py`.
@@ -389,6 +417,10 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
   `components/elevators/{ElevatorStatusPromptDialog,statusReason}.test.*`, `kanban/RequestCard.test.tsx`,
   `callcenter/CallCenterModal.test.tsx`, `twa/components/elevatorSelection.test.ts`,
   `twa/pages/applicant/CreatePage.test.tsx`; фикстуры `test/fixtures/elevators.ts`.
+  Публичные экраны (Р16/Р17, через msw, не мок хука): `components/board/ElevatorsBoardModule.test.tsx`
+  (сводка, ≤5 проблемных, ссылка), `pages/ResidentElevatorsPage.test.tsx` (фильтры ↔ URL, редирект
+  без флага), `components/elevators-public/publicElevatorsFilter.test.ts`; фикстуры
+  `test/fixtures/publicElevators.ts`.
 - Ратчеты, которых касается модуль: `test_handler_authz_ratchet`, `test_aud337_async_handlers_gate`
   (CONVERTED), `test_aud5_code10_long_functions_ratchet`, broad-except.
 

@@ -6435,6 +6435,9 @@
             "title": "Generated At",
             "type": "string"
           },
+          "summary": {
+            "$ref": "#/components/schemas/PublicElevatorsSummaryOut"
+          },
           "yards": {
             "items": {
               "$ref": "#/components/schemas/PublicElevatorYardOut"
@@ -6445,10 +6448,45 @@
         },
         "required": [
           "yards",
+          "summary",
           "dispatch_phone",
           "generated_at"
         ],
         "title": "PublicElevatorsOut",
+        "type": "object"
+      },
+      "PublicElevatorsSummaryOut": {
+        "description": "Счётчики по статусам — по тем же лифтам, что и в ``yards`` (Р17).",
+        "properties": {
+          "maintenance": {
+            "title": "Maintenance",
+            "type": "integer"
+          },
+          "not_working": {
+            "title": "Not Working",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "under_repair": {
+            "title": "Under Repair",
+            "type": "integer"
+          },
+          "working": {
+            "title": "Working",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "working",
+          "not_working",
+          "under_repair",
+          "maintenance"
+        ],
+        "title": "PublicElevatorsSummaryOut",
         "type": "object"
       },
       "PublicWorkReportOut": {
