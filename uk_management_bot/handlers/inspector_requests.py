@@ -37,6 +37,20 @@ from uk_management_bot.services.request_address import (
     resolve_request_address_sync,
     AddressResolutionError,
 )
+# Модуль «Лифты» (Ф4a-2, T7): общие шаги лифта; здесь — только состояния и
+# тонкие хендлеры со своим StateFilter (см. INSPECTOR_FLOW ниже).
+from uk_management_bot.handlers.requests.create_elevator import (
+    ElevatorFlow,
+    begin_elevator_step,
+    clear_elevator_data,
+    elevator_step_text,
+    elevator_summary_line,
+    is_elevator_flow,
+    operational_step,
+    pick_elevator_step,
+    save_failed_key,
+)
+from uk_management_bot.keyboards.elevators import OPERATIONAL_PREFIX, PICK_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +69,10 @@ class InspectorRequestStates(StatesGroup):
     yard = State()
     building = State()
     category = State()
+    # Ф4a-2 (T7): только для категории elevator при ELEVATORS_ENABLED —
+    # между категорией и описанием (дом обходчик выбрал раньше).
+    elevator_pick = State()
+    elevator_operational = State()
     description = State()
     urgency = State()
     media = State()
@@ -277,13 +295,63 @@ async def inspector_category_selected(callback: CallbackQuery, state: FSMContext
     if category_key not in CATEGORY_KEYS:
         await callback.answer(get_text("errors.default", language=lang), show_alert=True)
         return
-    await state.update_data(category=category_key)
+    await clear_elevator_data(state)
+    data = await state.update_data(category=category_key)
+    if is_elevator_flow(data):
+        # Ф4a-2 (T7): лифт дома и «работает?» — до описания (общие шаги create_elevator).
+        await begin_elevator_step(callback, state, lang, data, INSPECTOR_FLOW)
+        await callback.answer()
+        return
     await state.set_state(InspectorRequestStates.description)
     await callback.message.edit_text(get_text("requests.description", language=lang))
     await callback.message.answer(
         get_text("requests.description", language=lang), reply_markup=get_cancel_keyboard(language=lang)
     )
     await callback.answer()
+
+
+async def _cancel(message: Message, state: FSMContext, lang: str):
+    await state.clear()
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    await message.answer(
+        get_text("requests.request_creation_cancelled", language=lang),
+        reply_markup=await get_user_contextual_keyboard(message.chat.id),
+    )
+
+
+async def _inspector_no_building(callback: CallbackQuery, lang: str) -> None:
+    """У обходчика адрес всегда уровня дома — ветка недостижима, отвечаем алертом."""
+    await callback.answer(get_text("requests.elevator.need_building", language=lang), show_alert=True)
+
+
+INSPECTOR_FLOW = ElevatorFlow(
+    required_role="inspector",
+    pick_state=InspectorRequestStates.elevator_pick,
+    operational_state=InspectorRequestStates.elevator_operational,
+    description_state=InspectorRequestStates.description,
+    category_state=InspectorRequestStates.category,
+    forbidden_key="inspector.only_approved",
+    category_keyboard=_category_keyboard,
+    on_no_building=_inspector_no_building,
+    cancel=_cancel,
+)
+
+
+@router.callback_query(F.data.startswith(PICK_PREFIX), InspectorRequestStates.elevator_pick)
+async def inspector_elevator_pick(callback: CallbackQuery, state: FSMContext):
+    await pick_elevator_step(callback, state, await _lang(callback), INSPECTOR_FLOW)
+
+
+@router.callback_query(F.data.startswith(OPERATIONAL_PREFIX), InspectorRequestStates.elevator_operational)
+async def inspector_elevator_operational(callback: CallbackQuery, state: FSMContext):
+    await operational_step(callback, state, await _lang(callback), INSPECTOR_FLOW)
+
+
+@router.message(InspectorRequestStates.elevator_pick)
+@router.message(InspectorRequestStates.elevator_operational)
+async def inspector_elevator_step_text(message: Message, state: FSMContext):
+    await elevator_step_text(message, state, await _lang(message), INSPECTOR_FLOW)
 
 
 @router.message(InspectorRequestStates.description)
@@ -355,6 +423,9 @@ async def inspector_media_text(message: Message, state: FSMContext):
             urgency=get_text(URGENCY_KEYS.get(data.get("urgency"), ""), language=lang),
             description=data.get("description", ""),
         )
+        elevator_line = elevator_summary_line(data, lang)
+        if elevator_line:
+            summary += f"\n{elevator_line}"
         if media_count:
             summary += f"\n📸 Файлов: {media_count}"
         # Убираем reply-клавиатуру медиа и показываем inline-подтверждение.
@@ -394,7 +465,8 @@ async def inspector_confirm(callback: CallbackQuery, state: FSMContext, *, _db=N
             get_text("requests.request_created_success", language=lang)
         )
     else:
-        await callback.message.edit_text(get_text("errors.request_save_failed", language=lang))
+        # Ф4a-2 (T7): для заявки по лифту (Р11 → None) текст свой, не общий.
+        await callback.message.edit_text(get_text(save_failed_key(data), language=lang))
     await callback.answer()
 
 
@@ -408,13 +480,3 @@ async def inspector_cancel_cb(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "insp_noop")
 async def inspector_noop(callback: CallbackQuery):
     await callback.answer()
-
-
-async def _cancel(message: Message, state: FSMContext, lang: str):
-    await state.clear()
-    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
-
-    await message.answer(
-        get_text("requests.request_creation_cancelled", language=lang),
-        reply_markup=await get_user_contextual_keyboard(message.chat.id),
-    )

@@ -17,6 +17,11 @@ Staff-группы (фаза 2, решение владельца 2026-08-22 —
 Заявка создаётся с ``acceptance_mode='manager'`` (приёмка менеджером,
 жительского шага нет) и ``reported_by_user_id`` (кто доложил).
 
+Категория «лифт» (Ф4b, ``handlers/group_intake_elevator.py``): после «Да»
+кандидат остаётся под тем же ключом в фазе выбора дома/лифта/«работает?»
+(``gint:bld:<n>`` / ``gint:elv:{id}`` / ``gint:op:1|0``, только автор); заявка
+создаётся после ответа, без ответа за таймаут — не создаётся.
+
 AUD3-37: хендлеры не объявляют db — БД только через run_db-юниты;
 ``_db`` — keyword-only тестовый seam.
 """
@@ -53,7 +58,10 @@ from uk_management_bot.database.models.monitored_group import (
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
+from uk_management_bot.handlers import group_intake_elevator as gi_elevator
+from uk_management_bot.keyboards.group_intake import build_options_keyboard
 from uk_management_bot.services.group_intake import pending
+from uk_management_bot.services.group_intake.links import bot_link, deeplink
 from uk_management_bot.services.group_intake.classifier import (
     ClassificationResult,
     Outcome,
@@ -107,8 +115,6 @@ _STAFF_MATCH_LIMIT = 4
 # SELECT'ов с ICU-collation на одно сообщение — тихий DoS БД от инсайдера.
 _MAX_MATCH_ATTEMPTS = 8
 _MAX_TEXT_DIGIT_TOKENS = 5
-# Telegram ограничивает текст кнопки; длинные адреса режем с многоточием.
-_BTN_LABEL_LIMIT = 60
 
 # Порядок «шага вниз» при отказе резолвера на уровне scope: от широкого к
 # квартире. apartment-уровень — последняя опора; отказ на нём = адреса нет.
@@ -120,12 +126,9 @@ _SCOPE_LEVELS = {
 }
 
 
-def _bot_link() -> str:
-    return f"https://t.me/{settings.BOT_USERNAME}"
-
-
-def _deeplink() -> str:
-    return f"https://t.me/{settings.BOT_USERNAME}?start=group"
+# Ссылки на основной бот — общие с фазой лифта (services/group_intake/links).
+_bot_link = bot_link
+_deeplink = deeplink
 
 
 # ───────────────────────── sync-юниты (run_db) ─────────────────────────
@@ -595,22 +598,7 @@ def _category_pick_keyboard(lang: str, current: Optional[str]) -> InlineKeyboard
 
 
 def _address_options_keyboard(options: list[dict]) -> InlineKeyboardMarkup:
-    def _clip(label: str) -> str:
-        if len(label) <= _BTN_LABEL_LIMIT:
-            return label
-        return label[: _BTN_LABEL_LIMIT - 1] + "…"
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=_clip(option["label_public"]),
-                    callback_data=f"gint:addr:{index}",
-                )
-            ]
-            for index, option in enumerate(options)
-        ]
-    )
+    return build_options_keyboard(options, "gint:addr:")
 
 
 def _staff_confirm_prompt(candidate_like: dict, address_label: str, lang: str,
@@ -875,6 +863,8 @@ async def _handle_address_pick(callback: CallbackQuery, candidate: dict,
     должны вести в заведомо потерянное состояние). callback_data шлёт КЛИЕНТ:
     kind, диапазон индекса и наличие options проверяются серверно.
     """
+    if candidate.get(gi_elevator.FIELD_PHASE):
+        return  # фаза лифта: адрес уже выбран, crafted addr не должен её сбросить
     if candidate.get("kind") != GROUP_KIND_STAFF:
         return
     options = candidate.get("address_options") or []
@@ -917,6 +907,8 @@ async def _handle_category_pick(callback: CallbackQuery, candidate: dict,
     """
     from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
 
+    if candidate.get(gi_elevator.FIELD_PHASE):
+        return  # фаза лифта: категория зафиксирована, crafted cat не пересохраняет кандидата
     if candidate.get("kind") != GROUP_KIND_STAFF:
         return
     if candidate.get("selected_address") is None:
@@ -982,37 +974,20 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
 
     lang = candidate.get("lang") or lang_fallback
     is_staff = candidate.get("kind") == GROUP_KIND_STAFF
-    if is_staff:
-        # Staff-группа: кнопки жмёт ЛЮБОЙ approved-сотрудник (решение владельца
-        # 2026-08-23 — бригада подтверждает репорты совместно, менеджер может
-        # подтвердить за автора). Проверка ДО пустого answer и ДО pop:
-        # посторонний не должен ни снять кандидата, ни остаться без алерта.
-        if callback.from_user.id != candidate.get("author_id"):
-            presser_ok = await run_db(
-                lambda s: _staff_author_lang_sync(s, callback.from_user.id),
-                db=_db,
-            )
-            if presser_ok is None:
-                await callback.answer(
-                    get_text("group_intake.staff_only", language=lang),
-                    show_alert=True,
-                )
-                return
-    elif callback.from_user.id != candidate.get("author_id"):
-        # Residents: решает только автор (адрес — его квартира).
-        await callback.answer(
-            get_text("group_intake.not_author", language=lang), show_alert=True
-        )
+    action = (callback.data or "").split(":", 1)[-1]
+    if not await _presser_allowed(callback, candidate, action, lang, _db=_db):
         return
 
     # Право подтверждено: пустой answer сразу, дальше работа.
     await callback.answer()
-    action = (callback.data or "").split(":", 1)[-1]
     if action.startswith("addr:"):
         await _handle_address_pick(callback, candidate, action, lang)
         return
     if action == "cat" or action.startswith("cat:"):
         await _handle_category_pick(callback, candidate, action, lang)
+        return
+    if gi_elevator.is_elevator_action(action):
+        await _handle_elevator_action(callback, bot, candidate, action, lang, _db=_db)
         return
     if action == "no":
         await pending.pop_candidate(chat_id, prompt_message_id)
@@ -1031,9 +1006,10 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
     if action != "yes":
         return
 
-    if candidate.get("selected_address") is None:
-        # Staff-кандидат в состоянии выбора адреса: «Да» легитимно недостижимо
-        # (кнопки нет), crafted-нажатие не должно создавать заявку без адреса.
+    if candidate.get("selected_address") is None or candidate.get(gi_elevator.FIELD_PHASE):
+        # Staff-кандидат в состоянии выбора адреса либо кандидат в фазе лифта:
+        # «Да» легитимно недостижимо (кнопки нет), crafted-нажатие не должно
+        # создавать заявку без адреса / без лифта.
         return
 
     # GETDEL — идемпотентность двойного «Да»: второй pop получает None.
@@ -1049,8 +1025,94 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
         await callback.message.edit_text(get_text("group_intake.expired", language=lang))
         return
 
+    if gi_elevator.is_group_elevator_flow(candidate):
+        # Ф4b: заявка по лифту создаётся только после ответа «работает?» —
+        # кандидат остаётся под тем же ключом в фазе лифта (см. модуль).
+        await gi_elevator.start_elevator_phase(
+            callback, bot, candidate, allowed["user_id"], lang, _db=_db
+        )
+        return
+    await _create_from_candidate(callback, bot, candidate, allowed, lang, _db=_db)
+
+
+async def _presser_allowed(callback: CallbackQuery, candidate: dict, action: str,
+                           lang: str, *, _db=None) -> bool:
+    """Право нажимать кнопку промпта; отказ = alert (единственный answer нажатия).
+
+    Residents: решает только автор (адрес — его квартира). Вопросы о лифте
+    (Ф4b) — тоже только автор, и в staff-группе: коллега может подтвердить
+    репорт, но какой лифт и работает ли он — знает автор. Staff-группа: прочие
+    кнопки жмёт ЛЮБОЙ approved-сотрудник (решение владельца 2026-08-23 —
+    бригада подтверждает репорты совместно, менеджер может подтвердить за
+    автора). Проверка ДО пустого answer и ДО pop: посторонний не должен ни
+    снять кандидата, ни остаться без алерта.
+    """
+    if callback.from_user.id == candidate.get("author_id"):
+        return True
+    is_staff = candidate.get("kind") == GROUP_KIND_STAFF
+    if not is_staff or gi_elevator.is_elevator_action(action):
+        await callback.answer(
+            get_text("group_intake.not_author", language=lang), show_alert=True
+        )
+        return False
+    presser_ok = await run_db(
+        lambda s: _staff_author_lang_sync(s, callback.from_user.id), db=_db
+    )
+    if presser_ok is None:
+        await callback.answer(
+            get_text("group_intake.staff_only", language=lang), show_alert=True
+        )
+        return False
+    return True
+
+
+async def _handle_elevator_action(callback: CallbackQuery, bot: Bot, candidate: dict,
+                                  action: str, lang: str, *, _db=None) -> None:
+    """``gint:bld:<n>`` / ``gint:elv:{id}`` / ``gint:op:1|0`` — фаза лифта (Ф4b).
+
+    Право нажимать (только автор) проверено выше. После дедлайна фазы —
+    «устарело» без заявки (ленивая проверка поверх таймера и Redis-TTL). Дом
+    и лифт — шаги внутри модуля; ответ «работает?» — GETDEL + отмена таймера +
+    тот же ре-гейт, что у «Да», затем штатное создание с
+    ``elevator_id``/``elevator_operational``.
+    """
+    if gi_elevator.is_expired(candidate):
+        await gi_elevator.reject_expired(callback, lang)
+        return
+    if action.startswith("bld:"):
+        await gi_elevator.handle_building_pick(callback, candidate, action, lang, _db=_db)
+        return
+    if action.startswith("elv:"):
+        await gi_elevator.handle_elevator_pick(callback, candidate, action, lang, _db=_db)
+        return
+    operational = gi_elevator.parse_operational(candidate, action)
+    if operational is None:
+        return
+    chat_id = callback.message.chat.id
+    prompt_message_id = callback.message.message_id
+    popped = await pending.pop_candidate(chat_id, prompt_message_id)
+    if popped is None:
+        await callback.message.edit_text(get_text("group_intake.expired", language=lang))
+        return
+    gi_elevator.cancel_elevator_timeout(chat_id, prompt_message_id)
+    allowed = await run_db(
+        lambda s: _regate_sync(s, chat_id, callback.from_user.id, popped), db=_db
+    )
+    if allowed is None:
+        await callback.message.edit_text(get_text("group_intake.expired", language=lang))
+        return
+    await _create_from_candidate(
+        callback, bot, {**popped, "elevator_operational": operational}, allowed, lang, _db=_db
+    )
+
+
+async def _create_from_candidate(callback: CallbackQuery, bot: Bot, candidate: dict,
+                                 allowed: dict, lang: str, *, _db=None) -> None:
+    """Штатное создание заявки из снятого (GETDEL) и ре-гейтованного кандидата."""
     from uk_management_bot.handlers.requests.create import save_request
 
+    chat_id = callback.message.chat.id
+    is_staff = candidate.get("kind") == GROUP_KIND_STAFF
     photo_file_id = candidate.get("photo_file_id")
     data = {
         "category": candidate["category"],
@@ -1067,6 +1129,11 @@ async def group_intake_callback(callback: CallbackQuery, bot: Bot, *, _db=None) 
         # прокидка через create_request_record).
         data["acceptance_mode"] = ACCEPTANCE_MODE_MANAGER
         data["reported_by_user_id"] = allowed["user_id"]
+    if candidate.get(gi_elevator.FIELD_ELEVATOR_ID) is not None:
+        # Ф4b: лифт и «работает?» — из фазы лифта; Р11 перепроверит в
+        # create_request_record (лифт этого дома, введён в эксплуатацию).
+        data["elevator_id"] = candidate[gi_elevator.FIELD_ELEVATOR_ID]
+        data["elevator_operational"] = candidate.get(gi_elevator.FIELD_OPERATIONAL)
     # Владелец заявки — АВТОР исходного сообщения (для staff подтвердить мог
     # коллега, но заявка принадлежит доложившему; кто подтвердил — в audit).
     owner_tg_id = candidate.get("author_id") if is_staff else callback.from_user.id

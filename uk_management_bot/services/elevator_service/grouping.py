@@ -1,0 +1,114 @@
+"""Групповая приёмка заявок менеджером: ``MANAGER_CONFIRM`` по списку номеров.
+
+Каждый номер — отдельная команда ``run_command_async`` (runner сам владеет
+транзакцией и коммитит); отказ одной заявки фиксируется в результате и не
+прерывает остальные: доменная ``WorkflowError`` (неверный переход, нет прав,
+не найдена…) → ``error_kind`` = класс ошибки; инфраструктурный отказ БД
+(``SQLAlchemyError`` — runner откатил свою транзакцию) →
+``error_kind="InfrastructureError"``. Уже подтверждённые заявки остаются
+подтверждёнными (каждая — своя транзакция). Прочие исключения
+(программные) пробрасываются. Post-commit intents (уведомления/realtime) и
+``old_state`` возвращаются вызывающему — он диспетчит их после ответа, как
+остальные адаптеры runner'а.
+
+Модуль НЕ реэкспортируется из пакета и импортирует ``workflow_runner`` лениво
+(внутри ``bulk_confirm_async``): runner тянет webhook-стек (httpx), а сам
+``set_status(source="request_hint")`` вызывается из хендлеров рядом с runner'ом
+— модульный импорт дал бы цикл. Потребитель — API-роутер:
+``from uk_management_bot.services.elevator_service.grouping import bulk_confirm_async``.
+Гейт: ``tests/services/test_elevator_service_imports.py``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from uk_management_bot.utils.request_workflow import (
+    Action,
+    ActionCommand,
+    EventIntent,
+    PrincipalRef,
+    RequestState,
+    WorkflowError,
+)
+
+from ._core import ElevatorValidationError
+
+MAX_BULK_CONFIRM = 50
+DEFAULT_COMMAND_PREFIX = "bulk-confirm"
+INFRASTRUCTURE_ERROR_KIND = "InfrastructureError"
+
+
+@dataclass(frozen=True)
+class BulkItemResult:
+    """Итог по одной заявке: ``ok`` (+ ``old_state`` до перехода) либо ``error_kind``/``error``.
+
+    ``error_kind`` — класс ``WorkflowError`` или ``InfrastructureError`` (отказ БД);
+    ``error`` — текст (для API/JSON; в HTML экранировать).
+    """
+
+    request_number: str
+    ok: bool
+    error_kind: str | None = None
+    error: str | None = None
+    post_commit_intents: tuple[EventIntent, ...] = ()
+    old_state: RequestState | None = None
+
+
+def _normalize_numbers(request_numbers: Sequence[str]) -> tuple[str, ...]:
+    """Непустые строки без дублей, отсортированы; 1..MAX_BULK_CONFIRM штук."""
+    if isinstance(request_numbers, (str, bytes)) or not isinstance(request_numbers, Sequence):
+        raise ElevatorValidationError("request_numbers: ожидается список номеров заявок")
+    cleaned = {number.strip() for number in request_numbers if isinstance(number, str) and number.strip()}
+    if len(cleaned) != len(request_numbers):
+        raise ElevatorValidationError("request_numbers: только непустые уникальные номера заявок")
+    if not cleaned:
+        raise ElevatorValidationError("request_numbers: список пуст")
+    if len(cleaned) > MAX_BULK_CONFIRM:
+        raise ElevatorValidationError(f"за один вызов не больше {MAX_BULK_CONFIRM} заявок")
+    return tuple(sorted(cleaned))
+
+
+async def bulk_confirm_async(
+    session_factory,
+    request_numbers: Sequence[str],
+    *,
+    principal: PrincipalRef,
+    now: datetime | None = None,
+    command_prefix: str = DEFAULT_COMMAND_PREFIX,
+) -> tuple[BulkItemResult, ...]:
+    """Последовательно подтвердить заявки (в порядке номеров); частичный сбой изолирован."""
+    from uk_management_bot.services import workflow_runner  # lazy: см. докстринг модуля
+
+    results: list[BulkItemResult] = []
+    for number in _normalize_numbers(request_numbers):
+        command = ActionCommand(
+            command_id=f"{command_prefix}:{number}", action=Action.MANAGER_CONFIRM, payload={}
+        )
+        try:
+            outcome = await workflow_runner.run_command_async(
+                session_factory, number, principal, command, now
+            )
+        except WorkflowError as exc:
+            results.append(BulkItemResult(
+                request_number=number, ok=False, error_kind=type(exc).__name__, error=str(exc),
+            ))
+            continue
+        except SQLAlchemyError as exc:
+            # Runner уже сделал rollback своей сессии; текст ошибки БД наружу не
+            # отдаём (может нести SQL/значения) — только класс.
+            results.append(BulkItemResult(
+                request_number=number, ok=False, error_kind=INFRASTRUCTURE_ERROR_KIND,
+                error=f"ошибка базы данных ({type(exc).__name__})",
+            ))
+            continue
+        results.append(BulkItemResult(
+            request_number=number, ok=True,
+            post_commit_intents=tuple(outcome.post_commit_intents),
+            old_state=getattr(outcome, "old_state", None),
+        ))
+    return tuple(results)

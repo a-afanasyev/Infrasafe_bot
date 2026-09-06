@@ -130,7 +130,8 @@
     "resourceAccounting": "Resurs hisobi",
     "workReports": "Ishlar hisobotlari",
     "residents": "Aholi",
-    "groups": "Guruhlar"
+    "groups": "Guruhlar",
+    "elevators": "Liftlar"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -739,7 +740,8 @@
       "announcements": "E'lonlar",
       "rating": "Aholilar bahosi",
       "hours": "Ish vaqti",
-      "workreports": "Ishlar hisobotlari"
+      "workreports": "Ishlar hisobotlari",
+      "elevators": "Liftlar"
     },
     "org": "Boshqaruv kompaniyasi",
     "orgName": "Nomi",
@@ -1063,6 +1065,19 @@
     "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang"
   },
   "callcenter": {
+    "elevator": {
+      "yard": "Hovli *",
+      "yardPlaceholder": "Hovlini tanlang...",
+      "building": "Uy *",
+      "buildingPlaceholder": "Uyni tanlang...",
+      "elevator": "Lift *",
+      "elevatorPlaceholder": "Liftni tanlang...",
+      "noElevators": "Bu uy uchun liftlar kiritilmagan",
+      "operational": "Lift ishlayaptimi? *",
+      "yes": "Ha",
+      "no": "Yo'q",
+      "required": "Lift bo'yicha ariza uchun uy, lift va u ishlayotganini ko'rsating"
+    },
     "title": "Qo'ng'iroq orqali ariza yaratish",
     "searchPlaceholder": "Telefon yoki aholi FIO",
     "find": "Topish",
@@ -1735,13 +1750,40 @@
       "avgAcceptanceRating": "Qabul qilingan arizalar bo'yicha o'rtacha baho",
       "workingHours": "Ish vaqti",
       "emergencyService": "Favqulodda xizmat: kunduzi-kechasi",
-      "workReports": "Ishlar hisobotlari"
+      "workReports": "Ishlar hisobotlari",
+      "elevators": "Liftlar"
     },
     "workReports": {
       "viewAll": "Barcha hisobotlar",
       "before": "Oldin",
       "after": "Keyin",
       "noPhoto": "Foto yo‘q"
+    },
+    "elevators": {
+      "empty": "Liftlar haqida ma'lumot hali e'lon qilinmagan",
+      "dispatch": "Dispetcherlik",
+      "entrance": "{{entrance}}-kirish",
+      "elevator": "{{elevator}}-lift",
+      "since": "{{date}} dan",
+      "downtimeReason": "Sabab: {{reason}}",
+      "sparePartExpected": "Ehtiyot qism {{date}} kutilmoqda",
+      "servicedBy": "Xizmat ko'rsatadi: {{org}}",
+      "certUntil": "tekshiruv {{date}} gacha",
+      "certExpired": "tekshiruv muddati o'tgan",
+      "lastMaintenance": "Texnik xizmat {{date}}",
+      "availability": "mavjudlik {{pct}} %",
+      "workingOf_one": "{{total}} tadan {{count}} tasi ishlayapti",
+      "workingOf_other": "{{total}} tadan {{count}} tasi ishlayapti",
+      "allWorking": "Barcha liftlar ishlayapti",
+      "andMore": "yana {{count}} ta",
+      "viewAll": "Barcha liftlar →",
+      "chips": {
+        "all": "Barchasi",
+        "working": "Ishlayapti",
+        "not_working": "Ishlamayapti",
+        "under_repair": "Ta'mirda",
+        "maintenance": "Texnik xizmatda"
+      }
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
@@ -1917,7 +1959,26 @@
       "submitted": "Ariza yaratildi",
       "submitFailed": "Ariza yaratib bo'lmadi",
       "addressChanged": "Manzil o'zgardi — qaytadan tanlang",
-      "noAddresses": "Mavjud manzillar yo'q. Menejerga murojaat qiling."
+      "noAddresses": "Mavjud manzillar yo'q. Menejerga murojaat qiling.",
+      "elevator": {
+        "title": "Lift",
+        "selectElevator": "Qaysi lift?",
+        "item": "{{entrance}}-kirish · {{number}}-lift",
+        "operationalQuestion": "Lift hozir ishlayaptimi?",
+        "yes": "Ha, ishlayapti",
+        "no": "Yo'q, ishlamayapti",
+        "hintUnderRepair": "Lift allaqachon ta'mirda — ariza joriy ta'mirga qo'shiladi.",
+        "hintMaintenance": "Lift texnik xizmatda — ariza xizmat ko'rsatuvchi tashkilotga yuboriladi.",
+        "noElevators": "Bu uy uchun liftlar kiritilmagan — dispetcherga murojaat qiling.",
+        "backToCategory": "Toifaga qaytish",
+        "needBuilding": "Lift bo'yicha ariza uchun hovli emas, uy yoki kvartirani tanlang.",
+        "backToAddress": "Manzil tanlashga",
+        "loadError": "Liftlar ro'yxatini yuklab bo'lmadi",
+        "retry": "Qayta urinish",
+        "summaryLabel": "Lift",
+        "summaryWorking": "ishlayapti",
+        "summaryNotWorking": "ishlamayapti"
+      }
     },
     "inspector": {
       "selectYard": "Hovlini tanlang",
@@ -2274,6 +2335,17 @@
       "settingsUpdated": "Sozlamalar saqlandi"
     }
   },
+  "publicElevators": {
+    "title": "Liftlar",
+    "backToBoard": "← Tabloga",
+    "searchLabel": "Qidiruv",
+    "searchPlaceholder": "Manzil yoki hovli bo'yicha qidirish",
+    "yardLabel": "Hovli",
+    "yardAll": "Barcha hovlilar",
+    "notFound": "Hech narsa topilmadi",
+    "resetFilters": "Filtrlarni tozalash",
+    "updatedAt": "Ma'lumotlar {{time}} ga dolzarb"
+  },
   "workReportsArchive": {
     "title": "Bajarilgan ishlar hisobotlari",
     "backToBoard": "← Taxtaga",
@@ -2456,6 +2528,278 @@
       "empty": "F.I.Sh. bo‘sh bo‘lishi mumkin emas",
       "noLetters": "F.I.Sh. da kamida bitta harf bo‘lishi kerak",
       "tooLong": "F.I.Sh. ko‘pi bilan {{max}} belgi"
+    }
+  },
+  "elevators": {
+    "title": "Liftlar",
+    "subtitle": "Liftlar reyestri, holatlar, texnik xizmat va tekshiruv jadvali",
+    "status": {
+      "working": "Ishlayapti",
+      "not_working": "Ishlamayapti",
+      "under_repair": "Ta'mirda",
+      "maintenance": "Texnik xizmat",
+      "none": "Ishga tushirilmagan"
+    },
+    "flags": {
+      "no_contract": "Shartnomasiz",
+      "cert_expired": "Tekshiruv muddati o'tgan",
+      "maintenance_overdue": "Texnik xizmat muddati o'tgan"
+    },
+    "summary": {
+      "total": "Jami liftlar",
+      "noContract": "Shartnomasiz",
+      "certExpired": "Tekshiruv muddati o'tgan",
+      "maintenanceOverdue": "Texnik xizmat muddati o'tgan",
+      "downtimeOverThreshold": "Uzoq to'xtab qolish",
+      "requestsWithoutElevator": "Liftga bog'lanmagan lift arizalari",
+      "byStatus": "Holatlar bo'yicha",
+      "byYard": "Hovlilar bo'yicha"
+    },
+    "filters": {
+      "yard": "Hovli",
+      "allYards": "Barcha hovlilar",
+      "building": "Uy",
+      "allBuildings": "Barcha uylar",
+      "status": "Holat",
+      "allStatuses": "Barcha holatlar",
+      "includeArchived": "Arxivdagilarni ko'rsatish"
+    },
+    "columns": {
+      "label": "Lift",
+      "status": "Holat",
+      "since": "Qachondan",
+      "availability": "30 kunlik ishlash, %",
+      "flags": "Belgilar",
+      "openRequests": "Ochiq arizalar",
+      "actions": "Amallar"
+    },
+    "actions": {
+      "add": "Lift qo'shish",
+      "open": "Ochish",
+      "edit": "Tahrirlash",
+      "commission": "Ishga tushirish",
+      "archive": "Arxivlash",
+      "calendar": "Kalendar",
+      "config": "Sozlamalar",
+      "copyPrevious": "Oldingisidan nusxa olish",
+      "addOccurrence": "Band qo'shish",
+      "generate": "Jadval tuzish",
+      "reschedule": "Ko'chirish",
+      "cancel": "Bekor qilish",
+      "complete": "Bajarildi",
+      "confirmSelected": "Tanlanganlarni tasdiqlash",
+      "createRepair": "Ta'mir arizasi yaratish",
+      "backToList": "Reyestrga"
+    },
+    "empty": "Liftlar topilmadi",
+    "archivedBadge": "Arxiv",
+    "tabs": {
+      "passport": "Pasport",
+      "status": "Holat",
+      "events": "Jurnal",
+      "calendar": "Kalendar",
+      "requests": "Arizalar"
+    },
+    "form": {
+      "createTitle": "Yangi lift",
+      "editTitle": "Liftni tahrirlash",
+      "sectionRequired": "Majburiy maydonlar",
+      "sectionPassport": "Pasport",
+      "sectionContract": "Xizmat ko'rsatish shartnomasi",
+      "sectionCert": "Texnik tekshiruv",
+      "sectionDowntime": "To'xtab qolish va e'lon qilish",
+      "yard": "Hovli",
+      "building": "Uy",
+      "selectYard": "Hovlini tanlang",
+      "selectBuilding": "Uyni tanlang",
+      "entrance": "Kirish (pod'ezd)",
+      "elevatorNumber": "Lift raqami",
+      "passportNumber": "Pasport raqami",
+      "manufacturer": "Ishlab chiqaruvchi",
+      "serialNumber": "Seriya raqami",
+      "factoryNumber": "Zavod raqami",
+      "model": "Model",
+      "productionYear": "Ishlab chiqarilgan yil",
+      "capacityKg": "Yuk ko'tarish, kg",
+      "floorsServed": "Xizmat ko'rsatiladigan qavatlar",
+      "serviceOrgName": "Xizmat ko'rsatuvchi tashkilot",
+      "serviceOrgPhone": "Tashkilot telefoni",
+      "contractNumber": "Shartnoma raqami",
+      "contractUntil": "Shartnoma muddati",
+      "certNumber": "Tekshiruv raqami",
+      "certValidUntil": "Tekshiruv amal qilish muddati",
+      "certActUrl": "Dalolatnoma havolasi",
+      "downtimeReason": "To'xtab qolish sababi",
+      "sparePartExpectedOn": "Ehtiyot qism kutilmoqda (sana)",
+      "publishDowntimeDetails": "To'xtab qolish sababini aholiga ko'rsatish",
+      "isPublic": "Aholiga ko'rsatish",
+      "required": "Majburiy maydonlarni to'ldiring: hovli va uy, kirish, lift raqami, pasport raqami, ishlab chiqaruvchi, seriya raqami",
+      "positiveInt": "Kirish va lift raqami — musbat butun sonlar",
+      "copied": "Pasport maydonlari {{label}} liftidan nusxalandi",
+      "copyNone": "Nusxa olish uchun liftlar yo'q",
+      "reloaded": "Kartani boshqa foydalanuvchi yangiladi — forma qayta yuklandi",
+      "invalidUrl": "Dalolatnoma havolasi http:// yoki https:// bilan boshlanishi kerak"
+    },
+    "detail": {
+      "notCommissioned": "Ishga tushirilmagan",
+      "commissionedAt": "Ishga tushirilgan",
+      "archived": "{{date}} dan arxivda",
+      "archivedReason": "Arxivlash sababi",
+      "apartmentsWithoutEntrance": "Kirishi ko'rsatilmagan xonadonlar: {{count}}",
+      "apartmentsWithoutEntranceHint": "Bu xonadonlarda kirish (pod'ezd) ko'rsatilmagan — manzillarda kirish to'ldirilmaguncha aholi lift haqida xabar olmaydi.",
+      "publicCode": "Ochiq kod",
+      "version": "Karta versiyasi",
+      "currentStatus": "Joriy holat",
+      "since": "Qachondan",
+      "availability": "30 kunlik ishlash",
+      "statusNeedsCommission": "Holatni o'zgartirish mumkin emas: lift ishga tushirilmagan",
+      "openRequests": "Ochiq arizalar",
+      "notFound": "Lift topilmadi"
+    },
+    "statusDialog": {
+      "title": "Holatni o'zgartirish → {{status}}",
+      "reason": "Sabab (ixtiyoriy)",
+      "reasonPlaceholder": "Masalan: qavatlar orasida tiqilib qoldi",
+      "submit": "Holatni o'zgartirish"
+    },
+    "archiveDialog": {
+      "title": "Liftni arxivlash",
+      "hint": "Lift reyestrdan va arizalardagi tanlovdan yo'qoladi; karta havola orqali ochiq qoladi.",
+      "reason": "Arxivlash sababi",
+      "submit": "Arxivlash"
+    },
+    "events": {
+      "time": "Vaqt",
+      "kind": "Hodisa",
+      "transition": "O'tish",
+      "source": "Manba",
+      "actor": "Kim",
+      "reason": "Sabab",
+      "request": "Ariza",
+      "empty": "Hodisalar hali yo'q",
+      "system": "tizim",
+      "kinds": {
+        "status_changed": "Holat o'zgarishi",
+        "commissioned": "Ishga tushirish",
+        "archived": "Arxivlash",
+        "contract_changed": "Shartnoma o'zgartirildi",
+        "cert_changed": "Tekshiruv o'zgartirildi",
+        "passport_changed": "Pasport o'zgartirildi"
+      },
+      "sources": {
+        "manual": "Qo'lda",
+        "request_hint": "Arizadan",
+        "infrasafe": "InfraSafe",
+        "system": "Tizim"
+      }
+    },
+    "occurrences": {
+      "kind": {
+        "maintenance": "Texnik xizmat",
+        "certification": "Tekshiruv"
+      },
+      "state": {
+        "planned": "Rejalashtirilgan",
+        "done": "Bajarilgan",
+        "cancelled": "Bekor qilingan",
+        "all": "Barchasi"
+      },
+      "kindLabel": "Turi",
+      "stateLabel": "Holati",
+      "allKinds": "Barcha turlar",
+      "dueOn": "Muddat",
+      "doneAt": "Bajarilgan",
+      "comment": "Izoh",
+      "request": "Ariza",
+      "empty": "Jadval bandlari yo'q",
+      "createTitle": "Jadval bandini qo'shish",
+      "generateTitle": "Jadval tuzish",
+      "start": "Birinchi sana",
+      "everyMonths": "Har N oyda",
+      "count": "Bandlar soni",
+      "rescheduleTitle": "Boshqa sanaga ko'chirish",
+      "completeTitle": "Bajarilgan deb belgilash",
+      "certFieldsHint": "Tekshiruv uchun raqam, amal qilish muddati va dalolatnoma havolasi majburiy",
+      "certRequired": "Raqam, amal qilish muddati va dalolatnoma havolasini to'ldiring",
+      "requestNumber": "Ariza raqami (ixtiyoriy)"
+    },
+    "requests": {
+      "includeClosed": "Yopilganlarni ko'rsatish",
+      "number": "Raqam",
+      "status": "Holat",
+      "category": "Toifa",
+      "urgency": "Shoshilinchlik",
+      "created": "Yaratilgan",
+      "operational": "Lift ishlaydi",
+      "executor": "Ijrochi",
+      "applicant": "Arizachi",
+      "empty": "Lift bo'yicha arizalar yo'q",
+      "selected": "Tanlangan: {{count}}",
+      "resultTitle": "Qabul qilish natijasi",
+      "resultOk": "tasdiqlandi",
+      "resultFail": "xato",
+      "yes": "Ha",
+      "no": "Yo'q"
+    },
+    "repair": {
+      "title": "Ta'mir arizasi yaratish",
+      "hint": "«Lift» toifasidagi ariza, «lift ishlamayapti» belgisi bilan; qabul — menejer tomonidan.",
+      "description": "Tavsif",
+      "descriptionPlaceholder": "Lift bilan nima bo'ldi",
+      "urgency": "Shoshilinchlik",
+      "submit": "Ariza yaratish"
+    },
+    "prompt": {
+      "title": "Lift ishlayaptimi?",
+      "body": "Lift {{label}}: hozir «{{status}}». Lift ishlayaptimi?",
+      "current": "joriy",
+      "keep": "O'zgarishsiz qoldirish",
+      "reason": "{{number}} arizasini tasdiqlash",
+      "reasonMany": "{{count}} ta arizani tasdiqlash: {{numbers}}"
+    },
+    "calendar": {
+      "title": "Texnik xizmat va tekshiruv kalendari",
+      "subtitle": "Barcha liftlar bo'yicha rejalashtirilgan ishlar",
+      "from": "Dan",
+      "to": "Gacha",
+      "empty": "Tanlangan davrga ishlar rejalashtirilmagan"
+    },
+    "config": {
+      "title": "«Liftlar» moduli sozlamalari",
+      "subtitle": "To'xtab qolish chegaralari, aholiga xabarlar va xodimlarga eslatmalar",
+      "thresholds": "To'xtab qolish chegaralari (kun)",
+      "notWorkingDays": "Ishlamayapti — necha kundan keyin eslatish",
+      "underRepairDays": "Ta'mirda — necha kundan keyin eslatish",
+      "noRemind": "Eslatmaslik",
+      "residentNotifications": "Aholiga xabarlar",
+      "repairStarted": "Ta'mir boshlandi",
+      "maintenanceStarted": "Texnik xizmat boshlandi",
+      "backInService": "Lift yana ishlayapti",
+      "staffReminders": "Xodimlarga eslatmalar (muddatgacha kunlar, vergul bilan)",
+      "maintenance": "Texnik xizmat",
+      "certification": "Tekshiruv",
+      "contract": "Shartnoma",
+      "stagesHint": "Masalan: 30, 7, 1 — uchta eslatma",
+      "overdueWeekly": "Muddati o'tganlar haqida har hafta eslatish",
+      "modulePublic": "Liftlarni aholiga ko'rsatish",
+      "modulePublicHint": "Aholilar tablosidagi xulosa va /elevators ommaviy sahifasi «Liftlarni aholiga ko'rsatish» yoqilgan liftlarni ko'rsatadi",
+      "invalidStages": "Eslatma bosqichlari — manfiy bo'lmagan butun sonlar"
+    },
+    "toast": {
+      "created": "Lift qo'shildi",
+      "updated": "Lift kartasi saqlandi",
+      "conflict": "Kartani boshqa kimdir o'zgartirdi — sahifani yangilang",
+      "commissioned": "Lift ishga tushirildi",
+      "archived": "Lift arxivlandi",
+      "statusChanged": "Holat o'zgartirildi, xabar berilgan aholi: {{count}}",
+      "statusUnchanged": "Holat o'zgarmadi",
+      "occurrenceCreated": "Jadval bandi qo'shildi",
+      "generated": "Jadval tuzildi",
+      "rescheduled": "Band ko'chirildi",
+      "cancelled": "Band bekor qilindi",
+      "completed": "Band bajarilgan deb belgilandi",
+      "repairCreated": "Ta'mir arizasi yaratildi",
+      "configSaved": "Sozlamalar saqlandi"
     }
   }
 }

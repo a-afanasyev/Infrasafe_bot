@@ -52,6 +52,10 @@ from .request_assignment import RequestAssignment
 # Group Intake: реестр мониторимых ТГ-групп
 from .monitored_group import MonitoredGroup
 
+# Лифты: реестр, журнал статусов, график ТО/освидетельствований + singleton-конфиг
+from .elevator import Elevator, ElevatorStatusEvent, ElevatorMaintenanceOccurrence
+from .elevators_config import ElevatorsConfig
+
 __all__ = [
     'User',
     'Request',
@@ -90,4 +94,8 @@ __all__ = [
     'RequestComment',
     'RequestAssignment',
     'MonitoredGroup',
+    'Elevator',
+    'ElevatorStatusEvent',
+    'ElevatorMaintenanceOccurrence',
+    'ElevatorsConfig',
 ]

@@ -17,12 +17,29 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { safeErrorMessage } from '@/utils/errorMessage'
+import { isElevatorsEnabled } from '../../utils/featureFlags'
+import CallCenterElevatorFields from './CallCenterElevatorFields'
+import { EMPTY_ELEVATOR_VALUE, isElevatorValueComplete, type CallCenterElevatorValue } from './callCenterElevator'
 
 interface Props { isOpen: boolean; onClose: () => void }
 
 import { CATEGORIES, URGENCIES } from '../../constants'
 
 const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '' }
+
+/** Тело POST /api/v2/callcenter/requests (CallCenterCreateRequest): адрес —
+ *  либо свободный `address`, либо `building_id` (+ поля лифта). */
+interface CallCenterBody {
+  category: string
+  urgency: string
+  description: string
+  user_id?: number
+  address?: string
+  building_id?: number | null
+  elevator_id?: number | null
+  elevator_operational?: boolean | null
+}
 
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()
@@ -31,9 +48,15 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
   const [residents, setResidents] = useState<Array<{ id: number; full_name: string; phone: string }>>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [form, setForm] = useState(INITIAL_FORM)
+  const [elevator, setElevator] = useState<CallCenterElevatorValue>(EMPTY_ELEVATOR_VALUE)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
+
+  // Категория «Лифт» при включённом модуле: адрес — дом из справочника
+  // (building_id), плюс лифт и «работает?»; свободный текст адреса скрыт —
+  // к legacy-адресу лифт не привязать (T6).
+  const elevatorMode = form.category === 'elevator' && isElevatorsEnabled()
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +64,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
       setResidents([])
       setSelected(null)
       setForm(INITIAL_FORM)
+      setElevator(EMPTY_ELEVATOR_VALUE)
       setError('')
     }
   }, [isOpen])
@@ -54,23 +78,34 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
     }
   }
 
+  const canSubmit = elevatorMode ? isElevatorValueComplete(elevator) : form.address.trim().length > 0
+
+  const buildBody = (): CallCenterBody => {
+    const base: CallCenterBody = { category: form.category, urgency: form.urgency, description: form.description, user_id: selected || undefined }
+    if (!elevatorMode) return { ...base, address: form.address }
+    return {
+      ...base,
+      building_id: elevator.buildingId,
+      elevator_id: elevator.elevatorId,
+      elevator_operational: elevator.operational,
+    }
+  }
+
   const submit = async () => {
-    if (!form.address.trim()) {
-      setError(t('errors.specifyAddress'))
+    if (!canSubmit) {
+      setError(t(elevatorMode ? 'callcenter.elevator.required' : 'errors.specifyAddress'))
       return
     }
     setLoading(true)
     setError('')
     try {
-      await apiClient.post('/api/v2/callcenter/requests', {
-        ...form,
-        user_id: selected || undefined,
-      })
+      await apiClient.post('/api/v2/callcenter/requests', buildBody())
       queryClient.invalidateQueries({ queryKey: ['kanban'] })
       onClose()
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg ?? t('errors.createRequest'))
+      // 422 от сервера (в т.ч. Р11: лифт обязателен) — detail строкой или
+      // pydantic-списком; safeErrorMessage не даёт уронить рендер объектом.
+      setError(safeErrorMessage(e, t('errors.createRequest')))
     } finally {
       setLoading(false)
     }
@@ -152,16 +187,20 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
           />
         </div>
 
-        {/* Address (required) */}
-        <div className="space-y-1.5">
-          <Label htmlFor="cc-address">{t('callcenter.addressLabel')}</Label>
-          <Input
-            id="cc-address"
-            placeholder={t('callcenter.addressPlaceholder')}
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-          />
-        </div>
+        {/* Address (required): для «Лифта» — дом/лифт/работает из справочников */}
+        {elevatorMode ? (
+          <CallCenterElevatorFields value={elevator} onChange={setElevator} />
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="cc-address">{t('callcenter.addressLabel')}</Label>
+            <Input
+              id="cc-address"
+              placeholder={t('callcenter.addressPlaceholder')}
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+            />
+          </div>
+        )}
 
         {error && <p className="text-red text-sm">{error}</p>}
 
@@ -169,7 +208,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={submit}
-            disabled={loading || !form.category || !form.description || !form.address.trim()}
+            disabled={loading || !form.category || !form.description || !canSubmit}
           >
             {loading ? t('callcenter.submitLoading') : t('callcenter.submit')}
           </Button>

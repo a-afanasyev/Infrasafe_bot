@@ -779,3 +779,108 @@ class TestShiftSchedulerBotSeam:
                 patch.object(sched, "start", new=AsyncMock()):
             asyncio.get_event_loop().run_until_complete(ss.start_scheduler(bot=fake_bot))
         assert sched._bot is fake_bot
+
+
+# ---------------------------------------------------------------------------
+# Лифты (Ф6): джоба напоминаний под флагом ELEVATORS_ENABLED
+# ---------------------------------------------------------------------------
+
+class TestElevatorRemindersJob:
+    """Регистрация только при включённом модуле; тик — DB-фаза в потоке, затем
+    рассылка; сбой считается в task_stats, планировщик живёт дальше.
+
+    Тики гоняются через ``asyncio.run`` — ``get_event_loop()`` без текущего
+    loop'а на Python ≥3.12 хрупок (в 3.13 уже RuntimeError)."""
+
+    REMINDERS = "uk_management_bot.services.elevator_service.reminders"
+
+    @staticmethod
+    def _settings(flag):
+        settings = MagicMock()
+        settings.ELEVATORS_ENABLED = flag
+        return patch("uk_management_bot.config.settings.settings", settings)
+
+    def _reminder_calls(self, sched):
+        return [
+            call for call in sched._mock_apscheduler.add_job.call_args_list
+            if call.kwargs.get("id") == "elevator_reminders"
+        ]
+
+    def test_registered_hourly_when_enabled(self):
+        from datetime import timedelta
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        sched = _make_scheduler()
+        with self._settings(True):
+            sched.setup_jobs()
+
+        calls = self._reminder_calls(sched)
+        assert len(calls) == 1
+        call = calls[0]
+        assert call.args[0] == sched._elevator_reminders_tick
+        trigger = call.args[1]
+        # Интервал, не cron: планировщик в UTC, «за N дней» — по бизнес-дате в тике
+        assert isinstance(trigger, IntervalTrigger)
+        assert trigger.interval == timedelta(hours=1)
+        assert call.kwargs.get("max_instances") == 1
+        assert call.kwargs.get("coalesce") is True
+
+    def test_not_registered_when_disabled(self):
+        sched = _make_scheduler()
+        with self._settings(False):
+            sched.setup_jobs()
+        assert self._reminder_calls(sched) == []
+        assert sched._mock_apscheduler.add_job.call_count >= 8  # остальные джобы на месте
+
+    def test_task_stats_key_present(self):
+        sched = _make_scheduler()
+        assert sched.task_stats["elevator_reminders"] == {"success": 0, "failed": 0, "last_run": None}
+
+    def _patched_tick(self, batch):
+        from contextlib import ExitStack
+        from uk_management_bot.services.elevator_service import reminders  # noqa: F401
+
+        sent = AsyncMock(return_value=1)
+        stack = ExitStack()
+        stack.enter_context(patch(SESSION_LOCAL_PATH, return_value=MagicMock()))
+        stack.enter_context(patch(
+            "uk_management_bot.services.elevator_service.load_config_sync", return_value={}
+        ))
+        stack.enter_context(patch(f"{self.REMINDERS}.collect_reminders_sync", return_value=batch))
+        stack.enter_context(patch(f"{self.REMINDERS}.apply_reminders_sync"))
+        stack.enter_context(patch(
+            "uk_management_bot.services.workflow_notifications.send_notify_messages", sent
+        ))
+        return stack, sent
+
+    def test_tick_sends_flat_messages_after_db_phase(self):
+        from uk_management_bot.services.elevator_service import Message
+        from uk_management_bot.services.elevator_service.reminders import RemindersBatch
+
+        batch = RemindersBatch(staff_messages=(Message(telegram_id=5, text="t"),))
+        sched = _make_scheduler()
+        sched._bot = object()
+        stack, sent = self._patched_tick(batch)
+        with stack:
+            asyncio.run(sched._elevator_reminders_tick())
+
+        sent.assert_awaited_once_with(sched._bot, [(5, "t")])
+        assert sched.task_stats["elevator_reminders"]["success"] == 1
+
+    def test_tick_without_messages_does_not_touch_network(self):
+        from uk_management_bot.services.elevator_service.reminders import RemindersBatch
+
+        sched = _make_scheduler()
+        stack, sent = self._patched_tick(RemindersBatch())
+        with stack:
+            asyncio.run(sched._elevator_reminders_tick())
+
+        sent.assert_not_awaited()
+        assert sched.task_stats["elevator_reminders"]["success"] == 1
+
+    def test_db_failure_counts_as_failed_and_does_not_raise(self):
+        sched = _make_scheduler()
+        with patch(SESSION_LOCAL_PATH, side_effect=RuntimeError("db down")):
+            asyncio.run(sched._elevator_reminders_tick())
+        assert sched.task_stats["elevator_reminders"]["failed"] == 1
+        assert sched.task_stats["elevator_reminders"]["success"] == 0

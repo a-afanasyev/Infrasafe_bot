@@ -142,6 +142,22 @@ async def merge_and_save_board_config(
     return normalized
 
 
+async def load_dispatch_phone(db: AsyncSession) -> str | None:
+    """Телефон диспетчерской из СОХРАНЁННОЙ строки board_config — канон бота
+    ``RequestHandlerService.get_dispatch_phone``: нет строки / битые данные /
+    пустое поле → ``None``, а не плейсхолдер из ``DEFAULT_BOARD_CONFIG``
+    (публичный виджет лифтов не должен печатать выдуманный номер)."""
+    try:
+        row = await db.get(BoardConfig, CONFIG_ROW_ID)
+    except (OperationalError, ProgrammingError) as e:
+        logger.warning("board_config недоступен, телефон диспетчерской пуст: %s", e)
+        return None
+    data = row.data if row is not None and isinstance(row.data, dict) else {}
+    contacts = data.get("contacts")
+    phone = contacts.get("dispatch_phone") if isinstance(contacts, dict) else None
+    return (phone.strip() or None) if isinstance(phone, str) else None
+
+
 def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
     """Гейт по фиче-флагу на границе ответа: вырезать невключённые модули из layout.
 

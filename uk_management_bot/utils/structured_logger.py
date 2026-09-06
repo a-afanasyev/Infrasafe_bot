@@ -220,6 +220,12 @@ def setup_specific_loggers():
     if not settings.DEBUG:
         redis_logger.setLevel(logging.WARNING)
 
+    # httpx/httpcore на INFO печатают строку «HTTP Request: POST https://api.telegram.org/bot<TOKEN>/…»
+    # — URL Bot API несёт токен (OTP, уведомления жителям о лифтах). Глушим независимо
+    # от DEBUG: ошибки транспорта мы логируем сами через describe_http_error без URL.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
 
 def get_logger(name: str, **context) -> StructuredLogger:
     """

@@ -53,3 +53,9 @@ class AlertBlock(BaseModel):
     # observed in deployed wire (sender unshipped at the InfraSafe side as of
     # 2026-05-24); we treat it as a nested field for symmetry with the rest.
     engineer_required_reason: str | None = Field(default=None, max_length=64)
+    # Модуль «Лифты» (Ф4a-1, Р14): наш `elevators.id`. Обязателен, когда
+    # итоговая категория заявки — «лифт» и флаг ELEVATORS_ENABLED включён:
+    # лифт должен быть активен, введён в эксплуатацию и принадлежать дому
+    # `external_id`, иначе 422 + webhook_inbox(outcome="rejected"). Заявка
+    # получает elevator_operational=False (InfraSafe сообщает о неисправности).
+    uk_elevator_id: int | None = Field(default=None, ge=1)

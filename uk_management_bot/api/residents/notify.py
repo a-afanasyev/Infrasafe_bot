@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from typing import Protocol
 
 import httpx
 
@@ -28,11 +30,27 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 10
 
 
-async def _send(chat_id: int, text: str, reply_markup: dict | None = None) -> None:
+class PlainMessage(Protocol):
+    """Адресованное сообщение: ``telegram_id`` + готовый текст (``elevator_service.Message``)."""
+
+    telegram_id: int
+    text: str
+
+
+async def _send(
+    chat_id: int, text: str, reply_markup: dict | None = None, *, parse_mode: str | None = None,
+) -> bool:
+    """Один ``sendMessage``; ``True`` — Telegram принял (HTTP 200), иначе ``False`` (в лог).
+
+    Не-200 (403 «бот заблокирован», 400 «чат не найден») — штатный прод-кейс,
+    не исключение: вызывающий по возвращаемому значению считает доставленных.
+    """
     url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
     payload: dict = {"chat_id": chat_id, "text": text}
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
+    if parse_mode is not None:
+        payload["parse_mode"] = parse_mode
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         response = await client.post(url, json=payload)
         if response.status_code != 200:
@@ -40,6 +58,8 @@ async def _send(chat_id: int, text: str, reply_markup: dict | None = None) -> No
                 "Telegram отклонил уведомление жителю %s: HTTP %s",
                 chat_id, response.status_code,
             )
+            return False
+        return True
 
 
 async def _safe_send(resident: User, text: str, reply_markup: dict | None = None) -> None:
@@ -47,6 +67,32 @@ async def _safe_send(resident: User, text: str, reply_markup: dict | None = None
         await _send(resident.telegram_id, text, reply_markup)
     except Exception as e:  # noqa: BLE001 — best-effort, наружу не поднимаем
         logger.error("Не удалось уведомить жителя %s: %s", resident.id, describe_http_error(e))
+
+
+async def send_plain_messages(
+    messages: Iterable[PlainMessage], *, parse_mode: str | None = "HTML",
+) -> int:
+    """Разослать готовые сообщения (например, жителям подъезда о лифте); вернуть число ДОСТАВЛЕННЫХ.
+
+    Считаются только принятые Telegram (HTTP 200): отказ 400/403 (бот
+    заблокирован жителем) — не доставка. Best-effort: вызывать строго ПОСЛЕ
+    commit; сбой одного адресата не останавливает остальных и не поднимается
+    наружу. Текст исключения httpx не логируется — он несёт URL с токеном
+    бота (``describe_http_error``).
+    """
+    delivered = 0
+    for message in messages:
+        try:
+            accepted = await _send(message.telegram_id, message.text, parse_mode=parse_mode)
+        except httpx.HTTPError as exc:
+            logger.error(
+                "Не удалось доставить сообщение %s: %s",
+                message.telegram_id, describe_http_error(exc),
+            )
+            continue
+        if accepted:
+            delivered += 1
+    return delivered
 
 
 def _lang(resident: User) -> str:

@@ -440,3 +440,18 @@ class TestLogFunctionCallDecorator:
 
         greet("World")
         assert any("info" == lvl for lvl, _ in calls)
+
+
+class TestThirdPartyLoggerLevels:
+    """httpx/httpcore на INFO печатают URL Bot API вместе с токеном — глушим всегда."""
+
+    @pytest.mark.parametrize("debug", [True, False])
+    def test_httpx_loggers_are_warning_in_both_modes(self, debug):
+        from uk_management_bot.utils import structured_logger
+
+        for name in ("httpx", "httpcore"):
+            logging.getLogger(name).setLevel(logging.NOTSET)
+        with patch.object(structured_logger.settings, "DEBUG", debug):
+            structured_logger.setup_specific_loggers()
+        for name in ("httpx", "httpcore"):
+            assert logging.getLogger(name).level == logging.WARNING, f"{name} при DEBUG={debug}"

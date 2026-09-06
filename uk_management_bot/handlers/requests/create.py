@@ -30,6 +30,7 @@ from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.session import run_db
+from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 
@@ -54,6 +55,16 @@ from uk_management_bot.utils.helpers import get_text
 
 from ._router import router
 
+# Модуль «Лифты» (Ф4a-2, T7): шаги лифта между адресом и описанием. Импорт
+# односторонний (create_elevator не импортирует create на уровне модуля).
+from .create_elevator import (
+    begin_elevator_step,
+    clear_elevator_data,
+    elevator_summary_line,
+    is_elevator_flow,
+    save_failed_key,
+)
+from .create_elevator_resident import RESIDENT_FLOW
 from .shared import (
     _get_user_language,
     _deny_if_pending_message,
@@ -147,6 +158,8 @@ async def start_request_creation(message: Message, state: FSMContext, user_statu
         return
 
     logger.info(f"Пользователь {message.from_user.id} начал создание заявки (текст: '{message.text}')")
+    # Ф4a-2 (T7): хвост брошенной лифтовой заявки не должен уехать в новую.
+    await clear_elevator_data(state)
     await state.set_state(RequestStates.category)
 
     # Скрываем главное меню (ReplyKeyboard) на время сценария создания заявки
@@ -216,7 +229,7 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         )
         return
 
-    await state.update_data(
+    data = await state.update_data(
         address=resolved.canonical_address,
         address_type=resolved.address_type,
         address_id=address_id,
@@ -224,13 +237,19 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         building_id=resolved.building_id,
         yard_id=resolved.yard_id,
     )
-    await state.set_state(RequestStates.description)
     try:
         await callback.message.edit_text(
             get_text("requests.address_selected", language=lang, address=resolved.canonical_address)
         )
     except Exception:
         pass
+    if is_elevator_flow(data):
+        # Ф4a-2 (T7): категория «лифт» — сначала лифт дома и «работает?»,
+        # описание — после (create_elevator.py). Флаг выключен → штатный путь.
+        await begin_elevator_step(callback, state, lang, data, RESIDENT_FLOW)
+        await callback.answer()
+        return
+    await state.set_state(RequestStates.description)
     await callback.message.answer(
         get_text("requests.description", language=lang),
         reply_markup=get_cancel_keyboard(language=lang),
@@ -418,6 +437,12 @@ async def show_confirmation(message: Message, state: FSMContext):
         urgency=urgency_display,
         files_count=len(data.get('media_files', []))
     )
+    # Ф4a-2 (T7): строка лифта — внутри сводки, перед финальным призывом
+    # подтвердить (последний абзац шаблона confirmation_summary).
+    elevator_line = elevator_summary_line(data, lang)
+    if elevator_line:
+        head, sep, tail = summary.rpartition("\n\n")
+        summary = f"{head}\n{elevator_line}{sep}{tail}" if sep else f"{summary}\n{elevator_line}"
 
     await message.answer(
         summary,
@@ -461,7 +486,7 @@ async def process_confirmation(message: Message, state: FSMContext, roles: list 
             # Очищаем состояние, чтобы пользователь мог продолжить работу (например, открыть Мои заявки)
             await state.clear()
             await message.answer(
-                get_text("errors.request_save_failed", language=lang),
+                get_text(save_failed_key(data), language=lang),
                 reply_markup=await get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")
@@ -579,6 +604,11 @@ def save_request_sync(
             # Для остальных путей data этих ключей не несёт — дефолты.
             reported_by_user_id=data.get('reported_by_user_id'),
             acceptance_mode=data.get('acceptance_mode') or ACCEPTANCE_MODE_RESIDENT,
+            # Модуль «Лифты» (Ф4a-1): FSM-шаг выбора лифта — T7; здесь только
+            # протаскивание значений из data. Инвариант Р11 проверяет
+            # create_request_record (ElevatorValidationError → общий except → None).
+            elevator_id=data.get('elevator_id'),
+            elevator_operational=data.get('elevator_operational'),
         )
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
@@ -598,6 +628,11 @@ def save_request_sync(
         auto_dispatch_new_request_sync(request_number, data['category'])
 
         return request_number, user.id, media_file_ids
+    except ElevatorValidationError as e:
+        # Р11: лифт не указан / непригоден / чужого дома — ожидаемый отказ
+        # валидации, не сбой (образец — ветка AddressResolutionError выше).
+        logger.warning("[SAVE_REQUEST] Лифт отклонён: %s", e)
+        return None
     except Exception as e:
         logger.error(f"[SAVE_REQUEST] ❌ Ошибка сохранения заявки: {e}", exc_info=True)
         return None

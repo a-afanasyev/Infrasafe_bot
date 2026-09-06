@@ -23,7 +23,14 @@ from uk_management_bot.services.request_address import (
     resolve_request_address_async,
     AddressResolutionError,
 )
+from uk_management_bot.api.elevators.errors import http_error as elevator_http_error
 from uk_management_bot.api.requests import service as svc
+from uk_management_bot.api.requests.elevator_fields import (
+    attach_elevator,
+    card_language,
+    load_elevators,
+    persisted_card,
+)
 from uk_management_bot.api.requests.schemas import (
     RequestCard, KanbanResponse, KanbanColumn,
     CreateRequestBody, CreateInspectorRequestBody, UpdateRequestBody,
@@ -31,6 +38,7 @@ from uk_management_bot.api.requests.schemas import (
     CommentBody, CommentOut,
 )
 from uk_management_bot.services.category_change import change_category_async
+from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
@@ -88,7 +96,8 @@ TERMINAL_COLUMN_LIMIT = 100
 _format_executor_name = full_name
 
 
-def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
+def _make_request_card(req, exec_user=None, inbox_row=None, *, elevator=None,
+                       language: str = "ru") -> RequestCard:
     """Build RequestCard from ORM Request, optionally with executor user.
 
     When `inbox_row` (a WebhookInbox row associated with this request) is
@@ -96,6 +105,9 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
     Sequence=1 (deployed-wire first-time default) → None — only true reopens
     (≥ 2) carry visible meta. List endpoints skip the enrichment to keep
     their query cost identical to pre-INT-120 baseline.
+
+    `elevator` (Ф4a-1) — лифт заявки, подгруженный вызывающим batch-запросом
+    (`load_elevators`), даёт `elevator_label`/`elevator_status`.
     """
     card = RequestCard.model_validate(req)
     # PR7: аутентифицированные app-потребители (Kanban/список/детали/TWA) видят
@@ -139,7 +151,17 @@ def _make_request_card(req, exec_user=None, inbox_row=None) -> RequestCard:
         infra = alert.get("infrastructure_label")
         if infra:
             card.infrastructure_label = infra
-    return card
+    return attach_elevator(card, elevator, language)
+
+
+async def _cards(db: AsyncSession, rows, user: User) -> list[RequestCard]:
+    """Карточки страницы `(Request, executor)` с лифтами одним запросом."""
+    elevators = await load_elevators(db, [r for r, _ in rows])
+    language = card_language(user)
+    return [
+        _make_request_card(r, eu, elevator=elevators.get(r.elevator_id), language=language)
+        for r, eu in rows
+    ]
 
 
 @router.get("/kanban", response_model=KanbanResponse)
@@ -165,7 +187,7 @@ async def get_kanban(
     # Карты несут канон-статус (PR7: _make_request_card нормализует, не
     # проецирует), поэтому группируем по card.status: канон-«Возвращена»
     # попадает в одноимённую колонку, а не сворачивается в «Исполнено».
-    all_cards = [_make_request_card(r, eu) for r, eu in [*active_rows, *terminal_rows]]
+    all_cards = await _cards(db, [*active_rows, *terminal_rows], user)
     columns = []
     for st in KANBAN_STATUSES:
         st_cards = [c for c in all_cards if c.status == st]
@@ -208,7 +230,7 @@ async def list_requests(
         limit=limit,
         offset=offset,
     )
-    return [_make_request_card(r, eu) for r, eu in rows]
+    return await _cards(db, rows, user)
 
 
 @router.get("/acceptance", response_model=list[RequestCard])
@@ -218,7 +240,7 @@ async def get_acceptance_requests(
 ):
     """Requests pending acceptance: own + apartment neighbors, status=Исполнено."""
     rows = await svc.acceptance_rows(db, user=user)
-    return [_make_request_card(r, eu) for r, eu in rows]
+    return await _cards(db, rows, user)
 
 
 @router.get("/{request_number}", response_model=RequestCard)
@@ -237,7 +259,11 @@ async def get_request(
     # INT-120 #3 — detail endpoint enriches with reopen-meta from webhook_inbox
     # (list endpoints skip this to keep their cost identical to the baseline).
     inbox_row = await svc.latest_accepted_inbox(db, request_number)
-    return _make_request_card(req, exec_user, inbox_row=inbox_row)
+    elevators = await load_elevators(db, [req])
+    return _make_request_card(
+        req, exec_user, inbox_row=inbox_row,
+        elevator=elevators.get(req.elevator_id), language=card_language(user),
+    )
 
 
 @router.post("", response_model=RequestCard, status_code=201)
@@ -260,18 +286,23 @@ async def create_request(
     except AddressResolutionError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    req = await svc.persist_request(
-        db,
-        user_id=user.id,
-        category=body.category,
-        urgency=body.urgency,
-        description=body.description,
-        media_files=body.media_files,
-        source="twa",
-        resolved=resolved,
-        webhook_tag="twa",
-    )
-    return RequestCard.model_validate(req)
+    try:
+        persisted = await svc.persist_request(
+            db,
+            user_id=user.id,
+            category=body.category,
+            urgency=body.urgency,
+            description=body.description,
+            media_files=body.media_files,
+            source="twa",
+            resolved=resolved,
+            webhook_tag="twa",
+            elevator_id=body.elevator_id,
+            elevator_operational=body.elevator_operational,
+        )
+    except ElevatorValidationError as exc:
+        raise elevator_http_error(exc)
+    return persisted_card(persisted, language=card_language(user))
 
 
 @router.post("/inspector", response_model=RequestCard, status_code=201)
@@ -291,18 +322,23 @@ async def create_inspector_request(
     except AddressResolutionError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
 
-    req = await svc.persist_request(
-        db,
-        user_id=user.id,
-        category=body.category,
-        urgency=body.urgency,
-        description=body.description,
-        media_files=body.media_files,
-        source="inspector",
-        resolved=resolved,
-        webhook_tag="inspector",
-    )
-    return RequestCard.model_validate(req)
+    try:
+        persisted = await svc.persist_request(
+            db,
+            user_id=user.id,
+            category=body.category,
+            urgency=body.urgency,
+            description=body.description,
+            media_files=body.media_files,
+            source="inspector",
+            resolved=resolved,
+            webhook_tag="inspector",
+            elevator_id=body.elevator_id,
+            elevator_operational=body.elevator_operational,
+        )
+    except ElevatorValidationError as exc:
+        raise elevator_http_error(exc)
+    return persisted_card(persisted, language=card_language(user))
 
 
 # Транспортный маппер (PR2b, риск #20/#43): сырые/deprecated поля схемы PATCH →

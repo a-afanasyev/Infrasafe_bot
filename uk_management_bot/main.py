@@ -36,6 +36,7 @@ from uk_management_bot.handlers.health import router as health_router
 # Новые обработчики системы смен
 from uk_management_bot.handlers.shift_management import router as shift_management_router_new
 from uk_management_bot.handlers.my_shifts import router as my_shifts_router
+from uk_management_bot.handlers.elevators import router as elevators_router  # Лифтёр: меню «Лифты» (Ф5)
 from uk_management_bot.handlers.auto_manager import router as auto_manager_router  # Бот-UI автоменеджера
 
 # Обработчики назначения заявок
@@ -326,6 +327,7 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(shift_management_router_new)  # Управление сменами для менеджеров
     dp.include_router(auto_manager_router)  # Бот-UI автоменеджера (вкл/выкл, окно) для менеджеров
     dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
+    dp.include_router(elevators_router)  # Лифтёр: меню «Лифты» (RoleGate executor; elvm:*)
     dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
     dp.include_router(shifts_router)  # старый роутер смен
 

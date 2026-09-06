@@ -43,7 +43,9 @@ from uk_management_bot.api.residents.router import router as residents_router
 from uk_management_bot.api.public.router import router as public_router
 from uk_management_bot.api.board_config.router import router as board_config_router
 from uk_management_bot.api.work_reports.router import router as work_reports_router
+from uk_management_bot.api.elevators.router import router as elevators_router
 from uk_management_bot.api.work_reports.public_router import router as work_reports_public_router
+from uk_management_bot.api.elevators.public_router import router as elevators_public_router
 from uk_management_bot.api.auto_manager.router import router as auto_manager_router
 from uk_management_bot.api.webhooks.router import router as webhooks_router
 from uk_management_bot.api.registration.router import router as registration_router
@@ -145,6 +147,8 @@ app.include_router(residents_router, prefix="/api/v2/residents", tags=["resident
 app.include_router(executor_shifts_router, prefix="/api/v2/executor/shifts", tags=["executor-shifts"])
 app.include_router(public_router, prefix="/api/v2/public", tags=["public"])
 app.include_router(work_reports_public_router, prefix="/api/v2/public", tags=["public"])
+# Виджет статусов лифтов на табло (T16, Р16): тот же заявленный префикс /api/v2/public/.
+app.include_router(elevators_public_router, prefix="/api/v2/public", tags=["public"])
 app.include_router(board_config_router, prefix="/api/v2", tags=["board-config"])
 app.include_router(auto_manager_router, prefix="/api/v2", tags=["auto-manager"])
 app.include_router(webhooks_router, prefix="/api/v2/webhooks", tags=["webhooks"])
@@ -158,6 +162,8 @@ app.include_router(materials_router, prefix="/api/v2/materials", tags=["material
 # раздел отвечает 404 на обеих площадках.
 app.include_router(payment_control_router, prefix="/api/v2/payment-control", tags=["payment-control"])
 app.include_router(work_reports_router, prefix="/api/v2/work-reports", tags=["work-reports"])
+# ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist. Гейт — ELEVATORS_ENABLED.
+app.include_router(elevators_router, prefix="/api/v2/elevators", tags=["elevators"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
 app.include_router(health_router)

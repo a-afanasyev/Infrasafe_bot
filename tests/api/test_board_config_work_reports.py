@@ -179,7 +179,8 @@ def test_normalization_preserves_survivor_order_appends_new_at_end():
     cfg = StoredBoardConfigData.model_validate(data)
     ids = [i.id for i in cfg.layout]
     assert ids[:5] == ["hours", "rating", "announcements", "requests", "stats"]
-    assert ids[5:] == ["workreports"]  # new module appended at the end
+    # New modules appended at the end in ALL_MODULE_IDS order (T16 added "elevators").
+    assert ids[5:] == ["workreports", "elevators"]
 
 
 # ── work_reports settings: PUT that omits the key must not reset it ────

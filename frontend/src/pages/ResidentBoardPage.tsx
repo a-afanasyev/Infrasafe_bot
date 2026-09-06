@@ -9,6 +9,8 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { brand } from '../brand/brand'
 import { groupBoardRows } from '../utils/boardRows'
 import WorkReportsModule from '../components/board/WorkReportsModule'
+import ElevatorsBoardModule from '../components/board/ElevatorsBoardModule'
+import { isElevatorsEnabled } from '../utils/featureFlags'
 
 // DARK-гейт модуля визуальных отчётов «до/после» на табло: монтируется только
 // при VITE_WORK_REPORTS_ENABLED=true (билд-арг), по умолчанию OFF.
@@ -289,6 +291,10 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     // значит превью в редакторе сразу отражает правку лимита/заголовка.
     ...(WORK_REPORTS_ENABLED
       ? { workreports: <WorkReportsModule limit={config.work_reports?.limit} title={loc(config.work_reports?.title as LocalizedText)} /> }
+      : {}),
+    // Виджет статусов лифтов (T16, Р16) — DARK за VITE_ELEVATORS_ENABLED.
+    ...(isElevatorsEnabled()
+      ? { elevators: <ElevatorsBoardModule title={loc(config.elevators?.title as LocalizedText)} /> }
       : {}),
   }
 

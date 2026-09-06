@@ -21,7 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from uk_management_bot.api.dependencies import _parse_user_roles
+from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.api.requests.schemas import RequestCard
+from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.request_comment import RequestComment
@@ -29,6 +31,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
+from uk_management_bot.services.elevator_service import resolve_request_elevator_async
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.request_address import ResolvedAddress
 from uk_management_bot.services.request_number_service import RequestNumberService
@@ -307,7 +310,9 @@ async def persist_request(
     source: str,
     resolved: ResolvedAddress,
     webhook_tag: str,
-) -> RequestModel:
+    elevator_id: Optional[int] = None,
+    elevator_operational: Optional[bool] = None,
+) -> PersistedRequest:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
     Транзакц. граница (ARCH-113): INSERT(request) + enqueue outbox эмитятся в
@@ -318,7 +323,21 @@ async def persist_request(
     counter-инкремент → повтор с чистой транзакцией и СВЕЖИМ объектом —
     переиспользование detached-инстанса после rollback ненадёжно).
     Адрес/FK/source — из резолвера.
+
+    Лифт (Р11, Ф4a-1): ``resolve_request_elevator_async`` — единая проверка
+    (категория «лифт» требует оба поля; указанный лифт пригоден); при
+    выключенном флаге поля игнорируются. ``ElevatorValidationError`` — наверх,
+    роутер мапит в 422. Проверка ДО выдачи номера — отказ не жжёт счётчик.
+    Возвращает ``PersistedRequest`` — заявку вместе с уже загруженным лифтом,
+    чтобы ответ POST не перечитывал его.
     """
+    # Дом заявки — из разрешённого адреса (уровень building) или дом квартиры
+    # (уровень apartment); двор → лифт привязать нельзя (security-ревью T6).
+    binding = await resolve_request_elevator_async(
+        db, category=category, elevator_id=elevator_id,
+        elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
+        building_id=resolved.building_id, apartment_id=resolved.apartment_id,
+    )
 
     async def _attempt(number: str) -> RequestModel:
         req = RequestModel(
@@ -335,6 +354,8 @@ async def persist_request(
             status="Новая",
             source=source,
             media_files=media_files or [],
+            elevator_id=binding.elevator_id,
+            elevator_operational=binding.elevator_operational,
         )
         db.add(req)
         # Outbox в той же транзакции (source-тег в метаданные, НЕ в wire-payload).
@@ -360,7 +381,7 @@ async def persist_request(
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
     await auto_dispatch_new_request_async(req.request_number, category)
     await db.refresh(req)
-    return req
+    return PersistedRequest(request=req, elevator=binding.elevator)
 
 
 async def category_of(db: AsyncSession, request_number: str) -> Optional[str]:

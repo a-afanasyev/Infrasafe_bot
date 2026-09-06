@@ -33,6 +33,9 @@
   --color-emerald: #10b981;
   --color-green: #22c55e;
   --color-teal: #14b8a6;
+  /* orange следует за брендовой :root-переменной (dark/profk задают --orange сами),
+     чтобы утилиты text-orange / bg-orange/15 жили, а не молча падали в ничто. */
+  --color-orange: var(--orange);
 
   /* ── Border radius ── */
   --radius-default: 12px;

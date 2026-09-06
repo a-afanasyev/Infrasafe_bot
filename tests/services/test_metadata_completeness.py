@@ -32,7 +32,7 @@ _ENV_IMPORTS_SNIPPET = (
     "print(json.dumps(sorted(Base.metadata.tables.keys())))\n"
 )
 
-# Снимок фактического Base.metadata (56 таблиц UK + access_control домен).
+# Снимок фактического Base.metadata (60 таблиц UK + access_control домен).
 # media_* здесь НЕТ — они на чужой Base (SDK), в UK-контракт не входят.
 _EXPECTED_TABLES = frozenset({
     "access_audit_logs",
@@ -54,6 +54,10 @@ _EXPECTED_TABLES = frozenset({
     "camera_events",
     "controller_sync_events",
     "edge_controllers",
+    "elevator_maintenance_occurrences",
+    "elevator_status_events",
+    "elevators",
+    "elevators_config",
     "feedback",
     "invite_nonces",
     "manual_openings",

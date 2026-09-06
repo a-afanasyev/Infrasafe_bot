@@ -126,6 +126,13 @@ class WorkReportsCfg(BaseModel):
         return deduped
 
 
+class ElevatorsCfg(BaseModel):
+    """Настройки модуля «Лифты» на табло (T16): только заголовок. Пустой
+    заголовок = фронт подставляет i18n-дефолт; лимитов у модуля нет."""
+
+    title: LocalizedText = Field(default_factory=LocalizedText)
+
+
 class _BoardConfigFields(BaseModel):
     """Общие поля конфига витрины. Не используется как самостоятельная API-модель
     (см. `StoredBoardConfigData` / `BoardConfigResponse` / `BoardConfigUpdateIn`)."""
@@ -137,6 +144,7 @@ class _BoardConfigFields(BaseModel):
     working_hours: list[WorkingHourCfg]
     layout: list[LayoutItem]
     work_reports: WorkReportsCfg = Field(default_factory=WorkReportsCfg)
+    elevators: ElevatorsCfg = Field(default_factory=ElevatorsCfg)
 
     @field_validator("working_hours")
     @classmethod
@@ -265,6 +273,10 @@ class WorkReportsCfgIn(WorkReportsCfg, _StrictIn):
     title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
 
 
+class ElevatorsCfgIn(ElevatorsCfg, _StrictIn):
+    title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+
+
 class BoardConfigUpdateIn(_BoardConfigFields, _StrictIn):
     """Тело PUT /board-config. Без нормализации — мёрж и нормализация делаются
     сервис-слоем (`service.merge_and_save_board_config`).
@@ -281,6 +293,7 @@ class BoardConfigUpdateIn(_BoardConfigFields, _StrictIn):
     working_hours: list[WorkingHourCfgIn]
     layout: list[LayoutItemIn]
     work_reports: WorkReportsCfgIn = Field(default_factory=WorkReportsCfgIn)
+    elevators: ElevatorsCfgIn = Field(default_factory=ElevatorsCfgIn)
 
 
 # Alias для обратной совместимости: tests/api/test_board_config_layout_width.py

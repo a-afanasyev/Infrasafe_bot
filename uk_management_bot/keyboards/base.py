@@ -164,6 +164,10 @@ def get_main_keyboard_for_role(
         # Быстрый доступ к сменам отдельной кнопкой
         builder.add(KeyboardButton(text=get_text("main_menu.shift", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.my_shifts", language=language)))
+        # Модуль «Лифты» (Ф5): кнопка лифтёра видна всем executor при включённом
+        # флаге; гейт по специализации «лифты» — в хендлере входа (handlers/elevators).
+        if settings.ELEVATORS_ENABLED:
+            builder.add(KeyboardButton(text=get_text("main_menu.elevators", language=language)))
     elif active_role == "inspector":
         # Клавиатура обходчика: одноцелевая роль — завести заявку с обхода
         # (двор→дом, building-level). Создание доступно только approved-обходчику.

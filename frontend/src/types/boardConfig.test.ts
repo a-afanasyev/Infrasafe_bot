@@ -5,7 +5,7 @@ import type { BoardConfigResponse } from './boardConfig'
 // Зеркалит uk_management_bot/api/board_config/defaults.py ALL_MODULE_IDS.
 // Правка одной стороны без другой не поймается тайпчекером — ловит только
 // этот тест.
-const BACKEND_ALL_MODULE_IDS = ['stats', 'requests', 'announcements', 'rating', 'hours', 'workreports']
+const BACKEND_ALL_MODULE_IDS = ['stats', 'requests', 'announcements', 'rating', 'hours', 'workreports', 'elevators']
 
 describe('MODULE_IDS parity with backend ALL_MODULE_IDS', () => {
   it('matches the backend tuple exactly, including order', () => {
@@ -14,7 +14,7 @@ describe('MODULE_IDS parity with backend ALL_MODULE_IDS', () => {
 })
 
 describe('defaultBoardConfig.layout', () => {
-  it('covers the 5 pre-work-reports modules, deliberately excluding workreports', () => {
+  it('covers the 5 pre-work-reports modules, deliberately excluding workreports/elevators', () => {
     const ids = defaultBoardConfig.layout.map((item) => item.id)
     expect(ids).toEqual(['stats', 'requests', 'announcements', 'rating', 'hours'])
   })
@@ -38,6 +38,12 @@ describe('defaultBoardConfig.work_reports', () => {
       limit: 6,
       title: { ru: 'Отчёты о выполненных работах', uz: 'Bajarilgan ishlar hisobotlari' },
     })
+  })
+})
+
+describe('defaultBoardConfig.elevators', () => {
+  it('matches the backend default title (T16)', () => {
+    expect(defaultBoardConfig.elevators).toEqual({ title: { ru: 'Лифты', uz: 'Liftlar' } })
   })
 })
 

@@ -60,7 +60,8 @@ class ShiftScheduler:
             'process_transfers': {'success': 0, 'failed': 0, 'last_run': None},
             'cleanup_expired': {'success': 0, 'failed': 0, 'last_run': None},
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
-            'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None}
+            'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
+            'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
         }
 
     @property
@@ -221,6 +222,30 @@ class ShiftScheduler:
                 max_instances=1,
                 coalesce=True
             )
+
+            # 12. Лифты (Ф6): напоминания персоналу о ТО/освидетельствовании,
+            #     просрочках, договоре и длительном простое. Интервал, а не
+            #     cron: планировщик живёт в UTC (см. №5), а «за N дней»
+            #     считается по бизнес-дате внутри тика — час запуска ни на что
+            #     не влияет, тик идемпотентен.
+            #     Флаг читается ОДИН раз, здесь: выключенный модуль = джобы
+            #     нет вовсе (а не пустой тик каждый час); включение требует
+            #     рестарта бота, как и остальные ELEVATORS_*-настройки.
+            #     TODO(multi-replica): max_instances=1 защищает от наложения
+            #     тиков только внутри ОДНОГО процесса; вторая реплика бота даст
+            #     дубли напоминаний (как и у всех джоб этого файла) — нужен
+            #     внешний лок (advisory lock / redis) при горизонтальном
+            #     масштабировании.
+            from uk_management_bot.config.settings import settings
+            if settings.ELEVATORS_ENABLED:
+                self.scheduler.add_job(
+                    self._elevator_reminders_tick,
+                    IntervalTrigger(hours=1),
+                    id='elevator_reminders',
+                    name='Лифты — напоминания персоналу',
+                    max_instances=1,
+                    coalesce=True
+                )
 
             logger.info("Задачи планировщика смен настроены успешно")
 
@@ -756,6 +781,53 @@ class ShiftScheduler:
 
         self.task_stats[task_name]['failed' if failed else 'success'] += 1
         self.task_stats[task_name]['last_run'] = utc_now()
+
+    def _elevator_reminders_sync(self) -> tuple[tuple[int, str], ...]:
+        """DB-фаза напоминаний по лифтам целиком в рабочем потоке.
+
+        Сбор и запись стадий — в ОДНОЙ транзакции, commit до выхода: если сеть
+        ниже упадёт, сообщение потеряется (допустимо, Р7), но не продублируется
+        на следующем тике. Наружу — плоские (telegram_id, text), не ORM.
+        """
+        from uk_management_bot.services.elevator_service import load_config_sync
+        from uk_management_bot.services.elevator_service.reminders import (
+            apply_reminders_sync,
+            collect_reminders_sync,
+        )
+
+        db = SessionLocal()
+        try:
+            now = utc_now()
+            batch = collect_reminders_sync(
+                db, now=now, today=business_today(now), config=load_config_sync(db),
+            )
+            apply_reminders_sync(db, batch)
+            db.commit()
+            return tuple((m.telegram_id, m.text) for m in batch.staff_messages)
+        finally:
+            db.close()
+
+    async def _elevator_reminders_tick(self):
+        """Тик напоминаний по лифтам: DB-фаза в потоке, затем рассылка."""
+        task_name = 'elevator_reminders'
+        try:
+            messages = await asyncio.to_thread(self._elevator_reminders_sync)
+            sent = 0
+            if messages:
+                # Best-effort, сам не бросает и не пишет текст httpx в лог.
+                from uk_management_bot.services.workflow_notifications import send_notify_messages
+                sent = await send_notify_messages(self._bot, list(messages))
+                logger.info(
+                    "Лифты: напоминаний собрано %s, доставлено %s", len(messages), sent,
+                )
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            # Сюда долетают только ошибки DB-фазы: send_notify_messages не
+            # бросает, так что текста httpx (URL с токеном) в трейсе нет.
+            logger.exception("Ошибка напоминаний по лифтам")
 
 
 # Глобальный экземпляр планировщика

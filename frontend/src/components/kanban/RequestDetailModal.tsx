@@ -35,6 +35,8 @@ import { REASSIGNABLE_STATUSES } from './transitions'
 import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
 import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal, needsReturnReasonModal } from './transitions'
 import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
+import ElevatorStatusPromptDialog from '../elevators/ElevatorStatusPromptDialog'
+import { isElevatorsEnabled } from '../../utils/featureFlags'
 
 // TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
 const URGENCY: Record<string, { bg: string; text: string }> = {
@@ -114,6 +116,9 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [categoryWarning, setCategoryWarning] = useState<
     { kind: 'mismatch' | 'unassigned'; canReassign: boolean } | null
   >(null)
+  // Модуль «Лифты»: после подтверждения заявки с elevator_id — подсказка
+  // «Лифт работает?» (смена статуса лифта одним касанием, Ф4a-3).
+  const [elevatorPromptOpen, setElevatorPromptOpen] = useState(false)
 
   // FE-07: reset per-request form state when a *different* request opens.
   // Done at render time («adjust state when input changes») rather than in an
@@ -133,6 +138,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     setRemindStatus('idle')
     setPendingTargetStatus(null)
     setCategoryWarning(null)
+    setElevatorPromptOpen(false)
   }
 
   const { data: request } = useQuery({
@@ -266,6 +272,22 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     updateRequest.mutate(data as unknown as Record<string, unknown>)
     setPendingTargetStatus(null)
   }
+
+  // У заявки по лифту после успешной приёмки менеджером спрашиваем, работает
+  // ли лифт (только при включённом модуле). Общий хвост для обоих путей:
+  // подтверждение «Выполнена» → «Исполнено» и приёмка за жителя → «Принято».
+  const openElevatorPromptIfNeeded = () => {
+    if (isElevatorsEnabled() && request?.elevator_id) setElevatorPromptOpen(true)
+  }
+
+  const confirmCompletion = () =>
+    updateRequest.mutate(
+      { status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) },
+      { onSuccess: openElevatorPromptIfNeeded },
+    )
+
+  const forceAcceptWithNote = () =>
+    forceAccept.mutate(forceAcceptNote, { onSuccess: openElevatorPromptIfNeeded })
 
   if (!requestNumber) return null
 
@@ -651,7 +673,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                           {t('common.cancel')}
                         </Button>
                         <Button
-                          onClick={() => updateRequest.mutate({ status: 'Исполнено', manager_confirmed: true, ...(confirmNote ? { manager_confirmation_notes: confirmNote } : {}) })}
+                          onClick={confirmCompletion}
                           disabled={updateRequest.isPending}
                           className="flex-1 bg-emerald hover:bg-emerald/90 text-white"
                         >
@@ -746,7 +768,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                           onClick={() => { setShowForceAcceptSection(false); setForceAcceptNote('') }}
                         >{t('common.cancel')}</Button>
                         <Button
-                          onClick={() => forceAccept.mutate(forceAcceptNote)}
+                          onClick={forceAcceptWithNote}
                           disabled={forceAccept.isPending || forceAcceptNote.trim().length < 10}
                           className="flex-1 bg-[#d97706] hover:bg-[#d97706]/90 text-white font-[family-name:var(--font-display)]"
                         >
@@ -827,6 +849,17 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
         currentExecutorName={request.executor_name ?? null}
         onClose={() => setReassignOpen(false)}
         onReassigned={() => setCategoryWarning(null)}
+      />
+    )}
+
+    {elevatorPromptOpen && request?.elevator_id && (
+      <ElevatorStatusPromptDialog
+        open
+        elevatorId={request.elevator_id}
+        elevatorLabel={request.elevator_label ?? `#${request.elevator_id}`}
+        currentStatus={request.elevator_status ?? null}
+        requestNumbers={[requestNumber]}
+        onClose={() => setElevatorPromptOpen(false)}
       />
     )}
     </>

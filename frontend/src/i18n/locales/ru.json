@@ -130,7 +130,8 @@
     "resourceAccounting": "Учёт ресурсов",
     "workReports": "Отчёты о работах",
     "residents": "Жители",
-    "groups": "Группы"
+    "groups": "Группы",
+    "elevators": "Лифты"
   },
   "resourceAccounting": {
     "unavailable": "Раздел учёта ресурсов временно недоступен. Попробуйте позже или обратитесь к администратору.",
@@ -739,7 +740,8 @@
       "announcements": "Объявления",
       "rating": "Оценка жителей",
       "hours": "Часы работы",
-      "workreports": "Отчёты о работах"
+      "workreports": "Отчёты о работах",
+      "elevators": "Лифты"
     },
     "org": "Управляющая компания",
     "orgName": "Наименование",
@@ -1063,6 +1065,19 @@
     "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя"
   },
   "callcenter": {
+    "elevator": {
+      "yard": "Двор *",
+      "yardPlaceholder": "Выберите двор...",
+      "building": "Дом *",
+      "buildingPlaceholder": "Выберите дом...",
+      "elevator": "Лифт *",
+      "elevatorPlaceholder": "Выберите лифт...",
+      "noElevators": "Для этого дома лифты не заведены",
+      "operational": "Лифт работает? *",
+      "yes": "Да",
+      "no": "Нет",
+      "required": "Для заявки по лифту укажите дом, лифт и работает ли он"
+    },
     "title": "Создание заявки по звонку",
     "searchPlaceholder": "Телефон или ФИО жителя",
     "find": "Найти",
@@ -1746,13 +1761,42 @@
       "avgAcceptanceRating": "Средняя оценка по принятым заявкам",
       "workingHours": "Часы работы",
       "emergencyService": "Аварийная служба: круглосуточно",
-      "workReports": "Отчёты о работах"
+      "workReports": "Отчёты о работах",
+      "elevators": "Лифты"
     },
     "workReports": {
       "viewAll": "Все отчёты",
       "before": "До",
       "after": "После",
       "noPhoto": "Нет фото"
+    },
+    "elevators": {
+      "empty": "Данные о лифтах пока не опубликованы",
+      "dispatch": "Диспетчерская",
+      "entrance": "Подъезд {{entrance}}",
+      "elevator": "Лифт {{elevator}}",
+      "since": "с {{date}}",
+      "downtimeReason": "Причина: {{reason}}",
+      "sparePartExpected": "Запчасть ожидается {{date}}",
+      "servicedBy": "Обслуживает: {{org}}",
+      "certUntil": "освид. до {{date}}",
+      "certExpired": "освидетельствование просрочено",
+      "lastMaintenance": "ТО {{date}}",
+      "availability": "доступность {{pct}} %",
+      "workingOf_zero": "{{count}} из {{total}} работает",
+      "workingOf_one": "{{count}} из {{total}} работает",
+      "workingOf_few": "{{count}} из {{total}} работают",
+      "workingOf_many": "{{count}} из {{total}} работают",
+      "allWorking": "Все лифты работают",
+      "andMore": "и ещё {{count}}",
+      "viewAll": "Все лифты →",
+      "chips": {
+        "all": "Все",
+        "working": "Работают",
+        "not_working": "Не работают",
+        "under_repair": "В ремонте",
+        "maintenance": "На ТО"
+      }
     },
     "footer": {
       "realtime": "Обновление в реальном времени · Данные актуальны на {{time}}"
@@ -1928,7 +1972,26 @@
       "submitted": "Заявка создана",
       "submitFailed": "Не удалось создать заявку",
       "addressChanged": "Адрес изменился — выберите заново",
-      "noAddresses": "Нет доступных адресов. Обратитесь к менеджеру."
+      "noAddresses": "Нет доступных адресов. Обратитесь к менеджеру.",
+      "elevator": {
+        "title": "Лифт",
+        "selectElevator": "Какой лифт?",
+        "item": "Подъезд {{entrance}} · лифт {{number}}",
+        "operationalQuestion": "Лифт сейчас работает?",
+        "yes": "Да, работает",
+        "no": "Нет, не работает",
+        "hintUnderRepair": "Лифт уже в ремонте — заявка будет добавлена к текущему ремонту.",
+        "hintMaintenance": "Лифт на техобслуживании — заявка будет передана обслуживающей организации.",
+        "noElevators": "Для этого дома лифты не заведены — обратитесь к диспетчеру.",
+        "backToCategory": "Назад к категории",
+        "needBuilding": "Для заявки по лифту выберите дом или квартиру, а не двор.",
+        "backToAddress": "К выбору адреса",
+        "loadError": "Не удалось загрузить список лифтов",
+        "retry": "Повторить",
+        "summaryLabel": "Лифт",
+        "summaryWorking": "работает",
+        "summaryNotWorking": "не работает"
+      }
     },
     "inspector": {
       "selectYard": "Выберите двор",
@@ -2285,6 +2348,17 @@
       "settingsUpdated": "Настройки сохранены"
     }
   },
+  "publicElevators": {
+    "title": "Лифты",
+    "backToBoard": "← На табло",
+    "searchLabel": "Поиск",
+    "searchPlaceholder": "Поиск по адресу или двору",
+    "yardLabel": "Двор",
+    "yardAll": "Все дворы",
+    "notFound": "Ничего не найдено",
+    "resetFilters": "Сбросить фильтры",
+    "updatedAt": "Данные актуальны на {{time}}"
+  },
   "workReportsArchive": {
     "title": "Отчёты о выполненных работах",
     "backToBoard": "← На табло",
@@ -2467,6 +2541,278 @@
       "empty": "ФИО не может быть пустым",
       "noLetters": "ФИО должно содержать хотя бы одну букву",
       "tooLong": "ФИО не длиннее {{max}} символов"
+    }
+  },
+  "elevators": {
+    "title": "Лифты",
+    "subtitle": "Реестр лифтов, статусы, график ТО и освидетельствований",
+    "status": {
+      "working": "Работает",
+      "not_working": "Не работает",
+      "under_repair": "В ремонте",
+      "maintenance": "Техобслуживание",
+      "none": "Не введён"
+    },
+    "flags": {
+      "no_contract": "Без договора",
+      "cert_expired": "Просрочено освидетельствование",
+      "maintenance_overdue": "Просрочено ТО"
+    },
+    "summary": {
+      "total": "Всего лифтов",
+      "noContract": "Без договора",
+      "certExpired": "Просрочено освид.",
+      "maintenanceOverdue": "Просрочено ТО",
+      "downtimeOverThreshold": "Долгий простой",
+      "requestsWithoutElevator": "Лифтовых заявок без лифта",
+      "byStatus": "По статусам",
+      "byYard": "По дворам"
+    },
+    "filters": {
+      "yard": "Двор",
+      "allYards": "Все дворы",
+      "building": "Дом",
+      "allBuildings": "Все дома",
+      "status": "Статус",
+      "allStatuses": "Все статусы",
+      "includeArchived": "Показать архивные"
+    },
+    "columns": {
+      "label": "Лифт",
+      "status": "Статус",
+      "since": "С какого времени",
+      "availability": "Доступность 30 дн.",
+      "flags": "Флаги",
+      "openRequests": "Открытых заявок",
+      "actions": "Действия"
+    },
+    "actions": {
+      "add": "Добавить лифт",
+      "open": "Открыть",
+      "edit": "Редактировать",
+      "commission": "Ввести в эксплуатацию",
+      "archive": "Архивировать",
+      "calendar": "Календарь",
+      "config": "Настройки",
+      "copyPrevious": "Скопировать предыдущий",
+      "addOccurrence": "Добавить пункт",
+      "generate": "Сгенерировать",
+      "reschedule": "Перенести",
+      "cancel": "Отменить",
+      "complete": "Выполнено",
+      "confirmSelected": "Подтвердить выбранные",
+      "createRepair": "Создать ремонт",
+      "backToList": "К реестру"
+    },
+    "empty": "Лифты не найдены",
+    "archivedBadge": "Архив",
+    "tabs": {
+      "passport": "Паспорт",
+      "status": "Статус",
+      "events": "Журнал",
+      "calendar": "Календарь",
+      "requests": "Заявки"
+    },
+    "form": {
+      "createTitle": "Новый лифт",
+      "editTitle": "Редактирование лифта",
+      "sectionRequired": "Обязательные поля",
+      "sectionPassport": "Паспорт",
+      "sectionContract": "Договор обслуживания",
+      "sectionCert": "Освидетельствование",
+      "sectionDowntime": "Простой и публикация",
+      "yard": "Двор",
+      "building": "Дом",
+      "selectYard": "Выберите двор",
+      "selectBuilding": "Выберите дом",
+      "entrance": "Подъезд",
+      "elevatorNumber": "Номер лифта",
+      "passportNumber": "Номер паспорта",
+      "manufacturer": "Производитель",
+      "serialNumber": "Серийный номер",
+      "factoryNumber": "Заводской номер",
+      "model": "Модель",
+      "productionYear": "Год выпуска",
+      "capacityKg": "Грузоподъёмность, кг",
+      "floorsServed": "Обслуживаемые этажи",
+      "serviceOrgName": "Обслуживающая организация",
+      "serviceOrgPhone": "Телефон организации",
+      "contractNumber": "Номер договора",
+      "contractUntil": "Договор до",
+      "certNumber": "Номер освидетельствования",
+      "certValidUntil": "Освидетельствование до",
+      "certActUrl": "Ссылка на акт",
+      "downtimeReason": "Причина простоя",
+      "sparePartExpectedOn": "Ожидание запчасти до",
+      "publishDowntimeDetails": "Публиковать причину простоя жителям",
+      "isPublic": "Показывать жителям",
+      "required": "Заполните обязательные поля: двор и дом, подъезд, номер лифта, номер паспорта, производитель, серийный номер",
+      "positiveInt": "Подъезд и номер лифта — целые положительные числа",
+      "copied": "Паспортные поля скопированы из лифта {{label}}",
+      "copyNone": "Нет лифтов для копирования",
+      "reloaded": "Карточка обновлена другим пользователем — форма перечитана",
+      "invalidUrl": "Ссылка на акт должна начинаться с http:// или https://"
+    },
+    "detail": {
+      "notCommissioned": "Не введён в эксплуатацию",
+      "commissionedAt": "Введён в эксплуатацию",
+      "archived": "В архиве с {{date}}",
+      "archivedReason": "Причина архивации",
+      "apartmentsWithoutEntrance": "Квартир без подъезда: {{count}}",
+      "apartmentsWithoutEntranceHint": "У этих квартир дома не указан подъезд — жители не получат уведомления о лифте, пока подъезд не заполнен в адресах.",
+      "publicCode": "Публичный код",
+      "version": "Версия карточки",
+      "currentStatus": "Текущий статус",
+      "since": "С какого времени",
+      "availability": "Доступность за 30 дней",
+      "statusNeedsCommission": "Смена статуса недоступна: лифт не введён в эксплуатацию",
+      "openRequests": "Открытых заявок",
+      "notFound": "Лифт не найден"
+    },
+    "statusDialog": {
+      "title": "Смена статуса → {{status}}",
+      "reason": "Причина (необязательно)",
+      "reasonPlaceholder": "Например: застрял между этажами",
+      "submit": "Сменить статус"
+    },
+    "archiveDialog": {
+      "title": "Архивировать лифт",
+      "hint": "Лифт исчезнет из реестра и выбора в заявках; карточка останется доступной по ссылке.",
+      "reason": "Причина архивации",
+      "submit": "Архивировать"
+    },
+    "events": {
+      "time": "Время",
+      "kind": "Событие",
+      "transition": "Переход",
+      "source": "Источник",
+      "actor": "Кто",
+      "reason": "Причина",
+      "request": "Заявка",
+      "empty": "Событий пока нет",
+      "system": "система",
+      "kinds": {
+        "status_changed": "Смена статуса",
+        "commissioned": "Ввод в эксплуатацию",
+        "archived": "Архивация",
+        "contract_changed": "Договор изменён",
+        "cert_changed": "Освидетельствование изменено",
+        "passport_changed": "Паспорт изменён"
+      },
+      "sources": {
+        "manual": "Вручную",
+        "request_hint": "Из заявки",
+        "infrasafe": "InfraSafe",
+        "system": "Система"
+      }
+    },
+    "occurrences": {
+      "kind": {
+        "maintenance": "ТО",
+        "certification": "Освидетельствование"
+      },
+      "state": {
+        "planned": "Запланировано",
+        "done": "Выполнено",
+        "cancelled": "Отменено",
+        "all": "Все"
+      },
+      "kindLabel": "Вид",
+      "stateLabel": "Состояние",
+      "allKinds": "Все виды",
+      "dueOn": "Срок",
+      "doneAt": "Выполнено",
+      "comment": "Комментарий",
+      "request": "Заявка",
+      "empty": "Записей графика нет",
+      "createTitle": "Добавить пункт графика",
+      "generateTitle": "Сгенерировать график",
+      "start": "Первая дата",
+      "everyMonths": "Каждые N месяцев",
+      "count": "Количество записей",
+      "rescheduleTitle": "Перенести на другую дату",
+      "completeTitle": "Отметить выполненным",
+      "certFieldsHint": "Для освидетельствования обязательны номер, срок действия и ссылка на акт",
+      "certRequired": "Заполните номер, срок действия и ссылку на акт",
+      "requestNumber": "Номер заявки (необязательно)"
+    },
+    "requests": {
+      "includeClosed": "Показывать закрытые",
+      "number": "Номер",
+      "status": "Статус",
+      "category": "Категория",
+      "urgency": "Срочность",
+      "created": "Создана",
+      "operational": "Лифт работает",
+      "executor": "Исполнитель",
+      "applicant": "Заявитель",
+      "empty": "Заявок по лифту нет",
+      "selected": "Выбрано: {{count}}",
+      "resultTitle": "Результат приёмки",
+      "resultOk": "подтверждена",
+      "resultFail": "ошибка",
+      "yes": "Да",
+      "no": "Нет"
+    },
+    "repair": {
+      "title": "Создать заявку на ремонт",
+      "hint": "Заявка категории «Лифт» с признаком «лифт не работает», приёмка — менеджером.",
+      "description": "Описание",
+      "descriptionPlaceholder": "Что случилось с лифтом",
+      "urgency": "Срочность",
+      "submit": "Создать заявку"
+    },
+    "prompt": {
+      "title": "Лифт работает?",
+      "body": "Лифт {{label}}: сейчас «{{status}}». Лифт работает?",
+      "current": "текущий",
+      "keep": "Оставить как есть",
+      "reason": "подтверждение заявки {{number}}",
+      "reasonMany": "подтверждение {{count}} заявок: {{numbers}}"
+    },
+    "calendar": {
+      "title": "Календарь ТО и освидетельствований",
+      "subtitle": "Запланированные работы по всем лифтам",
+      "from": "С",
+      "to": "По",
+      "empty": "На выбранный период работ не запланировано"
+    },
+    "config": {
+      "title": "Настройки модуля «Лифты»",
+      "subtitle": "Пороги простоя, уведомления жителям и напоминания персоналу",
+      "thresholds": "Пороги простоя (дней)",
+      "notWorkingDays": "Не работает — напоминать через, дней",
+      "underRepairDays": "В ремонте — напоминать через, дней",
+      "noRemind": "Не напоминать",
+      "residentNotifications": "Уведомления жителям",
+      "repairStarted": "Начало ремонта",
+      "maintenanceStarted": "Начало техобслуживания",
+      "backInService": "Лифт снова работает",
+      "staffReminders": "Напоминания персоналу (дней до срока, через запятую)",
+      "maintenance": "Техобслуживание",
+      "certification": "Освидетельствование",
+      "contract": "Договор",
+      "stagesHint": "Например: 30, 7, 1 — три напоминания",
+      "overdueWeekly": "Еженедельно напоминать о просроченном",
+      "modulePublic": "Показывать лифты жителям",
+      "modulePublicHint": "Сводка на табло жителей и публичная страница /elevators показывают лифты, у которых включено «Показывать жителям»",
+      "invalidStages": "Стадии напоминаний — целые неотрицательные числа"
+    },
+    "toast": {
+      "created": "Лифт добавлен",
+      "updated": "Карточка лифта сохранена",
+      "conflict": "Карточку изменил кто-то другой — обновите страницу",
+      "commissioned": "Лифт введён в эксплуатацию",
+      "archived": "Лифт архивирован",
+      "statusChanged": "Статус изменён, уведомлено жителей: {{count}}",
+      "statusUnchanged": "Статус не изменился",
+      "occurrenceCreated": "Пункт графика добавлен",
+      "generated": "График сгенерирован",
+      "rescheduled": "Пункт перенесён",
+      "cancelled": "Пункт отменён",
+      "completed": "Пункт отмечен выполненным",
+      "repairCreated": "Заявка на ремонт создана",
+      "configSaved": "Настройки сохранены"
     }
   }
 }

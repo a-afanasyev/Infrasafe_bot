@@ -38,7 +38,14 @@ export interface WorkingHourCfg {
   closed: boolean
 }
 
-export type ModuleId = 'stats' | 'requests' | 'announcements' | 'rating' | 'hours' | 'workreports'
+export type ModuleId =
+  | 'stats'
+  | 'requests'
+  | 'announcements'
+  | 'rating'
+  | 'hours'
+  | 'workreports'
+  | 'elevators'
 
 export const MODULE_IDS: ModuleId[] = [
   'stats',
@@ -47,6 +54,7 @@ export const MODULE_IDS: ModuleId[] = [
   'rating',
   'hours',
   'workreports',
+  'elevators',
 ]
 
 export type ModuleWidth = 'full' | 'half'
@@ -74,6 +82,12 @@ export interface WorkReportsCfg {
   title: LocalizedText
 }
 
+// Настройки модуля «Лифты» на табло (T16): только заголовок, лимитов нет.
+// Пустой заголовок = i18n-дефолт на клиенте.
+export interface ElevatorsCfg {
+  title: LocalizedText
+}
+
 export interface BoardConfigData {
   org: OrgCfg
   contacts: ContactsCfg
@@ -82,6 +96,8 @@ export interface BoardConfigData {
   working_hours: WorkingHourCfg[]
   layout: LayoutItem[]
   work_reports: WorkReportsCfg
+  // Опционально: ответ бэкенда до T16 (rolling deploy) блока не несёт.
+  elevators?: ElevatorsCfg
 }
 
 // ARCH-137 B5: ответ публичного board-config несёт display_tz — зону показа
@@ -164,5 +180,8 @@ export const defaultBoardConfig: BoardConfigData = {
     categories: [],
     limit: 6,
     title: { ru: 'Отчёты о выполненных работах', uz: 'Bajarilgan ishlar hisobotlari' },
+  },
+  elevators: {
+    title: { ru: 'Лифты', uz: 'Liftlar' },
   },
 }
