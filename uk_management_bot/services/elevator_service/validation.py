@@ -28,6 +28,26 @@ PASSPORT_REQUIRED_FIELDS: tuple[str, ...] = (
 _POSITIVE_INT_FIELDS: frozenset[str] = frozenset(
     {"building_id", "entrance_number", "elevator_number"}
 )
+# Р18: статусы, при которых по лифту УЖЕ идут работы — мастер занимается им,
+# и заявка самообслуживания жителя не нужна. Канон один на весь репозиторий:
+# бот, групповой приём и API берут кортеж отсюда, копий не держат.
+WORKS_STATUSES: tuple[str, ...] = ("under_repair", "maintenance")
+
+
+def is_under_works(status: str | None) -> bool:
+    """Идут ли по лифту работы (ремонт / ТО). ``None`` и прочие статусы → False."""
+    return status in WORKS_STATUSES
+
+
+def resident_requests_blocked(status: str | None, *, allowed_by_config: bool) -> bool:
+    """Р18a: запрещена ли заявка самообслуживания по лифту с таким статусом.
+
+    ``allowed_by_config`` — тумблер менеджера
+    ``elevators_config.allow_resident_requests_under_works`` (дефолт False =
+    запрет включён). Тумблер включён → не блокируем никогда; выключен →
+    блокируем ровно ``WORKS_STATUSES``.
+    """
+    return not allowed_by_config and is_under_works(status)
 
 
 def require_elevator_for_category(

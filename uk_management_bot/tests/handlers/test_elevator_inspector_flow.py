@@ -290,3 +290,35 @@ async def test_confirm_save_failed_other_category_generic(world):
         await insp.inspector_confirm(cb, state)
     assert cb.message.edit_text.await_args.args[0] == get_text(
         "errors.request_save_failed", language="ru")
+
+
+# ── 6. Р18: обходчик — персонал, запрет самообслуживания на него не действует ──
+
+
+@pytest.mark.asyncio
+async def test_inspector_can_pick_elevator_under_works(world, db):
+    """Лифт «В ремонте» обходчику не блокируется: прежняя мягкая подсказка + вопрос."""
+    world["m21"].current_status = "under_repair"
+    db.commit()
+    cb = _callback(f"elv:pick:{world['m21'].id}")
+    state = FakeState({"category": "elevator", "elevator_building_id": world["many"].id},
+                      InspectorRequestStates.elevator_pick)
+    await insp.inspector_elevator_pick(cb, state)
+    assert state.state is InspectorRequestStates.elevator_operational
+    assert state.data["elevator_id"] == world["m21"].id
+    texts = "\n".join(_answers(cb))
+    assert get_text("elevators.status.under_repair", language="ru") in texts
+    assert get_text("requests.elevator.operational_prompt", language="ru") in texts
+
+
+@pytest.mark.asyncio
+async def test_inspector_confirm_passes_staff_escape_hatch(world):
+    """save_request получает allow_under_works=True — иначе Р18 отбил бы ремонт."""
+    cb = _callback("insp_confirm_yes")
+    data = {**_building_data(world, "many"), "category": "elevator", "description": "Не едет",
+            "urgency": "high", "elevator_id": world["m21"].id, "elevator_operational": False}
+    state = FakeState(data, InspectorRequestStates.confirm)
+    saved = AsyncMock(return_value="260906-002")
+    with patch("uk_management_bot.handlers.requests.save_request", saved):
+        await insp.inspector_confirm(cb, state)
+    assert saved.await_args.kwargs["allow_under_works"] is True

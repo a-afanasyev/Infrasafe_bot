@@ -113,6 +113,7 @@ class RequestHandlerService:
         acceptance_mode: str = ACCEPTANCE_MODE_RESIDENT,
         elevator_id: int | None = None,
         elevator_operational: bool | None = None,
+        allow_under_works: bool = False,
     ) -> Request:
         """Создать строку заявки и положить в сессию (без commit — коммитит
         вызывающий после emit, как в исходном коде).
@@ -124,13 +125,16 @@ class RequestHandlerService:
         elevator_id/elevator_operational — модуль «Лифты» (Р11, Ф4a-1): единая
         точка проверки для всех sync-путей (житель, группы, инспектор, лифтёр) —
         ``resolve_request_elevator_sync`` бросает ``ElevatorValidationError``
-        (категория «лифт» без полей / непригодный лифт); флаг выключен → NULL."""
+        (категория «лифт» без полей / непригодный лифт); флаг выключен → NULL.
+        allow_under_works — лазейка персонала (Р18): лифт «В ремонте»/«На ТО»
+        блокируется только для самообслуживания (житель, групповой приём)."""
         # Дом заявки — building_id (уровень дома) или дом квартиры apartment_id
         # (оба из резолвера адреса); без дома лифт не привязывается.
         elevator = resolve_request_elevator_sync(
             self.db, category=category, elevator_id=elevator_id,
             elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
             building_id=building_id, apartment_id=apartment_id,
+            allow_under_works=allow_under_works,
         )
         request = Request(
             request_number=request_number,

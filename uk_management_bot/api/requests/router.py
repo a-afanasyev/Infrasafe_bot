@@ -299,6 +299,8 @@ async def create_request(
             webhook_tag="twa",
             elevator_id=body.elevator_id,
             elevator_operational=body.elevator_operational,
+            # Р18: подпись лифта в теле 409 — на языке жителя, как и карточка.
+            language=card_language(user),
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)
@@ -335,6 +337,10 @@ async def create_inspector_request(
             webhook_tag="inspector",
             elevator_id=body.elevator_id,
             elevator_operational=body.elevator_operational,
+            # Р18: обходчик — персонал на объекте; запрет заявок по лифту
+            # «В ремонте»/«На ТО» на него не распространяется.
+            allow_under_works=True,
+            language=card_language(user),
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)

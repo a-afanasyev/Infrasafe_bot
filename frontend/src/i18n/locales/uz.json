@@ -1967,8 +1967,6 @@
         "operationalQuestion": "Lift hozir ishlayaptimi?",
         "yes": "Ha, ishlayapti",
         "no": "Yo'q, ishlamayapti",
-        "hintUnderRepair": "Lift allaqachon ta'mirda — ariza joriy ta'mirga qo'shiladi.",
-        "hintMaintenance": "Lift texnik xizmatda — ariza xizmat ko'rsatuvchi tashkilotga yuboriladi.",
         "noElevators": "Bu uy uchun liftlar kiritilmagan — dispetcherga murojaat qiling.",
         "backToCategory": "Toifaga qaytish",
         "needBuilding": "Lift bo'yicha ariza uchun hovli emas, uy yoki kvartirani tanlang.",
@@ -1977,7 +1975,15 @@
         "retry": "Qayta urinish",
         "summaryLabel": "Lift",
         "summaryWorking": "ishlayapti",
-        "summaryNotWorking": "ishlamayapti"
+        "summaryNotWorking": "ishlamayapti",
+        "blockedTitle": "Ariza kerak emas",
+        "blockedBody": "Liftda hozir ishlar olib borilmoqda: {{status}}, {{since}} dan. Usta allaqachon u bilan shug'ullanmoqda.",
+        "blockedBodyNoSince": "Liftda hozir ishlar olib borilmoqda: {{status}}. Usta allaqachon u bilan shug'ullanmoqda.",
+        "blockedCall": "Agar boshqa hodisa yuz bergan bo'lsa (masalan, kimdir kabinada qolib ketgan bo'lsa) — dispetcherga qo'ng'iroq qiling:",
+        "blockedCallNoPhone": "Agar boshqa hodisa yuz bergan bo'lsa (masalan, kimdir kabinada qolib ketgan bo'lsa) — zudlik bilan dispetcherga qo'ng'iroq qiling.",
+        "blockedPickAnother": "Boshqa liftni tanlang yoki toifaga qayting.",
+        "hintUnderRepair": "Lift allaqachon ta'mirda — ariza joriy ta'mirga qo'shiladi.",
+        "hintMaintenance": "Lift texnik xizmatda — ariza xizmat ko'rsatuvchi tashkilotga uzatiladi."
       }
     },
     "inspector": {
@@ -2747,7 +2753,9 @@
       "description": "Tavsif",
       "descriptionPlaceholder": "Lift bilan nima bo'ldi",
       "urgency": "Shoshilinchlik",
-      "submit": "Ariza yaratish"
+      "submit": "Ariza yaratish",
+      "alreadyUnderWorks": "Lift allaqachon {{status}} ({{since}} dan) — ariza joriy ishlarni takrorlamayotganini tekshiring.",
+      "alreadyUnderWorksNoSince": "Lift allaqachon {{status}} — ariza joriy ishlarni takrorlamayotganini tekshiring."
     },
     "prompt": {
       "title": "Lift ishlayaptimi?",
@@ -2783,7 +2791,10 @@
       "overdueWeekly": "Muddati o'tganlar haqida har hafta eslatish",
       "modulePublic": "Liftlarni aholiga ko'rsatish",
       "modulePublicHint": "Aholilar tablosidagi xulosa va /elevators ommaviy sahifasi «Liftlarni aholiga ko'rsatish» yoqilgan liftlarni ko'rsatadi",
-      "invalidStages": "Eslatma bosqichlari — manfiy bo'lmagan butun sonlar"
+      "invalidStages": "Eslatma bosqichlari — manfiy bo'lmagan butun sonlar",
+      "residentRequests": "Aholi arizalari",
+      "allowUnderWorks": "Ta'mir va texnik xizmat vaqtida aholi arizalariga ruxsat berish",
+      "allowUnderWorksHint": "O'chirilgan: yashovchi ta'mirdagi yoki texnik xizmatdagi lift bo'yicha ariza yarata olmaydi, holat va dispetcherlik telefonini ko'radi. Yoqilgan: ogohlantirish ko'rsatiladi, lekin ariza yaratishi mumkin."
     },
     "toast": {
       "created": "Lift qo'shildi",

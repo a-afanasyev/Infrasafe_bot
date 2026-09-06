@@ -312,6 +312,8 @@ async def persist_request(
     webhook_tag: str,
     elevator_id: Optional[int] = None,
     elevator_operational: Optional[bool] = None,
+    allow_under_works: bool = False,
+    language: str = "ru",
 ) -> PersistedRequest:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
@@ -330,6 +332,12 @@ async def persist_request(
     роутер мапит в 422. Проверка ДО выдачи номера — отказ не жжёт счётчик.
     Возвращает ``PersistedRequest`` — заявку вместе с уже загруженным лифтом,
     чтобы ответ POST не перечитывал его.
+
+    Р18: ``allow_under_works`` — лазейка персонала для лифта «В ремонте»/«На ТО».
+    Житель (TWA) вызывает с дефолтом False и получает 409; инспектор — True
+    (он на объекте и видит статус сам). Решение вызывающего роутера по роли
+    эндпоинта, а не по телу запроса. ``language`` — язык подписи лифта в теле
+    409 (тот же ``card_language(user)``, что у карточки ответа).
     """
     # Дом заявки — из разрешённого адреса (уровень building) или дом квартиры
     # (уровень apartment); двор → лифт привязать нельзя (security-ревью T6).
@@ -337,6 +345,7 @@ async def persist_request(
         db, category=category, elevator_id=elevator_id,
         elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
         building_id=resolved.building_id, apartment_id=resolved.apartment_id,
+        allow_under_works=allow_under_works, language=language,
     )
 
     async def _attempt(number: str) -> RequestModel:

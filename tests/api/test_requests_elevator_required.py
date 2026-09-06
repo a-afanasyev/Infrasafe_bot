@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -22,6 +22,7 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.elevator import Elevator
+from uk_management_bot.database.models.elevators_config import ElevatorsConfig
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
@@ -67,13 +68,19 @@ def _elevator(building_id: int, *, number: int, commissioned: bool = True,
 
 @pytest_asyncio.fixture
 async def elevators(db_session: AsyncSession, addr_tree):
-    """ok — пригодный лифт дома; raw — не введён; foreign — пригодный лифт другого дома."""
+    """ok — пригодный лифт дома; raw — не введён; foreign — лифт другого дома;
+    repairing/maintained — «В ремонте»/«На ТО» (Р18); broken — «не работает»."""
     ok = _elevator(addr_tree["building"].id, number=1)
     raw = _elevator(addr_tree["building"].id, number=2, commissioned=False)
     foreign = _elevator(addr_tree["other"].id, number=1)
-    db_session.add_all([ok, raw, foreign])
+    repairing = _elevator(addr_tree["building"].id, number=3, status="under_repair")
+    repairing.status_since = datetime(2026, 9, 1, 7, 30, tzinfo=timezone.utc)
+    maintained = _elevator(addr_tree["building"].id, number=4, status="maintenance")
+    broken = _elevator(addr_tree["building"].id, number=5, status="not_working")
+    db_session.add_all([ok, raw, foreign, repairing, maintained, broken])
     await db_session.commit()
-    return {"ok": ok, "raw": raw, "foreign": foreign}
+    return {"ok": ok, "raw": raw, "foreign": foreign, "repairing": repairing,
+            "maintained": maintained, "broken": broken}
 
 
 @pytest_asyncio.fixture
@@ -289,6 +296,81 @@ async def test_inspector_elevator_valid_201(make_client, inspector, addr_tree, e
     assert row.elevator_operational is True and row.source == "inspector"
 
 
+# ── Р18: лифт «В ремонте»/«На ТО» ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key,status", [("repairing", "under_repair"), ("maintained", "maintenance")])
+async def test_twa_elevator_under_works_409(make_client, applicant, addr_tree, elevators,
+                                            db_session, key, status):
+    """Житель по лифту в работах получает 409 с машинным кодом; заявки нет."""
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators[key].id,
+                                         elevator_operational=False))
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert detail["code"] == "elevator_under_works"
+    assert detail["status"] == status
+    assert "ул. Ленина 1" in detail["label"]
+    assert (await db_session.execute(select(RequestModel))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_twa_under_works_409_carries_status_since(make_client, applicant, addr_tree,
+                                                        elevators):
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert r.json()["detail"]["status_since"].startswith("2026-09-01T07:30")
+
+
+@pytest.mark.asyncio
+async def test_twa_not_working_elevator_still_201(make_client, applicant, addr_tree, elevators):
+    """Регресс: «не работает» — не «идут работы», заявка создаётся как раньше."""
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["broken"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 201, r.text
+
+
+@pytest.mark.asyncio
+async def test_twa_flag_off_does_not_block_under_works(make_client, applicant, addr_tree,
+                                                       elevators, monkeypatch):
+    monkeypatch.setattr(settings, "ELEVATORS_ENABLED", False)
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 201, r.text
+
+
+@pytest.mark.asyncio
+async def test_inspector_under_works_201(make_client, inspector, addr_tree, elevators, db_session):
+    """Лазейка персонала: обходчик создаёт заявку по лифту в ремонте."""
+    async with make_client(inspector) as ac:
+        r = await ac.post(f"{URL}/inspector", json=_body(
+            "building", addr_tree["building"].id,
+            elevator_id=elevators["repairing"].id, elevator_operational=False,
+        ))
+    assert r.status_code == 201, r.text
+    row = await _row(db_session, r.json()["request_number"])
+    assert row.elevator_id == elevators["repairing"].id
+
+
+@pytest.mark.asyncio
+async def test_uncommissioned_elevator_still_422_not_409(make_client, applicant, addr_tree,
+                                                         elevators):
+    """Обычная ошибка Р11 осталась 422 — 409 только у Р18."""
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["raw"].id,
+                                         elevator_operational=True))
+    assert r.status_code == 422, r.text
+
+
 # ── RequestCard: канбан / список / деталь ────────────────────────────
 
 def _seed_request(number: str, *, user_id: int, elevator_id: int | None, category: str) -> RequestModel:
@@ -332,3 +414,157 @@ async def test_list_and_detail_carry_elevator_fields(client, db_session, manager
     detail = (await client.get(f"{URL}/260905-003")).json()
     assert detail["elevator_id"] == elevators["ok"].id
     assert "подъезд 1" in detail["elevator_label"]
+
+
+# ── Р18a: тумблер менеджера ──────────────────────────────────────────
+
+
+async def _set_toggle(db_session: AsyncSession, allowed: bool) -> None:
+    """Записать elevators_config.allow_resident_requests_under_works."""
+    from uk_management_bot.services.elevator_service import merge_config
+
+    db_session.add(ElevatorsConfig(
+        id=1, data=merge_config(None, {"allow_resident_requests_under_works": allowed}),
+    ))
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_toggle_on_lets_resident_create_under_works(make_client, applicant, addr_tree,
+                                                          elevators, db_session):
+    """Менеджер разрешил — TWA-житель снова создаёт заявку (201)."""
+    await _set_toggle(db_session, True)
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 201, r.text
+    row = await _row(db_session, r.json()["request_number"])
+    assert row.elevator_id == elevators["repairing"].id
+
+
+@pytest.mark.asyncio
+async def test_toggle_off_explicitly_still_409(make_client, applicant, addr_tree, elevators,
+                                               db_session):
+    await _set_toggle(db_session, False)
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["code"] == "elevator_under_works"
+
+
+@pytest.mark.asyncio
+async def test_for_building_carries_resident_verdict_blocked(make_client, applicant, addr_tree,
+                                                             elevators):
+    """TWA получает готовый вердикт, а не конфиг: запрет включён (дефолт)."""
+    async with make_client(applicant) as ac:
+        r = await ac.get(f"/api/v2/elevators/for-building/{addr_tree['building'].id}")
+    assert r.status_code == 200, r.text
+    by_id = {item["id"]: item for item in r.json()}
+    assert by_id[elevators["repairing"].id]["resident_request_blocked"] is True
+    assert by_id[elevators["maintained"].id]["resident_request_blocked"] is True
+    assert by_id[elevators["ok"].id]["resident_request_blocked"] is False
+    assert by_id[elevators["broken"].id]["resident_request_blocked"] is False
+    assert by_id[elevators["repairing"].id]["status_since"].startswith("2026-09-01T07:30")
+
+
+@pytest.mark.asyncio
+async def test_for_building_verdict_follows_toggle(make_client, applicant, addr_tree, elevators,
+                                                   db_session):
+    await _set_toggle(db_session, True)
+    async with make_client(applicant) as ac:
+        r = await ac.get(f"/api/v2/elevators/for-building/{addr_tree['building'].id}")
+    by_id = {item["id"]: item for item in r.json()}
+    assert by_id[elevators["repairing"].id]["resident_request_blocked"] is False
+
+
+@pytest_asyncio.fixture
+async def uz_applicant(db_session: AsyncSession, addr_tree):
+    """Житель с языком uz — проверяем локализацию подписи в теле 409."""
+    user = User(telegram_id=333, username="uzappl", first_name="U",
+                roles='["applicant"]', status="approved", phone="+702", language="uz")
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(UserApartment(user_id=user.id, apartment_id=addr_tree["apt"].id,
+                                 status="approved"))
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.mark.asyncio
+async def test_409_label_uses_requester_language(make_client, uz_applicant, addr_tree, elevators):
+    """UZ-житель получает UZ-подпись лифта (RU-подпись в UZ-уведомлении — баг)."""
+    async with make_client(uz_applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert r.status_code == 409, r.text
+    label = r.json()["detail"]["label"]
+    assert "kirish" in label and "lift" in label
+    assert "подъезд" not in label
+
+
+@pytest.mark.asyncio
+async def test_409_label_default_language_is_ru(make_client, applicant, addr_tree, elevators):
+    async with make_client(applicant) as ac:
+        r = await ac.post(URL, json=_body("apartment", addr_tree["apt"].id,
+                                         elevator_id=elevators["repairing"].id,
+                                         elevator_operational=False))
+    assert "подъезд" in r.json()["detail"]["label"]
+
+
+@pytest.mark.asyncio
+async def test_for_building_skips_config_read_when_nothing_under_works(
+    make_client, applicant, addr_tree, db_session, monkeypatch,
+):
+    """Штатный путь (все лифты работают) не трогает строку elevators_config."""
+    from uk_management_bot.api.elevators import service as elevators_service
+
+    working_only = _elevator(addr_tree["building"].id, number=1)
+    broken = _elevator(addr_tree["building"].id, number=2, status="not_working")
+    db_session.add_all([working_only, broken])
+    await db_session.commit()
+
+    calls = 0
+    original = elevators_service.domain.load_config_async
+
+    async def _spy(db):
+        nonlocal calls
+        calls += 1
+        return await original(db)
+
+    monkeypatch.setattr(elevators_service.domain, "load_config_async", _spy)
+
+    async with make_client(applicant) as ac:
+        r = await ac.get(f"/api/v2/elevators/for-building/{addr_tree['building'].id}")
+    assert r.status_code == 200, r.text
+    assert calls == 0, "конфиг прочитан, хотя под работами нет ни одного лифта"
+    assert all(item["resident_request_blocked"] is False for item in r.json())
+
+
+@pytest.mark.asyncio
+async def test_for_building_reads_config_once_when_something_under_works(
+    make_client, applicant, addr_tree, elevators, monkeypatch,
+):
+    """Есть лифт под работами — конфиг читается РОВНО один раз на страницу."""
+    from uk_management_bot.api.elevators import service as elevators_service
+
+    calls = 0
+    original = elevators_service.domain.load_config_async
+
+    async def _spy(db):
+        nonlocal calls
+        calls += 1
+        return await original(db)
+
+    monkeypatch.setattr(elevators_service.domain, "load_config_async", _spy)
+
+    async with make_client(applicant) as ac:
+        r = await ac.get(f"/api/v2/elevators/for-building/{addr_tree['building'].id}")
+    assert r.status_code == 200, r.text
+    assert calls == 1
+    by_id = {item["id"]: item for item in r.json()}
+    assert by_id[elevators["repairing"].id]["resident_request_blocked"] is True

@@ -1140,6 +1140,9 @@ async def _create_from_candidate(callback: CallbackQuery, bot: Bot, candidate: d
     request_number = await save_request(
         data, owner_tg_id, _db, bot, source="group",
         role="staff_group" if is_staff else "applicant",
+        # Р18: staff-группа — персонал (тот же признак, что даёт менеджерскую
+        # приёмку); запрет заявок по лифту в работах на неё не распространяется.
+        allow_under_works=is_staff,
     )
     if not request_number:
         # Честный error-текст (не тишина): создание могло упасть на

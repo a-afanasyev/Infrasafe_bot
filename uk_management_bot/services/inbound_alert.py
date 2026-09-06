@@ -231,6 +231,10 @@ async def _resolve_alert_elevator(
     хранится как прислали — RU-лейбл «Лифт» тоже «лифт»); лифт обязан быть
     пригодным и принадлежать дому `external_id`. Присланный лифт означает
     неисправность → `elevator_operational=False`. Флаг выключен → NULL-ы.
+
+    Р18 запрет здесь НЕ применяется (`allow_under_works=True`): машинный алерт
+    терять нельзя — лифт может уже стоять «В ремонте», а датчик сообщает о новом
+    событии в кабине.
     """
     from uk_management_bot.keyboards.requests import resolve_category_key
 
@@ -238,7 +242,7 @@ async def _resolve_alert_elevator(
     return await resolve_request_elevator_async(
         db, category=resolve_category_key(category), elevator_id=uk_elevator_id,
         elevator_operational=operational, enabled=settings.ELEVATORS_ENABLED,
-        building_id=building_id,
+        building_id=building_id, allow_under_works=True,
     )
 
 

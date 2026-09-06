@@ -6,12 +6,16 @@ from uk_management_bot.keyboards.requests import CATEGORY_KEYS
 from uk_management_bot.services.elevator_service import (
     ELEVATOR_CATEGORY,
     PASSPORT_REQUIRED_FIELDS,
+    WORKS_STATUSES,
     ElevatorConflictError,
     ElevatorServiceError,
     ElevatorStateError,
+    ElevatorUnderWorksError,
     ElevatorValidationError,
     can_set_status,
+    is_under_works,
     require_elevator_for_category,
+    resident_requests_blocked,
     validate_passport_required,
     validate_status,
 )
@@ -157,3 +161,71 @@ class TestCanSetStatus:
     def test_unknown_status_is_validation_error(self):
         with pytest.raises(ElevatorValidationError):
             can_set_status("broken", is_commissioned=True, archived=False)
+
+
+# ---------------------------------------------------------------------------
+# Р18: канон «по лифту идут работы»
+# ---------------------------------------------------------------------------
+
+class TestIsUnderWorks:
+    @pytest.mark.parametrize("status", ["under_repair", "maintenance"])
+    def test_works_statuses_are_under_works(self, status):
+        assert is_under_works(status) is True
+
+    @pytest.mark.parametrize("status", ["working", "not_working"])
+    def test_operable_statuses_are_not_under_works(self, status):
+        assert is_under_works(status) is False
+
+    def test_none_is_not_under_works(self):
+        assert is_under_works(None) is False
+
+    def test_unknown_status_is_not_under_works(self):
+        assert is_under_works("teleported") is False
+
+    def test_works_statuses_are_canonical_and_disjoint(self):
+        assert set(WORKS_STATUSES) < set(ELEVATOR_STATUSES)
+        assert all(is_under_works(s) for s in WORKS_STATUSES)
+
+
+def test_under_works_error_is_validation_subclass():
+    """Подкласс базового: обработчики, ловящие ElevatorValidationError, не сломались."""
+    assert issubclass(ElevatorUnderWorksError, ElevatorValidationError)
+
+
+def test_under_works_error_carries_message_fields():
+    exc = ElevatorUnderWorksError(
+        elevator_id=7, status="under_repair", status_since=None, label="Дом 1, подъезд 1, лифт 1",
+    )
+    assert exc.elevator_id == 7
+    assert exc.status == "under_repair"
+    assert exc.status_since is None
+    assert exc.label == "Дом 1, подъезд 1, лифт 1"
+
+
+# ---------------------------------------------------------------------------
+# Р18a: запрет — тумблер менеджера, не константа
+# ---------------------------------------------------------------------------
+
+class TestResidentRequestsBlocked:
+    @pytest.mark.parametrize("status", ["under_repair", "maintenance"])
+    def test_blocked_when_toggle_off(self, status):
+        assert resident_requests_blocked(status, allowed_by_config=False) is True
+
+    @pytest.mark.parametrize("status", ["under_repair", "maintenance"])
+    def test_not_blocked_when_toggle_on(self, status):
+        assert resident_requests_blocked(status, allowed_by_config=True) is False
+
+    @pytest.mark.parametrize("status", ["working", "not_working", None])
+    @pytest.mark.parametrize("allowed", [True, False])
+    def test_operable_statuses_never_blocked(self, status, allowed):
+        assert resident_requests_blocked(status, allowed_by_config=allowed) is False
+
+
+def test_default_config_blocks_resident_requests():
+    """Дефолт владельца: запрет ВКЛЮЧЁН (тумблер выключен)."""
+    from uk_management_bot.services.elevator_service import (
+        ALLOW_RESIDENT_UNDER_WORKS_KEY,
+        DEFAULT_ELEVATORS_CONFIG,
+    )
+
+    assert DEFAULT_ELEVATORS_CONFIG[ALLOW_RESIDENT_UNDER_WORKS_KEY] is False

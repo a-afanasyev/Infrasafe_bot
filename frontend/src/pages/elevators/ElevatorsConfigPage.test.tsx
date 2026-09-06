@@ -14,6 +14,7 @@ vi.mock('sonner', () => ({
 
 const CONFIG: ElevatorsConfigOut = {
   module_public: false,
+  allow_resident_requests_under_works: false,
   downtime_threshold_days: { not_working: 2, under_repair: 14 },
   resident_notifications: { repair_started: true, maintenance_started: false, back_in_service: true },
   staff_reminders: { maintenance: [30, 7, 1], certification: [60, 30], contract: [90], overdue_weekly: false },
@@ -52,10 +53,34 @@ describe('ElevatorsConfigPage', () => {
     await waitFor(() => expect(body).not.toBeNull())
     expect(body).toEqual({
       module_public: true,
+      allow_resident_requests_under_works: false,
       downtime_threshold_days: { not_working: 2, under_repair: null },
       resident_notifications: { repair_started: true, maintenance_started: false, back_in_service: true },
       staff_reminders: { maintenance: [30, 7, 1], certification: [60, 30], contract: [45, 10, 3], overdue_weekly: true },
     })
+  })
+
+  it('Р18a: тумблер «разрешить заявки при работах» редактируется и уходит в PUT', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/elevators/config', () => HttpResponse.json(CONFIG)),
+      http.put('*/api/v2/elevators/config', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ ...CONFIG, allow_resident_requests_under_works: true })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<ElevatorsConfigPage />)
+    const toggle = await screen.findByLabelText(/Разрешить заявки жителей при ремонте и ТО/)
+    expect(toggle).not.toBeChecked()  // дефолт: запрет действует
+    await user.click(toggle)
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(body!.allow_resident_requests_under_works).toBe(true)
+    // ответ PUT пересиживает черновик — галочка остаётся включённой
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Разрешить заявки жителей при ремонте и ТО/)).toBeChecked(),
+    )
   })
 
   it('мусор в стадиях — ошибка на клиенте, PUT не уходит', async () => {

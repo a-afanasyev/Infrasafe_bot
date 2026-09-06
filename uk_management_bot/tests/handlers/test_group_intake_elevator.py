@@ -9,7 +9,8 @@ Redis-pending подменён dict-фейком (реально сохранё�
 ленивая проверка); «нет» → save_request с elevator_operational=False.
 """
 import asyncio
-from datetime import date
+import copy
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -27,10 +28,13 @@ from uk_management_bot.database.models import (
     UserApartment,
     Yard,
 )
+from uk_management_bot.database.models.board_config import BoardConfig
+from uk_management_bot.database.models.elevators_config import ElevatorsConfig
 from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
 from uk_management_bot.services.elevator_service import generate_public_code
+from uk_management_bot.utils.helpers import get_text
 
 CHAT_ID = -100700
 PROMPT_ID = 777
@@ -131,7 +135,8 @@ def _elevator(building, entrance, number, *, commissioned=True, status="working"
 @pytest.fixture()
 def world(db):
     """Двор с тремя домами: A — три лифта (подъезд 1: один; подъезд 2: два),
-    B — без лифтов, C — один лифт. Автор — approved applicant с телефоном."""
+    B — без лифтов, C — один лифт. Все лифты «работает»; тесты Р18 переводят
+    нужный лифт в работы сами. Автор — approved applicant с телефоном."""
     yard = Yard(name="Двор Лифтовый", is_active=True)
     a = Building(address="ул. Лифтовая, 1", yard=yard, is_active=True)
     b = Building(address="ул. Пешая, 2", yard=yard, is_active=True)
@@ -148,7 +153,7 @@ def world(db):
     db.commit()
     lifts = [
         _elevator(a, 1, 1), _elevator(a, 2, 1), _elevator(a, 2, 2),
-        _elevator(a, 2, 3, commissioned=False), _elevator(c, 1, 1, status="under_repair"),
+        _elevator(a, 2, 3, commissioned=False), _elevator(c, 1, 1),
     ]
     db.add_all(lifts)
     db.commit()
@@ -158,6 +163,16 @@ def world(db):
         lift_a11=lifts[0], lift_a21=lifts[1], lift_a22=lifts[2], lift_raw=lifts[3],
         lift_c=lifts[4],
     )
+
+
+def _stored_board_config(phone: str) -> dict:
+    """Строка board_config в РЕАЛЬНОЙ форме (contacts.dispatch_phone), через схему API."""
+    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+    from uk_management_bot.api.board_config.schemas import StoredBoardConfigData
+
+    raw = copy.deepcopy(DEFAULT_BOARD_CONFIG)
+    raw["contacts"]["dispatch_phone"] = phone
+    return StoredBoardConfigData.model_validate(raw).model_dump()
 
 
 def approve(db, world, *apartments):
@@ -360,8 +375,7 @@ async def test_yard_level_with_single_building_resolves_it(env, db, world):
     assert payload["selected_address"]["type"] == "apartment"
     assert payload["selected_address"]["id"] == world.apt_c.id
     assert payload["elevator_id"] == world.lift_c.id
-    # мягкая подсказка о ремонте/ТО
-    assert "работы" in edited_text(callback) and "В ремонте" in edited_text(callback)
+    assert "работает" in edited_text(callback)
 
 
 async def test_store_failure_after_yes_shows_expired(env, db, world):
@@ -780,3 +794,179 @@ async def test_end_to_end_yes_building_elevator_operational_save(env, db, world)
     assert "260906-001" in edited_text(step4)
     assert env.pending.store == {}
     env.schedule_timeout.assert_called_once()  # один таймер на весь поток
+
+
+# ───────────────────────── Р18: лифт в работах — заявки нет ─────────────────
+
+
+def _under_works(db, elevator, status="under_repair"):
+    elevator.current_status = status
+    elevator.status_since = datetime(2026, 9, 1, 7, 30, tzinfo=timezone.utc)
+    db.commit()
+
+
+def _blocked_text(entrance, number, status_key, *, phone=""):
+    common = {"entrance": entrance, "elevator": number,
+              "status": get_text(f"elevators.status.{status_key}", language="ru"),
+              "since": "01.09.2026 12:30"}
+    if phone:
+        return get_text("requests.elevator.works_blocked", language="ru", phone=phone, **common)
+    return get_text("requests.elevator.works_blocked_no_phone", language="ru", **common)
+
+
+async def test_elevator_pick_under_works_blocks_without_request(env, db, world):
+    """Р18: выбран лифт в ремонте → блок-текст в группу, кандидат снят, заявки нет."""
+    _under_works(db, world.lift_a22)
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+
+    assert edited_text(callback) == _blocked_text(2, 2, "under_repair")
+    assert env.pending.stores == []          # в фазу «работает?» не перешли
+    assert env.pending.store == {}           # кандидат снят
+    env.save_request.assert_not_awaited()
+
+
+async def test_elevator_pick_under_works_shows_dispatch_phone(env, db, world):
+    _under_works(db, world.lift_a22, status="maintenance")
+    db.add(BoardConfig(id=1, data=_stored_board_config("+998 71 200-00-00")))
+    db.commit()
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+
+    assert edited_text(callback) == _blocked_text(
+        2, 2, "maintenance", phone="+998 71 200-00-00"
+    )
+
+
+async def test_auto_picked_elevator_under_works_blocks(env, db, world):
+    """Автоподстановка единственного лифта подъезда тоже упирается в Р18."""
+    _under_works(db, world.lift_a11)
+    approve(db, world, world.apt_e1)
+    env.pending.seed(make_candidate(apartment_address(world.apt_e1)))
+    callback = await press("yes", db)
+
+    assert edited_text(callback) == _blocked_text(1, 1, "under_repair")
+    assert env.pending.store == {}
+    env.save_request.assert_not_awaited()
+
+
+async def test_operable_statuses_still_reach_operational_question(env, db, world):
+    """Регресс: статусы working/not_working Р18 не трогает."""
+    world.lift_a22.current_status = "not_working"
+    db.commit()
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+    assert env.pending.last["phase"] == gie.PHASE_OPERATIONAL
+    assert buttons(callback) == ["gint:op:1", "gint:op:0"]
+
+
+def _allow_under_works(db, allowed: bool) -> None:
+    from uk_management_bot.services.elevator_service import merge_config
+
+    db.add(ElevatorsConfig(
+        id=1, data=merge_config(None, {"allow_resident_requests_under_works": allowed}),
+    ))
+    db.commit()
+
+
+async def test_toggle_on_group_intake_shows_hint_and_continues(env, db, world):
+    """Р18a: менеджер разрешил — прежняя мягкая подсказка и вопрос «работает?»."""
+    _allow_under_works(db, True)
+    _under_works(db, world.lift_a22)
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+
+    assert env.pending.last["phase"] == gie.PHASE_OPERATIONAL
+    text = edited_text(callback)
+    assert get_text("elevators.status.under_repair", language="ru") in text
+    assert "Заявка не нужна" not in text
+    assert buttons(callback) == ["gint:op:1", "gint:op:0"]
+
+
+async def test_toggle_off_group_intake_blocks(env, db, world):
+    """Строка конфига есть, тумблер выключен — запрет тот же, что по дефолту."""
+    _allow_under_works(db, False)
+    _under_works(db, world.lift_a22)
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+
+    assert edited_text(callback) == _blocked_text(2, 2, "under_repair")
+    assert env.pending.store == {}
+
+
+# ── Р18 × kind группы: персонал (staff) не блокируется ───────────────────
+
+
+def make_staff_group(db, world):
+    """Перевести группу в staff-режим и дать автору роль сотрудника.
+
+    Ре-гейт (`_regate_sync`) сверяет kind кандидата с kind живой группы и
+    требует staff-роль у АВТОРА — без этого staff-путь до save_request не
+    доходит вовсе, и тест Р18 ничего бы не проверял.
+    """
+    group = db.query(MonitoredGroup).filter(MonitoredGroup.chat_id == CHAT_ID).one()
+    group.kind = "staff"
+    world.user.roles = '["applicant", "executor"]'
+    db.commit()
+
+
+def staff_pick_candidate(world, **overrides):
+    """Кандидат staff-группы в фазе выбора лифта (kind даёт менеджерскую приёмку)."""
+    return pick_candidate(world, kind="staff", **overrides)
+
+
+async def test_resident_group_under_works_blocked_without_request(env, db, world):
+    """Жилая группа — самообслуживание: заявки нет, в чат уходит блок-текст."""
+    _under_works(db, world.lift_a22)
+    env.pending.seed(pick_candidate(world))
+    callback = await press(f"elv:{world.lift_a22.id}", db)
+
+    assert edited_text(callback) == _blocked_text(2, 2, "under_repair")
+    assert env.pending.stores == []
+    assert env.pending.store == {}
+    env.save_request.assert_not_awaited()
+
+
+async def test_staff_group_under_works_creates_request(env, db, world):
+    """Staff-группа — персонал: проходит фазу «работает?» и создаёт заявку."""
+    approve(db, world, world.apt_noent)
+    make_staff_group(db, world)
+    _under_works(db, world.lift_a22)
+    env.pending.seed(staff_pick_candidate(world))
+
+    step = await press(f"elv:{world.lift_a22.id}", db)
+    assert env.pending.last["phase"] == gie.PHASE_OPERATIONAL
+    assert "Заявка не нужна" not in edited_text(step)
+    assert buttons(step) == ["gint:op:1", "gint:op:0"]
+
+    await press("op:0", db)
+    env.save_request.assert_awaited_once()
+    data = env.save_request.await_args.args[0]
+    assert data["elevator_id"] == world.lift_a22.id
+    assert data["elevator_operational"] is False
+    # лазейка персонала прокинута в конструктор заявки
+    assert env.save_request.await_args.kwargs["allow_under_works"] is True
+    assert env.save_request.await_args.kwargs["role"] == "staff_group"
+
+
+async def test_resident_group_passes_no_staff_hatch(env, db, world):
+    """Регресс: у жилой группы лазейки персонала нет."""
+    approve(db, world, world.apt_e1)
+    env.pending.seed(operational_candidate(world))
+    await press("op:0", db)
+    env.save_request.assert_awaited_once()
+    assert env.save_request.await_args.kwargs["allow_under_works"] is False
+    assert env.save_request.await_args.kwargs["role"] == "applicant"
+
+
+async def test_staff_group_autopick_under_works_not_blocked(env, db, world):
+    """Автоподстановка в staff-группе тоже не упирается в запрет."""
+    approve(db, world, world.apt_e1)
+    make_staff_group(db, world)
+    _under_works(db, world.lift_a11)
+    env.pending.seed(make_candidate(apartment_address(world.apt_e1), kind="staff"))
+    callback = await press("yes", db)
+
+    assert env.pending.last["phase"] == gie.PHASE_OPERATIONAL
+    assert env.pending.last["elevator_id"] == world.lift_a11.id
+    assert "Заявка не нужна" not in edited_text(callback)

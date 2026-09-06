@@ -60,9 +60,9 @@ from ._router import router
 from .create_elevator import (
     begin_elevator_step,
     clear_elevator_data,
+    elevator_save_failed_text,
     elevator_summary_line,
     is_elevator_flow,
-    save_failed_key,
 )
 from .create_elevator_resident import RESIDENT_FLOW
 from .shared import (
@@ -485,8 +485,11 @@ async def process_confirmation(message: Message, state: FSMContext, roles: list 
         else:
             # Очищаем состояние, чтобы пользователь мог продолжить работу (например, открыть Мои заявки)
             await state.clear()
+            # Ф4a-2 (T7) + Р18: для лифтовой заявки текст свой; если статус лифта
+            # сменился на «В ремонте»/«На ТО» между выбором и подтверждением —
+            # тот же блокирующий текст, что на шаге выбора, а не общий сбой.
             await message.answer(
-                get_text(save_failed_key(data), language=lang),
+                await elevator_save_failed_text(data, lang, RESIDENT_FLOW),
                 reply_markup=await get_user_contextual_keyboard(message.from_user.id)
             )
             logger.error(f"Ошибка создания заявки пользователем {message.from_user.id}")
@@ -514,6 +517,7 @@ def save_request_sync(
     db,
     source: str = "bot",
     role: str = "applicant",
+    allow_under_works: bool = False,
 ):
     """Sync-ядро сохранения заявки: всё ДО сетевой загрузки медиа.
 
@@ -609,6 +613,7 @@ def save_request_sync(
             # create_request_record (ElevatorValidationError → общий except → None).
             elevator_id=data.get('elevator_id'),
             elevator_operational=data.get('elevator_operational'),
+            allow_under_works=allow_under_works,
         )
 
         # ARCH-113: emit + INSERT in one transaction — protects against orphan
@@ -645,6 +650,7 @@ async def save_request(
     bot: Bot = None,
     source: str = "bot",
     role: str = "applicant",
+    allow_under_works: bool = False,
 ) -> Optional[str]:
     """Сохранение заявки в базу данных. Возвращает номер заявки (str) или None.
 
@@ -659,7 +665,10 @@ async def save_request(
     """
     try:
         saved = await run_db(
-            lambda s: save_request_sync(data, user_id, s, source=source, role=role),
+            lambda s: save_request_sync(
+                data, user_id, s, source=source, role=role,
+                allow_under_works=allow_under_works,
+            ),
             db=_db,
         )
         if saved is None:

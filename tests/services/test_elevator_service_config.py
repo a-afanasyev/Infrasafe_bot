@@ -108,3 +108,39 @@ class TestAsync:
             with caplog.at_level(logging.WARNING):
                 assert await load_config_async(s) == DEFAULTS
         assert "недоступен" in caplog.text and rollbacks == [True]
+
+
+# ── Р18a: тумблер «заявки жителей при работах» ────────────────────────
+
+
+def test_allow_resident_requests_under_works_defaults_to_false():
+    from uk_management_bot.services.elevator_service import merge_config
+
+    assert merge_config(None, None)["allow_resident_requests_under_works"] is False
+
+
+def test_allow_resident_requests_under_works_patchable():
+    from uk_management_bot.services.elevator_service import merge_config
+
+    merged = merge_config(None, {"allow_resident_requests_under_works": True})
+    assert merged["allow_resident_requests_under_works"] is True
+
+
+def test_allow_resident_requests_under_works_must_be_bool():
+    import pytest as _pytest
+
+    from uk_management_bot.services.elevator_service import (
+        ElevatorValidationError,
+        merge_config,
+    )
+
+    with _pytest.raises(ElevatorValidationError, match="allow_resident_requests_under_works"):
+        merge_config(None, {"allow_resident_requests_under_works": "yes"})
+
+
+def test_stored_without_toggle_still_valid():
+    """Старая строка конфига (до Р18a) читается: ключ добирается из дефолтов."""
+    from uk_management_bot.services.elevator_service import merge_config
+
+    merged = merge_config({"module_public": True}, None)
+    assert merged["allow_resident_requests_under_works"] is False

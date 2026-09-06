@@ -19,6 +19,7 @@ from uk_management_bot.database.models.elevator import (
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.elevator_service import (
+    resident_requests_blocked,
     ElevatorCounters,
     ElevatorSummary,
     elevator_label,
@@ -118,13 +119,20 @@ def build_detail(
     )
 
 
-def build_mini(elevator: Elevator, language: str) -> ElevatorMiniOut:
+def build_mini(
+    elevator: Elevator, language: str, *, resident_requests_under_works_allowed: bool = False
+) -> ElevatorMiniOut:
+    """``resident_request_blocked`` считает домен (Р18a): статус + тумблер конфига."""
     return ElevatorMiniOut(
         id=elevator.id,
         entrance_number=elevator.entrance_number,
         elevator_number=elevator.elevator_number,
         label=elevator_label(elevator, language),
         current_status=elevator.current_status,
+        status_since=aware_utc(elevator.status_since),
+        resident_request_blocked=resident_requests_blocked(
+            elevator.current_status, allowed_by_config=resident_requests_under_works_allowed
+        ),
     )
 
 

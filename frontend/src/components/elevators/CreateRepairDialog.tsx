@@ -7,12 +7,16 @@ import { useOpenReset } from '../../hooks/useOpenReset'
 import { URGENCIES } from '../../constants'
 import { tUrgency } from '../../i18n/apiMaps'
 import { useCreateElevatorRepair } from '../../hooks/useElevators'
-import type { ElevatorDetail } from '../../types/elevators'
+import { isElevatorUnderWorks, type ElevatorDetail } from '../../types/elevators'
 
 /**
  * «Создать ремонт» из карточки лифта → POST /api/v2/callcenter/requests с
  * category=elevator, building_id (адрес уровня дома — без него 422),
  * elevator_id, elevator_operational=false, acceptance_mode=manager.
+ *
+ * Р18: персоналу запрет не действует (канал колл-центра), но если лифт УЖЕ
+ * «В ремонте»/«На ТО» — предупреждаем, что заявка может дублировать текущие
+ * работы. Кнопка остаётся активной: решает менеджер.
  */
 interface Props {
   elevator: ElevatorDetail
@@ -31,6 +35,11 @@ export default function CreateRepairDialog({ elevator, open, onClose }: Props) {
     setDescription('')
     setUrgency(DEFAULT_URGENCY)
   })
+
+  const status = t(
+    elevator.current_status ? `elevators.status.${elevator.current_status}` : 'elevators.status.none',
+  )
+  const since = elevator.status_since ? new Date(elevator.status_since).toLocaleDateString() : null
 
   const submit = () =>
     mutation.mutate(
@@ -61,6 +70,13 @@ export default function CreateRepairDialog({ elevator, open, onClose }: Props) {
       <p className="text-[13px] text-text-muted">
         {elevator.label} · {elevator.building_address}
       </p>
+      {isElevatorUnderWorks(elevator.current_status) && (
+        <p role="alert" className="text-[13px] rounded-md px-3 py-2 bg-amber-50 text-amber-900 border border-amber-200">
+          {since
+            ? t('elevators.repair.alreadyUnderWorks', { status, since })
+            : t('elevators.repair.alreadyUnderWorksNoSince', { status })}
+        </p>
+      )}
       <p className="text-[13px] text-text-muted">{t('elevators.repair.hint')}</p>
       <Field id="elevator-repair-urgency" label={t('elevators.repair.urgency')}>
         <Select id="elevator-repair-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value)}>

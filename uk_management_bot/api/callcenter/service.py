@@ -90,6 +90,9 @@ async def persist_call_center_request(
     карточки) ИЛИ ни одного (legacy) — роутер даёт согласованный ``address_type``.
     Лифт (Р11, Ф4a-1) — единая проверка ``resolve_request_elevator_async``
     ДО выдачи номера; ``ElevatorValidationError`` наверх (роутер → 422).
+    Р18 запрет на лифт «В ремонте»/«На ТО» здесь НЕ применяется
+    (``allow_under_works=True``): оператор на линии видит статус в карточке и
+    решает сам — через этот же путь идёт и «Создать ремонт» из дашборда.
     ``acceptance_mode=None`` → прежний дефолт ('resident').
     """
     # Дом заявки: building_id (уровень дома) или дом квартиры жителя; при
@@ -97,7 +100,7 @@ async def persist_call_center_request(
     binding = await resolve_request_elevator_async(
         db, category=category, elevator_id=elevator_id,
         elevator_operational=elevator_operational, enabled=settings.ELEVATORS_ENABLED,
-        building_id=building_id, apartment_id=apartment_id,
+        building_id=building_id, apartment_id=apartment_id, allow_under_works=True,
     )
     request_number = await RequestNumberService.next_number_async(db)
 
