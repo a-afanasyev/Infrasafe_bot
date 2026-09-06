@@ -672,6 +672,9 @@
             "title": "Display Tz",
             "type": "string"
           },
+          "elevators": {
+            "$ref": "#/components/schemas/ElevatorsCfg"
+          },
           "layout": {
             "items": {
               "$ref": "#/components/schemas/LayoutItem"
@@ -721,6 +724,9 @@
           },
           "contacts": {
             "$ref": "#/components/schemas/ContactsCfgIn"
+          },
+          "elevators": {
+            "$ref": "#/components/schemas/ElevatorsCfgIn"
           },
           "layout": {
             "items": {
@@ -3931,6 +3937,26 @@
         "title": "ElevatorYardSummaryOut",
         "type": "object"
       },
+      "ElevatorsCfg": {
+        "description": "Настройки модуля «Лифты» на табло (T16): только заголовок. Пустой\nзаголовок = фронт подставляет i18n-дефолт; лимитов у модуля нет.",
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "title": "ElevatorsCfg",
+        "type": "object"
+      },
+      "ElevatorsCfgIn": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          }
+        },
+        "title": "ElevatorsCfgIn",
+        "type": "object"
+      },
       "ElevatorsConfigIn": {
         "additionalProperties": false,
         "properties": {
@@ -6155,6 +6181,274 @@
           "created_at"
         ],
         "title": "PublicBoardRequest",
+        "type": "object"
+      },
+      "PublicElevatorBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "elevators": {
+            "items": {
+              "$ref": "#/components/schemas/PublicElevatorOut"
+            },
+            "title": "Elevators",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address",
+          "elevators"
+        ],
+        "title": "PublicElevatorBuildingOut",
+        "type": "object"
+      },
+      "PublicElevatorOut": {
+        "description": "Один лифт глазами жителя. Без ``id`` и без ``public_code`` — намеренно.",
+        "properties": {
+          "availability_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability 30D"
+          },
+          "capacity_kg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Kg"
+          },
+          "cert_expired": {
+            "title": "Cert Expired",
+            "type": "boolean"
+          },
+          "cert_valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Valid Until"
+          },
+          "downtime_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downtime Reason"
+          },
+          "elevator_number": {
+            "title": "Elevator Number",
+            "type": "integer"
+          },
+          "entrance_number": {
+            "title": "Entrance Number",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_maintenance_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Maintenance On"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "production_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Year"
+          },
+          "service_org_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Name"
+          },
+          "service_org_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Org Phone"
+          },
+          "spare_part_expected_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spare Part Expected On"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Since"
+          }
+        },
+        "required": [
+          "entrance_number",
+          "elevator_number",
+          "label",
+          "status",
+          "status_since",
+          "availability_30d",
+          "last_maintenance_on",
+          "cert_valid_until",
+          "cert_expired",
+          "service_org_name",
+          "service_org_phone",
+          "manufacturer",
+          "model",
+          "production_year",
+          "capacity_kg",
+          "downtime_reason",
+          "spare_part_expected_on"
+        ],
+        "title": "PublicElevatorOut",
+        "type": "object"
+      },
+      "PublicElevatorYardOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/PublicElevatorBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "buildings"
+        ],
+        "title": "PublicElevatorYardOut",
+        "type": "object"
+      },
+      "PublicElevatorsOut": {
+        "properties": {
+          "dispatch_phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatch Phone"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/PublicElevatorYardOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "yards",
+          "dispatch_phone",
+          "generated_at"
+        ],
+        "title": "PublicElevatorsOut",
         "type": "object"
       },
       "PublicWorkReportOut": {
@@ -16262,6 +16556,51 @@
         "summary": "Get Board Config",
         "tags": [
           "board-config"
+        ]
+      }
+    },
+    "/api/v2/public/elevators": {
+      "get": {
+        "description": "Статусы публичных лифтов для табло жителей, сгруппированные двор → дом.\n\nIntentionally has NO authentication dependency. Флаг выключен или витрина не\nвключена менеджером → 200 с пустым ответом (см. модуль-docstring).",
+        "operationId": "get_public_elevators_api_v2_public_elevators_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "pattern": "^(ru|uz)$",
+              "title": "Lang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicElevatorsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Public Elevators",
+        "tags": [
+          "public"
         ]
       }
     },
