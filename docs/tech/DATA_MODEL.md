@@ -1,9 +1,9 @@
 # UK Management — модель данных
 
-> _Последнее редактирование: 2026-08-25_
+> _Последнее редактирование: 2026-09-06_
 
 **Назначение:** обзор доменов данных, ERD по доменам, ключевые связи и инварианты.
-**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (история сжата в baseline PRC-05; **head = `014`**).
+**Источник истины:** SQLAlchemy-модели `uk_management_bot/database/models/*.py` + миграции `alembic/versions/` (история сжата в baseline PRC-05; **head = `017`** — 015 на main, 016/017 в ветке модуля «Лифты»).
 **Актуальные ER-диаграммы всех четырёх хранилищ** (основная БД + access-домен + `uk_media` + ресурсы) — [ARCHITECTURE_DIAGRAMS.md §3](ARCHITECTURE_DIAGRAMS.md).
 
 ⚠️ Изменения после 2026-07-06, ещё не влитые в диаграммы ниже:
@@ -15,6 +15,9 @@
   из группы, 012), `reported_by_user_id` + `acceptance_mode`
   (CHECK resident|manager — менеджерская приёмка staff-репортов, 013).
 - Схемы новых сущностей — в [ARCHITECTURE_DIAGRAMS.md §3.2, §3.4](ARCHITECTURE_DIAGRAMS.md).
+- **Модуль «Лифты» (016/017, ветка `worktree-feat+elevators`)**: `elevators`,
+  `elevator_status_events`, `elevator_maintenance_occurrences`, `elevators_config`;
+  `requests` +`elevator_id` (FK SET NULL, индекс) +`elevator_operational`. Раздел 7a.
 
 ---
 
@@ -30,6 +33,7 @@
 | **Справочник адресов** | `yards`, `buildings`, `apartments`, `user_apartments`, `user_yards` | бот/API |
 | **Коммуникации / инфраструктура** | `notifications`, `audit_logs`, `board_config`, `feedback`, `webhook_outbox`, `webhook_inbox` | бот/API |
 | **Склад материалов** | `materials`, `material_receipts`, `material_issues`, `material_issue_allocations` | бот/API — см. [MATERIALS_MODULE.md](../MATERIALS_MODULE.md) |
+| **Лифты** | `elevators`, `elevator_status_events`, `elevator_maintenance_occurrences`, `elevators_config` (+2 колонки `requests`) | бот/API — см. [ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md) |
 | **access_control (СКУД/ANPR)** | 22 таблицы (`parking_zones`, `vehicles`, `access_passes`, `camera_events`, `access_decisions`, `barrier_commands`, …) | отдельный сервис (`Dockerfile.access`), raw-миграции 025–035 |
 
 > `users` — центральная сущность: почти все таблицы ссылаются на `users.id` (заявитель, исполнитель, менеджер-ревьюер, автор аудита). На диаграммах эти многочисленные FK на `users` показаны выборочно, чтобы не перегружать ERD.
@@ -152,6 +156,7 @@ erDiagram
 - **Не более одного активного назначения** на заявку: partial-unique `uq_request_assignments_active` WHERE `status='active'` (`request_assignment.py:20`). История cancelled/completed сохраняется.
 - **Одна оценка на заявку:** UNIQUE `uq_ratings_request_number` (`rating.py:11`) — идемпотентность приёмки (повторный APPLICANT_ACCEPT не создаёт дубль).
 - `request_comments`/`ratings`/`request_assignments` ссылаются на `requests.request_number` (строковый FK, не на `id`).
+- **Лифт заявки (016):** `requests.elevator_id` → `elevators.id` `ON DELETE SET NULL` (индекс `ix_requests_elevator_id`), `requests.elevator_operational` bool. Обе колонки nullable в БД; для `category='elevator'` их обязательность — инвариант доменного валидатора Р11 (`services/elevator_service/validation_db.py`), не CHECK: исторические заявки не переписываются. Подробнее — раздел 7a.
 
 ---
 
@@ -361,6 +366,73 @@ erDiagram
 
 ---
 
+## 7a. Домен «Лифты» (миграции 016/017)
+
+Полная модель, инварианты, сервис и API — в **[ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md)**. Схема агрегата:
+
+```mermaid
+erDiagram
+    buildings ||--o{ elevators : "building_id"
+    elevators ||--o{ elevator_status_events : "RESTRICT, append-only"
+    elevators ||--o{ elevator_maintenance_occurrences : "RESTRICT"
+    elevators |o--o{ requests : "elevator_id SET NULL"
+    users |o--o| elevators_config : "updated_by SET NULL"
+
+    elevators {
+        int id PK
+        int building_id FK
+        int entrance_number
+        int elevator_number
+        varchar passport_number "NOT NULL"
+        varchar manufacturer "NOT NULL"
+        varchar serial_number "NOT NULL"
+        varchar current_status "NULL until commissioned; CHECK 4 values"
+        timestamptz status_since
+        date contract_until
+        date cert_valid_until
+        smallint contract_reminder_stage "days: 0/30/14/7"
+        smallint cert_reminder_stage "days"
+        timestamptz downtime_reminded_at
+        timestamptz contract_overdue_reminded_at "017"
+        timestamptz cert_overdue_reminded_at "017"
+        varchar public_code UK "CSPRNG, 32"
+        bool is_public
+        bool is_commissioned
+        timestamptz archived_at
+        int version "optimistic lock"
+    }
+    elevator_status_events {
+        int id PK
+        int elevator_id FK "RESTRICT"
+        varchar event_kind "CHECK 6 kinds"
+        varchar old_status
+        varchar new_status
+        varchar source "CHECK manual/request_hint/infrasafe/system"
+        varchar request_number "plain string, NO FK"
+        int actor_user_id FK "SET NULL"
+        jsonb payload
+    }
+    elevator_maintenance_occurrences {
+        int id PK
+        int elevator_id FK "RESTRICT"
+        varchar kind "maintenance/certification"
+        date due_on
+        varchar state "planned/done/cancelled"
+        smallint reminder_stage "days"
+        timestamptz overdue_reminded_at
+        varchar request_number "plain string, NO FK"
+    }
+    elevators_config {
+        int id PK "singleton id=1"
+        jsonb data
+        int updated_by FK
+    }
+```
+
+**Ключевые инварианты (кратко):** место лифта уникально среди неархивных — partial-unique `uq_elevators_building_entrance_number_active … WHERE archived_at IS NULL`; статус NULL до ввода в эксплуатацию (`is_commissioned`, сервисный инвариант); дочерние таблицы — `ON DELETE RESTRICT` (лифт архивируется, не удаляется; `passive_deletes=True`); `request_number` — plain-строка без FK (история переживает удаление заявки, как `material_issues`); календарь — partial-unique `(elevator_id, kind, due_on) WHERE state <> 'cancelled'`, `done` неизменяем; стадии напоминаний хранятся в **днях**, сбрасываются сервисом при смене соответствующей даты; `public_code` — `secrets.token_urlsafe`, не переиспользуется. `elevators_config` — клон `auto_manager_config`, seed-строки нет.
+
+---
+
 ## 8. Домен access_control (СКУД/ANPR) — вне основной ORM
 
 22 таблицы (`parking_zones`, `edge_controllers`, `access_gates`, `access_cameras`, `access_barriers`, `vehicles`, `vehicle_apartments`, `access_rules`, `access_passes`, `resident_access_requests`, `camera_events`, `access_decisions`, `access_events`, `controller_sync_events`, `barrier_commands`, `manual_openings`, `access_audit_logs`, `parking_spots`, `parking_spot_assignments`, `access_entry_confirmations`, `vehicle_presence_sessions`). DDL — raw-миграции 025–035; ORM-моделей в `database/models/` нет (домен обслуживает отдельный сервис, образ `Dockerfile.access`). Перечень — в [DATABASE_SCHEMA_ACTUAL.md §1.2](../Archive/2026-07-26-stale-docs/DATABASE_SCHEMA_ACTUAL.md).
@@ -369,7 +441,7 @@ erDiagram
 
 ## 9. Alembic
 
-- **Head:** `014` (история сжата: baseline `001` + seed `002` — PRC-05).
+- **Head:** `017` (история сжата: baseline `001` + seed `002` — PRC-05; `016`/`017` — модуль «Лифты», ветка `worktree-feat+elevators`).
 - Миграции применяет **только one-shot сервис `migrate`** под ролью-владельцем
   схемы (PR-7); api/access-api на старте делают read-only preflight
   (drift ⇒ отказ старта). Рутина — `.claude/skills/uk-deploy/SKILL.md`.

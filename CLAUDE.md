@@ -1,6 +1,6 @@
 # CLAUDE.md — UK Management System
 
-> _Последнее редактирование: 2026-07-10_
+> _Последнее редактирование: 2026-09-06_
 
 ## Scope
 
@@ -29,6 +29,7 @@
 - **Номера заявок**: формат `YYMMDD-NNN` (строка, не int). Сервис: `RequestNumberService`.
 - **Миграции/деплой**: `alembic upgrade head` + `alembic check` — CI-дрейф-гейт. ⚠️ Рутинный деплой ОБЯЗАТЕЛЬНО через `migrate`-шаг перед `up` (иначе preflight уронит контейнер), и через `doppler run --` (ARCH-106 Phase 1 — секреты приходят из Doppler, не из `.env`); `alembic stamp --purge` — ТОЛЬКО для разового пере-baseline, НЕ рутина. Детали (роли post-PR-7, provisioning, PR-7 rollout, Doppler-деплой) → `.claude/skills/uk-deploy/SKILL.md`.
 - **Секреты (ARCH-106 закрыт целиком 2026-07-21)**: `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` **и `media-service`** получают секреты из Doppler (`doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`), НЕ из `.env`. media подключается к БД `uk_media` под выделенной ролью `uk_media_owner` (пароль в Doppler). Carve-out (осознанно вне Doppler): PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`), несекретная конфигурация. Детали → `.claude/skills/uk-deploy/SKILL.md`.
+- **Модуль «Лифты»** (`/api/v2/elevators`, миграции 016/017): DARK за `ELEVATORS_ENABLED` (бот+API, одинаково для обоих сервисов) и `VITE_ELEVATORS_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/ELEVATORS_MODULE.md`.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи, Doppler-токены) — никогда не коммитить, не выводить.

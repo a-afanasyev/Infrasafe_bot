@@ -1,6 +1,6 @@
 # InfraSafe public edge — prefix-allowlist contract for `/uk/api/*` (SEC-22)
 
-> _Последнее редактирование: 2026-08-22_
+> _Последнее редактирование: 2026-09-06_
 
 **Date:** 2026-06-07
 **Status:** ✅ live on prod (deployed by InfraSafe edge side, verified)
@@ -48,6 +48,7 @@ Derived from actual code, not assumptions:
 - `/api/v2/work-reports` — manager API for visual work reports (✅ live на ОБОИХ хостах, verified 2026-08-22; на infrasafe.uz фича DARK — приложение отвечает 404 JSON до включения флага)
 - `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (✅ live на ОБОИХ хостах, verified 2026-08-22; до деплоя фичи приложение отвечает 404 JSON — после деплоя ждём 401)
 - `/api/v2/residents` — раздел «Жители» дашборда (manager-only) (✅ live на ОБОИХ хостах, verified 2026-08-22 — пробел на infrasafe.uz закрыт, раздел «Жители» там снова работает)
+- `/api/v2/elevators` — модуль «Лифты»: реестр/карточка/статус/календарь (executor|manager), паспорт/конфиг/bulk-confirm (manager), `for-building/{id}` (любая approved-роль, житель — свои дома; вызывается TWA-формой заявки). Роуты `""`, `/{id}`, `/summary`, `/config`, `/occurrences`, `/requests/bulk-confirm` (⏳ **НЕ ЗАЯВЛЕН** InfraSafe, 2026-09-06; фича DARK за `ELEVATORS_ENABLED` на обеих площадках — приложение отвечает 404 JSON до включения флага; после включения ждём 401 на `GET /api/v2/elevators` без токена). Док модуля — `docs/ELEVATORS_MODULE.md` §5, §10
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -93,6 +94,7 @@ Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix
 - `/api/v2/work-reports` (visual work reports, manager API) — added to this doc 2026-07-25; **✅ live на обеих площадках, verified 2026-08-22** (на profk стоял с 25.07; на infrasafe был реальный пробел — закрыт). Фича на infrasafe.uz DARK (`WORK_REPORTS_ENABLED=false`).
 - `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **✅ live на обеих площадках, verified 2026-08-22**.
 - `/api/v2/residents` (раздел «Жители», manager-only) — **✅ live на обеих площадках, verified 2026-08-22** (пробел infrasafe.uz закрыт по встречному вопросу InfraSafe; наборы префиксов площадок сверены ими и идентичны, у них добавлена сборочная проверка на оба конфига).
+- `/api/v2/elevators` (модуль «Лифты», ветка `worktree-feat+elevators`, миграции 016/017) — добавлен в этот док 2026-09-06; **⏳ запрос InfraSafe ещё не отправлен**, на edge не стоит ни на одной площадке. Форма записи — `~^/uk/api/v2/elevators(/|$)` для ОБОИХ хостов. Порядок: заявить префикс → дождаться раскатки → проверить (без флага ожидается 404 **JSON** от приложения, HTML-404 nginx = edge режет) → только потом `ELEVATORS_ENABLED=true`. Отдельный пункт контракта данных: чтобы алерты категории «лифт» создавали заявки, InfraSafe должен передавать `alert.uk_elevator_id` = наш `elevators.id` (иначе 422 + `webhook_inbox.outcome=rejected`) — InfraSafe об этом ещё не уведомлён.
 
 ## Verification (2026-08-22, финал) — ✅ подтверждено на обеих площадках
 
