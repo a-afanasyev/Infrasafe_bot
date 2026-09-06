@@ -13,21 +13,24 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime
+from collections.abc import Mapping
 from typing import Any, Optional, Union
 
 from aiogram import F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.elevator_service import ElevatorValidationError, validate_url
 from uk_management_bot.services.elevator_service.calendar import KIND_CERTIFICATION
-from uk_management_bot.services.elevator_service.validation_db import cert_act_url_max_len
+from uk_management_bot.services.elevator_service.validation_db import (
+    cert_act_url_max_len,
+    cert_number_max_len,
+)
 from uk_management_bot.states.elevators import ElevatorStates
 
-from . import card
+from . import _common
 from ._keyboards import (
     OCCURRENCE_DONE_SUFFIX,
     OCCURRENCE_PREFIX,
@@ -44,13 +47,7 @@ from ._units import OK, complete_occurrence, load_occurrence, load_occurrences
 logger = logging.getLogger(__name__)
 
 DATE_FORMAT = "%d.%m.%Y"
-CERT_NUMBER_MAX_LEN = Elevator.__table__.c.cert_number.type.length
-ALL_STATES = tuple(
-    getattr(ElevatorStates, name) for name in (
-        "status_reason", "repair_description", "repair_urgency",
-        "occ_comment", "cert_number", "cert_valid_until", "cert_url",
-    )
-)
+CERT_NUMBER_MAX_LEN = cert_number_max_len()
 
 _LIST_RE = re.compile(rf"^{re.escape(OCCURRENCES_PREFIX)}(?P<id>\d+)$")
 _PICK_RE = re.compile(
@@ -60,10 +57,12 @@ _PICK_RE = re.compile(
 Event = Union[CallbackQuery, Message]
 
 
-async def _say(event: Event, text: str, markup=None, *, is_callback: bool) -> None:
+async def _say(
+    event: Event, text: str, markup: Optional[InlineKeyboardMarkup] = None, *, is_callback: bool
+) -> None:
     """Ответ шага: callback — редактируем, текст — новое сообщение."""
     if is_callback:
-        await card.edit(event, text, markup)
+        await _common.edit(event, text, markup)
     else:
         await event.answer(text, reply_markup=markup, parse_mode="HTML")
 
@@ -75,7 +74,7 @@ def parse_cert_date(raw: str) -> Optional[date]:
         return None
 
 
-def cert_fields_from(data: dict) -> Optional[dict[str, Any]]:
+def cert_fields_from(data: Mapping[str, Any]) -> Optional[dict[str, Any]]:
     """Поля освидетельствования из FSM; ``None`` для ТО."""
     if data.get("elvm_kind") != KIND_CERTIFICATION:
         return None
@@ -93,37 +92,37 @@ def cert_fields_from(data: dict) -> Optional[dict[str, Any]]:
 async def handle_occurrences(callback: CallbackQuery, language: str = "ru") -> None:
     """``elvm:occs:{id}``: planned-пункты графика лифта."""
     match = _LIST_RE.match(callback.data or "")
-    elevator_id = card.parse_int(match.group("id")) if match else None
+    elevator_id = _common.parse_int(match.group("id")) if match else None
     if elevator_id is None:
-        await card.deny(callback, "error", language)
+        await _common.deny(callback, "error", language)
         return
-    view = await card.run_unit(
+    view = await _common.run_unit(
         run_db, lambda s: load_occurrences(s, callback.from_user.id, elevator_id), "график лифта")
     if view is None or view.verdict != OK:
-        await card.deny(callback, view.verdict if view else "error", language)
+        await _common.deny(callback, view.verdict if view else "error", language)
         return
     text = t("occ_title", language) if view.rows else t("occ_none", language)
-    await card.edit(callback, text, occurrences_keyboard(elevator_id, view.rows, language))
+    await _common.edit(callback, text, occurrences_keyboard(elevator_id, view.rows, language))
 
 
 @router.callback_query(F.data.regexp(_PICK_RE.pattern))
 async def handle_occurrence_pick(callback: CallbackQuery, state: FSMContext, language: str = "ru") -> None:
     """``elvm:occ:{oid}:done``: пункт проверен сервером (planned) → шаг комментария."""
     match = _PICK_RE.match(callback.data or "")
-    occurrence_id = card.parse_int(match.group("id")) if match else None
+    occurrence_id = _common.parse_int(match.group("id")) if match else None
     if occurrence_id is None:
-        await card.deny(callback, "error", language)
+        await _common.deny(callback, "error", language)
         return
-    target = await card.run_unit(
+    target = await _common.run_unit(
         run_db, lambda s: load_occurrence(s, callback.from_user.id, occurrence_id), "пункт графика")
     if target is None or target.verdict != OK:
-        await card.deny(callback, target.verdict if target else "error", language)
+        await _common.deny(callback, target.verdict if target else "error", language)
         return
     await state.clear()
     await state.update_data(elvm_occurrence_id=target.id, elvm_elevator_id=target.elevator_id,
                             elvm_kind=target.kind)
     await state.set_state(ElevatorStates.occ_comment)
-    await card.edit(callback, t("occ_comment_prompt", language), skip_cancel_keyboard(language))
+    await _common.edit(callback, t("occ_comment_prompt", language), skip_cancel_keyboard(language))
 
 
 async def _after_comment(event: Event, state: FSMContext, language: str, *, is_callback: bool) -> None:
@@ -143,14 +142,14 @@ async def _complete(event: Event, state: FSMContext, language: str, *, is_callba
     if occurrence_id is None:
         await _say(event, t("cancelled", language), is_callback=is_callback)
         return
-    outcome = await card.run_unit(run_db, lambda s: complete_occurrence(
+    outcome = await _common.run_unit(run_db, lambda s: complete_occurrence(
         s, event.from_user.id, int(occurrence_id),
         comment=data.get("elvm_comment"), cert_fields=cert_fields_from(data),
     ), "закрытие пункта графика")
     if outcome is None or outcome.verdict != "done":
         verdict = outcome.verdict if outcome else "error"
         if is_callback:
-            await card.deny(event, verdict, language)
+            await _common.deny(event, verdict, language)
         else:
             await event.answer(deny_text(verdict, language))
         return
@@ -158,7 +157,7 @@ async def _complete(event: Event, state: FSMContext, language: str, *, is_callba
                 event.from_user.id, occurrence_id, outcome.elevator_id)
     await _say(event, occ_done_text(outcome, language), is_callback=is_callback)
     message = event.message if is_callback else event
-    await card.answer_card(run_db, message, event.from_user.id, outcome.elevator_id, language)
+    await _common.answer_card(run_db, message, event.from_user.id, outcome.elevator_id, language)
 
 
 @router.message(StateFilter(ElevatorStates.occ_comment), F.text)
@@ -211,9 +210,3 @@ async def handle_cert_url(message: Message, state: FSMContext, language: str = "
         return
     await state.update_data(elvm_cert_url=url)
     await _complete(message, state, language, is_callback=False)
-
-
-@router.message(StateFilter(*ALL_STATES))
-async def handle_non_text(message: Message, language: str = "ru") -> None:
-    """Не текст на текстовом шаге лифтёра — подсказка, состояние сохраняется."""
-    await message.answer(t("text_only", language))

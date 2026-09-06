@@ -3,8 +3,9 @@
 Каждый юнит начинается с ``check_access``: флаг модуля, approved-пользователь,
 роль ``executor`` (``check_user_role_sync``) и специализация ``elevator``
 (``parse_specializations`` резолвит алиас ``maintenance``). Наружу выходят
-только frozen-DTO; ORM за границу run_db не выходит. Commit/rollback — здесь,
-отправка сообщений — у вызывающего (после commit).
+только frozen-DTO; ORM за границу run_db не выходит. Commit/rollback — здесь
+(смена статуса — в общем ``handlers/_elevator_status_unit``), отправка
+сообщений — у вызывающего (после commit).
 """
 
 from __future__ import annotations
@@ -20,8 +21,10 @@ from sqlalchemy.orm import Session
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.elevator import Elevator, ElevatorMaintenanceOccurrence
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.handlers._elevator_status_unit import StatusOutcome, apply_elevator_status
 from uk_management_bot.services.elevator_service import (
     ElevatorConflictError,
     ElevatorNotFoundError,
@@ -34,8 +37,6 @@ from uk_management_bot.services.elevator_service import (
     get_occurrence_sync,
     list_active_for_building_sync,
     list_occurrences_sync,
-    load_config_sync,
-    set_status_sync,
     status_intervals_sync,
 )
 from uk_management_bot.utils.auth_helpers import check_user_role_sync
@@ -54,6 +55,8 @@ DUE_SOON_DAYS = 7
 
 OK = "ok"
 
+__all__ = ["StatusOutcome"]  # реэкспорт общего DTO для _texts/status
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # DTO — пересекают границу run_db
@@ -62,7 +65,7 @@ OK = "ok"
 
 @dataclass(frozen=True)
 class Access:
-    """Вердикт доступа: ok | disabled | no_access | no_spec."""
+    """Вердикт доступа: ok | disabled | no_access | no_role | no_spec."""
 
     verdict: str
     user_id: Optional[int] = None
@@ -129,14 +132,6 @@ class CardView:
 
 
 @dataclass(frozen=True)
-class StatusOutcome:
-    verdict: str  # changed | unchanged | not_found | rejected | вердикт доступа
-    old_status: Optional[str] = None
-    new_status: Optional[str] = None
-    messages: tuple[tuple[int, str], ...] = ()
-
-
-@dataclass(frozen=True)
 class OccurrenceRow:
     id: int
     kind: str
@@ -179,7 +174,7 @@ def check_access(db: Session, telegram_id: int) -> Access:
     if user is None or user.status != "approved":
         return Access("no_access")
     if not check_user_role_sync(user.id, REQUIRED_ROLE, db):
-        return Access("no_spec", user.id)
+        return Access("no_role", user.id)
     if REQUIRED_SPECIALIZATION not in parse_specializations(user):
         return Access("no_spec", user.id)
     return Access(OK, user.id)
@@ -254,6 +249,12 @@ def _planned(db: Session, elevator_id: int) -> list[ElevatorMaintenanceOccurrenc
 
 
 def load_card(db: Session, telegram_id: int, elevator_id: int, language: str) -> CardView:
+    """Карточка лифта.
+
+    ``can_complete`` — есть planned-пункт с ``due_on ≤ сегодня + DUE_SOON_DAYS``
+    ЛЮБОГО вида: освидетельствование закрывается из того же меню, что и ТО
+    (осознанно шире формулировки «planned maintenance» в спеке).
+    """
     access = check_access(db, telegram_id)
     if access.verdict != OK:
         return CardView(access.verdict)
@@ -280,31 +281,29 @@ def load_card(db: Session, telegram_id: int, elevator_id: int, language: str) ->
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _request_bound_to_elevator(db: Session, request_number: str, elevator_id: int) -> bool:
+    stmt = select(Request.request_number).where(
+        Request.request_number == request_number, Request.elevator_id == elevator_id
+    )
+    return db.execute(stmt).scalar_one_or_none() is not None
+
+
 def apply_status(
     db: Session, telegram_id: int, elevator_id: int, status: str, *,
     reason: Optional[str], request_number: Optional[str],
 ) -> StatusOutcome:
-    """``set_status_sync(source="manual")`` + commit; сообщения жителям возвращаются."""
+    """Гейт → (номер заявки, если передан, обязан быть привязан к ЭТОМУ лифту —
+    callback_data шлёт клиент) → общий юнит ``source="manual"`` с commit."""
     access = check_access(db, telegram_id)
     if access.verdict != OK:
         return StatusOutcome(access.verdict)
-    try:
-        change = set_status_sync(
-            db, elevator_id, status, actor_user_id=access.user_id, source=MANUAL_SOURCE,
-            reason=reason, request_number=request_number, config=load_config_sync(db),
-        )
-    except ElevatorNotFoundError:
-        return StatusOutcome("not_found")
-    except (ElevatorConflictError, ElevatorValidationError) as exc:
-        db.rollback()
-        logger.info("Статус лифта %s отклонён (лифтёр tg=%s): %s", elevator_id, telegram_id, exc)
-        return StatusOutcome("rejected")
-    if not change.changed:
-        return StatusOutcome("unchanged", change.old_status, change.new_status)
-    db.commit()
-    return StatusOutcome(
-        "changed", change.old_status, change.new_status,
-        tuple((m.telegram_id, m.text) for m in change.resident_messages),
+    if request_number is not None and not _request_bound_to_elevator(db, request_number, elevator_id):
+        logger.info("Лифт %s: заявка %s не привязана к лифту, статус отклонён (tg=%s)",
+                    elevator_id, request_number, telegram_id)
+        return StatusOutcome("request_mismatch")
+    return apply_elevator_status(
+        db, elevator_id, status, actor_user_id=access.user_id, source=MANUAL_SOURCE,
+        reason=reason, request_number=request_number,
     )
 
 

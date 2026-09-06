@@ -81,11 +81,11 @@ def elevators_keyboard(
 
 
 def card_keyboard(view: CardView, language: str) -> InlineKeyboardMarkup:
-    """Статус — только у введённого лифта; ТО — при planned-пункте в ближайшие дни."""
+    """Статус и ремонт — только у введённого лифта; ТО — при planned-пункте в ближайшие дни."""
     rows: list[Row] = []
     if view.is_commissioned:
         rows.append([_btn(t("btn_status", language), f"{STATUS_PREFIX}{view.id}")])
-    rows.append([_btn(t("btn_repair", language), f"{REPAIR_PREFIX}{view.id}")])
+        rows.append([_btn(t("btn_repair", language), f"{REPAIR_PREFIX}{view.id}")])
     if view.can_complete:
         rows.append([_btn(t("btn_maintenance", language), f"{OCCURRENCES_PREFIX}{view.id}")])
     rows.append(_back_row(t("btn_back", language), f"{BUILDING_PREFIX}{view.building_id}"))

@@ -18,7 +18,7 @@ import pytest
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.elevator import Elevator, ElevatorMaintenanceOccurrence
-from uk_management_bot.handlers.elevators import card, maintenance
+from uk_management_bot.handlers.elevators import _common, card, maintenance
 from uk_management_bot.states.elevators import ElevatorStates
 from uk_management_bot.tests.handlers import elevators_harness as h
 from uk_management_bot.utils.business_time import business_today, fmt_date
@@ -42,7 +42,8 @@ def _flag_on(monkeypatch):
 @pytest.fixture(autouse=True)
 def _run_db_on_sqlite(db):
     run = h.run_db_on(db)
-    with patch.object(maintenance, "run_db", run), patch.object(card, "run_db", run):
+    with patch.object(maintenance, "run_db", run), patch.object(card, "run_db", run), \
+         patch.object(_common, "run_db", run):
         yield
 
 
@@ -244,5 +245,24 @@ async def test_non_text_in_fsm_state_gets_hint(world):
     state = h.FakeState()
     await state.set_state(ElevatorStates.occ_comment)
     msg = h.make_message(None)
-    await maintenance.handle_non_text(msg, language="ru")
+    await _common.handle_non_text(msg, state, language="ru")
     assert msg.answer.await_args.args[0] == get_text("elevators.bot.text_only", language="ru")
+    assert state.state == ElevatorStates.occ_comment
+
+
+@pytest.mark.asyncio
+async def test_text_in_urgency_state_asks_for_button(world):
+    state = h.FakeState()
+    await state.set_state(ElevatorStates.repair_urgency)
+    msg = h.make_message("срочно!")
+    await _common.handle_non_text(msg, state, language="ru")
+    assert msg.answer.await_args.args[0] == get_text("elevators.bot.pick_urgency", language="ru")
+    assert state.state == ElevatorStates.repair_urgency
+
+
+def test_non_text_hint_is_registered_last_on_router():
+    from uk_management_bot.handlers.elevators import router
+
+    names = [handler.callback.__name__ for handler in router.message.handlers]
+    assert names[0] == "handle_exit_button"
+    assert names[-1] == "handle_non_text"

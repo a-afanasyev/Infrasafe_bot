@@ -158,6 +158,7 @@ CONVERTED = [
     # Модуль «Лифты» (Ф5, T10): бот лифтёра рождён под run_db — sync-юниты в
     # _units.py, хендлеры без параметра db.
     "uk_management_bot/handlers/elevators/_units.py",
+    "uk_management_bot/handlers/elevators/_common.py",
     "uk_management_bot/handlers/elevators/menu.py",
     "uk_management_bot/handlers/elevators/card.py",
     "uk_management_bot/handlers/elevators/status.py",

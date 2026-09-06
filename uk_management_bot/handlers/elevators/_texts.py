@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import html
+from datetime import date
 from typing import Optional
 
 from uk_management_bot.services.elevator_service import status_label
@@ -30,7 +31,9 @@ NO_STATUS_EMOJI = "⚪"
 _DENY_KEYS: dict[str, str] = {
     "disabled": KEY + "disabled",
     "no_access": "auth.no_access",
+    "no_role": "auth.no_access",
     "no_spec": KEY + "no_spec",
+    "request_mismatch": KEY + "request_mismatch",
     "not_found": KEY + "not_found",
     "rejected": KEY + "status_rejected",
     "state_error": KEY + "occ_state_error",
@@ -110,7 +113,7 @@ def status_outcome_text(outcome: StatusOutcome, sent: int, language: str) -> str
     )
 
 
-def occurrence_button(kind: str, due_on, overdue: bool, language: str) -> str:
+def occurrence_button(kind: str, due_on: date, overdue: bool, language: str) -> str:
     mark = t("occ_overdue_mark", language) if overdue else ""
     return t("occ_button", language, overdue=mark, kind=kind_label(kind, language), date=fmt_date(due_on))
 

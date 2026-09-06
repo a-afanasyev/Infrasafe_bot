@@ -17,7 +17,7 @@ import pytest
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.elevator import Elevator, ElevatorStatusEvent
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.handlers.elevators import card, repair, status
+from uk_management_bot.handlers.elevators import _common, card, repair, status
 from uk_management_bot.handlers.requests import create as create_mod
 from uk_management_bot.states.elevators import ElevatorStates
 from uk_management_bot.tests.handlers import elevators_harness as h
@@ -53,7 +53,7 @@ def _no_dispatch(monkeypatch):
 def _run_db_on_sqlite(db):
     run = h.run_db_on(db)
     with patch.object(repair, "run_db", run), patch.object(card, "run_db", run), \
-         patch.object(create_mod, "run_db", run):
+         patch.object(create_mod, "run_db", run), patch.object(_common, "run_db", run):
         yield
 
 
@@ -190,6 +190,7 @@ async def test_real_save_request_creates_elevator_repair(world, db):
 @pytest.mark.asyncio
 async def test_repair_status_offer_yes_sets_under_repair(world, db):
     elevator_id = world["working"].id
+    h.add_request(db, NUMBER, elevator_id=elevator_id, user_id=world["tech"].id)
     cb = h.make_callback(f"elvm:repst:{elevator_id}:{NUMBER}:1")
     with patch.object(status, "send_notify_messages", AsyncMock(return_value=1)) as notify:
         await repair.handle_repair_status_offer(cb, language="ru")
@@ -201,6 +202,34 @@ async def test_repair_status_offer_yes_sets_under_repair(world, db):
     assert event.reason == get_text("elevators.bot.repair_reason", language="ru", number=NUMBER)
     assert event.actor_user_id == world["tech"].id
     notify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_repair_status_offer_foreign_number_rejected(world, db):
+    """Номер заявки из callback_data не привязан к этому лифту — отказ, журнал пуст."""
+    elevator_id = world["working"].id
+    h.add_request(db, NUMBER, elevator_id=world["raw"].id, user_id=world["tech"].id)
+    for number in (NUMBER, "260906-777"):  # чужой лифт / несуществующая
+        cb = h.make_callback(f"elvm:repst:{elevator_id}:{number}:1")
+        with patch.object(status, "send_notify_messages", AsyncMock()) as notify:
+            await repair.handle_repair_status_offer(cb, language="ru")
+        notify.assert_not_awaited()
+        assert cb.answer.await_args.args[0] == get_text("elevators.bot.request_mismatch", language="ru")
+        assert cb.answer.await_args.kwargs.get("show_alert") is True
+    db.expire_all()
+    assert db.query(ElevatorStatusEvent).count() == 0
+    assert db.get(Elevator, elevator_id).current_status == "working"
+
+
+@pytest.mark.asyncio
+async def test_repair_start_refused_for_uncommissioned(world):
+    """Кнопки в карточке нет, но устаревшая карточка/crafted callback — явный отказ."""
+    state = h.FakeState()
+    cb = h.make_callback(f"elvm:rep:{world['raw'].id}")
+    await repair.handle_repair_start(cb, state, language="ru")
+    assert state.state is None
+    assert cb.answer.await_args.args[0] == get_text("elevators.bot.repair_not_commissioned", language="ru")
+    cb.message.edit_text.assert_not_awaited()
 
 
 @pytest.mark.asyncio

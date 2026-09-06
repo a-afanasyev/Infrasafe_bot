@@ -16,7 +16,7 @@ import pytest
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.elevator import Elevator, ElevatorStatusEvent
-from uk_management_bot.handlers.elevators import card, status
+from uk_management_bot.handlers.elevators import _common, card, status
 from uk_management_bot.services.elevator_service import MAX_REASON_LEN
 from uk_management_bot.states.elevators import ElevatorStates
 from uk_management_bot.tests.handlers import elevators_harness as h
@@ -41,7 +41,8 @@ def _flag_on(monkeypatch):
 @pytest.fixture(autouse=True)
 def _run_db_on_sqlite(db):
     run = h.run_db_on(db)
-    with patch.object(status, "run_db", run), patch.object(card, "run_db", run):
+    with patch.object(status, "run_db", run), patch.object(card, "run_db", run), \
+         patch.object(_common, "run_db", run):
         yield
 
 
@@ -194,3 +195,20 @@ async def test_reason_state_without_fsm_data_is_cancelled(world):
     await status.handle_reason_text(msg, state, language="ru")
     assert state.state is None
     assert msg.answer.await_args.args[0] == get_text("elevators.bot.cancelled", language="ru")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["❌ Отменить", "❌ Отмена", "🔙 Назад", "👤 Профиль"])
+async def test_reply_exit_button_in_reason_state_cancels_without_writing(world, db, text):
+    """Reply-кнопки отмены/меню на шаге причины — выход, а не текст причины."""
+    state = h.FakeState()
+    await state.update_data(elvm_elevator_id=world["working"].id, elvm_status="not_working")
+    await state.set_state(ElevatorStates.status_reason)
+    msg = h.make_message(text)
+    assert text in _common.EXIT_TEXTS
+    await _common.handle_exit_button(msg, state, language="ru")
+    assert state.state is None and state.data == {}
+    assert db.query(ElevatorStatusEvent).count() == 0
+    assert msg.answer.await_args_list[0].args[0] == get_text("elevators.bot.cancelled", language="ru")
+    callbacks = h.callbacks_of(msg.answer.await_args_list[1].kwargs["reply_markup"])
+    assert f"elvm:st:{world['working'].id}" in callbacks

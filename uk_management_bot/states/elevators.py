@@ -25,3 +25,16 @@ class ElevatorStates(StatesGroup):
     cert_number = State()
     cert_valid_until = State()
     cert_url = State()
+
+
+# Все текстовые шаги лифтёра — для перехвата reply-кнопок отмены/меню и подсказки
+# «только текст» (handlers/elevators/_common.py).
+ALL_STATES: tuple[State, ...] = (
+    ElevatorStates.status_reason,
+    ElevatorStates.repair_description,
+    ElevatorStates.repair_urgency,
+    ElevatorStates.occ_comment,
+    ElevatorStates.cert_number,
+    ElevatorStates.cert_valid_until,
+    ElevatorStates.cert_url,
+)

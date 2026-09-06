@@ -90,6 +90,11 @@ def cert_act_url_max_len() -> int | None:
     return Elevator.__table__.columns["cert_act_url"].type.length
 
 
+def cert_number_max_len() -> int | None:
+    """Ширина колонки номера акта освидетельствования (границы ввода в боте)."""
+    return Elevator.__table__.columns["cert_number"].type.length
+
+
 def validate_passport_values(fields: Mapping[str, Any]) -> None:
     """Границы паспорта/договора/освидетельствования: длины + схема ``cert_act_url``."""
     validate_string_lengths(fields)

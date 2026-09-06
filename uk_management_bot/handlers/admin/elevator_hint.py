@@ -36,15 +36,11 @@ from uk_management_bot.keyboards.elevators import (
     STATUS_PREFIX,
     build_elevator_status_hint_keyboard,
 )
-from uk_management_bot.services.admin_handler_service import AdminHandlerService
+from uk_management_bot.handlers._elevator_status_unit import StatusOutcome, apply_elevator_status
 from uk_management_bot.services.elevator_service import (
     ElevatorNotFoundError,
-    ElevatorStateError,
-    ElevatorValidationError,
     elevator_label,
     get_elevator_sync,
-    load_config_sync,
-    set_status_sync,
     status_label,
 )
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
@@ -75,14 +71,6 @@ class HintView:
     status: Optional[str]
 
 
-@dataclass(frozen=True)
-class StatusOutcome:
-    verdict: str  # changed | unchanged | not_found | rejected
-    old_status: Optional[str] = None
-    new_status: Optional[str] = None
-    messages: tuple[tuple[int, str], ...] = ()
-
-
 # ══════════════════════════════════════════════════════════════════════════
 # Sync-юниты (worker-поток через run_db)
 # ══════════════════════════════════════════════════════════════════════════
@@ -99,24 +87,11 @@ def _load_hint(db: Session, elevator_id: int, language: str) -> Optional[HintVie
 def _apply_status(
     db: Session, elevator_id: int, status: str, actor_user_id: Optional[int], request_number: str
 ) -> StatusOutcome:
-    """set_status_sync + commit; сообщения жителям возвращаются, не отправляются."""
-    try:
-        change = set_status_sync(
-            db, elevator_id, status, actor_user_id=actor_user_id, source=HINT_SOURCE,
-            request_number=request_number, config=load_config_sync(db),
-        )
-    except ElevatorNotFoundError:
-        return StatusOutcome("not_found")
-    except (ElevatorStateError, ElevatorValidationError) as exc:
-        AdminHandlerService(db).rollback()
-        logger.info("Статус лифта %s из подсказки отклонён: %s", elevator_id, exc)
-        return StatusOutcome("rejected")
-    if not change.changed:
-        return StatusOutcome("unchanged", change.old_status, change.new_status)
-    AdminHandlerService(db).commit()
-    return StatusOutcome(
-        "changed", change.old_status, change.new_status,
-        tuple((m.telegram_id, m.text) for m in change.resident_messages),
+    """Общий юнит смены статуса (handlers/_elevator_status_unit) с ``source="request_hint"``;
+    commit внутри, сообщения жителям возвращаются, не отправляются."""
+    return apply_elevator_status(
+        db, elevator_id, status, actor_user_id=actor_user_id, source=HINT_SOURCE,
+        request_number=request_number,
     )
 
 

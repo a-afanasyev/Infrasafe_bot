@@ -29,7 +29,7 @@ from uk_management_bot.services.request_number_service import REQUEST_NUMBER_COR
 from uk_management_bot.states.elevators import ElevatorStates
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_MANAGER, URGENCY_VALUES
 
-from . import card, status
+from . import _common, status
 from ._keyboards import (
     REPAIR_PREFIX,
     REPAIR_STATUS_PREFIX,
@@ -79,18 +79,22 @@ def build_repair_data(
 async def handle_repair_start(callback: CallbackQuery, state: FSMContext, language: str = "ru") -> None:
     """``elvm:rep:{id}``: гейт + дом лифта в FSM → шаг описания."""
     match = _START_RE.match(callback.data or "")
-    elevator_id = card.parse_int(match.group("id")) if match else None
+    elevator_id = _common.parse_int(match.group("id")) if match else None
     if elevator_id is None:
-        await card.deny(callback, "error", language)
+        await _common.deny(callback, "error", language)
         return
-    view = await card.load_card_view(run_db, callback.from_user.id, elevator_id, language)
+    view = await _common.load_card_view(run_db, callback.from_user.id, elevator_id, language)
     if view.verdict != OK:
-        await card.deny(callback, view.verdict, language)
+        await _common.deny(callback, view.verdict, language)
+        return
+    if not view.is_commissioned:
+        # Кнопки в карточке нет, но устаревшая карточка / crafted callback — явный отказ.
+        await callback.answer(t("repair_not_commissioned", language), show_alert=True)
         return
     await state.clear()
     await state.update_data(elvm_elevator_id=view.id, elvm_building_id=view.building_id)
     await state.set_state(ElevatorStates.repair_description)
-    await card.edit(callback, t("repair_description_prompt", language, min=MIN_DESCRIPTION_LEN),
+    await _common.edit(callback, t("repair_description_prompt", language, min=MIN_DESCRIPTION_LEN),
                     cancel_keyboard(language))
 
 
@@ -107,7 +111,7 @@ async def handle_description(message: Message, state: FSMContext, language: str 
 
 
 async def _reporter(telegram_id: int) -> Access:
-    access = await card.run_unit(run_db, lambda s: check_access(s, telegram_id), "гейт лифтёра")
+    access = await _common.run_unit(run_db, lambda s: check_access(s, telegram_id), "гейт лифтёра")
     return access if access is not None else Access("error")
 
 
@@ -117,18 +121,18 @@ async def handle_urgency(callback: CallbackQuery, state: FSMContext, language: s
     match = _URGENCY_RE.match(callback.data or "")
     urgency = match.group("key") if match else None
     if urgency not in URGENCY_VALUES:
-        await card.deny(callback, "error", language)
+        await _common.deny(callback, "error", language)
         return
     data = await state.get_data()
     await state.clear()
     elevator_id, building_id = data.get("elvm_elevator_id"), data.get("elvm_building_id")
     description = data.get("elvm_description")
     if elevator_id is None or building_id is None or not description:
-        await card.cancelled(callback, language)
+        await _common.cancelled(callback, language)
         return
     access = await _reporter(callback.from_user.id)
     if access.verdict != OK:
-        await card.deny(callback, access.verdict, language)
+        await _common.deny(callback, access.verdict, language)
         return
     request_data = build_repair_data(
         building_id=int(building_id), elevator_id=int(elevator_id), description=str(description),
@@ -137,10 +141,10 @@ async def handle_urgency(callback: CallbackQuery, state: FSMContext, language: s
     number = await save_request(request_data, callback.from_user.id, None, callback.bot,
                                 source=REPAIR_SOURCE, role=REPAIR_ROLE)
     if not number:
-        await card.edit(callback, t("repair_failed", language))
+        await _common.edit(callback, t("repair_failed", language))
         return
     logger.info("Лифтёр tg=%s создал ремонт %s по лифту %s", callback.from_user.id, number, elevator_id)
-    await card.edit(callback, repair_created_text(number, language),
+    await _common.edit(callback, repair_created_text(number, language),
                     repair_status_offer_keyboard(int(elevator_id), number, language))
 
 
@@ -149,12 +153,12 @@ async def handle_repair_status_offer(callback: CallbackQuery, language: str = "r
     """``elvm:repst:{id}:{номер}:1|0``: «Да» — статус «В ремонте» с номером заявки в журнале."""
     match = _OFFER_RE.match(callback.data or "")
     if match is None:
-        await card.deny(callback, "error", language)
+        await _common.deny(callback, "error", language)
         return
     elevator_id, number = int(match.group("id")), match.group("number")
     if match.group("yes") == "0":
-        await card.edit(callback, t("repair_status_kept", language))
-        await card.answer_card(run_db, callback.message, callback.from_user.id, elevator_id, language)
+        await _common.edit(callback, t("repair_status_kept", language))
+        await _common.answer_card(run_db, callback.message, callback.from_user.id, elevator_id, language)
         return
     outcome, sent = await status.change_status(
         run_db, callback.bot, callback.from_user.id, elevator_id, UNDER_REPAIR,

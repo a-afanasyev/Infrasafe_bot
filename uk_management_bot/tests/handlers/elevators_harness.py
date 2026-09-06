@@ -88,6 +88,18 @@ def build_world(db: Session, *, today: date) -> dict:
     }
 
 
+def add_request(db: Session, number: str, *, elevator_id: int, user_id: int) -> Request:
+    """Заявка, привязанная к лифту (для сверки номера при «Поставить „В ремонте“»)."""
+    request = Request(
+        request_number=number, user_id=user_id, category="elevator", address="ул. Лифтовая, 1",
+        description="ремонт лифта", urgency="high", status="Новая",
+        elevator_id=elevator_id, elevator_operational=False,
+    )
+    db.add(request)
+    db.commit()
+    return request
+
+
 class FakeState:
     """Минимальный FSMContext: данные и состояние в памяти."""
 
