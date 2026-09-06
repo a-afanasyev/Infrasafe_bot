@@ -102,10 +102,10 @@ CSV: UTF-8/BOM или Windows-1251, разделитель `;` или `,`. Ли�
 Overlay `docker-compose.payments.yml` добавляет `payment-postgres` (PostgreSQL
 16), `payment-migrate`, `payment-api`. Порты новой БД и сервиса наружу не
 публикуются. Внутренний адрес: `http://payment-api.internal:8101/v1`.
-Если edge применяет allowlist, разрешить `/uk/api/v2/payment-control/*`
-на основной UK API. Не открывать `/v1` напрямую. Префикс заявлен в
-`docs/audit/2026-06-07-infrasafe-edge-allowlist-contract.md` как ожидающий
-добавления: до подтверждения InfraSafe раздел отдаёт 404 на обеих площадках.
+Префикс `/uk/api/v2/payment-control` разрешён на edge обеих площадок с
+2026-09-06 (см. `docs/audit/2026-06-07-infrasafe-edge-allowlist-contract.md`).
+Сам `/v1` сервиса наружу не открывать никогда. Лимит тела на edge — 10 МБ,
+прикладной предел 5 МБ срабатывает раньше.
 
 Пункт меню закрыт build-флагом фронта `VITE_PAYMENTS_ENABLED` (по умолчанию
 выключен). Включать только там, где overlay поднят, `PAYMENT_SERVICE_TOKEN`
@@ -152,8 +152,9 @@ Overlay `docker-compose.payments.yml` добавляет `payment-postgres` (Pos
 2. Добавить БД `payment_control` в кросс-бэкап хостов, как ранее `uk_media`, и
    прогнать проверку восстановления (`pg_restore -l`). Том `payment_pg_data`
    включить в резервное копирование.
-3. Подтвердить у InfraSafe добавление префикса `/api/v2/payment-control` в
-   edge-allowlist на обеих площадках.
+3. ✅ Выполнено 2026-09-06: InfraSafe добавила префикс `/api/v2/payment-control`
+   в edge-allowlist на обеих площадках (02:40 UTC, без простоя), проверено
+   пробами с нашей стороны — см. контракт-док в `docs/audit/`.
 4. Только после этого собирать фронт с `VITE_PAYMENTS_ENABLED=true`.
 
 ## Осознанные ограничения

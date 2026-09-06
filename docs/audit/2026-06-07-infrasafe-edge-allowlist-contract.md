@@ -1,6 +1,6 @@
 # InfraSafe public edge — prefix-allowlist contract for `/uk/api/*` (SEC-22)
 
-> _Последнее редактирование: 2026-08-22_
+> _Последнее редактирование: 2026-09-06_
 
 **Date:** 2026-06-07
 **Status:** ✅ live on prod (deployed by InfraSafe edge side, verified)
@@ -48,6 +48,7 @@ Derived from actual code, not assumptions:
 - `/api/v2/work-reports` — manager API for visual work reports (✅ live на ОБОИХ хостах, verified 2026-08-22; на infrasafe.uz фича DARK — приложение отвечает 404 JSON до включения флага)
 - `/api/v2/monitored-groups` — Group Intake: CRUD реестра ТГ-групп из дашборда (manager-only, `require_roles("manager")`; write-методы 30/min в приложении). Роуты `""` и `/{id}` (✅ live на ОБОИХ хостах, verified 2026-08-22; до деплоя фичи приложение отвечает 404 JSON — после деплоя ждём 401)
 - `/api/v2/residents` — раздел «Жители» дашборда (manager-only) (✅ live на ОБОИХ хостах, verified 2026-08-22 — пробел на infrasafe.uz закрыт, раздел «Жители» там снова работает)
+- `/api/v2/payment-control` — раздел «Контроль платежей» дашборда (manager/admin, только `approved`; предпросмотр импорта 10/min, активация и деактивация 30/min в приложении). Роуты `/apartments/{id}`, `/account`, `/imports`, `/imports/preview` (multipart до 5 МБ), `/imports/{id}`, `/imports/{id}/activate`, `/imports/{id}/deactivate` (✅ live на ОБОИХ хостах, добавлено InfraSafe 2026-09-06 02:40 UTC без простоя, verified 2026-09-06)
 
 **External inbound (server-to-server, HMAC):**
 - `/api/v2/webhooks/infrasafe/alert` (exact path; no other inbound webhooks exist)
@@ -94,10 +95,16 @@ Because the edge now enforces a prefix-allowlist, **any NEW `/api/v2/...` prefix
 - `/api/v2/monitored-groups` (Group Intake, реестр ТГ-групп, manager-only) — **✅ live на обеих площадках, verified 2026-08-22**.
 - `/api/v2/residents` (раздел «Жители», manager-only) — **✅ live на обеих площадках, verified 2026-08-22** (пробел infrasafe.uz закрыт по встречному вопросу InfraSafe; наборы префиксов площадок сверены ими и идентичны, у них добавлена сборочная проверка на оба конфига).
 - `/api/v2/payment-control` (Контроль платежей, manager/admin, требует overlay
-  `docker-compose.payments.yml`) — **⏳ ожидает добавления InfraSafe, добавлено в
-  этот док 2026-09-05.** До заявки раздел отдаёт 404 на обеих площадках, поэтому
-  пункт меню закрыт build-флагом `VITE_PAYMENTS_ENABLED` (по умолчанию выключен):
-  фронт не показывает раздел, пока префикс не заявлен и overlay не поднят.
+  `docker-compose.payments.yml`) — **✅ live на обеих площадках, добавлено InfraSafe
+  2026-09-06 02:40 UTC (без простоя), verified 2026-09-06.** Пробы с нашей стороны:
+  `/uk/api/v2/payment-control/imports` → `401 application/json {"detail":"Not
+  authenticated"}` на infrasafe.uz и profk.uz; негативный контроль
+  `/uk/api/v2/payment-control-admin` → HTML-404 nginx на обеих — граница `(/|$)`
+  держит. Лимит тела на edge — 10 МБ на уровне http, на `/uk/api/` не
+  переопределён (на стенде InfraSafe: 6 МБ проходит, 11 МБ → 413), то есть наш
+  прикладной предел 5 МБ срабатывает раньше edge. Послаблений частоты не делали,
+  действует общая группа ~120 r/min/IP. Пункт меню остаётся закрытым build-флагом
+  `VITE_PAYMENTS_ENABLED`, пока не поднят overlay сервиса.
 
 ## Verification (2026-08-22, финал) — ✅ подтверждено на обеих площадках
 
