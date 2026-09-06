@@ -5,21 +5,28 @@
 """
 from uk_management_bot.config.settings import settings
 
-# Идентификаторы перетаскиваемых модулей витрины. "workreports" зарезервирован
-# для будущего модуля отчётов о выполненных работах (гейт — enabled_module_ids
-# ниже) — до включения флага он не должен появляться в публичном ответе.
-ALL_MODULE_IDS = ("stats", "requests", "announcements", "rating", "hours", "workreports")
+# Идентификаторы перетаскиваемых модулей витрины. "workreports" и "elevators"
+# гейтованы фиче-флагами (enabled_module_ids ниже) — до включения флага модуль
+# не должен появляться в публичном ответе.
+ALL_MODULE_IDS = ("stats", "requests", "announcements", "rating", "hours", "workreports", "elevators")
+
+# Модуль → флаг settings, который его включает (остальные модули видны всегда).
+_MODULE_FLAGS = {
+    "workreports": "WORK_REPORTS_ENABLED",
+    "elevators": "ELEVATORS_ENABLED",
+}
 
 
 def enabled_module_ids() -> tuple[str, ...]:
     """Модули, видимые снаружи при текущем состоянии settings.
 
-    Пока WORK_REPORTS_ENABLED=False (дефолт везде) — "workreports" вырезается,
-    даже если в БД для него уже есть строка layout (см. service.to_public_response).
+    Пока флаг модуля выключен (дефолт везде) — модуль вырезается, даже если в
+    БД для него уже есть строка layout (см. service.to_public_response).
     """
-    if settings.WORK_REPORTS_ENABLED:
-        return ALL_MODULE_IDS
-    return tuple(m for m in ALL_MODULE_IDS if m != "workreports")
+    return tuple(
+        m for m in ALL_MODULE_IDS
+        if m not in _MODULE_FLAGS or getattr(settings, _MODULE_FLAGS[m])
+    )
 
 
 DEFAULT_BOARD_CONFIG = {
@@ -112,6 +119,14 @@ DEFAULT_BOARD_CONFIG = {
             "uz": "Bajarilgan ishlar hisobotlari",
         },
     },
+    # Настройки модуля «Лифты» на табло (T16, Р16): только заголовок. Layout-запись
+    # — в MODULE_DEFAULTS["elevators"], состав виджета определяет elevators_config.
+    "elevators": {
+        "title": {
+            "ru": "Лифты",
+            "uz": "Liftlar",
+        },
+    },
 }
 
 # Дефолт одной layout-записи на каждый известный модуль — используется
@@ -122,3 +137,4 @@ DEFAULT_BOARD_CONFIG = {
 # отрендерено на живой публичной странице, пока менеджер не включит его сам.
 MODULE_DEFAULTS: dict[str, dict] = {item["id"]: dict(item) for item in DEFAULT_BOARD_CONFIG["layout"]}
 MODULE_DEFAULTS["workreports"] = {"id": "workreports", "visible": False, "width": "full"}
+MODULE_DEFAULTS["elevators"] = {"id": "elevators", "visible": False, "width": "full"}

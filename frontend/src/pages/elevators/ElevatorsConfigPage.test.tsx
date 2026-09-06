@@ -38,7 +38,11 @@ describe('ElevatorsConfigPage', () => {
     const underRepair = await screen.findByLabelText('В ремонте — напоминать через, дней')
     expect(underRepair).toHaveValue(14)
     expect(screen.getByLabelText('Техобслуживание')).toHaveValue('30, 7, 1')
-    expect(screen.getByLabelText(/Показывать лифты жителям/)).toBeDisabled()
+    // T16: тумблер публичного виджета редактируемый и уходит в PUT.
+    const modulePublic = screen.getByLabelText(/Показывать лифты жителям/)
+    expect(modulePublic).not.toBeDisabled()
+    expect(modulePublic).not.toBeChecked()
+    await user.click(modulePublic)
 
     await user.clear(underRepair)
     await user.clear(screen.getByLabelText('Договор'))
@@ -47,6 +51,7 @@ describe('ElevatorsConfigPage', () => {
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(body).not.toBeNull())
     expect(body).toEqual({
+      module_public: true,
       downtime_threshold_days: { not_working: 2, under_repair: null },
       resident_notifications: { repair_started: true, maintenance_started: false, back_in_service: true },
       staff_reminders: { maintenance: [30, 7, 1], certification: [60, 30], contract: [45, 10, 3], overdue_weekly: true },
@@ -84,9 +89,11 @@ describe('elevatorsConfigForm (чистые функции)', () => {
 
   it('draft ↔ payload: null-порог = пустая строка и обратно', () => {
     const draft = configDraftFrom({ ...CONFIG, downtime_threshold_days: { not_working: null, under_repair: 3 } })
+    expect(draft.module_public).toBe(false)
     expect(draft.not_working).toBe('')
     expect(draft.under_repair).toBe('3')
     const payload = configDraftToPayload({ ...draft, maintenance: ' 30 , 7,1 ' })
+    expect(payload.module_public).toBe(false)
     expect(payload.downtime_threshold_days).toEqual({ not_working: null, under_repair: 3 })
     expect(payload.staff_reminders?.maintenance).toEqual([30, 7, 1])
   })

@@ -740,7 +740,8 @@
       "announcements": "E'lonlar",
       "rating": "Aholilar bahosi",
       "hours": "Ish vaqti",
-      "workreports": "Ishlar hisobotlari"
+      "workreports": "Ishlar hisobotlari",
+      "elevators": "Liftlar"
     },
     "org": "Boshqaruv kompaniyasi",
     "orgName": "Nomi",
@@ -1749,13 +1750,28 @@
       "avgAcceptanceRating": "Qabul qilingan arizalar bo'yicha o'rtacha baho",
       "workingHours": "Ish vaqti",
       "emergencyService": "Favqulodda xizmat: kunduzi-kechasi",
-      "workReports": "Ishlar hisobotlari"
+      "workReports": "Ishlar hisobotlari",
+      "elevators": "Liftlar"
     },
     "workReports": {
       "viewAll": "Barcha hisobotlar",
       "before": "Oldin",
       "after": "Keyin",
       "noPhoto": "Foto yo‘q"
+    },
+    "elevators": {
+      "empty": "Liftlar haqida ma'lumot hali e'lon qilinmagan",
+      "dispatch": "Dispetcherlik",
+      "entrance": "{{entrance}}-kirish",
+      "elevator": "{{elevator}}-lift",
+      "since": "{{date}} dan",
+      "downtimeReason": "Sabab: {{reason}}",
+      "sparePartExpected": "Ehtiyot qism {{date}} kutilmoqda",
+      "servicedBy": "Xizmat ko'rsatadi: {{org}}",
+      "certUntil": "tekshiruv {{date}} gacha",
+      "certExpired": "tekshiruv muddati o'tgan",
+      "lastMaintenance": "Texnik xizmat {{date}}",
+      "availability": "mavjudlik {{pct}} %"
     },
     "footer": {
       "realtime": "Real vaqtda yangilanish · Ma'lumotlar {{time}} ga dolzarb"
@@ -2743,7 +2759,7 @@
       "stagesHint": "Masalan: 30, 7, 1 — uchta eslatma",
       "overdueWeekly": "Muddati o'tganlar haqida har hafta eslatish",
       "modulePublic": "Liftlarni aholiga ko'rsatish",
-      "modulePublicHint": "Ikkinchi relizda yoqiladi",
+      "modulePublicHint": "Aholilar tablosidagi ommaviy vidjet «Liftlarni aholiga ko'rsatish» yoqilgan liftlarni ko'rsatadi",
       "invalidStages": "Eslatma bosqichlari — manfiy bo'lmagan butun sonlar"
     },
     "toast": {

@@ -47,6 +47,7 @@
 | Р13 | Паспорта — ручной ввод, форма с «скопировать предыдущий»; импорт отложен |
 | Р14 | InfraSafe передаёт **наш `elevators.id`** в `alert.uk_elevator_id`; отдельной колонки маппинга нет |
 | Р15 | Групповой приём: дом из квартиры автора, лифт — inline-кнопками в чате, автовыбор при единственном лифте в подъезде; нет ответа — нет заявки |
+| Р16 | Из отложенного п. 3.3 — только публичный виджет статусов на табло жителей (§5, «Публичный виджет»). Без QR, без публичной карточки по коду, без печати; `public_code` зарезервирован и наружу не выдаётся |
 
 ## 3. Модель данных
 
@@ -182,6 +183,40 @@ RBAC только по роли (`require_approved_roles`): `_staff` = executor|
 > `~^/uk/api/v2/elevators(/|$)`; иначе SPA/TWA получат HTML-404 nginx. Запись —
 > `docs/audit/2026-06-07-infrasafe-edge-allowlist-contract.md`.
 
+### Публичный виджет (Р16) — `GET /api/v2/public/elevators`
+
+Роутер `api/elevators/public_router.py`, подключён рядом с лентой отчётов под уже заявленным
+префиксом `/api/v2/public/` (нового префикса в edge-allowlist не нужно). Анонимный, без
+`get_current_user`; `120/minute`; серверный кэш 30 с на язык (per-worker, как `_board_cache`); калитка `module_public`
+проверяется ДО кэша на каждом запросе.
+Параметр `lang` ∈ ru/uz — локализация подписи лифта.
+
+Две **тихие** калитки, обе → `200` с пустым `yards: []` (не 404: киоск в подъезде поллит
+постоянно): `ELEVATORS_ENABLED=false` и `elevators_config.module_public=false` (тумблер
+«Показывать лифты жителям» в `/dashboard/elevators/config`).
+
+Выборка (`services/elevator_service/public.py`, sync+async): `is_public=true`,
+`is_commissioned=true`, `archived_at IS NULL`, `current_status IS NOT NULL`; порядок
+двор → дом → подъезд → номер; в ответе группировка `yards[] → buildings[] → elevators[]`.
+
+Поля лифта (`PublicElevatorOut`): `entrance_number`, `elevator_number`, `label`, `status`,
+`status_since` (UTC datetime), `availability_30d`, `last_maintenance_on` (бизнес-дата закрытия
+последнего `done` ТО; без `done_at` — `due_on`), `cert_valid_until`, `cert_expired` (канон реестра: нет освидетельствования == истекло),
+`service_org_name`, `service_org_phone`, `manufacturer`, `model`, `production_year`, `capacity_kg`;
+`downtime_reason` и `spare_part_expected_on` — **только** при `publish_downtime_details=true`,
+иначе `null`. Корень: `yards`, `dispatch_phone` (сохранённая строка `board_config.contacts.dispatch_phone`,
+канон бота `get_dispatch_phone`: нет строки → `null`), `generated_at`.
+
+**Запрещено отдавать** (тест `tests/api/test_public_elevators.py` обходит весь JSON): `id`
+лифта, `public_code`, `passport_number`, `serial_number`, `factory_number`, `contract_number`,
+`contract_until`, `cert_number`, `cert_act_url`, любые `request_number`, тексты/авторы заявок,
+ФИО/id сотрудников, `open_requests_count`, флаги договора. Даты — `date` везде, кроме
+`status_since`.
+
+Модуль табло `elevators` (`api/board_config/defaults.py`): гейт `ELEVATORS_ENABLED` по образцу
+`workreports` — вырезается из ответа, хранится всегда, дефолт `visible=false`; блок
+`board_config.elevators.title` (ru/uz, дефолт «Лифты» / «Liftlar»).
+
 ## 6. Интеграция с заявками
 
 Четыре живых конструктора Request, общей фабрики нет — каждый вызывает единый резолвер Р11
@@ -246,6 +281,11 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 - **Подсказка после подтверждения** — `components/elevators/ElevatorStatusPromptDialog.tsx`:
   четыре статуса + «Оставить как есть» → `PUT /{id}/status` с `reason` (`statusReason.ts`, ≤500)
   и `request_number` при одной заявке; тот же статус — «без изменений» без запроса.
+- **Табло жителей (Р16)** — `components/board/ElevatorsBoardModule.tsx` + хук
+  `hooks/usePublicElevators.ts` (`publicClient`, `?lang`, поллинг 60 с). Регистрируется в
+  `ResidentBoardPage.tsx` как `MODULES.elevators` только при `isElevatorsEnabled()`; заголовок
+  из `board_config.elevators.title`, пустой ответ → заглушка «Данные о лифтах пока не
+  опубликованы» (модуль не пропадает — превью в редакторе видно). Строки i18n `board.elevators.*`.
 
 ## 9. Напоминания и уведомления
 
@@ -274,7 +314,7 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 по `telegram_id`. Тексты HTML-безопасны.
 
 Конфиг `elevators_config.data` (дефолты `reminder_rules.DEFAULT_ELEVATORS_CONFIG`):
-`module_public` (задел под QR), `downtime_threshold_days {not_working, under_repair}`,
+`module_public` (публичный виджет на табло, Р16 — §5), `downtime_threshold_days {not_working, under_repair}`,
 `resident_notifications {repair_started, maintenance_started, back_in_service}`,
 `staff_reminders {maintenance, certification, contract: [30,14,7]; overdue_weekly: true}`;
 стадии — убывающий список дней ≤365.
@@ -320,8 +360,9 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 
 Автостатус лифта от заявок (3.1; подготовлено `requests.elevator_id`/`elevator_operational`,
 `source`/`request_number` в журнале; условие — метрика игнорирования подсказки + рефакторинг
-«одна фабрика Request»), обходы (3.2), QR и публичная карточка (3.3; `public_code`, `is_public`,
-`module_public` готовы; нужен публичный префикс и QR-библиотека), организации и договоры как
+«одна фабрика Request»), обходы (3.2), QR и публичная карточка по коду (3.3; из этого пункта
+по Р16 сделан только виджет на табло — §5; `public_code` зарезервирован, QR-библиотеки нет),
+организации и договоры как
 сущности (3.4), таблица актов освидетельствования (3.5), notification ledger (3.6), скрытые
 служебные заявки (3.7), шаблоны планов ТО (3.8), автосвязь повторных сигналов InfraSafe (3.9),
 аудит подъездов квартир (3.10; счётчик в карточке есть), жёсткая блокировка обращений при
@@ -333,9 +374,11 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
 - Модели/схема: `uk_management_bot/tests/test_elevator_models.py` (паритет CHECK с миграцией,
   RESTRICT); `tests/services/test_metadata_completeness.py` (+4 таблицы).
 - Чистое ядро: `uk_management_bot/tests/services/elevator_service/test_{validation,availability,calendar_rules,reminder_rules,public_code}.py`.
-- DB-слой (sqlite-conftest): `tests/services/test_elevator_service_{status,passport,calendar,reads,recipients,config,grouping}.py`,
+- DB-слой (sqlite-conftest): `tests/services/test_elevator_service_{status,passport,calendar,reads,recipients,config,grouping,public}.py`,
   `test_elevator_reminders.py`, импорт-гейт `test_elevator_service_imports.py`.
 - API: `tests/api/test_elevators_{registry,status_calendar,requests_config}.py`,
+  `test_public_elevators.py` (виджет Р16: калитки, запрещённые ключи, кэш),
+  `test_board_config_elevators.py` (модуль табло за флагом),
   `test_requests_elevator_required.py` (Р11 в TWA/инспекторе), `test_callcenter_elevator.py`,
   `test_inbound_alert_elevator.py` (422 + inbox), `test_residents_notify_plain.py`.
 - Бот: `uk_management_bot/tests/handlers/test_elevator_request_flow.py`, `test_elevator_inspector_flow.py`,

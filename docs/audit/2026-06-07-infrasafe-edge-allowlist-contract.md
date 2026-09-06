@@ -27,7 +27,7 @@ Derived from actual code, not assumptions:
 ## Allowlist (prefixes passed through `^~ /uk/api/`)
 
 **Public (no auth, intentional):**
-- `/api/v2/public/`
+- `/api/v2/public/` — + `/api/v2/public/elevators` (модуль «Лифты», 2026-09-06, нового префикса нет)
 - `/api/v2/board-config` and `/api/v2/public/board-config` (GET public / PUT manager-only)
 - `/api/v2/announcements`
 - `/api/health` (basic liveness, if edge healthcheck needs it)

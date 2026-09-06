@@ -20,8 +20,8 @@ import {
  * Настройки модуля (/dashboard/elevators/config, manager): пороги простоя
  * (пусто = «не напоминать» → null), тумблеры уведомлений жителям, стадии
  * напоминаний персоналу (списки дней), overdue_weekly, module_public
- * (disabled — второй релиз). Черновик сидится из GET один раз и пересиживается
- * из ответа PUT (паттерн AutoManagerCard).
+ * (публичный виджет на табло жителей, T16). Черновик сидится из GET один раз
+ * и пересиживается из ответа PUT (паттерн AutoManagerCard).
  */
 type Draft = ElevatorsConfigDraft
 
@@ -119,8 +119,8 @@ export default function ElevatorsConfigPage() {
 
       <FormSection title={t('elevators.config.modulePublic')} grid={false}>
         <Toggle
-          id="cfg-module_public" label={t('elevators.config.modulePublic')} checked={config.data.module_public}
-          onChange={() => undefined} disabled hint={t('elevators.config.modulePublicHint')}
+          id="cfg-module_public" label={t('elevators.config.modulePublic')} checked={draft.module_public}
+          onChange={(v) => patch({ module_public: v })} hint={t('elevators.config.modulePublicHint')}
         />
       </FormSection>
 

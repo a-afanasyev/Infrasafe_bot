@@ -740,7 +740,8 @@
       "announcements": "Объявления",
       "rating": "Оценка жителей",
       "hours": "Часы работы",
-      "workreports": "Отчёты о работах"
+      "workreports": "Отчёты о работах",
+      "elevators": "Лифты"
     },
     "org": "Управляющая компания",
     "orgName": "Наименование",
@@ -1760,13 +1761,28 @@
       "avgAcceptanceRating": "Средняя оценка по принятым заявкам",
       "workingHours": "Часы работы",
       "emergencyService": "Аварийная служба: круглосуточно",
-      "workReports": "Отчёты о работах"
+      "workReports": "Отчёты о работах",
+      "elevators": "Лифты"
     },
     "workReports": {
       "viewAll": "Все отчёты",
       "before": "До",
       "after": "После",
       "noPhoto": "Нет фото"
+    },
+    "elevators": {
+      "empty": "Данные о лифтах пока не опубликованы",
+      "dispatch": "Диспетчерская",
+      "entrance": "Подъезд {{entrance}}",
+      "elevator": "Лифт {{elevator}}",
+      "since": "с {{date}}",
+      "downtimeReason": "Причина: {{reason}}",
+      "sparePartExpected": "Запчасть ожидается {{date}}",
+      "servicedBy": "Обслуживает: {{org}}",
+      "certUntil": "освид. до {{date}}",
+      "certExpired": "освидетельствование просрочено",
+      "lastMaintenance": "ТО {{date}}",
+      "availability": "доступность {{pct}} %"
     },
     "footer": {
       "realtime": "Обновление в реальном времени · Данные актуальны на {{time}}"
@@ -2754,7 +2770,7 @@
       "stagesHint": "Например: 30, 7, 1 — три напоминания",
       "overdueWeekly": "Еженедельно напоминать о просроченном",
       "modulePublic": "Показывать лифты жителям",
-      "modulePublicHint": "Включится во втором релизе",
+      "modulePublicHint": "Публичный виджет на табло жителей показывает лифты, у которых включено «Показывать жителям»",
       "invalidStages": "Стадии напоминаний — целые неотрицательные числа"
     },
     "toast": {

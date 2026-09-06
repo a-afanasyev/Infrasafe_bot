@@ -7,7 +7,8 @@ async для API (``AsyncSession``). Сети нет: ``set_status`` возвр�
 сообщения, отправляет вызывающий; commit — у вызывающего.
 
 DB-модули: ``reads`` (лифт/журнал/график/заявки), ``registry`` (реестр с
-фильтрами и сводка), ``metrics`` (доступность поверх журнала), ``status``,
+фильтрами и сводка), ``public`` (выборка для публичного виджета табло, Р16),
+``metrics`` (доступность поверх журнала), ``status``,
 ``recipients``, ``passport``, ``calendar``, ``config``, ``validation_db``
 (границы: длины колонок, номер заявки, URL; ``resolve_request_elevator_*`` —
 Р11 с запросом в БД, единая точка для всех конструкторов заявок). ``grouping`` (групповая приёмка
@@ -86,6 +87,12 @@ from .reads import (
     list_occurrences_async,
     list_occurrences_sync,
     list_requests_for_elevator_async,
+)
+from .public import (
+    last_maintenance_by_elevator_async,
+    last_maintenance_by_elevator_sync,
+    list_public_elevators_async,
+    list_public_elevators_sync,
 )
 from .recipients import (
     Recipient,
@@ -241,6 +248,8 @@ __all__ = [
     "is_overdue",
     "is_strict_int",
     "is_valid_public_code",
+    "last_maintenance_by_elevator_async",
+    "last_maintenance_by_elevator_sync",
     "list_active_for_building_async",
     "list_active_for_building_sync",
     "list_all_occurrences_async",
@@ -248,6 +257,8 @@ __all__ = [
     "list_events_async",
     "list_occurrences_async",
     "list_occurrences_sync",
+    "list_public_elevators_async",
+    "list_public_elevators_sync",
     "list_requests_for_elevator_async",
     "load_config_async",
     "load_config_sync",

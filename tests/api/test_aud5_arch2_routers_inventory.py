@@ -25,6 +25,7 @@ _API_ROOT = Path(__file__).resolve().parents[2] / "uk_management_bot" / "api"
 ROUTERS: dict[str, str] = {
     "auth": "uk_management_bot/api/auth/router.py",
     "callcenter": "uk_management_bot/api/callcenter/router.py",
+    "elevators_public": "uk_management_bot/api/elevators/public_router.py",
     "feedback": "uk_management_bot/api/feedback/router.py",
     "materials": "uk_management_bot/api/materials/router.py",
     "profile": "uk_management_bot/api/profile/router.py",
@@ -86,6 +87,7 @@ def collect_orm_sites(rel: str) -> set[tuple[str, str]]:
 BASELINE: dict[str, set[tuple[str, str]]] = {
     "auth": set(),
     "callcenter": set(),
+    "elevators_public": set(),
     "feedback": set(),
     "materials": set(),
     "profile": set(),
