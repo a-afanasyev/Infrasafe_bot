@@ -5,23 +5,20 @@ import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
+import { SortIndicator } from '../shared/SortIndicator'
+import type { UseTableSortResult } from '../../hooks/useTableSort'
+import { RESIDENT_COLUMNS } from './residentSortColumns'
 
 interface Props {
   residents: ResidentListItem[]
+  /** Состояние сортировки страницы; без него заголовки статичные. */
+  sort?: UseTableSortResult<ResidentListItem>
 }
 
-export default function ResidentTable({ residents }: Props) {
+export default function ResidentTable({ residents, sort }: Props) {
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
   const navigate = useNavigate()
-
-  const HEADERS = [
-    t('residents.headerResident'),
-    t('residents.headerAddress'),
-    t('residents.headerApartments'),
-    t('residents.headerVerification'),
-    t('residents.headerStatus'),
-  ]
 
   if (residents.length === 0) {
     return (
@@ -36,14 +33,28 @@ export default function ResidentTable({ residents }: Props) {
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-bg-surface border-b border-border-default">
-            {HEADERS.map(h => (
-              <th
-                key={h}
-                className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-text-muted font-[family-name:var(--font-display)]"
-              >
-                {h}
-              </th>
-            ))}
+            {RESIDENT_COLUMNS.map(column => {
+              const sortable = sort && column.serverField
+              return (
+                <th
+                  key={column.id}
+                  aria-sort={sortable ? sort.ariaSort(column.id) : undefined}
+                  className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-text-muted font-[family-name:var(--font-display)]"
+                >
+                  {sortable ? (
+                    <SortIndicator
+                      direction={sort.direction(column.id)}
+                      ariaSort={sort.ariaSort(column.id)}
+                      onToggle={() => sort.toggle(column.id)}
+                    >
+                      {t(column.labelKey)}
+                    </SortIndicator>
+                  ) : (
+                    t(column.labelKey)
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>

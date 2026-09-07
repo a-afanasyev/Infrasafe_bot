@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../hooks/usePersonName'
 import { useTopbar } from '../contexts/topbar'
 import {
-  useEmployees,
+  useEmployeesPage,
   usePendingStaff,
   useActivateEmployee,
   useDeclineEmployee,
@@ -27,6 +27,16 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import TopbarSearch from '../components/shared/TopbarSearch'
 import { cn } from '@/lib/utils'
+import AccessPagination from '../components/access/AccessPagination'
+import { useTableSort } from '../hooks/useTableSort'
+import {
+  EMPLOYEE_COLUMNS,
+  EMPLOYEES_SORT_STORAGE_KEY,
+} from '../components/employees/employeeSortColumns'
+
+const PAGE_SIZE = 50
+/** Плиткам нужен только размер выборки — строки не забираем. */
+const COUNT_ONLY = { limit: 1, offset: 0 }
 
 export default function EmployeesPage() {
   const { t } = useTranslation()
@@ -55,7 +65,42 @@ export default function EmployeesPage() {
     ...(specFilter !== 'all' ? { specialization: specFilter } : {}),
   }
 
-  const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
+  const [offset, setOffset] = useState(0)
+  // Любое сужение выборки возвращает на первую страницу: иначе третья страница
+  // прежней выдачи попадает в новую, и менеджер видит пустой экран при непустом
+  // результате. Сброс — в обработчиках, не в эффекте (каскадный ререндер).
+  // Обработчики написаны по одному, без обобщённой обёртки: компилятор React
+  // на дженерик-стрелке в теле компонента перестаёт разбирать мемоизацию
+  // соседнего useMemo и валит сборку.
+  const onRoleChange = (value: string) => { setRoleFilter(value); setOffset(0) }
+  const onStatusChange = (value: string) => { setStatusFilter(value); setOffset(0) }
+  const onSpecChange = (value: string) => { setSpecFilter(value); setOffset(0) }
+  // Поиск сбрасывает страницу иначе: его узел мемоизирован БЕЗ зависимости от
+  // текста (иначе поле теряет символы, см. ниже), поэтому подменять там
+  // обработчик нельзя. Правим состояние при смене входа — штатный приём React.
+  const [searchAtPage, setSearchAtPage] = useState(search)
+  if (searchAtPage !== search) {
+    setSearchAtPage(search)
+    setOffset(0)
+  }
+
+  const sort = useTableSort<EmployeeBrief>(EMPLOYEE_COLUMNS, EMPLOYEES_SORT_STORAGE_KEY)
+  const { data: page, isLoading, isError } = useEmployeesPage(
+    apiFilters,
+    search || undefined,
+    { limit: PAGE_SIZE, offset },
+    sort.queryParams,
+  )
+  const employees = page?.items ?? []
+  // Смена сортировки возвращает на первую страницу: иначе пользователь остался
+  // бы на «странице 3» уже другого списка.
+  const sortWithReset = {
+    ...sort,
+    toggle: (columnId: string) => {
+      sort.toggle(columnId)
+      setOffset(0)
+    },
+  }
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [assignTarget, setAssignTarget] = useState<EmployeeBrief | null>(null)
@@ -99,10 +144,17 @@ export default function EmployeesPage() {
     })
   }, [blockEmployee, unblockEmployee, fullName])
 
-  const total = employees.length
-  const onShift = employees.filter(e => e.active_shift_id !== null).length
+  // Все плитки считаются по ВСЕЙ выборке, а не по загруженной странице.
+  // Раньше здесь стояло `employees.length`, и при упёршемся в лимит списке
+  // «Всего» показывало размер страницы. Считать по странице только часть плиток
+  // ещё хуже: рядом с честным «Всего 137» соседнее «На смене 4» читалось бы как
+  // факт обо всех 137 и менялось бы от клика по заголовку таблицы.
+  const onShiftPage = useEmployeesPage({ ...apiFilters, has_active_shift: true }, search || undefined, COUNT_ONLY)
+  const verifiedPage = useEmployeesPage({ ...apiFilters, verification_status: 'verified' }, search || undefined, COUNT_ONLY)
+  const total = page?.total ?? 0
+  const onShift = onShiftPage.data?.total ?? 0
   const pending = pendingStaff.length
-  const verified = employees.filter(e => e.verification_status === 'verified').length
+  const verified = verifiedPage.data?.total ?? 0
 
   // Поле поиска — НЕконтролируемое (TopbarSearch), и узел мемоизирован БЕЗ
   // зависимости от `search`: контролируемое поле в топбаре теряет символы
@@ -206,7 +258,7 @@ export default function EmployeesPage() {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setRoleFilter(f.key)}
+              onClick={() => onRoleChange(f.key)}
               className={cn(
                 'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                 roleFilter === f.key
@@ -226,7 +278,7 @@ export default function EmployeesPage() {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => onStatusChange(f.key)}
               className={cn(
                 'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                 statusFilter === f.key
@@ -260,7 +312,7 @@ export default function EmployeesPage() {
         {/* Row 2: Specialization */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            onClick={() => setSpecFilter('all')}
+            onClick={() => onSpecChange('all')}
             className={cn(
               'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
               specFilter === 'all'
@@ -278,7 +330,7 @@ export default function EmployeesPage() {
             return (
               <button
                 key={key}
-                onClick={() => setSpecFilter(isActive ? 'all' : key)}
+                onClick={() => onSpecChange(isActive ? 'all' : key)}
                 className={cn(
                   'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                   !isActive && 'bg-bg-card border-border-default text-text-secondary font-normal'
@@ -305,6 +357,7 @@ export default function EmployeesPage() {
           onBlock={handleBlockToggle}
           onDelete={(e) => setDeleteTarget(e)}
           isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
+          sort={sortWithReset}
         />
       ) : employees.length === 0 ? (
         <EmptyState icon="👥" title={t('employees.notFound')} subtitle={t('employees.notFoundDesc')} />
@@ -323,6 +376,10 @@ export default function EmployeesPage() {
           ))}
         </div>
       )}
+
+      {/* Раньше список молча обрезался пятьюдесятью строками без всякого
+          указателя: ни страниц, ни честного «показано N из M». */}
+      <AccessPagination total={total} limit={PAGE_SIZE} offset={offset} onOffsetChange={setOffset} />
 
       <AddEmployeeModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 

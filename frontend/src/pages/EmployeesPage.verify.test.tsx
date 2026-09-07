@@ -30,7 +30,7 @@ const UNVERIFIED: EmployeeBrief = {
 const { approveSpy } = vi.hoisted(() => ({ approveSpy: vi.fn() }))
 
 vi.mock('../hooks/useEmployees', () => ({
-  useEmployees: () => ({ data: [UNVERIFIED], isLoading: false, isError: false }),
+  useEmployeesPage: () => ({ data: { items: [UNVERIFIED], total: 1 }, isLoading: false, isError: false }),
   useEmployee: () => ({ data: undefined }),
   usePendingStaff: () => ({ data: [] }),
   useApproveEmployee: () => ({ mutate: approveSpy, isPending: false }),

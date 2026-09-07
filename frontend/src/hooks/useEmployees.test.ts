@@ -5,6 +5,7 @@ import { renderHook } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import {
   useEmployees,
+  useEmployeesPage,
   useEmployee,
   useApproveEmployee,
 } from './useEmployees'
@@ -35,6 +36,52 @@ describe('useEmployees', () => {
     )
     const { result } = renderHook(() => useEmployees())
     await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+})
+
+describe('useEmployeesPage', () => {
+  it('берёт размер всей выборки из заголовка, а не из длины страницы', async () => {
+    server.use(
+      http.get('*/api/v2/shifts/employees', () =>
+        HttpResponse.json([{ id: 1, first_name: 'A', last_name: 'B', role: 'executor' }], {
+          headers: { 'X-Total-Count': '137' },
+        }),
+      ),
+    )
+    const { result } = renderHook(() => useEmployeesPage())
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual({
+      items: [{ id: 1, first_name: 'A', last_name: 'B', role: 'executor' }],
+      total: 137,
+    })
+  })
+
+  it('без заголовка счётчик не занижает видимое', async () => {
+    server.use(
+      http.get('*/api/v2/shifts/employees', () =>
+        HttpResponse.json([{ id: 1 }, { id: 2 }]),
+      ),
+    )
+    const { result } = renderHook(() => useEmployeesPage())
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.total).toBe(2)
+  })
+
+  it('передаёт страницу и сортировку в запрос', async () => {
+    let url: URL | undefined
+    server.use(
+      http.get('*/api/v2/shifts/employees', ({ request }) => {
+        url = new URL(request.url)
+        return HttpResponse.json([], { headers: { 'X-Total-Count': '0' } })
+      }),
+    )
+    const { result } = renderHook(() =>
+      useEmployeesPage({}, undefined, { limit: 25, offset: 50 }, { sort: 'name', order: 'desc' }),
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(url?.searchParams.get('sort')).toBe('name')
+    expect(url?.searchParams.get('order')).toBe('desc')
+    expect(url?.searchParams.get('offset')).toBe('50')
   })
 })
 

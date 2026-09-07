@@ -77,7 +77,12 @@
     "logout": "Chiqish",
     "refresh": "Sahifani yangilash",
     "tryAgain": "Qayta urinish",
-    "goHome": "Bosh sahifaga"
+    "goHome": "Bosh sahifaga",
+    "sort": {
+      "nextAsc": "O'sish bo'yicha saralash",
+      "nextDesc": "Kamayish bo'yicha saralash",
+      "nextReset": "Standart tartibni qaytarish"
+    }
   },
   "changePassword": {
     "menuItem": "Parolni o'zgartirish",

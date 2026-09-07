@@ -328,6 +328,9 @@ export interface ElevatorListFilters {
   status?: ElevatorStatus
   flag?: RegistryFlag[]
   include_archived?: boolean
+  /** Колонка сортировки; порядок задаёт сервер по ВСЕЙ выборке. */
+  sort?: string
+  order?: 'asc' | 'desc'
   limit?: number
   offset?: number
 }

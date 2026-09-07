@@ -42,6 +42,26 @@ export function formatBalanceCell(
   return { text: formatAmount(0), tone: 'zero' }
 }
 
+/**
+ * Ключ сортировки по балансу: долг уводит в минус, предоплата в плюс.
+ *
+ * Правило намеренно то же, что и у `formatBalanceCell`, — иначе цвет ячейки и
+ * место строки в отсортированном списке разошлись бы. Снимка нет → `null`:
+ * «данных нет» это НЕ ноль (см. `useApartmentBalances`), такие строки уходят
+ * в конец списка в обе стороны.
+ */
+export function balanceSortValue(
+  snapshot: { debt?: string | null; prepayment?: string | null } | null | undefined,
+): number | null {
+  if (!snapshot) return null
+  const debt = Number(snapshot.debt ?? 0)
+  const prepayment = Number(snapshot.prepayment ?? 0)
+  if (Number.isFinite(prepayment) && prepayment > 0) return prepayment
+  // Сумма пришла нечисловой — это тоже «данных нет», а не подтверждённый ноль:
+  // иначе битая строка встала бы в один ряд с честными нулевыми балансами.
+  return Number.isFinite(debt) ? -debt : null
+}
+
 function formatAmount(value: number): string {
   return formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }

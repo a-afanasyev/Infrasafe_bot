@@ -19,6 +19,11 @@ OccurrenceState = Literal["planned", "done", "cancelled"]
 CalendarState = Literal["planned", "done", "cancelled", "all"]
 RegistryFlag = Literal["no_contract", "cert_expired", "maintenance_overdue"]
 Lang = Literal["ru", "uz"]
+# Сортировка реестра. Список — белый: чужое значение отбивается на входе (422),
+# до SQL не доходит. Доступности за 30 дней здесь нет — она считается по
+# журналу событий в Python, честной сортировки по всей выборке для неё нет.
+ElevatorSortField = Literal["label", "status", "status_since", "open_requests"]
+SortOrder = Literal["asc", "desc"]
 
 MAX_REASON_LEN = 500
 MAX_BULK_CONFIRM = 50

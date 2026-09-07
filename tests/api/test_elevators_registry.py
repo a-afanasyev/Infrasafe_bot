@@ -18,6 +18,7 @@ from uk_management_bot.api.main import app
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.yard import Yard
@@ -296,3 +297,87 @@ async def test_inspector_sees_for_building_only(client: AsyncClient, seeded,
         ]:
             resp = await client.request(method, path, json=body)
             assert resp.status_code == 403, f"{method} {path}: {resp.status_code}"
+
+
+# ── Сортировка реестра ───────────────────────────────────────────────
+
+async def _three_elevators(client: AsyncClient) -> dict[str, int]:
+    """Три введённых лифта в доме 1 с разными статусами."""
+    ids = {}
+    for entrance, (status, name) in enumerate(
+        [("working", "ok"), ("not_working", "down"), ("maintenance", "service")], start=1
+    ):
+        created = await _commissioned(
+            client, entrance_number=entrance,
+            passport_number=f"P-{name}", serial_number=f"S-{name}",
+        )
+        ids[name] = created["id"]
+        if status != "working":
+            resp = await client.put(f"{BASE}/{created['id']}/status", json={"status": status})
+            assert resp.status_code == 200, resp.text
+    return ids
+
+
+async def _listed(client: AsyncClient, **params) -> list[int]:
+    resp = await client.get(BASE, params=params)
+    assert resp.status_code == 200, resp.text
+    return [row["id"] for row in resp.json()["items"]]
+
+
+@pytest.mark.asyncio
+async def test_default_order_is_address_entrance_number(client: AsyncClient, seeded):
+    ids = await _three_elevators(client)
+    assert await _listed(client) == [ids["ok"], ids["down"], ids["service"]]
+
+
+@pytest.mark.asyncio
+async def test_sort_by_status_puts_broken_first_and_reverses(client: AsyncClient, seeded):
+    ids = await _three_elevators(client)
+    # «По возрастанию» для статуса — по тяжести: сначала то, что не работает.
+    assert await _listed(client, sort="status") == [ids["down"], ids["service"], ids["ok"]]
+    assert await _listed(client, sort="status", order="desc") == [
+        ids["ok"], ids["service"], ids["down"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sort_covers_whole_selection_not_just_the_page(client: AsyncClient, seeded):
+    """Ключевое свойство: страница — срез уже отсортированной выборки."""
+    ids = await _three_elevators(client)
+    assert await _listed(client, sort="status", limit=1) == [ids["down"]]
+    assert await _listed(client, sort="status", limit=1, offset=2) == [ids["ok"]]
+
+
+@pytest.mark.asyncio
+async def test_sort_by_status_since_is_accepted(client: AsyncClient, seeded):
+    ids = await _three_elevators(client)
+    assert sorted(await _listed(client, sort="status_since")) == sorted(ids.values())
+
+
+@pytest.mark.asyncio
+async def test_sort_by_open_requests_orders_by_real_count(
+    client: AsyncClient, seeded, db_session: AsyncSession
+):
+    """Счёт заявок считается подзапросом по ВСЕЙ выборке, а не по странице."""
+    ids = await _three_elevators(client)
+    author = await _mk_user(db_session, 700010, '["applicant"]')
+    # Две открытые заявки на «service», одна на «down», ноль на «ok».
+    for index, elevator_id in enumerate([ids["service"], ids["service"], ids["down"]]):
+        db_session.add(Request(
+            request_number=f"26090{index}-001", user_id=author.id, category="Лифт",
+            status="Новая", description="QA", address="ул. Мира, д. 5",
+            elevator_id=elevator_id, elevator_operational=False,
+        ))
+    await db_session.commit()
+
+    assert await _listed(client, sort="open_requests", order="desc") == [
+        ids["service"], ids["down"], ids["ok"],
+    ]
+    # Страница — срез уже упорядоченной выборки.
+    assert await _listed(client, sort="open_requests", order="desc", limit=1) == [ids["service"]]
+
+
+@pytest.mark.asyncio
+async def test_unknown_sort_field_is_rejected(client: AsyncClient, seeded):
+    assert (await client.get(BASE, params={"sort": "выдумка"})).status_code == 422
+    assert (await client.get(BASE, params={"sort": "status", "order": "вверх"})).status_code == 422

@@ -1,0 +1,117 @@
+/**
+ * Колонки таблиц раздела «Адреса»: подпись + ключ сортировки.
+ *
+ * Сортируем сырые поля, а не то, что нарисовано в ячейке: площадь показана как
+ * «52.02 м²», статус — цветной точкой, дом — хвостом адреса. Колонка без
+ * `value` (действия) заголовком не кликается.
+ *
+ * Данные всех трёх уровней приходят целиком, без постраничной загрузки, —
+ * поэтому здесь сортировка браузерная и охватывает всю выборку.
+ */
+import type { ApartmentBrief, BuildingBrief, YardBrief } from '../../types/api'
+import type { ApartmentBalances } from '../../hooks/useApartmentBalances'
+import type { SortableColumn } from '../../utils/tableSort'
+import { balanceSortValue } from '../payment/format'
+
+export type GridColumn<T> = SortableColumn<T> & { labelKey: string }
+
+/** Активные сверху при возрастании — отключённые записи интересны реже. */
+const ACTIVE_ORDER = ['active', 'inactive'] as const
+const activeKey = (row: { is_active: boolean }) => (row.is_active ? 'active' : 'inactive')
+
+/** «Yangi Olmazor, 1G» → «1G» — та же подпись, что видна в ячейке. */
+export function houseLabel(address?: string | null): string {
+  if (!address) return '—'
+  const tail = address.split(',').pop()?.trim()
+  return tail || address
+}
+
+export const YARD_COLUMNS: readonly GridColumn<YardBrief>[] = [
+  { id: 'name', labelKey: 'addresses.yardName', kind: 'text', value: y => y.name },
+  { id: 'description', labelKey: 'addresses.description', kind: 'text', value: y => y.description },
+  {
+    id: 'buildings',
+    labelKey: 'addresses.stats.buildings',
+    kind: 'number',
+    value: y => y.buildings_count,
+    defaultDirection: 'desc',
+  },
+  { id: 'status', labelKey: 'addresses.status', kind: 'enum', value: activeKey, order: ACTIVE_ORDER },
+  { id: 'actions', labelKey: 'common.actions', kind: 'text' },
+]
+
+export const BUILDING_COLUMNS: readonly GridColumn<BuildingBrief>[] = [
+  { id: 'address', labelKey: 'addresses.buildingAddress', kind: 'text', value: b => b.address },
+  { id: 'entrances', labelKey: 'addresses.entrances', kind: 'number', value: b => b.entrance_count },
+  { id: 'floors', labelKey: 'addresses.floors', kind: 'number', value: b => b.floor_count },
+  {
+    id: 'apartments',
+    labelKey: 'addresses.stats.apartments',
+    kind: 'number',
+    value: b => b.apartments_count,
+    defaultDirection: 'desc',
+  },
+  { id: 'status', labelKey: 'addresses.status', kind: 'enum', value: activeKey, order: ACTIVE_ORDER },
+  { id: 'actions', labelKey: 'common.actions', kind: 'text' },
+]
+
+/**
+ * Подъезд и этаж живут в одной ячейке. Склейка через `\u0000` даёт каскад
+ * «сначала подъезд, внутри — этаж»: числовой коллатор сравнивает сегменты
+ * посегментно, поэтому подъезд 2 идёт перед 10, а не после. Символ в данных
+ * не встречается и сортируется раньше любого печатного.
+ */
+function entranceFloorKey(apt: ApartmentBrief): string | null {
+  if (apt.entrance == null && apt.floor == null) return null
+  return `${apt.entrance ?? ''}\u0000${apt.floor ?? ''}`
+}
+
+/**
+ * Колонка баланса появляется только вместе с модулем платежей И только когда
+ * все пакеты снимков доехали: пока хотя бы один в пути, хук отдаёт пустую
+ * карту, и сортировка по долгу свалила бы все строки в «нет данных», а потом
+ * перетасовала бы их под курсором пользователя.
+ */
+export function apartmentColumns(
+  showBalance: boolean,
+  balances: ApartmentBalances,
+): readonly GridColumn<ApartmentBrief>[] {
+  const balanceColumn: GridColumn<ApartmentBrief> = {
+    id: 'balance',
+    labelKey: 'addresses.balance',
+    kind: 'money',
+    defaultDirection: 'asc', // долг отрицателен → крупнейшие должники сверху
+    // Счёт обрезаем так же, как это делает ячейка и построитель карты снимков:
+    // ключи карты — обрезанные, и без `trim` счёт с краевым пробелом (обычное
+    // дело после импорта из Excel) считался бы «без данных» и уезжал в конец —
+    // то есть крупнейший должник не попал бы в топ.
+    ...(balances.state === 'ready'
+      ? {
+          value: (a: ApartmentBrief) => {
+            const account = a.account_number?.trim()
+            return balanceSortValue(account ? balances.map[account] : null)
+          },
+        }
+      : {}),
+  }
+
+  return [
+    // Ключ отделён от подписи: `houseLabel` рисует прочерк вместо пустого
+    // адреса, и по коллатору этот прочерк встал бы ПЕРЕД домами — вопреки
+    // правилу «пустые всегда в конец».
+    {
+      id: 'building',
+      labelKey: 'addresses.building',
+      kind: 'text',
+      value: a => (a.building_address ? houseLabel(a.building_address) : null),
+    },
+    { id: 'apartment_number', labelKey: 'addresses.apartmentNumber', kind: 'text', value: a => a.apartment_number },
+    { id: 'entrance_floor', labelKey: 'addresses.entranceFloor', kind: 'text', value: entranceFloorKey },
+    { id: 'area', labelKey: 'addresses.area', kind: 'number', value: a => a.area },
+    { id: 'residents', labelKey: 'addresses.residentsCount', kind: 'number', value: a => a.residents_count, defaultDirection: 'desc' },
+    { id: 'account_number', labelKey: 'addresses.accountNumber', kind: 'text', value: a => a.account_number },
+    ...(showBalance ? [balanceColumn] : []),
+    { id: 'status', labelKey: 'addresses.status', kind: 'enum', value: activeKey, order: ACTIVE_ORDER },
+    { id: 'actions', labelKey: 'common.actions', kind: 'text' },
+  ]
+}

@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import Select, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +25,7 @@ from uk_management_bot.database.models.elevator import (
 )
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.services.sql_sorting import apply_sort
 from uk_management_bot.utils.datetime_utils import as_utc
 from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES
 
@@ -41,6 +42,37 @@ REGISTRY_FLAGS: frozenset[str] = frozenset({FLAG_NO_CONTRACT, FLAG_CERT_EXPIRED,
 # Просрочка ТО — с 8-го дня после due_on (паритет с calendar_rules.is_overdue)
 MAINTENANCE_OVERDUE_GRACE_DAYS = 7
 MAX_PAGE = 500
+
+# Порядок реестра по умолчанию: адрес дома → подъезд → номер лифта.
+DEFAULT_ORDER = (Building.address, Elevator.entrance_number, Elevator.elevator_number)
+# Тяжесть статуса: неработающий лифт важнее работающего, поэтому «по
+# возрастанию» здесь означает «сначала проблемные», а не алфавит канон-ключей.
+_STATUS_WEIGHT = case(
+    {"not_working": 0, "under_repair": 1, "maintenance": 2, "working": 3},
+    value=Elevator.current_status,
+    else_=4,
+)
+# Открытые заявки по лифту — скалярный подзапрос: считать их в Python нельзя,
+# сортировка обязана охватывать всю выборку, а не загруженную страницу.
+_OPEN_REQUESTS = (
+    select(func.count(Request.request_number))
+    .where(
+        Request.elevator_id == Elevator.id,
+        Request.status.not_in(list(TERMINAL_STATUSES)),
+    )
+    .correlate(Elevator)
+    .scalar_subquery()
+)
+# Белый список сортировок реестра. Доступности за 30 дней здесь нет намеренно:
+# она считается по журналу событий в Python, и честной сортировки по всей
+# выборке для неё сейчас нет — колонка остаётся некликабельной.
+REGISTRY_SORT_FIELDS: Mapping[str, Sequence[Any]] = MappingProxyType({
+    "label": DEFAULT_ORDER,
+    "status": (_STATUS_WEIGHT,),
+    "status_since": (Elevator.status_since,),
+    "open_requests": (_OPEN_REQUESTS,),
+})
+REGISTRY_SORT_IDS: tuple[str, ...] = tuple(REGISTRY_SORT_FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -154,11 +186,18 @@ async def list_elevators_async(
     only_commissioned: bool | None = None,
     include_archived: bool = False,
     flags: set[str] | None = None,
+    sort: str | None = None,
+    order: str | None = None,
     limit: int = 200,
     offset: int = 0,
     now: datetime | None = None,
 ) -> list[Elevator]:
     """Страница реестра (дом подгружен), порядок: адрес дома, подъезд, номер.
+
+    ``sort`` из ``REGISTRY_SORT_IDS`` меняет порядок ВСЕЙ выборки, а не
+    страницы: иначе верхняя строка выглядела бы как максимум по базе, будучи
+    максимумом внутри случайных 50 строк. Чужое значение до сюда не доходит —
+    его отбивает ``Literal`` в сигнатуре роутера.
 
     ``flags`` ⊆ {no_contract, cert_expired, maintenance_overdue}: договор/
     освидетельствование отсутствуют или истекли на бизнес-«сегодня»; ТО
@@ -172,11 +211,14 @@ async def list_elevators_async(
         only_commissioned=only_commissioned, include_archived=include_archived,
         flags=_validate_flags(flags), today=today_of(now),
     )
-    stmt = (
-        stmt.order_by(Building.address, Elevator.entrance_number, Elevator.elevator_number, Elevator.id)
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt = apply_sort(
+        stmt,
+        fields=REGISTRY_SORT_FIELDS,
+        sort=sort,
+        order=order,
+        default=DEFAULT_ORDER,
+        tiebreak=Elevator.id,
+    ).limit(limit).offset(offset)
     return list((await db.execute(stmt)).scalars().all())
 
 

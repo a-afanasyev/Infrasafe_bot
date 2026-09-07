@@ -4,9 +4,15 @@
 карточке адреса) — это разные сущности, см. Т9 плана.
 """
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+# Сортировка списка. Белый список: чужое значение отбивается на входе (422) и
+# до SQL не доходит. Адрес и число квартир не сортируются — оба собираются
+# отдельными запросами уже после выборки страницы.
+ResidentSortField = Literal["name", "created_at", "verification", "status"]
+SortOrder = Literal["asc", "desc"]
 
 
 class ResidentApartmentOut(BaseModel):

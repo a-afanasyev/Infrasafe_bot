@@ -13,6 +13,12 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useTableSort } from '../hooks/useTableSort'
+import {
+  RESIDENT_COLUMNS,
+  RESIDENTS_SORT_STORAGE_KEY,
+} from '../components/residents/residentSortColumns'
+import type { ResidentListItem } from '../types/api'
 
 const PAGE_SIZE = 25
 
@@ -73,11 +79,22 @@ export default function ResidentsPage() {
     ...(apartmentId === null && buildingId === null && yardId !== null ? { yard_id: yardId } : {}),
   }
 
+  const sort = useTableSort<ResidentListItem>(RESIDENT_COLUMNS, RESIDENTS_SORT_STORAGE_KEY)
   const { data, isLoading, isError } = useResidents(
     filters,
     search || undefined,
     { limit: PAGE_SIZE, offset },
+    sort.queryParams,
   )
+  // Смена сортировки возвращает на первую страницу: иначе пользователь остался
+  // бы на «странице 3» уже другого списка.
+  const sortWithReset = {
+    ...sort,
+    toggle: (columnId: string) => {
+      sort.toggle(columnId)
+      setOffset(0)
+    },
+  }
   const { data: stats } = useResidentStats()
 
   // Каскад: дома фильтруются двором, квартиры — домом; выбор верхнего уровня
@@ -235,7 +252,7 @@ export default function ResidentsPage() {
           {t('common.error')}
         </div>
       ) : viewMode === 'table' ? (
-        <ResidentTable residents={items} />
+        <ResidentTable residents={items} sort={sortWithReset} />
       ) : items.length === 0 ? (
         // offset > 0 при пустой выдаче = страница уехала за конец списка
         // (polling сократил total, пока менеджер стоял на дальней странице).

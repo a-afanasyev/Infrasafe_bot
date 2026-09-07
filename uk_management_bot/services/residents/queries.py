@@ -31,6 +31,7 @@ from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification,
 )
 from uk_management_bot.database.models.yard import Yard
+from uk_management_bot.services.sql_sorting import apply_sort, text_key
 # Поиск по кириллице на проде работает только через эти хелперы — локаль
 # кластера `C` ломает голый ILIKE (см. докстринг `utils/sql_search`).
 from uk_management_bot.utils.sql_search import (
@@ -40,6 +41,36 @@ from uk_management_bot.utils.sql_search import (
 )
 
 RESIDENT_ROLE = "applicant"
+
+# Порядок раздела по умолчанию: новые сверху.
+DEFAULT_RESIDENT_ORDER = (User.created_at.desc(),)
+# Ранги статусов: «по возрастанию» = сначала то, что требует внимания
+# менеджера. Алфавит канон-ключей здесь бессмыслен, а сортировка по
+# локализованному ярлыку ещё и разъезжалась бы между ru и uz.
+_VERIFICATION_WEIGHT = case(
+    {"requested": 0, "pending": 1, "rejected": 2, "verified": 3},
+    value=User.verification_status,
+    else_=4,
+)
+_ACCOUNT_WEIGHT = case(
+    {"pending": 0, "blocked": 1, "approved": 2},
+    value=User.status,
+    else_=3,
+)
+# Белый список сортировок раздела. Адрес и число квартир не сортируются:
+# оба собираются вне выборки пользователей.
+RESIDENT_SORT_FIELDS = {
+    # Порядок ключей — как в ПОКАЗАННОЙ строке ФИО. Колонки не несут семантику
+    # «имя/фамилия»: ФИО вводится одной строкой, первое слово уходит в
+    # `first_name`, остаток — в `last_name` (см. `utils/person_name`), а показ
+    # склеивает их обратно. Начать с `last_name` значило бы сортировать список
+    # по второму слову — на глаз это выглядит как несортированный список.
+    "name": (text_key(User.first_name), text_key(User.last_name)),
+    "created_at": (User.created_at,),
+    "verification": (_VERIFICATION_WEIGHT,),
+    "status": (_ACCOUNT_WEIGHT,),
+}
+RESIDENT_SORT_IDS: tuple[str, ...] = tuple(RESIDENT_SORT_FIELDS)
 
 # Статусы привязки, означающие принадлежность жителя к адресу (см. докстринг).
 BELONGING_STATUSES = (
@@ -119,6 +150,8 @@ async def list_residents(
     building_id: int | None = None,
     apartment_id: int | None = None,
     q: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
     limit: int = 25,
     offset: int = 0,
 ) -> tuple[list[User], int]:
@@ -127,6 +160,9 @@ async def list_residents(
     Сортировка `created_at DESC, id DESC` — второй ключ обязателен: у
     импортированных пачкой жителей `created_at` совпадает до секунды, и без
     доопределения порядка соседние страницы теряли бы и дублировали строки.
+
+    `sort` из `RESIDENT_SORT_IDS` переупорядочивает ВСЮ выборку, а не страницу:
+    иначе «первый по алфавиту» на странице 2 начинался бы с «А» заново.
 
     Адресные фильтры взаимоисключающи по уровню детализации: задан
     `apartment_id` — двор и дом уже не сужают, они лишь родители этой квартиры.
@@ -137,7 +173,15 @@ async def list_residents(
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id, q=q,
         is_postgres=is_postgres,
-    ).order_by(User.created_at.desc(), User.id.desc()).limit(limit).offset(offset)
+    )
+    page_query = apply_sort(
+        page_query,
+        fields=RESIDENT_SORT_FIELDS,
+        sort=sort,
+        order=order,
+        default=DEFAULT_RESIDENT_ORDER,
+        tiebreak=User.id.desc(),
+    ).limit(limit).offset(offset)
 
     count_query = _apply_list_filters(
         select(func.count(User.id)),

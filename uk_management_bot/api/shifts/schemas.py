@@ -13,6 +13,10 @@ from uk_management_bot.constants.specializations import (
 ShiftStatus = Literal["active", "completed", "cancelled", "planned", "paused"]
 ShiftType = Literal["regular", "emergency", "overtime", "maintenance"]
 TransferAction = Literal["approve", "reject", "cancel"]
+# Сортировка списка сотрудников. Белый список: чужое значение → 422 на входе.
+# Специализации здесь нет — это массив, полного порядка у неё не существует.
+EmployeeSortField = Literal["name", "verification", "shift", "created_at"]
+SortOrder = Literal["asc", "desc"]
 
 
 def _parse_spec_field(raw) -> list[str]:
