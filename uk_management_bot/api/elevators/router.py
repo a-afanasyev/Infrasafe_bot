@@ -44,7 +44,9 @@ from uk_management_bot.api.elevators.schemas import (
     ElevatorsConfigIn,
     ElevatorsConfigOut,
     Lang,
+    ElevatorSortField,
     RegistryFlag,
+    SortOrder,
 )
 from uk_management_bot.api.elevators.presenters import build_bulk_item
 from uk_management_bot.api.rate_limit import limiter
@@ -77,6 +79,8 @@ async def list_elevators(
     status: Optional[ElevatorStatus] = Query(None),
     flag: Optional[list[RegistryFlag]] = Query(None),
     include_archived: bool = Query(False),
+    sort: Optional[ElevatorSortField] = Query(None),
+    order: SortOrder = Query("asc"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     lang: Lang = Query("ru"),
@@ -86,7 +90,7 @@ async def list_elevators(
     query = api_service.RegistryQuery(
         yard_id=yard_id, building_id=building_id, status=status,
         flags=frozenset(flag or ()), include_archived=include_archived,
-        limit=limit, offset=offset,
+        sort=sort, order=order, limit=limit, offset=offset,
     )
     try:
         return await api_service.list_page(db, query, language=lang)

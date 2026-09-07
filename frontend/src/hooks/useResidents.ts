@@ -29,15 +29,18 @@ export function useResidents(
   filters: ResidentFilters = {},
   search?: string,
   page: { limit: number; offset: number } = { limit: 25, offset: 0 },
+  /** Сортировка выполняется на сервере — по всей выборке, а не по странице. */
+  sort: { sort?: string; order?: 'asc' | 'desc' } = {},
 ) {
   return useQuery<ResidentListResponse>({
-    queryKey: ['residents', filters, search, page],
+    queryKey: ['residents', filters, search, page, sort],
     queryFn: () =>
       apiClient
         .get('/api/v2/residents', {
           params: {
             ...filters,
             ...(search ? { q: search } : {}),
+            ...sort,
             limit: page.limit,
             offset: page.offset,
           },

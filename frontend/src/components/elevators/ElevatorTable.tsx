@@ -7,10 +7,14 @@ import ElevatorStatusBadge from './ElevatorStatusBadge'
 import { BodyRow, HeadRow, TableShell, Td, Th } from './TableCells'
 import { fmtAvailability, fmtInstant } from '../../utils/elevatorsFormat'
 import type { ElevatorCard, ElevatorFlags } from '../../types/elevators'
+import type { UseTableSortResult } from '../../hooks/useTableSort'
+import { ELEVATOR_COLUMNS, type ElevatorColumn } from './elevatorSortColumns'
 
 /** Таблица реестра: label, статус, с какого времени, доступность 30д, флаги, заявки, «Открыть». */
 interface Props {
   items: ElevatorCard[]
+  /** Состояние сортировки страницы; без него заголовки статичные. */
+  sort?: UseTableSortResult<ElevatorCard>
 }
 
 function FlagIcons({ flags }: { flags: ElevatorFlags }) {
@@ -36,8 +40,18 @@ function FlagIcons({ flags }: { flags: ElevatorFlags }) {
   )
 }
 
-export default function ElevatorTable({ items }: Props) {
+export default function ElevatorTable({ items, sort }: Props) {
   const { t } = useTranslation()
+  /** Кликабельны только колонки, которые умеет упорядочить сервер. */
+  const headProps = (column: ElevatorColumn) =>
+    sort && column.serverField
+      ? {
+          direction: sort.direction(column.id),
+          ariaSort: sort.ariaSort(column.id),
+          onToggle: () => sort.toggle(column.id),
+        }
+      : undefined
+
   if (items.length === 0) {
     return (
       <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
@@ -49,13 +63,9 @@ export default function ElevatorTable({ items }: Props) {
     <TableShell>
       <thead>
         <HeadRow>
-          <Th>{t('elevators.columns.label')}</Th>
-          <Th>{t('elevators.columns.status')}</Th>
-          <Th>{t('elevators.columns.since')}</Th>
-          <Th>{t('elevators.columns.availability')}</Th>
-          <Th>{t('elevators.columns.flags')}</Th>
-          <Th>{t('elevators.columns.openRequests')}</Th>
-          <Th>{t('elevators.columns.actions')}</Th>
+          {ELEVATOR_COLUMNS.map(column => (
+            <Th key={column.id} sort={headProps(column)}>{t(column.labelKey)}</Th>
+          ))}
         </HeadRow>
       </thead>
       <tbody>

@@ -11,7 +11,12 @@ import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import ElevatorSummaryCards from '../../components/elevators/ElevatorSummaryCards'
 import ElevatorFilters from '../../components/elevators/ElevatorFilters'
 import ElevatorTable from '../../components/elevators/ElevatorTable'
-import type { ElevatorListFilters } from '../../types/elevators'
+import type { ElevatorCard, ElevatorListFilters } from '../../types/elevators'
+import { useTableSort } from '../../hooks/useTableSort'
+import {
+  ELEVATOR_COLUMNS,
+  ELEVATORS_SORT_STORAGE_KEY,
+} from '../../components/elevators/elevatorSortColumns'
 
 /**
  * Реестр лифтов (/dashboard/elevators): сводка, фильтры, таблица, пагинация.
@@ -24,9 +29,21 @@ export default function ElevatorsPage() {
   usePageTitle(t('elevators.title'))
   const isManager = useHasRole('manager')
   const [filters, setFilters] = useState<ElevatorListFilters>({ limit: PAGE_LIMIT, offset: 0 })
+  const sort = useTableSort<ElevatorCard>(ELEVATOR_COLUMNS, ELEVATORS_SORT_STORAGE_KEY)
 
   const summary = useElevatorsSummary()
-  const list = useElevators(filters)
+  // Порядок задаёт сервер: сортировка обязана охватывать всю выборку, а не
+  // загруженную страницу.
+  const list = useElevators({ ...filters, ...sort.queryParams })
+  // Смена сортировки возвращает на первую страницу: иначе пользователь остался
+  // бы на «странице 3» уже другого списка.
+  const sortWithReset = {
+    ...sort,
+    toggle: (columnId: string) => {
+      sort.toggle(columnId)
+      setFilters(prev => ({ ...prev, offset: 0 }))
+    },
+  }
 
   const patchFilters = (patch: Partial<ElevatorListFilters>) =>
     setFilters((prev) => ({ ...prev, ...patch, offset: 0 }))
@@ -68,7 +85,7 @@ export default function ElevatorsPage() {
         <p className="text-[13px] text-red">{t('common.error')}</p>
       ) : (
         <>
-          <ElevatorTable items={list.data?.items ?? []} />
+          <ElevatorTable items={list.data?.items ?? []} sort={sortWithReset} />
           <AccessPagination
             total={list.data?.total ?? 0}
             limit={filters.limit ?? PAGE_LIMIT}

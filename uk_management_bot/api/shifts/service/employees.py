@@ -5,7 +5,7 @@ block-move из api/shifts/service.py — код байт-в-байт)."""
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import case, select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.constants.categories import get_specialization_for_category
@@ -13,6 +13,7 @@ from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.sql_sorting import apply_sort
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import (
     matches_raw_requirement,
@@ -41,12 +42,31 @@ def _is_staff(user: User) -> bool:
 # сохранения прежней классификации (наружу проецируется как «Исполнено»).
 ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена"}
 
+# Порядок списка сотрудников по умолчанию — по фамилии и имени.
+DEFAULT_EMPLOYEE_ORDER = (User.last_name, User.first_name)
+# «По возрастанию» = сначала непроверенные: список открывают, чтобы разобрать
+# очередь. Сортировать по локализованному ярлыку нельзя — он разный в ru и uz.
+_VERIFICATION_WEIGHT = case(
+    {"pending": 0, "requested": 1, "rejected": 2, "verified": 3},
+    value=User.verification_status,
+    else_=4,
+)
+_ON_SHIFT = case((User.id.in_(select(Shift.user_id).where(Shift.status == "active")), 0), else_=1)
+# Белый список сортировок. Специализация — массив, полного порядка у неё нет.
+EMPLOYEE_SORT_FIELDS = {
+    "name": DEFAULT_EMPLOYEE_ORDER,
+    "verification": (_VERIFICATION_WEIGHT,),
+    "shift": (_ON_SHIFT,),
+    "created_at": (User.created_at,),
+}
+EMPLOYEE_SORT_IDS: tuple[str, ...] = tuple(EMPLOYEE_SORT_FIELDS)
+
 
 # ---------------------------------------------------------------------------
 # Employees
 # ---------------------------------------------------------------------------
 
-async def list_employees(
+def _employees_filtered(
     db: AsyncSession,
     *,
     specialization: Optional[str],
@@ -54,31 +74,8 @@ async def list_employees(
     search: Optional[str],
     role: Optional[str],
     verification_status: Optional[str],
-    for_category: Optional[str] = None,
-    for_specializations: Optional[str] = None,
-    limit: int,
-    offset: int,
-) -> tuple[list[User], dict[int, int]]:
-    """Return (users, {user_id: active_shift_id}) for the employees list.
-
-    По умолчанию список executor-scoped — им кормятся дропдауны назначения на
-    смену/заявку (там допустимы только исполнители). Явный ``role`` ЗАМЕНЯЕТ этот
-    scope (страница «Сотрудники» так показывает менеджеров/обходчиков по фильтру),
-    а НЕ добавляется поверх executor — иначе ``role='manager'`` давал бы «executor
-    И manager» и чистые менеджеры (без роли executor) никогда бы не находились.
-
-    ``for_category`` — категория ЗАЯВКИ: оставить только исполнителей, чья
-    специализация покрывает её (канон-предикат `matches_required_specs`, джокер
-    `universal`, неизвестная категория → `repair`). Это те же правила, которыми
-    бот строит кандидатов назначения/переназначения — семантика одна на оба
-    интерфейса. Не путать с ``specialization`` — тот сырой LIKE по полю и
-    универсалов не находит.
-
-    ``for_specializations`` — CSV-требование ШАБЛОНА СМЕНЫ
-    (`required_specializations`): семантика guard'а шаблонов
-    (`matches_raw_requirement`) — одного совпадения достаточно, `universal`
-    с обеих сторон — джокер, нерезолвимое требование fail-closed (никого).
-    """
+):
+    """Выборка сотрудников под фильтрами — без сортировки и среза страницы."""
     scoped_role = role or "executor"
     query = select(User).where(
         User.roles.like(f'%"{_escape_like(scoped_role)}"%'),
@@ -100,20 +97,73 @@ async def list_employees(
     if verification_status:
         query = query.where(User.verification_status == verification_status)
 
-    if has_active_shift is True:
-        active_shift_subq = (
-            select(Shift.user_id)
-            .where(Shift.status == "active")
-            .scalar_subquery()
+    if has_active_shift is not None:
+        on_shift = select(Shift.user_id).where(Shift.status == "active").scalar_subquery()
+        query = query.where(
+            User.id.in_(on_shift) if has_active_shift else User.id.not_in(on_shift)
         )
-        query = query.where(User.id.in_(active_shift_subq))
-    elif has_active_shift is False:
-        active_shift_subq = (
-            select(Shift.user_id)
-            .where(Shift.status == "active")
-            .scalar_subquery()
-        )
-        query = query.where(User.id.not_in(active_shift_subq))
+    return query
+
+
+async def list_employees(
+    db: AsyncSession,
+    *,
+    specialization: Optional[str],
+    has_active_shift: Optional[bool],
+    search: Optional[str],
+    role: Optional[str],
+    verification_status: Optional[str],
+    for_category: Optional[str] = None,
+    for_specializations: Optional[str] = None,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
+    limit: int,
+    offset: int,
+) -> tuple[list[User], dict[int, int], int]:
+    """Return (users, {user_id: active_shift_id}, total) for the employees list.
+
+    ``total`` — размер ВСЕЙ выборки под теми же фильтрами, а не длина страницы:
+    плитка «Всего» на странице раньше считала `len(items)` и при упёршемся в
+    лимит списке показывала размер страницы вместо числа сотрудников.
+
+    Порядок по умолчанию — по фамилии и имени. Раньше ``ORDER BY`` не было
+    вовсе: база вправе вернуть строки в любом порядке, и постраничная выдача
+    могла терять и дублировать сотрудников между страницами.
+
+    По умолчанию список executor-scoped — им кормятся дропдауны назначения на
+    смену/заявку (там допустимы только исполнители). Явный ``role`` ЗАМЕНЯЕТ этот
+    scope (страница «Сотрудники» так показывает менеджеров/обходчиков по фильтру),
+    а НЕ добавляется поверх executor — иначе ``role='manager'`` давал бы «executor
+    И manager» и чистые менеджеры (без роли executor) никогда бы не находились.
+
+    ``for_category`` — категория ЗАЯВКИ: оставить только исполнителей, чья
+    специализация покрывает её (канон-предикат `matches_required_specs`, джокер
+    `universal`, неизвестная категория → `repair`). Это те же правила, которыми
+    бот строит кандидатов назначения/переназначения — семантика одна на оба
+    интерфейса. Не путать с ``specialization`` — тот сырой LIKE по полю и
+    универсалов не находит.
+
+    ``for_specializations`` — CSV-требование ШАБЛОНА СМЕНЫ
+    (`required_specializations`): семантика guard'а шаблонов
+    (`matches_raw_requirement`) — одного совпадения достаточно, `universal`
+    с обеих сторон — джокер, нерезолвимое требование fail-closed (никого).
+    """
+    query = _employees_filtered(
+        db,
+        specialization=specialization,
+        has_active_shift=has_active_shift,
+        search=search,
+        role=role,
+        verification_status=verification_status,
+    )
+    query = apply_sort(
+        query,
+        fields=EMPLOYEE_SORT_FIELDS,
+        sort=sort,
+        order=order,
+        default=DEFAULT_EMPLOYEE_ORDER,
+        tiebreak=User.id,
+    )
 
     if for_category or for_specializations:
         # Предикат не выражается в SQL (JSON/CSV/скаляр-хранение + нормализация
@@ -129,8 +179,14 @@ async def list_employees(
             matched = [u for u in matched
                        if matches_raw_requirement(parse_specializations(u),
                                                   for_specializations)]
+        total = len(matched)
         users = matched[offset:offset + limit]
     else:
+        # Считаем по той же выборке без сортировки и среза: ORDER BY в подзапросе
+        # счётчика бесполезен, а сортировка по подзапросу его бы ещё и утяжелила.
+        total = (await db.execute(
+            select(func.count()).select_from(query.order_by(None).subquery())
+        )).scalar() or 0
         result = await db.execute(query.offset(offset).limit(limit))
         users = result.scalars().all()
 
@@ -144,7 +200,7 @@ async def list_employees(
         for uid, sid in shift_result.all():
             active_shifts[uid] = sid
 
-    return list(users), active_shifts
+    return list(users), active_shifts, total
 
 
 async def get_user(db: AsyncSession, user_id: int) -> Optional[User]:

@@ -19,9 +19,9 @@ import EmployeesPage from './EmployeesPage'
 const { employeesSpy } = vi.hoisted(() => ({ employeesSpy: vi.fn() }))
 
 vi.mock('../hooks/useEmployees', () => ({
-  useEmployees: (...args: unknown[]) => {
+  useEmployeesPage: (...args: unknown[]) => {
     employeesSpy(...args)
-    return { data: [], isLoading: false, isError: false }
+    return { data: { items: [], total: 0 }, isLoading: false, isError: false }
   },
   useEmployee: () => ({ data: undefined }),
   usePendingStaff: () => ({ data: [] }),

@@ -33,6 +33,48 @@ export function useEmployees(
   })
 }
 
+export interface EmployeesPage {
+  items: EmployeeBrief[]
+  /** Размер ВСЕЙ выборки под фильтрами — приходит заголовком `X-Total-Count`. */
+  total: number
+}
+
+/**
+ * Постраничный список для раздела «Сотрудники»: страница, сортировка и честный
+ * счётчик.
+ *
+ * Отдельно от `useEmployees` намеренно: тем же эндпоинтом кормятся выпадающие
+ * списки назначения, и менять форму их данных ради страницы нельзя. Поэтому и
+ * размер выборки приходит заголовком, а не конвертом.
+ */
+export function useEmployeesPage(
+  filters: Record<string, string | boolean | undefined> = {},
+  search?: string,
+  page: { limit: number; offset: number } = { limit: 50, offset: 0 },
+  sort: { sort?: string; order?: 'asc' | 'desc' } = {},
+) {
+  return useQuery<EmployeesPage>({
+    queryKey: ['employees-page', filters, search, page, sort],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/v2/shifts/employees', {
+        params: {
+          ...filters,
+          ...(search ? { search } : {}),
+          ...sort,
+          limit: page.limit,
+          offset: page.offset,
+        },
+      })
+      const items = (response.data ?? []) as EmployeeBrief[]
+      // Заголовка нет (старый сервер, кэш прокси) — честнее показать длину
+      // страницы, чем ноль: счётчик хотя бы не занижает видимое.
+      const header = Number(response.headers?.['x-total-count'])
+      return { items, total: Number.isFinite(header) ? header : items.length }
+    },
+    staleTime: 30_000,
+  })
+}
+
 export function useEmployee(id: number | null) {
   return useQuery<EmployeeDetail>({
     queryKey: ['employee', id],

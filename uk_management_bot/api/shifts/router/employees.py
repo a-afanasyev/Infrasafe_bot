@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles
@@ -22,7 +22,9 @@ from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     DeleteEmployeeRequest, ActiveRequestsCount,
     CreateInviteRequest, CreateInviteResponse,
+    EmployeeSortField,
     MeterEntryToggleRequest,
+    SortOrder,
 )
 from uk_management_bot.database.models.user import User
 
@@ -64,12 +66,15 @@ async def list_employees(
                     "исполнителей, покрывающих хотя бы одну (universal — "
                     "джокер; нерезолвимое требование не пропускает никого).",
     ),
+    sort: Optional[EmployeeSortField] = Query(None, description="колонка сортировки"),
+    order: SortOrder = Query("asc"),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
+    response: Response = None,  # noqa: RUF013 — заполняет FastAPI
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
-    users, active_shifts = await service.list_employees(
+    users, active_shifts, total = await service.list_employees(
         db,
         specialization=specialization,
         has_active_shift=has_active_shift,
@@ -78,9 +83,15 @@ async def list_employees(
         verification_status=verification_status,
         for_category=for_category,
         for_specializations=for_specializations,
+        sort=sort,
+        order=order,
         limit=limit,
         offset=offset,
     )
+    # Размер всей выборки — заголовком, а не конвертом: этой ручкой кормятся и
+    # выпадающие списки назначения, и смена формы ответа сломала бы их все.
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total)
 
     briefs = []
     for u in users:

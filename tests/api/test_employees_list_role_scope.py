@@ -32,7 +32,7 @@ async def _ids(db, **kw):
     kw.setdefault("verification_status", None)
     kw.setdefault("limit", 50)
     kw.setdefault("offset", 0)
-    users, _ = await service.list_employees(db, **kw)
+    users, _, _ = await service.list_employees(db, **kw)
     return {u.telegram_id for u in users}
 
 

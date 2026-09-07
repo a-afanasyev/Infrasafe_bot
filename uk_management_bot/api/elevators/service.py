@@ -58,6 +58,8 @@ class RegistryQuery:
     status: str | None = None
     flags: frozenset[str] = frozenset()
     include_archived: bool = False
+    sort: str | None = None
+    order: str | None = None
     limit: int = 50
     offset: int = 0
 
@@ -103,7 +105,7 @@ async def list_page(db: AsyncSession, query: RegistryQuery, *, language: str) ->
         include_archived=query.include_archived, flags=set(query.flags), now=now,
     )
     elevators = await domain.list_elevators_async(
-        db, limit=query.limit, offset=query.offset, **filters
+        db, limit=query.limit, offset=query.offset, sort=query.sort, order=query.order, **filters
     )
     total = await domain.count_elevators_async(db, **filters)
     ctx = await _card_context(db, elevators, language=language, now=now)

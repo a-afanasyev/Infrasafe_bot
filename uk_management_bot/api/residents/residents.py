@@ -18,8 +18,10 @@ from uk_management_bot.api.residents.schemas import (
     ResidentDocumentOut,
     ResidentListItemOut,
     ResidentListOut,
+    ResidentSortField,
     ResidentStatsOut,
     ResidentVerificationOut,
+    SortOrder,
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.residents import queries
@@ -61,6 +63,8 @@ async def list_residents(
     building_id: int | None = Query(None),
     apartment_id: int | None = Query(None),
     q: str | None = Query(None, description="ФИО или телефон"),
+    sort: ResidentSortField | None = Query(None, description="колонка сортировки"),
+    order: SortOrder = Query("asc"),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -70,7 +74,7 @@ async def list_residents(
         db,
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id,
-        q=q, limit=limit, offset=offset,
+        q=q, sort=sort, order=order, limit=limit, offset=offset,
     )
     user_ids = [u.id for u in users]
     counts = await queries.apartments_count_map(db, user_ids)

@@ -8,6 +8,15 @@ import { Button } from '@/components/ui/button'
 import { useApartmentBalances, paymentsEnabled } from '@/hooks/useApartmentBalances'
 import { formatBalanceCell, formatBusinessDate } from '../payment/format'
 import { cn } from '@/lib/utils'
+import { SortIndicator, type SortHeaderProps } from '../shared/SortIndicator'
+import { useTableSort, type UseTableSortResult } from '../../hooks/useTableSort'
+import {
+  apartmentColumns,
+  BUILDING_COLUMNS,
+  houseLabel,
+  YARD_COLUMNS,
+  type GridColumn,
+} from './addressSortColumns'
 
 // -- Table configs --------------------------------------------------------
 
@@ -16,13 +25,6 @@ const BUILDING_COLS = '2.5fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr'
 // дом · номер · подъезд/этаж · площадь · жителей · счёт · [баланс] · статус · действия
 const APT_COLS = '0.7fr 0.7fr 0.9fr 0.7fr 0.5fr 1.1fr 1.1fr 0.35fr 0.9fr'
 const APT_COLS_NO_BALANCE = '0.7fr 0.7fr 0.9fr 0.7fr 0.5fr 1.1fr 0.35fr 0.9fr'
-
-/** «Yangi Olmazor, 1G» → «1G»: в колонке дома нужен различающий хвост адреса. */
-function houseLabel(address?: string | null): string {
-  if (!address) return '—'
-  const tail = address.split(',').pop()?.trim()
-  return tail || address
-}
 
 /**
  * Номера квартир и домов — текст («1G», «10»), поэтому обычная сортировка даёт
@@ -121,11 +123,58 @@ function RowAction({ label, onClick, className, children }: {
   )
 }
 
-function HeaderCell({ children }: { children: React.ReactNode }) {
+const HEADER_CLASS =
+  'text-text-muted text-[10px] font-bold uppercase tracking-wide font-[family-name:var(--font-display)]'
+
+/**
+ * Ячейка шапки grid-«таблицы». Индикатор сортировки рендерится ВНУТРИ неё:
+ * каждый прямой ребёнок шапки — отдельная колонка сетки, соседний элемент
+ * сдвинул бы все последующие. Роль `columnheader` нужна, чтобы `aria-sort`
+ * был легален вне настоящей `<table>`.
+ */
+function HeaderCell({ children, sort }: { children: React.ReactNode; sort?: SortHeaderProps }) {
+  if (!sort) return <span className={HEADER_CLASS}>{children}</span>
   return (
-    <span className="text-text-muted text-[10px] font-bold uppercase tracking-wide font-[family-name:var(--font-display)]">
-      {children}
+    <span className={HEADER_CLASS} role="columnheader" aria-sort={sort.ariaSort}>
+      <SortIndicator {...sort}>{children}</SortIndicator>
     </span>
+  )
+}
+
+/** Шапка целиком: подписи из описаний колонок, сортируемые — кнопками. */
+function GridHeader<T extends { id: number }>({
+  columns,
+  sort,
+  cols,
+}: {
+  columns: readonly GridColumn<T>[]
+  sort: UseTableSortResult<T>
+  cols: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <div
+      className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
+      style={{ gridTemplateColumns: cols }}
+      role="row"
+    >
+      {columns.map(c => (
+        <HeaderCell
+          key={c.id}
+          sort={
+            c.value
+              ? {
+                  direction: sort.direction(c.id),
+                  ariaSort: sort.ariaSort(c.id),
+                  onToggle: () => sort.toggle(c.id),
+                }
+              : undefined
+          }
+        >
+          {t(c.labelKey)}
+        </HeaderCell>
+      ))}
+    </div>
   )
 }
 
@@ -153,7 +202,9 @@ function YardsTable({
   // template renders `…""?` because the i18n placeholder gets an empty string.
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
-  const items = yards ?? []
+  const source = yards ?? []
+  const sort = useTableSort(YARD_COLUMNS, 'addresses_yards_sort_v1')
+  const items = sort.sortRows(source)
 
   if (items.length === 0) {
     return (
@@ -165,14 +216,7 @@ function YardsTable({
 
   return (
     <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-      <div
-        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
-        style={{ gridTemplateColumns: YARD_COLS }}
-      >
-        {[t('addresses.yardName'), t('addresses.description'), t('addresses.stats.buildings'), t('addresses.status'), t('common.actions')].map(h => (
-          <HeaderCell key={h}>{h}</HeaderCell>
-        ))}
-      </div>
+      <GridHeader columns={YARD_COLUMNS} sort={sort} cols={YARD_COLS} />
 
       {items.map((yard, idx) => {
         const isLast = idx === items.length - 1
@@ -266,7 +310,9 @@ function BuildingsTable({
   // Purge is a separate, more dangerous confirm — keep state isolated so the
   // dialog text and the mutation it triggers can't be mixed up.
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; address: string }>({ open: false, id: null, address: '' })
-  const items = buildings ?? []
+  const source = buildings ?? []
+  const sort = useTableSort(BUILDING_COLUMNS, 'addresses_buildings_sort_v1')
+  const items = sort.sortRows(source)
 
   if (items.length === 0) {
     return (
@@ -278,14 +324,7 @@ function BuildingsTable({
 
   return (
     <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
-      <div
-        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
-        style={{ gridTemplateColumns: BUILDING_COLS }}
-      >
-        {[t('addresses.buildingAddress'), t('addresses.entrances'), t('addresses.floors'), t('addresses.stats.apartments'), t('addresses.status'), t('common.actions')].map(h => (
-          <HeaderCell key={h}>{h}</HeaderCell>
-        ))}
-      </div>
+      <GridHeader columns={BUILDING_COLUMNS} sort={sort} cols={BUILDING_COLS} />
 
       {items.map((bld, idx) => {
         const isLast = idx === items.length - 1
@@ -415,9 +454,17 @@ function ApartmentsTable({
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const [confirmPurge, setConfirmPurge] = useState<{ open: boolean; id: number | null; number: string }>({ open: false, id: null, number: '' })
   const source = apartments ?? []
-  const items = useMemo(() => [...source].sort(byHouseThenNumber), [source])
   const showBalance = paymentsEnabled()
-  const balances = useApartmentBalances(useMemo(() => items.map(a => a.account_number), [items]))
+  // Счета берём из НЕсортированного списка: иначе появилась бы петля
+  // «строки → счета → балансы → строки», когда сортируем по балансу.
+  // Ключ запроса всё равно строится из отсортированных счетов, так что
+  // переупорядочивание строк кэш не роняет.
+  const balances = useApartmentBalances(useMemo(() => source.map(a => a.account_number), [source]))
+  const columns = useMemo(() => apartmentColumns(showBalance, balances), [showBalance, balances])
+  // Порядок по умолчанию — прежняя группировка «дом → номер»; он же вторичный
+  // ключ, чтобы при сортировке по площади квартиры одного размера не шли вразнобой.
+  const sort = useTableSort(columns, 'addresses_apartments_sort_v1', byHouseThenNumber)
+  const items = sort.sortRows(source)
   const cols = showBalance ? APT_COLS : APT_COLS_NO_BALANCE
 
   if (items.length === 0) {
@@ -445,24 +492,7 @@ function ApartmentsTable({
         )}
       </div>
 
-      <div
-        className="grid bg-bg-surface border-b border-border-default px-4 py-2.5 gap-2"
-        style={{ gridTemplateColumns: cols }}
-      >
-        {[
-          t('addresses.building'),
-          t('addresses.apartmentNumber'),
-          t('addresses.entranceFloor'),
-          t('addresses.area'),
-          t('addresses.residentsCount'),
-          t('addresses.accountNumber'),
-          ...(showBalance ? [t('addresses.balance')] : []),
-          t('addresses.status'),
-          t('common.actions'),
-        ].map(h => (
-          <HeaderCell key={h}>{h}</HeaderCell>
-        ))}
-      </div>
+      <GridHeader columns={columns} sort={sort} cols={cols} />
 
       {items.map((apt, idx) => {
         const isLast = idx === items.length - 1

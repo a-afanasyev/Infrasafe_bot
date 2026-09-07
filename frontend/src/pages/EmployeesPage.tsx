@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../hooks/usePersonName'
 import { useTopbar } from '../contexts/topbar'
 import {
-  useEmployees,
+  useEmployeesPage,
   usePendingStaff,
   useActivateEmployee,
   useDeclineEmployee,
@@ -27,6 +27,14 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import TopbarSearch from '../components/shared/TopbarSearch'
 import { cn } from '@/lib/utils'
+import AccessPagination from '../components/access/AccessPagination'
+import { useTableSort } from '../hooks/useTableSort'
+import {
+  EMPLOYEE_COLUMNS,
+  EMPLOYEES_SORT_STORAGE_KEY,
+} from '../components/employees/employeeSortColumns'
+
+const PAGE_SIZE = 50
 
 export default function EmployeesPage() {
   const { t } = useTranslation()
@@ -55,7 +63,24 @@ export default function EmployeesPage() {
     ...(specFilter !== 'all' ? { specialization: specFilter } : {}),
   }
 
-  const { data: employees = [], isLoading, isError } = useEmployees(apiFilters, search || undefined)
+  const [offset, setOffset] = useState(0)
+  const sort = useTableSort<EmployeeBrief>(EMPLOYEE_COLUMNS, EMPLOYEES_SORT_STORAGE_KEY)
+  const { data: page, isLoading, isError } = useEmployeesPage(
+    apiFilters,
+    search || undefined,
+    { limit: PAGE_SIZE, offset },
+    sort.queryParams,
+  )
+  const employees = page?.items ?? []
+  // Смена сортировки возвращает на первую страницу: иначе пользователь остался
+  // бы на «странице 3» уже другого списка.
+  const sortWithReset = {
+    ...sort,
+    toggle: (columnId: string) => {
+      sort.toggle(columnId)
+      setOffset(0)
+    },
+  }
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [assignTarget, setAssignTarget] = useState<EmployeeBrief | null>(null)
@@ -99,7 +124,10 @@ export default function EmployeesPage() {
     })
   }, [blockEmployee, unblockEmployee, fullName])
 
-  const total = employees.length
+  // Размер всей выборки приходит с сервера. Раньше здесь стояло
+  // `employees.length`, и при упёршемся в лимит списке плитка «Всего»
+  // показывала размер страницы вместо числа сотрудников.
+  const total = page?.total ?? 0
   const onShift = employees.filter(e => e.active_shift_id !== null).length
   const pending = pendingStaff.length
   const verified = employees.filter(e => e.verification_status === 'verified').length
@@ -305,6 +333,7 @@ export default function EmployeesPage() {
           onBlock={handleBlockToggle}
           onDelete={(e) => setDeleteTarget(e)}
           isBlockPending={blockEmployee.isPending || unblockEmployee.isPending}
+          sort={sortWithReset}
         />
       ) : employees.length === 0 ? (
         <EmptyState icon="👥" title={t('employees.notFound')} subtitle={t('employees.notFoundDesc')} />
@@ -323,6 +352,10 @@ export default function EmployeesPage() {
           ))}
         </div>
       )}
+
+      {/* Раньше список молча обрезался пятьюдесятью строками без всякого
+          указателя: ни страниц, ни честного «показано N из M». */}
+      <AccessPagination total={total} limit={PAGE_SIZE} offset={offset} onOffsetChange={setOffset} />
 
       <AddEmployeeModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 

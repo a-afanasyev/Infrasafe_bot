@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { apiClient } from '@/api/client'
 import '@/i18n'
 import AddressTable from './AddressTable'
-import type { ApartmentBrief } from '../../types/api'
+import type { ApartmentBrief, BuildingBrief } from '../../types/api'
 import { formatBusinessDate } from '../payment/format'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
-beforeEach(() => { vi.stubEnv('VITE_PAYMENTS_ENABLED', 'true') })
+// Сортировка запоминается в localStorage — без очистки соседние тесты
+// наследовали бы чужой порядок строк.
+beforeEach(() => { localStorage.clear(); vi.stubEnv('VITE_PAYMENTS_ENABLED', 'true') })
 
 function apt(number: string, extra: Partial<ApartmentBrief> = {}): ApartmentBrief {
   return {
@@ -167,4 +170,100 @@ it('дворы и здания сохраняют подпись статуса'
   )
   const rows = screen.getByText('Двор').closest('div')!.parentElement!
   expect(within(rows).getAllByText('Активен').length).toBeGreaterThan(0)
+})
+
+// -- Сортировка -----------------------------------------------------------
+
+/** Порядок номеров квартир — то, что реально видит пользователь. */
+function numbers(): (string | null)[] {
+  return screen.getAllByText(/^(1|2|10|100)$/).map(el => el.textContent)
+}
+
+it('клик по заголовку сортирует, второй переворачивает, третий возвращает исходный', async () => {
+  balancesReply({})
+  const user = userEvent.setup()
+  mount([apt('100'), apt('10'), apt('2'), apt('1')])
+  const header = () => screen.getByRole('button', { name: 'Номер квартиры' })
+
+  expect(numbers()).toEqual(['1', '2', '10', '100'])
+  await user.click(header())
+  expect(numbers()).toEqual(['1', '2', '10', '100'])
+  await user.click(header())
+  expect(numbers()).toEqual(['100', '10', '2', '1'])
+  await user.click(header())
+  expect(numbers()).toEqual(['1', '2', '10', '100'])
+})
+
+it('состояние сортировки объявлено через aria-sort', async () => {
+  balancesReply({})
+  const user = userEvent.setup()
+  mount([apt('2', { id: 2 }), apt('1')])
+  const cell = () => screen.getByRole('columnheader', { name: /Номер квартиры/ })
+
+  expect(cell()).toHaveAttribute('aria-sort', 'none')
+  await user.click(screen.getByRole('button', { name: 'Номер квартиры' }))
+  expect(cell()).toHaveAttribute('aria-sort', 'ascending')
+  await user.click(screen.getByRole('button', { name: 'Номер квартиры' }))
+  expect(cell()).toHaveAttribute('aria-sort', 'descending')
+})
+
+it('квартиры без площади остаются внизу в обе стороны', async () => {
+  balancesReply({})
+  const user = userEvent.setup()
+  mount([apt('1', { area: 52 }), apt('2', { id: 2, area: null }), apt('10', { id: 10, area: 80 })])
+  const header = () => screen.getByRole('button', { name: 'Площадь' })
+
+  await user.click(header())
+  expect(numbers()).toEqual(['1', '10', '2'])
+  await user.click(header())
+  expect(numbers()).toEqual(['10', '1', '2'])
+})
+
+it('крупнейший должник поднимается наверх, строка без снимка остаётся внизу', async () => {
+  balancesReply({
+    '1385000001': { debt: '1000.00', prepayment: '0.00', as_of: '2026-09-06', source: 'Accounting', currency: 'UZS' },
+    '1385000002': { debt: '0.00', prepayment: '50.00', as_of: '2026-09-06', source: 'Accounting', currency: 'UZS' },
+  })
+  const user = userEvent.setup()
+  mount([apt('2', { id: 2 }), apt('1'), apt('10', { id: 10 })])
+
+  await user.click(await screen.findByRole('button', { name: 'Баланс' }))
+  expect(numbers()).toEqual(['1', '2', '10'])
+})
+
+it('пока снимки балансов не доехали, заголовок «Баланс» не кликается', async () => {
+  vi.spyOn(apiClient, 'post').mockReturnValue(new Promise(() => {}) as never)
+  mount([apt('1')])
+  expect(screen.getByText('Баланс')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Баланс' })).not.toBeInTheDocument()
+})
+
+it('колонка действий заголовком не сортируется', async () => {
+  balancesReply({})
+  mount([apt('1')])
+  expect(screen.queryByRole('button', { name: 'Действия' })).not.toBeInTheDocument()
+})
+
+it('дома сортируются по числу квартир', async () => {
+  const user = userEvent.setup()
+  const building = (id: number, address: string, apartments_count: number): BuildingBrief => ({
+    id, address, yard_id: 1, yard_name: null, entrance_count: 2, floor_count: 9,
+    description: null, gps_latitude: null, gps_longitude: null, is_active: true,
+    created_at: null, apartments_count,
+  })
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AddressTable
+        level="buildings"
+        buildings={[building(1, 'Yangi Olmazor, 1G', 104), building(2, 'Yangi Olmazor, 6G', 54)]}
+      />
+    </QueryClientProvider>,
+  )
+
+  const houses = () => screen.getAllByText(/^Yangi Olmazor/).map(el => el.textContent)
+  // Счётчики начинают с убывания: «где квартир больше всего» — частый вопрос.
+  await user.click(screen.getByRole('button', { name: 'Квартир' }))
+  expect(houses()).toEqual(['Yangi Olmazor, 1G', 'Yangi Olmazor, 6G'])
+  await user.click(screen.getByRole('button', { name: 'Квартир' }))
+  expect(houses()).toEqual(['Yangi Olmazor, 6G', 'Yangi Olmazor, 1G'])
 })

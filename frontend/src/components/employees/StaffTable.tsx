@@ -7,6 +7,9 @@ import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
+import { SortIndicator } from '../shared/SortIndicator'
+import type { UseTableSortResult } from '../../hooks/useTableSort'
+import { EMPLOYEE_COLUMNS } from './employeeSortColumns'
 
 interface Props {
   employees: EmployeeBrief[]
@@ -14,26 +17,19 @@ interface Props {
   onBlock: (e: EmployeeBrief) => void
   onDelete: (e: EmployeeBrief) => void
   isBlockPending: boolean
+  /** Состояние сортировки страницы; без него заголовки статичные. */
+  sort?: UseTableSortResult<EmployeeBrief>
 }
 
 function specColor(key: string): string {
   return SPEC_COLORS[key] ?? 'var(--text-muted)'
 }
 
-export default function StaffTable({ employees, onAssign, onBlock, onDelete, isBlockPending }: Props) {
+export default function StaffTable({ employees, onAssign, onBlock, onDelete, isBlockPending, sort }: Props) {
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const navigate = useNavigate()
-
-  const HEADERS = [
-    t('employees.headerEmployee'),
-    t('employees.headerSpec'),
-    t('employees.headerVerification'),
-    t('employees.headerStatus'),
-    t('employees.headerShift'),
-    t('employees.headerActions'),
-  ]
 
   if (employees.length === 0) {
     return (
@@ -48,14 +44,28 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-bg-surface border-b border-border-default">
-            {HEADERS.map(h => (
-              <th
-                key={h}
-                className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-text-muted font-[var(--font-display)]"
-              >
-                {h}
-              </th>
-            ))}
+            {EMPLOYEE_COLUMNS.map(column => {
+              const sortable = sort && column.serverField
+              return (
+                <th
+                  key={column.id}
+                  aria-sort={sortable ? sort.ariaSort(column.id) : undefined}
+                  className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-text-muted font-[var(--font-display)]"
+                >
+                  {sortable ? (
+                    <SortIndicator
+                      direction={sort.direction(column.id)}
+                      ariaSort={sort.ariaSort(column.id)}
+                      onToggle={() => sort.toggle(column.id)}
+                    >
+                      {t(column.labelKey)}
+                    </SortIndicator>
+                  ) : (
+                    t(column.labelKey)
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
