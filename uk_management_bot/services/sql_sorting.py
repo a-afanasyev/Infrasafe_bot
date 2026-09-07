@@ -14,11 +14,22 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import Select
+from sqlalchemy import Select, func
 
 # Идентификатор колонки → выражения ORDER BY в порядке ВОЗРАСТАНИЯ.
 # Несколько выражений — составной ключ (например адрес дома, затем подъезд).
 SortFields = Mapping[str, Sequence[Any]]
+
+
+def text_key(column: Any) -> Any:
+    """Текстовая колонка как ключ сортировки: пустая строка = «значения нет».
+
+    В базе «нет фамилии» записано и как NULL, и как ``''`` — историческое
+    расхождение. Голый ``NULLS LAST`` ловит только первое, и пустая строка
+    всплывала бы в начало списка. Браузер (`utils/tableSort.ts`) считает пустой
+    и её тоже, поэтому без этого клиентская и серверная сортировка разошлись бы.
+    """
+    return func.nullif(column, "")
 
 
 def apply_sort(

@@ -81,8 +81,7 @@
     "sort": {
       "nextAsc": "O'sish bo'yicha saralash",
       "nextDesc": "Kamayish bo'yicha saralash",
-      "nextReset": "Standart tartibni qaytarish",
-      "pageOnly": "Saralash faqat joriy sahifaga qo'llanadi"
+      "nextReset": "Standart tartibni qaytarish"
     }
   },
   "changePassword": {

@@ -57,7 +57,9 @@ export function balanceSortValue(
   const debt = Number(snapshot.debt ?? 0)
   const prepayment = Number(snapshot.prepayment ?? 0)
   if (Number.isFinite(prepayment) && prepayment > 0) return prepayment
-  return Number.isFinite(debt) ? -debt : 0
+  // Сумма пришла нечисловой — это тоже «данных нет», а не подтверждённый ноль:
+  // иначе битая строка встала бы в один ряд с честными нулевыми балансами.
+  return Number.isFinite(debt) ? -debt : null
 }
 
 function formatAmount(value: number): string {

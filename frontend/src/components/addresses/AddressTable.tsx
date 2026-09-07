@@ -133,10 +133,12 @@ const HEADER_CLASS =
  * был легален вне настоящей `<table>`.
  */
 function HeaderCell({ children, sort }: { children: React.ReactNode; sort?: SortHeaderProps }) {
-  if (!sort) return <span className={HEADER_CLASS}>{children}</span>
+  // Роль ставится ВСЕМ ячейкам шапки, а не только сортируемым: строка с
+  // `role="row"` обязана состоять из ячеек целиком, иначе разметка невалидна и
+  // скринридер вправе проигнорировать её вместе с `aria-sort`.
   return (
-    <span className={HEADER_CLASS} role="columnheader" aria-sort={sort.ariaSort}>
-      <SortIndicator {...sort}>{children}</SortIndicator>
+    <span className={HEADER_CLASS} role="columnheader" aria-sort={sort?.ariaSort}>
+      {sort ? <SortIndicator {...sort}>{children}</SortIndicator> : children}
     </span>
   )
 }
@@ -215,7 +217,7 @@ function YardsTable({
   }
 
   return (
-    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+    <div role="table" className="bg-bg-card border border-border-default rounded-default overflow-hidden">
       <GridHeader columns={YARD_COLUMNS} sort={sort} cols={YARD_COLS} />
 
       {items.map((yard, idx) => {
@@ -323,7 +325,7 @@ function BuildingsTable({
   }
 
   return (
-    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+    <div role="table" className="bg-bg-card border border-border-default rounded-default overflow-hidden">
       <GridHeader columns={BUILDING_COLUMNS} sort={sort} cols={BUILDING_COLS} />
 
       {items.map((bld, idx) => {
@@ -476,7 +478,7 @@ function ApartmentsTable({
   }
 
   return (
-    <div className="bg-bg-card border border-border-default rounded-default overflow-hidden">
+    <div role="table" className="bg-bg-card border border-border-default rounded-default overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-2 border-b border-border-default text-[11px] text-text-muted">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <LegendSwatch className="bg-emerald" label={t('addresses.active')} />

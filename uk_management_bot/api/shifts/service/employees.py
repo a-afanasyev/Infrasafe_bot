@@ -13,7 +13,7 @@ from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.sql_sorting import apply_sort
+from uk_management_bot.services.sql_sorting import apply_sort, text_key
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import (
     matches_raw_requirement,
@@ -42,12 +42,18 @@ def _is_staff(user: User) -> bool:
 # сохранения прежней классификации (наружу проецируется как «Исполнено»).
 ACTIVE_REQUEST_STATUSES = {"В работе", "Закуп", "Уточнение", "Выполнена", "Исполнено", "Возвращена"}
 
-# Порядок списка сотрудников по умолчанию — по фамилии и имени.
-DEFAULT_EMPLOYEE_ORDER = (User.last_name, User.first_name)
-# «По возрастанию» = сначала непроверенные: список открывают, чтобы разобрать
-# очередь. Сортировать по локализованному ярлыку нельзя — он разный в ru и uz.
+# Порядок по умолчанию — по ПОКАЗАННОЙ строке ФИО. Колонки не несут семантику
+# «имя/фамилия»: ФИО вводится одной строкой, первое слово уходит в `first_name`,
+# остаток — в `last_name` (см. `utils/person_name`), показ склеивает обратно.
+# `text_key`: «нет имени» встречается и как NULL, и как пустая строка — без него
+# пустые всплывали бы в начало вопреки правилу «пустые в конец».
+DEFAULT_EMPLOYEE_ORDER = (text_key(User.first_name), text_key(User.last_name))
+# «По возрастанию» = сначала то, что требует внимания менеджера. Порядок тот же,
+# что у жителей (`services/residents/queries.py`): менеджер работает с обоими
+# разделами, и «первый клик» должен означать в них одно и то же. Сортировать по
+# локализованному ярлыку нельзя — он разный в ru и uz.
 _VERIFICATION_WEIGHT = case(
-    {"pending": 0, "requested": 1, "rejected": 2, "verified": 3},
+    {"requested": 0, "pending": 1, "rejected": 2, "verified": 3},
     value=User.verification_status,
     else_=4,
 )

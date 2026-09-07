@@ -47,7 +47,10 @@ export function SortIndicator({ direction, onToggle, children }: Props) {
       type="button"
       onClick={onToggle}
       title={nextHint}
-      className="inline-flex w-full cursor-pointer items-center gap-1 bg-transparent p-0 text-left [font:inherit] [letter-spacing:inherit] [color:inherit] hover:text-text-primary"
+      // Браузер сбрасывает кнопке шрифт, регистр и межбуквенный интервал —
+      // без явного наследования сортируемый заголовок выглядел бы иначе, чем
+      // соседний обычный (проверено вживую: `text-transform` у кнопки `none`).
+      className="inline-flex w-full cursor-pointer items-center gap-1 bg-transparent p-0 text-left [font:inherit] [letter-spacing:inherit] [text-transform:inherit] [color:inherit] hover:text-text-primary"
     >
       {children}
       <Icon size={12} aria-hidden className={direction ? 'text-text-primary' : 'opacity-40'} />

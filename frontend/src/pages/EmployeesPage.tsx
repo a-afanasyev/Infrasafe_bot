@@ -35,6 +35,8 @@ import {
 } from '../components/employees/employeeSortColumns'
 
 const PAGE_SIZE = 50
+/** Плиткам нужен только размер выборки — строки не забираем. */
+const COUNT_ONLY = { limit: 1, offset: 0 }
 
 export default function EmployeesPage() {
   const { t } = useTranslation()
@@ -64,6 +66,23 @@ export default function EmployeesPage() {
   }
 
   const [offset, setOffset] = useState(0)
+  // Любое сужение выборки возвращает на первую страницу: иначе третья страница
+  // прежней выдачи попадает в новую, и менеджер видит пустой экран при непустом
+  // результате. Сброс — в обработчиках, не в эффекте (каскадный ререндер).
+  const withPageReset = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v)
+    setOffset(0)
+  }
+  const onRoleChange = withPageReset(setRoleFilter)
+  const onStatusChange = withPageReset(setStatusFilter)
+  const onSpecChange = withPageReset(setSpecFilter)
+  // Отдельно от остальных: узел поиска мемоизирован без зависимости от текста,
+  // поэтому обработчик обязан быть стабильным (сеттеры состояния стабильны).
+  const onSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    setOffset(0)
+  }, [])
+
   const sort = useTableSort<EmployeeBrief>(EMPLOYEE_COLUMNS, EMPLOYEES_SORT_STORAGE_KEY)
   const { data: page, isLoading, isError } = useEmployeesPage(
     apiFilters,
@@ -124,13 +143,17 @@ export default function EmployeesPage() {
     })
   }, [blockEmployee, unblockEmployee, fullName])
 
-  // Размер всей выборки приходит с сервера. Раньше здесь стояло
-  // `employees.length`, и при упёршемся в лимит списке плитка «Всего»
-  // показывала размер страницы вместо числа сотрудников.
+  // Все плитки считаются по ВСЕЙ выборке, а не по загруженной странице.
+  // Раньше здесь стояло `employees.length`, и при упёршемся в лимит списке
+  // «Всего» показывало размер страницы. Считать по странице только часть плиток
+  // ещё хуже: рядом с честным «Всего 137» соседнее «На смене 4» читалось бы как
+  // факт обо всех 137 и менялось бы от клика по заголовку таблицы.
+  const onShiftPage = useEmployeesPage({ ...apiFilters, has_active_shift: true }, search || undefined, COUNT_ONLY)
+  const verifiedPage = useEmployeesPage({ ...apiFilters, verification_status: 'verified' }, search || undefined, COUNT_ONLY)
   const total = page?.total ?? 0
-  const onShift = employees.filter(e => e.active_shift_id !== null).length
+  const onShift = onShiftPage.data?.total ?? 0
   const pending = pendingStaff.length
-  const verified = employees.filter(e => e.verification_status === 'verified').length
+  const verified = verifiedPage.data?.total ?? 0
 
   // Поле поиска — НЕконтролируемое (TopbarSearch), и узел мемоизирован БЕЗ
   // зависимости от `search`: контролируемое поле в топбаре теряет символы
@@ -140,13 +163,13 @@ export default function EmployeesPage() {
     <div className="flex items-center gap-2">
       <TopbarSearch
         placeholder={t('employees.searchPlaceholder')}
-        onSearch={setSearch}
+        onSearch={onSearchChange}
         className="w-[200px]"
       />
       <Button variant="outline" size="sm">{t('employees.export')}</Button>
       <Button size="sm" onClick={() => setAddModalOpen(true)}>{t('employees.add')}</Button>
     </div>
-  ), [t])
+  ), [t, onSearchChange])
 
   useEffect(() => {
     setActions(actionsNode)
@@ -234,7 +257,7 @@ export default function EmployeesPage() {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setRoleFilter(f.key)}
+              onClick={() => onRoleChange(f.key)}
               className={cn(
                 'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                 roleFilter === f.key
@@ -254,7 +277,7 @@ export default function EmployeesPage() {
           ].map(f => (
             <button
               key={f.key}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => onStatusChange(f.key)}
               className={cn(
                 'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                 statusFilter === f.key
@@ -288,7 +311,7 @@ export default function EmployeesPage() {
         {/* Row 2: Specialization */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            onClick={() => setSpecFilter('all')}
+            onClick={() => onSpecChange('all')}
             className={cn(
               'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
               specFilter === 'all'
@@ -306,7 +329,7 @@ export default function EmployeesPage() {
             return (
               <button
                 key={key}
-                onClick={() => setSpecFilter(isActive ? 'all' : key)}
+                onClick={() => onSpecChange(isActive ? 'all' : key)}
                 className={cn(
                   'rounded-full cursor-pointer text-xs px-3 py-1.5 font-[var(--font-display)] transition-all duration-150 border',
                   !isActive && 'bg-bg-card border-border-default text-text-secondary font-normal'

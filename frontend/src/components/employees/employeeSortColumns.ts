@@ -17,8 +17,12 @@ export const EMPLOYEE_COLUMNS: readonly EmployeeColumn[] = [
   { id: 'name', labelKey: 'employees.headerEmployee', kind: 'text', serverField: 'name' },
   { id: 'specialization', labelKey: 'employees.headerSpec', kind: 'text' },
   { id: 'verification', labelKey: 'employees.headerVerification', kind: 'enum', serverField: 'verification' },
+  // «Статус» показывает «на смене / нет» — по этому признаку и упорядочиваем.
   { id: 'status', labelKey: 'employees.headerStatus', kind: 'enum', serverField: 'shift' },
-  { id: 'shift', labelKey: 'employees.headerShift', kind: 'number', serverField: 'shift' },
+  // «Смена» рисует номер текущей смены. Сортировать по нему нечего: тот же
+  // признак «на смене» уже даёт соседняя колонка, а порядок номеров смен
+  // ничего не значит для менеджера.
+  { id: 'shift', labelKey: 'employees.headerShift', kind: 'number' },
   { id: 'actions', labelKey: 'employees.headerActions', kind: 'text' },
 ]
 

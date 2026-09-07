@@ -18,6 +18,7 @@ from uk_management_bot.api.main import app
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.yard import Yard
@@ -348,10 +349,32 @@ async def test_sort_covers_whole_selection_not_just_the_page(client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_sort_by_open_requests_and_since_are_accepted(client: AsyncClient, seeded):
+async def test_sort_by_status_since_is_accepted(client: AsyncClient, seeded):
     ids = await _three_elevators(client)
-    assert sorted(await _listed(client, sort="open_requests", order="desc")) == sorted(ids.values())
     assert sorted(await _listed(client, sort="status_since")) == sorted(ids.values())
+
+
+@pytest.mark.asyncio
+async def test_sort_by_open_requests_orders_by_real_count(
+    client: AsyncClient, seeded, db_session: AsyncSession
+):
+    """Счёт заявок считается подзапросом по ВСЕЙ выборке, а не по странице."""
+    ids = await _three_elevators(client)
+    author = await _mk_user(db_session, 700010, '["applicant"]')
+    # Две открытые заявки на «service», одна на «down», ноль на «ok».
+    for index, elevator_id in enumerate([ids["service"], ids["service"], ids["down"]]):
+        db_session.add(Request(
+            request_number=f"26090{index}-001", user_id=author.id, category="Лифт",
+            status="Новая", description="QA", address="ул. Мира, д. 5",
+            elevator_id=elevator_id, elevator_operational=False,
+        ))
+    await db_session.commit()
+
+    assert await _listed(client, sort="open_requests", order="desc") == [
+        ids["service"], ids["down"], ids["ok"],
+    ]
+    # Страница — срез уже упорядоченной выборки.
+    assert await _listed(client, sort="open_requests", order="desc", limit=1) == [ids["service"]]
 
 
 @pytest.mark.asyncio

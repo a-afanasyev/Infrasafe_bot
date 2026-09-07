@@ -10,18 +10,21 @@ import { ELEVATOR_COLUMNS, ELEVATORS_SORT_STORAGE_KEY } from './elevatorSortColu
 
 const ITEM: ElevatorCard = {
   id: 1,
-  label: 'ул. Мира, д. 5, подъезд 1, лифт 1',
   building_id: 1,
   building_address: 'ул. Мира, д. 5',
+  yard_id: 1,
   yard_name: 'Двор',
   entrance_number: 1,
   elevator_number: 1,
-  status: 'working',
+  label: 'ул. Мира, д. 5, подъезд 1, лифт 1',
+  current_status: 'working',
   status_since: '2026-09-01T10:00:00Z',
+  is_commissioned: true,
+  archived_at: null,
+  is_public: false,
+  flags: { no_contract: false, cert_expired: false, maintenance_overdue: false },
   availability_30d: 97,
   open_requests_count: 2,
-  is_archived: false,
-  flags: { no_contract: false, cert_expired: false, maintenance_overdue: false },
 }
 
 /** Обёртка, которая связывает таблицу с настоящим хуком сортировки. */

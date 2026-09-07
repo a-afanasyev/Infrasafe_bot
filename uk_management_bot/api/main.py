@@ -113,7 +113,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+    # `X-Total-Count` — размер выборки списка сотрудников. Без явной экспозиции
+    # браузер не отдаст заголовок фронту при кросс-доменной раскладке, и счётчик
+    # молча откатится на длину страницы (ровно тот обман, который и чинили).
+    expose_headers=["X-Request-ID", "X-Total-Count"],
 )
 
 

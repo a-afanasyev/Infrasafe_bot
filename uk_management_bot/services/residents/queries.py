@@ -31,7 +31,7 @@ from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification,
 )
 from uk_management_bot.database.models.yard import Yard
-from uk_management_bot.services.sql_sorting import apply_sort
+from uk_management_bot.services.sql_sorting import apply_sort, text_key
 # Поиск по кириллице на проде работает только через эти хелперы — локаль
 # кластера `C` ломает голый ILIKE (см. докстринг `utils/sql_search`).
 from uk_management_bot.utils.sql_search import (
@@ -60,8 +60,12 @@ _ACCOUNT_WEIGHT = case(
 # Белый список сортировок раздела. Адрес и число квартир не сортируются:
 # оба собираются вне выборки пользователей.
 RESIDENT_SORT_FIELDS = {
-    # Фамилия первична: список ищут глазами именно по ней.
-    "name": (User.last_name, User.first_name),
+    # Порядок ключей — как в ПОКАЗАННОЙ строке ФИО. Колонки не несут семантику
+    # «имя/фамилия»: ФИО вводится одной строкой, первое слово уходит в
+    # `first_name`, остаток — в `last_name` (см. `utils/person_name`), а показ
+    # склеивает их обратно. Начать с `last_name` значило бы сортировать список
+    # по второму слову — на глаз это выглядит как несортированный список.
+    "name": (text_key(User.first_name), text_key(User.last_name)),
     "created_at": (User.created_at,),
     "verification": (_VERIFICATION_WEIGHT,),
     "status": (_ACCOUNT_WEIGHT,),
