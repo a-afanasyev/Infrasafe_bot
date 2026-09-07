@@ -69,19 +69,20 @@ export default function EmployeesPage() {
   // Любое сужение выборки возвращает на первую страницу: иначе третья страница
   // прежней выдачи попадает в новую, и менеджер видит пустой экран при непустом
   // результате. Сброс — в обработчиках, не в эффекте (каскадный ререндер).
-  const withPageReset = <T,>(set: (v: T) => void) => (v: T) => {
-    set(v)
+  // Обработчики написаны по одному, без обобщённой обёртки: компилятор React
+  // на дженерик-стрелке в теле компонента перестаёт разбирать мемоизацию
+  // соседнего useMemo и валит сборку.
+  const onRoleChange = (value: string) => { setRoleFilter(value); setOffset(0) }
+  const onStatusChange = (value: string) => { setStatusFilter(value); setOffset(0) }
+  const onSpecChange = (value: string) => { setSpecFilter(value); setOffset(0) }
+  // Поиск сбрасывает страницу иначе: его узел мемоизирован БЕЗ зависимости от
+  // текста (иначе поле теряет символы, см. ниже), поэтому подменять там
+  // обработчик нельзя. Правим состояние при смене входа — штатный приём React.
+  const [searchAtPage, setSearchAtPage] = useState(search)
+  if (searchAtPage !== search) {
+    setSearchAtPage(search)
     setOffset(0)
   }
-  const onRoleChange = withPageReset(setRoleFilter)
-  const onStatusChange = withPageReset(setStatusFilter)
-  const onSpecChange = withPageReset(setSpecFilter)
-  // Отдельно от остальных: узел поиска мемоизирован без зависимости от текста,
-  // поэтому обработчик обязан быть стабильным (сеттеры состояния стабильны).
-  const onSearchChange = useCallback((value: string) => {
-    setSearch(value)
-    setOffset(0)
-  }, [])
 
   const sort = useTableSort<EmployeeBrief>(EMPLOYEE_COLUMNS, EMPLOYEES_SORT_STORAGE_KEY)
   const { data: page, isLoading, isError } = useEmployeesPage(
@@ -163,13 +164,13 @@ export default function EmployeesPage() {
     <div className="flex items-center gap-2">
       <TopbarSearch
         placeholder={t('employees.searchPlaceholder')}
-        onSearch={onSearchChange}
+        onSearch={setSearch}
         className="w-[200px]"
       />
       <Button variant="outline" size="sm">{t('employees.export')}</Button>
       <Button size="sm" onClick={() => setAddModalOpen(true)}>{t('employees.add')}</Button>
     </div>
-  ), [t, onSearchChange])
+  ), [t])
 
   useEffect(() => {
     setActions(actionsNode)
