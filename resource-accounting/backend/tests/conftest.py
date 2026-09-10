@@ -97,3 +97,24 @@ def make_period(client: TestClient, month: str) -> dict:
         periods = client.get("/v1/periods").json()["data"]
         return next(p for p in periods if p["month"] == month)
     return resp.json()["data"]
+
+
+def fill_missing(client: TestClient, month: str) -> int:
+    """Заполнить missing-строкой каждый активный счётчик tenant'а без показания за month.
+
+    Сьют делит один tenant на все тесты, а submit (AUD7-COR-02) требует строку у
+    каждого активного счётчика — иначе чужие счётчики из соседних тестов блокируют
+    подтверждение. Возвращает число добавленных строк.
+    """
+    ws = client.get(f"/v1/periods/{month}/worksheet")
+    assert ws.status_code == 200, ws.text
+    filled = 0
+    for row in ws.json()["data"]["rows"]:
+        if row["reading"] is None:
+            resp = client.put(
+                f"/v1/meters/{row['meter_id']}/readings/{month}",
+                json={"value": None, "missing_reason": "other", "comment": "test fill"},
+            )
+            assert resp.status_code == 200, resp.text
+            filled += 1
+    return filled

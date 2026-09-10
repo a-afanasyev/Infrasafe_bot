@@ -5,7 +5,7 @@ import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testI18n } from '../../../test/test-utils';
-import type { Role } from '../api/types';
+import type { Role, ValidationSummary } from '../api/types';
 import { ResourceAuthProvider } from '../auth/ResourceAuthContext';
 import { WorksheetPage } from './WorksheetPage';
 
@@ -65,6 +65,36 @@ function mockFetchByUrl() {
         status: 200,
         json: () => Promise.resolve(payload),
       } as Response);
+    }),
+  );
+}
+
+const REVIEW_PERIOD = { id: 'p1', month: '2026-07', status: 'review' };
+
+function mockFetchReview(validation: ValidationSummary | 'never' | 'fail') {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/periods') && url.includes('/validate')) {
+        if (validation === 'never') return new Promise<Response>(() => {});
+        if (validation === 'fail') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ error: { message: 'boom' } }),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ data: validation }),
+        } as Response);
+      }
+      let payload: unknown = { data: [] };
+      if (url.includes('/worksheet')) payload = { data: { ...WORKSHEET, period: REVIEW_PERIOD } };
+      else if (url.includes('/v1/periods')) payload = { data: [REVIEW_PERIOD] };
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payload) } as Response);
     }),
   );
 }
@@ -147,5 +177,45 @@ describe('WorksheetPage', () => {
     const urls = fetchMock.mock.calls.map(([u]) => String(u));
     expect(urls.some((u) => u.includes('/v1/objects'))).toBe(false);
     expect(urls.some((u) => u.includes('/validate'))).toBe(false);
+  });
+
+  it('«Передать» заблокирована, пока validate не получен (AUD7-COR-02)', async () => {
+    mockFetchReview('never');
+    renderPage();
+    const btn = await screen.findByRole('button', { name: 'Передать' });
+    expect(btn).toBeDisabled();
+  });
+
+  it('«Передать» заблокирована при can_submit=false', async () => {
+    mockFetchReview({ ...VALIDATION, can_submit: false });
+    renderPage();
+    const btn = await screen.findByRole('button', { name: 'Передать' });
+    await waitFor(() => expect(btn).toBeDisabled());
+  });
+
+  it('«Передать» доступна при can_submit=true', async () => {
+    mockFetchReview({ ...VALIDATION, not_entered: 0, entered: 1, can_submit: true });
+    renderPage();
+    const btn = await screen.findByRole('button', { name: 'Передать' });
+    await waitFor(() => expect(btn).toBeEnabled());
+  });
+
+  it('«Передать» заблокирована при ошибке validate; повтор включает кнопку после успеха (AUD7-COR-02)', async () => {
+    mockFetchReview('fail');
+    const user = userEvent.setup();
+    renderPage();
+
+    const btn = await screen.findByRole('button', { name: 'Передать' });
+    await waitFor(() => {
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveAttribute('title', 'Проверка ведомости не удалась');
+    });
+    const retryBtn = screen.getByRole('button', { name: 'Повторить проверку' });
+    expect(retryBtn).toBeInTheDocument();
+
+    mockFetchReview({ ...VALIDATION, not_entered: 0, entered: 1, can_submit: true });
+    await user.click(retryBtn);
+
+    await waitFor(() => expect(btn).toBeEnabled());
   });
 });

@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.conftest import login, make_meter, make_object, make_period
+from tests.conftest import fill_missing, login, make_meter, make_object, make_period
 
 
 def meter_entry_client() -> TestClient:
@@ -63,6 +63,7 @@ def test_meter_entry_cannot_enter_closed_period(admin, reviewer):
     meter = make_meter(admin, "ME-0003", obj["id"])
     make_period(admin, "2033-04")
     admin.put(f"/v1/meters/{meter['id']}/readings/2033-04", json={"value": "100", "read_at": "2033-04-30"})
+    fill_missing(admin, "2033-04")
     admin.post("/v1/periods/2033-04/move-to-review")
     reviewer.post("/v1/periods/2033-04/submit")
 

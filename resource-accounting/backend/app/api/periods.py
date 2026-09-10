@@ -20,6 +20,7 @@ from app.core.deps import (
     correlation_id as _cid,
 )
 from app.core.errors import bad_request, conflict, not_found
+from app.core.ratelimit import WRITE_LIMIT, limiter
 from app.db import get_db
 from app.models import AnomalyRule, Meter, Reading, ReportingPeriod, User
 from app.schemas.readings import (
@@ -34,7 +35,10 @@ from app.schemas.readings import (
     WorksheetOut,
     WorksheetRow,
 )
+from app.services.period_lock import lock_period, lock_periods_from
+from app.services.period_validation import summarize_period
 from app.services.readings import (
+    EDITABLE_PERIOD_STATUSES,
     apply_correction,
     get_previous_accepted_bulk,
     upsert_reading,
@@ -50,6 +54,12 @@ STATUS_FLOW = {
 }
 
 
+def _reject_if_editable(period: ReportingPeriod) -> None:
+    """Корректировка допустима только для submitted/closed периода."""
+    if period.status in EDITABLE_PERIOD_STATUSES:
+        raise bad_request("Период ещё редактируется: измените показание напрямую")
+
+
 def get_period_or_404(db: Session, user: User, month: str) -> ReportingPeriod:
     row = db.execute(
         select(ReportingPeriod).where(
@@ -61,8 +71,8 @@ def get_period_or_404(db: Session, user: User, month: str) -> ReportingPeriod:
     return row
 
 
-def _transition(db: Session, request: Request, user: User, month: str, target: str) -> ReportingPeriod:
-    period = get_period_or_404(db, user, month)
+def _transition(db: Session, request: Request, user: User, period: ReportingPeriod, target: str) -> ReportingPeriod:
+    """Переход статуса; `period` обязан прийти из lock_period (AUD7-COR-03)."""
     if target not in STATUS_FLOW[period.status]:
         raise conflict(f"Переход {period.status} → {target} недопустим")
     before = {"status": period.status}
@@ -166,6 +176,7 @@ def worksheet(
 
 
 @router.put("/meters/{meter_id}/readings/{month}", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def put_reading(
     meter_id: uuid.UUID,
     month: str,
@@ -174,7 +185,7 @@ def put_reading(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
-    period = get_period_or_404(db, user, month)
+    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
     meter = db.get(Meter, meter_id)
     if not meter or meter.tenant_id != user.tenant_id:
         raise not_found("Счётчик")
@@ -188,6 +199,7 @@ def put_reading(
 
 
 @router.post("/periods/{month}/readings/bulk", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def bulk_readings(
     month: str,
     payload: BulkReadingsIn,
@@ -196,7 +208,7 @@ def bulk_readings(
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
     """Transactional batch save: all valid selected rows or none (ТЗ §9)."""
-    period = get_period_or_404(db, user, month)
+    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
     results = []
     for item in payload.items:
         meter = db.get(Meter, item.meter_id)
@@ -219,98 +231,84 @@ def validate_period(
 ):
     """Summary of problems that block confirmation."""
     period = get_period_or_404(db, user, month)
-    active_ids = set(db.execute(
-        select(Meter.id).where(Meter.tenant_id == user.tenant_id, Meter.status == "active")
-    ).scalars())
-    readings = db.execute(
-        select(Reading).where(Reading.reporting_period_id == period.id)
-    ).scalars().all()
-    by_status: dict[str, int] = {}
-    warnings_without_comment = []
-    errors = []
-    for r in readings:
-        by_status[r.status] = by_status.get(r.status, 0) + 1
-        if r.status == "warning" and not r.comment:
-            warnings_without_comment.append(str(r.meter_id))
-        if r.status == "error":
-            errors.append({"meter_id": str(r.meter_id), "message": r.validation_message})
-    # AUD6-P2-09: показания архивированных счётчиков остаются в периоде, но из
-    # множества активных исчезают — разность длин уводила not_entered в минус,
-    # а завышенный entered при can_submit==0 делал период неподтверждаемым.
-    # Считаем строго по пересечению множеств id.
-    entered_active = {r.meter_id for r in readings if r.meter_id in active_ids}
-    not_entered = len(active_ids - entered_active)
+    summary = summarize_period(db, user.tenant_id, period)
     return {
         "data": {
             "period": PeriodOut.model_validate(period).model_dump(mode="json"),
-            "active_meters": len(active_ids),
-            "entered": len(entered_active),
-            "not_entered": not_entered,
-            "by_status": by_status,
-            "warnings_without_comment": warnings_without_comment,
-            "errors": errors,
-            "can_submit": not errors and not warnings_without_comment and not_entered == 0,
+            "active_meters": summary.active_meters,
+            "entered": summary.entered,
+            "not_entered": summary.not_entered,
+            "by_status": summary.by_status,
+            "warnings_without_comment": [str(mid) for mid, _msg in summary.warnings_without_comment],
+            "errors": [{"meter_id": str(mid), "message": msg} for mid, msg in summary.errors],
+            "can_submit": summary.can_submit,
         }
     }
 
 
 @router.post("/periods/{month}/move-to-review", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def move_to_review(
     month: str,
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*OPERATOR_ROLES)),
 ):
-    period = _transition(db, request, user, month, "review")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "review")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
 @router.post("/periods/{month}/reopen", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def reopen(
     month: str,
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    period = _transition(db, request, user, month, "open")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "open")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
 @router.post("/periods/{month}/submit", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def submit(
     month: str,
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    """review → submitted: blocked while errors or uncommented warnings remain."""
-    period = get_period_or_404(db, user, month)
+    """review → submitted: тот же критерий, что у validate (AUD7-COR-02) —
+    ошибки, предупреждения без комментария и незаполненные активные счётчики
+    блокируют подтверждение; статус не меняется."""
+    period = lock_period(db, user.tenant_id, month)
     if period.status != "review":
         raise conflict(f"Подтвердить можно только период в статусе review (сейчас {period.status})")
-    readings = db.execute(select(Reading).where(Reading.reporting_period_id == period.id)).scalars().all()
-    problems = [r for r in readings if r.status == "error" or (r.status == "warning" and not r.comment)]
-    if problems:
+    summary = summarize_period(db, user.tenant_id, period)
+    if not summary.can_submit:
         raise conflict(
-            "Есть ошибки или предупреждения без комментария",
-            details=[{"meter_id": str(r.meter_id), "status": r.status, "message": r.validation_message}
-                     for r in problems],
+            "Ведомость не готова к подтверждению: ошибки, предупреждения без комментария "
+            "или незаполненные счётчики",
+            details=summary.blocking_details(),
         )
-    period = _transition(db, request, user, month, "submitted")
+    period = _transition(db, request, user, period, "submitted")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
 @router.post("/periods/{month}/close", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def close_period(
     month: str,
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    period = _transition(db, request, user, month, "closed")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "closed")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
 @router.post("/readings/{reading_id}/corrections", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def create_correction(
     reading_id: uuid.UUID,
     payload: CorrectionIn,
@@ -321,8 +319,13 @@ def create_correction(
     reading = db.get(Reading, reading_id)
     if not reading or reading.tenant_id != user.tenant_id:
         raise not_found("Показание")
-    if reading.period.status in ("open", "review"):
-        raise bad_request("Период ещё редактируется: измените показание напрямую")
+    _reject_if_editable(reading.period)
+    # AUD7-COR-03: каскад пишет в последующие периоды — берём их все по возрастанию month.
+    locked = lock_periods_from(db, user.tenant_id, reading.period.month)
+    if not locked or locked[0].id != reading.period.id:
+        raise not_found(f"Период {reading.period.month}")
+    _reject_if_editable(locked[0])
+    db.refresh(reading)  # AUD7-COR-03: объект загружен до блокировки — берём свежие value/kind/read_at
     old_value = reading.value  # COR-04: capture the true previous value before it is overwritten
     apply_correction(db, reading, payload.new_value, payload.reason, payload.kind, user)
     write_audit(db, user=user, entity_type="reading", entity_id=reading.id, action="correction",

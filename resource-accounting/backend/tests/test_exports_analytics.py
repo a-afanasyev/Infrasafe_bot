@@ -1,6 +1,6 @@
 import hashlib
 
-from tests.conftest import make_meter, make_object, make_period
+from tests.conftest import fill_missing, make_meter, make_object, make_period
 
 
 def _fill(client, meter_id, month, value):
@@ -91,6 +91,7 @@ def test_export_create_download_immutable(admin, reviewer):
     # correction of source data must not change the already generated act
     reading = admin.get("/v1/periods/2029-08/worksheet").json()["data"]
     row = next(r for r in reading["rows"] if r["meter_number"] == "EXP-001")
+    fill_missing(admin, "2029-08")
     admin.post("/v1/periods/2029-08/move-to-review")
     reviewer.post("/v1/periods/2029-08/submit")
     resp = reviewer.post(f"/v1/readings/{row['reading']['id']}/corrections",

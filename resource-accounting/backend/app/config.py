@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     db_pool_size: int = 15
     db_max_overflow: int = 25
 
+    # AUD7-COR-03 hardening (сек-ревью H-1/M-3): писатель, ждущий блокировку
+    # периода, сдаётся через столько мс (55P03 → 409 period_busy), а не висит
+    # на воркере thread-пула; 0 = ждать бесконечно.
+    lock_timeout_ms: int = 5000
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

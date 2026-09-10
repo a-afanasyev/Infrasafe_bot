@@ -280,6 +280,11 @@ def recompute_forward(db: Session, meter: Meter, from_month: str) -> int:
     for reading, period in db.execute(stmt).all():
         if period.status == "closed" or reading.value is None:
             continue
+        # AUD7-COR-01: сессия с autoflush=False — без явного flush SELECT базы
+        # (get_previous_accepted фильтрует по status в БД) не видит ни только что
+        # исправленное показание, ни предыдущие шаги этого же каскада: база
+        # бралась из старого месяца (150 вместо 50). Flush на каждом шаге.
+        db.flush()
         prev = get_previous_accepted(db, meter.id, period.month)
         reading.previous_value = prev.value if prev else None
         # COR-03: recompute status/anomaly too, not just the number — a new base
