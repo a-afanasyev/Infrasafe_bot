@@ -1,7 +1,11 @@
+import uuid
+
+import pytest
 from sqlalchemy import select
 
+from app.core.errors import ApiError
 from app.db import SessionLocal
-from app.models import ReportingPeriod, Tenant
+from app.models import Reading, ReportingPeriod, Tenant
 from app.services.period_lock import lock_period, lock_periods_from
 from tests.conftest import fill_missing, make_meter, make_object, make_period
 
@@ -461,3 +465,28 @@ def test_lock_period_returns_fresh_status(admin):
     with SessionLocal() as db:
         months = [p.month for p in lock_periods_from(db, _tenant_id(db), "2039-01")]
         assert months == sorted(months) and months[0] == "2039-01"
+
+
+def test_lock_period_unknown_month_is_404(admin):
+    """AUD7-COR-03: блокировка несуществующего периода — 404 (ApiError), не IndexError."""
+    with SessionLocal() as db:
+        with pytest.raises(ApiError) as exc:
+            lock_period(db, _tenant_id(db), "2039-12")
+        assert exc.value.status_code == 404
+        assert lock_periods_from(db, uuid.uuid4(), "2039-01") == []  # чужой tenant — пусто
+
+
+def test_lock_periods_from_refreshes_joined_period(admin, reviewer):
+    """AUD7-COR-03: после range-lock объект reading.period — тот же, что locked[0], и со свежим статусом."""
+    obj = make_object(admin, "AUD7COR03-объект")
+    meter = make_meter(admin, "AUD7COR03-1", obj["id"])
+    make_period(admin, "2039-02")
+    r = put_reading(admin, meter["id"], "2039-02", value="100", read_at="2039-02-28").json()["data"]
+    with SessionLocal() as s1, SessionLocal() as s2:
+        reading = s1.get(Reading, uuid.UUID(r["id"]))
+        assert reading.period.status == "open"
+        other = lock_period(s2, _tenant_id(s2), "2039-02")
+        other.status = "review"
+        s2.commit()
+        locked = lock_periods_from(s1, _tenant_id(s1), "2039-02")
+        assert locked[0] is reading.period and reading.period.status == "review"

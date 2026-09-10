@@ -37,6 +37,7 @@ from app.schemas.readings import (
 from app.services.period_lock import lock_period, lock_periods_from
 from app.services.period_validation import summarize_period
 from app.services.readings import (
+    EDITABLE_PERIOD_STATUSES,
     apply_correction,
     get_previous_accepted_bulk,
     upsert_reading,
@@ -52,6 +53,12 @@ STATUS_FLOW = {
 }
 
 
+def _reject_if_editable(period: ReportingPeriod) -> None:
+    """Корректировка допустима только для submitted/closed периода."""
+    if period.status in EDITABLE_PERIOD_STATUSES:
+        raise bad_request("Период ещё редактируется: измените показание напрямую")
+
+
 def get_period_or_404(db: Session, user: User, month: str) -> ReportingPeriod:
     row = db.execute(
         select(ReportingPeriod).where(
@@ -64,6 +71,7 @@ def get_period_or_404(db: Session, user: User, month: str) -> ReportingPeriod:
 
 
 def _transition(db: Session, request: Request, user: User, period: ReportingPeriod, target: str) -> ReportingPeriod:
+    """Переход статуса; `period` обязан прийти из lock_period (AUD7-COR-03)."""
     if target not in STATUS_FLOW[period.status]:
         raise conflict(f"Переход {period.status} → {target} недопустим")
     before = {"status": period.status}
@@ -303,12 +311,12 @@ def create_correction(
     reading = db.get(Reading, reading_id)
     if not reading or reading.tenant_id != user.tenant_id:
         raise not_found("Показание")
-    if reading.period.status in ("open", "review"):
-        raise bad_request("Период ещё редактируется: измените показание напрямую")
+    _reject_if_editable(reading.period)
     # AUD7-COR-03: каскад пишет в последующие периоды — берём их все по возрастанию month.
     locked = lock_periods_from(db, user.tenant_id, reading.period.month)
-    if locked[0].status in ("open", "review"):
-        raise bad_request("Период ещё редактируется: измените показание напрямую")
+    if not locked or locked[0].id != reading.period.id:
+        raise not_found(f"Период {reading.period.month}")
+    _reject_if_editable(locked[0])
     old_value = reading.value  # COR-04: capture the true previous value before it is overwritten
     apply_correction(db, reading, payload.new_value, payload.reason, payload.kind, user)
     write_audit(db, user=user, entity_type="reading", entity_id=reading.id, action="correction",
