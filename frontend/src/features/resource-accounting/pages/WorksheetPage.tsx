@@ -163,6 +163,13 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
   };
 
   const v = validationQuery.data;
+  const submitTitle = validationQuery.isError
+    ? t('resourceAccounting.worksheet.submitValidationFailed')
+    : !v
+      ? t('resourceAccounting.worksheet.submitPendingValidation')
+      : v.can_submit
+        ? ''
+        : t('resourceAccounting.worksheet.submitBlocked');
 
   return (
     <div>
@@ -281,6 +288,14 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                   })}
               </span>
             )}
+            {validationQuery.isError && (
+              <span className="period-panel-validation text-error">
+                {t('resourceAccounting.worksheet.submitValidationFailed')}{' '}
+                <button className="btn btn-sm" onClick={() => validationQuery.refetch()}>
+                  {t('resourceAccounting.worksheet.validationRetry')}
+                </button>
+              </span>
+            )}
           </div>
           <div className="period-panel-actions">
             {period.status === 'open' && canEnterReadings(role) && (
@@ -305,13 +320,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                   className="btn btn-sm btn-primary"
                   disabled={transition.isPending || !v || !v.can_submit}
                   onClick={() => transition.mutate('submit')}
-                  title={
-                    !v
-                      ? t('resourceAccounting.worksheet.submitPendingValidation')
-                      : v.can_submit
-                        ? ''
-                        : t('resourceAccounting.worksheet.submitBlocked')
-                  }
+                  title={submitTitle}
                 >
                   {t('resourceAccounting.worksheet.submit')}
                 </button>

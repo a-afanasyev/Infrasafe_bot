@@ -200,6 +200,8 @@
       "submit": "Передать",
       "submitBlocked": "Есть ошибки или незаполненные показания",
       "submitPendingValidation": "Проверка ведомости ещё не получена",
+      "submitValidationFailed": "Проверка ведомости не удалась",
+      "validationRetry": "Повторить проверку",
       "closePeriod": "Закрыть период",
       "emptyNoOpenPeriod": "Нет открытого периода. Обратитесь к менеджеру.",
       "emptyNoPeriods": "Периоды ещё не созданы",
