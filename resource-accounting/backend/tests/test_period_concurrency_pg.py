@@ -57,20 +57,29 @@ def test_late_write_after_submit_is_rejected(admin):
 
     locked = threading.Event()
     release = threading.Event()
+    result: dict = {}
 
     def reviewer_submits():
-        with SessionLocal() as s2:
-            period = lock_period(s2, tenant_id, month)
-            locked.set()
-            release.wait(timeout=10)
-            period.status = "submitted"
-            s2.commit()
+        try:
+            with SessionLocal() as s2:
+                try:
+                    period = lock_period(s2, tenant_id, month)
+                finally:
+                    # сигналим главному потоку сразу после захвата блокировки, а не
+                    # после всего тела — иначе main ждёт locked, поток ждёт release,
+                    # и оба просто досиживают 10 с таймаута до взаимного молчания
+                    locked.set()
+                release.wait(timeout=10)
+                period.status = "submitted"
+                s2.commit()
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            result["reviewer_error"] = repr(exc)
+        finally:
+            locked.set()  # безопасный дубль: ловит и падения до захвата блокировки
 
-    t = threading.Thread(target=reviewer_submits)
+    t = threading.Thread(target=reviewer_submits, daemon=True)
     t.start()
-    assert locked.wait(timeout=10)
-
-    result: dict = {}
+    assert locked.wait(timeout=10) and "reviewer_error" not in result, result
 
     def writer_puts():
         with SessionLocal() as s1:
@@ -84,10 +93,10 @@ def test_late_write_after_submit_is_rejected(admin):
                 result["outcome"] = type(exc).__name__
                 result["status_code"] = getattr(exc, "status_code", None)
 
-    w = threading.Thread(target=writer_puts)
+    w = threading.Thread(target=writer_puts, daemon=True)
     w.start()
     w.join(timeout=1.0)
-    assert w.is_alive(), "writer обязан ждать блокировку, а не писать сразу"
+    assert w.is_alive(), f"writer обязан ждать блокировку, а не завершаться сразу: {result}"
 
     release.set()
     t.join(timeout=10)
@@ -114,6 +123,7 @@ def test_correction_range_lock_and_put_do_not_deadlock(admin, reviewer):
     make_period(admin, mar)
     r_feb = admin.put(f"/v1/meters/{meter['id']}/readings/{feb}",
                       json={"value": "100", "read_at": "2040-02-28"}).json()["data"]
+    assert r_feb["status"] == "ok"
     fill_missing(admin, feb)
     assert admin.post(f"/v1/periods/{feb}/move-to-review").status_code == 200
     assert reviewer.post(f"/v1/periods/{feb}/submit").status_code == 200
@@ -125,31 +135,45 @@ def test_correction_range_lock_and_put_do_not_deadlock(admin, reviewer):
     outcome: dict = {}
 
     def correction_holds_range():
-        with SessionLocal() as s1:
-            locked = lock_periods_from(s1, tenant_id, feb)  # Feb, Mar — по возрастанию
-            assert [p.month for p in locked] == [feb, mar]
-            holding.set()
-            release.wait(timeout=10)
-            s1.commit()
-            outcome["correction"] = "released"
+        try:
+            with SessionLocal() as s1:
+                try:
+                    # инвариант сьюта: ни один другой тест не создаёт периодов >= 2040-04 (иначе список длиннее)
+                    locked = lock_periods_from(s1, tenant_id, feb)  # Feb, Mar — по возрастанию
+                    outcome["locked_months"] = [p.month for p in locked]
+                finally:
+                    # сигналим главному потоку сразу после захвата, см. reviewer_submits
+                    holding.set()
+                release.wait(timeout=10)
+                s1.commit()
+                outcome["correction"] = "released"
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            outcome["correction_error"] = repr(exc)
+        finally:
+            holding.set()  # безопасный дубль: ловит и падения до захвата блокировки
 
     def put_march():
-        with SessionLocal() as s2:
-            period = lock_period(s2, tenant_id, mar)  # ждёт, пока range-lock не отпущен
-            meter_row = s2.get(Meter, meter_id)
-            upsert_reading(s2, meter_row, period, ReadingIn(value=Decimal("150"), read_at=None), actor=None)
-            s2.commit()
-            outcome["put"] = "written"
+        try:
+            with SessionLocal() as s2:
+                period = lock_period(s2, tenant_id, mar)  # ждёт, пока range-lock не отпущен
+                meter_row = s2.get(Meter, meter_id)
+                upsert_reading(s2, meter_row, period, ReadingIn(value=Decimal("150"), read_at=None), actor=None)
+                s2.commit()
+                outcome["put"] = "written"
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            outcome["put_error"] = repr(exc)
 
-    t1 = threading.Thread(target=correction_holds_range)
+    t1 = threading.Thread(target=correction_holds_range, daemon=True)
     t1.start()
     assert holding.wait(timeout=10)
-    t2 = threading.Thread(target=put_march)
+    assert outcome.get("locked_months", [])[:2] == [feb, mar], outcome
+    assert "correction_error" not in outcome, outcome
+
+    t2 = threading.Thread(target=put_march, daemon=True)
     t2.start()
     t2.join(timeout=1.0)
-    assert t2.is_alive(), "PUT в Mar обязан ждать range-lock корректировки"
+    assert t2.is_alive(), f"PUT в Mar обязан ждать range-lock корректировки: {outcome}"
     release.set()
     t1.join(timeout=10)
     t2.join(timeout=10)
-    assert outcome == {"correction": "released", "put": "written"}, outcome
-    assert r_feb["status"] == "ok"
+    assert outcome == {"locked_months": [feb, mar], "correction": "released", "put": "written"}, outcome

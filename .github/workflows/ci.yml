@@ -353,7 +353,7 @@ jobs:
       - name: Concurrency tests (postgres 16, FOR UPDATE)
         env:
           RESOURCE_DATABASE_URL: "postgresql+psycopg2://resource:ci-only@localhost:55432/resource_accounting"
-        run: pytest -q tests/test_period_concurrency_pg.py -v -rs
+        run: pytest tests/test_period_concurrency_pg.py -v -rs -o addopts=""
 
   backend-tests:
     name: backend-tests (pytest)
