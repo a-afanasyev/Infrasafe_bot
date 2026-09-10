@@ -104,6 +104,7 @@ def test_anomaly_warning_and_submit_gate(admin, operator, reviewer):
     assert "порог" in data["validation_message"]
 
     # warning without comment blocks submit
+    fill_missing(admin, "2027-02")  # общая БД: у чужих счётчиков строк за этот месяц нет
     assert operator.post("/v1/periods/2027-02/move-to-review").status_code == 200
     resp = reviewer.post("/v1/periods/2027-02/submit")
     assert resp.status_code == 409
@@ -112,6 +113,7 @@ def test_anomaly_warning_and_submit_gate(admin, operator, reviewer):
     assert reviewer.post("/v1/periods/2027-02/reopen").status_code == 200
     put_reading(operator, meter["id"], "2027-02", value="900", read_at="2027-02-25",
                 comment="промыв резервуара, подтверждено")
+    fill_missing(admin, "2027-02")
     operator.post("/v1/periods/2027-02/move-to-review")
     resp = reviewer.post("/v1/periods/2027-02/submit")
     assert resp.status_code == 200, resp.text
@@ -127,6 +129,7 @@ def test_submitted_period_locked_and_correction(admin, reviewer):
     r_apr = put_reading(admin, meter["id"], "2027-04", value="1100", read_at="2027-04-30").json()["data"]
     put_reading(admin, meter["id"], "2027-05", value="1250", read_at="2027-05-31")
 
+    fill_missing(admin, "2027-04")
     admin.post("/v1/periods/2027-04/move-to-review")
     assert reviewer.post("/v1/periods/2027-04/submit").status_code == 200
 
@@ -236,6 +239,7 @@ def test_correction_runs_through_validation(admin, reviewer):
     put_reading(admin, meter["id"], "2032-03", value="1000", read_at="2032-03-31")
     r = put_reading(admin, meter["id"], "2032-04", value="1100", read_at="2032-04-30").json()["data"]
 
+    fill_missing(admin, "2032-04")
     admin.post("/v1/periods/2032-04/move-to-review")
     assert reviewer.post("/v1/periods/2032-04/submit").status_code == 200
 
@@ -259,6 +263,7 @@ def test_correction_recomputes_downstream_status(admin, reviewer):
     jul = put_reading(admin, meter["id"], "2032-07", value="1150", read_at="2032-07-31").json()["data"]
     assert jul["status"] == "ok"
 
+    fill_missing(admin, "2032-06")
     admin.post("/v1/periods/2032-06/move-to-review")
     reviewer.post("/v1/periods/2032-06/submit")
     # raise June above July → July becomes a decrease
@@ -279,6 +284,7 @@ def test_correction_audit_before_is_old_value(admin, reviewer):
     make_period(admin, "2032-09")
     put_reading(admin, meter["id"], "2032-08", value="1000", read_at="2032-08-31")
     r = put_reading(admin, meter["id"], "2032-09", value="1100", read_at="2032-09-30").json()["data"]
+    fill_missing(admin, "2032-09")
     admin.post("/v1/periods/2032-09/move-to-review")
     reviewer.post("/v1/periods/2032-09/submit")
     reviewer.post(f"/v1/readings/{r['id']}/corrections", json={"new_value": "1150", "reason": "правка"})
@@ -362,3 +368,62 @@ def test_correction_cascade_skips_closed_period(admin, reviewer):
     reviewer.post(f"/v1/readings/{aug['id']}/corrections", json={"new_value": "210", "reason": "правка"})
     sep = _readings_by_month(admin, "AUD7COR01-2", ("2037-09",))["2037-09"]
     assert (sep["previous_value"], sep["consumption"]) == ("200.0000", "50.0000")
+
+
+def _period_status(client, month: str) -> str:
+    return next(p for p in client.get("/v1/periods").json()["data"] if p["month"] == month)["status"]
+
+
+def test_submit_rejects_partial_worksheet(admin, reviewer):
+    """AUD7-COR-02: submit применяет тот же критерий полноты, что и validate."""
+    obj = make_object(admin, "AUD7COR02-объект")
+    m1 = make_meter(admin, "AUD7COR02-1", obj["id"])
+    m2 = make_meter(admin, "AUD7COR02-2", obj["id"])
+    make_period(admin, "2038-01")
+    put_reading(admin, m1["id"], "2038-01", value="100", read_at="2038-01-31")
+    admin.post("/v1/periods/2038-01/move-to-review")
+
+    v = admin.post("/v1/periods/2038-01/validate").json()["data"]
+    assert v["not_entered"] >= 1 and v["can_submit"] is False  # >=: общая БД, чужие счётчики тоже пусты
+
+    resp = reviewer.post("/v1/periods/2038-01/submit")
+    assert resp.status_code == 409, resp.text
+    details = resp.json()["error"]["details"]
+    assert {"meter_id": m2["id"], "status": "not_entered", "message": "Показание не введено"} in details
+    assert not any(d["meter_id"] == m1["id"] for d in details)  # заполненный не в списке
+    assert _period_status(admin, "2038-01") == "review"  # статус не менялся
+
+    # Явная строка missing с причиной — это «введено» по действующим правилам.
+    put_reading(admin, m2["id"], "2038-01", value=None, missing_reason="no_access")
+    fill_missing(admin, "2038-01")  # остальные (чужие) активные счётчики tenant'а
+    assert admin.post("/v1/periods/2038-01/validate").json()["data"]["can_submit"] is True
+    assert reviewer.post("/v1/periods/2038-01/submit").status_code == 200
+    assert _period_status(admin, "2038-01") == "submitted"
+
+
+def test_submit_rejects_empty_worksheet(admin, reviewer):
+    """AUD7-COR-02: ведомость без единой строки не утверждается."""
+    obj = make_object(admin, "AUD7COR02b-объект")
+    make_meter(admin, "AUD7COR02-3", obj["id"])
+    make_period(admin, "2038-02")
+    admin.post("/v1/periods/2038-02/move-to-review")
+    resp = reviewer.post("/v1/periods/2038-02/submit")
+    assert resp.status_code == 409, resp.text
+    assert _period_status(admin, "2038-02") == "review"
+
+
+def test_validate_and_submit_share_error_details(admin, reviewer):
+    """AUD7-COR-02: ошибки/предупреждения submit берёт из того же summary, что validate."""
+    obj = make_object(admin, "AUD7COR02c-объект")
+    meter = make_meter(admin, "AUD7COR02-4", obj["id"], max_digits=3)
+    make_period(admin, "2038-03")
+    err = put_reading(admin, meter["id"], "2038-03", value="5000", read_at="2038-03-31").json()["data"]
+    assert err["status"] == "error"
+    admin.post("/v1/periods/2038-03/move-to-review")
+    v = admin.post("/v1/periods/2038-03/validate").json()["data"]
+    resp = reviewer.post("/v1/periods/2038-03/submit")
+    assert resp.status_code == 409
+    details = resp.json()["error"]["details"]
+    assert [d for d in details if d["status"] == "error"] == [
+        {"meter_id": meter["id"], "status": "error", "message": v["errors"][0]["message"]}
+    ]

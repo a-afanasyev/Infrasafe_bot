@@ -34,6 +34,7 @@ from app.schemas.readings import (
     WorksheetOut,
     WorksheetRow,
 )
+from app.services.period_validation import summarize_period
 from app.services.readings import (
     apply_correction,
     get_previous_accepted_bulk,
@@ -219,37 +220,17 @@ def validate_period(
 ):
     """Summary of problems that block confirmation."""
     period = get_period_or_404(db, user, month)
-    active_ids = set(db.execute(
-        select(Meter.id).where(Meter.tenant_id == user.tenant_id, Meter.status == "active")
-    ).scalars())
-    readings = db.execute(
-        select(Reading).where(Reading.reporting_period_id == period.id)
-    ).scalars().all()
-    by_status: dict[str, int] = {}
-    warnings_without_comment = []
-    errors = []
-    for r in readings:
-        by_status[r.status] = by_status.get(r.status, 0) + 1
-        if r.status == "warning" and not r.comment:
-            warnings_without_comment.append(str(r.meter_id))
-        if r.status == "error":
-            errors.append({"meter_id": str(r.meter_id), "message": r.validation_message})
-    # AUD6-P2-09: показания архивированных счётчиков остаются в периоде, но из
-    # множества активных исчезают — разность длин уводила not_entered в минус,
-    # а завышенный entered при can_submit==0 делал период неподтверждаемым.
-    # Считаем строго по пересечению множеств id.
-    entered_active = {r.meter_id for r in readings if r.meter_id in active_ids}
-    not_entered = len(active_ids - entered_active)
+    summary = summarize_period(db, user.tenant_id, period)
     return {
         "data": {
             "period": PeriodOut.model_validate(period).model_dump(mode="json"),
-            "active_meters": len(active_ids),
-            "entered": len(entered_active),
-            "not_entered": not_entered,
-            "by_status": by_status,
-            "warnings_without_comment": warnings_without_comment,
-            "errors": errors,
-            "can_submit": not errors and not warnings_without_comment and not_entered == 0,
+            "active_meters": summary.active_meters,
+            "entered": summary.entered,
+            "not_entered": summary.not_entered,
+            "by_status": summary.by_status,
+            "warnings_without_comment": [str(mid) for mid, _msg in summary.warnings_without_comment],
+            "errors": [{"meter_id": str(mid), "message": msg} for mid, msg in summary.errors],
+            "can_submit": summary.can_submit,
         }
     }
 
@@ -283,17 +264,18 @@ def submit(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    """review → submitted: blocked while errors or uncommented warnings remain."""
+    """review → submitted: тот же критерий, что у validate (AUD7-COR-02) —
+    ошибки, предупреждения без комментария и незаполненные активные счётчики
+    блокируют подтверждение; статус не меняется."""
     period = get_period_or_404(db, user, month)
     if period.status != "review":
         raise conflict(f"Подтвердить можно только период в статусе review (сейчас {period.status})")
-    readings = db.execute(select(Reading).where(Reading.reporting_period_id == period.id)).scalars().all()
-    problems = [r for r in readings if r.status == "error" or (r.status == "warning" and not r.comment)]
-    if problems:
+    summary = summarize_period(db, user.tenant_id, period)
+    if not summary.can_submit:
         raise conflict(
-            "Есть ошибки или предупреждения без комментария",
-            details=[{"meter_id": str(r.meter_id), "status": r.status, "message": r.validation_message}
-                     for r in problems],
+            "Ведомость не готова к подтверждению: ошибки, предупреждения без комментария "
+            "или незаполненные счётчики",
+            details=summary.blocking_details(),
         )
     period = _transition(db, request, user, month, "submitted")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
