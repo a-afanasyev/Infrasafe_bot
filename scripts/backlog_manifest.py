@@ -125,12 +125,10 @@ ASSIGNMENT: dict[str, dict] = {
     # Сверка по коду 2026-09-11 (отчёт Codex docs/audit/2026-09-11-backlog-code-check.md):
     # 36/36 перепроверены, закрытых нет; method=verified-2026-09-11 только там, где
     # запись/AC уточнены или строки перепроверены на HEAD 6a04699a.
-    "AUD7-COR-01": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
-                       services="resource API", note="воспроизведено 2026-09-11: после error→ok Mar consumption=150 вместо 50, Apr 250 вместо 100; тест ok→ok цепочку не ловит"),
-    "AUD7-COR-02": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
-                       services="resource API / frontend", note="воспроизведено 2026-09-11: not_entered=1 / can_submit=false, submit всё равно → submitted; UI тоже пропускает"),
-    "AUD7-COR-03": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
-                       services="resource API / PostgreSQL", note="воспроизведено 2026-09-11 на двух SQLite-сессиях (поздняя запись поверх submitted); PostgreSQL concurrency-тест обязателен"),
+    # AUD7-COR-01/02/03 (три P1) закрыты 2026-09-11, PR #558: flush каскада, единый предикат
+    # полноты validate/submit + UI, FOR UPDATE во всех путях записи + PG concurrency-тест в CI.
+    "AUD7-COR-04": A(pkg="AUD7-R1", status="actionable", method="review-2026-09-11",
+                       services="resource API", note="follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock"),
     "AUD7-SEC-02": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-11",
                        services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
     "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-09",

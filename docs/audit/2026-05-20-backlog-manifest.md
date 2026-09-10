@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **485**
-- закрыто маркером: **449**
-- открыто маркером: **36**
+- пунктов всего (с Priority): **486**
+- закрыто маркером: **452**
+- открыто маркером: **34**
 
-  - `actionable` — **28**
+  - `actionable` — **26**
   - `decision` — **1**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P1=3, P2=18, P3=7.
+Из них actionable по приоритету: P2=19, P3=7.
 
 Значения `status`:
 
@@ -72,9 +72,7 @@
 | `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
 | `AUD7-ENG-08` | P3 | actionable | verified-2026-09-09 | AUD7-O1 | — | resource image | — | из отчёта ENG-08; AC и зависимости в канонической записи |
-| `AUD7-COR-01` | P1 | actionable | verified-2026-09-11 | AUD7-R1 | — | resource API | — | воспроизведено 2026-09-11: после error→ok Mar consumption=150 вместо 50, Apr 250 вместо 100; тест ok→ok цепочку не ловит |
-| `AUD7-COR-02` | P1 | actionable | verified-2026-09-11 | AUD7-R1 | — | resource API / frontend | — | воспроизведено 2026-09-11: not_entered=1 / can_submit=false, submit всё равно → submitted; UI тоже пропускает |
-| `AUD7-COR-03` | P1 | actionable | verified-2026-09-11 | AUD7-R1 | — | resource API / PostgreSQL | — | воспроизведено 2026-09-11 на двух SQLite-сессиях (поздняя запись поверх submitted); PostgreSQL concurrency-тест обязателен |
+| `AUD7-COR-04` | P2 | actionable | review-2026-09-11 | AUD7-R1 | — | resource API | — | follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock |
 | `AUD7-SEC-02` | P2 | actionable | verified-2026-09-11 | AUD7-S1 | — | access API | — | handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher |
 | `AUD7-SEC-04` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | resource exports | — | из отчёта SEC-04; AC и зависимости в канонической записи |
 | `AUD7-SEC-05` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | UK auth / Redis | — | из отчёта SEC-05; AC и зависимости в канонической записи |
