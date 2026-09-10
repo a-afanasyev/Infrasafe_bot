@@ -22,17 +22,19 @@ lock_periods_from (не затронута), и её FOR UPDATE на строк�
 """
 
 import threading
+import time
 import uuid
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db import SessionLocal, engine
-from app.models import Meter, Reading, ReportingPeriod, Tenant
+from app.models import Meter, Reading, ReadingRevision, ReportingPeriod, Tenant
 from app.schemas.readings import ReadingIn
 from app.services.period_lock import lock_period, lock_periods_from
-from app.services.readings import upsert_reading
+from app.services.readings import apply_correction, upsert_reading
 from tests.conftest import fill_missing, make_meter, make_object, make_period
 
 pytestmark = pytest.mark.skipif(engine.dialect.name != "postgresql", reason="FOR UPDATE — только PostgreSQL")
@@ -177,3 +179,127 @@ def test_correction_range_lock_and_put_do_not_deadlock(admin, reviewer):
     t1.join(timeout=10)
     t2.join(timeout=10)
     assert outcome == {"locked_months": [feb, mar], "correction": "released", "put": "written"}, outcome
+
+
+def test_lock_timeout_turns_into_409(admin, monkeypatch):
+    """Сек-ревью COR-03 (H-1/M-3): писатель, упёршийся в занятый период, не висит
+    на воркере до бесконечности — lock_timeout срабатывает, 55P03 отдаётся как 409 period_busy."""
+    monkeypatch.setattr(get_settings(), "lock_timeout_ms", 300)
+    month = "2046-01"
+    obj = make_object(admin, "PG-timeout-объект")
+    meter = make_meter(admin, "PG-TIMEOUT-1", obj["id"])
+    make_period(admin, month)
+    tenant_id = _tenant_id()
+
+    held = threading.Event()
+    release = threading.Event()
+    outcome: dict = {}
+
+    def holder():
+        try:
+            with SessionLocal() as s1:
+                try:
+                    lock_period(s1, tenant_id, month)
+                finally:
+                    held.set()
+                release.wait(timeout=10)
+                s1.rollback()
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            outcome["holder_error"] = repr(exc)
+        finally:
+            held.set()
+
+    t = threading.Thread(target=holder, daemon=True)
+    t.start()
+    assert held.wait(timeout=10) and "holder_error" not in outcome, outcome
+
+    started = time.monotonic()
+    resp = admin.put(f"/v1/meters/{meter['id']}/readings/{month}", json={"value": "100", "read_at": "2046-01-15"})
+    elapsed = time.monotonic() - started
+    release.set()
+    t.join(timeout=10)
+    assert not t.is_alive()
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"]["code"] == "period_busy"
+    assert elapsed < 3.0, f"ответ обязан прийти по lock_timeout (300 мс), а не через {elapsed:.1f} с"
+
+
+def test_concurrent_corrections_of_same_reading_keep_revision_trail(admin, reviewer):
+    """Код-ревью COR-03 (Important-1): вторая корректировка того же показания, загрузившая
+    объект до захвата range-lock, после refresh пишет в ревизию актуальный old_value.
+    Заодно — overlapping range-lock (M-3): оба берут 2046-02.. в одном порядке, дедлока нет."""
+    feb, mar = "2046-02", "2046-03"
+    obj = make_object(admin, "PG-corr-объект")
+    meter = make_meter(admin, "PG-CORR-1", obj["id"])
+    make_period(admin, feb)
+    make_period(admin, mar)
+    r_feb = admin.put(f"/v1/meters/{meter['id']}/readings/{feb}",
+                      json={"value": "100", "read_at": "2046-02-28"}).json()["data"]
+    assert admin.put(f"/v1/meters/{meter['id']}/readings/{mar}",
+                     json={"value": "150", "read_at": "2046-03-31"}).status_code == 200
+    fill_missing(admin, feb)
+    assert admin.post(f"/v1/periods/{feb}/move-to-review").status_code == 200
+    assert reviewer.post(f"/v1/periods/{feb}/submit").status_code == 200
+    tenant_id = _tenant_id()
+    rid = uuid.UUID(r_feb["id"])
+
+    held = threading.Event()
+    release = threading.Event()
+    outcome: dict = {}
+
+    def correction_a():
+        try:
+            with SessionLocal() as sa:
+                reading_a = sa.get(Reading, rid)  # как в эндпоинте: объект загружен ДО блокировки
+                try:
+                    lock_periods_from(sa, tenant_id, feb)
+                finally:
+                    held.set()
+                release.wait(timeout=10)
+                apply_correction(sa, reading_a, Decimal("110"), "первая", "correction", actor=None)
+                sa.commit()
+                outcome["a"] = "done"
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            outcome["a_error"] = repr(exc)
+        finally:
+            held.set()
+
+    def correction_b():
+        try:
+            with SessionLocal() as sb:
+                reading_b = sb.get(Reading, rid)  # устареет, пока ждём range-lock A
+                lock_periods_from(sb, tenant_id, feb)
+                sb.refresh(reading_b)  # ровно то, что теперь делает create_correction
+                apply_correction(sb, reading_b, Decimal("120"), "вторая", "correction", actor=None)
+                sb.commit()
+                outcome["b"] = "done"
+        except Exception as exc:  # noqa: BLE001 — ошибка потока обязана всплыть в главном
+            outcome["b_error"] = repr(exc)
+
+    ta = threading.Thread(target=correction_a, daemon=True)
+    ta.start()
+    assert held.wait(timeout=10) and "a_error" not in outcome, outcome
+
+    tb = threading.Thread(target=correction_b, daemon=True)
+    tb.start()
+    tb.join(timeout=1.0)
+    assert tb.is_alive(), f"вторая корректировка обязана ждать range-lock первой: {outcome}"
+
+    release.set()
+    ta.join(timeout=10)
+    tb.join(timeout=10)
+    assert not ta.is_alive() and not tb.is_alive()
+    assert outcome == {"a": "done", "b": "done"}, outcome
+
+    with SessionLocal() as db:
+        assert db.get(Reading, rid).value == Decimal("120")
+        trail = db.execute(
+            select(ReadingRevision.old_value, ReadingRevision.new_value)
+            .where(ReadingRevision.reading_id == rid, ReadingRevision.kind == "correction")
+            .order_by(ReadingRevision.created_at)
+        ).all()
+        assert [(Decimal(o), Decimal(n)) for o, n in trail] == [
+            (Decimal("100"), Decimal("110")),
+            (Decimal("110"), Decimal("120")),
+        ]

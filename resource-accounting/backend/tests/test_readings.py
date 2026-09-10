@@ -415,11 +415,14 @@ def test_submit_rejects_partial_worksheet(admin, reviewer):
 def test_submit_rejects_empty_worksheet(admin, reviewer):
     """AUD7-COR-02: ведомость без единой строки не утверждается."""
     obj = make_object(admin, "AUD7COR02b-объект")
-    make_meter(admin, "AUD7COR02-3", obj["id"])
+    meter = make_meter(admin, "AUD7COR02-3", obj["id"])
     make_period(admin, "2038-02")
     admin.post("/v1/periods/2038-02/move-to-review")
     resp = reviewer.post("/v1/periods/2038-02/submit")
     assert resp.status_code == 409, resp.text
+    assert any(
+        d["meter_id"] == meter["id"] and d["status"] == "not_entered" for d in resp.json()["error"]["details"]
+    )
     assert _period_status(admin, "2038-02") == "review"
 
 
@@ -490,3 +493,28 @@ def test_lock_periods_from_refreshes_joined_period(admin, reviewer):
         s2.commit()
         locked = lock_periods_from(s1, _tenant_id(s1), "2039-02")
         assert locked[0] is reading.period and reading.period.status == "review"
+
+
+def test_lock_periods_from_skips_later_closed_periods(admin, reviewer):
+    """AUD7-COR-03 (сек-ревью M-1): range-lock не трогает закрытые периоды после стартового —
+    каскад корректировки в них не пишет; стартовый месяц берётся всегда (он сам может быть closed)."""
+    obj = make_object(admin, "AUD7COR03b-объект")
+    meter = make_meter(admin, "AUD7COR03-2", obj["id"])
+    for month in ("2039-05", "2039-06", "2039-07"):
+        make_period(admin, month)
+    put_reading(admin, meter["id"], "2039-05", value="100", read_at="2039-05-31")
+    put_reading(admin, meter["id"], "2039-06", value="150", read_at="2039-06-30")
+    for month in ("2039-05", "2039-06"):
+        fill_missing(admin, month)
+        assert admin.post(f"/v1/periods/{month}/move-to-review").status_code == 200
+        assert reviewer.post(f"/v1/periods/{month}/submit").status_code == 200
+    assert reviewer.post("/v1/periods/2039-06/close").status_code == 200
+
+    with SessionLocal() as db:
+        tid = _tenant_id(db)
+        # tenant общий на сьют: на PostgreSQL сюда попадают и открытые 2040-*/2046-* периоды
+        # concurrency-тестов — смотрим только на свои 2039-* месяцы.
+        months = [p.month for p in lock_periods_from(db, tid, "2039-05")]
+        assert months == sorted(months)
+        assert [m for m in months if m.startswith("2039-")] == ["2039-05", "2039-07"]
+        assert [p.month for p in lock_periods_from(db, tid, "2039-06")][0] == "2039-06"

@@ -20,6 +20,7 @@ from app.core.deps import (
     correlation_id as _cid,
 )
 from app.core.errors import bad_request, conflict, not_found
+from app.core.ratelimit import WRITE_LIMIT, limiter
 from app.db import get_db
 from app.models import AnomalyRule, Meter, Reading, ReportingPeriod, User
 from app.schemas.readings import (
@@ -175,6 +176,7 @@ def worksheet(
 
 
 @router.put("/meters/{meter_id}/readings/{month}", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def put_reading(
     meter_id: uuid.UUID,
     month: str,
@@ -197,6 +199,7 @@ def put_reading(
 
 
 @router.post("/periods/{month}/readings/bulk", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def bulk_readings(
     month: str,
     payload: BulkReadingsIn,
@@ -244,6 +247,7 @@ def validate_period(
 
 
 @router.post("/periods/{month}/move-to-review", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def move_to_review(
     month: str,
     request: Request,
@@ -255,6 +259,7 @@ def move_to_review(
 
 
 @router.post("/periods/{month}/reopen", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def reopen(
     month: str,
     request: Request,
@@ -266,6 +271,7 @@ def reopen(
 
 
 @router.post("/periods/{month}/submit", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def submit(
     month: str,
     request: Request,
@@ -290,6 +296,7 @@ def submit(
 
 
 @router.post("/periods/{month}/close", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def close_period(
     month: str,
     request: Request,
@@ -301,6 +308,7 @@ def close_period(
 
 
 @router.post("/readings/{reading_id}/corrections", response_model=dict)
+@limiter.limit(WRITE_LIMIT)
 def create_correction(
     reading_id: uuid.UUID,
     payload: CorrectionIn,
@@ -317,6 +325,7 @@ def create_correction(
     if not locked or locked[0].id != reading.period.id:
         raise not_found(f"Период {reading.period.month}")
     _reject_if_editable(locked[0])
+    db.refresh(reading)  # AUD7-COR-03: объект загружен до блокировки — берём свежие value/kind/read_at
     old_value = reading.value  # COR-04: capture the true previous value before it is overwritten
     apply_correction(db, reading, payload.new_value, payload.reason, payload.kind, user)
     write_audit(db, user=user, entity_type="reading", entity_id=reading.id, action="correction",

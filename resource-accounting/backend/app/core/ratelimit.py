@@ -15,3 +15,6 @@ limiter = Limiter(key_func=client_ip_key, enabled=get_settings().rate_limit_enab
 # Per-endpoint limits (strings so slowapi parses them lazily)
 AUTH_LIMIT = "10/minute"
 HEAVY_LIMIT = "30/minute"
+# AUD7-COR-03 (сек-ревью H-1): пишущие ручки держат блокировку периода —
+# потолок на клиентский IP, чтобы шторм ретраев не занял весь thread-пул.
+WRITE_LIMIT = "120/minute"
