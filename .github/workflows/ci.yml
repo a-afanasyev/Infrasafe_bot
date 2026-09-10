@@ -345,6 +345,16 @@ jobs:
       - name: Audit installed dependencies
         run: pip-audit
 
+      # AUD7-COR-03: единственные тесты, которым нужен настоящий PostgreSQL —
+      # FOR UPDATE на sqlite не компилируется. Ставим ПОСЛЕДНИМ: фикстура
+      # tests/conftest.py делает create_all/drop_all, а drift-gate и
+      # least-privilege выше рассчитывают на схему alembic. URL — только в env
+      # этого шага (ловушка setdefault, см. комментарий к «Run tests»).
+      - name: Concurrency tests (postgres 16, FOR UPDATE)
+        env:
+          RESOURCE_DATABASE_URL: "postgresql+psycopg2://resource:ci-only@localhost:55432/resource_accounting"
+        run: pytest -q tests/test_period_concurrency_pg.py -v -rs
+
   backend-tests:
     name: backend-tests (pytest)
     runs-on: ubuntu-latest
