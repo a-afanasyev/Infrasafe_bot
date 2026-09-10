@@ -118,6 +118,67 @@ def classify(title: str) -> str:
 A = dict  # краткость таблицы
 
 ASSIGNMENT: dict[str, dict] = {
+    # Аудит Codex 2026-09-08, консолидация 2026-09-09; только метаданные задач.
+    # Аудит бэклога 2026-09-09: все 27 перепроверены чтением кода на HEAD 2451dc85
+    # (пометки под записями), ENG-07/CODE-06/DEP-01 скорректированы по существу.
+    # SEC-01 относится к уже закрытой FIX-002 и в открытые не включается.
+    # Сверка по коду 2026-09-11 (отчёт Codex docs/audit/2026-09-11-backlog-code-check.md):
+    # 36/36 перепроверены, закрытых нет; method=verified-2026-09-11 только там, где
+    # запись/AC уточнены или строки перепроверены на HEAD 6a04699a.
+    "AUD7-COR-01": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
+                       services="resource API", note="воспроизведено 2026-09-11: после error→ok Mar consumption=150 вместо 50, Apr 250 вместо 100; тест ok→ok цепочку не ловит"),
+    "AUD7-COR-02": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
+                       services="resource API / frontend", note="воспроизведено 2026-09-11: not_entered=1 / can_submit=false, submit всё равно → submitted; UI тоже пропускает"),
+    "AUD7-COR-03": A(pkg="AUD7-R1", status="actionable", method="verified-2026-09-11",
+                       services="resource API / PostgreSQL", note="воспроизведено 2026-09-11 на двух SQLite-сессиях (поздняя запись поверх submitted); PostgreSQL concurrency-тест обязателен"),
+    "AUD7-SEC-02": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-11",
+                       services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
+    "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-09",
+                       services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; сам RBAC-план от 2026-09-05 не закоммичен — коммитить вместе с консолидацией"),
+    "AUD7-SEC-04": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
+                       services="resource exports", note="из отчёта SEC-04; AC и зависимости в канонической записи"),
+    "AUD7-SEC-05": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
+                       services="UK auth / Redis", note="из отчёта SEC-05; AC и зависимости в канонической записи"),
+    "AUD7-CODE-01": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
+                       services="frontend / UK auth", note="из отчёта CODE-01; AC и зависимости в канонической записи"),
+    "AUD7-CODE-02": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-11",
+                       services="frontend", note="воспроизведено 2026-09-11: cleanup → отложенный close → таймер → второй сокет; ссылка на тест исправлена (:26)"),
+    "AUD7-CODE-03": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
+                       services="bot / Redis / PostgreSQL", note="из отчёта CODE-03; AC и зависимости в канонической записи"),
+    "AUD7-CODE-04": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
+                       services="bot / Redis", note="из отчёта CODE-04; AC и зависимости в канонической записи"),
+    "AUD7-CODE-05": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
+                       services="frontend", note="из отчёта CODE-05; AC и зависимости в канонической записи"),
+    "AUD7-CODE-06": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-11",
+                       services="frontend / UK employees API", note="EmployeesPage после PR #556 уже с серверной пагинацией и настоящим total; дыра только в пикерах смен (CreateShiftModal берёт дефолт limit=50) — AC сужен"),
+    "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
+                       services="media API", note="из отчёта ARCH-01; AC и зависимости в канонической записи"),
+    "AUD7-ARCH-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
+                       services="UK services", note="импортируются сервисные функции api.*.service / схемы, не HTTP; ограниченный перенос, цикла нет"),
+    "AUD7-SIMP-01": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
+                       services="bot image / locales", note="9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54)"),
+    "AUD7-SIMP-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
+                       services="bot states / keyboards", note="из отчёта SIMP-02; AC и зависимости в канонической записи"),
+    "AUD7-SIMP-03": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
+                       services="UK work_reports / tests", note="из отчёта SIMP-03; AC и зависимости в канонической записи"),
+    "AUD7-ENG-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-11",
+                       services="frontend CI", note="невалидный JSON уже exit 1; fail-open только для валидного {error}/{} — нужна проверка структуры отчёта"),
+    "AUD7-ENG-02": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
+                       services="E2E CI", note="из отчёта ENG-02; AC и зависимости в канонической записи"),
+    "AUD7-ENG-03": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
+                       services="media / resource / payment", note="из отчёта ENG-03; AC и зависимости в канонической записи"),
+    "AUD7-ENG-04": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
+                       services="payment CI", note="из отчёта ENG-04; AC и зависимости в канонической записи"),
+    "AUD7-ENG-05": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
+                       services="Makefile / runbook", note="из отчёта ENG-05; AC и зависимости в канонической записи"),
+    "AUD7-ENG-06": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
+                       services="dev compose / README", note="в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET, compose требует их через :? — config падает до старта postgres/redis"),
+    "AUD7-ENG-07": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
+                       services="DB / operations", note="прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh"),
+    "AUD7-ENG-08": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
+                       services="resource image", note="из отчёта ENG-08; AC и зависимости в канонической записи"),
+    "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-11",
+                       services="frontend dev dependencies", note="npm audit 2026-09-11: prod 0, dev 10 package entries (high 4) — не 10 уникальных CVE; новые GHSA у vitest, baseline-browser-mapping, js-yaml; всё dev-only"),
     # ── П1 ЗАКРЫТ 2026-07-26 целиком: `AUD5-CODE-4`, `AUD5-APIFE-19`,
     # `AUD5-APIFE-18`, `AUD5-PRAC-5`, `AUD5-DEP-1`, `AUD5-PRAC-9` — все шесть
     # помечены закрытыми в бэклоге, поэтому строк здесь больше нет (`--check`
@@ -163,8 +224,8 @@ ASSIGNMENT: dict[str, dict] = {
     # (AUD3-37 + AUD5-CODE-6: волны B1–B4 + финал F1/F2, PR #362..#368 + F2)
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
-    "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="verified-2026-08-19",
-                     note="локальные venv/db/png — только пофайлово с подтверждения; venv вырос 148→164 МБ"),
+    "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="verified-2026-09-11",
+                     note="локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09)"),
     # П8 закрыт целиком 2026-07-27: `AUD5-CODE-12` (язык каждого админа),
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
@@ -176,10 +237,10 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
-    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-09-01",
-                  note="порция 3.1: 750 тестов, покрытие 50.8/48.8/40.7/41.1, "
-                       "floors 49/47/39/40; остаток до 80% — components/addresses, "
-                       "twa/pages, components/materials"),
+    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-09-11",
+                  note="срез 2026-09-11: 835 тестов, покрытие 53.52/51.55/43.22/44.70, "
+                       "floors 49/47/39/40; остаток до 80% — components/materials, "
+                       "twa/pages, components/addresses"),
     # `AUD3-25` закрыт 2026-09-01 (фаза 2 программы ратчетов): sqlite-сьют
     # test_aud325_scoring_sqlite.py гоняет реальные SQL-предикаты скоринга;
     # мутационная порча каждого предиката краснит (мок-сосед — нет).
@@ -290,16 +351,16 @@ ASSIGNMENT: dict[str, dict] = {
     # процедура ротации → uk-deploy SKILL.md.
     # `PENT-F12`, `PENT-F15`, `PENT-F16` закрыты 2026-09-02 вместе с П2: один PR
     # владельца edge на оба конфига, релоад 11:22 UTC, наши пробы снаружи зелёные.
-    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-09-02",
+    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-09-09",
                  services="DNS/регистратор владельца (оба домена)",
-                 note="OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, ждём непустой dig CAA"),
+                 note="OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, проверять раздельно (CAA и DS); 2026-09-09: оба пусты на обоих доменах"),
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
-    "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-07-27",
-                 note="возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
+    "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-09-11",
+                 note="AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
     "DB-049": A(pkg="—", status="deferred", method="verified-2026-07-27",
                 note="jsonb+GIN — когда появится запрос по ролям, которому нужен индекс"),
-    "SEC-115": A(pkg="—", status="deferred", method="verified-2026-07-27",
-                 note="фикс на стороне InfraSafe; в повестку следующего разговора"),
+    "SEC-115": A(pkg="—", status="deferred", method="verified-2026-09-11",
+                 note="UK-часть сделана (/api/uk-buildings-metrics + x-service-token при INFRASAFE_INVENTORY_TOKEN); остаток внешний — принуждение auth на стороне InfraSafe и проверка токена на продах"),
     # ── Календарь: `PENT-F04` жил здесь до 2026-08-30 — единственный
     # calendar-пункт (снятие ?token= после срока депрекации 2026-09-01).
     # Закрыт PR #516: живых клиентов query-пути не было (0 SEC-03 warning'ов
@@ -403,15 +464,19 @@ def render(items: list[Item]) -> str:
     out.append("")
     out.append("## Спорные пункты, разведённые явно")
     out.append("")
+    out.append("_История разведения (что и когда решили); текущее состояние — в таблицах выше._")
+    out.append("")
     out.append("- `REG-03` — был закрыт кодом, но открыт документом; подтверждён чтением")
     out.append("  `ci.yml` и закрыт 2026-07-26. Пример класса «код впереди документа».")
     out.append("- `AUD5-APIFE-2` — закрыт PR #263, документ поправлен PR #264.")
     out.append("- `PENT-F04` — основная часть закрыта раньше; календарный остаток")
     out.append("  (query-токен WS) снят 2026-08-30 (PR #516).")
-    out.append("- `AUD3-37` — не назывался в первых версиях плана; здесь `decision`.")
+    out.append("- `AUD3-37` — не назывался в первых версиях плана, шёл как `decision`;")
+    out.append("  закрыт 2026-08-07 (Программа B, парой с `AUD5-CODE-6`).")
     out.append("- `PENT-F13`, `PENT-F14`, `PENT-F15`, `PENT-F16` — каждый отдельной строкой:")
     out.append("  сокращение группы «F12/F13/F15/F16» ранее скрыло потерю `PENT-F14`.")
-    out.append("- `AUD5-PRAC-3` и `AUD3-38` — дубль друг друга, закрывать парой.")
+    out.append("  F14/F15/F16 закрыты 2026-09-02; открыт только `PENT-F13` (CAA + DNSSEC у регистратора).")
+    out.append("- `AUD5-PRAC-3` и `AUD3-38` — дубль друг друга; закрыты парой 2026-07-27.")
     out.append("")
     return "\n".join(out)
 
