@@ -40,6 +40,19 @@ router = APIRouter()
 
 REQUEST_NUMBER_PATTERN = re.compile(_REQUEST_NUMBER_PATTERN_STR)
 
+# BUG-189 (2026-09-09): edge-nginx отдаёт браузеру 504 через 30 с. Клиенты к
+# media-service ждали ответа 60 с одним числом на connect/read — и ретрай
+# `stream_with_retries`, и сам ответ приходили уже после 504 у клиента.
+# connect короткий (сервис в той же docker-сети), read — меньше бюджета edge:
+# media-service сам качает файл у Telegram с собственными ретраями.
+_MEDIA_CONNECT_TIMEOUT_SECONDS = 5.0
+_MEDIA_META_TIMEOUT = httpx.Timeout(
+    connect=_MEDIA_CONNECT_TIMEOUT_SECONDS, read=10.0, write=5.0, pool=5.0
+)
+_MEDIA_STREAM_TIMEOUT = httpx.Timeout(
+    connect=_MEDIA_CONNECT_TIMEOUT_SECONDS, read=25.0, write=5.0, pool=5.0
+)
+
 
 class FileCategories(str, Enum):
     """SEC-021 whitelist for media-upload category. Mirrors the strings
@@ -212,7 +225,7 @@ async def proxy_media_file(
     #
     # 1-2) Метаданные и гейт доступа — короткие буферизуемые вызовы, их клиент
     # живёт ровно в этом блоке.
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=_MEDIA_META_TIMEOUT) as client:
         try:
             meta_resp = await get_with_retries(
                 client,
@@ -240,7 +253,7 @@ async def proxy_media_file(
     # Закрывает его `finally` генератора — то есть и при обрыве клиента тоже
     # (Starlette бросает в генератор при disconnect). Форма скопирована с
     # `api/work_reports/public_router.py`, где этот вывод уже сделан.
-    client = httpx.AsyncClient(timeout=60)
+    client = httpx.AsyncClient(timeout=_MEDIA_STREAM_TIMEOUT)
 
     async def _close() -> None:
         await upstream.aclose()

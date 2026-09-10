@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     # очередь из них выедает пул соединений и воркеры.
     telegram_download_concurrency: int = 4
 
+    # BUG-189 (2026-09-09): edge-nginx отдаёт браузеру 504 через 30 с. Раньше
+    # и aiogram-сессия (get_file), и httpx-скачивание ждали по 60 с — одно
+    # повисшее соединение с Telegram гарантированно превращалось в сломанную
+    # картинку, хотя ретрай через полсекунды успевал за секунду. Худший случай
+    # трёх попыток download_file с backoff обязан укладываться в бюджет edge:
+    # 3 × connect + 0.5 + 1.5 с — см. test_download_retry.py.
+    telegram_api_timeout_seconds: float = 15.0
+    telegram_download_connect_timeout_seconds: float = 5.0
+    telegram_download_read_timeout_seconds: float = 20.0
+
     # extra="ignore" обязателен с удалением полей (AUD6-P2-46): на прод-хостах
     # media_service/.env всё ещё содержит LOG_LEVEL и прочие снятые ключи —
     # без ignore pydantic-settings роняет старт на extra_forbidden.

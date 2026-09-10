@@ -97,6 +97,12 @@ _work_reports_feed_cache: dict[
 # по разу на воркер — идемпотентен и безвреден; межворкерная инвалидация КЭША
 # идёт через эпоху, см. выше).
 _REVOKE_THROTTLE_SECONDS = 60
+
+# BUG-189 (2026-09-09): edge-nginx отдаёт браузеру 504 через 30 с; клиент к
+# media-service ждал 60 с одним числом на connect/read, и ответ приходил в
+# пустоту. Те же значения, что у `api/routes/media_proxy.py`: connect короткий
+# (docker-сеть), read меньше бюджета edge — Telegram media-service качает сам.
+_MEDIA_STREAM_TIMEOUT = httpx.Timeout(connect=5.0, read=25.0, write=5.0, pool=5.0)
 _last_revoke_check_at: Optional[float] = None
 
 
@@ -322,7 +328,7 @@ async def get_public_work_report_media(
     # returns, before Starlette ever drains a byte. The manual
     # send(stream=True) + explicit aclose() (in _close()/the generator's
     # finally) is the only shape whose lifetime actually matches.
-    client = httpx.AsyncClient(timeout=60)
+    client = httpx.AsyncClient(timeout=_MEDIA_STREAM_TIMEOUT)
 
     async def _close() -> None:
         await upstream_response.aclose()
