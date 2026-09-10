@@ -318,7 +318,7 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                 </button>
                 <button
                   className="btn btn-sm btn-primary"
-                  disabled={transition.isPending || !v || !v.can_submit}
+                  disabled={transition.isPending || validationQuery.isError || !v || !v.can_submit}
                   onClick={() => transition.mutate('submit')}
                   title={submitTitle}
                 >
