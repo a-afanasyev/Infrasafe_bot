@@ -34,6 +34,7 @@ from app.schemas.readings import (
     WorksheetOut,
     WorksheetRow,
 )
+from app.services.period_lock import lock_period, lock_periods_from
 from app.services.period_validation import summarize_period
 from app.services.readings import (
     apply_correction,
@@ -62,8 +63,7 @@ def get_period_or_404(db: Session, user: User, month: str) -> ReportingPeriod:
     return row
 
 
-def _transition(db: Session, request: Request, user: User, month: str, target: str) -> ReportingPeriod:
-    period = get_period_or_404(db, user, month)
+def _transition(db: Session, request: Request, user: User, period: ReportingPeriod, target: str) -> ReportingPeriod:
     if target not in STATUS_FLOW[period.status]:
         raise conflict(f"Переход {period.status} → {target} недопустим")
     before = {"status": period.status}
@@ -175,7 +175,7 @@ def put_reading(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
-    period = get_period_or_404(db, user, month)
+    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
     meter = db.get(Meter, meter_id)
     if not meter or meter.tenant_id != user.tenant_id:
         raise not_found("Счётчик")
@@ -197,7 +197,7 @@ def bulk_readings(
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
     """Transactional batch save: all valid selected rows or none (ТЗ §9)."""
-    period = get_period_or_404(db, user, month)
+    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
     results = []
     for item in payload.items:
         meter = db.get(Meter, item.meter_id)
@@ -242,7 +242,7 @@ def move_to_review(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*OPERATOR_ROLES)),
 ):
-    period = _transition(db, request, user, month, "review")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "review")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
@@ -253,7 +253,7 @@ def reopen(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    period = _transition(db, request, user, month, "open")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "open")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
@@ -267,7 +267,7 @@ def submit(
     """review → submitted: тот же критерий, что у validate (AUD7-COR-02) —
     ошибки, предупреждения без комментария и незаполненные активные счётчики
     блокируют подтверждение; статус не меняется."""
-    period = get_period_or_404(db, user, month)
+    period = lock_period(db, user.tenant_id, month)
     if period.status != "review":
         raise conflict(f"Подтвердить можно только период в статусе review (сейчас {period.status})")
     summary = summarize_period(db, user.tenant_id, period)
@@ -277,7 +277,7 @@ def submit(
             "или незаполненные счётчики",
             details=summary.blocking_details(),
         )
-    period = _transition(db, request, user, month, "submitted")
+    period = _transition(db, request, user, period, "submitted")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
@@ -288,7 +288,7 @@ def close_period(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REVIEWER_ROLES)),
 ):
-    period = _transition(db, request, user, month, "closed")
+    period = _transition(db, request, user, lock_period(db, user.tenant_id, month), "closed")
     return {"data": PeriodOut.model_validate(period).model_dump(mode="json")}
 
 
@@ -304,6 +304,10 @@ def create_correction(
     if not reading or reading.tenant_id != user.tenant_id:
         raise not_found("Показание")
     if reading.period.status in ("open", "review"):
+        raise bad_request("Период ещё редактируется: измените показание напрямую")
+    # AUD7-COR-03: каскад пишет в последующие периоды — берём их все по возрастанию month.
+    locked = lock_periods_from(db, user.tenant_id, reading.period.month)
+    if locked[0].status in ("open", "review"):
         raise bad_request("Период ещё редактируется: измените показание напрямую")
     old_value = reading.value  # COR-04: capture the true previous value before it is overwritten
     apply_correction(db, reading, payload.new_value, payload.reason, payload.kind, user)

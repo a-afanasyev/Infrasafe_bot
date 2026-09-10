@@ -1,3 +1,8 @@
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import ReportingPeriod, Tenant
+from app.services.period_lock import lock_period, lock_periods_from
 from tests.conftest import fill_missing, make_meter, make_object, make_period
 
 
@@ -429,3 +434,30 @@ def test_validate_and_submit_share_error_details(admin, reviewer):
     assert [d for d in details if d["status"] == "error"] == [
         {"meter_id": meter["id"], "status": "error", "message": v["errors"][0]["message"]}
     ]
+
+
+def _tenant_id(db):
+    """Фикстура _schema создаёт единственный tenant `uk`."""
+    return db.execute(select(Tenant.id).where(Tenant.code == "uk")).scalar_one()
+
+
+def test_lock_period_returns_fresh_status(admin):
+    """AUD7-COR-03: блокировка возвращает свежую строку периода, а не устаревший ORM-объект."""
+    make_period(admin, "2039-01")
+
+    with SessionLocal() as writer, SessionLocal() as reviewer_db:
+        tid = _tenant_id(writer)
+        stale = writer.execute(
+            select(ReportingPeriod).where(ReportingPeriod.tenant_id == tid, ReportingPeriod.month == "2039-01")
+        ).scalar_one()
+        assert stale.status == "open"
+        other = lock_period(reviewer_db, tid, "2039-01")
+        other.status = "submitted"
+        reviewer_db.commit()
+
+        fresh = lock_period(writer, tid, "2039-01")
+        assert fresh.status == "submitted"  # перечитано из БД, а не из identity map
+
+    with SessionLocal() as db:
+        months = [p.month for p in lock_periods_from(db, _tenant_id(db), "2039-01")]
+        assert months == sorted(months) and months[0] == "2039-01"
