@@ -1,4 +1,4 @@
-from tests.conftest import make_meter, make_object, make_period
+from tests.conftest import fill_missing, make_meter, make_object, make_period
 
 
 def put_reading(client, meter_id, month, **payload):
@@ -287,3 +287,78 @@ def test_correction_audit_before_is_old_value(admin, reviewer):
     entry = next(a for a in audit if a["entity_id"] == r["id"])
     assert entry["before"]["value"] == "1100.0000"  # true old value, not the new one
     assert entry["after"]["value"].startswith("1150")
+
+
+def _readings_by_month(client, meter_number: str, months) -> dict[str, dict]:
+    """Строка ведомости счётчика за каждый месяц (previous_value/consumption/status)."""
+    out = {}
+    for month in months:
+        ws = client.get(f"/v1/periods/{month}/worksheet").json()["data"]
+        row = next(r for r in ws["rows"] if r["meter_number"] == meter_number)
+        out[month] = row["reading"]
+    return out
+
+
+def test_correction_cascade_ok_to_error_and_back(admin, reviewer):
+    """AUD7-COR-01: каскад после корректировки видит результат каждого шага.
+
+    Сессия autoflush=False: без flush SELECT базы читал старый status из БД
+    и брал базу не из того месяца (150 вместо 50). Проверяем обе стороны —
+    ok→error (февраль выпадает из баз) и error→ok (февраль возвращается) —
+    на трёх открытых месяцах подряд.
+    """
+    obj = make_object(admin, "AUD7COR01-объект")
+    meter = make_meter(admin, "AUD7COR01-1", obj["id"], max_digits=4)
+    months = ("2037-01", "2037-02", "2037-03", "2037-04", "2037-05")
+    for m in months:
+        make_period(admin, m)
+    put_reading(admin, meter["id"], "2037-01", value="100", read_at="2037-01-31")
+    feb = put_reading(admin, meter["id"], "2037-02", value="200", read_at="2037-02-28").json()["data"]
+    put_reading(admin, meter["id"], "2037-03", value="250", read_at="2037-03-31")
+    put_reading(admin, meter["id"], "2037-04", value="350", read_at="2037-04-30")
+    put_reading(admin, meter["id"], "2037-05", value="400", read_at="2037-05-31")
+    fill_missing(admin, "2037-02")  # общая БД: у чужих счётчиков строк за этот месяц нет
+    admin.post("/v1/periods/2037-02/move-to-review")
+    assert reviewer.post("/v1/periods/2037-02/submit").status_code == 200
+
+    # ok→error: 20000 превышает 4 разряда → февраль error и выпадает из баз;
+    # база марта — январь (100), дальше цепочка по фактическим соседям.
+    resp = reviewer.post(f"/v1/readings/{feb['id']}/corrections",
+                         json={"new_value": "20000", "reason": "опечатка"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["status"] == "error"
+    rows = _readings_by_month(admin, "AUD7COR01-1", months[2:])
+    assert (rows["2037-03"]["previous_value"], rows["2037-03"]["consumption"]) == ("100.0000", "150.0000")
+    assert (rows["2037-04"]["previous_value"], rows["2037-04"]["consumption"]) == ("250.0000", "100.0000")
+    assert (rows["2037-05"]["previous_value"], rows["2037-05"]["consumption"]) == ("350.0000", "50.0000")
+    assert {r["status"] for r in rows.values()} == {"ok"}
+
+    # error→ok: возврат к 200 — база марта снова февраль.
+    resp = reviewer.post(f"/v1/readings/{feb['id']}/corrections",
+                         json={"new_value": "200", "reason": "возврат"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["status"] == "ok"
+    rows = _readings_by_month(admin, "AUD7COR01-1", months[2:])
+    assert (rows["2037-03"]["previous_value"], rows["2037-03"]["consumption"]) == ("200.0000", "50.0000")
+    assert (rows["2037-04"]["previous_value"], rows["2037-04"]["consumption"]) == ("250.0000", "100.0000")
+    assert (rows["2037-05"]["previous_value"], rows["2037-05"]["consumption"]) == ("350.0000", "50.0000")
+
+
+def test_correction_cascade_skips_closed_period(admin, reviewer):
+    """AUD7-COR-01: закрытый период каскад не трогает (действующий контракт recompute_forward)."""
+    obj = make_object(admin, "AUD7COR01b-объект")
+    meter = make_meter(admin, "AUD7COR01-2", obj["id"])
+    for m in ("2037-07", "2037-08", "2037-09"):
+        make_period(admin, m)
+    put_reading(admin, meter["id"], "2037-07", value="100", read_at="2037-07-31")
+    aug = put_reading(admin, meter["id"], "2037-08", value="200", read_at="2037-08-31").json()["data"]
+    put_reading(admin, meter["id"], "2037-09", value="250", read_at="2037-09-30")
+    for m in ("2037-08", "2037-09"):
+        fill_missing(admin, m)
+        admin.post(f"/v1/periods/{m}/move-to-review")
+        assert reviewer.post(f"/v1/periods/{m}/submit").status_code == 200
+    assert reviewer.post("/v1/periods/2037-09/close").status_code == 200
+
+    reviewer.post(f"/v1/readings/{aug['id']}/corrections", json={"new_value": "210", "reason": "правка"})
+    sep = _readings_by_month(admin, "AUD7COR01-2", ("2037-09",))["2037-09"]
+    assert (sep["previous_value"], sep["consumption"]) == ("200.0000", "50.0000")
