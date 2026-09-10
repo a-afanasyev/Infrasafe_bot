@@ -108,6 +108,7 @@ def test_anomaly_warning_and_submit_gate(admin, operator, reviewer):
     assert operator.post("/v1/periods/2027-02/move-to-review").status_code == 200
     resp = reviewer.post("/v1/periods/2027-02/submit")
     assert resp.status_code == 409
+    assert any(d["status"] == "warning" for d in resp.json()["error"]["details"])
 
     # reopen, add comment, resubmit
     assert reviewer.post("/v1/periods/2027-02/reopen").status_code == 200
@@ -389,7 +390,8 @@ def test_submit_rejects_partial_worksheet(admin, reviewer):
     resp = reviewer.post("/v1/periods/2038-01/submit")
     assert resp.status_code == 409, resp.text
     details = resp.json()["error"]["details"]
-    assert {"meter_id": m2["id"], "status": "not_entered", "message": "Показание не введено"} in details
+    assert {"meter_id": m2["id"], "status": "not_entered", "message": "Показание не введено",
+            "meter_number": "AUD7COR02-2"} in details
     assert not any(d["meter_id"] == m1["id"] for d in details)  # заполненный не в списке
     assert _period_status(admin, "2038-01") == "review"  # статус не менялся
 

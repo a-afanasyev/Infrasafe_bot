@@ -44,8 +44,9 @@ class PeriodSummary:
                 for mid, msg in self.warnings_without_comment
             ]
             + [
-                {"meter_id": str(mid), "status": "not_entered", "message": NOT_ENTERED_MESSAGE}
-                for mid, _number in self.not_entered_meters
+                {"meter_id": str(mid), "status": "not_entered", "message": NOT_ENTERED_MESSAGE,
+                 "meter_number": number}
+                for mid, number in self.not_entered_meters
             ]
         )
 
@@ -60,20 +61,23 @@ def summarize_period(db: Session, tenant_id: uuid.UUID, period: ReportingPeriod)
         .order_by(Meter.meter_number_normalized)
     ).all()
     active_by_id = {row.id: row.meter_number for row in active}
-    readings = db.execute(select(Reading).where(Reading.reporting_period_id == period.id)).scalars().all()
+    rows = db.execute(
+        select(Reading.meter_id, Reading.status, Reading.comment, Reading.validation_message)
+        .where(Reading.reporting_period_id == period.id)
+    ).all()
 
     by_status: dict[str, int] = {}
     warnings: list[tuple[uuid.UUID, str | None]] = []
     errors: list[tuple[uuid.UUID, str | None]] = []
     entered: set[uuid.UUID] = set()
-    for r in readings:
-        by_status[r.status] = by_status.get(r.status, 0) + 1
-        if r.status == "warning" and not r.comment:
-            warnings.append((r.meter_id, r.validation_message))
-        if r.status == "error":
-            errors.append((r.meter_id, r.validation_message))
-        if r.meter_id in active_by_id:
-            entered.add(r.meter_id)
+    for meter_id, status, comment, message in rows:
+        by_status[status] = by_status.get(status, 0) + 1
+        if status == "warning" and not comment:
+            warnings.append((meter_id, message))
+        if status == "error":
+            errors.append((meter_id, message))
+        if meter_id in active_by_id:
+            entered.add(meter_id)
     not_entered = tuple((mid, number) for mid, number in active_by_id.items() if mid not in entered)
     return PeriodSummary(
         active_meters=len(active_by_id),
