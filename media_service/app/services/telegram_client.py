@@ -7,6 +7,7 @@ import logging
 from typing import Optional, Union, Tuple
 import httpx
 from aiogram import Bot
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import InputFile, BufferedInputFile, Message
 from aiogram.exceptions import TelegramAPIError
 
@@ -15,12 +16,37 @@ from app.core.log_sanitize import TelegramDownloadError, describe_http_error
 
 logger = logging.getLogger(__name__)
 
+# Паузы перед 2-й и 3-й попытками download_file (первая — сразу). Вынесены в
+# константу, чтобы тест мог посчитать худший случай против бюджета edge.
+DOWNLOAD_BACKOFF_SECONDS: Tuple[float, ...] = (0.0, 0.5, 1.5)
+
+
+def _download_timeout() -> httpx.Timeout:
+    """BUG-189: connect и read — разные бюджеты.
+
+    Одно число `timeout=60` заставляло ждать повисшее TCP-соединение с Telegram
+    так же долго, как чтение большого файла, и ретрай стартовал уже после того,
+    как edge-nginx (30 с) отдал браузеру 504.
+    """
+    connect = settings.telegram_download_connect_timeout_seconds
+    return httpx.Timeout(
+        connect=connect,
+        read=settings.telegram_download_read_timeout_seconds,
+        write=connect,
+        pool=connect,
+    )
+
 
 class TelegramClientService:
     """Сервис для работы с Telegram API"""
 
     def __init__(self):
-        self.bot = Bot(token=settings.telegram_bot_token)
+        # BUG-189: дефолт aiogram-сессии — 60 с на любой вызов Bot API, включая
+        # get_file перед скачиванием; тот же бюджет edge, что и у download_file.
+        self.bot = Bot(
+            token=settings.telegram_bot_token,
+            session=AiohttpSession(timeout=settings.telegram_api_timeout_seconds),
+        )
 
     async def send_photo(
         self,
@@ -162,14 +188,14 @@ class TelegramClientService:
             # стороне потребителя, и не на всех путях). Клиентские 4xx (файл
             # удалён/недоступен) не ретраятся — повтор их не лечит.
             last_exc: Optional[Exception] = None
-            for attempt, delay in enumerate((0.0, 0.5, 1.5), start=1):
+            for attempt, delay in enumerate(DOWNLOAD_BACKOFF_SECONDS, start=1):
                 if delay:
                     await asyncio.sleep(delay)
                 try:
                     file_info = await self.get_file(file_id)
                     url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
 
-                    async with httpx.AsyncClient(timeout=60) as client:
+                    async with httpx.AsyncClient(timeout=_download_timeout()) as client:
                         resp = await client.get(url)
                         resp.raise_for_status()
 

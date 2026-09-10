@@ -94,6 +94,49 @@ async def test_persistent_failure_raises_after_three_attempts(client, monkeypatc
     assert excinfo.value.__suppress_context__  # from None: цепочка подавлена
 
 
+# BUG-189 (2026-09-09): edge-nginx отдаёт браузеру 504 через 30 с, а одно
+# повисшее соединение с Telegram ждалось 60 с — ретрай приходил в пустоту.
+# Худший случай трёх попыток с backoff обязан укладываться в этот бюджет.
+EDGE_BUDGET_SECONDS = 30.0
+
+
+@pytest.mark.asyncio
+async def test_download_timeouts_fit_edge_budget(client, monkeypatch):
+    seen = {}
+
+    class _RecordingClient(_FakeAsyncClient):
+        def __init__(self, *args, **kwargs):
+            seen["timeout"] = kwargs.get("timeout")
+
+    async def ok_get_file(file_id):
+        return SimpleNamespace(file_path="photos/1.jpg")
+
+    monkeypatch.setattr(client, "get_file", ok_get_file)
+    monkeypatch.setattr(httpx, "AsyncClient", _RecordingClient)
+
+    await client.download_file("F4")
+
+    timeout = seen["timeout"]
+    assert isinstance(timeout, httpx.Timeout), (
+        f"одно число {timeout!r} на connect/read: повисший connect ждётся как чтение"
+    )
+    assert timeout.connect is not None and timeout.connect <= 5.0
+    assert timeout.read is not None and timeout.read <= 20.0
+    from app.services.telegram_client import DOWNLOAD_BACKOFF_SECONDS
+
+    worst_case = len(DOWNLOAD_BACKOFF_SECONDS) * timeout.connect + sum(DOWNLOAD_BACKOFF_SECONDS)
+    assert worst_case < EDGE_BUDGET_SECONDS
+
+
+def test_bot_api_timeout_is_bounded(monkeypatch):
+    """`get_file` идёт через aiogram-сессию с дефолтом 60 с — тот же бюджет."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "telegram_bot_token", "123456:ci-dummy-token")
+    svc = TelegramClientService()
+    assert svc.bot.session.timeout <= 15.0
+
+
 @pytest.mark.asyncio
 async def test_client_4xx_not_retried(client, monkeypatch):
     calls = {"n": 0}

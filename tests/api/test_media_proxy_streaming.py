@@ -53,6 +53,7 @@ def upstream():
         "file_status": 200,
         "content_type": "image/jpeg",
         "transport_errors": 0,
+        "timeouts": [],
     }
 
 
@@ -78,6 +79,7 @@ def wired(monkeypatch, upstream):
     real_client = httpx.AsyncClient
 
     def _factory(*args, **kwargs):
+        upstream["timeouts"].append(kwargs.get("timeout"))
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
@@ -208,3 +210,23 @@ class TestSizeLimit:
             f"за лимит 6 байт ушло {len(received)} — предел не соблюдён"
         )
         assert wired["stream"].closed
+
+
+class TestTimeoutsFitEdgeBudget:
+    """BUG-189 (2026-09-09): edge-nginx отдаёт 504 через 30 с. Клиент к
+    media-service ждал ответа 60 с, так что и ретрай `stream_with_retries`,
+    и сам ответ приходили уже после того, как браузер получил 504."""
+
+    EDGE_BUDGET_SECONDS = 30.0
+
+    async def test_every_media_client_gives_up_before_edge_504(self, wired):
+        response = await _call()
+        await response.body_iterator.aclose()
+
+        assert wired["timeouts"], "клиенты к media-service не создавались"
+        for timeout in wired["timeouts"]:
+            assert isinstance(timeout, httpx.Timeout), (
+                f"одно число {timeout!r} на connect/read — повисший connect ждётся как чтение"
+            )
+            assert timeout.connect is not None and timeout.connect <= 5.0
+            assert timeout.read is not None and timeout.read < self.EDGE_BUDGET_SECONDS

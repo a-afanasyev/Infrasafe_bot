@@ -253,6 +253,37 @@ async def test_media_200_has_cache_headers(client, db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_media_client_timeout_fits_edge_budget(client, db_session, monkeypatch):
+    """BUG-189: edge-nginx отдаёт 504 через 30 с; клиент к media-service ждал 60."""
+    _enable(monkeypatch)
+    report = await _mk_report(
+        db_session, "260725-tmo", status="published", published_at=datetime.now(timezone.utc),
+        before_media_ids=[1], after_media_ids=[2],
+        media_meta=[{"id": 1, "mime": "image/jpeg"}, {"id": 2, "mime": "image/png"}],
+    )
+    fake = _FakeAsyncClient(response=_FakeUpstreamResponse(chunks=[b"abc"]))
+    seen: list = []
+
+    def _factory(timeout=None):
+        seen.append(timeout)
+        return fake
+
+    monkeypatch.setattr(public_router.httpx, "AsyncClient", _factory)
+    monkeypatch.setattr(public_router.settings, "MEDIA_SERVICE_URL", "http://stub-media")
+
+    resp = await client.get(f"{BASE}/{report.id}/media/1")
+    assert resp.status_code == 200
+
+    assert seen, "клиент к media-service не создавался"
+    timeout = seen[0]
+    assert isinstance(timeout, httpx.Timeout), (
+        f"одно число {timeout!r} на connect/read — повисший connect ждётся как чтение"
+    )
+    assert timeout.connect is not None and timeout.connect <= 5.0
+    assert timeout.read is not None and timeout.read < 30.0
+
+
+@pytest.mark.asyncio
 async def test_media_serves_preview_by_default(client, db_session, monkeypatch):
     """Витрина обязана получать ПРЕВЬЮ, а не оригинал.
 
