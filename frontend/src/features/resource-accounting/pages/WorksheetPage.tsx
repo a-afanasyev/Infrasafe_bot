@@ -303,10 +303,14 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                 </button>
                 <button
                   className="btn btn-sm btn-primary"
-                  disabled={transition.isPending || (v ? !v.can_submit : false)}
+                  disabled={transition.isPending || !v || !v.can_submit}
                   onClick={() => transition.mutate('submit')}
                   title={
-                    v && !v.can_submit ? t('resourceAccounting.worksheet.submitBlocked') : ''
+                    !v
+                      ? t('resourceAccounting.worksheet.submitPendingValidation')
+                      : v.can_submit
+                        ? ''
+                        : t('resourceAccounting.worksheet.submitBlocked')
                   }
                 >
                   {t('resourceAccounting.worksheet.submit')}

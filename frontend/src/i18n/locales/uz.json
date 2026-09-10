@@ -199,6 +199,7 @@
       "returnToWork": "Ishga qaytarish",
       "submit": "Topshirish",
       "submitBlocked": "Xatolar yoki kiritilmagan ko'rsatkichlar bor",
+      "submitPendingValidation": "Vedomost tekshiruvi hali olinmagan",
       "closePeriod": "Davrni yopish",
       "emptyNoOpenPeriod": "Ochiq davr yo'q. Menejerga murojaat qiling.",
       "emptyNoPeriods": "Davrlar hali yaratilmagan",

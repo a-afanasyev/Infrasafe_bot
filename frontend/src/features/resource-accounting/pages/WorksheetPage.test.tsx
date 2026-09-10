@@ -69,6 +69,29 @@ function mockFetchByUrl() {
   );
 }
 
+const REVIEW_PERIOD = { id: 'p1', month: '2026-07', status: 'review' };
+
+function mockFetchReview(validation: unknown | 'never') {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/periods') && url.includes('/validate')) {
+        if (validation === 'never') return new Promise<Response>(() => {});
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ data: validation }),
+        } as Response);
+      }
+      let payload: unknown = { data: [] };
+      if (url.includes('/worksheet')) payload = { data: { ...WORKSHEET, period: REVIEW_PERIOD } };
+      else if (url.includes('/v1/periods')) payload = { data: [REVIEW_PERIOD] };
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payload) } as Response);
+    }),
+  );
+}
+
 function renderPage(opts: { role?: string; entryMode?: boolean } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -147,5 +170,26 @@ describe('WorksheetPage', () => {
     const urls = fetchMock.mock.calls.map(([u]) => String(u));
     expect(urls.some((u) => u.includes('/v1/objects'))).toBe(false);
     expect(urls.some((u) => u.includes('/validate'))).toBe(false);
+  });
+
+  it('«Передать» заблокирована, пока validate не получен (AUD7-COR-02)', async () => {
+    mockFetchReview('never');
+    renderPage();
+    const btn = await screen.findByRole('button', { name: 'Передать' });
+    expect(btn).toBeDisabled();
+  });
+
+  it('«Передать» заблокирована при can_submit=false и доступна при can_submit=true', async () => {
+    mockFetchReview({ ...VALIDATION, can_submit: false });
+    const first = renderPage();
+    expect(await screen.findByRole('button', { name: 'Передать' })).toBeDisabled();
+    first.unmount();
+    vi.unstubAllGlobals();
+
+    mockFetchReview({ ...VALIDATION, not_entered: 0, entered: 1, can_submit: true });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Передать' })).toBeEnabled();
+    });
   });
 });
