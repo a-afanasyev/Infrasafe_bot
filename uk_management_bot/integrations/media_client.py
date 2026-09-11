@@ -358,6 +358,23 @@ class MediaServiceClient:
             logger.error(f"Failed to get media URL {media_id}: {e}")
             return None
 
+    async def download_media_file(self, media_id: int) -> Optional[tuple[bytes, str]]:
+        """Байты файла и его content-type, либо None при любой HTTP-ошибке.
+
+        Нужен боту для показа файлов, загруженных мимо него (дашборд/TWA):
+        `telegram_file_id` медиа-сервиса выдан под другим бот-токеном и
+        основному боту не годится, поэтому файл пересылается байтами
+        (services/request_media_entries.py). Идемпотентный GET — с ретраями.
+        """
+        try:
+            response = await get_with_retries(self.client, f"/media/{media_id}/file")
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.warning("Failed to download media file %s: %s", media_id, e)
+            return None
+        content_type = response.headers.get("content-type", "application/octet-stream")
+        return response.content, content_type
+
     async def update_media_tags(
         self,
         media_id: int,

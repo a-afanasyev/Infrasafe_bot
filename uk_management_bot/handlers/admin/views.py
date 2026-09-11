@@ -28,6 +28,8 @@ from uk_management_bot.keyboards.requests import (
     resolve_category_key,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 from uk_management_bot.services.completion_media import get_completion_media_file_ids
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.user_names import display_name
@@ -276,40 +278,19 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                 get_text("admin.handlers.media_creation_header", language=lang).format(request_number=request.request_number),
                 parse_mode="HTML"
             )
-
-            # Если файлов больше 1, отправляем группой
-            if len(media_files) > 1:
-                media_group = []
-                for idx, media_item in enumerate(media_files):
-                    # Извлекаем file_id из объекта или используем как строку
-                    file_id = media_item.get("file_id") if isinstance(media_item, dict) else media_item
-
-                    try:
-                        # Пробуем как фото
-                        if idx == 0:
-                            media_group.append(InputMediaPhoto(media=file_id, caption=get_text("admin.handlers.photo_counter", language=lang).format(current=idx+1, total=len(media_files))))
-                        else:
-                            media_group.append(InputMediaPhoto(media=file_id))
-                    except Exception:
-                        # Если не получилось как фото, пробуем как документ
-                        if idx == 0:
-                            media_group.append(InputMediaDocument(media=file_id, caption=get_text("admin.handlers.file_counter", language=lang).format(current=idx+1, total=len(media_files))))
-                        else:
-                            media_group.append(InputMediaDocument(media=file_id))
-
-                if media_group:
-                    await callback.message.answer_media_group(media=media_group)
-            else:
-                # Один файл - отправляем отдельно
-                file_id = media_files[0].get("file_id") if isinstance(media_files[0], dict) else media_files[0]
-                try:
-                    await callback.message.answer_photo(photo=file_id)
-                except Exception:
-                    try:
-                        await callback.message.answer_document(document=file_id)
-                    except Exception as e:
-                        logger.error(f"Ошибка отправки медиафайла: {e}")
-                        await callback.message.answer(get_text("admin.handlers.media_send_failed", language=lang))
+            # services/request_media_entries.py: три формы элементов (в т.ч.
+            # файлы медиа-сервиса байтами), чанки по лимиту Telegram.
+            entries = parse_media_entries(media_files)
+            first_caption = (
+                get_text("admin.handlers.photo_counter", language=lang).format(current=1, total=len(entries))
+                if len(entries) > 1 else None
+            )
+            sent = await send_media_entries(
+                callback.message, entries, get_media_client(), first_caption=first_caption
+            )
+            if sent == 0:
+                logger.error("Ошибка отправки медиафайлов заявки %s: ни один элемент не отправлен", request.request_number)
+                await callback.message.answer(get_text("admin.handlers.media_send_failed", language=lang))
 
         # Отправляем медиафайлы при завершении заявки
         if completion_media:

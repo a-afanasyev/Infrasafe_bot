@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.request_access import has_request_access_sync
 from uk_management_bot.services.request_handler_service import RequestHandlerService
+from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 
 from uk_management_bot.keyboards.base import get_user_contextual_keyboard
 import logging
@@ -87,31 +89,12 @@ async def executor_view_media(callback: CallbackQuery, *, _db=None):
 
             request_media_files = request.media_files
 
-        # Отправляем медиа-файлы
-        from aiogram.types import InputMediaPhoto, InputMediaVideo, InputMediaDocument
-        import json
+        # Отправка — services/request_media_entries.py: три формы элементов
+        # (в т.ч. файлы медиа-сервиса байтами), чанки по лимиту Telegram.
+        entries = parse_media_entries(request_media_files)
+        sent = await send_media_entries(callback.message, entries, get_media_client())
 
-        media_group = []
-
-        if request_media_files:
-            try:
-                media_files = json.loads(request_media_files) if isinstance(request_media_files, str) else request_media_files
-                if media_files:
-                    for media in media_files:
-                        file_id = media.get('file_id') if isinstance(media, dict) else media
-                        media_type = media.get('type', 'photo') if isinstance(media, dict) else 'photo'
-
-                        if media_type == 'photo':
-                            media_group.append(InputMediaPhoto(media=file_id))
-                        elif media_type == 'video':
-                            media_group.append(InputMediaVideo(media=file_id))
-                        elif media_type == 'document':
-                            media_group.append(InputMediaDocument(media=file_id))
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.error(f"Ошибка парсинга media_files: {e}")
-
-        if media_group:
-            await callback.message.answer_media_group(media=media_group)
+        if sent:
             await callback.answer(get_text("requests.media_files_sent", language=lang))
         else:
             await callback.answer(get_text("requests.no_media_files", language=lang), show_alert=True)
