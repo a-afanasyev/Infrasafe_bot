@@ -31,6 +31,8 @@ from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports import coordination
 from uk_management_bot.api.work_reports import service as api_service
 from uk_management_bot.api.work_reports.schemas import (
+    WorkReportBulkRejectIn,
+    WorkReportBulkRejectOut,
     WorkReportCreateIn,
     WorkReportListOut,
     WorkReportOut,
@@ -364,6 +366,26 @@ async def reconcile_work_reports(
     if media_client is None:
         raise HTTPException(status_code=503, detail="media service not configured")
     return await work_report_service.reconcile_publication_locks(db, media_client)
+
+
+# ── POST /reject-without-media ───────────────────────────────────────────
+
+
+@router.post("/reject-without-media", response_model=WorkReportBulkRejectOut)
+async def reject_work_reports_without_media(
+    body: WorkReportBulkRejectIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+) -> WorkReportBulkRejectOut:
+    """Отклонить все отчёты в статусе ``needs_media`` одной причиной.
+
+    Статическая ручка объявлена ДО динамических ``/{report_id}/…`` (порядок —
+    контракт модуля). Кэш-эпоха публичной ленты не бампается сознательно:
+    ``needs_media`` никогда не публиковались, публичная видимость не меняется
+    (в отличие от одиночного reject, который бампает её на всякий случай).
+    """
+    rejected = await work_report_service.reject_reports_without_media(db, user.id, body.reason)
+    return WorkReportBulkRejectOut(rejected=rejected)
 
 
 # ── POST /{report_id}/autofill ───────────────────────────────────────────

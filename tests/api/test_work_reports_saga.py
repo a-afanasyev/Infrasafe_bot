@@ -24,6 +24,7 @@ from uk_management_bot.services.work_report_service import (
     publish_report,
     reconcile_publication_locks,
     reject_report,
+    reject_reports_without_media,
     reopen_report,
     unpublish_report,
 )
@@ -1215,3 +1216,49 @@ async def test_publish_compensates_on_transport_failure_during_validate(db_sessi
     await db_session.refresh(report)
     assert report.status == "pending", "транспортный сбой не должен парковать в publishing"
     assert report.locked_media_ids == []
+
+
+# ===========================================================================
+# reject_reports_without_media — массовое отклонение needs_media
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_rejects_only_needs_media(db_session):
+    nm1 = _mk_report("260911-401", status="needs_media")
+    nm2 = _mk_report("260911-402", status="needs_media")
+    pending = _mk_report("260911-403", status="pending")
+    published = _mk_report("260911-404", status="published", locked_media_ids=[1])
+    for r in (nm1, nm2, pending, published):
+        db_session.add(r)
+    await db_session.commit()
+    for r in (nm1, nm2, pending, published):
+        await db_session.refresh(r)
+
+    rejected = await reject_reports_without_media(db_session, MODERATOR_ID, "Нет фото результата")
+
+    assert rejected == 2
+    for r in (nm1, nm2):
+        fresh = await _reload(db_session, r.id)
+        assert fresh.status == "rejected"
+        assert fresh.reject_reason == "Нет фото результата"
+        assert fresh.moderated_by == MODERATOR_ID
+        assert fresh.state_changed_at is not None
+        rows = await _audit_rows(db_session, "work_report.reject", r.id)
+        assert len(rows) == 1
+        assert rows[0].details["reason"] == "Нет фото результата"
+        assert rows[0].details["bulk"] == "without_media"
+    assert (await _reload(db_session, pending.id)).status == "pending"
+    assert (await _reload(db_session, published.id)).status == "published"
+    assert await _audit_rows(db_session, "work_report.reject", pending.id) == []
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_empty_queue_returns_zero(db_session):
+    only_pending = _mk_report("260911-405", status="pending")
+    db_session.add(only_pending)
+    await db_session.commit()
+
+    assert await reject_reports_without_media(db_session, MODERATOR_ID, "x") == 0
+    await db_session.refresh(only_pending)
+    assert only_pending.status == "pending"

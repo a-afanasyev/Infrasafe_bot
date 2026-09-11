@@ -313,6 +313,56 @@ async def reject_report(
     return report
 
 
+async def reject_reports_without_media(
+    db: AsyncSession, moderator_id: int, reason: str
+) -> int:
+    """Массовое отклонение: все ``needs_media`` → ``rejected`` одной причиной.
+
+    Цель — именно статус ``needs_media`` (автоподбор уже подтвердил отсутствие
+    фото результата), а не «пустой список медиа»: свежие черновики ``pending``
+    ещё не проходили автоподбор, и резать их вслепую нельзя.
+
+    Кандидаты выбираются без лока, затем каждый берётся ``FOR UPDATE`` с
+    перепроверкой статуса — параллельный autofill/publish мог уже увезти строку.
+    Один commit на весь пакет; аудит-запись на каждый отчёт (та же ``action``,
+    что у одиночного отклонения, плюс маркер ``bulk``), чтобы история отчёта
+    читалась одинаково независимо от способа отклонения.
+    """
+    candidate_ids = (await db.execute(
+        select(WorkReport.id)
+        .where(WorkReport.status == "needs_media")
+        .order_by(WorkReport.id)
+    )).scalars().all()
+
+    now = datetime.now(timezone.utc)
+    rejected = 0
+    for report_id in candidate_ids:
+        try:
+            report = await _load_report_for_update(db, report_id)
+        except WorkReportPublishError:
+            continue  # строка исчезла между выборкой и локом
+        if report.status != "needs_media":
+            continue
+        report.status = "rejected"
+        report.reject_reason = reason
+        report.moderated_by = moderator_id
+        report.state_changed_at = now
+        db.add(AuditLog(
+            user_id=moderator_id,
+            action="work_report.reject",
+            details={
+                "report_id": report.id,
+                "request_number": report.request_number,
+                "reason": reason,
+                "bulk": "without_media",
+            },
+        ))
+        rejected += 1
+
+    await db.commit()
+    return rejected
+
+
 async def reopen_report(db: AsyncSession, report_id: int, moderator_id: int) -> WorkReport:
     """``rejected`` → ``pending``."""
     report = await _load_report_for_update(db, report_id)
