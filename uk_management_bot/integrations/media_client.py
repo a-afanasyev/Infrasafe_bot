@@ -369,7 +369,9 @@ class MediaServiceClient:
         try:
             response = await get_with_retries(self.client, f"/media/{media_id}/file")
             response.raise_for_status()
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, RuntimeError) as e:
+            # RuntimeError — исчерпанные попытки get_with_retries; один
+            # недоступный файл не должен ронять показ остальных.
             logger.warning("Failed to download media file %s: %s", media_id, e)
             return None
         content_type = response.headers.get("content-type", "application/octet-stream")

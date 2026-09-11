@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from enum import Enum
+from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -186,10 +187,10 @@ async def _record_request_media_marker(
     kind = _MARKER_KIND_BY_CATEGORY.get(category)
     if kind is None:
         return
-    media_id = payload.get("id") if isinstance(payload, dict) else None
-    if not isinstance(media_id, int):
+    media_id = _extract_media_id(payload)
+    if media_id is None:
         _logger.warning(
-            "media upload %s: ответ media-service без числового id, маркер не записан",
+            "media upload %s: ответ media-service без числового media_file.id, маркер не записан",
             request_number,
         )
         return
@@ -198,6 +199,19 @@ async def _record_request_media_marker(
     except Exception:
         _logger.exception("media upload %s: не удалось записать маркер media_id=%s", request_number, media_id)
         await db.rollback()
+
+
+def _extract_media_id(payload: object) -> Optional[int]:
+    """`MediaUploadResponse` медиа-сервиса — конверт `{"media_file": {"id": …},
+    "file_url", "message"}` (media_service/app/schemas/media.py), не плоский
+    объект; плоский `id` принимается как запасная форма."""
+    if not isinstance(payload, dict):
+        return None
+    nested = payload.get("media_file")
+    candidate = nested.get("id") if isinstance(nested, dict) else payload.get("id")
+    if isinstance(candidate, bool) or not isinstance(candidate, int):
+        return None
+    return candidate
 
 
 async def _append_media_marker(db: AsyncSession, request_number: str, media_id: int, kind: str) -> None:
@@ -217,6 +231,11 @@ async def _append_media_marker(db: AsyncSession, request_number: str, media_id: 
             current = json.loads(current) or []
         except (json.JSONDecodeError, TypeError):
             current = []
+    if not isinstance(current, list):
+        # Не список (строка file_id / dict): `[*current]` разложил бы строку
+        # посимвольно и необратимо испортил колонку — сохраняем как элемент.
+        _logger.warning("media upload %s: media_files не список (%s), оборачиваю", request_number, type(current).__name__)
+        current = [current]
     if any(isinstance(m, dict) and m.get("media_id") == media_id for m in current):
         return
     # Колонка — plain JSON без MutableList: только переприсваивание

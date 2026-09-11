@@ -216,13 +216,22 @@ RN = "260911-601"
 def _stub_media_service(monkeypatch, media_id=42):
     from uk_management_bot.api import main as api_main
 
+    # Реальная форма ответа медиа-сервиса — MediaUploadResponse
+    # (media_service/app/schemas/media.py): конверт с вложенным media_file,
+    # а не плоский {"id"}. Плоский стаб здесь уже один раз спрятал дефект.
+    upload_payload = {
+        "media_file": {"id": media_id, "file_type": "photo", "category": "request_photo"},
+        "file_url": f"/api/v1/media/{media_id}/file",
+        "message": "Файл успешно загружен",
+    }
+
     class _StubResp:
         status_code = 200
         text = "ok"
 
         @staticmethod
         def json():
-            return {"id": media_id, "ok": True}
+            return upload_payload
 
     class _StubClient:
         def __init__(self, *a, **k):
@@ -240,6 +249,7 @@ def _stub_media_service(monkeypatch, media_id=42):
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
     _bypass_request_access(monkeypatch)
+    return upload_payload
 
 
 async def _seed_request(db_session, media_files=None):
@@ -322,9 +332,34 @@ async def test_completion_upload_leaves_media_files_untouched(client, db_session
 async def test_marker_skipped_when_request_row_missing(client, monkeypatch):
     """Access-гейт застаблен, строки заявки нет: загрузка в медиа-сервис уже
     прошла, ответ остаётся 200 — маркер молча не пишется (с warning)."""
-    _stub_media_service(monkeypatch, media_id=42)
+    payload = _stub_media_service(monkeypatch, media_id=42)
 
     resp = await _upload(client, "request_photo")
 
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"id": 42, "ok": True}
+    assert resp.json() == payload
+
+
+@pytest.mark.asyncio
+async def test_marker_appended_to_legacy_json_string_column(client, db_session, monkeypatch):
+    """Legacy-строки: колонка хранит JSON-строку списка file_id."""
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files='["AgAC-legacy"]')
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy", {"media_id": 42, "type": "photo"}]
+
+
+@pytest.mark.asyncio
+async def test_marker_does_not_explode_non_list_legacy_value(client, db_session, monkeypatch):
+    """JSON-строка, декодирующаяся в строку: `[*current]` разложил бы file_id
+    посимвольно — значение оборачивается элементом, не теряется."""
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files='"AgAC-legacy"')
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy", {"media_id": 42, "type": "photo"}]

@@ -21,7 +21,14 @@ class FileTypeEnum(str, Enum):
 
 class MediaCategoryEnum(str, Enum):
     REQUEST_PHOTO = "request_photo"
+    # Видео/документы заявки и видео фотоотчёта: канал уже замаплен в
+    # FileCategories.CATEGORY_TO_CHANNEL (core/config.py), а UK-прокси
+    # (api/routes/media_proxy.py FileCategories) их пропускал — без членов
+    # enum загрузка mp4/mov из дашборда/TWA падала 422 здесь.
+    REQUEST_VIDEO = "request_video"
+    REQUEST_DOCUMENT = "request_document"
     COMPLETION_PHOTO = "completion_photo"
+    COMPLETION_VIDEO = "completion_video"
     DAMAGE_PHOTO = "damage_photo"
     MATERIALS_PHOTO = "materials_photo"
     PROCESS_VIDEO = "process_video"

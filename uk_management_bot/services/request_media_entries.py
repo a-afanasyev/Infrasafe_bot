@@ -132,12 +132,17 @@ async def send_media_entries(
     items = await build_input_media(entries, media_client, first_caption=first_caption)
     if not items:
         return 0
-    for start in range(0, len(items), TELEGRAM_MEDIA_GROUP_MAX):
-        chunk = items[start:start + TELEGRAM_MEDIA_GROUP_MAX]
-        if len(chunk) == 1:
-            await _send_single(message, chunk[0])
-        else:
-            await message.answer_media_group(media=chunk)
+    # Telegram не смешивает документы с фото/видео в одной медиагруппе —
+    # визуальные и документы уходят отдельными партиями.
+    visual = [i for i in items if not isinstance(i, InputMediaDocument)]
+    documents = [i for i in items if isinstance(i, InputMediaDocument)]
+    for batch in (visual, documents):
+        for start in range(0, len(batch), TELEGRAM_MEDIA_GROUP_MAX):
+            chunk = batch[start:start + TELEGRAM_MEDIA_GROUP_MAX]
+            if len(chunk) == 1:
+                await _send_single(message, chunk[0])
+            else:
+                await message.answer_media_group(media=chunk)
     return len(items)
 
 

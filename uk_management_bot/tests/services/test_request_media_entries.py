@@ -140,6 +140,23 @@ async def test_send_eleven_items_last_chunk_goes_as_single():
 
 
 @pytest.mark.asyncio
+async def test_send_documents_separately_from_photos():
+    """Telegram не смешивает документы с фото/видео в одной медиагруппе."""
+    msg = _message()
+    entries = [
+        MediaEntry(kind="photo", file_id="p1"),
+        MediaEntry(kind="document", file_id="d1"),
+        MediaEntry(kind="photo", file_id="p2"),
+        MediaEntry(kind="document", file_id="d2"),
+    ]
+    assert await send_media_entries(msg, entries, None) == 4
+    assert msg.answer_media_group.await_count == 2
+    groups = [c.kwargs["media"] for c in msg.answer_media_group.await_args_list]
+    assert [type(i) for i in groups[0]] == [InputMediaPhoto, InputMediaPhoto]
+    assert [type(i) for i in groups[1]] == [InputMediaDocument, InputMediaDocument]
+
+
+@pytest.mark.asyncio
 async def test_send_nothing_when_all_entries_unresolvable():
     msg = _message()
     sent = await send_media_entries(msg, [MediaEntry(kind="photo", media_id=1)], _client({1: None}))
