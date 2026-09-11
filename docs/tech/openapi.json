@@ -9870,6 +9870,35 @@
         "title": "WebTokenResponse",
         "type": "object"
       },
+      "WorkReportBulkRejectIn": {
+        "description": "Причина массового отклонения. Обязательна и непустая (после strip):\nбез неё история модерации каждого отчёта осталась бы без объяснения.\nВерхняя граница — ширина колонки `reject_reason` (String(200)).",
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "WorkReportBulkRejectIn",
+        "type": "object"
+      },
+      "WorkReportBulkRejectOut": {
+        "properties": {
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rejected"
+        ],
+        "title": "WorkReportBulkRejectOut",
+        "type": "object"
+      },
       "WorkReportCreateIn": {
         "properties": {
           "building_id": {
@@ -21140,6 +21169,53 @@
           }
         ],
         "summary": "Reconcile Work Reports",
+        "tags": [
+          "work-reports"
+        ]
+      }
+    },
+    "/api/v2/work-reports/reject-without-media": {
+      "post": {
+        "description": "Отклонить все отчёты в статусе ``needs_media`` одной причиной.\n\nСтатическая ручка объявлена ДО динамических ``/{report_id}/…`` (порядок —\nконтракт модуля). Кэш-эпоха публичной ленты не бампается сознательно:\n``needs_media`` никогда не публиковались, публичная видимость не меняется\n(в отличие от одиночного reject, который бампает её на всякий случай).",
+        "operationId": "reject_work_reports_without_media_api_v2_work_reports_reject_without_media_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkReportBulkRejectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkReportBulkRejectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Work Reports Without Media",
         "tags": [
           "work-reports"
         ]

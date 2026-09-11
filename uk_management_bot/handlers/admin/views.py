@@ -285,11 +285,15 @@ async def handle_view_request_media(callback: CallbackQuery, db: Session, roles:
                 get_text("admin.handlers.photo_counter", language=lang).format(current=1, total=len(entries))
                 if len(entries) > 1 else None
             )
-            sent = await send_media_entries(
-                callback.message, entries, get_media_client(), first_caption=first_caption
-            )
+            try:
+                sent = await send_media_entries(
+                    callback.message, entries, get_media_client(), first_caption=first_caption
+                )
+            except TelegramAPIError as e:
+                # Устаревший file_id и т.п.: как и раньше — сообщение, не падение.
+                logger.error("Ошибка отправки медиафайлов заявки %s: %s", request.request_number, e)
+                sent = 0
             if sent == 0:
-                logger.error("Ошибка отправки медиафайлов заявки %s: ни один элемент не отправлен", request.request_number)
                 await callback.message.answer(get_text("admin.handlers.media_send_failed", language=lang))
 
         # Отправляем медиафайлы при завершении заявки
