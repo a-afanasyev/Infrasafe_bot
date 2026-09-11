@@ -162,6 +162,30 @@ export function useRejectWorkReport() {
   })
 }
 
+/** Серверный total отчётов без фото результата — для кнопки массового
+ * отклонения. Отдельный запрос, а не подсчёт по подгруженным строкам: группа
+ * модерации режется по limit, а кнопка обещает «всех». */
+export function useNeedsMediaCount(): number {
+  const { data } = useWorkReports({ status: ['needs_media'], limit: 1 })
+  return data?.total ?? 0
+}
+
+export function useRejectWorkReportsWithoutMedia() {
+  const { t } = useTranslation()
+  const invalidate = useWorkReportsInvalidator()
+  return useMutation({
+    mutationFn: ({ reason }: { reason: string }) =>
+      apiClient
+        .post(`${BASE}/reject-without-media`, { reason })
+        .then((r) => r.data as { rejected: number }),
+    onSuccess: ({ rejected }) => {
+      invalidate()
+      toast.success(t('workReports.toast.rejectedBulk', { count: rejected }))
+    },
+    onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
+  })
+}
+
 export function useReopenWorkReport() {
   const { t } = useTranslation()
   const invalidate = useWorkReportsInvalidator()

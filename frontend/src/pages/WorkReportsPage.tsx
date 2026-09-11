@@ -19,6 +19,8 @@ import {
   usePublishWorkReport,
   useUnpublishWorkReport,
   useRejectWorkReport,
+  useRejectWorkReportsWithoutMedia,
+  useNeedsMediaCount,
   useReopenWorkReport,
   useUpdateWorkReportsSettings,
 } from '../hooks/useWorkReports'
@@ -114,6 +116,8 @@ export default function WorkReportsPage() {
   const unpublishReport = useUnpublishWorkReport()
   const rejectReport = useRejectWorkReport()
   const reopenReport = useReopenWorkReport()
+  const rejectWithoutMedia = useRejectWorkReportsWithoutMedia()
+  const needsMediaCount = useNeedsMediaCount()
   const updateSettings = useUpdateWorkReportsSettings()
 
   // Настройки лимита/заголовка — черновик с явным "Сохранить" (autopost шлёт
@@ -164,13 +168,22 @@ export default function WorkReportsPage() {
 
   const handleReasonSubmit = (reason: string) => {
     if (!reasonTarget) return
-    const { report, action } = reasonTarget
-    if (action === 'reject') {
-      rejectReport.mutate({ id: report.id, reason }, { onSuccess: () => setReasonTarget(null) })
+    const close = { onSuccess: () => setReasonTarget(null) }
+    if (reasonTarget.action === 'rejectWithoutMedia') {
+      rejectWithoutMedia.mutate({ reason }, close)
+    } else if (reasonTarget.action === 'reject') {
+      rejectReport.mutate({ id: reasonTarget.report.id, reason }, close)
     } else {
-      unpublishReport.mutate({ id: report.id, reason }, { onSuccess: () => setReasonTarget(null) })
+      unpublishReport.mutate({ id: reasonTarget.report.id, reason }, close)
     }
   }
+
+  const reasonLoading =
+    reasonTarget?.action === 'rejectWithoutMedia'
+      ? rejectWithoutMedia.isPending
+      : reasonTarget?.action === 'reject'
+        ? rejectReport.isPending
+        : unpublishReport.isPending
 
   function renderShowMore(group: ReportGroup) {
     if (!group.hasMore) return null
@@ -362,7 +375,28 @@ export default function WorkReportsPage() {
         <p className="text-[13px] text-red px-1">{t('common.error')}</p>
       ) : (
         <>
-          <GroupSection title={t('workReports.groups.moderation')} count={moderationGroup.total}>
+          <GroupSection
+            title={t('workReports.groups.moderation')}
+            count={moderationGroup.total}
+            actions={
+              needsMediaCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red text-red hover:bg-red/10"
+                  onClick={() =>
+                    setReasonTarget({
+                      action: 'rejectWithoutMedia',
+                      count: needsMediaCount,
+                      initialReason: t('workReports.bulkRejectDefaultReason'),
+                    })
+                  }
+                >
+                  {t('workReports.actions.rejectWithoutMedia', { count: needsMediaCount })}
+                </Button>
+              )
+            }
+          >
             {moderationGroup.items.map(renderRow)}
             {renderShowMore(moderationGroup)}
           </GroupSection>
@@ -383,7 +417,7 @@ export default function WorkReportsPage() {
 
       <ReasonDialog
         target={reasonTarget}
-        loading={reasonTarget?.action === 'reject' ? rejectReport.isPending : unpublishReport.isPending}
+        loading={reasonLoading}
         onClose={() => setReasonTarget(null)}
         onSubmit={handleReasonSubmit}
       />

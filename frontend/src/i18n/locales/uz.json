@@ -2335,9 +2335,13 @@
       "unpublish": "Nashrdan olish",
       "reject": "Rad etish",
       "reopen": "Ishga qaytarish",
-      "autofill": "Avto-to'ldirish"
+      "autofill": "Avto-to'ldirish",
+      "addPhoto": "Surat qo'shish",
+      "rejectWithoutMedia": "Mediasizlarning barchasini rad etish ({{count}})"
     },
-    "needsMediaExplanation": "Nashr qilish uchun natija fotosi kerak. «Oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi",
+    "needsMediaExplanation": "Nashr qilish uchun natija fotosi kerak. «Oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi. Suratni yuklagach «Avto-to'ldirish» tugmasini bosing",
+    "bulkRejectDesc": "Natija fotosi bo'lmagan barcha hisobotlar rad etiladi: {{count}}. Sabab har birining tarixida saqlanadi.",
+    "bulkRejectDefaultReason": "Natija fotosi yo'q",
     "reasonPlaceholder": "Sabab",
     "reasonDialogDesc": "Sabab hisobot moderatsiyasi tarixida saqlanadi.",
     "confirmReopenDesc": "{{number}} arizasi moderatsiya navbatiga qaytadi.",
@@ -2349,7 +2353,8 @@
       "unpublished": "Hisobot nashrdan olindi",
       "rejected": "Hisobot rad etildi",
       "reopened": "Hisobot ishga qaytarildi",
-      "settingsUpdated": "Sozlamalar saqlandi"
+      "settingsUpdated": "Sozlamalar saqlandi",
+      "rejectedBulk": "Rad etilgan hisobotlar: {{count}}"
     }
   },
   "publicElevators": {

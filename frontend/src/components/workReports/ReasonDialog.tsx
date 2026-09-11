@@ -18,17 +18,24 @@ import type { WorkReport } from '../../types/workReports'
  * components/access/ResolveDialog.tsx's "type a reason, then confirm" shape,
  * ported to the workReports.* i18n namespace. Reject requires a non-empty
  * reason; unpublish does not (see canSubmit below).
+ *
+ * Третий режим — `rejectWithoutMedia`: массовое отклонение всех отчётов без
+ * фото результата одной причиной; поле предзаполнено `initialReason`, чтобы
+ * типовой случай закрывался одним кликом, но текст остаётся редактируемым.
  */
-export interface ReasonTarget {
-  report: WorkReport
-  action: 'reject' | 'unpublish'
-}
+export type ReasonTarget =
+  | { report: WorkReport; action: 'reject' | 'unpublish' }
+  | { action: 'rejectWithoutMedia'; count: number; initialReason: string }
 
 interface Props {
   target: ReasonTarget | null
   loading?: boolean
   onClose: () => void
   onSubmit: (reason: string) => void
+}
+
+function initialReasonFor(target: ReasonTarget | null): string {
+  return target?.action === 'rejectWithoutMedia' ? target.initialReason : ''
 }
 
 export default function ReasonDialog({ target, loading, onClose, onSubmit }: Props) {
@@ -41,21 +48,29 @@ export default function ReasonDialog({ target, loading, onClose, onSubmit }: Pro
   const [prevTarget, setPrevTarget] = useState<ReasonTarget | null>(null)
   if (target !== prevTarget) {
     setPrevTarget(target)
-    if (target) setReason('')
+    if (target) setReason(initialReasonFor(target))
   }
 
   const isOpen = target !== null
-  const isReject = target?.action === 'reject'
-  const canSubmit = (!isReject || reason.trim().length > 0) && !loading
+  const isBulk = target?.action === 'rejectWithoutMedia'
+  const requiresReason = target?.action === 'reject' || isBulk
+  const canSubmit = (!requiresReason || reason.trim().length > 0) && !loading
+
+  const actionLabel = isBulk
+    ? t('workReports.actions.rejectWithoutMedia', { count: target.count })
+    : target?.action === 'reject'
+      ? t('workReports.actions.reject')
+      : t('workReports.actions.unpublish')
+  const description = isBulk
+    ? t('workReports.bulkRejectDesc', { count: target.count })
+    : t('workReports.reasonDialogDesc')
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {isReject ? t('workReports.actions.reject') : t('workReports.actions.unpublish')}
-          </DialogTitle>
-          <DialogDescription>{t('workReports.reasonDialogDesc')}</DialogDescription>
+          <DialogTitle>{actionLabel}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-1.5">
@@ -74,11 +89,11 @@ export default function ReasonDialog({ target, loading, onClose, onSubmit }: Pro
             {t('common.cancel')}
           </Button>
           <Button
-            variant={isReject ? 'destructive' : 'default'}
+            variant={requiresReason ? 'destructive' : 'default'}
             disabled={!canSubmit}
             onClick={() => onSubmit(reason.trim())}
           >
-            {isReject ? t('workReports.actions.reject') : t('workReports.actions.unpublish')}
+            {actionLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
