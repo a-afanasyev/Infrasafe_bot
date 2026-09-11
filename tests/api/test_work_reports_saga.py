@@ -1254,6 +1254,25 @@ async def test_reject_without_media_rejects_only_needs_media(db_session):
 
 
 @pytest.mark.asyncio
+async def test_reject_without_media_respects_batch_limit(db_session, monkeypatch):
+    """Потолок пакета: локи держатся до commit, очередь режется по BULK_REJECT_LIMIT;
+    остаток остаётся needs_media для следующего нажатия."""
+    from uk_management_bot.services.work_reports import saga
+
+    monkeypatch.setattr(saga, "BULK_REJECT_LIMIT", 2)
+    reports = [_mk_report(f"260911-41{i}", status="needs_media") for i in range(3)]
+    db_session.add_all(reports)
+    await db_session.commit()
+
+    assert await reject_reports_without_media(db_session, MODERATOR_ID, "x") == 2
+    statuses = []
+    for r in reports:
+        statuses.append((await _reload(db_session, r.id)).status)
+    assert sorted(statuses) == ["needs_media", "rejected", "rejected"]
+    assert await reject_reports_without_media(db_session, MODERATOR_ID, "x") == 1
+
+
+@pytest.mark.asyncio
 async def test_reject_without_media_empty_queue_returns_zero(db_session):
     only_pending = _mk_report("260911-405", status="pending")
     db_session.add(only_pending)

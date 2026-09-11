@@ -21,6 +21,9 @@ from uk_management_bot.utils.workflow_predicates import is_report_eligible
 
 logger = logging.getLogger(__name__)
 
+# Потолок одного пакета reject_reports_without_media (см. докстринг).
+BULK_REJECT_LIMIT = 200
+
 
 def _svc():
     """Ленивое обращение к фасаду `services.work_report_service`: тесты и
@@ -327,11 +330,17 @@ async def reject_reports_without_media(
     Один commit на весь пакет; аудит-запись на каждый отчёт (та же ``action``,
     что у одиночного отклонения, плюс маркер ``bulk``), чтобы история отчёта
     читалась одинаково независимо от способа отклонения.
+
+    Пакет ограничен ``BULK_REJECT_LIMIT``: одна транзакция держит локи на все
+    строки до commit, и без потолка большая очередь стала бы долгой блокировкой
+    для autofill/publish. Остаток менеджер отклоняет повторным нажатием —
+    кнопка показывает серверный total и после refetch появится снова.
     """
     candidate_ids = (await db.execute(
         select(WorkReport.id)
         .where(WorkReport.status == "needs_media")
         .order_by(WorkReport.id)
+        .limit(BULK_REJECT_LIMIT)
     )).scalars().all()
 
     now = datetime.now(timezone.utc)

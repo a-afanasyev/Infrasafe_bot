@@ -201,8 +201,12 @@ async def _record_request_media_marker(
 
 
 async def _append_media_marker(db: AsyncSession, request_number: str, media_id: int, kind: str) -> None:
+    # FOR UPDATE: две параллельные загрузки в одну заявку (две вкладки, бот и
+    # дашборд) иначе читают один список и последняя запись затирает первую.
     row = (await db.execute(
-        select(RequestModel).where(RequestModel.request_number == request_number)
+        select(RequestModel)
+        .where(RequestModel.request_number == request_number)
+        .with_for_update()
     )).scalar_one_or_none()
     if row is None:
         _logger.warning("media upload %s: заявка не найдена, маркер не записан", request_number)
