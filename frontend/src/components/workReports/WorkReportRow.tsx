@@ -14,6 +14,11 @@ const STATUS_CLASS: Record<WorkReportStatus, string> = {
   rejected: 'bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-300',
 }
 
+/** Deep-link карточки заявки в дашборде (KanbanPage читает ?request=). */
+function requestCardUrl(requestNumber: string): string {
+  return `${import.meta.env.BASE_URL}dashboard?request=${encodeURIComponent(requestNumber)}`
+}
+
 // publish/autofill are single mutation instances shared across every row in
 // the group (one useMutation() call per action on the page, reused per row)
 // — `.variables` (the id most recently passed to `.mutate()`) is what lets a
@@ -85,6 +90,13 @@ export default function WorkReportRow({
                 {t('workReports.needsMediaExplanation')}
               </span>
             )}
+            {/* Карточка заявки (deep-link KanbanPage ?request=) в НОВОЙ вкладке:
+                менеджер докладывает фото и возвращается к очереди, не теряя её. */}
+            <Button asChild size="sm" variant="outline">
+              <a href={requestCardUrl(report.request_number)} target="_blank" rel="noreferrer noopener">
+                {t('workReports.actions.addPhoto')}
+              </a>
+            </Button>
             <Button size="sm" disabled={isNeedsMedia || publishPendingHere} onClick={() => publish.mutate(report.id)}>
               {t('workReports.actions.publish')}
             </Button>

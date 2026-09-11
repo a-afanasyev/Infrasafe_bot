@@ -172,6 +172,48 @@ describe('RequestDetailModal — фотоотчёт: загрузка менед
     await renderModal(makeRequest({}))
     expect(screen.queryByText('Фотоотчёт')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Добавить фото работ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Добавить фото заявки' })).not.toBeInTheDocument()
+  })
+
+  // Фото заявки (фото проблемы): заявка оформлена по телефону, житель прислал
+  // фото в мессенджер — менеджер прикладывает их к заявке из дашборда.
+  it('менеджер без медиа: секция «Фото» с кнопкой добавления фото заявки видна', async () => {
+    mockHasRole.mockReturnValue(true)
+    mockHasAnyRole.mockReturnValue(true)
+    mockMediaEndpoints([])
+    await renderModal(makeRequest({}))
+    expect(await screen.findByText('Фото')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Добавить фото заявки' })).toBeInTheDocument()
+    expect(screen.getByTestId('request-upload-input')).toBeInTheDocument()
+  })
+
+  it('загрузка фото заявки шлёт category=request_photo, видео — request_video', async () => {
+    mockHasRole.mockReturnValue(true)
+    mockHasAnyRole.mockReturnValue(true)
+    let listCalls = 0
+    mockMediaEndpoints([])
+    server.use(http.get('*/api/v2/media/request/:number', () => { listCalls += 1; return HttpResponse.json([]) }))
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { id: 11 } } as never)
+    try {
+      await renderModal(makeRequest({}))
+      await waitFor(() => expect(listCalls).toBeGreaterThan(0))
+      const callsBeforeUpload = listCalls
+
+      const input = screen.getByTestId('request-upload-input')
+      await userEvent.upload(input, [
+        new File([jpegBytes], 'leak.jpg', { type: 'image/jpeg' }),
+        new File([new Uint8Array([0, 0, 0, 0x18])], 'leak.mp4', { type: 'video/mp4' }),
+      ])
+
+      await waitFor(() => expect(postSpy).toHaveBeenCalledTimes(2))
+      const forms = postSpy.mock.calls.map((c) => c[1] as FormData)
+      expect(postSpy.mock.calls.every((c) => c[0] === '/api/v2/media/upload')).toBe(true)
+      expect(forms.map((f) => f.get('category'))).toEqual(['request_photo', 'request_video'])
+      expect(forms.every((f) => f.get('request_number') === '260101-001')).toBe(true)
+      await waitFor(() => expect(listCalls).toBeGreaterThan(callsBeforeUpload))
+    } finally {
+      postSpy.mockRestore()
+    }
   })
 
   it('выбор файла шлёт FormData с category=completion_photo и инвалидирует список', async () => {

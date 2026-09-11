@@ -1040,6 +1040,7 @@
     "photos": "Surat",
     "completionPhotos": "Foto hisobot",
     "addWorkPhotos": "Ish suratlarini qo'shish",
+    "addRequestPhotos": "Ariza suratini qo'shish",
     "fileTooLarge": "Fayl hajmi juda katta",
     "unsupportedFileType": "Fayl turi qo'llab-quvvatlanmaydi",
     "mediaError": "Yuklab bo'lmadi",
@@ -2181,6 +2182,8 @@
     "requestUpdateFailed": "Arizani yangilab bo'lmadi",
     "workPhotosUploaded": "Ish suratlari yuklandi",
     "workPhotosUploadFailed": "Ish suratlarini yuklab bo'lmadi",
+    "requestPhotosUploaded": "Ariza suratlari yuklandi",
+    "requestPhotosUploadFailed": "Ariza suratlarini yuklab bo'lmadi",
     "requestAccepted": "Ariza aholi o'rniga qabul qilindi",
     "requestAcceptFailed": "Arizani qabul qilib bo'lmadi",
     "requestForceAccepted": "Ariza aholi o'rniga qabul qilindi",
@@ -2332,9 +2335,13 @@
       "unpublish": "Nashrdan olish",
       "reject": "Rad etish",
       "reopen": "Ishga qaytarish",
-      "autofill": "Avto-to'ldirish"
+      "autofill": "Avto-to'ldirish",
+      "addPhoto": "Surat qo'shish",
+      "rejectWithoutMedia": "Mediasizlarning barchasini rad etish ({{count}})"
     },
-    "needsMediaExplanation": "Nashr qilish uchun natija fotosi kerak. «Oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi",
+    "needsMediaExplanation": "Nashr qilish uchun natija fotosi kerak. «Oldin» fotosi shart emas — vitrinada «Foto yo‘q» ko‘rsatiladi. Suratni yuklagach «Avto-to'ldirish» tugmasini bosing",
+    "bulkRejectDesc": "Natija fotosi bo'lmagan barcha hisobotlar rad etiladi: {{count}}. Sabab har birining tarixida saqlanadi.",
+    "bulkRejectDefaultReason": "Natija fotosi yo'q",
     "reasonPlaceholder": "Sabab",
     "reasonDialogDesc": "Sabab hisobot moderatsiyasi tarixida saqlanadi.",
     "confirmReopenDesc": "{{number}} arizasi moderatsiya navbatiga qaytadi.",
@@ -2346,7 +2353,8 @@
       "unpublished": "Hisobot nashrdan olindi",
       "rejected": "Hisobot rad etildi",
       "reopened": "Hisobot ishga qaytarildi",
-      "settingsUpdated": "Sozlamalar saqlandi"
+      "settingsUpdated": "Sozlamalar saqlandi",
+      "rejectedBulk": "Rad etilgan hisobotlar: {{count}}"
     }
   },
   "publicElevators": {

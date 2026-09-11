@@ -239,6 +239,7 @@
 | POST | `/autofill-pending` | Автозаполнить медиа во всех pending-черновиках |
 | PUT | `/settings` | Настройки модуля (в board_config) |
 | POST | `/reconcile` | Сверка publication-lock'ов с media-service (self-healing саги) |
+| POST | `/reject-without-media` | Отклонить все отчёты без фото результата (`needs_media`) одной причиной; ответ `{rejected}` |
 | POST | `/{report_id}/autofill` | Автозаполнить медиа отчёта |
 | PATCH | `/{report_id}` | Правка черновика (медиа, адрес, дата) |
 | POST | `/{report_id}/publish` | Опубликовать (сага: лок медиа в media-service → публикация) |

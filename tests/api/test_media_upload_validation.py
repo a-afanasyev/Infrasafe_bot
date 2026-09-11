@@ -201,3 +201,165 @@ async def test_forwarded_content_type_is_sniffed_not_client(client, monkeypatch)
     assert resp.status_code == 200, resp.text
     # files["file"] == (filename, bytes, content_type)
     assert captured["files"]["file"][2] == "image/jpeg"
+
+
+# ── Маркер медиа-сервиса в Request.media_files ──────────────────────────
+#
+# Бот показывает исполнителю фото заявки из колонки media_files (telegram
+# file_id). Загрузка через дашборд/TWA идёт мимо бота, поэтому прокси
+# дописывает в колонку ссылку на медиа-сервис {"media_id", "type"}, а бот
+# по ней скачивает байты (services/request_media_entries.py).
+
+RN = "260911-601"
+
+
+def _stub_media_service(monkeypatch, media_id=42):
+    from uk_management_bot.api import main as api_main
+
+    # Реальная форма ответа медиа-сервиса — MediaUploadResponse
+    # (media_service/app/schemas/media.py): конверт с вложенным media_file,
+    # а не плоский {"id"}. Плоский стаб здесь уже один раз спрятал дефект.
+    upload_payload = {
+        "media_file": {"id": media_id, "file_type": "photo", "category": "request_photo"},
+        "file_url": f"/api/v1/media/{media_id}/file",
+        "message": "Файл успешно загружен",
+    }
+
+    class _StubResp:
+        status_code = 200
+        text = "ok"
+
+        @staticmethod
+        def json():
+            return upload_payload
+
+    class _StubClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, headers=None, files=None, data=None):
+            return _StubResp()
+
+    monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
+    monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
+    _bypass_request_access(monkeypatch)
+    return upload_payload
+
+
+async def _seed_request(db_session, media_files=None):
+    from uk_management_bot.database.models.request import Request as RequestModel
+
+    req = RequestModel(
+        request_number=RN, user_id=999999, category="Сантехника", urgency="Срочная",
+        description="t", address="ул. Тестовая, 1", apartment_id=None,
+        status="Новая", source="bot", media_files=media_files or [],
+    )
+    db_session.add(req)
+    await db_session.commit()
+    return req
+
+
+async def _media_files(db_session):
+    from sqlalchemy import select
+    from uk_management_bot.database.models.request import Request as RequestModel
+
+    row = (await db_session.execute(
+        select(RequestModel).where(RequestModel.request_number == RN)
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+    return row.media_files
+
+
+async def _upload(client, category: str):
+    return await client.post(
+        "/api/v2/media/upload",
+        files=[_file_part()],
+        data={"request_number": RN, "category": category},
+    )
+
+
+@pytest.mark.asyncio
+async def test_request_photo_upload_appends_media_marker(client, db_session, monkeypatch):
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files=["AgAC-legacy"])
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy", {"media_id": 42, "type": "photo"}]
+
+
+@pytest.mark.asyncio
+async def test_request_document_upload_marker_type_document(client, db_session, monkeypatch):
+    _stub_media_service(monkeypatch, media_id=7)
+    await _seed_request(db_session)
+
+    resp = await _upload(client, "request_document")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == [{"media_id": 7, "type": "document"}]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_media_marker_not_appended(client, db_session, monkeypatch):
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files=[{"media_id": 42, "type": "photo"}])
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == [{"media_id": 42, "type": "photo"}]
+
+
+@pytest.mark.asyncio
+async def test_completion_upload_leaves_media_files_untouched(client, db_session, monkeypatch):
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files=["AgAC-legacy"])
+
+    resp = await _upload(client, "completion_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy"]
+
+
+@pytest.mark.asyncio
+async def test_marker_skipped_when_request_row_missing(client, monkeypatch):
+    """Access-гейт застаблен, строки заявки нет: загрузка в медиа-сервис уже
+    прошла, ответ остаётся 200 — маркер молча не пишется (с warning)."""
+    payload = _stub_media_service(monkeypatch, media_id=42)
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == payload
+
+
+@pytest.mark.asyncio
+async def test_marker_appended_to_legacy_json_string_column(client, db_session, monkeypatch):
+    """Legacy-строки: колонка хранит JSON-строку списка file_id."""
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files='["AgAC-legacy"]')
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy", {"media_id": 42, "type": "photo"}]
+
+
+@pytest.mark.asyncio
+async def test_marker_does_not_explode_non_list_legacy_value(client, db_session, monkeypatch):
+    """JSON-строка, декодирующаяся в строку: `[*current]` разложил бы file_id
+    посимвольно — значение оборачивается элементом, не теряется."""
+    _stub_media_service(monkeypatch, media_id=42)
+    await _seed_request(db_session, media_files='"AgAC-legacy"')
+
+    resp = await _upload(client, "request_photo")
+
+    assert resp.status_code == 200, resp.text
+    assert await _media_files(db_session) == ["AgAC-legacy", {"media_id": 42, "type": "photo"}]

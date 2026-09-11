@@ -1040,6 +1040,7 @@
     "photos": "Фото",
     "completionPhotos": "Фотоотчёт",
     "addWorkPhotos": "Добавить фото работ",
+    "addRequestPhotos": "Добавить фото заявки",
     "fileTooLarge": "Файл слишком большой",
     "unsupportedFileType": "Неподдерживаемый тип файла",
     "mediaError": "Не удалось загрузить",
@@ -2194,6 +2195,8 @@
     "requestUpdateFailed": "Не удалось обновить заявку",
     "workPhotosUploaded": "Фото работ загружены",
     "workPhotosUploadFailed": "Не удалось загрузить фото работ",
+    "requestPhotosUploaded": "Фото заявки загружены",
+    "requestPhotosUploadFailed": "Не удалось загрузить фото заявки",
     "requestAccepted": "Заявка принята за жителя",
     "requestAcceptFailed": "Не удалось принять заявку",
     "requestForceAccepted": "Заявка принята за жителя",
@@ -2345,9 +2348,13 @@
       "unpublish": "Снять с публикации",
       "reject": "Отклонить",
       "reopen": "Вернуть в работу",
-      "autofill": "Автозаполнить"
+      "autofill": "Автозаполнить",
+      "addPhoto": "Добавить фото",
+      "rejectWithoutMedia": "Отклонить всех без медиа ({{count}})"
     },
-    "needsMediaExplanation": "Нужно фото результата, чтобы опубликовать. Фото «до» не обязательно — витрина покажет «нет фото»",
+    "needsMediaExplanation": "Нужно фото результата, чтобы опубликовать. Фото «до» не обязательно — витрина покажет «нет фото». После загрузки фото нажмите «Автозаполнить»",
+    "bulkRejectDesc": "Будут отклонены все отчёты без фото результата: {{count}}. Причина сохранится в истории каждого.",
+    "bulkRejectDefaultReason": "Нет фото результата",
     "reasonPlaceholder": "Причина",
     "reasonDialogDesc": "Причина будет сохранена в истории модерации отчёта.",
     "confirmReopenDesc": "Заявка {{number}} вернётся в очередь на модерацию.",
@@ -2359,7 +2366,8 @@
       "unpublished": "Отчёт снят с публикации",
       "rejected": "Отчёт отклонён",
       "reopened": "Отчёт возвращён в работу",
-      "settingsUpdated": "Настройки сохранены"
+      "settingsUpdated": "Настройки сохранены",
+      "rejectedBulk": "Отклонено отчётов: {{count}}"
     }
   },
   "publicElevators": {

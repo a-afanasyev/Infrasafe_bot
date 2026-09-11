@@ -64,6 +64,7 @@ from uk_management_bot.services.work_reports.saga import (
     _load_report_for_update,
     publish_report,
     reject_report,
+    reject_reports_without_media,
     reopen_report,
     unpublish_report,
 )
@@ -107,6 +108,7 @@ __all__ = [
     "publish_report",
     "unpublish_report",
     "reject_report",
+    "reject_reports_without_media",
     "reopen_report",
     # previews.py
     "warm_report_previews",

@@ -1023,3 +1023,58 @@ async def test_autofill_pending_skips_published_rows(client: AsyncClient, db_ses
     assert reloaded.before_media_ids == [1]
     assert reloaded.media_synced_at is None
     assert editable.id != published.id
+
+
+# ── POST /reject-without-media ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_happy_path(client: AsyncClient, db_session, monkeypatch):
+    _enable(monkeypatch)
+    a = await _mk_report(db_session, "260911-501", status="needs_media")
+    b = await _mk_report(db_session, "260911-502", status="needs_media")
+    pending = await _mk_report(db_session, "260911-503", status="pending")
+
+    resp = await client.post(f"{BASE}/reject-without-media", json={"reason": "Нет фото результата"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"rejected": 2}
+    listed = (await client.get(BASE, params={"status": "rejected"})).json()
+    assert {r["id"] for r in listed["items"]} == {a.id, b.id}
+    assert all(r["reject_reason"] == "Нет фото результата" for r in listed["items"])
+    still = (await client.get(BASE, params={"status": "pending"})).json()
+    assert [r["id"] for r in still["items"]] == [pending.id]
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_nothing_to_reject(client: AsyncClient, db_session, monkeypatch):
+    _enable(monkeypatch)
+    await _mk_report(db_session, "260911-504", status="pending")
+    resp = await client.post(f"{BASE}/reject-without-media", json={"reason": "x"})
+    assert resp.status_code == 200
+    assert resp.json() == {"rejected": 0}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["", "   ", "x" * 201])
+async def test_reject_without_media_422_bad_reason(client: AsyncClient, db_session, monkeypatch, reason):
+    _enable(monkeypatch)
+    report = await _mk_report(db_session, "260911-505", status="needs_media")
+    resp = await client.post(f"{BASE}/reject-without-media", json={"reason": reason})
+    assert resp.status_code == 422
+    await db_session.refresh(report)
+    assert report.status == "needs_media"
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_non_manager_403(client: AsyncClient, resident_user, monkeypatch):
+    _enable(monkeypatch)
+    with _as_user(resident_user):
+        resp = await client.post(f"{BASE}/reject-without-media", json={"reason": "x"})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_reject_without_media_flag_off_404(client: AsyncClient):
+    resp = await client.post(f"{BASE}/reject-without-media", json={"reason": "x"})
+    assert resp.status_code == 404

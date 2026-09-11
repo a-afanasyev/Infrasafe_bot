@@ -89,6 +89,26 @@ class WorkReportRejectIn(BaseModel):
     reason: str
 
 
+class WorkReportBulkRejectIn(BaseModel):
+    """Причина массового отклонения. Обязательна и непустая (после strip):
+    без неё история модерации каждого отчёта осталась бы без объяснения.
+    Верхняя граница — ширина колонки `reject_reason` (String(200))."""
+
+    reason: str = Field(min_length=1, max_length=200)
+
+    @field_validator("reason")
+    @classmethod
+    def _strip_nonblank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("reason must not be blank")
+        return v
+
+
+class WorkReportBulkRejectOut(BaseModel):
+    rejected: int
+
+
 class WorkReportUnpublishIn(BaseModel):
     reason: Optional[str] = None
 

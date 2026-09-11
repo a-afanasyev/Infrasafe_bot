@@ -325,3 +325,89 @@ describe('пагинация групп (AUD6-P2-08)', () => {
     expect(screen.getByText('260720-059')).toBeInTheDocument()
   })
 })
+
+// Страница шлёт несколько запросов списка с разными ?status= (группы +
+// счётчик needs_media) — хендлер фильтрует по query, как сервер.
+function mockListByStatus(items: WorkReport[], onCall?: () => void) {
+  return http.get('*/api/v2/work-reports', ({ request }) => {
+    onCall?.()
+    const statuses = new URL(request.url).searchParams.getAll('status')
+    const filtered = statuses.length ? items.filter((r) => statuses.includes(r.status)) : items
+    return HttpResponse.json({ items: filtered, total: filtered.length, limit: 50, offset: 0 })
+  })
+}
+
+describe('WorkReportsPage — фото заявки и массовое отклонение', () => {
+  it('строки модерации ведут в карточку заявки новой вкладкой; у опубликованных ссылки нет', async () => {
+    server.use(
+      mockBoardConfig(),
+      mockListByStatus([
+        makeReport({ id: 3, status: 'needs_media' }),
+        makeReport({ id: 5, status: 'pending' }),
+        makeReport({ id: 4, status: 'published' }),
+      ]),
+    )
+    render(<WorkReportsPage />)
+    await screen.findByText('260724-001')
+
+    const links = screen.getAllByRole('link', { name: 'Добавить фото' })
+    expect(links).toHaveLength(2)
+    const byHref = links.map((l) => l.getAttribute('href')).sort()
+    expect(byHref).toEqual(['/dashboard?request=260723-001', '/dashboard?request=260725-001'])
+    links.forEach((l) => {
+      expect(l).toHaveAttribute('target', '_blank')
+      expect(l.getAttribute('rel')).toContain('noopener')
+    })
+  })
+
+  it('кнопка «Отклонить всех без медиа» показывает серверный счётчик needs_media и скрыта при нуле', async () => {
+    server.use(
+      mockBoardConfig(),
+      mockListByStatus([
+        makeReport({ id: 3, status: 'needs_media' }),
+        makeReport({ id: 6, status: 'needs_media' }),
+        makeReport({ id: 5, status: 'pending' }),
+      ]),
+    )
+    const { unmount } = render(<WorkReportsPage />)
+    expect(await screen.findByRole('button', { name: 'Отклонить всех без медиа (2)' })).toBeInTheDocument()
+    unmount()
+
+    server.use(mockBoardConfig(), mockListByStatus([makeReport({ id: 5, status: 'pending' })]))
+    render(<WorkReportsPage />)
+    await screen.findByText('260725-001')
+    expect(screen.queryByRole('button', { name: /Отклонить всех без медиа/ })).not.toBeInTheDocument()
+  })
+
+  it('диалог предзаполнен причиной, правится и шлёт POST .../reject-without-media', async () => {
+    let getListCalls = 0
+    let body: Record<string, unknown> | null = null
+    server.use(
+      mockBoardConfig(),
+      mockListByStatus(
+        [makeReport({ id: 3, status: 'needs_media' }), makeReport({ id: 6, status: 'needs_media' })],
+        () => { getListCalls++ },
+      ),
+      http.post('*/api/v2/work-reports/reject-without-media', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ rejected: 2 })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<WorkReportsPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Отклонить всех без медиа (2)' }))
+    const dialog = await screen.findByRole('dialog')
+    const textarea = within(dialog).getByPlaceholderText('Причина')
+    expect(textarea).toHaveValue('Нет фото результата')
+    const callsBefore = getListCalls
+
+    await user.clear(textarea)
+    await user.type(textarea, 'Нет медиа')
+    await user.click(within(dialog).getByRole('button', { name: /Отклонить всех без медиа/ }))
+
+    await waitFor(() => expect(body).toEqual({ reason: 'Нет медиа' }))
+    await waitFor(() => expect(getListCalls).toBeGreaterThan(callsBefore))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+})

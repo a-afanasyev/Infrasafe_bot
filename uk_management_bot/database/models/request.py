@@ -98,6 +98,12 @@ class Request(Base):
     elevator_operational = Column(Boolean, nullable=True)
 
     # Медиафайлы (JSON массив с file_ids)
+    # Формы элементов (читатель — services/request_media_entries.py):
+    #   "AgAC…"                         — telegram file_id (бот, legacy);
+    #   {"file_id": "…", "type": "…"}   — то же с типом;
+    #   {"media_id": N, "type": "…"}    — файл в медиа-сервисе (загрузка через
+    #                                     дашборд/TWA, пишет api/routes/media_proxy.py).
+    # Колонка — plain JSON без MutableList: изменять только переприсваиванием.
     media_files = Column(JSON, default=list)
     
     # Исполнитель (если назначен)

@@ -27,6 +27,7 @@ def _callback(request_number: str = "260818-001", from_id: int = 777):
     cb.from_user.id = from_id
     cb.answer = AsyncMock()
     cb.message.answer_media_group = AsyncMock()
+    cb.message.answer_photo = AsyncMock()
     return cb
 
 
@@ -93,7 +94,9 @@ async def test_unknown_user_gets_not_found():
 
 @pytest.mark.asyncio
 async def test_authorized_user_receives_media():
-    """Легитимный путь не сломан: доступ есть → медиагруппа отправлена."""
+    """Легитимный путь не сломан: доступ есть → фото отправлено. Один файл
+    уходит `answer_photo`, не медиагруппой: sendMediaGroup требует 2–10
+    элементов (services/request_media_entries.py)."""
     callback = _callback()
     service = _service(_request_with_media(), user=MagicMock())
 
@@ -102,6 +105,54 @@ async def test_authorized_user_receives_media():
          patch.object(ex, "has_request_access_sync", return_value=True):
         await ex.executor_view_media(callback, _db=MagicMock())
 
-    callback.message.answer_media_group.assert_awaited_once()
+    callback.message.answer_photo.assert_awaited_once_with(photo="AgAC-test", caption=None)
+    callback.message.answer_media_group.assert_not_awaited()
     callback.answer.assert_awaited_once()
     assert callback.answer.await_args.args[0] != NOT_FOUND_TEXT
+
+
+@pytest.mark.asyncio
+async def test_media_service_marker_is_downloaded_and_sent():
+    """Фото, загруженное из дашборда (маркер {"media_id"} в media_files),
+    исполнитель тоже получает: байты скачиваются через media-client."""
+    callback = _callback()
+    request = MagicMock()
+    request.media_files = [{"file_id": "AgAC-test", "type": "photo"}, {"media_id": 42, "type": "photo"}]
+    service = _service(request, user=MagicMock())
+    media_client = MagicMock()
+    media_client.download_media_file = AsyncMock(return_value=(b"\xff\xd8jpeg", "image/jpeg"))
+
+    with patch.object(ex, "RequestHandlerService", return_value=service), \
+         patch.object(ex, "get_user_language", return_value="ru"), \
+         patch.object(ex, "has_request_access_sync", return_value=True), \
+         patch.object(ex, "get_media_client", return_value=media_client):
+        await ex.executor_view_media(callback, _db=MagicMock())
+
+    media_client.download_media_file.assert_awaited_once_with(42)
+    callback.message.answer_media_group.assert_awaited_once()
+    group = callback.message.answer_media_group.await_args.kwargs["media"]
+    assert group[0].media == "AgAC-test"
+    assert group[1].media.filename == "media_42.jpg"
+    assert callback.answer.await_args.args[0] != NOT_FOUND_TEXT
+
+
+@pytest.mark.asyncio
+async def test_marker_without_media_client_falls_back_to_no_media_alert():
+    """Медиа-сервис выключен, в колонке только маркер → честный алерт «нет
+    файлов», а не падение и не пустая медиагруппа."""
+    callback = _callback()
+    request = MagicMock()
+    request.media_files = [{"media_id": 42, "type": "photo"}]
+    service = _service(request, user=MagicMock())
+
+    with patch.object(ex, "RequestHandlerService", return_value=service), \
+         patch.object(ex, "get_user_language", return_value="ru"), \
+         patch.object(ex, "has_request_access_sync", return_value=True), \
+         patch.object(ex, "get_media_client", return_value=None):
+        await ex.executor_view_media(callback, _db=MagicMock())
+
+    callback.message.answer_media_group.assert_not_awaited()
+    callback.message.answer_photo.assert_not_awaited()
+    callback.answer.assert_awaited_once_with(
+        get_text("requests.no_media_files", language="ru"), show_alert=True
+    )
