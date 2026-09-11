@@ -6,6 +6,7 @@ are absolute and the router is included without a prefix, so the surface is
 unchanged. ``httpx``/``settings`` are module-level so existing tests that
 monkeypatch them on the shared objects keep working.
 """
+import json
 import logging
 import re
 from enum import Enum
@@ -13,11 +14,13 @@ from enum import Enum
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.dependencies_access import check_request_access
 from uk_management_bot.config.settings import settings
+from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.user import User
 from uk_management_bot.integrations.http_retry import (
     get_with_retries,
@@ -151,7 +154,71 @@ async def proxy_media_upload(
             # может оказаться что угодно, включая эхо загруженного контента.
             _logger.error("Media service upload error %s for %s", resp.status_code, request_number)
             raise HTTPException(status_code=resp.status_code, detail="Media service error")
-        return resp.json()
+        payload = resp.json()
+
+    await _record_request_media_marker(db, request_number, category, payload)
+    return payload
+
+
+# Категория загрузки → тип записи-маркера в Request.media_files. Фотоотчёт
+# (completion_*) маркера не получает: его бот читает из медиа-сервиса через
+# services/completion_media.py, колонка для него — legacy-фолбэк.
+_MARKER_KIND_BY_CATEGORY = {
+    FileCategories.REQUEST_PHOTO: "photo",
+    FileCategories.REQUEST_VIDEO: "video",
+    FileCategories.REQUEST_DOCUMENT: "document",
+}
+
+
+async def _record_request_media_marker(
+    db: AsyncSession, request_number: str, category: FileCategories, payload: object
+) -> None:
+    """Дописать в `Request.media_files` ссылку на файл медиа-сервиса.
+
+    Бот показывает исполнителю фото заявки из этой колонки (telegram
+    file_id), а загрузка через дашборд/TWA идёт мимо бота — без маркера
+    такие фото исполнитель в боте не увидит. Формат `{"media_id", "type"}`,
+    чтение — `services/request_media_entries.py`.
+
+    Файл в медиа-сервисе уже лежит и виден дашборду, поэтому сбой записи
+    маркера не превращается в ошибку загрузки: логируем и отдаём ответ.
+    """
+    kind = _MARKER_KIND_BY_CATEGORY.get(category)
+    if kind is None:
+        return
+    media_id = payload.get("id") if isinstance(payload, dict) else None
+    if not isinstance(media_id, int):
+        _logger.warning(
+            "media upload %s: ответ media-service без числового id, маркер не записан",
+            request_number,
+        )
+        return
+    try:
+        await _append_media_marker(db, request_number, media_id, kind)
+    except Exception:
+        _logger.exception("media upload %s: не удалось записать маркер media_id=%s", request_number, media_id)
+        await db.rollback()
+
+
+async def _append_media_marker(db: AsyncSession, request_number: str, media_id: int, kind: str) -> None:
+    row = (await db.execute(
+        select(RequestModel).where(RequestModel.request_number == request_number)
+    )).scalar_one_or_none()
+    if row is None:
+        _logger.warning("media upload %s: заявка не найдена, маркер не записан", request_number)
+        return
+    current = row.media_files or []
+    if isinstance(current, str):  # legacy: JSON-строка вместо списка
+        try:
+            current = json.loads(current) or []
+        except (json.JSONDecodeError, TypeError):
+            current = []
+    if any(isinstance(m, dict) and m.get("media_id") == media_id for m in current):
+        return
+    # Колонка — plain JSON без MutableList: только переприсваивание
+    # помечает строку грязной (прецедент RequestService.add_media_to_request).
+    row.media_files = [*current, {"media_id": media_id, "type": kind}]
+    await db.commit()
 
 
 @router.get("/api/v2/media/request/{request_number}")
