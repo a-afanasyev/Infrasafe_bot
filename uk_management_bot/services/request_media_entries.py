@@ -102,14 +102,22 @@ async def _resolve_media(entry: MediaEntry, media_client: Any) -> Any:
     return BufferedInputFile(data, filename=f"media_{entry.media_id}{ext}")
 
 
-async def build_input_media(entries: Sequence[MediaEntry], media_client: Any) -> list[Any]:
-    """Список InputMedia* для медиагруппы; нерезолвленные записи выпадают."""
+async def build_input_media(
+    entries: Sequence[MediaEntry], media_client: Any, *, first_caption: Optional[str] = None
+) -> list[Any]:
+    """Список InputMedia* для медиагруппы; нерезолвленные записи выпадают.
+
+    Подпись — только у первого отправляемого элемента и только через
+    конструктор: InputMedia* в aiogram заморожены, присваивание после
+    создания падает ValidationError(frozen_instance).
+    """
     items: list[Any] = []
     for entry in entries:
         media = await _resolve_media(entry, media_client)
         if media is None:
             continue
-        items.append(_INPUT_MEDIA_BY_KIND[entry.kind](media=media))
+        caption = first_caption if (first_caption and not items) else None
+        items.append(_INPUT_MEDIA_BY_KIND[entry.kind](media=media, caption=caption))
     return items
 
 
@@ -121,11 +129,9 @@ async def send_media_entries(
     first_caption: Optional[str] = None,
 ) -> int:
     """Отправить все записи в чат сообщения; вернуть число отправленных."""
-    items = await build_input_media(entries, media_client)
+    items = await build_input_media(entries, media_client, first_caption=first_caption)
     if not items:
         return 0
-    if first_caption:
-        items[0].caption = first_caption
     for start in range(0, len(items), TELEGRAM_MEDIA_GROUP_MAX):
         chunk = items[start:start + TELEGRAM_MEDIA_GROUP_MAX]
         if len(chunk) == 1:
