@@ -25,7 +25,6 @@ from uk_management_bot.api.elevators.schemas import (
     ElevatorOccurrenceRescheduleIn,
     Lang,
     OccurrenceKind,
-    OccurrenceState,
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.elevator_service import ElevatorServiceError
@@ -110,17 +109,18 @@ async def complete_occurrence(
 async def list_occurrences(
     elevator_id: int,
     kind: Optional[OccurrenceKind] = Query(None),
-    state: Optional[OccurrenceState] = Query(None),
+    state: Optional[CalendarState] = Query(None),
     from_date: Optional[date] = Query(None, alias="from"),
     to_date: Optional[date] = Query(None, alias="to"),
     lang: Lang = Query("ru"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_staff),
 ):
+    """График лифта; ``state`` не передан или ``all`` — без фильтра по состоянию."""
     try:
         return await calendar_service.list_for_elevator(
-            db, elevator_id, kind=kind, state=state, from_date=from_date, to_date=to_date,
-            language=lang,
+            db, elevator_id, kind=kind, state=None if state == "all" else state,
+            from_date=from_date, to_date=to_date, language=lang,
         )
     except ElevatorServiceError as exc:
         raise http_error(exc)

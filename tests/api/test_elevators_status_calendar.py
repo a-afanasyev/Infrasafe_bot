@@ -211,6 +211,24 @@ async def test_generate_is_idempotent_and_listed(client: AsyncClient, seeded):
 
 
 @pytest.mark.asyncio
+async def test_list_occurrences_state_all_is_unfiltered(client: AsyncClient, seeded):
+    """Вкладка «Календарь» шлёт ``state=all`` («Все») — per-elevator роут обязан принять
+    его как «без фильтра», как и общий календарь, а не отвечать 422 (profk, 2026-09-14)."""
+    eid = (await _commissioned(client))["id"]
+    body = {"kind": "maintenance", "start": "2026-10-01", "every_months": 1, "count": 2}
+    created = (await client.post(f"{BASE}/{eid}/occurrences/generate", json=body)).json()
+    assert (await client.post(f"{BASE}/occurrences/{created[0]['id']}/cancel")).status_code == 200
+
+    everything = await client.get(f"{BASE}/{eid}/occurrences", params={"state": "all"})
+    assert everything.status_code == 200, everything.text
+    assert sorted(o["state"] for o in everything.json()) == ["cancelled", "planned"]
+
+    by_kind = await client.get(f"{BASE}/{eid}/occurrences", params={"state": "all", "kind": "maintenance"})
+    assert by_kind.status_code == 200 and len(by_kind.json()) == 2
+    assert (await client.get(f"{BASE}/{eid}/occurrences", params={"state": "x"})).status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_occurrence_create_reschedule_cancel(client: AsyncClient, seeded):
     eid = (await _commissioned(client))["id"]
     resp = await client.post(f"{BASE}/{eid}/occurrences",
