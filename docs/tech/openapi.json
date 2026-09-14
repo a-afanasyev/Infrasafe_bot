@@ -13999,6 +13999,7 @@
     },
     "/api/v2/elevators/{elevator_id}/occurrences": {
       "get": {
+        "description": "График лифта; ``state`` не передан или ``all`` — без фильтра по состоянию.",
         "operationId": "list_occurrences_api_v2_elevators__elevator_id__occurrences_get",
         "parameters": [
           {
@@ -14040,7 +14041,8 @@
                   "enum": [
                     "planned",
                     "done",
-                    "cancelled"
+                    "cancelled",
+                    "all"
                   ],
                   "type": "string"
                 },
