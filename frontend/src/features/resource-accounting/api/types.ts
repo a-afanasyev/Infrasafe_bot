@@ -164,13 +164,20 @@ export interface Worksheet {
   rows: WorksheetRow[];
 }
 
+/** Одна блокирующая ошибка ведомости — как отдаёт `POST /v1/periods/{month}/validate`. */
+export interface ValidationError {
+  meter_id: string;
+  message: string;
+}
+
 export interface ValidationSummary {
   active_meters: number;
   entered: number;
   not_entered: number;
   by_status: Record<string, number>;
-  warnings_without_comment: number;
-  errors: number;
+  /** Счётчики (id) с предупреждением без комментария — сервер отдаёт массив, не число (AUD7-CODE-08). */
+  warnings_without_comment: string[];
+  errors: ValidationError[];
   can_submit: boolean;
 }
 
