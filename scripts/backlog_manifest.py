@@ -173,8 +173,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="dev compose / README", note="в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск"),
     "AUD7-ENG-07": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
                        services="DB / operations", note="прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh"),
-    "AUD7-ENG-08": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
-                       services="resource image", note="из отчёта ENG-08; AC и зависимости в канонической записи"),
+    # AUD7-ENG-08 закрыт 2026-09-17 (PR #566).
     "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
                        services="frontend dev dependencies", note="npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия"),
     # AUD7-CODE-07 закрыт 2026-09-17 (PR #563).
