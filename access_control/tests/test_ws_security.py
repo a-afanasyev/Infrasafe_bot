@@ -38,6 +38,18 @@ WS_URL = "/ws/v1/access/security"
 
 
 @pytest.fixture(autouse=True)
+def _identity_ok_by_default(request, monkeypatch):
+    """AUD7-SEC-02: handshake сверяет личность с БД; тесты token-only — считаем
+    пользователя живым, кроме тестов, которые явно подменяют предикат или
+    зовут настоящий (маркер ``real_identity``)."""
+    if request.node.get_closest_marker("real_identity"):
+        return
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", lambda user_id: True)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_broker():
     """Свежий in-process брокер на каждый тест: подписчики не «протекают»."""
     reset_broker()
@@ -368,8 +380,14 @@ def test_role_revoked_mid_stream_closes_4003(monkeypatch) -> None:
     """
     from access_control.api import ws_security as ws_mod
 
+    calls: list[int] = []
+
+    def _alive_then_revoked(user_id: int) -> bool:
+        calls.append(user_id)
+        return len(calls) == 1  # AUD7-SEC-02: на handshake ещё жив, отозван после
+
     monkeypatch.setattr(ws_mod, "_WS_IDENTITY_RECHECK_INTERVAL", 0.05)
-    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", lambda user_id: False)
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", _alive_then_revoked)
     monkeypatch.setattr(
         ws_mod,
         "verify_access_token",
@@ -389,7 +407,12 @@ def test_identity_check_failure_keeps_stream(monkeypatch) -> None:
     ограниченный exp): события продолжают доставляться."""
     from access_control.api import ws_security as ws_mod
 
+    calls: list[int] = []
+
     def _boom(user_id: int) -> bool:
+        calls.append(user_id)
+        if len(calls) == 1:
+            return True  # AUD7-SEC-02: handshake сверился с живой БД
         raise RuntimeError("db down")
 
     monkeypatch.setattr(ws_mod, "_WS_IDENTITY_RECHECK_INTERVAL", 0.05)
@@ -552,3 +575,80 @@ def test_ingestion_replay_does_not_publish(pg_db, pilot, monkeypatch) -> None:
     ingest_anpr(pg_db, payload)
     ingest_anpr(pg_db, payload)  # повтор → replay
     assert len(captured) == 1  # только первое (новое) событие опубликовано
+
+
+# ───────────────────── AUD7-SEC-02: удалённый оператор и проверка личности ДО стрима ─────────────────────
+
+
+class _FakeSession:
+    def __init__(self, user):
+        self._user = user
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, model, user_id):
+        return self._user
+
+
+def _fake_user(**over):
+    from types import SimpleNamespace
+
+    base = dict(id=1, status="approved", deleted_at=None, roles='["security_operator"]', active_role="security_operator")
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+@pytest.mark.real_identity
+@pytest.mark.parametrize(
+    "user",
+    [
+        _fake_user(status="deleted", deleted_at="2026-09-17T00:00:00+00:00"),
+        _fake_user(status="approved", deleted_at="2026-09-17T00:00:00+00:00"),
+        _fake_user(status="pending"),
+    ],
+    ids=["deleted", "approved-but-deleted_at", "pending"],
+)
+def test_identity_predicate_rejects_deleted_and_unapproved(monkeypatch, user) -> None:
+    """Удаление сотрудника ставит status='deleted' + deleted_at (employees.py);
+    предикат раньше отсекал только blocked — удалённый оператор проходил."""
+    import uk_management_bot.database.session as session_mod
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(session_mod, "SessionLocal", lambda: _FakeSession(user))
+    assert ws_mod._ws_identity_ok_sync(1) is False
+
+
+@pytest.mark.real_identity
+def test_identity_predicate_accepts_live_operator(monkeypatch) -> None:
+    import uk_management_bot.database.session as session_mod
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(session_mod, "SessionLocal", lambda: _FakeSession(_fake_user()))
+    assert ws_mod._ws_identity_ok_sync(1) is True
+
+
+def test_revoked_identity_rejected_before_accept_cookie(monkeypatch) -> None:
+    """Валидный JWT с ролью, но пользователь в БД уже удалён/заблокирован —
+    отказ ДО accept (на проводе HTTP 403), а не «ready» и закрытие через интервал."""
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", lambda user_id: False)
+    client = _client_with_cookie(_token("security_operator"))
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(WS_URL) as ws:
+            ws.receive_json()
+
+
+def test_revoked_identity_rejected_first_message(monkeypatch) -> None:
+    from access_control.api import ws_security as ws_mod
+
+    monkeypatch.setattr(ws_mod, "_ws_identity_ok_sync", lambda user_id: False)
+    client = _client_with_cookie()
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(WS_URL) as ws:
+            ws.send_json({"token": _token("security_operator")})
+            ws.receive_json()

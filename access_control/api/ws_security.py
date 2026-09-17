@@ -116,9 +116,31 @@ def _ws_identity_ok_sync(user_id: int) -> bool:
 
     with SessionLocal() as db:
         user = db.get(User, user_id)
-        if user is None or user.status == "blocked":
+        # AUD7-SEC-02: удаление сотрудника ставит status="deleted" + deleted_at
+        # (api/shifts/service/employees.py), а раньше отсекался только blocked —
+        # удалённый оператор проходил. Как у HTTP-дверей: только approved и живой.
+        if user is None or user.status != "approved" or getattr(user, "deleted_at", None) is not None:
             return False
         return any(role in WS_ROLES for role in _parse_user_roles(user))
+
+
+async def _identity_ok_at_handshake(user_id: int | None) -> bool:
+    """Личность по БД ДО подписки (AUD7-SEC-02).
+
+    До этого handshake верил только JWT (roles/exp), а первая сверка с БД шла
+    лишь через ``_WS_IDENTITY_RECHECK_INTERVAL`` — удалённый или заблокированный
+    оператор получал стрим на целый интервал. Токен без ``sub`` сверить нечем —
+    отказ. Недоступность БД здесь — тоже отказ (fail-closed): живой сессии ещё
+    нет, клиент переподключится; fail-open остаётся только у вахты уже
+    установленного стрима, где верхнюю границу держит exp.
+    """
+    if user_id is None:
+        return False
+    try:
+        return await asyncio.to_thread(_ws_identity_ok_sync, user_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("ws security identity check failed at handshake for user %s", user_id, exc_info=True)
+        return False
 
 
 def _token_exp(payload: dict | None) -> float | None:
@@ -179,6 +201,9 @@ async def ws_security(websocket: WebSocket) -> None:
         if not _authorized_roles(payload) or exp is None:
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
+        if not await _identity_ok_at_handshake(_payload_user_id(payload)):
+            await _safe_close(websocket, code=WS_POLICY_VIOLATION)
+            return
         await websocket.accept()
     else:
         # Cookieless: принимаем, ждём JWT в первом сообщении, затем проверяем роли.
@@ -195,6 +220,9 @@ async def ws_security(websocket: WebSocket) -> None:
         payload = verify_access_token(token) if token else None
         exp = _token_exp(payload)
         if not _authorized_roles(payload) or exp is None:
+            await _safe_close(websocket, code=WS_POLICY_VIOLATION)
+            return
+        if not await _identity_ok_at_handshake(_payload_user_id(payload)):
             await _safe_close(websocket, code=WS_POLICY_VIOLATION)
             return
 
