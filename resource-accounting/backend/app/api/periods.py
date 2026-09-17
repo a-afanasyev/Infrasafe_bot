@@ -35,7 +35,7 @@ from app.schemas.readings import (
     WorksheetOut,
     WorksheetRow,
 )
-from app.services.period_lock import lock_period, lock_periods_from
+from app.services.period_lock import lock_period, lock_period_with_following, lock_periods_from
 from app.services.period_validation import summarize_period
 from app.services.readings import (
     EDITABLE_PERIOD_STATUSES,
@@ -185,7 +185,8 @@ def put_reading(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
-    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
+    # AUD7-COR-03/04: статус под блокировкой; каскад пересчёта пишет в следующие открытые месяцы
+    period = lock_period_with_following(db, user.tenant_id, month)
     meter = db.get(Meter, meter_id)
     if not meter or meter.tenant_id != user.tenant_id:
         raise not_found("Счётчик")
@@ -208,7 +209,8 @@ def bulk_readings(
     user: User = Depends(require_roles(*READING_ENTRY_ROLES)),
 ):
     """Transactional batch save: all valid selected rows or none (ТЗ §9)."""
-    period = lock_period(db, user.tenant_id, month)  # AUD7-COR-03: статус читаем под блокировкой
+    # AUD7-COR-03/04: статус под блокировкой; каскад пересчёта пишет в следующие открытые месяцы
+    period = lock_period_with_following(db, user.tenant_id, month)
     results = []
     for item in payload.items:
         meter = db.get(Meter, item.meter_id)

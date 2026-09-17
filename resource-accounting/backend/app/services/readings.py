@@ -265,6 +265,10 @@ def upsert_reading(
                 created_at=utcnow(),
             )
         )
+    # AUD7-COR-04: прямая правка показания в открытом месяце меняет базу следующих
+    # открытых месяцев так же, как корректировка — иначе Feb хранил previous_value=100
+    # при Jan=150, а колонка ведомости (считается отдельно) уже показывала 150.
+    recompute_forward(db, meter, period.month)
     return reading
 
 
