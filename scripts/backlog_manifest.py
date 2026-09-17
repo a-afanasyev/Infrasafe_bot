@@ -150,8 +150,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="bot / Redis", note="из отчёта CODE-04; AC и зависимости в канонической записи"),
     "AUD7-CODE-05": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
                        services="frontend", note="из отчёта CODE-05; AC и зависимости в канонической записи"),
-    "AUD7-CODE-06": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
-                       services="frontend / UK employees API", note="частично реализовано: страница, total и стабильная сортировка (tiebreaker User.id) сделаны; остаток — шесть потребителей useEmployees без страниц/поиска (CreateShiftModal, ShiftDetailModal, TransferRequestCard, ExecutorPicker, CreateShiftFromTemplateModal, DeleteEmployeeModal); регресс инвалидации — CODE-07"),
+    # AUD7-CODE-06 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
                        services="media API", note="из отчёта ARCH-01; AC и зависимости в канонической записи"),
     "AUD7-ARCH-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
@@ -180,8 +179,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="resource image", note="из отчёта ENG-08; AC и зависимости в канонической записи"),
     "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
                        services="frontend dev dependencies", note="npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия"),
-    "AUD7-CODE-07": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
-                       services="frontend", note="СВ-01: страница сотрудников читает ключ employees-page, мутации инвалидируют только employees — после блокировки строка не обновляется (регресс PR #556); делать до остатка CODE-06"),
+    # AUD7-CODE-07 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-03": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-15",
                        services="media-service", note="СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога"),
     "AUD7-CODE-08": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
