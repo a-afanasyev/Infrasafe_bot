@@ -6,13 +6,16 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:report": "playwright show-report artifacts/html-report"
+    "test:report": "playwright show-report artifacts/html-report",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^20.19.43",
+    "typescript": "~5.9.3"
   }
 }
