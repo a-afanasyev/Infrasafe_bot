@@ -268,34 +268,48 @@ async def store_otp(user_id: int, code: str) -> None:
     await r.aclose()
 
 
+# AUD7-SEC-05: проверка и потребление OTP — одна атомарная операция. Раньше
+# HGETALL → сравнение → HINCRBY/DEL шли тремя запросами: два параллельных верных
+# кода давали два успеха, а параллельные неверные читали один счётчик и все
+# получали «N attempts remaining» по устаревшему значению. Сравнение внутри
+# Redis идёт по sha1-хэшам (redis.sha1hex): побайтовое сравнение хэшей не
+# раскрывает префикс кода, а сам код в Lua не сравнивается напрямую.
+_OTP_CONSUME_LUA = """
+local code = redis.call('HGET', KEYS[1], 'code')
+if not code then return {'missing', 0} end
+local attempts = tonumber(redis.call('HGET', KEYS[1], 'attempts') or '0')
+if attempts <= 0 then
+  redis.call('DEL', KEYS[1])
+  return {'exhausted', 0}
+end
+if redis.sha1hex(code) == redis.sha1hex(ARGV[1]) then
+  redis.call('DEL', KEYS[1])
+  return {'ok', 0}
+end
+local remaining = redis.call('HINCRBY', KEYS[1], 'attempts', -1)
+if remaining <= 0 then
+  redis.call('DEL', KEYS[1])
+  return {'exhausted', 0}
+end
+return {'invalid', remaining}
+"""
+
+
 async def verify_otp(user_id: int, code: str) -> tuple[bool, str]:
-    """Verify OTP. Returns (success, error_message)."""
+    """Verify OTP atomically: check + consume attempt/code in one Redis EVAL."""
     r = await _get_redis()
     key = f"mfa:otp:{user_id}"
-    data = await r.hgetall(key)
-
-    if not data:
+    try:
+        outcome, remaining = await r.eval(_OTP_CONSUME_LUA, 1, key, code)
+    finally:
         await r.aclose()
+
+    if outcome == "missing":
         return False, "OTP expired or not found. Please login again."
-
-    attempts = int(data.get("attempts", "0"))
-    if attempts <= 0:
-        await r.delete(key)
-        await r.aclose()
+    if outcome == "exhausted":
         return False, "Too many attempts. Please login again."
-
-    stored_code = data.get("code", "")
-    if not hmac.compare_digest(code, stored_code):
-        await r.hincrby(key, "attempts", -1)
-        remaining = attempts - 1
-        await r.aclose()
-        if remaining <= 0:
-            return False, "Too many attempts. Please login again."
-        return False, f"Invalid code. {remaining} attempts remaining."
-
-    # Success — delete OTP
-    await r.delete(key)
-    await r.aclose()
+    if outcome == "invalid":
+        return False, f"Invalid code. {int(remaining)} attempts remaining."
     return True, ""
 
 
