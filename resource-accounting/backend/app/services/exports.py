@@ -90,12 +90,33 @@ def snapshot_rows(db: Session, export: Export, rows: list[dict]) -> None:
         db.add(ExportRow(export_id=export.id, row_index=index, data=data))
 
 
+# AUD7-SEC-04: символы, с которых табличные редакторы начинают формулу/DDE
+# (OWASP CSV injection). Комментарий оператора и названия — свободный текст,
+# который раньше попадал в файл как есть: `=1+1` в примечании становился формулой.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _looks_like_number(value: str) -> bool:
+    try:
+        float(value.replace(",", "."))
+    except ValueError:
+        return False
+    return True
+
+
+def _csv_safe(value: object) -> object:
+    """Экранировать текст, который CSV-импорт исполнил бы как формулу; числа (в т.ч. `-5`) не трогаем."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES) and not _looks_like_number(value):
+        return "'" + value
+    return value
+
+
 def render_csv(rows: list[dict]) -> bytes:
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";")
     writer.writerow([label for _, label in BASE_COLUMNS])
     for row in rows:
-        writer.writerow([row.get(key, "") for key, _ in BASE_COLUMNS])
+        writer.writerow([_csv_safe(row.get(key, "")) for key, _ in BASE_COLUMNS])
     return buf.getvalue().encode("utf-8-sig")
 
 
@@ -106,6 +127,11 @@ def render_xlsx(rows: list[dict], title: str) -> bytes:
     ws.append([label for _, label in BASE_COLUMNS])
     for row in rows:
         ws.append([row.get(key, "") for key, _ in BASE_COLUMNS])
+        # AUD7-SEC-04: openpyxl помечает строку, начинающуюся с «=», как формулу
+        # (data_type «f»); текст оператора обязан остаться текстом.
+        for cell in ws[ws.max_row]:
+            if cell.data_type == "f":
+                cell.data_type = "s"
     for column_cells in ws.columns:
         width = max(len(str(c.value or "")) for c in column_cells)
         ws.column_dimensions[column_cells[0].column_letter].width = min(max(width + 2, 10), 50)
