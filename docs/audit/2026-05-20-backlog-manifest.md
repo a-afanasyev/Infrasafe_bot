@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **455**
-- открыто маркером: **35**
+- закрыто маркером: **457**
+- открыто маркером: **33**
 
-  - `actionable` — **26**
+  - `actionable` — **24**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=18, P3=8.
+Из них actionable по приоритету: P2=17, P3=7.
 
 Значения `status`:
 
@@ -67,8 +67,6 @@
 | `AUD7-ENG-06` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | dev compose / README | — | в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск |
 | `AUD7-CODE-01` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend / UK auth | — | из отчёта CODE-01; AC и зависимости в канонической записи |
 | `AUD7-CODE-02` | P2 | actionable | verified-2026-09-11 | AUD7-F1 | — | frontend | — | воспроизведено 2026-09-11: cleanup → отложенный close → таймер → второй сокет; ссылка на тест исправлена (:26) |
-| `AUD7-CODE-05` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend | — | из отчёта CODE-05; AC и зависимости в канонической записи |
-| `AUD7-CODE-08` | P3 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend (resource-accounting) | — | СВ-03: validate отдаёт errors/warnings_without_comment массивами, types.ts ждёт числа — «ошибок [object Object]»; моки в тесте подставляют числа |
 | `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
 | `AUD7-ARCH-03` | P2 | actionable | verified-2026-09-15 | AUD7-M1 | — | media-service | — | СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
