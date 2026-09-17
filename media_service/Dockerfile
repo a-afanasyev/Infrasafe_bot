@@ -14,7 +14,8 @@ WORKDIR /app
 
 # Копирование requirements и установка зависимостей
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# AUD7-ENG-03: requirements.txt — hash-locked (uv pip compile requirements.in).
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Копирование кода приложения
 COPY app/ ./app/

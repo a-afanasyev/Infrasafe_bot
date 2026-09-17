@@ -222,6 +222,11 @@ jobs:
       - name: Audit payment_control dependencies
         run: pip-audit -r payment_control/requirements.txt
 
+      # AUD7-ENG-03: resource-api жил на pyproject без lock — аудировать было
+      # нечего; теперь hash-locked requirements.txt (uv pip compile pyproject.toml).
+      - name: Audit resource-accounting dependencies
+        run: pip-audit -r resource-accounting/backend/requirements.txt
+
   media-tests:
     name: media-tests (pytest)
     runs-on: ubuntu-latest
@@ -284,8 +289,11 @@ jobs:
 
       # Зависимости в pyproject (requirements.txt у сервиса нет) — ставим
       # проект с dev-экстрами, как это делает его Dockerfile (`pip install .`).
-      - name: Install service with dev extras
-        run: pip install .[dev]
+      # AUD7-ENG-03: dev-lock (requirements-dev.txt = pyproject + extra dev,
+      # hash-locked) вместо `pip install .[dev]` — тот резолвил floor'ы заново
+      # на каждом прогоне, и CI тестировал не то, что уезжало в образ.
+      - name: Install dependencies from dev lock
+        run: pip install --require-hashes -r requirements-dev.txt && pip install --no-deps .
 
       # ЛОВУШКА: tests/conftest.py задаёт sqlite через os.environ.setdefault
       # ("RESOURCE_DATABASE_URL", ...). Задай мы postgres-URL на уровне ДЖОБЫ —

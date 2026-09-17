@@ -13,7 +13,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - run: pip install -r payment_control/requirements.txt pytest pytest-cov httpx
+      # AUD7-ENG-03: requirements.txt hash-locked — pip в hash-режиме требует
+      # хэши у всех пакетов одной команды, поэтому тест-инструменты отдельно.
+      - run: pip install --require-hashes -r payment_control/requirements.txt
+      - run: pip install pytest pytest-cov httpx
       - run: python -m pytest payment_control/tests --cov=payment_control --cov-report=term --cov-fail-under=80
 
   migration-drift:
@@ -36,7 +39,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - run: pip install -r payment_control/requirements.txt
+      - run: pip install --require-hashes -r payment_control/requirements.txt
       - name: Migration drift on PostgreSQL
         env:
           PAYMENT_DATABASE_URL: postgresql+psycopg2://payment_owner:ci-owner-password@localhost:5432/payment_control
