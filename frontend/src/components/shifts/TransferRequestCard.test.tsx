@@ -73,3 +73,19 @@ describe('TransferRequestCard', () => {
     expect(screen.getByText('Сантехник Тест1 → ?')).toBeInTheDocument()
   })
 })
+
+
+describe('TransferRequestCard — поиск исполнителя (AUD7-CODE-06)', () => {
+  it('поле поиска над списком передаёт запрос серверу', async () => {
+    const seen: string[] = []
+    server.use(http.get('*/api/v2/shifts/employees', ({ request }) => {
+      seen.push(new URL(request.url).searchParams.get('search') ?? '')
+      return HttpResponse.json(EMPLOYEES, { headers: { 'X-Total-Count': '1' } })
+    }))
+    const user = userEvent.setup()
+    render(<TransferRequestCard transfer={transfer()} />)
+    await user.click(screen.getByRole('button', { name: 'Назначить' }))
+    await user.type(await screen.findByPlaceholderText('Поиск сотрудника...'), 'Эл')
+    await waitFor(() => expect(seen).toContain('Эл'))
+  })
+})

@@ -12,27 +12,6 @@ import type {
 
 export type { VerificationStatus, EmployeeBrief, ShiftBrief, EmployeeDetail }
 
-export function useEmployees(
-  filters: Record<string, string | boolean | undefined> = {},
-  search?: string,
-) {
-  return useQuery<EmployeeBrief[]>({
-    queryKey: ['employees', filters, search],
-    queryFn: () =>
-      apiClient
-        .get('/api/v2/shifts/employees', {
-          params: {
-            limit: 50,
-            offset: 0,
-            ...filters,
-            ...(search ? { search } : {}),
-          },
-        })
-        .then(r => r.data),
-    staleTime: 30_000,
-  })
-}
-
 export interface EmployeesPage {
   items: EmployeeBrief[]
   /** Размер ВСЕЙ выборки под фильтрами — приходит заголовком `X-Total-Count`. */
@@ -43,9 +22,8 @@ export interface EmployeesPage {
  * Постраничный список для раздела «Сотрудники»: страница, сортировка и честный
  * счётчик.
  *
- * Отдельно от `useEmployees` намеренно: тем же эндпоинтом кормятся выпадающие
- * списки назначения, и менять форму их данных ради страницы нельзя. Поэтому и
- * размер выборки приходит заголовком, а не конвертом.
+ * Тем же эндпоинтом кормятся пикеры (`useEmployeePicker`, AUD7-CODE-06), поэтому
+ * размер выборки приходит заголовком, а не конвертом — форма массива общая.
  */
 export function useEmployeesPage(
   filters: Record<string, string | boolean | undefined> = {},
@@ -54,7 +32,10 @@ export function useEmployeesPage(
   sort: { sort?: string; order?: 'asc' | 'desc' } = {},
 ) {
   return useQuery<EmployeesPage>({
-    queryKey: ['employees-page', filters, search, page, sort],
+    // AUD7-CODE-07: ключ под общим префиксом 'employees' — все мутации сотрудников
+    // инвалидируют ['employees'], и страница обязана попадать под этот префикс,
+    // иначе после блокировки/удаления строка показывала старый статус.
+    queryKey: ['employees', 'page', filters, search, page, sort],
     queryFn: async () => {
       const response = await apiClient.get('/api/v2/shifts/employees', {
         params: {

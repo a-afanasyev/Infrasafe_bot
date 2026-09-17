@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { useEmployees } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 
@@ -43,16 +44,22 @@ export default function ExecutorPicker({
 }: Props) {
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
-  const { data: employees = [] } = useEmployees({
+  const picker = useEmployeePicker({
     verification_status: 'verified',
     ...(forCategory ? { for_category: forCategory } : {}),
   })
 
-  const candidates = employees.filter(emp => emp.id !== excludeId)
+  const candidates = picker.employees.filter(emp => emp.id !== excludeId)
 
   return (
     <div className="space-y-2">
       <Label className="text-text-secondary">{label ?? t('kanban.selectExecutorLabel')}</Label>
+      <EmployeePickerSearch
+        value={picker.search}
+        onChange={picker.setSearch}
+        shown={picker.employees.length}
+        total={picker.total}
+      />
 
       {showDuty && (
         <>

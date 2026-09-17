@@ -1147,6 +1147,7 @@
     "headerShift": "Смена",
     "headerActions": "Действия",
     "searchPlaceholder": "Поиск сотрудника...",
+    "pickerTruncated": "Показаны {{shown}} из {{total}} — уточните поиск",
     "export": "Экспорт",
     "add": "+ Добавить",
     "statsTotal": "Всего сотрудников",

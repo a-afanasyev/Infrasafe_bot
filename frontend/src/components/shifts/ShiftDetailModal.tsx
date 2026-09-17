@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useShift, useEndShift, useReassignShift } from '../../hooks/useShifts'
-import { useEmployees } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { useHasRole } from '../../hooks/useHasRole'
 import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
 import LoadingSpinner from '../shared/LoadingSpinner'
@@ -57,11 +58,11 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const [reassignOpen, setReassignOpen] = useState(false)
   const [pickedExecutor, setPickedExecutor] = useState<string>('')
   // REG-02: список исполнителей для переназначения (грузим только когда нужно).
-  const { data: employees } = useEmployees({}, undefined)
+  const picker = useEmployeePicker()
 
   if (shiftId === null) return null
 
-  const eligibleExecutors = (employees ?? []).filter(
+  const eligibleExecutors = picker.employees.filter(
     e => e.status === 'approved' && e.id !== shift?.user_id,
   )
 
@@ -223,6 +224,12 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                   <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
                     {t('shifts.reassignPick')}
                   </label>
+                  <EmployeePickerSearch
+                    value={picker.search}
+                    onChange={picker.setSearch}
+                    shown={picker.employees.length}
+                    total={picker.total}
+                  />
                   <select
                     className="bg-bg-base border border-border-default rounded-sm px-2 py-1.5 text-sm text-text-primary"
                     value={pickedExecutor}

@@ -15,9 +15,10 @@ import { Label } from '@/components/ui/label'
 import {
   useActiveRequestsCount,
   useDeleteEmployee,
-  useEmployees,
 } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from './EmployeePickerSearch'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import { cn } from '@/lib/utils'
 
@@ -40,8 +41,8 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
   const { data: activeRequestsData } = useActiveRequestsCount(employee.id)
   const activeCount = activeRequestsData?.count ?? 0
 
-  const { data: employees = [] } = useEmployees()
-  const availableTargets = employees.filter(
+  const picker = useEmployeePicker()
+  const availableTargets = picker.employees.filter(
     (e) => e.id !== employee.id && e.status !== 'blocked',
   )
 
@@ -116,6 +117,12 @@ export default function DeleteEmployeeModal({ employee, onClose }: Props) {
               </DialogDescription>
             </DialogHeader>
 
+            <EmployeePickerSearch
+              value={picker.search}
+              onChange={picker.setSearch}
+              shown={picker.employees.length}
+              total={picker.total}
+            />
             <div className="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto">
               {availableTargets.map((e) => {
                 const gradient =
