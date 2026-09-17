@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **452**
-- открыто маркером: **38**
+- закрыто маркером: **453**
+- открыто маркером: **37**
 
-  - `actionable` — **29**
+  - `actionable` — **28**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=21, P3=8.
+Из них actionable по приоритету: P2=20, P3=8.
 
 Значения `status`:
 
@@ -75,7 +75,6 @@
 | `AUD7-ARCH-03` | P2 | actionable | verified-2026-09-15 | AUD7-M1 | — | media-service | — | СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
 | `AUD7-ENG-08` | P3 | actionable | verified-2026-09-09 | AUD7-O1 | — | resource image | — | из отчёта ENG-08; AC и зависимости в канонической записи |
-| `AUD7-COR-04` | P2 | actionable | review-2026-09-11 | AUD7-R1 | — | resource API | — | follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock |
 | `AUD7-SEC-02` | P2 | actionable | verified-2026-09-11 | AUD7-S1 | — | access API | — | handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher |
 | `AUD7-SEC-04` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | resource exports | — | из отчёта SEC-04; AC и зависимости в канонической записи |
 | `AUD7-SEC-05` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | UK auth / Redis | — | из отчёта SEC-05; AC и зависимости в канонической записи |

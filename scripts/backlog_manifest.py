@@ -131,8 +131,7 @@ ASSIGNMENT: dict[str, dict] = {
     # снимок 635f97db; разбор 2026-09-17): 34/34 перепроверены, закрытие COR-01..03 подтверждено,
     # закрытых нет; четыре новые задачи по находкам СВ-01..04 (CODE-07/08, ARCH-03, DOC-01);
     # method=verified-2026-09-15 там, где запись/AC/метрика уточнены на этом снимке.
-    "AUD7-COR-04": A(pkg="AUD7-R1", status="actionable", method="review-2026-09-11",
-                       services="resource API", note="follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock"),
+    # AUD7-COR-04 закрыт 2026-09-17 (PR #562): recompute_forward после upsert + range-lock у PUT/bulk/import.
     "AUD7-SEC-02": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-11",
                        services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
     "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
