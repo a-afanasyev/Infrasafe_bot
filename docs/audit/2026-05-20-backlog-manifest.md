@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **459**
-- открыто маркером: **31**
+- закрыто маркером: **461**
+- открыто маркером: **29**
 
-  - `actionable` — **22**
+  - `actionable` — **20**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=16, P3=6.
+Из них actionable по приоритету: P2=14, P3=6.
 
 Значения `status`:
 
@@ -70,8 +70,6 @@
 | `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
 | `AUD7-ARCH-03` | P2 | actionable | verified-2026-09-15 | AUD7-M1 | — | media-service | — | СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
-| `AUD7-SEC-02` | P2 | actionable | verified-2026-09-11 | AUD7-S1 | — | access API | — | handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher |
-| `AUD7-SEC-05` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | UK auth / Redis | — | из отчёта SEC-05; AC и зависимости в канонической записи |
 | `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `TEST-068` | P2 | actionable | verified-2026-09-15 | П11 | — | — | — | срез 2026-09-15: 151 файл / 1032 теста, покрытие 59.67/57.61/49.18/51.27, floors 49/47/39/40 (не подтягивались); CI test:cov — ci.yml:1299; до 80% ещё ~20 п.п. |

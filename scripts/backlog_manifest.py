@@ -132,13 +132,11 @@ ASSIGNMENT: dict[str, dict] = {
     # закрытых нет; четыре новые задачи по находкам СВ-01..04 (CODE-07/08, ARCH-03, DOC-01);
     # method=verified-2026-09-15 там, где запись/AC/метрика уточнены на этом снимке.
     # AUD7-COR-04 закрыт 2026-09-17 (PR #562): recompute_forward после upsert + range-lock у PUT/bulk/import.
-    "AUD7-SEC-02": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-11",
-                       services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
+    # AUD7-SEC-02 закрыт 2026-09-17 (PR #568).
     "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
                        services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01"),
     # AUD7-SEC-04 закрыт 2026-09-17 (PR #565).
-    "AUD7-SEC-05": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
-                       services="UK auth / Redis", note="из отчёта SEC-05; AC и зависимости в канонической записи"),
+    # AUD7-SEC-05 закрыт 2026-09-17 (PR #567).
     "AUD7-CODE-01": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
                        services="frontend / UK auth", note="из отчёта CODE-01; AC и зависимости в канонической записи"),
     "AUD7-CODE-02": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-11",
