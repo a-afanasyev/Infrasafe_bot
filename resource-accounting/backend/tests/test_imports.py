@@ -3,6 +3,7 @@ import io
 from openpyxl import Workbook
 
 from tests.conftest import make_meter, make_object, make_period
+from tests.test_readings import _readings_by_month, put_reading
 
 
 def _preview(client, month, filename, content):
@@ -111,3 +112,22 @@ def test_import_missing_reading(admin):
     row = next(r for r in ws["rows"] if r["meter_number"] == "IMPM-001")
     assert row["reading"]["status"] == "missing"
     assert row["reading"]["missing_reason"] == "replaced"
+
+
+def test_import_commit_recomputes_following_open_months(admin):
+    """AUD7-COR-04: импорт в открытый месяц пересчитывает следующие открытые месяцы, как PUT."""
+    obj = make_object(admin, "AUD7COR04-импорт")
+    meter = make_meter(admin, "AUD7COR04-5", obj["id"], max_digits=4)
+    for m in ("2039-01", "2039-02"):
+        make_period(admin, m)
+    assert put_reading(admin, meter["id"], "2039-01", value="100", read_at="2039-01-28").status_code == 200
+    assert put_reading(admin, meter["id"], "2039-02", value="200", read_at="2039-02-28").status_code == 200
+
+    csv_content = "meter_number;period;reading_value;read_at;note\nAUD7COR04-5;2039-01;150;2039-01-28;\n".encode()
+    data = _preview(admin, "2039-01", "readings.csv", csv_content).json()["data"]
+    assert data["valid"] == 1, data
+    resp = admin.post("/v1/imports/readings/commit", json={"month": "2039-01", "commit_token": data["commit_token"]})
+    assert resp.status_code == 200, resp.text
+
+    feb = _readings_by_month(admin, "AUD7COR04-5", ("2039-02",))["2039-02"]
+    assert (feb["previous_value"], feb["consumption"]) == ("150.0000", "50.0000")

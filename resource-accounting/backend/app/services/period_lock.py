@@ -73,3 +73,17 @@ def lock_periods_from(db: Session, tenant_id: uuid.UUID, month: str) -> list[Rep
             .execution_options(populate_existing=True)
         ).scalars()
     )
+
+
+def lock_period_with_following(db: Session, tenant_id: uuid.UUID, month: str) -> ReportingPeriod:
+    """Период month под FOR UPDATE вместе с более поздними незакрытыми (AUD7-COR-04).
+
+    Для прямой записи (PUT, bulk, import): после upsert идёт каскад пересчёта
+    в последующие открытые месяцы, поэтому писатель захватывает их так же, как
+    корректировка — иначе одиночная запись и каскад конкурировали бы за одни
+    строки без общего порядка. Возвращает стартовый период; 404, если его нет.
+    """
+    periods = lock_periods_from(db, tenant_id, month)
+    if not periods or periods[0].month != month:
+        raise not_found(f"Период {month}")
+    return periods[0]

@@ -18,7 +18,7 @@ from app.core.ratelimit import HEAVY_LIMIT, limiter
 from app.db import get_db
 from app.models import User
 from app.services.imports import build_preview, commit_rows, parse_file
-from app.services.period_lock import lock_period
+from app.services.period_lock import lock_period_with_following
 from app.services.readings import EDITABLE_PERIOD_STATUSES
 
 router = APIRouter(prefix="/imports/readings", tags=["imports"])
@@ -81,7 +81,7 @@ def commit_import(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*OPERATOR_ROLES)),
 ):
-    period = lock_period(db, user.tenant_id, payload.month)
+    period = lock_period_with_following(db, user.tenant_id, payload.month)  # AUD7-COR-04: + следующие открытые
     if period.status not in EDITABLE_PERIOD_STATUSES:
         raise bad_request(f"Период {payload.month} в статусе {period.status}: импорт невозможен")
 

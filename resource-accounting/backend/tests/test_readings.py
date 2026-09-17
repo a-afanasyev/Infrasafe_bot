@@ -380,6 +380,83 @@ def test_correction_cascade_skips_closed_period(admin, reviewer):
     assert (sep["previous_value"], sep["consumption"]) == ("200.0000", "50.0000")
 
 
+def _cor04_setup(admin, tag: str, months: tuple[str, ...]) -> dict:
+    """Счётчик с введёнными показаниями во всех months (все периоды открыты): 100, 200, 250…"""
+    obj = make_object(admin, f"{tag}-объект")
+    meter = make_meter(admin, tag, obj["id"], max_digits=4)
+    for m in months:
+        make_period(admin, m)
+    values = ("100", "200", "250", "350")
+    for m, v in zip(months, values):
+        assert put_reading(admin, meter["id"], m, value=v, read_at=f"{m}-28").status_code == 200
+    return meter
+
+
+def test_direct_edit_recomputes_following_open_months(admin):
+    """AUD7-COR-04: прямая правка (PUT) в открытом месяце пересчитывает следующие открытые.
+
+    До правки Feb показывал previous_value=100 / consumption=100 после PUT Jan=150,
+    а колонка ведомости previous_value — уже 150 (считается отдельно): расхождение
+    видно пользователю. Ожидание — Feb previous=150, consumption=50, Mar без изменений.
+    """
+    months = ("2038-01", "2038-02", "2038-03")
+    meter = _cor04_setup(admin, "AUD7COR04-1", months)
+
+    resp = put_reading(admin, meter["id"], "2038-01", value="150", read_at="2038-01-28")
+    assert resp.status_code == 200, resp.text
+
+    rows = _readings_by_month(admin, "AUD7COR04-1", months[1:])
+    assert (rows["2038-02"]["previous_value"], rows["2038-02"]["consumption"]) == ("150.0000", "50.0000")
+    assert (rows["2038-03"]["previous_value"], rows["2038-03"]["consumption"]) == ("200.0000", "50.0000")
+    assert {r["status"] for r in rows.values()} == {"ok"}
+
+
+def test_direct_edit_recompute_updates_status_of_following_month(admin):
+    """AUD7-COR-04: пересчёт меняет и статус следующего месяца, не только число.
+
+    Jan поднимается выше Feb (300 > 200) — Feb становится «меньше предыдущего» → error.
+    """
+    months = ("2038-05", "2038-06")
+    meter = _cor04_setup(admin, "AUD7COR04-2", months)
+
+    assert put_reading(admin, meter["id"], "2038-05", value="300", read_at="2038-05-28").status_code == 200
+
+    jun = _readings_by_month(admin, "AUD7COR04-2", ("2038-06",))["2038-06"]
+    assert jun["previous_value"] == "300.0000"
+    assert jun["status"] == "error"
+    assert jun["consumption"] is None
+
+
+def test_bulk_save_recomputes_following_open_months(admin, operator):
+    """AUD7-COR-04: bulk-сохранение ведёт себя как PUT — следующие открытые месяцы пересчитаны."""
+    months = ("2038-08", "2038-09", "2038-10")
+    meter = _cor04_setup(admin, "AUD7COR04-3", months)
+
+    resp = operator.post("/v1/periods/2038-08/readings/bulk", json={"items": [
+        {"meter_id": meter["id"], "value": "150", "read_at": "2038-08-28"},
+    ]})
+    assert resp.status_code == 200, resp.text
+
+    rows = _readings_by_month(admin, "AUD7COR04-3", months[1:])
+    assert (rows["2038-09"]["previous_value"], rows["2038-09"]["consumption"]) == ("150.0000", "50.0000")
+    assert (rows["2038-10"]["previous_value"], rows["2038-10"]["consumption"]) == ("200.0000", "50.0000")
+
+
+def test_direct_edit_recompute_skips_closed_period(admin, reviewer):
+    """AUD7-COR-04: закрытый следующий месяц прямая правка не трогает (контракт recompute_forward)."""
+    months = ("2038-11", "2038-12")
+    meter = _cor04_setup(admin, "AUD7COR04-4", months)
+    fill_missing(admin, "2038-12")
+    admin.post("/v1/periods/2038-12/move-to-review")
+    assert reviewer.post("/v1/periods/2038-12/submit").status_code == 200
+    assert reviewer.post("/v1/periods/2038-12/close").status_code == 200
+
+    assert put_reading(admin, meter["id"], "2038-11", value="150", read_at="2038-11-28").status_code == 200
+
+    dec = _readings_by_month(admin, "AUD7COR04-4", ("2038-12",))["2038-12"]
+    assert (dec["previous_value"], dec["consumption"]) == ("100.0000", "100.0000")
+
+
 def _period_status(client, month: str) -> str:
     return next(p for p in client.get("/v1/periods").json()["data"] if p["month"] == month)["status"]
 
