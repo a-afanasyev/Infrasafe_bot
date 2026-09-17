@@ -116,9 +116,12 @@ jobs:
       # AUD6-P2-21: media_service и resource-accounting добавлены 2026-07-30 —
       # оба живые прод-сервисы, bandit их не видел (перечисление каталогов
       # здесь и в advisory-шаге ниже обязано совпадать).
+      # AUD7-ENG-04: payment_control добавлен 2026-09-17 — та же история в
+      # третий раз; с этого дня паритет «compose → bandit/pip-audit/images»
+      # держит гейт uk_management_bot/tests/test_ci_service_coverage.py.
       - name: Bandit — High confidence + High severity (blocking)
         run: |
-          bandit -r uk_management_bot access_control media_service resource-accounting \
+          bandit -r uk_management_bot access_control media_service resource-accounting payment_control \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*' \
             -iii -lll
 
@@ -132,7 +135,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          bandit -r uk_management_bot access_control media_service resource-accounting \
+          bandit -r uk_management_bot access_control media_service resource-accounting payment_control \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*'
 
   npm-audit:
@@ -211,6 +214,13 @@ jobs:
       # python-jose — сервис его нигде не импортирует.
       - name: Audit media_service dependencies
         run: pip-audit -r media_service/requirements.txt
+
+      # AUD7-ENG-04: payment_control — живой прод-сервис profk (overlay
+      # docker-compose.payments.yml) со своим requirements.txt, который до
+      # 2026-09-17 не сканировал никто. Без --ignore-vuln: на момент включения
+      # находок нет.
+      - name: Audit payment_control dependencies
+        run: pip-audit -r payment_control/requirements.txt
 
   media-tests:
     name: media-tests (pytest)
@@ -1251,6 +1261,22 @@ jobs:
             ${{ env.REGISTRY }}/uk-frontend:main
           cache-from: type=gha,scope=frontend
           cache-to: "type=gha,mode=max,scope=frontend"
+
+      # AUD7-ENG-04: payment-control — прод-сервис profk (overlay
+      # docker-compose.payments.yml: payment-api + payment-migrate из ОДНОГО
+      # образа, контекст — корень репо, как в compose). Отдельный cache-scope.
+      - name: Build payment image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: payment_control/Dockerfile
+          push: ${{ env.PUBLISH == 'true' }}
+          load: false
+          tags: |
+            ${{ env.REGISTRY }}/uk-payment-control:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/uk-payment-control:main
+          cache-from: type=gha,scope=payment
+          cache-to: "type=gha,mode=max,scope=payment"
 
   frontend:
     name: frontend (build + lint + test)

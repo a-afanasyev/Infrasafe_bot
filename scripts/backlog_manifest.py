@@ -158,12 +158,10 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD7-SIMP-03": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
                        services="UK work_reports / tests", note="из отчёта SIMP-03; AC и зависимости в канонической записи"),
     # AUD7-ENG-01 закрыт 2026-09-17 (PR #570).
-    "AUD7-ENG-02": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
-                       services="E2E CI", note="из отчёта ENG-02; AC и зависимости в канонической записи"),
+    # AUD7-ENG-02 закрыт 2026-09-17 (PR #571).
     "AUD7-ENG-03": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
                        services="media / resource / payment", note="из отчёта ENG-03; AC и зависимости в канонической записи"),
-    "AUD7-ENG-04": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
-                       services="payment CI", note="из отчёта ENG-04; AC и зависимости в канонической записи"),
+    # AUD7-ENG-04 закрыт 2026-09-17 (PR #571).
     "AUD7-ENG-05": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
                        services="Makefile / runbook", note="AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн"),
     "AUD7-ENG-06": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",

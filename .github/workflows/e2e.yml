@@ -39,8 +39,13 @@ jobs:
 
       # Проверка типов отдельным шагом: она полезна и тогда, когда стенд
       # недоступен, — именно она ловит стухший спек без запуска браузера.
+      # AUD7-ENG-02: `npx tsc` при чистом `npm ci` шёл за пакетом `tsc` в
+      # registry (TypeScript в этом пакете объявлен не был) — шаг «проходил»,
+      # ничего не проверяя. Теперь typescript/@types/node в devDependencies с
+      # lock, скрипт локальный; первый же честный прогон нашёл три ошибки в
+      # login-flow.spec.ts (browser-код в page.evaluate без lib DOM).
       - name: Typecheck specs
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - run: npx playwright install --with-deps chromium
 

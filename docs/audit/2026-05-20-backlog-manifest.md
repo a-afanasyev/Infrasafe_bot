@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **463**
-- открыто маркером: **27**
+- закрыто маркером: **465**
+- открыто маркером: **25**
 
-  - `actionable` — **18**
+  - `actionable` — **16**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=13, P3=5.
+Из них actionable по приоритету: P2=11, P3=5.
 
 Значения `status`:
 
@@ -58,9 +58,7 @@
 | `AUD7-SIMP-01` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | bot image / locales | — | 9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54) |
 | `AUD7-SIMP-02` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | bot states / keyboards | — | из отчёта SIMP-02; AC и зависимости в канонической записи |
 | `AUD7-SIMP-03` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | UK work_reports / tests | — | из отчёта SIMP-03; AC и зависимости в канонической записи |
-| `AUD7-ENG-02` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | E2E CI | — | из отчёта ENG-02; AC и зависимости в канонической записи |
 | `AUD7-ENG-03` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | media / resource / payment | — | из отчёта ENG-03; AC и зависимости в канонической записи |
-| `AUD7-ENG-04` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | payment CI | — | из отчёта ENG-04; AC и зависимости в канонической записи |
 | `AUD7-ENG-05` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | Makefile / runbook | — | AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн |
 | `AUD7-ENG-06` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | dev compose / README | — | в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск |
 | `AUD7-CODE-01` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend / UK auth | — | из отчёта CODE-01; AC и зависимости в канонической записи |
