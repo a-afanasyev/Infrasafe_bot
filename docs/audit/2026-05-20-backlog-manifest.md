@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **461**
-- открыто маркером: **29**
+- закрыто маркером: **463**
+- открыто маркером: **27**
 
-  - `actionable` — **20**
+  - `actionable` — **18**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=14, P3=6.
+Из них actionable по приоритету: P2=13, P3=5.
 
 Значения `status`:
 
@@ -58,8 +58,6 @@
 | `AUD7-SIMP-01` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | bot image / locales | — | 9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54) |
 | `AUD7-SIMP-02` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | bot states / keyboards | — | из отчёта SIMP-02; AC и зависимости в канонической записи |
 | `AUD7-SIMP-03` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | UK work_reports / tests | — | из отчёта SIMP-03; AC и зависимости в канонической записи |
-| `AUD7-DEP-01` | P3 | actionable | verified-2026-09-15 | AUD7-E1 | — | frontend dev dependencies | — | npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия |
-| `AUD7-ENG-01` | P2 | actionable | verified-2026-09-11 | AUD7-E1 | — | frontend CI | — | невалидный JSON уже exit 1; fail-open только для валидного {error}/{} — нужна проверка структуры отчёта |
 | `AUD7-ENG-02` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | E2E CI | — | из отчёта ENG-02; AC и зависимости в канонической записи |
 | `AUD7-ENG-03` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | media / resource / payment | — | из отчёта ENG-03; AC и зависимости в канонической записи |
 | `AUD7-ENG-04` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | payment CI | — | из отчёта ENG-04; AC и зависимости в канонической записи |

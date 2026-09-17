@@ -157,8 +157,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="bot states / keyboards", note="из отчёта SIMP-02; AC и зависимости в канонической записи"),
     "AUD7-SIMP-03": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
                        services="UK work_reports / tests", note="из отчёта SIMP-03; AC и зависимости в канонической записи"),
-    "AUD7-ENG-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-11",
-                       services="frontend CI", note="невалидный JSON уже exit 1; fail-open только для валидного {error}/{} — нужна проверка структуры отчёта"),
+    # AUD7-ENG-01 закрыт 2026-09-17 (PR #570).
     "AUD7-ENG-02": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
                        services="E2E CI", note="из отчёта ENG-02; AC и зависимости в канонической записи"),
     "AUD7-ENG-03": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
@@ -172,8 +171,7 @@ ASSIGNMENT: dict[str, dict] = {
     "AUD7-ENG-07": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
                        services="DB / operations", note="прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh"),
     # AUD7-ENG-08 закрыт 2026-09-17 (PR #566).
-    "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
-                       services="frontend dev dependencies", note="npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия"),
+    # AUD7-DEP-01 закрыт 2026-09-17 (PR #570).
     # AUD7-CODE-07 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-03": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-15",
                        services="media-service", note="СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога"),
