@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useCreateShift, useUpdateShift, useDeleteShift } from '../../hooks/useShifts'
-import { useEmployees } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { fromDisplayTz, isoToDatetimeLocal } from '../../utils/timezone'
 import type { ShiftDetail } from '../../types/api'
 import ConfirmDialog from '../shared/ConfirmDialog'
@@ -49,7 +50,8 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
-  const { data: employees = [] } = useEmployees({}, undefined)
+  const picker = useEmployeePicker()
+  const employees = picker.employees
 
   // When editing a shift whose executor isn't in the (verified) employees list
   // — e.g. assigned before verification — surface them as a selectable option so
@@ -172,6 +174,14 @@ export default function CreateShiftModal({ isOpen, onClose, shift = null }: Prop
             {/* Executor */}
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-text-secondary">{t('shifts.executorLabel')}</Label>
+              {!isEdit && (
+                <EmployeePickerSearch
+                  value={picker.search}
+                  onChange={picker.setSearch}
+                  shown={employees.length}
+                  total={picker.total}
+                />
+              )}
               <Select
                 value={executorId}
                 onChange={e => setExecutorId(e.target.value)}

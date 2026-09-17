@@ -4,7 +4,8 @@ import { usePersonName } from '../../hooks/usePersonName'
 import { joinPersonName } from '../../utils/nameCase'
 
 import { useHandleTransfer } from '../../hooks/useShifts'
-import { useEmployees } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { useHasRole } from '../../hooks/useHasRole'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -33,12 +34,12 @@ export default function TransferRequestCard({ transfer }: Props) {
   const isManager = useHasRole('manager')
   const [assigning, setAssigning] = useState(false)
   const [picked, setPicked] = useState('')
-  const { data: employees } = useEmployees({}, undefined)
+  const picker = useEmployeePicker()
 
   // Approve требует executor-роль; исключаем инициатора (по имени — id в
   // TransferOut нет) и берём только approved. Сравнение — канонических строк
   // из БД, а не display-формы (предпочтение «ФИО заглавными» тут ни при чём).
-  const eligible = (employees ?? []).filter(
+  const eligible = picker.employees.filter(
     e =>
       e.status === 'approved' &&
       joinPersonName(e.first_name, e.last_name) !== transfer.from_executor_name,
@@ -105,6 +106,12 @@ export default function TransferRequestCard({ transfer }: Props) {
 
           {assigning && (
             <div className="flex flex-col gap-1.5">
+              <EmployeePickerSearch
+                value={picker.search}
+                onChange={picker.setSearch}
+                shown={picker.employees.length}
+                total={picker.total}
+              />
               <select
                 className="bg-bg-base border border-border-default rounded-sm px-2 py-1.5 text-xs text-text-primary"
                 value={picked}

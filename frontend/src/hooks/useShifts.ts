@@ -204,4 +204,3 @@ export function useShiftsWebSocket() {
   useWebSocket('shifts', onEvent)
 }
 
-export { useEmployees } from './useEmployees'

@@ -4,8 +4,8 @@ import { waitFor } from '@testing-library/react'
 import { renderHook } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import {
-  useEmployees,
   useEmployeesPage,
+  useBlockEmployee,
   useEmployee,
   useApproveEmployee,
 } from './useEmployees'
@@ -13,31 +13,6 @@ import {
 // TEST-068 Phase 2: data-hooks over MSW. Per-test handlers via server.use keep
 // the global handlers.ts lean (Phase 3 widens it). renderHook from test-utils
 // supplies a fresh QueryClient (retry:false) so failures surface fast.
-
-describe('useEmployees', () => {
-  it('fetches the employee list', async () => {
-    server.use(
-      http.get('*/api/v2/shifts/employees', () =>
-        HttpResponse.json([
-          { id: 1, first_name: 'A', last_name: 'B', role: 'executor' },
-          { id: 2, first_name: 'C', last_name: 'D', role: 'executor' },
-        ]),
-      ),
-    )
-    const { result } = renderHook(() => useEmployees())
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toHaveLength(2)
-    expect(result.current.data?.[0].first_name).toBe('A')
-  })
-
-  it('surfaces a server error', async () => {
-    server.use(
-      http.get('*/api/v2/shifts/employees', () => new HttpResponse(null, { status: 500 })),
-    )
-    const { result } = renderHook(() => useEmployees())
-    await waitFor(() => expect(result.current.isError).toBe(true))
-  })
-})
 
 describe('useEmployeesPage', () => {
   it('берёт размер всей выборки из заголовка, а не из длины страницы', async () => {
@@ -82,6 +57,31 @@ describe('useEmployeesPage', () => {
     expect(url?.searchParams.get('sort')).toBe('name')
     expect(url?.searchParams.get('order')).toBe('desc')
     expect(url?.searchParams.get('offset')).toBe('50')
+  })
+})
+
+describe('useEmployeesPage — инвалидация после мутаций (AUD7-CODE-07)', () => {
+  it('блокировка сотрудника перезапрашивает страницу списка', async () => {
+    let gets = 0
+    server.use(
+      http.get('*/api/v2/shifts/employees', () => {
+        gets += 1
+        return HttpResponse.json(
+          [{ id: 7, first_name: 'A', last_name: 'B', role: 'executor', status: gets === 1 ? 'approved' : 'blocked' }],
+          { headers: { 'X-Total-Count': '1' } },
+        )
+      }),
+      http.patch('*/api/v2/shifts/employees/7/block', () => HttpResponse.json({ id: 7, status: 'blocked' })),
+    )
+    // Один QueryClient на оба хука — как на странице «Сотрудники».
+    const { result } = renderHook(() => ({ page: useEmployeesPage(), block: useBlockEmployee() }))
+    await waitFor(() => expect(result.current.page.isSuccess).toBe(true))
+    expect(result.current.page.data?.items[0].status).toBe('approved')
+
+    await result.current.block.mutateAsync(7)
+
+    await waitFor(() => expect(gets).toBe(2))
+    await waitFor(() => expect(result.current.page.data?.items[0].status).toBe('blocked'))
   })
 })
 

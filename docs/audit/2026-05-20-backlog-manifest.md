@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **453**
-- открыто маркером: **37**
+- закрыто маркером: **455**
+- открыто маркером: **35**
 
-  - `actionable` — **28**
+  - `actionable` — **26**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=20, P3=8.
+Из них actionable по приоритету: P2=18, P3=8.
 
 Значения `status`:
 
@@ -68,8 +68,6 @@
 | `AUD7-CODE-01` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend / UK auth | — | из отчёта CODE-01; AC и зависимости в канонической записи |
 | `AUD7-CODE-02` | P2 | actionable | verified-2026-09-11 | AUD7-F1 | — | frontend | — | воспроизведено 2026-09-11: cleanup → отложенный close → таймер → второй сокет; ссылка на тест исправлена (:26) |
 | `AUD7-CODE-05` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend | — | из отчёта CODE-05; AC и зависимости в канонической записи |
-| `AUD7-CODE-06` | P2 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend / UK employees API | — | частично реализовано: страница, total и стабильная сортировка (tiebreaker User.id) сделаны; остаток — шесть потребителей useEmployees без страниц/поиска (CreateShiftModal, ShiftDetailModal, TransferRequestCard, ExecutorPicker, CreateShiftFromTemplateModal, DeleteEmployeeModal); регресс инвалидации — CODE-07 |
-| `AUD7-CODE-07` | P2 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend | — | СВ-01: страница сотрудников читает ключ employees-page, мутации инвалидируют только employees — после блокировки строка не обновляется (регресс PR #556); делать до остатка CODE-06 |
 | `AUD7-CODE-08` | P3 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend (resource-accounting) | — | СВ-03: validate отдаёт errors/warnings_without_comment массивами, types.ts ждёт числа — «ошибок [object Object]»; моки в тесте подставляют числа |
 | `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
 | `AUD7-ARCH-03` | P2 | actionable | verified-2026-09-15 | AUD7-M1 | — | media-service | — | СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога |

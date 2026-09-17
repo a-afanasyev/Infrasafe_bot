@@ -155,3 +155,13 @@ describe('ReassignExecutorModal', () => {
     expect(await screen.findByText(/Других подходящих исполнителей нет/)).toBeInTheDocument()
   })
 })
+
+
+describe('ExecutorPicker — поиск исполнителя (AUD7-CODE-06)', () => {
+  it('поле поиска передаёт запрос серверу, сохраняя фильтр категории', async () => {
+    const seenUrls = await renderModal()
+    await userEvent.type(screen.getByPlaceholderText('Поиск сотрудника...'), 'Пё')
+    await waitFor(() => expect(seenUrls.some(u => new URL(u).searchParams.get('search') === 'Пё')).toBe(true))
+    expect(new URL(seenUrls.at(-1)!).searchParams.get('for_category')).toBe('plumbing')
+  })
+})

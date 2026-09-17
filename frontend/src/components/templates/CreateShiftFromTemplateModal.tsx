@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName, type PersonNameFormatter } from '../../hooks/usePersonName'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
-import { useEmployees } from '../../hooks/useEmployees'
+import { useEmployeePicker } from '../../hooks/useEmployeePicker'
+import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { tSpecialization } from '../../i18n/apiMaps'
 import type { EmployeeBrief } from '../../types/api'
 import { todayInDisplayTz } from '../../utils/timezone'
@@ -48,11 +49,12 @@ export default function CreateShiftFromTemplateModal({
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
   const createFromTemplate = useCreateShiftFromTemplate()
-  const { data: employees = [], isLoading } = useEmployees({
+  const picker = useEmployeePicker({
     ...(requiredSpecializations.length > 0
       ? { for_specializations: requiredSpecializations.join(',') }
       : {}),
   })
+  const { employees, isLoading } = picker
 
   const [date, setDate] = useState(today)
   const [selected, setSelected] = useState<number[]>([])
@@ -127,6 +129,12 @@ export default function CreateShiftFromTemplateModal({
                 })}
               </p>
             )}
+            <EmployeePickerSearch
+              value={picker.search}
+              onChange={picker.setSearch}
+              shown={picker.employees.length}
+              total={picker.total}
+            />
             {isLoading ? (
               <p className="text-[13px] text-muted-foreground">{t('common.loading')}</p>
             ) : employees.length === 0 ? (

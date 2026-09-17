@@ -120,3 +120,30 @@ describe('CreateShiftModal — edit mode', () => {
     expect(posted).toHaveProperty('end_time')
   })
 })
+
+
+describe('CreateShiftModal — поиск исполнителя (AUD7-CODE-06)', () => {
+  it('поле поиска отправляет запрос серверу и сужает список исполнителей', async () => {
+    const seen: string[] = []
+    server.use(
+      http.get('*/api/v2/shifts/employees', ({ request }) => {
+        const search = new URL(request.url).searchParams.get('search') ?? ''
+        seen.push(search)
+        const all = [
+          { id: 1, first_name: 'Андрей', last_name: 'Афанасьев', phone: null },
+          { id: 2, first_name: 'Иван', last_name: 'Петров', phone: null },
+        ]
+        const rows = search ? all.filter(e => e.first_name.includes(search)) : all
+        return HttpResponse.json(rows, { headers: { 'X-Total-Count': String(rows.length) } })
+      }),
+    )
+    render(<CreateShiftModal isOpen onClose={noop} />)
+    await waitFor(() => expect(screen.getByRole('option', { name: /Иван Петров/ })).toBeInTheDocument())
+
+    await userEvent.type(screen.getByPlaceholderText('Поиск сотрудника...'), 'Иван')
+
+    await waitFor(() => expect(seen).toContain('Иван'))
+    await waitFor(() => expect(screen.queryByRole('option', { name: /Андрей Афанасьев/ })).not.toBeInTheDocument())
+    expect(screen.getByRole('option', { name: /Иван Петров/ })).toBeInTheDocument()
+  })
+})

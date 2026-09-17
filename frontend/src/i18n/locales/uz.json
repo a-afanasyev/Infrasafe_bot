@@ -1147,6 +1147,7 @@
     "headerShift": "Smena",
     "headerActions": "Amallar",
     "searchPlaceholder": "Xodim qidirish...",
+    "pickerTruncated": "{{total}} tadan {{shown}} tasi ko‘rsatilgan — qidiruvni aniqlashtiring",
     "export": "Eksport",
     "add": "+ Qo'shish",
     "statsTotal": "Jami xodimlar",

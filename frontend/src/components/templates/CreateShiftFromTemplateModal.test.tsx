@@ -103,3 +103,20 @@ describe('CreateShiftFromTemplateModal', () => {
     expect(screen.getByText('Выбрано: 2')).toBeInTheDocument()
   })
 })
+
+
+describe('CreateShiftFromTemplateModal — поиск исполнителя (AUD7-CODE-06)', () => {
+  it('поле поиска над списком передаёт запрос серверу вместе со специализациями', async () => {
+    const seen: URL[] = []
+    server.use(http.get('*/api/v2/shifts/employees', ({ request }) => {
+      seen.push(new URL(request.url))
+      return HttpResponse.json(EMPLOYEES, { headers: { 'X-Total-Count': '2' } })
+    }))
+    render(<CreateShiftFromTemplateModal isOpen onClose={noop} templateId={5} requiredSpecializations={['electrician']} />)
+    await screen.findByText('Иван Петров')
+    await userEvent.type(screen.getByPlaceholderText('Поиск сотрудника...'), 'Ив')
+    await waitFor(() => expect(seen.some(u => u.searchParams.get('search') === 'Ив')).toBe(true))
+    const last = seen.at(-1)!
+    expect(last.searchParams.get('for_specializations')).toBe('electrician')
+  })
+})
