@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **486**
+- пунктов всего (с Priority): **490**
 - закрыто маркером: **452**
-- открыто маркером: **34**
+- открыто маркером: **38**
 
-  - `actionable` — **26**
-  - `decision` — **1**
+  - `actionable` — **29**
+  - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=19, P3=7.
+Из них actionable по приоритету: P2=21, P3=8.
 
 Значения `status`:
 
@@ -49,8 +49,8 @@
 
 | ID | P | status | method | Пакет | PR | Сервисы | Прод-верификация | Примечание |
 |---|---|---|---|---|---|---|---|---|
-| `AUD3-07` | P2 | deferred | gate-2026-09-01 | A2 | — | — | — | ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, baseline 23 файла / 232 сайта, двунаправленный; конверсия «при касании», deferred-трекер класса |
-| `AUD5-CODE-10` | P3 | deferred | gate-2026-09-01 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций, двунаправленный; раскрой «при касании» под принуждением гейта |
+| `AUD3-07` | P2 | deferred | verified-2026-09-15 | A2 | — | — | — | ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; конверсия «при касании», deferred-трекер класса |
+| `AUD5-CODE-10` | P3 | deferred | verified-2026-09-15 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `AUD7-CODE-03` | P2 | actionable | verified-2026-09-09 | AUD7-B1 | — | bot / Redis / PostgreSQL | — | из отчёта CODE-03; AC и зависимости в канонической записи |
 | `AUD7-CODE-04` | P2 | actionable | verified-2026-09-09 | AUD7-B1 | — | bot / Redis | — | из отчёта CODE-04; AC и зависимости в канонической записи |
@@ -58,26 +58,30 @@
 | `AUD7-SIMP-01` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | bot image / locales | — | 9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54) |
 | `AUD7-SIMP-02` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | bot states / keyboards | — | из отчёта SIMP-02; AC и зависимости в канонической записи |
 | `AUD7-SIMP-03` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | UK work_reports / tests | — | из отчёта SIMP-03; AC и зависимости в канонической записи |
-| `AUD7-DEP-01` | P3 | actionable | verified-2026-09-11 | AUD7-E1 | — | frontend dev dependencies | — | npm audit 2026-09-11: prod 0, dev 10 package entries (high 4) — не 10 уникальных CVE; новые GHSA у vitest, baseline-browser-mapping, js-yaml; всё dev-only |
+| `AUD7-DEP-01` | P3 | actionable | verified-2026-09-15 | AUD7-E1 | — | frontend dev dependencies | — | npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия |
 | `AUD7-ENG-01` | P2 | actionable | verified-2026-09-11 | AUD7-E1 | — | frontend CI | — | невалидный JSON уже exit 1; fail-open только для валидного {error}/{} — нужна проверка структуры отчёта |
 | `AUD7-ENG-02` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | E2E CI | — | из отчёта ENG-02; AC и зависимости в канонической записи |
 | `AUD7-ENG-03` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | media / resource / payment | — | из отчёта ENG-03; AC и зависимости в канонической записи |
 | `AUD7-ENG-04` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | payment CI | — | из отчёта ENG-04; AC и зависимости в канонической записи |
-| `AUD7-ENG-05` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | Makefile / runbook | — | из отчёта ENG-05; AC и зависимости в канонической записи |
-| `AUD7-ENG-06` | P2 | actionable | verified-2026-09-09 | AUD7-E1 | — | dev compose / README | — | в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET, compose требует их через :? — config падает до старта postgres/redis |
+| `AUD7-ENG-05` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | Makefile / runbook | — | AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн |
+| `AUD7-ENG-06` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | dev compose / README | — | в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск |
 | `AUD7-CODE-01` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend / UK auth | — | из отчёта CODE-01; AC и зависимости в канонической записи |
 | `AUD7-CODE-02` | P2 | actionable | verified-2026-09-11 | AUD7-F1 | — | frontend | — | воспроизведено 2026-09-11: cleanup → отложенный close → таймер → второй сокет; ссылка на тест исправлена (:26) |
 | `AUD7-CODE-05` | P2 | actionable | verified-2026-09-09 | AUD7-F1 | — | frontend | — | из отчёта CODE-05; AC и зависимости в канонической записи |
-| `AUD7-CODE-06` | P2 | actionable | verified-2026-09-11 | AUD7-F1 | — | frontend / UK employees API | — | EmployeesPage после PR #556 уже с серверной пагинацией и настоящим total; дыра только в пикерах смен (CreateShiftModal берёт дефолт limit=50) — AC сужен |
+| `AUD7-CODE-06` | P2 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend / UK employees API | — | частично реализовано: страница, total и стабильная сортировка (tiebreaker User.id) сделаны; остаток — шесть потребителей useEmployees без страниц/поиска (CreateShiftModal, ShiftDetailModal, TransferRequestCard, ExecutorPicker, CreateShiftFromTemplateModal, DeleteEmployeeModal); регресс инвалидации — CODE-07 |
+| `AUD7-CODE-07` | P2 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend | — | СВ-01: страница сотрудников читает ключ employees-page, мутации инвалидируют только employees — после блокировки строка не обновляется (регресс PR #556); делать до остатка CODE-06 |
+| `AUD7-CODE-08` | P3 | actionable | verified-2026-09-15 | AUD7-F1 | — | frontend (resource-accounting) | — | СВ-03: validate отдаёт errors/warnings_without_comment массивами, types.ts ждёт числа — «ошибок [object Object]»; моки в тесте подставляют числа |
 | `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
+| `AUD7-ARCH-03` | P2 | actionable | verified-2026-09-15 | AUD7-M1 | — | media-service | — | СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
 | `AUD7-ENG-08` | P3 | actionable | verified-2026-09-09 | AUD7-O1 | — | resource image | — | из отчёта ENG-08; AC и зависимости в канонической записи |
 | `AUD7-COR-04` | P2 | actionable | review-2026-09-11 | AUD7-R1 | — | resource API | — | follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock |
 | `AUD7-SEC-02` | P2 | actionable | verified-2026-09-11 | AUD7-S1 | — | access API | — | handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher |
 | `AUD7-SEC-04` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | resource exports | — | из отчёта SEC-04; AC и зависимости в канонической записи |
 | `AUD7-SEC-05` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | UK auth / Redis | — | из отчёта SEC-05; AC и зависимости в канонической записи |
-| `AUD7-SEC-03` | P2 | decision | verified-2026-09-09 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; сам RBAC-план от 2026-09-05 не закоммичен — коммитить вместе с консолидацией |
-| `TEST-068` | P2 | actionable | verified-2026-09-11 | П11 | — | — | — | срез 2026-09-11: 835 тестов, покрытие 53.52/51.55/43.22/44.70, floors 49/47/39/40; остаток до 80% — components/materials, twa/pages, components/addresses |
+| `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
+| `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
+| `TEST-068` | P2 | actionable | verified-2026-09-15 | П11 | — | — | — | срез 2026-09-15: 151 файл / 1032 теста, покрытие 59.67/57.61/49.18/51.27, floors 49/47/39/40 (не подтягивались); CI test:cov — ci.yml:1299; до 80% ещё ~20 п.п. |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
