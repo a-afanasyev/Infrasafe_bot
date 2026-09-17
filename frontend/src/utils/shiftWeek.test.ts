@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   addDays,
+  addMonths,
   daysInMonth,
   endOfMonth,
   endOfWeek,
@@ -185,5 +186,20 @@ describe('specColor', () => {
   it('returns a non-empty hex string', () => {
     const c = specColor('plumbing')
     expect(c).toMatch(/^#[0-9a-fA-F]{6}$/)
+  })
+})
+
+describe('addMonths (AUD7-CODE-05)', () => {
+  it('31 января → конец февраля, а не 3 марта', () => {
+    const d = addMonths(new Date(2027, 0, 31, 9, 0), 1)
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2027, 1, 28])
+  })
+  it('31 марта назад → конец февраля', () => {
+    const d = addMonths(new Date(2028, 2, 31), -1)
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2028, 1, 29])
+  })
+  it('обычный день сохраняется, год переваливается', () => {
+    const d = addMonths(new Date(2026, 11, 15, 8, 30), 1)
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2027, 0, 15, 8])
   })
 })

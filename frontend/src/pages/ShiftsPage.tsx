@@ -29,6 +29,7 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import {
   addDays,
+  addMonths,
   endOfMonth,
   endOfWeek,
   shiftMatchesSpec,
@@ -93,21 +94,13 @@ export default function ShiftsPage() {
   const goToday = () => setSelectedDate(nowInDisplayTz())
   const goPrev = () =>
     setSelectedDate(d => {
-      if (viewMode === 'month') {
-        const n = new Date(d)
-        n.setMonth(n.getMonth() - 1)
-        return n
-      }
+      if (viewMode === 'month') return addMonths(d, -1)
       const step = viewMode === 'week' ? 7 : 1
       return addDays(d, -step)
     })
   const goNext = () =>
     setSelectedDate(d => {
-      if (viewMode === 'month') {
-        const n = new Date(d)
-        n.setMonth(n.getMonth() + 1)
-        return n
-      }
+      if (viewMode === 'month') return addMonths(d, 1)
       const step = viewMode === 'week' ? 7 : 1
       return addDays(d, step)
     })

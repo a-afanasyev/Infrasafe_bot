@@ -94,7 +94,8 @@ export function DashboardPage() {
               <>
                 <span className="text-warning">{v.by_status?.warning ?? 0}</span>
                 {' / '}
-                <span className="text-error">{v.errors}</span>
+                {/* AUD7-CODE-08: сервер отдаёт массив ошибок — объект как child ронял страницу. */}
+                <span className="text-error">{v.errors.length}</span>
               </>
             )}
           </div>

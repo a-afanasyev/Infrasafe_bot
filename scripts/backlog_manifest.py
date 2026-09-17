@@ -148,8 +148,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="bot / Redis / PostgreSQL", note="из отчёта CODE-03; AC и зависимости в канонической записи"),
     "AUD7-CODE-04": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
                        services="bot / Redis", note="из отчёта CODE-04; AC и зависимости в канонической записи"),
-    "AUD7-CODE-05": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
-                       services="frontend", note="из отчёта CODE-05; AC и зависимости в канонической записи"),
+    # AUD7-CODE-05 закрыт 2026-09-17 (PR #564).
     # AUD7-CODE-06 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
                        services="media API", note="из отчёта ARCH-01; AC и зависимости в канонической записи"),
@@ -182,8 +181,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD7-CODE-07 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-03": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-15",
                        services="media-service", note="СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога"),
-    "AUD7-CODE-08": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
-                       services="frontend (resource-accounting)", note="СВ-03: validate отдаёт errors/warnings_without_comment массивами, types.ts ждёт числа — «ошибок [object Object]»; моки в тесте подставляют числа"),
+    # AUD7-CODE-08 закрыт 2026-09-17 (PR #564).
     "AUD7-DOC-01": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
                        services="docs", note="СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию"),
     # ── П1 ЗАКРЫТ 2026-07-26 целиком: `AUD5-CODE-4`, `AUD5-APIFE-19`,

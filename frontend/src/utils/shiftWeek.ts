@@ -25,6 +25,21 @@ export function addDays(d: Date, days: number): Date {
   return c
 }
 
+/**
+ * Сдвиг на `months` месяцев с зажимом дня: 31 января + 1 → 28/29 февраля,
+ * а не 3 марта (AUD7-CODE-05 — `setMonth` переносил лишние дни в следующий
+ * месяц, и «вперёд/назад» в месячном виде перескакивало через февраль).
+ */
+export function addMonths(d: Date, months: number): Date {
+  const c = new Date(d)
+  const day = c.getDate()
+  c.setDate(1)
+  c.setMonth(c.getMonth() + months)
+  const lastDay = new Date(c.getFullYear(), c.getMonth() + 1, 0).getDate()
+  c.setDate(Math.min(day, lastDay))
+  return c
+}
+
 /** Monday-anchored start of the ISO week containing `d`. */
 export function startOfWeek(d: Date): Date {
   const c = startOfDay(d)

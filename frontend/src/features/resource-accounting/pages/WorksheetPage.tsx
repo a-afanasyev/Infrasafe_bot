@@ -280,11 +280,11 @@ export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {
                 </span>
                 ,{' '}
                 <span className="text-error">
-                  {t('resourceAccounting.worksheet.validationErrors', { n: v.errors })}
+                  {t('resourceAccounting.worksheet.validationErrors', { n: v.errors.length })}
                 </span>
-                {v.warnings_without_comment > 0 &&
+                {v.warnings_without_comment.length > 0 &&
                   t('resourceAccounting.worksheet.validationNoComment', {
-                    n: v.warnings_without_comment,
+                    n: v.warnings_without_comment.length,
                   })}
               </span>
             )}

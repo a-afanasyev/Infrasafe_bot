@@ -38,8 +38,8 @@ const VALIDATION = {
   entered: 0,
   not_entered: 1,
   by_status: {},
-  warnings_without_comment: 0,
-  errors: 0,
+  warnings_without_comment: [],
+  errors: [],
   can_submit: false,
 };
 
@@ -217,5 +217,24 @@ describe('WorksheetPage', () => {
     await user.click(retryBtn);
 
     await waitFor(() => expect(btn).toBeEnabled());
+  });
+});
+
+describe('WorksheetPage — сводка validate в форме сервера (AUD7-CODE-08)', () => {
+  it('ошибки и предупреждения без комментария приходят массивами и считаются по длине', async () => {
+    mockFetchReview({
+      active_meters: 2,
+      entered: 2,
+      not_entered: 0,
+      by_status: { warning: 1, error: 1 },
+      warnings_without_comment: ['m-2'],
+      errors: [{ meter_id: 'm-1', message: 'Показание меньше предыдущего' }],
+      can_submit: false,
+    });
+    renderPage({ role: 'resource_reviewer' });
+
+    expect(await screen.findByText('ошибок 1')).toBeInTheDocument();
+    expect(screen.getByText(/без комментария 1/)).toBeInTheDocument();
+    expect(screen.queryByText(/object Object/)).not.toBeInTheDocument();
   });
 });
