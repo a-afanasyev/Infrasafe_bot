@@ -11,7 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
 
 COPY --chown=appuser:appuser . .
-RUN pip install --no-cache-dir . \
+# AUD7-ENG-03: зависимости — из hash-locked requirements.txt (uv pip compile
+# pyproject.toml, команда в шапке файла), сам пакет — --no-deps, чтобы
+# pyproject не мог подтянуть ничего мимо lock.
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
+    && pip install --no-cache-dir --no-deps . \
     && chmod +x scripts/entrypoint-api.sh
 
 USER appuser

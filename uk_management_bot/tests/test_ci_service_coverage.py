@@ -148,8 +148,6 @@ def test_pip_audit_covers_every_requirements_file(dockerfiles):
         for s in _steps(ci, "pip-audit")
         for m in re.finditer(r"pip-audit\s+-r\s+(\S+)", s.get("run", ""))
     }
-    # resource-accounting/backend живёт на pyproject без lock — его аудит
-    # подключается в AUD7-ENG-03 вместе с lock-файлом; здесь только requirements.txt.
     expected = {"requirements.txt"} | {
         str(d / "requirements.txt")
         for d in _python_service_dirs(dockerfiles)
@@ -157,3 +155,21 @@ def test_pip_audit_covers_every_requirements_file(dockerfiles):
     }
     missing = sorted(expected - audited)
     assert not missing, f"requirements без pip-audit в ci.yml: {missing}"
+
+
+def test_every_python_service_installs_from_hashed_lock(dockerfiles):
+    """AUD7-ENG-03: у каждого python-сервиса свой lock с хэшами (как корневой
+    requirements.txt: `uv pip compile … --generate-hashes`), и Dockerfile
+    ставит зависимости из него, а не из floor-диапазонов/pyproject."""
+    problems: list[str] = []
+    for service_dir in sorted(_python_service_dirs(dockerfiles)):
+        lock = REPO_ROOT / service_dir / "requirements.txt"
+        if not lock.exists():
+            problems.append(f"{service_dir}: нет requirements.txt (lock)")
+            continue
+        if "--hash=sha256:" not in lock.read_text():
+            problems.append(f"{service_dir}/requirements.txt: без --hash — это не lock")
+        dockerfile = next(d for d in dockerfiles if d.parent == service_dir)
+        if "-r requirements.txt" not in (REPO_ROOT / dockerfile).read_text():
+            problems.append(f"{dockerfile}: pip install не из requirements.txt")
+    assert not problems, "\n".join(problems)
