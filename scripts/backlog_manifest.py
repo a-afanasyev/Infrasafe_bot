@@ -136,8 +136,7 @@ ASSIGNMENT: dict[str, dict] = {
                        services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
     "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
                        services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01"),
-    "AUD7-SEC-04": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
-                       services="resource exports", note="из отчёта SEC-04; AC и зависимости в канонической записи"),
+    # AUD7-SEC-04 закрыт 2026-09-17 (PR #565).
     "AUD7-SEC-05": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
                        services="UK auth / Redis", note="из отчёта SEC-05; AC и зависимости в канонической записи"),
     "AUD7-CODE-01": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",

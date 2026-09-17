@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **457**
-- открыто маркером: **33**
+- закрыто маркером: **458**
+- открыто маркером: **32**
 
-  - `actionable` — **24**
+  - `actionable` — **23**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=17, P3=7.
+Из них actionable по приоритету: P2=16, P3=7.
 
 Значения `status`:
 
@@ -72,7 +72,6 @@
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
 | `AUD7-ENG-08` | P3 | actionable | verified-2026-09-09 | AUD7-O1 | — | resource image | — | из отчёта ENG-08; AC и зависимости в канонической записи |
 | `AUD7-SEC-02` | P2 | actionable | verified-2026-09-11 | AUD7-S1 | — | access API | — | handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher |
-| `AUD7-SEC-04` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | resource exports | — | из отчёта SEC-04; AC и зависимости в канонической записи |
 | `AUD7-SEC-05` | P2 | actionable | verified-2026-09-09 | AUD7-S1 | — | UK auth / Redis | — | из отчёта SEC-05; AC и зависимости в канонической записи |
 | `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
