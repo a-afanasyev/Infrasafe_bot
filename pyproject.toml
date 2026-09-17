@@ -17,6 +17,7 @@ addopts = "--import-mode=importlib"
 # NICE-114: register custom marks so @pytest.mark.unit / .integration don't emit
 # PytestUnknownMarkWarning. See docs/development/testing-conventions.md.
 markers = [
+    "real_identity: тест зовёт настоящий предикат WS-личности (autouse-заглушка отключена)",
     "unit: fast hermetic unit test (no DB/network/external I/O)",
     "integration: test touching the DB or external services",
 ]
