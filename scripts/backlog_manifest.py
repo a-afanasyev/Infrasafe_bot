@@ -127,12 +127,16 @@ ASSIGNMENT: dict[str, dict] = {
     # запись/AC уточнены или строки перепроверены на HEAD 6a04699a.
     # AUD7-COR-01/02/03 (три P1) закрыты 2026-09-11, PR #558: flush каскада, единый предикат
     # полноты validate/submit + UI, FOR UPDATE во всех путях записи + PG concurrency-тест в CI.
+    # Сверка по коду 2026-09-15 (отчёт Codex docs/audit/2026-09-15-backlog-code-check.md,
+    # снимок 635f97db; разбор 2026-09-17): 34/34 перепроверены, закрытие COR-01..03 подтверждено,
+    # закрытых нет; четыре новые задачи по находкам СВ-01..04 (CODE-07/08, ARCH-03, DOC-01);
+    # method=verified-2026-09-15 там, где запись/AC/метрика уточнены на этом снимке.
     "AUD7-COR-04": A(pkg="AUD7-R1", status="actionable", method="review-2026-09-11",
                        services="resource API", note="follow-up COR-01: прямая правка открытого месяца не пересчитывает следующие открытые (upsert_reading без recompute_forward); делать под range-lock"),
     "AUD7-SEC-02": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-11",
                        services="access API", note="handshake без DB identity-check (только JWT roles/exp), первая DB-проверка — после первого интервала recheck; фикс = общий предикат ДО стрима и в watcher"),
-    "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-09",
-                       services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; сам RBAC-план от 2026-09-05 не закоммичен — коммитить вместе с консолидацией"),
+    "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
+                       services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01"),
     "AUD7-SEC-04": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
                        services="resource exports", note="из отчёта SEC-04; AC и зависимости в канонической записи"),
     "AUD7-SEC-05": A(pkg="AUD7-S1", status="actionable", method="verified-2026-09-09",
@@ -147,8 +151,8 @@ ASSIGNMENT: dict[str, dict] = {
                        services="bot / Redis", note="из отчёта CODE-04; AC и зависимости в канонической записи"),
     "AUD7-CODE-05": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
                        services="frontend", note="из отчёта CODE-05; AC и зависимости в канонической записи"),
-    "AUD7-CODE-06": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-11",
-                       services="frontend / UK employees API", note="EmployeesPage после PR #556 уже с серверной пагинацией и настоящим total; дыра только в пикерах смен (CreateShiftModal берёт дефолт limit=50) — AC сужен"),
+    "AUD7-CODE-06": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
+                       services="frontend / UK employees API", note="частично реализовано: страница, total и стабильная сортировка (tiebreaker User.id) сделаны; остаток — шесть потребителей useEmployees без страниц/поиска (CreateShiftModal, ShiftDetailModal, TransferRequestCard, ExecutorPicker, CreateShiftFromTemplateModal, DeleteEmployeeModal); регресс инвалидации — CODE-07"),
     "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
                        services="media API", note="из отчёта ARCH-01; AC и зависимости в канонической записи"),
     "AUD7-ARCH-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
@@ -167,16 +171,24 @@ ASSIGNMENT: dict[str, dict] = {
                        services="media / resource / payment", note="из отчёта ENG-03; AC и зависимости в канонической записи"),
     "AUD7-ENG-04": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
                        services="payment CI", note="из отчёта ENG-04; AC и зависимости в канонической записи"),
-    "AUD7-ENG-05": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
-                       services="Makefile / runbook", note="из отчёта ENG-05; AC и зависимости в канонической записи"),
-    "AUD7-ENG-06": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-09",
-                       services="dev compose / README", note="в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET, compose требует их через :? — config падает до старта postgres/redis"),
+    "AUD7-ENG-05": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
+                       services="Makefile / runbook", note="AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн"),
+    "AUD7-ENG-06": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
+                       services="dev compose / README", note="в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск"),
     "AUD7-ENG-07": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
                        services="DB / operations", note="прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh"),
     "AUD7-ENG-08": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
                        services="resource image", note="из отчёта ENG-08; AC и зависимости в канонической записи"),
-    "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-11",
-                       services="frontend dev dependencies", note="npm audit 2026-09-11: prod 0, dev 10 package entries (high 4) — не 10 уникальных CVE; новые GHSA у vitest, baseline-browser-mapping, js-yaml; всё dev-only"),
+    "AUD7-DEP-01": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
+                       services="frontend dev dependencies", note="npm audit 2026-09-15: prod 0, dev 10 package entries (high 4 / moderate 5 / low 1), 11 advisory — не 10 уникальных CVE; всё dev-only; «<4.1.11» — уязвимый диапазон Vitest, не fix-версия"),
+    "AUD7-CODE-07": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
+                       services="frontend", note="СВ-01: страница сотрудников читает ключ employees-page, мутации инвалидируют только employees — после блокировки строка не обновляется (регресс PR #556); делать до остатка CODE-06"),
+    "AUD7-ARCH-03": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-15",
+                       services="media-service", note="СВ-02 / остаток BUG-189: ретраи повторяют get_file (15 с) + read (20 с) — по коду 47–62 с против бюджета edge 30 с; нужен общий deadline на цикл или честная формулировка баг-лога"),
+    "AUD7-CODE-08": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-15",
+                       services="frontend (resource-accounting)", note="СВ-03: validate отдаёт errors/warnings_without_comment массивами, types.ts ждёт числа — «ошибок [object Object]»; моки в тесте подставляют числа"),
+    "AUD7-DOC-01": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
+                       services="docs", note="СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию"),
     # ── П1 ЗАКРЫТ 2026-07-26 целиком: `AUD5-CODE-4`, `AUD5-APIFE-19`,
     # `AUD5-APIFE-18`, `AUD5-PRAC-5`, `AUD5-DEP-1`, `AUD5-PRAC-9` — все шесть
     # помечены закрытыми в бэклоге, поэтому строк здесь больше нет (`--check`
@@ -235,18 +247,18 @@ ASSIGNMENT: dict[str, dict] = {
     # ── П11: тесты и покрытие
     # `AUD5-PRAC-6` закрыт 2026-08-02: twa включён в знаменатель coverage ещё
     # PR #331 (волна 5 аудита #6, floors 41/39/31/32) — маркер отставал от кода.
-    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-09-11",
-                  note="срез 2026-09-11: 835 тестов, покрытие 53.52/51.55/43.22/44.70, "
-                       "floors 49/47/39/40; остаток до 80% — components/materials, "
-                       "twa/pages, components/addresses"),
+    "TEST-068": A(pkg="П11", status="actionable", method="verified-2026-09-15",
+                  note="срез 2026-09-15: 151 файл / 1032 теста, покрытие 59.67/57.61/49.18/51.27, "
+                       "floors 49/47/39/40 (не подтягивались); CI test:cov — ci.yml:1299; "
+                       "до 80% ещё ~20 п.п."),
     # `AUD3-25` закрыт 2026-09-01 (фаза 2 программы ратчетов): sqlite-сьют
     # test_aud325_scoring_sqlite.py гоняет реальные SQL-предикаты скоринга;
     # мутационная порча каждого предиката краснит (мок-сосед — нет).
     # ── Программа A: архитектура
-    "AUD3-07": A(pkg="A2", status="deferred", method="gate-2026-09-01",
+    "AUD3-07": A(pkg="A2", status="deferred", method="verified-2026-09-15",
                  note="ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, "
-                      "baseline 23 файла / 232 сайта, двунаправленный; конверсия "
-                      "«при касании», deferred-трекер класса"),
+                      "baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; "
+                      "конверсия «при касании», deferred-трекер класса"),
     # `AUD5-ARCH-1` закрыт 2026-08-19 консолидацией в `AUD3-07` (остаток обоих
     # совпадал побуквенно, прогресс с 2026-08-14 и так вёлся единым) — строка
     # удалена, `--check` падает на ID закрытого пункта.
@@ -316,9 +328,9 @@ ASSIGNMENT: dict[str, dict] = {
     # канону BUG-174; греп остальных send_to_user-сайтов чист.
     # `BUG-173` закрыт 2026-08-19 (волна живых дефектов): валидатор-зеркало
     # Create; сырые join-сайты рендера — класс BUG-149/169, остаются там.
-    "AUD5-CODE-10": A(pkg="A5", status="deferred", method="gate-2026-09-01",
+    "AUD5-CODE-10": A(pkg="A5", status="deferred", method="verified-2026-09-15",
                       note="ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, "
-                           "baseline 40 файлов / 49 функций, двунаправленный; "
+                           "baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); "
                            "раскрой «при касании» под принуждением гейта"),
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
