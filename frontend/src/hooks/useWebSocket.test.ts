@@ -291,3 +291,70 @@ describe('useWebSocket — unmount во время refresh', () => {
     expect(FakeWebSocket.instances).toHaveLength(2) // guard не задушил живой путь
   })
 })
+
+// AUD7-CODE-02: браузер доставляет событие close АСИНХРОННО — уже после того,
+// как cleanup вызвал ws.close() и снял таймер. Обработчик старого сокета ставил
+// новый reconnect-таймер, и через 3 с поднимался сокет, который никто не
+// закроет. Синхронный `close = vi.fn(...)` выше это скрывал: событие не
+// доставлялось вовсе. Здесь фейк ведёт себя как браузер.
+class AsyncCloseWebSocket extends FakeWebSocket {
+  close = vi.fn(() => {
+    this.readyState = 2 // CLOSING
+    setTimeout(() => {
+      this.readyState = 3
+      this.onclose?.({ code: 1006 })
+    }, 0)
+  })
+}
+
+describe('useWebSocket — поздний close после cleanup (AUD7-CODE-02)', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = []
+    vi.stubGlobal('WebSocket', AsyncCloseWebSocket)
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('close после unmount не ставит таймер и не создаёт сокет', async () => {
+    const { unmount } = renderHook(() => useWebSocket('kanban', () => {}))
+    await openLast()
+    expect(FakeWebSocket.instances).toHaveLength(1)
+
+    unmount()
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(refreshSession).not.toHaveBeenCalled()
+  })
+
+  it('смена endpoint: close старого сокета не оживляет старое поколение', async () => {
+    const { rerender, unmount } = renderHook(({ ep }) => useWebSocket(ep, () => {}), {
+      initialProps: { ep: 'kanban' as 'kanban' | 'shifts' },
+    })
+    await openLast()
+
+    rerender({ ep: 'shifts' })
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(FakeWebSocket.instances[1].url).toMatch(/\/ws\/v2\/shifts$/)
+    unmount()
+  })
+
+  it('контроль: сетевой обрыв живого сокета по-прежнему переподключает', async () => {
+    renderHook(() => useWebSocket('kanban', () => {}))
+    await openLast()
+
+    await act(async () => {
+      const sock = FakeWebSocket.instances[0]
+      sock.readyState = 3
+      sock.onclose?.({ code: 1006 })
+      await vi.advanceTimersByTimeAsync(3_500)
+    })
+
+    expect(FakeWebSocket.instances).toHaveLength(2)
+  })
+})
