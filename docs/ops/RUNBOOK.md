@@ -69,8 +69,10 @@ doppler run --project uk-management --config <cfg> -- \
 #    media_service/.env (каналы, ALLOWED_ORIGINS) — добавить --force-recreate: env_file
 #    не входит в config-hash, а docker restart файл вообще не перечитывает.
 
-# 6. Убедиться, что миграции применились (см. §4)
-docker logs uk-management-api 2>&1 | grep "Migrations complete"
+# 6. Убедиться, что миграции применились (см. §4): «Migrations complete.» печатает
+#    сам one-shot `migrate` (scripts/entrypoint-migrate.sh) в stdout шага 3, в логах
+#    api его нет — там только read-only preflight. Итоговая проверка — по БД:
+docker exec uk-postgres psql -U uk_admin -d <profk_management|uk_management> -Atc "SELECT version_num FROM alembic_version;"
 ```
 
 Критично:
@@ -108,7 +110,8 @@ doppler run --project uk-management --config <cfg> -- \
 
 Важно про откат миграций:
 - Alembic-миграции **не откатываются автоматически** откатом кода. Прод-схема останется на `head` предыдущего деплоя.
-- Откат схемы (`alembic downgrade`) выполнять только вручную и только при подтверждённой необходимости — многие миграции необратимы/содержат backfill. Downgrade запускать в `uk-management-api` (только там есть alembic — см. §4).
+- Откат схемы (`alembic downgrade`) выполнять только вручную и только при подтверждённой необходимости — многие миграции необратимы/содержат backfill. Downgrade — тем же one-shot сервисом `migrate` под `uk_migrator` (runtime-роли api DDL не имеют, см. §4):
+  `doppler run --project uk-management --config <cfg> -- docker compose <оба -f> run --rm --no-deps migrate python -m alembic downgrade <rev>`.
 - Деструктивные git-операции (`reset --hard`, `force push`) — только с явным подтверждением владельца.
 
 ### Откат media_service/migrations/0001_publication_lock.sql
@@ -151,13 +154,14 @@ docker exec uk-management-api curl -s -X POST \
 
 Владелец схемы (`public`) и всех объектов — `uk_migration_owner` (`NOLOGIN`); миграции выполняются под `uk_migrator` (`LOGIN NOINHERIT`) через `SET SESSION ROLE uk_migration_owner` в `alembic/env.py`. Runtime-контейнеры (`app`/`api`/`access-api`) подключаются под `uk_bot_runtime`/`uk_api_runtime`/`uk_access_runtime` — только DML через `uk_app_rw`/`access_app_rw`, без DDL/ownership. Credentials — `.secrets/roles/.env.<role>` (не в общем `.env`), генерируются `docker compose run --rm --name uk-provision-roles provision-roles`. Полный verifier-log обоих rollout'ов: `docs/audit/2026-07-15-pr7-rollout.md`.
 
-Текущий head: `003` (проверить `alembic/versions/`, если сомнение).
+Текущий head — последний файл в `alembic/versions/` (на 2026-09-18 — `019`).
 
 ```bash
-# Успех миграций в логах api
-docker logs uk-management-api 2>&1 | grep -E "Running database migrations|Migrations complete"
+# Успех миграций — в stdout one-shot шага `run --rm … migrate` (scripts/entrypoint-migrate.sh):
+#   Running database migrations… / Running ACL-reconciliation helper… / Verifying schema… /
+#   Migrations complete.  В логах api этих строк НЕТ — там только read-only preflight.
 
-# Текущая ревизия схемы в БД (запускать в api-контейнере — alembic только там)
+# Текущая ревизия схемы в БД (read-only; alembic есть в api-образе, DDL оттуда — нет)
 docker exec uk-management-api python -m alembic current
 
 # Сверить с head репозитория

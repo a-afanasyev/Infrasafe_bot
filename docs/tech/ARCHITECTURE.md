@@ -261,7 +261,8 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
   (`api/auth/router.py:175-236`).
 - **Refresh-токены** хранятся хешами в таблице `refresh_tokens` с ротацией
   (старый отзывается, выдаётся новый; `api/auth/router.py:256-311`). Web-SPA —
-  30 дней; TWA — 24 часа (`TWA_REFRESH_TOKEN_EXPIRE_HOURS`), т.к. Telegram
+  7 дней (`REFRESH_TOKEN_EXPIRE_DAYS`, NICE-082: сжато с 30 до 7, чтобы сузить
+  окно украденного refresh-токена); TWA — 24 часа (`TWA_REFRESH_TOKEN_EXPIRE_HOURS`), т.к. Telegram
   WebView ненадёжно хранит cookie и TWA работает по Bearer в теле ответа.
 - **Fail-closed**: весь auth-роутер закрывается при деградации rate-limit
   backend (`auth_ratelimit_guard`, `api/auth/router.py:34`).

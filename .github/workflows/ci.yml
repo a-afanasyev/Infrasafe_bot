@@ -1286,6 +1286,28 @@ jobs:
           cache-from: type=gha,scope=payment
           cache-to: "type=gha,mode=max,scope=payment"
 
+  quick-start:
+    name: quick-start (README dev path with example env)
+    runs-on: ubuntu-latest
+    # AUD7-ENG-06: документированный первый запуск (README «Быстрый старт») шёл с
+    # `.env.example`, в котором не было обязательных `:?`-переменных
+    # (RESOURCE_*/ACCESS_*/DEPLOY_UID/GID), а env_file role-файлов PR-7 до
+    # provisioning не существовали — compose отказывался разбирать ВСЮ
+    # конфигурацию, даже `up -d postgres redis`. Гейт повторяет шаги 0–1 README
+    # на чистом раннере без единого реального секрета.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: README steps 0–1 with example env
+        run: |
+          cp .env.example .env
+          cp .env.postgres.example .env.postgres
+          export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+          docker compose config -q
+          docker compose up -d --wait --wait-timeout 120 postgres redis
+          docker compose ps
+          docker compose down -v
+
   frontend:
     name: frontend (build + lint + test)
     runs-on: ubuntu-latest

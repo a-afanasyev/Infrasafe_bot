@@ -32,7 +32,10 @@ services:
     # важен: более поздний файл дополняет/переопределяет более ранний.
     env_file:
       - .env
-      - ./.secrets/roles/.env.bot
+      # AUD7-ENG-06: до `provision-roles` файла ещё нет — без required: false compose
+      # отказывался разбирать ВСЮ конфигурацию (даже `up -d postgres redis`).
+      - path: ./.secrets/roles/.env.bot
+        required: false
 
     # Переменные окружения для подключения к сервисам
     environment:
@@ -116,7 +119,10 @@ services:
     # Тот же PR-7 role-файл, что у app: DATABASE_URL под uk_bot_runtime.
     env_file:
       - .env
-      - ./.secrets/roles/.env.bot
+      # AUD7-ENG-06: до `provision-roles` файла ещё нет — без required: false compose
+      # отказывался разбирать ВСЮ конфигурацию (даже `up -d postgres redis`).
+      - path: ./.secrets/roles/.env.bot
+        required: false
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - LOG_LEVEL=INFO
@@ -181,7 +187,10 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
-      - ./.secrets/roles/.env.api
+      # AUD7-ENG-06: до `provision-roles` файла ещё нет — без required: false compose
+      # отказывался разбирать ВСЮ конфигурацию (даже `up -d postgres redis`).
+      - path: ./.secrets/roles/.env.api
+        required: false
     environment:
       # PR-7 (F-01): DATABASE_URL приходит ИСКЛЮЧИТЕЛЬНО из
       # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime —
@@ -279,7 +288,10 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     env_file:
       - .env
-      - ./.secrets/roles/.env.access
+      # AUD7-ENG-06: до `provision-roles` файла ещё нет — без required: false compose
+      # отказывался разбирать ВСЮ конфигурацию (даже `up -d postgres redis`).
+      - path: ./.secrets/roles/.env.access
+        required: false
     environment:
       # Общая БД и Redis с основным API (ТЗ §3.1). Миграции применяет
       # uk-management-api на той же БД — access-api их НЕ гоняет.
@@ -454,7 +466,10 @@ services:
       - uk-network
     env_file:
       - .env
-      - ./.secrets/roles/.env.migrate
+      # AUD7-ENG-06: до `provision-roles` файла ещё нет — без required: false compose
+      # отказывался разбирать ВСЮ конфигурацию (даже `up -d postgres redis`).
+      - path: ./.secrets/roles/.env.migrate
+        required: false
     environment:
       # Только migrate и этот job обязаны требовать fail-closed переключение
       # роли — api/app/access-api эту переменную не используют (не гоняют Alembic).
