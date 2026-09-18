@@ -68,11 +68,15 @@ export default mergeConfig(
         // Порция 7 (2026-09-18): components/addresses 44 % → 68 %, pages/materials,
         // AnalyticsPage, TemplatesPage 0 % → покрыты; факт 69.86 / 67.24 / 59.30 /
         // 62.90 при 170 файлах / 1139 тестах.
+        // Порция 8 (2026-09-18): pages/access/AccessEquipmentPage 39 % → CRUD всех
+        // панелей, pages/BoardEditorPage и twa/pages/inspector/CreatePage 0 % →
+        // покрыты (попутно BUG-191); факт 73.69 / 71.42 / 64.13 / 65.46 при
+        // 173 файлах / 1170 тестах.
         thresholds: {
-          lines: 68,
-          statements: 66,
-          functions: 58,
-          branches: 61,
+          lines: 72,
+          statements: 70,
+          functions: 63,
+          branches: 64,
         },
       },
     },
