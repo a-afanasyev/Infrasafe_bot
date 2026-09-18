@@ -96,60 +96,6 @@ class TemplateManagementStates(StatesGroup):
     exporting_templates = State()
 
 
-class AutoPlanningStates(StatesGroup):
-    """Состояния для автоматического планирования"""
-    
-    # Настройки автопланирования
-    settings_menu = State()
-    setting_auto_create = State()
-    setting_advance_days = State()
-    setting_min_executors = State()
-    setting_max_executors = State()
-    setting_priority_level = State()
-    
-    # Планирование периода
-    selecting_period = State()
-    confirming_auto_plan = State()
-    monitoring_progress = State()
-    reviewing_results = State()
-    
-    # Экстренное планирование
-    emergency_assessment = State()
-    emergency_solution_selection = State()
-    emergency_execution = State()
-
-
-class ShiftAnalyticsStates(StatesGroup):
-    """Состояния для аналитики смен"""
-    
-    # Основное меню аналитики
-    main_menu = State()
-    
-    # Выбор периода анализа
-    selecting_period = State()
-    custom_period_start = State()
-    custom_period_end = State()
-    
-    # Типы отчетов
-    generating_weekly_report = State()
-    generating_monthly_report = State()
-    generating_custom_report = State()
-    
-    # Экспорт данных
-    export_format_selection = State()
-    export_parameters = State()
-    export_confirmation = State()
-    
-    # Детализация аналитики
-    viewing_efficiency_details = State()
-    viewing_workload_details = State()
-    viewing_executor_performance = State()
-    
-    # Настройка дашборда
-    dashboard_customization = State()
-    dashboard_widget_selection = State()
-
-
 class ExecutorAssignmentStates(StatesGroup):
     """Состояния для назначения исполнителей на смены"""
     
