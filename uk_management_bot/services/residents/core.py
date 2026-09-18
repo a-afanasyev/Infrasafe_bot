@@ -28,7 +28,6 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.shifts import service as shifts_service
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.user import User
@@ -45,6 +44,7 @@ from uk_management_bot.services.residents.exceptions import (
     ResidentConflict, ResidentNotFound, ResidentValidationError,
 )
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.services.users.status import set_user_status
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +253,7 @@ async def approve_account(
         )
 
     old_status = resident.status
-    result = await shifts_service.set_user_status(db, resident, "approved", commit=False)
+    result = await set_user_status(db, resident, "approved", commit=False)
     _audit(db, action="user_approved", actor_id=actor_id, resident=resident,
            details={"old_status": old_status, "new_status": "approved", "comment": comment})
     await _finish(db, event=result["event"], payload=result["payload"])
@@ -275,7 +275,7 @@ async def block_account(
         raise ResidentConflict("Аккаунт уже заблокирован", code="already_blocked")
 
     old_status = resident.status
-    result = await shifts_service.set_user_status(db, resident, "blocked", commit=False)
+    result = await set_user_status(db, resident, "blocked", commit=False)
     _audit(db, action="user_blocked", actor_id=actor_id, resident=resident,
            details={"old_status": old_status, "new_status": "blocked", "reason": reason})
     await _finish(db, event=result["event"], payload=result["payload"])
@@ -292,7 +292,7 @@ async def unblock_account(db: AsyncSession, *, resident_id: int, actor_id: int) 
             f"Аккаунт не заблокирован (статус: {resident.status})", code="not_blocked",
         )
 
-    result = await shifts_service.set_user_status(db, resident, "approved", commit=False)
+    result = await set_user_status(db, resident, "approved", commit=False)
     _audit(db, action="user_unblocked", actor_id=actor_id, resident=resident,
            details={"old_status": "blocked", "new_status": "approved"})
     await _finish(db, event=result["event"], payload=result["payload"])

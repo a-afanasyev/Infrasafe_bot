@@ -38,7 +38,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.service import load_dispatch_phone
+from uk_management_bot.services.board_config.service import load_dispatch_phone
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.config.settings import settings

@@ -21,7 +21,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from uk_management_bot.api.board_config.defaults import ALL_MODULE_IDS, MODULE_DEFAULTS
+from uk_management_bot.services.board_config.defaults import ALL_MODULE_IDS, MODULE_DEFAULTS
 
 _DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 

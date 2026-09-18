@@ -25,7 +25,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User

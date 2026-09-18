@@ -9,8 +9,8 @@
 """
 from fastapi import APIRouter, Depends, Request
 
-from uk_management_bot.api.board_config.schemas import LocalizedText
-from uk_management_bot.api.board_config.service import format_working_hours, load_board_config
+from uk_management_bot.services.board_config.schemas import LocalizedText
+from uk_management_bot.services.board_config.service import format_working_hours, load_board_config
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 

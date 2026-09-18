@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.rate_limit_keys import client_ip_key
-from uk_management_bot.api.webhooks.schemas import InfrasafeAlertIn
+from uk_management_bot.services.inbound_webhooks.schemas import InfrasafeAlertIn
 from uk_management_bot.api.webhooks.security import verify_signature
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.inbound_alert import handle_infrasafe_alert

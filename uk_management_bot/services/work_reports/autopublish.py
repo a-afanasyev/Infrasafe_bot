@@ -8,8 +8,13 @@ from typing import Any, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.service import load_board_config
+from uk_management_bot.services.board_config.service import load_board_config
 from uk_management_bot.database.models.work_report import WorkReport
+from uk_management_bot.services.work_reports.media_selection import (
+    apply_media_selection,
+    fetch_media_selection,
+)
+from uk_management_bot.services.work_reports.saga import publish_report
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +24,6 @@ _AUTOPUBLISH_BATCH_LIMIT = 20
 # потолка пакет из 20 растягивался на десятки минут внутри /sync и тика.
 _AUTOPUBLISH_TIME_BUDGET_SECONDS = 60.0
 
-
-def _svc():
-    """Ленивое обращение к фасаду `services.work_report_service`: тесты и
-    колл-сайты патчат атрибуты по имени фасада (включая
-    `_AUTOPUBLISH_BATCH_LIMIT`), поэтому межмодульные вызовы и патчабельные
-    константы внутри пакета читаются через него (см. докстринг пакета)."""
-    from uk_management_bot.services import work_report_service
-
-    return work_report_service
 
 
 async def autopublish_ready_drafts(
@@ -96,7 +92,7 @@ async def autopublish_ready_drafts(
     candidates = (
         (await db.execute(
             stmt.order_by(WorkReport.created_at)
-            .limit(_svc()._AUTOPUBLISH_BATCH_LIMIT)
+            .limit(_AUTOPUBLISH_BATCH_LIMIT)
         )).scalars().all()
     )
 
@@ -115,7 +111,7 @@ async def autopublish_ready_drafts(
     # отчёт может стоить до ~90 с сетевых таймаутов — без потолка пакет из 20
     # растягивался на десятки минут; частичный результат честнее зависшего
     # /sync (недоделанные отчёты подберёт следующий тик/синк).
-    deadline = time.monotonic() + _svc()._AUTOPUBLISH_TIME_BUDGET_SECONDS
+    deadline = time.monotonic() + _AUTOPUBLISH_TIME_BUDGET_SECONDS
 
     ready_ids: list[int] = []
     left = 0
@@ -133,7 +129,7 @@ async def autopublish_ready_drafts(
         # один сбойный запрос ронял весь POST /sync пятисоткой — вместе с
         # синком и ревокацией, которые к media-service отношения не имеют.
         try:
-            before_ids, after_ids = await _svc().fetch_media_selection(
+            before_ids, after_ids = await fetch_media_selection(
                 media_client, report.request_number
             )
         except Exception as e:
@@ -155,7 +151,7 @@ async def autopublish_ready_drafts(
         if row is None:
             await db.commit()  # снять пустую транзакцию от select
             continue
-        _svc().apply_media_selection(row, before_ids, after_ids)
+        apply_media_selection(row, before_ids, after_ids)
         # Тот же критерий готовности, что в publish_report: нужен результат,
         # «до» опционально.
         ready = bool(row.after_media_ids)
@@ -177,7 +173,7 @@ async def autopublish_ready_drafts(
         # берёт publication-lock через media-service, и его недоступность не
         # должна срывать остальной пакет и весь /sync.
         try:
-            await _svc().publish_report(db, media_client, report_id, triggered_by, automatic=True)
+            await publish_report(db, media_client, report_id, triggered_by, automatic=True)
             published += 1
         except Exception as e:
             failed += 1

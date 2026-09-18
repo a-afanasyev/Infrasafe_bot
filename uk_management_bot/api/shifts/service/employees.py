@@ -14,6 +14,9 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.sql_sorting import apply_sort, text_key
+# AUD7-ARCH-02: общая для API и домена операция живёт в services; здесь —
+# реэкспорт, чтобы `api.shifts.service.set_user_status` остался для роутеров/тестов.
+from uk_management_bot.services.users.status import set_user_status  # noqa: F401
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import (
     matches_raw_requirement,
@@ -220,25 +223,6 @@ async def set_user_verification(db: AsyncSession, user: User, value: str) -> Use
     await db.commit()
     await db.refresh(user)
     return user
-
-
-async def set_user_status(
-    db: AsyncSession, user: User, value: str, *, commit: bool = True,
-) -> None | dict:
-    """Persist a status change (blocked/approved) — no refresh needed.
-
-    `commit=False` (Т1) — режим для владельца транзакции снаружи (раздел
-    «Жители»): только мутация + flush, возвращается `{entity, event, payload}`.
-    `event=None` здесь ЛЕГАЛЕН и обязателен: смены статуса аккаунта нет в
-    `_ROUTING` адресных событий, и вызывающий не должен звать для неё
-    `enqueue_outbox` — тот упал бы ValueError на неизвестном событии.
-    """
-    user.status = value
-    if not commit:
-        await db.flush()
-        return {"entity": user, "event": None, "payload": None}
-    await db.commit()
-    return None
 
 
 async def set_meter_entry_role(db: AsyncSession, user: User, enabled: bool) -> User:

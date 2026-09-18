@@ -11,7 +11,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from uk_management_bot.api.board_config.schemas import LocalizedText
+from uk_management_bot.services.board_config.schemas import LocalizedText
 from uk_management_bot.services.work_report_service import MAX_MEDIA_PER_SIDE
 
 

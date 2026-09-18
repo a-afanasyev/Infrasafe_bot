@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import uk_management_bot.api.elevators.public_router as public_router
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.main import app
 from uk_management_bot.config.settings import settings

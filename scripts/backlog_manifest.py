@@ -144,14 +144,10 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD7-CODE-05 закрыт 2026-09-17 (PR #564).
     # AUD7-CODE-06 закрыт 2026-09-17 (PR #563).
     # AUD7-ARCH-01 закрыт 2026-09-18 (PR #576).
-    "AUD7-ARCH-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
-                       services="UK services", note="импортируются сервисные функции api.*.service / схемы, не HTTP; ограниченный перенос, цикла нет"),
-    "AUD7-SIMP-01": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
-                       services="bot image / locales", note="9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54)"),
-    "AUD7-SIMP-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
-                       services="bot states / keyboards", note="из отчёта SIMP-02; AC и зависимости в канонической записи"),
-    "AUD7-SIMP-03": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-09",
-                       services="UK work_reports / tests", note="из отчёта SIMP-03; AC и зависимости в канонической записи"),
+    # AUD7-ARCH-02 закрыт 2026-09-18 (PR #579).
+    # AUD7-SIMP-01 закрыт 2026-09-18 (PR #579).
+    # AUD7-SIMP-02 закрыт 2026-09-18 (PR #579).
+    # AUD7-SIMP-03 закрыт 2026-09-18 (PR #579).
     # AUD7-ENG-01 закрыт 2026-09-17 (PR #570).
     # AUD7-ENG-02 закрыт 2026-09-17 (PR #571).
     # AUD7-ENG-03 закрыт 2026-09-17 (PR #572).

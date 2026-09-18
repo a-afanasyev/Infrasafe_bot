@@ -8,8 +8,8 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
-from uk_management_bot.api.board_config.schemas import BoardConfigData, LayoutItem
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.schemas import BoardConfigData, LayoutItem
 
 
 def test_width_defaults_to_full():

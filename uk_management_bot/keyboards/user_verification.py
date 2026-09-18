@@ -332,70 +332,6 @@ def get_verification_list_keyboard(users_data: Dict, list_type: str, language: s
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_documents_list_keyboard(documents_data: Dict, language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура списка документов для проверки
-    
-    Args:
-        documents_data: Данные документов с пагинацией
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup со списком документов
-    """
-    buttons = []
-    
-    # Документы (по 5 на страницу для удобства)
-    for document in documents_data.get('documents', []):
-        document_name = f"{document.document_type.value}"
-        status_emoji = _get_document_status_emoji(document.verification_status)
-        
-        buttons.append([InlineKeyboardButton(
-            text=f"{status_emoji} {document_name}",
-            callback_data=f"document_verify_{document.id}"
-        )])
-    
-    # Если документов нет
-    if not documents_data.get('documents'):
-        buttons.append([InlineKeyboardButton(
-            text=get_text('verification.no_documents_found', language),
-            callback_data="no_action"
-        )])
-    
-    # Пагинация
-    pagination_buttons = []
-    current_page = documents_data.get('current_page', 1)
-    total_pages = documents_data.get('total_pages', 1)
-    
-    if current_page > 1:
-        pagination_buttons.append(InlineKeyboardButton(
-            text="◀️",
-            callback_data=f"verification_documents_pending_{current_page - 1}"
-        ))
-    
-    pagination_buttons.append(InlineKeyboardButton(
-        text=f"{current_page}/{total_pages}",
-        callback_data="no_action"
-    ))
-    
-    if current_page < total_pages:
-        pagination_buttons.append(InlineKeyboardButton(
-            text="▶️",
-            callback_data=f"verification_documents_pending_{current_page + 1}"
-        ))
-    
-    if pagination_buttons:
-        buttons.append(pagination_buttons)
-    
-    # Назад
-    buttons.append([InlineKeyboardButton(
-        text=get_text('buttons.back', language),
-        callback_data="user_verification_panel"
-    )])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
 def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура отмены действия
@@ -432,63 +368,6 @@ def _get_verification_status_emoji(status: str) -> str:
         'requested': '📝'
     }
     return status_emojis.get(status, '❓')
-
-
-def _get_document_status_emoji(status) -> str:
-    """Получить эмодзи для статуса документа"""
-    status_emojis = {
-        'pending': '⏳',
-        'approved': '✅',
-        'rejected': '❌'
-    }
-    return status_emojis.get(status.value, '❓')
-
-
-def get_document_request_keyboard(user_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура выбора типа документа для запроса
-    
-    Args:
-        user_id: ID пользователя
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup с типами документов
-    """
-    buttons = []
-    
-    # Типы документов
-    document_types = [
-        (DocumentType.PASSPORT, "passport"),
-        (DocumentType.PROPERTY_DEED, "property_deed"),
-        (DocumentType.RENTAL_AGREEMENT, "rental_agreement"),
-        (DocumentType.UTILITY_BILL, "utility_bill"),
-        (DocumentType.OTHER, "other")
-    ]
-    
-    # Группируем по 2 в ряд
-    for i in range(0, len(document_types), 2):
-        row = []
-        
-        for j in range(2):
-            if i + j < len(document_types):
-                doc_type, key = document_types[i + j]
-                doc_name = get_text(f"verification.document_types.{key}", language)
-                
-                row.append(InlineKeyboardButton(
-                    text=f"📄 {doc_name}",
-                    callback_data=f"request_document_{user_id}_{doc_type.value}"
-                ))
-        
-        buttons.append(row)
-    
-    # Назад
-    buttons.append([InlineKeyboardButton(
-        text=get_text('buttons.back', language),
-        callback_data=f"back_to_user_details_{user_id}"
-    )])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_document_checklist_keyboard(user_id: int, selected_docs: list = None, language: str = 'ru') -> InlineKeyboardMarkup:

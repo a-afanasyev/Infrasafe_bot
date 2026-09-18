@@ -13,25 +13,21 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.services.work_reports.errors import (
+    _LOCK_HOLDING_STATUSES,
     MediaValidationError,
     WorkReportPublishError,
 )
 from uk_management_bot.services.work_reports.media_selection import _VALIDATE_FETCH_LIMIT
 from uk_management_bot.utils.workflow_predicates import is_report_eligible
+from uk_management_bot.services.work_reports.addressing import address_looks_like_apartment
+from uk_management_bot.services.work_reports.media_selection import validate_media_ids
+from uk_management_bot.services.work_reports.previews import warm_report_previews
 
 logger = logging.getLogger(__name__)
 
 # Потолок одного пакета reject_reports_without_media (см. докстринг).
 BULK_REJECT_LIMIT = 200
 
-
-def _svc():
-    """Ленивое обращение к фасаду `services.work_report_service`: тесты и
-    колл-сайты патчат атрибуты по имени фасада, поэтому межмодульные вызовы
-    внутри пакета идут через него (см. докстринг пакета)."""
-    from uk_management_bot.services import work_report_service
-
-    return work_report_service
 
 
 # ===========================================================================
@@ -126,7 +122,7 @@ async def publish_report(
             f"request {report.request_number} no longer eligible", 409
         )
 
-    if not report.address_public or _svc().address_looks_like_apartment(report.address_public):
+    if not report.address_public or address_looks_like_apartment(report.address_public):
         raise WorkReportPublishError(
             f"work report {report_id} has an invalid public address", 409
         )
@@ -150,7 +146,7 @@ async def publish_report(
     # ни один publication-lock, значит откат в `pending` всегда безопасен, и
     # парковать отчёт в `publishing` до reconcile здесь незачем.
     try:
-        await _svc().validate_media_ids(
+        await validate_media_ids(
             media_client, report.request_number, report.before_media_ids, report.after_media_ids
         )
     except Exception as e:
@@ -225,7 +221,7 @@ async def publish_report(
     # неудача оптимизации не должна его откатывать. Здесь же, а не только в
     # тике, потому что менеджер часто смотрит витрину сразу после публикации, а
     # тик придёт лишь через 10 минут.
-    await _svc().warm_report_previews(media_client, report)
+    await warm_report_previews(media_client, report)
     return report
 
 
@@ -274,7 +270,7 @@ async def unpublish_report(
     other_rows = (await db.execute(
         select(WorkReport.locked_media_ids).where(
             WorkReport.id != report.id,
-            WorkReport.status.in_(_svc()._LOCK_HOLDING_STATUSES),
+            WorkReport.status.in_(_LOCK_HOLDING_STATUSES),
         )
     )).all()
     for (ids,) in other_rows:

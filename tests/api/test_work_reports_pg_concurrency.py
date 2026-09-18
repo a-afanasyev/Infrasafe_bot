@@ -34,7 +34,7 @@ import pytest_asyncio
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.board_config import BoardConfig

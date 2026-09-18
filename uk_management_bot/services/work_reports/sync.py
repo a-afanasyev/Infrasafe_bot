@@ -11,13 +11,14 @@ from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from uk_management_bot.api.board_config.service import load_board_config
+from uk_management_bot.services.board_config.service import load_board_config
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.utils.workflow_predicates import report_eligible_clause
+from uk_management_bot.services.work_reports.addressing import derive_public_address
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,6 @@ _SYNC_CANDIDATE_LIMIT = 50
 _SYNC_CIRCUIT_BREAKER_LIMIT = 200
 _SYNC_MAX_BACKFILL_DAYS = 14
 
-
-def _svc():
-    """Ленивое обращение к фасаду `services.work_report_service`: тесты и
-    колл-сайты патчат атрибуты по имени фасада, поэтому межмодульные вызовы
-    внутри пакета идут через него (см. докстринг пакета)."""
-    from uk_management_bot.services import work_report_service
-
-    return work_report_service
 
 
 # ===========================================================================
@@ -132,7 +125,7 @@ async def sync_pending_drafts(db: AsyncSession) -> dict:
     created = 0
     for r in candidates:
         category_key = resolve_category_key(r.category)
-        address = _svc().derive_public_address(r)
+        address = derive_public_address(r)
         if address is None:
             logger.warning(
                 "sync_pending_drafts: derive_public_address вернул None для "

@@ -17,9 +17,9 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG, MODULE_DEFAULTS
-from uk_management_bot.api.board_config.schemas import StoredBoardConfigData
-from uk_management_bot.api.board_config.service import merge_and_save_board_config
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG, MODULE_DEFAULTS
+from uk_management_bot.services.board_config.schemas import StoredBoardConfigData
+from uk_management_bot.services.board_config.service import merge_and_save_board_config
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.board_config import BoardConfig
 

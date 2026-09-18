@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 
 
 def _unique_ip(salt: int = 0) -> str:
