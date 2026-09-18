@@ -65,11 +65,14 @@ export default mergeConfig(
         // 62.96 / 60.67 / 52.02 / 54.15 при 163 файлах / 1091 тестах.
         // Порция 6 (2026-09-18): features/resource-accounting 35 % → 85 %; факт
         // 66.64 / 64.12 / 56.31 / 58.40 при 168 файлах / 1118 тестах.
+        // Порция 7 (2026-09-18): components/addresses 44 % → 68 %, pages/materials,
+        // AnalyticsPage, TemplatesPage 0 % → покрыты; факт 69.86 / 67.24 / 59.30 /
+        // 62.90 при 170 файлах / 1139 тестах.
         thresholds: {
-          lines: 65,
-          statements: 63,
-          functions: 55,
-          branches: 57,
+          lines: 68,
+          statements: 66,
+          functions: 58,
+          branches: 61,
         },
       },
     },
