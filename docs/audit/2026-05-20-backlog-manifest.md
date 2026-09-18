@@ -22,12 +22,12 @@
 - закрыто маркером: **479**
 - открыто маркером: **11**
 
-  - `actionable` — **2**
+  - `actionable` — **1**
   - `decision` — **2**
   - `no-pr` — **1**
-  - `deferred` — **6**
+  - `deferred` — **7**
 
-Из них actionable по приоритету: P2=1, P3=1.
+Из них actionable по приоритету: P2=1.
 
 Значения `status`:
 
@@ -58,7 +58,7 @@
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
-| `PENT-F13` | P3 | actionable | verified-2026-09-09 | — | — | DNS/регистратор владельца (оба домена) | — | OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, проверять раздельно (CAA и DS); 2026-09-09: оба пусты на обоих доменах |
+| `PENT-F13` | P3 | deferred | owner-decision-2026-09-18 | — | — | DNS/регистратор владельца (оба домена) | — | решение владельца 2026-09-18: CAA на текущем DNS-провайдере не реализуем — deferred до смены провайдера (тогда CAA + DNSSEC, проверять раздельно CAA и DS); OCSP stapling неприменим для Let's Encrypt (закрыто ранее) |
 | `SEC-115` | P3 | deferred | verified-2026-09-11 | — | — | — | — | UK-часть сделана (/api/uk-buildings-metrics + x-service-token при INFRASAFE_INVENTORY_TOKEN); остаток внешний — принуждение auth на стороне InfraSafe и проверка токена на продах |
 
 ## Спорные пункты, разведённые явно
