@@ -252,6 +252,8 @@ docker exec uk-media-service curl -sf http://localhost:8000/api/v1/health
 
 ## 8. Ссылки
 
+- Бэкапы и восстановление БД: [BACKUPS.md](BACKUPS.md) — реестр покрытия обоих хостов, RPO/RTO, restore-репетиция.
+
 - Dev-окружение и добавление страниц: `docs/DEVELOPMENT.md`
 - Фронтенд: `frontend/README.md`
 - Локализация: `docs/LOCALIZATION_GUIDE.md`

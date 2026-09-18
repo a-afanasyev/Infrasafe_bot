@@ -93,7 +93,7 @@ clean: ## Очистить Docker (stopped containers, unused images)
 ps: ## Запущенные контейнеры
 	@$(COMPOSE) ps
 
-backup-db: ## Backup PostgreSQL
+backup-db: ## Разовый dev-дамп main-БД в ./backups (прод-бэкапы — docs/ops/BACKUPS.md)
 	@mkdir -p backups
 	@docker exec uk-postgres pg_dump -U uk_bot uk_management > backups/backup_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "$(GREEN)✅ Backup создан в backups/$(NC)"
