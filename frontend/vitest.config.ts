@@ -56,11 +56,16 @@ export default mergeConfig(
         // TEST-068: ratchet — только вверх, вслед за фактом (порция 3.1,
         // 2026-09-01: факт 50.8/48.8/40.7/41.1 после закрытия нулей
         // useAddresses/AddressesPage/DashboardLayout; floor = факт − ~1 п.п.).
+        // TEST-068 порция 4 (2026-09-18, после волн 1–7 бэклога): факт 61.84 /
+        // 59.65 / 50.89 / 53.11 (lines/statements/functions/branches) при 158
+        // файлах / 1078 тестах; components/materials 3.5 % → 94.4 %.
+        // Floor = факт − ~1 п.п.; до цели 80 % — ~18 п.п. (pages 56 %,
+        // features/resource-accounting 35 %, components/employees 27 %).
         thresholds: {
-          lines: 49,
-          statements: 47,
-          functions: 39,
-          branches: 40,
+          lines: 60,
+          statements: 58,
+          functions: 49,
+          branches: 52,
         },
       },
     },
