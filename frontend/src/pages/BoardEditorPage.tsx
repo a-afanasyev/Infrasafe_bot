@@ -180,7 +180,10 @@ export default function BoardEditorPage() {
   // beforeunload covers reload / tab-close / browser-close (the common vectors).
   // In-app route blocking needs a data router (createBrowserRouter); this app uses
   // <BrowserRouter>, so router-level blocking is out of scope here.
-  const isDirty = !!serverConfig && !!draft && JSON.stringify(draft) !== JSON.stringify(serverConfig)
+  // BUG-191: сравнивать с ОЧИЩЕННЫМ ответом — сырой несёт display_tz, которого в
+  // draft нет по построению, и «грязным» редактор был всегда (guard на каждый уход).
+  const isDirty =
+    !!serverConfig && !!draft && JSON.stringify(draft) !== JSON.stringify(toEditableBoardConfig(serverConfig))
   useEffect(() => {
     if (!isDirty) return
     const handler = (e: BeforeUnloadEvent) => {
