@@ -460,7 +460,14 @@ async def start_elevator_phase(
     step = await run_db(
         lambda s: load_group_elevator_step_sync(s, candidate, user_db_id), db=_db
     )
-    armed = {**candidate, FIELD_DEADLINE: int(_now()) + ELEVATOR_ANSWER_TIMEOUT}
+    # AUD7-CODE-03: кандидат уже снят GETDEL — под тем же ключом ставится НОВЫЙ
+    # (фаза лифта), поэтому без ``rev``: store_candidate пишет его только в
+    # пустой ключ. Дальнейшие шаги фазы идут через get_candidate и несут rev —
+    # CAS не даст правке воскресить кандидата, снятого параллельным ответом.
+    armed = {
+        **{k: v for k, v in candidate.items() if k != "rev"},
+        FIELD_DEADLINE: int(_now()) + ELEVATOR_ANSWER_TIMEOUT,
+    }
     if await _apply_step(callback, armed, step, lang):
         schedule_elevator_timeout(
             bot, callback.message.chat.id, callback.message.message_id, lang

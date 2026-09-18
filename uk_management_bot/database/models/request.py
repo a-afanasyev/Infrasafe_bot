@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint, Index
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, JSON, Boolean, CheckConstraint, Index, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -36,6 +36,19 @@ class Request(Base):
             name="ck_requests_acceptance_mode",
         ),
         Index("idx_requests_category", "category"),
+        # AUD7-CODE-03: одно исходное сообщение группы (Group Intake) — не более
+        # одной заявки. Redis-CAS в pending закрывает гонку правка/подтверждение,
+        # но рестарт Redis, истёкший TTL и повторная доставка апдейта переживает
+        # только инвариант в БД. Частичный: заявки без источника (бот, дашборд,
+        # TWA) не ограничены. Миграция 0019; перед ней дублей на продах не было.
+        Index(
+            "uq_requests_source_message",
+            "source_chat_id",
+            "source_message_id",
+            unique=True,
+            postgresql_where=text("source_message_id IS NOT NULL"),
+            sqlite_where=text("source_message_id IS NOT NULL"),
+        ),
     )
 
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN
