@@ -63,11 +63,13 @@ export default mergeConfig(
         // features/resource-accounting 35 %, components/employees 27 %).
         // Порция 5 (2026-09-18): components/employees 27 % → 85 %; факт
         // 62.96 / 60.67 / 52.02 / 54.15 при 163 файлах / 1091 тестах.
+        // Порция 6 (2026-09-18): features/resource-accounting 35 % → 85 %; факт
+        // 66.64 / 64.12 / 56.31 / 58.40 при 168 файлах / 1118 тестах.
         thresholds: {
-          lines: 61,
-          statements: 59,
-          functions: 51,
-          branches: 53,
+          lines: 65,
+          statements: 63,
+          functions: 55,
+          branches: 57,
         },
       },
     },
