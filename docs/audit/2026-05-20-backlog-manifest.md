@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **475**
-- открыто маркером: **15**
+- закрыто маркером: **479**
+- открыто маркером: **11**
 
-  - `actionable` — **6**
+  - `actionable` — **2**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=1, P3=5.
+Из них actionable по приоритету: P2=1, P3=1.
 
 Значения `status`:
 
@@ -52,10 +52,6 @@
 | `AUD3-07` | P2 | deferred | verified-2026-09-15 | A2 | — | — | — | ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; конверсия «при касании», deferred-трекер класса |
 | `AUD5-CODE-10` | P3 | deferred | verified-2026-09-15 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
-| `AUD7-ARCH-02` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | UK services | — | импортируются сервисные функции api.*.service / схемы, не HTTP; ограниченный перенос, цикла нет |
-| `AUD7-SIMP-01` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | bot image / locales | — | 9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54) |
-| `AUD7-SIMP-02` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | bot states / keyboards | — | из отчёта SIMP-02; AC и зависимости в канонической записи |
-| `AUD7-SIMP-03` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | UK work_reports / tests | — | из отчёта SIMP-03; AC и зависимости в канонической записи |
 | `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `TEST-068` | P2 | actionable | verified-2026-09-15 | П11 | — | — | — | срез 2026-09-15: 151 файл / 1032 теста, покрытие 59.67/57.61/49.18/51.27, floors 49/47/39/40 (не подтягивались); CI test:cov — ci.yml:1299; до 80% ещё ~20 п.п. |
