@@ -6,13 +6,15 @@
 компенсирует fail-silent («нет номера — нет заявки»).
 
 Ключи:
-  gint:cand:{chat_id}:{prompt_message_id} — кандидат (SETEX 1h, versioned JSON)
+  gint:cand:{chat_id}:{prompt_message_id} — кандидат (SETEX 1h, versioned JSON;
+                                            запись — CAS по ``rev``, см. store_candidate)
   gint:seen:{chat_id}:{message_id}        — dedup исходных сообщений (24h)
   gint:llm:{chat_id}                      — LLM-лимит на группу (окно 60s)
   gint:invite:{telegram_id}               — cooldown приглашений (1h)
 """
 import json
 import logging
+import uuid
 from typing import Any, Optional
 
 from uk_management_bot.config.settings import settings
@@ -72,18 +74,49 @@ def _cand_key(chat_id: int, prompt_message_id: int) -> str:
     return f"gint:cand:{chat_id}:{prompt_message_id}"
 
 
+# AUD7-CODE-03: запись кандидата — одна атомарная операция вместо GET → SETEX.
+# ARGV[3] — ожидаемая ревизия: пусто = «свежий» кандидат (только в пустой ключ,
+# NX), иначе — только поверх той же ревизии (CAS). Возврат 1/0.
+_STORE_CANDIDATE_LUA = """
+local cur = redis.call('GET', KEYS[1])
+if ARGV[3] == '' then
+  if cur then return 0 end
+else
+  if not cur then return 0 end
+  local ok, decoded = pcall(cjson.decode, cur)
+  if not ok or type(decoded) ~= 'table' or decoded['rev'] ~= ARGV[3] then return 0 end
+end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+return 1
+"""
+
+
 async def store_candidate(
     chat_id: int, prompt_message_id: int, payload: dict, *, ttl: int = CANDIDATE_TTL
 ) -> bool:
-    """Сохранить кандидата под message_id ОТПРАВЛЕННОГО промпта. False = сбой.
+    """Сохранить кандидата под message_id ОТПРАВЛЕННОГО промпта. False = сбой/отказ.
 
     ``ttl`` — время жизни в секундах; фаза лифта (Ф4b) хранит кандидата
     короче общего часа, чтобы ответ после таймаута не создал заявку даже при
-    потере in-process таймера (рестарт бота)."""
+    потере in-process таймера (рестарт бота).
+
+    AUD7-CODE-03 — compare-and-set по ``rev``: каждая запись получает новый
+    ``rev``; payload С ``rev`` (правка адреса/категории/фазы лифта, полученного
+    через get_candidate) пишется только поверх ТОЙ ЖЕ ревизии, payload БЕЗ
+    ``rev`` (новый промпт; фаза лифта после pop) — только в пустой ключ. Так
+    правка не воскрешает кандидата, которого подтверждение уже сняло GETDEL, и
+    из двух одновременных правок побеждает одна. False на отказе CAS —
+    вызывающий показывает «устарело», как при истёкшем TTL."""
+    expected_rev = payload.get("rev") or ""
+    stored = {k: v for k, v in payload.items() if k != "rev"}
     try:
-        body = json.dumps({"v": PAYLOAD_VERSION, **payload}, ensure_ascii=False)
-        await _get_client().setex(_cand_key(chat_id, prompt_message_id), ttl, body)
-        return True
+        body = json.dumps(
+            {"v": PAYLOAD_VERSION, **stored, "rev": uuid.uuid4().hex}, ensure_ascii=False
+        )
+        result = await _get_client().eval(
+            _STORE_CANDIDATE_LUA, 1, _cand_key(chat_id, prompt_message_id), body, ttl, expected_rev
+        )
+        return result == 1
     except Exception as e:
         logger.warning("group_intake: store_candidate failed: %s", type(e).__name__)
         return False
@@ -134,15 +167,23 @@ async def mark_seen(chat_id: int, message_id: int) -> bool:
         return False
 
 
+# AUD7-CODE-04: INCR и назначение окна — одной операцией. Раньше EXPIRE шёл
+# отдельной командой и только при count == 1: сбой между ними оставлял счётчик
+# без TTL навсегда, и группа переставала проходить лимит. Ключ без TTL (наследие
+# такого сбоя) здесь тоже получает срок.
+_LLM_INCR_LUA = """
+local c = redis.call('INCR', KEYS[1])
+if redis.call('TTL', KEYS[1]) < 0 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return c
+"""
+
+
 async def llm_allowed(chat_id: int) -> bool:
-    """Лимит LLM-вызовов на группу в минуту (INCR + EXPIRE на первом)."""
+    """Лимит LLM-вызовов на группу в минуту (атомарный INCR + окно)."""
     key = f"gint:llm:{chat_id}"
     try:
-        client = _get_client()
-        count = await client.incr(key)
-        if count == 1:
-            await client.expire(key, _LLM_WINDOW)
-        return count <= settings.GROUP_INTAKE_LLM_PER_MINUTE
+        count = await _get_client().eval(_LLM_INCR_LUA, 1, key, _LLM_WINDOW)
+        return int(count) <= settings.GROUP_INTAKE_LLM_PER_MINUTE
     except Exception as e:
         logger.warning("group_intake: llm_allowed failed: %s", type(e).__name__)
         return False

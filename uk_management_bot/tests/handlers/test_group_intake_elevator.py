@@ -59,7 +59,7 @@ class FakePending:
         self.store_ok = True
 
     def seed(self, candidate, key=KEY):
-        self.store[key] = dict(candidate)
+        self.store[key] = {"rev": "seed", **candidate}
 
     async def get_candidate(self, chat_id, message_id):
         candidate = self.store.get((chat_id, message_id))
@@ -70,10 +70,21 @@ class FakePending:
         return self.store.pop((chat_id, message_id), None)
 
     async def store_candidate(self, chat_id, message_id, payload, *, ttl=3600):
+        """Семантика CAS настоящего pending (AUD7-CODE-03): payload с rev — только
+        поверх той же ревизии, без rev — только в пустой ключ."""
         if not self.store_ok:
             return False
+        current = self.store.get((chat_id, message_id))
+        expected_rev = payload.get("rev")
+        if expected_rev is None:
+            if current is not None:
+                return False
+        elif current is None or current.get("rev") != expected_rev:
+            return False
         self.stores.append((chat_id, message_id, dict(payload), ttl))
-        self.store[(chat_id, message_id)] = {"v": 1, **payload}
+        self.store[(chat_id, message_id)] = {
+            "v": 1, **{k: v for k, v in payload.items() if k != "rev"}, "rev": f"r{len(self.stores)}",
+        }
         return True
 
     @property

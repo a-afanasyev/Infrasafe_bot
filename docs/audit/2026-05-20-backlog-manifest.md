@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **468**
-- открыто маркером: **22**
+- закрыто маркером: **470**
+- открыто маркером: **20**
 
-  - `actionable` — **13**
+  - `actionable` — **11**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=8, P3=5.
+Из них actionable по приоритету: P2=6, P3=5.
 
 Значения `status`:
 
@@ -52,8 +52,6 @@
 | `AUD3-07` | P2 | deferred | verified-2026-09-15 | A2 | — | — | — | ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; конверсия «при касании», deferred-трекер класса |
 | `AUD5-CODE-10` | P3 | deferred | verified-2026-09-15 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
-| `AUD7-CODE-03` | P2 | actionable | verified-2026-09-09 | AUD7-B1 | — | bot / Redis / PostgreSQL | — | из отчёта CODE-03; AC и зависимости в канонической записи |
-| `AUD7-CODE-04` | P2 | actionable | verified-2026-09-09 | AUD7-B1 | — | bot / Redis | — | из отчёта CODE-04; AC и зависимости в канонической записи |
 | `AUD7-ARCH-02` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | UK services | — | импортируются сервисные функции api.*.service / схемы, не HTTP; ограниченный перенос, цикла нет |
 | `AUD7-SIMP-01` | P3 | actionable | verified-2026-09-11 | AUD7-C1 | — | bot image / locales | — | 9 файлов на месте: 26 419 строк / 1 928 925 байт; ссылка на Dockerfile исправлена (:54) |
 | `AUD7-SIMP-02` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | bot states / keyboards | — | из отчёта SIMP-02; AC и зависимости в канонической записи |
