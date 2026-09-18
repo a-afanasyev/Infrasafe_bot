@@ -4,6 +4,7 @@ Telegram клиент для работы с каналами
 
 import asyncio
 import logging
+import time
 from typing import Optional, Union, Tuple
 import httpx
 from aiogram import Bot
@@ -20,18 +21,28 @@ logger = logging.getLogger(__name__)
 # константу, чтобы тест мог посчитать худший случай против бюджета edge.
 DOWNLOAD_BACKOFF_SECONDS: Tuple[float, ...] = (0.0, 0.5, 1.5)
 
+# Часы общего deadline — отдельным именем, чтобы тест худшего случая мог
+# «проматывать» время попыток без реальных 15- и 20-секундных ожиданий.
+_monotonic = time.monotonic
 
-def _download_timeout() -> httpx.Timeout:
+
+def _download_timeout(read_cap: Optional[float] = None) -> httpx.Timeout:
     """BUG-189: connect и read — разные бюджеты.
 
     Одно число `timeout=60` заставляло ждать повисшее TCP-соединение с Telegram
     так же долго, как чтение большого файла, и ретрай стартовал уже после того,
     как edge-nginx (30 с) отдал браузеру 504.
+
+    ``read_cap`` (AUD7-ARCH-03) — остаток общего бюджета: чтение не ждёт
+    дольше, чем осталось до deadline.
     """
     connect = settings.telegram_download_connect_timeout_seconds
+    read = settings.telegram_download_read_timeout_seconds
+    if read_cap is not None:
+        read = max(0.001, min(read, read_cap))
     return httpx.Timeout(
         connect=connect,
-        read=settings.telegram_download_read_timeout_seconds,
+        read=read,
         write=connect,
         pool=connect,
     )
@@ -182,6 +193,25 @@ class TelegramClientService:
         # (инцидент 2026-07-25, см. app/services/preview_cache.py).
         from app.services.preview_cache import download_semaphore
 
+        # AUD7-ARCH-03: один общий deadline на очередь семафора, get_file, чтение
+        # и все ретраи с backoff. asyncio.timeout обрывает повисший await (в том
+        # числе ожидание слота), проверка остатка перед попыткой не даёт стартовать
+        # той, что заведомо не уложится; при исчерпании — TelegramDownloadError
+        # потребителю, а не 504 от edge на всё ещё живом запросе.
+        budget = settings.telegram_download_total_budget_seconds
+        deadline = _monotonic() + budget
+        try:
+            async with asyncio.timeout(budget):
+                return await self._download_within_deadline(file_id, deadline, download_semaphore)
+        except TimeoutError:
+            raise TelegramDownloadError(
+                f"download_file {file_id}: общий бюджет {budget:g} с исчерпан"
+            ) from None
+
+    async def _download_within_deadline(
+        self, file_id: str, deadline: float, download_semaphore
+    ) -> Tuple[bytes, str]:
+        connect_timeout = settings.telegram_download_connect_timeout_seconds
         async with download_semaphore():
             # AUD6-P2-03: ретрай с backoff — сетевые сбои Telegram транзиентны,
             # а ретраев внутри media раньше не было вовсе (они жили только на
@@ -191,11 +221,19 @@ class TelegramClientService:
             for attempt, delay in enumerate(DOWNLOAD_BACKOFF_SECONDS, start=1):
                 if delay:
                     await asyncio.sleep(delay)
+                if _monotonic() + delay + connect_timeout > deadline:
+                    # Остатка не хватит даже на установление соединения —
+                    # поздняя попытка только продлила бы зависший запрос.
+                    break
                 try:
-                    file_info = await self.get_file(file_id)
+                    # Каждый шаг попытки — не дольше остатка общего бюджета.
+                    file_info = await asyncio.wait_for(
+                        self.get_file(file_id), timeout=max(0.001, deadline - _monotonic())
+                    )
                     url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
 
-                    async with httpx.AsyncClient(timeout=_download_timeout()) as client:
+                    timeout = _download_timeout(read_cap=deadline - _monotonic())
+                    async with httpx.AsyncClient(timeout=timeout) as client:
                         resp = await client.get(url)
                         resp.raise_for_status()
 
@@ -216,7 +254,15 @@ class TelegramClientService:
                     last_exc = e
                     logger.warning("download_file %s: попытка %d не удалась: %s",
                                    file_id, attempt, describe_http_error(e))
-            assert last_exc is not None
+                except TimeoutError as e:
+                    # asyncio.wait_for вокруг get_file: Bot API не ответил в остаток.
+                    last_exc = e
+                    logger.warning("download_file %s: попытка %d — get_file не уложился в бюджет",
+                                   file_id, attempt)
+            if last_exc is None:
+                raise TelegramDownloadError(
+                    f"download_file {file_id}: общий бюджет исчерпан до первой попытки"
+                )
             # E1: доминирующий путь (5xx/сеть после трёх попыток) — тоже без URL.
             raise TelegramDownloadError(
                 f"download_file {file_id}: {describe_http_error(last_exc)}"

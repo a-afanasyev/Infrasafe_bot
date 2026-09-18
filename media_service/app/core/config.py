@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     telegram_api_timeout_seconds: float = 15.0
     telegram_download_connect_timeout_seconds: float = 5.0
     telegram_download_read_timeout_seconds: float = 20.0
+    # AUD7-ARCH-03 (остаток BUG-189): connect-таймауты уложены в бюджет, но
+    # общий цикл — нет: каждая из трёх попыток заново звала get_file (до 15 с)
+    # и читала файл (до 20 с), плюс ожидание семафора — по коду допустимы
+    # 47–62 с. Один общий deadline на очередь + get_file + чтение + ретраи,
+    # строго меньше 30 с edge: поздняя попытка не стартует, повисшее чтение
+    # обрывается, потребитель получает ошибку, а не 504 от nginx.
+    telegram_download_total_budget_seconds: float = 25.0
 
     # extra="ignore" обязателен с удалением полей (AUD6-P2-46): на прод-хостах
     # media_service/.env всё ещё содержит LOG_LEVEL и прочие снятые ключи —
