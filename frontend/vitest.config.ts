@@ -61,11 +61,13 @@ export default mergeConfig(
         // файлах / 1078 тестах; components/materials 3.5 % → 94.4 %.
         // Floor = факт − ~1 п.п.; до цели 80 % — ~18 п.п. (pages 56 %,
         // features/resource-accounting 35 %, components/employees 27 %).
+        // Порция 5 (2026-09-18): components/employees 27 % → 85 %; факт
+        // 62.96 / 60.67 / 52.02 / 54.15 при 163 файлах / 1091 тестах.
         thresholds: {
-          lines: 60,
-          statements: 58,
-          functions: 49,
-          branches: 52,
+          lines: 61,
+          statements: 59,
+          functions: 51,
+          branches: 53,
         },
       },
     },
