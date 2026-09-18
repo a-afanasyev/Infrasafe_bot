@@ -9,19 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.work_report import WorkReport
+from uk_management_bot.services.work_reports.errors import _LOCK_HOLDING_STATUSES
 
 logger = logging.getLogger(__name__)
 
 _RECONCILE_STALE_MINUTES = 15
 
-
-def _svc():
-    """Ленивое обращение к фасаду `services.work_report_service`: тесты и
-    колл-сайты патчат атрибуты по имени фасада, поэтому межмодульные вызовы
-    внутри пакета идут через него (см. докстринг пакета)."""
-    from uk_management_bot.services import work_report_service
-
-    return work_report_service
 
 
 async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> dict:
@@ -93,7 +86,7 @@ async def reconcile_publication_locks(db: AsyncSession, media_client: Any) -> di
 
     covered_ids: set[int] = set()
     live_rows = (await db.execute(
-        select(WorkReport.locked_media_ids).where(WorkReport.status.in_(_svc()._LOCK_HOLDING_STATUSES))
+        select(WorkReport.locked_media_ids).where(WorkReport.status.in_(_LOCK_HOLDING_STATUSES))
     )).all()
     for (ids,) in live_rows:
         covered_ids.update(ids or [])

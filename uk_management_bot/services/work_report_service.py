@@ -15,12 +15,13 @@
 * ``autopublish.py`` — `autopublish_ready_drafts`;
 * ``reconcile.py`` — `reconcile_publication_locks`.
 
-Этот модуль остаётся ЕДИНСТВЕННОЙ публичной точкой входа: колл-сайты и тесты
-импортируют отсюда и monkeypatch-ят атрибуты по имени этого модуля
-(`monkeypatch.setattr("uk_management_bot.services.work_report_service.X", ...)`).
-Чтобы такие патчи продолжали действовать, межмодульные вызовы ВНУТРИ пакета
-тоже идут через этот фасад (см. `_svc()` в модулях пакета) — не заменяйте их
-на прямые импорты между модулями.
+Этот модуль — публичная точка входа для потребителей ВНЕ пакета (роутеры,
+планировщик, тесты контрактов). Патч атрибута по имени фасада влияет ТОЛЬКО на
+внешних потребителей: с AUD7-SIMP-03 модули пакета импортируют друг друга
+напрямую, и подменять зависимость нужно в точке использования —
+`monkeypatch.setattr("uk_management_bot.services.work_reports.<module>.<name>", ...)`
+(пример: `work_reports.saga.validate_media_ids` в
+tests/api/test_work_reports_pg_concurrency.py).
 """
 
 from uk_management_bot.services.work_reports.addressing import (

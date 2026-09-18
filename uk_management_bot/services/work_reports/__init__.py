@@ -44,8 +44,10 @@
 * ``autopublish.py`` — `autopublish_ready_drafts`;
 * ``reconcile.py`` — `reconcile_publication_locks`.
 
-Публичная точка входа — ПО-ПРЕЖНЕМУ фасад
-`uk_management_bot.services.work_report_service`: колл-сайты и тесты импортируют
-и monkeypatch-ят атрибуты по этому имени, поэтому межмодульные вызовы внутри
-пакета тоже идут через фасад (см. `_svc()` в модулях).
+Публичная точка входа для ВНЕШНИХ потребителей — по-прежнему фасад
+`uk_management_bot.services.work_report_service` (реэкспорт). Внутри пакета
+модули импортируют друг друга напрямую (AUD7-SIMP-03: прежний ленивый обратный
+ход к фасаду ради monkeypatch старых тестов убран); тесты подменяют
+зависимость там, где она используется: `services.work_reports.<module>.<name>`.
+Гейт: tests/services/test_work_reports_no_facade_backref.py.
 """
