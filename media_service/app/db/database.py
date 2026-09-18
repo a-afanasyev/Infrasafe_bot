@@ -2,11 +2,13 @@
 Конфигурация базы данных
 """
 
+import asyncio
+import functools
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Callable, Generator, TypeVar
 import logging
 
 from app.core.config import settings
@@ -58,6 +60,32 @@ def get_db_context() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
+
+
+_T = TypeVar("_T")
+
+
+async def run_sync(fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
+    """AUD7-ARCH-01: sync ORM-юнит — в рабочем потоке, не в event loop.
+
+    Движок sync (create_engine), сессии sync; до этого `db.query(...).count()`
+    и INSERT исполнялись прямо в цикле и блокировали все остальные запросы на
+    время round-trip к Postgres. Юнит обязан открыть и закрыть сессию сам
+    (get_db_context) и вернуть DTO/отсоединённый объект — сессия не живёт
+    дольше одного вызова и никогда не пересекает внешний I/O (Telegram).
+    """
+    return await asyncio.to_thread(fn, *args, **kwargs)
+
+
+def sync_unit(fn: Callable[..., _T]) -> Callable[..., "asyncio.Future[_T]"]:
+    """Декоратор: sync-метод с собственной сессией → async-метод той же
+    сигнатуры, исполняющий тело через run_sync."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> _T:
+        return await run_sync(fn, *args, **kwargs)
+
+    return wrapper
 
 
 def create_tables():
