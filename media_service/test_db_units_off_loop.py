@@ -11,7 +11,7 @@ import uuid
 
 import pytest
 
-from access_test_utils import FakeTelegram, make_fake_message
+from access_test_utils import FakeTelegram
 
 PNG_1x1 = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -193,7 +193,6 @@ async def test_upload_cancelled_during_telegram_leaves_no_open_session(tracker, 
 
 @pytest.mark.asyncio
 async def test_archive_saga_holds_no_session_during_telegram(tracker):
-    from app.db.database import SessionLocal
     from app.models.media import MediaChannel, MediaFile
 
     real = tracker.real_factory
