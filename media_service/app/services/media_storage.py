@@ -14,7 +14,9 @@ from app.models.media import MediaFile, MediaChannel, MediaTag
 from app.utils.display_tz import display_instant_str, display_now_str
 from app.services.telegram_client import TelegramClientService
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
-from app.db.database import get_db_context
+from dataclasses import dataclass, replace as dc_replace
+
+from app.db.database import get_db_context, run_sync, sync_unit
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,31 @@ class PublicationReservationError(RuntimeError):
     """Archive/delete не смогли зарезервировать файл: не active, или
     publication_locked=True (файл сейчас опубликован на публичном табло)."""
 
+
+
+@dataclass(frozen=True)
+class ChannelRef:
+    """Снимок канала вне сессии (AUD7-ARCH-01).
+
+    Telegram-загрузка идёт по этому снимку, а не по ORM-объекту: сессия, в
+    которой канал прочитан, закрывается до внешнего I/O.
+    """
+
+    id: int
+    purpose: str
+    channel_name: str
+    channel_id: Optional[int]
+    channel_username: Optional[str]
+
+    @classmethod
+    def from_row(cls, row: MediaChannel) -> "ChannelRef":
+        return cls(
+            id=row.id,
+            purpose=row.purpose,
+            channel_name=row.channel_name,
+            channel_id=row.channel_id,
+            channel_username=row.channel_username,
+        )
 
 class MediaStorageService:
     """Основной сервис для работы с медиа-хранилищем в Telegram каналах"""
@@ -54,47 +81,40 @@ class MediaStorageService:
     ) -> MediaFile:
         """
         Загружает медиа-файл для заявки в соответствующий канал
+
+        AUD7-ARCH-01: три короткие DB-единицы в рабочем потоке (канал →
+        [Telegram] → метаданные+теги); сессия не пересекает Telegram-загрузку.
         """
         logger.info(f"Uploading request media for {request_number}, category: {category}")
 
         # Валидация
         await self._validate_file(file_data, content_type)
 
-        with get_db_context() as db:
-            try:
-                # 1. Определяем канал для загрузки
-                channel = await self._get_channel_for_category(db, category)
+        try:
+            # 1. Определяем канал для загрузки (своя сессия, закрыта до I/O)
+            channel = await run_sync(self._resolve_channel_sync, category)
 
-                # 2. Подготавливаем файл
-                file_obj = BufferedInputFile(file_data, filename=filename)
+            # 2. Подготавливаем файл
+            file_obj = BufferedInputFile(file_data, filename=filename)
 
-                # 3. Генерируем подпись с тегами
-                caption = self._generate_caption(request_number, description, tags)
+            # 3. Генерируем подпись с тегами
+            caption = self._generate_caption(request_number, description, tags)
 
-                # 4. Загружаем в Telegram канал
-                message = await self._upload_to_channel(channel, file_obj, caption, content_type)
+            # 4. Загружаем в Telegram канал — без открытой сессии
+            message = await self._upload_to_channel(channel, file_obj, caption, content_type)
 
-                # 5. Сохраняем метаданные в БД
-                media_file = await self._save_media_metadata(
-                    db, message, request_number, category, description,
-                    tags, uploaded_by, filename, content_type, len(file_data)
-                )
+            # 5–6. Метаданные + статистика тегов — одна короткая транзакция
+            media_file = await run_sync(
+                self._persist_upload_sync, message, request_number, category,
+                description, tags, uploaded_by, filename, content_type, len(file_data),
+            )
 
-                # 6. Обновляем статистику тегов
-                if tags:
-                    await self._update_tags_usage(db, tags)
+            logger.info(f"Media uploaded successfully: {media_file.id}")
+            return media_file
 
-                # Обновляем объект, чтобы загрузить все поля
-                db.refresh(media_file)
-                # Делаем объект независимым от сессии
-                db.expunge(media_file)
-
-                logger.info(f"Media uploaded successfully: {media_file.id}")
-                return media_file
-
-            except Exception as e:
-                logger.error(f"Failed to upload media for {request_number}: {e}")
-                raise
+        except Exception as e:
+            logger.error(f"Failed to upload media for {request_number}: {e}")
+            raise
 
     async def upload_report_media(
         self,
@@ -182,38 +202,33 @@ class MediaStorageService:
             if ref_tag not in all_tags:
                 all_tags.append(ref_tag)
 
-        with get_db_context() as db:
-            try:
-                channel = await self._get_or_create_domain_channel(
-                    db, channel_purpose, configured
-                )
+        try:
+            # AUD7-ARCH-01: канал — своя короткая сессия, закрыта до Telegram I/O.
+            channel = await run_sync(
+                self._resolve_domain_channel_sync, channel_purpose, configured
+            )
 
-                file_obj = BufferedInputFile(file_data, filename=filename)
-                caption = self._generate_domain_caption(ref, description, all_tags)
+            file_obj = BufferedInputFile(file_data, filename=filename)
+            caption = self._generate_domain_caption(ref, description, all_tags)
 
-                message = await self._upload_to_channel(
-                    channel, file_obj, caption, content_type
-                )
+            message = await self._upload_to_channel(
+                channel, file_obj, caption, content_type
+            )
 
-                media_file = await self._save_media_metadata(
-                    db, message, None, category, description,
-                    all_tags, uploaded_by, filename, content_type, len(file_data)
-                )
+            media_file = await run_sync(
+                self._persist_upload_sync, message, None, category, description,
+                all_tags, uploaded_by, filename, content_type, len(file_data),
+            )
 
-                if all_tags:
-                    await self._update_tags_usage(db, all_tags)
+            logger.info(f"Domain media uploaded successfully: {media_file.id}")
+            return media_file
 
-                db.refresh(media_file)
-                db.expunge(media_file)
+        except Exception as e:
+            logger.error(f"Failed to upload domain media (ref={ref}): {e}")
+            raise
 
-                logger.info(f"Domain media uploaded successfully: {media_file.id}")
-                return media_file
-
-            except Exception as e:
-                logger.error(f"Failed to upload domain media (ref={ref}): {e}")
-                raise
-
-    async def get_request_media(
+    @sync_unit
+    def get_request_media(
         self,
         request_number: str,
         category: Optional[str] = None,
@@ -249,11 +264,27 @@ class MediaStorageService:
     ) -> Optional[MediaFile]:
         """
         Обновляет теги медиа-файла
+
+        AUD7-ARCH-01: теги и статистика — одна короткая транзакция в потоке,
+        подпись в Telegram правится уже по отсоединённому объекту.
         """
+        media_file = await run_sync(self._apply_tags_sync, media_file_id, tags, replace)
+        if media_file is None:
+            logger.warning(f"Media file {media_file_id} not found")
+            return None
+
+        # Обновляем подпись в Telegram канале — вне сессии
+        await self._update_channel_caption(media_file)
+
+        logger.info(f"Updated tags for media file {media_file_id}")
+        return media_file
+
+    def _apply_tags_sync(
+        self, media_file_id: int, tags: List[str], replace: bool
+    ) -> Optional[MediaFile]:
         with get_db_context() as db:
             media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
             if not media_file:
-                logger.warning(f"Media file {media_file_id} not found")
                 return None
 
             if replace:
@@ -261,16 +292,13 @@ class MediaStorageService:
             else:
                 # Объединяем существующие и новые теги
                 existing_tags = set(media_file.tags or [])
-                new_tags = existing_tags.union(set(tags))
-                media_file.tags = list(new_tags)
-
-            # Обновляем подпись в Telegram канале
-            await self._update_channel_caption(media_file)
+                media_file.tags = list(existing_tags.union(set(tags)))
 
             # Обновляем статистику тегов
-            await self._update_tags_usage(db, tags)
-
-            logger.info(f"Updated tags for media file {media_file_id}")
+            self._update_tags_usage(db, tags)
+            db.flush()
+            db.refresh(media_file)
+            db.expunge(media_file)
             return media_file
 
     async def archive_media(
@@ -327,15 +355,55 @@ class MediaStorageService:
             # транзиентный статус не должны молча трактоваться как удаление.
             raise ValueError(f"Unknown reserving_status: {reserving_status}")
 
-        # === Фаза 1: резервирование, своя короткая транзакция ===
-        reserved = False
+        # === Фаза 1: резервирование, своя короткая транзакция (в потоке) ===
+        reserved = await run_sync(self._reserve_sync, media_file_id, reserving_status)
+        if reserved is None:
+            logger.warning(f"Media file {media_file_id} not found")
+            return False
+        if not reserved:
+            raise PublicationReservationError(
+                f"media file {media_file_id} not archivable: not active or publication-locked"
+            )
+
+        # === Фаза 2: Telegram I/O по снимку строки, финализация — отдельной
+        # короткой транзакцией (AUD7-ARCH-01: сессия не держится через I/O) ===
+        media_file = await run_sync(self._load_detached_sync, media_file_id)
+        try:
+            if is_archive:
+                archive_channel = await run_sync(
+                    self._resolve_channel_sync, FileCategories.ARCHIVE
+                )
+                await self._copy_to_archive(media_file, archive_channel, archive_reason)
+                await run_sync(
+                    self._set_status_sync, media_file_id, "archived",
+                    archived_at=datetime.now(timezone.utc),
+                )
+                logger.info(f"Media file {media_file_id} archived successfully")
+            else:
+                await self.telegram.delete_message(
+                    chat_id=media_file.telegram_channel_id,
+                    message_id=media_file.telegram_message_id
+                )
+                await run_sync(self._set_status_sync, media_file_id, "deleted")
+                logger.info(f"Media file {media_file_id} deleted successfully")
+
+            return True
+
+        except Exception as e:
+            action = "archive" if is_archive else "delete"
+            logger.error(f"Failed to {action} media file {media_file_id}: {e}")
+            # Компенсация: I/O не удался, байты никуда не делись —
+            # возвращаем резервирование.
+            await run_sync(self._set_status_sync, media_file_id, "active")
+            return False
+
+    def _reserve_sync(self, media_file_id: int, reserving_status: str) -> Optional[bool]:
+        """None — файла нет; False — не active / заблокирован; True — зарезервирован."""
         with get_db_context() as db:
             exists = db.query(MediaFile.id).filter(MediaFile.id == media_file_id).first()
             if exists is None:
-                logger.warning(f"Media file {media_file_id} not found")
-                return False
-
-            reserved = db.execute(
+                return None
+            return db.execute(
                 update(MediaFile)
                 .where(
                     MediaFile.id == media_file_id,
@@ -346,44 +414,25 @@ class MediaStorageService:
                 .returning(MediaFile.id)
             ).first() is not None
 
-        if not reserved:
-            raise PublicationReservationError(
-                f"media file {media_file_id} not archivable: not active or publication-locked"
-            )
-
-        # === Фаза 2: Telegram I/O + финализация, свежая сессия ===
+    def _load_detached_sync(self, media_file_id: int) -> MediaFile:
         with get_db_context() as db:
             media_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
-            try:
-                if is_archive:
-                    archive_channel = await self._get_channel_for_category(db, FileCategories.ARCHIVE)
-                    await self._copy_to_archive(media_file, archive_channel, archive_reason)
+            if media_file is None:
+                raise ValueError(f"media file {media_file_id} vanished after reservation")
+            db.expunge(media_file)
+            return media_file
 
-                    media_file.status = "archived"
-                    media_file.archived_at = datetime.now(timezone.utc)
+    def _set_status_sync(
+        self, media_file_id: int, status: str, *, archived_at: Optional[datetime] = None
+    ) -> None:
+        values: Dict[str, Any] = {"status": status}
+        if archived_at is not None:
+            values["archived_at"] = archived_at
+        with get_db_context() as db:
+            db.execute(update(MediaFile).where(MediaFile.id == media_file_id).values(**values))
 
-                    logger.info(f"Media file {media_file_id} archived successfully")
-                else:
-                    await self.telegram.delete_message(
-                        chat_id=media_file.telegram_channel_id,
-                        message_id=media_file.telegram_message_id
-                    )
-
-                    media_file.status = "deleted"
-
-                    logger.info(f"Media file {media_file_id} deleted successfully")
-
-                return True
-
-            except Exception as e:
-                action = "archive" if is_archive else "delete"
-                logger.error(f"Failed to {action} media file {media_file_id}: {e}")
-                # Компенсация: I/O не удался, байты никуда не делись —
-                # возвращаем резервирование.
-                media_file.status = "active"
-                return False
-
-    async def acquire_publication_lock(self, media_file_id: int) -> bool:
+    @sync_unit
+    def acquire_publication_lock(self, media_file_id: int) -> bool:
         """Атомарно резервирует файл под публикацию.
 
         Успех только на текущий активный файл. Повторный вызов на уже
@@ -403,7 +452,8 @@ class MediaStorageService:
             ).first() is not None
         return locked
 
-    async def release_publication_lock(self, media_file_id: int) -> None:
+    @sync_unit
+    def release_publication_lock(self, media_file_id: int) -> None:
         """Снимает publication_locked. Идемпотентно — не ошибается, если
         файла нет или он уже не заблокирован."""
         with get_db_context() as db:
@@ -413,7 +463,8 @@ class MediaStorageService:
                 .values(publication_locked=False)
             )
 
-    async def resolve_stale_transitions(self, older_than_minutes: int) -> Dict[str, int]:
+    @sync_unit
+    def resolve_stale_transitions(self, older_than_minutes: int) -> Dict[str, int]:
         """Довести до терминального состояния строки, застрявшие в транзиентных
         статусах саги `_reserve_and_run` (крэш процесса между резервированием и
         финализацией).
@@ -451,7 +502,8 @@ class MediaStorageService:
             )
         return {"archiving_reverted": reverted, "deleting_finalized": finalized}
 
-    async def list_publication_locks(
+    @sync_unit
+    def list_publication_locks(
         self, limit: int, offset: int
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Возвращает (rows, total_count) для всех publication_locked=true
@@ -551,72 +603,81 @@ class MediaStorageService:
         caption_parts.append(f"⏰ {display_now_str()}")
         return "\n".join(caption_parts)
 
-    async def _get_or_create_domain_channel(
-        self, db: Session, channel_purpose: str, configured_value: str
-    ) -> MediaChannel:
-        """Возвращает активный канал по purpose, создавая запись при отсутствии.
+    def _resolve_domain_channel_sync(
+        self, channel_purpose: str, configured_value: str
+    ) -> ChannelRef:
+        """Активный канал по purpose (создаётся при отсутствии) — снимком.
 
         Канал «access» (и др. домен-каналы) может отсутствовать в БД на уже
         развёрнутых инсталляциях (init_db создаёт дефолтные каналы лишь на пустой
-        БД). Здесь создаём строку из env-значения идемпотентно.
+        БД). Здесь создаём строку из env-значения идемпотентно. Своя короткая
+        сессия (AUD7-ARCH-01), закрыта до Telegram I/O.
         """
-        channel = db.query(MediaChannel).filter(
-            MediaChannel.purpose == channel_purpose,
-            MediaChannel.is_active == True  # noqa: E712
-        ).first()
-        if channel:
-            return channel
+        with get_db_context() as db:
+            channel = db.query(MediaChannel).filter(
+                MediaChannel.purpose == channel_purpose,
+                MediaChannel.is_active == True  # noqa: E712
+            ).first()
+            if channel is None:
+                channel = MediaChannel(
+                    channel_name=f"uk_media_{channel_purpose}",
+                    channel_username=configured_value,
+                    purpose=channel_purpose,
+                    category="photo",
+                    is_active=True,
+                )
+                db.add(channel)
+                db.flush()
+                logger.info(
+                    f"Auto-provisioned media channel: purpose={channel_purpose}, "
+                    f"username={configured_value}"
+                )
+            return ChannelRef.from_row(channel)
 
-        channel = MediaChannel(
-            channel_name=f"uk_media_{channel_purpose}",
-            channel_username=configured_value,
-            purpose=channel_purpose,
-            category="photo",
-            is_active=True,
-        )
-        db.add(channel)
-        db.flush()
-        logger.info(
-            f"Auto-provisioned media channel: purpose={channel_purpose}, "
-            f"username={configured_value}"
-        )
-        return channel
-
-    async def _get_channel_for_category(self, db: Session, category: str) -> MediaChannel:
+    def _resolve_channel_sync(self, category: str) -> ChannelRef:
         """
-        Определяет канал для загрузки по категории файла
+        Канал для загрузки по категории файла — снимком, своей короткой сессией.
         """
         channel_purpose = FileCategories.get_channel_for_category(category)
 
         # Проверяем кэш
-        if channel_purpose in self.channels_cache:
-            return self.channels_cache[channel_purpose]
+        cached = self.channels_cache.get(channel_purpose)
+        if cached is not None:
+            return cached
 
-        # Загружаем из БД
-        channel = db.query(MediaChannel).filter(
-            MediaChannel.purpose == channel_purpose,
-            # `.is_(True)` — SQL-предикат, а не питоновское сравнение: даёт тот же
-            # `WHERE is_active` и снимает E712, не полагаясь на неявную истинность
-            # колонки (ruff предлагал именно её).
-            MediaChannel.is_active.is_(True)
-        ).first()
+        with get_db_context() as db:
+            channel = db.query(MediaChannel).filter(
+                MediaChannel.purpose == channel_purpose,
+                # `.is_(True)` — SQL-предикат, а не питоновское сравнение: даёт тот же
+                # `WHERE is_active` и снимает E712, не полагаясь на неявную истинность
+                # колонки (ruff предлагал именно её).
+                MediaChannel.is_active.is_(True)
+            ).first()
+            if not channel:
+                raise ValueError(f"{ErrorMessages.CHANNEL_NOT_FOUND}: {channel_purpose}")
+            ref = ChannelRef.from_row(channel)
 
-        if not channel:
-            raise ValueError(f"{ErrorMessages.CHANNEL_NOT_FOUND}: {channel_purpose}")
+        # Кэшируем снимок
+        self.channels_cache[channel_purpose] = ref
+        return ref
 
-        # Кэшируем
-        self.channels_cache[channel_purpose] = channel
-        return channel
+    def _remember_channel_id_sync(self, channel: ChannelRef, chat_id: int) -> None:
+        """Первая отправка в канал по username: запомнить numeric chat_id."""
+        with get_db_context() as db:
+            db_channel = db.query(MediaChannel).filter(MediaChannel.id == channel.id).first()
+            if db_channel:
+                db_channel.channel_id = chat_id
+        self.channels_cache[channel.purpose] = dc_replace(channel, channel_id=chat_id)
 
     async def _upload_to_channel(
         self,
-        channel: MediaChannel,
+        channel: ChannelRef,
         file_obj: BufferedInputFile,
         caption: str,
         content_type: str
     ) -> Message:
         """
-        Загружает файл в указанный Telegram канал
+        Загружает файл в указанный Telegram канал (по снимку канала, без сессии)
         """
         try:
             # Определяем ID канала (если еще не установлен)
@@ -641,12 +702,9 @@ class MediaStorageService:
                     caption=caption
                 )
 
-            # Обновляем ID канала если нужно
+            # Обновляем ID канала если нужно — отдельной короткой транзакцией
             if not channel.channel_id:
-                with get_db_context() as db:
-                    db_channel = db.query(MediaChannel).filter(MediaChannel.id == channel.id).first()
-                    if db_channel:
-                        db_channel.channel_id = message.chat.id
+                await run_sync(self._remember_channel_id_sync, channel, message.chat.id)
 
             return message
 
@@ -654,7 +712,34 @@ class MediaStorageService:
             logger.error(f"Failed to upload to channel {channel.channel_name}: {e}")
             raise
 
-    async def _save_media_metadata(
+    def _persist_upload_sync(
+        self,
+        message: Message,
+        request_number: Optional[str],
+        category: str,
+        description: Optional[str],
+        tags: Optional[List[str]],
+        uploaded_by: Optional[int],
+        filename: str,
+        content_type: str,
+        file_size: int,
+    ) -> MediaFile:
+        """Метаданные + статистика тегов одной короткой транзакцией; наружу —
+        отсоединённый объект (сессия закрыта при выходе)."""
+        with get_db_context() as db:
+            media_file = self._save_media_metadata(
+                db, message, request_number, category, description,
+                tags, uploaded_by, filename, content_type, file_size
+            )
+            if tags:
+                self._update_tags_usage(db, tags)
+            db.flush()
+            # Обновляем объект, чтобы загрузить все поля, и отсоединяем
+            db.refresh(media_file)
+            db.expunge(media_file)
+            return media_file
+
+    def _save_media_metadata(
         self,
         db: Session,
         message: Message,
@@ -723,7 +808,7 @@ class MediaStorageService:
 
         return media_file
 
-    async def _update_tags_usage(self, db: Session, tags: List[str]):
+    def _update_tags_usage(self, db: Session, tags: List[str]):
         """
         Обновляет статистику использования тегов
         """

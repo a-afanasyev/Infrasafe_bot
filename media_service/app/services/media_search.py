@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import or_, func
 
 from app.models.media import MediaFile, MediaTag
-from app.db.database import get_db_context
+from app.db.database import get_db_context, sync_unit
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,29 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-class MediaSearchService:
-    """Сервис для поиска и фильтрации медиа-файлов"""
+def _popular_tags(db, limit: int) -> List[Dict[str, Any]]:
+    popular_tags = db.query(MediaTag).order_by(MediaTag.usage_count.desc()).limit(limit).all()
+    return [
+        {
+            "tag": tag.tag_name,
+            "count": tag.usage_count,
+            "category": tag.tag_category,
+            "color": tag.color,
+            "is_system": tag.is_system,
+        }
+        for tag in popular_tags
+    ]
 
-    async def search_media(
+
+class MediaSearchService:
+    """Сервис для поиска и фильтрации медиа-файлов.
+
+    AUD7-ARCH-01: все методы — sync ORM-юниты под @sync_unit: снаружи они
+    async, тело исполняется в рабочем потоке со своей короткой сессией.
+    """
+
+    @sync_unit
+    def search_media(
         self,
         query: Optional[str] = None,
         request_numbers: Optional[List[str]] = None,
@@ -143,27 +162,18 @@ class MediaSearchService:
                 }
             }
 
-    async def get_popular_tags(self, limit: int = 20) -> List[Dict[str, Any]]:
+    @sync_unit
+    def get_popular_tags(self, limit: int = 20) -> List[Dict[str, Any]]:
         """
         Возвращает популярные теги
         """
         with get_db_context() as db:
-            popular_tags = db.query(MediaTag).order_by(MediaTag.usage_count.desc()).limit(limit).all()
-
-            result = []
-            for tag in popular_tags:
-                result.append({
-                    "tag": tag.tag_name,
-                    "count": tag.usage_count,
-                    "category": tag.tag_category,
-                    "color": tag.color,
-                    "is_system": tag.is_system
-                })
-
+            result = _popular_tags(db, limit)
             logger.info(f"Retrieved {len(result)} popular tags")
             return result
 
-    async def get_media_statistics(self) -> Dict[str, Any]:
+    @sync_unit
+    def get_media_statistics(self) -> Dict[str, Any]:
         """
         Возвращает статистику медиа-файлов
         """
@@ -197,8 +207,8 @@ class MediaSearchService:
                 MediaFile.status == "active"
             ).group_by(func.date(MediaFile.uploaded_at)).order_by(func.date(MediaFile.uploaded_at)).all()
 
-            # Топ тегов
-            top_tags = await self.get_popular_tags(limit=10)
+            # Топ тегов — той же сессией (внутри sync-юнита await недоступен).
+            top_tags = _popular_tags(db, limit=10)
 
             result = {
                 "total_files": total_files,
@@ -227,7 +237,8 @@ class MediaSearchService:
             logger.info(f"Generated media statistics: {total_files} files, {result['total_size_mb']} MB")
             return result
 
-    async def find_similar_media(
+    @sync_unit
+    def find_similar_media(
         self,
         media_file_id: int,
         similarity_threshold: float = 0.7,
@@ -284,7 +295,8 @@ class MediaSearchService:
             logger.info(f"Found {len(result)} similar files for media {media_file_id}")
             return result
 
-    async def get_request_media_timeline(self, request_number: str) -> List[Dict[str, Any]]:
+    @sync_unit
+    def get_request_media_timeline(self, request_number: str) -> List[Dict[str, Any]]:
         """
         Возвращает временную линию медиа-файлов для заявки
         """
@@ -310,7 +322,8 @@ class MediaSearchService:
             logger.info(f"Generated timeline for request {request_number}: {len(timeline)} files")
             return timeline
 
-    async def get_unused_tags(self, min_usage: int = 1) -> List[Dict[str, Any]]:
+    @sync_unit
+    def get_unused_tags(self, min_usage: int = 1) -> List[Dict[str, Any]]:
         """
         Возвращает неиспользуемые или малоиспользуемые теги
         """
