@@ -101,7 +101,7 @@ backup-db: ## Backup PostgreSQL
 shell-db: ## PostgreSQL shell
 	@docker exec -it uk-postgres psql -U uk_bot uk_management
 
-migration-upgrade: ## Применить миграции (api-контейнер — alembic есть только там)
-	@docker exec uk-management-api alembic upgrade head
+migration-upgrade: ## Применить миграции one-shot сервисом migrate (владелец схемы — uk_migration_owner, не runtime)
+	@$(COMPOSE) run --rm --no-deps migrate
 
 .DEFAULT_GOAL := help

@@ -47,12 +47,17 @@ cp .env.example .env         # единственный канонический
                              # UK_WEBHOOK_SECRET, OUTBOX_SOURCE_INSTANCE
 cp .env.postgres.example .env.postgres   # пароли служебных ролей PR-7 (F-01)
 
+# 0. Владелец deploy-каталога для provision-roles (на Linux — ДО первого up:
+#    compose интерполирует DEPLOY_UID/GID на уровне файла; в .env.example стоит 1000).
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+
 # 1. Поднять только БД и кэш — остальному нужны уже созданные роли.
+#    (`.env.example` содержит dev-плейсхолдеры для всех обязательных `:?`-переменных,
+#    в т.ч. RESOURCE_*/ACCESS_* — реальные секреты для локалки не нужны.)
 docker compose up -d postgres redis
 
 # 2. Создать роли least-privilege (PR-7): владелец схемы + runtime-роли.
 #    Кладёт креды в .secrets/roles/.env.{bot,api,access,migrate} — их читает env_file.
-export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
 docker compose run --rm provision-roles
 
 # 3. Схема — отдельным сервисом `migrate` (см. ниже почему не в api-контейнере).
@@ -69,8 +74,10 @@ docker logs uk-management-bot --tail 20
 зашитым в образ `EXPECTED_ALEMBIC_HEAD`. Оба сервиса — под compose-профилем `tools`,
 поэтому обычный `docker compose up -d` их не поднимает (и не должен).
 
-> `docker exec uk-management-api alembic upgrade head` технически работает, но это НЕ
-> рабочая процедура: порядок всегда `migrate` → `up`, иначе api не поднимется. На проде
+> DDL из runtime-контейнера (`api`) — не процедура вовсе: с PR-7 схемой владеет
+> `uk_migration_owner`, а runtime-роли `uk_*_runtime` DDL не имеют; единственный путь —
+> one-shot `migrate` под `uk_migrator` (`make migration-upgrade` = `docker compose run --rm
+> --no-deps migrate`). Порядок всегда `migrate` → `up`, иначе api не поднимется. На проде
 > та же команда идёт через `doppler run --` — см.
 > [`.claude/skills/uk-deploy/SKILL.md`](.claude/skills/uk-deploy/SKILL.md).
 
