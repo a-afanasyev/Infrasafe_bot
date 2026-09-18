@@ -76,11 +76,15 @@ export default mergeConfig(
         // components/shifts/{CalendarHeatmap,ShiftTimeline,ShiftDetailModal},
         // pages/ShiftsPage 0 % → покрыты; факт 77.72 / 75.41 / 67.71 / 68.77
         // при 177 файлах / 1203 тестах.
+        // Порция 10 (2026-09-18): components/kanban/KanbanBoard, twa/executor/
+        // {ShiftPage,CompletionReport}, pages/ResourceAccountingSection → покрыты;
+        // факт 80.05 / 77.73 / 69.35 / 70.37 при 181 файле / 1224 тестах —
+        // цель TEST-068 по строкам (80 %) достигнута.
         thresholds: {
-          lines: 76,
-          statements: 74,
-          functions: 66,
-          branches: 67,
+          lines: 79,
+          statements: 76,
+          functions: 68,
+          branches: 69,
         },
       },
     },
