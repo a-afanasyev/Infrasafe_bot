@@ -137,10 +137,8 @@ ASSIGNMENT: dict[str, dict] = {
                        services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01"),
     # AUD7-SEC-04 закрыт 2026-09-17 (PR #565).
     # AUD7-SEC-05 закрыт 2026-09-17 (PR #567).
-    "AUD7-CODE-01": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-09",
-                       services="frontend / UK auth", note="из отчёта CODE-01; AC и зависимости в канонической записи"),
-    "AUD7-CODE-02": A(pkg="AUD7-F1", status="actionable", method="verified-2026-09-11",
-                       services="frontend", note="воспроизведено 2026-09-11: cleanup → отложенный close → таймер → второй сокет; ссылка на тест исправлена (:26)"),
+    # AUD7-CODE-01 закрыт 2026-09-18 (PR #573).
+    # AUD7-CODE-02 закрыт 2026-09-18 (PR #573).
     "AUD7-CODE-03": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
                        services="bot / Redis / PostgreSQL", note="из отчёта CODE-03; AC и зависимости в канонической записи"),
     "AUD7-CODE-04": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",

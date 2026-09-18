@@ -46,17 +46,24 @@ export function useWebSocket(
   const attemptsRef = useRef(0)
   const lastExpiredRefreshAt = useRef(0)
   const openedRef = useRef(false)
-  // AUD6-P2-13: cleanup закрывает сокет и снимает таймер, но промис
-  // refreshSession().then(connect) он отменить не может — без этого флага
-  // resolve ПОСЛЕ размонтирования создавал бы новый сокет, который уже никто
-  // не закроет (эталон — closedByCaller в useAccessSecurityFeed).
-  const closedByCaller = useRef(false)
+  // AUD6-P2-13 / AUD7-CODE-02: поколение эффекта. Cleanup закрывает сокет и
+  // снимает таймер, но не может отменить ни промис refreshSession().then(connect),
+  // ни событие close, которое браузер доставляет АСИНХРОННО уже после cleanup.
+  // Без guard'а поздний onclose ставил новый reconnect-таймер, и через 3 с
+  // поднимался сокет, который никто не закроет; при смене endpoint он ещё и
+  // оживлял старый endpoint. Каждый сокет запоминает поколение, в котором создан;
+  // cleanup его инвалидирует, и всё «позднее» от старого поколения молча
+  // игнорируется (эталон — closedByCaller в useAccessSecurityFeed, здесь
+  // булев флаг недостаточен: следующий mount сбрасывал бы его в false).
+  const generationRef = useRef(0)
   const onMessageRef = useRef(onMessage)
   onMessageRef.current = onMessage
 
   const connect = useCallback(() => {
     // Browser sends httpOnly cookie automatically with the WebSocket upgrade request
     const ws = new WebSocket(`${WS_URL}/ws/v2/${endpoint}`)
+    const generation = generationRef.current
+    const isCurrent = (): boolean => generation === generationRef.current
     wsRef.current = ws
     openedRef.current = false
 
@@ -82,12 +89,13 @@ export function useWebSocket(
       // Провал refresh уже редиректит на /login внутри refreshSession.
       refreshSession().then(() => {
         // eslint-disable-next-line react-hooks/immutability -- намеренная рекурсивная ссылка на connect для reconnect (стабильна: connect мемоизирован по endpoint)
-        if (!closedByCaller.current) connect()
+        if (isCurrent()) connect()
       }).catch(() => {})
       return true
     }
 
     ws.onclose = (event) => {
+      if (!isCurrent()) return // поздний close после cleanup / смены endpoint
       if (event.code === WS_TOKEN_EXPIRED) {
         refreshAndReconnect() // отказ в окне — молча стоп, свежий токен живёт ~60 мин
         return
@@ -111,10 +119,9 @@ export function useWebSocket(
   }, [endpoint])
 
   useEffect(() => {
-    closedByCaller.current = false
     connect()
     return () => {
-      closedByCaller.current = true
+      generationRef.current += 1 // всё от этого поколения — мимо
       wsRef.current?.close()
       clearTimeout(reconnectTimer.current)
     }
