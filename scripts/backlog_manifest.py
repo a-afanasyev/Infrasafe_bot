@@ -334,9 +334,9 @@ ASSIGNMENT: dict[str, dict] = {
     # процедура ротации → uk-deploy SKILL.md.
     # `PENT-F12`, `PENT-F15`, `PENT-F16` закрыты 2026-09-02 вместе с П2: один PR
     # владельца edge на оба конфига, релоад 11:22 UTC, наши пробы снаружи зелёные.
-    "PENT-F13": A(pkg="—", status="actionable", method="verified-2026-09-09",
+    "PENT-F13": A(pkg="—", status="deferred", method="owner-decision-2026-09-18",
                  services="DNS/регистратор владельца (оба домена)",
-                 note="OCSP stapling неприменим для Let's Encrypt (OCSP-URL в серте нет — проверено); остаток CAA + DNSSEC у регистратора, проверять раздельно (CAA и DS); 2026-09-09: оба пусты на обоих доменах"),
+                 note="решение владельца 2026-09-18: CAA на текущем DNS-провайдере не реализуем — deferred до смены провайдера (тогда CAA + DNSSEC, проверять раздельно CAA и DS); OCSP stapling неприменим для Let's Encrypt (закрыто ранее)"),
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
     "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-09-11",
                  note="AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
