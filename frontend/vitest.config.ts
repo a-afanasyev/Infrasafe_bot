@@ -72,11 +72,15 @@ export default mergeConfig(
         // панелей, pages/BoardEditorPage и twa/pages/inspector/CreatePage 0 % →
         // покрыты (попутно BUG-191); факт 73.69 / 71.42 / 64.13 / 65.46 при
         // 173 файлах / 1170 тестах.
+        // Порция 9 (2026-09-18): twa/executor/TaskDetailPage + MediaGallery,
+        // components/shifts/{CalendarHeatmap,ShiftTimeline,ShiftDetailModal},
+        // pages/ShiftsPage 0 % → покрыты; факт 77.72 / 75.41 / 67.71 / 68.77
+        // при 177 файлах / 1203 тестах.
         thresholds: {
-          lines: 72,
-          statements: 70,
-          functions: 63,
-          branches: 64,
+          lines: 76,
+          statements: 74,
+          functions: 66,
+          branches: 67,
         },
       },
     },
