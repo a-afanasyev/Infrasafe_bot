@@ -139,10 +139,8 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD7-SEC-05 закрыт 2026-09-17 (PR #567).
     # AUD7-CODE-01 закрыт 2026-09-18 (PR #573).
     # AUD7-CODE-02 закрыт 2026-09-18 (PR #573).
-    "AUD7-CODE-03": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
-                       services="bot / Redis / PostgreSQL", note="из отчёта CODE-03; AC и зависимости в канонической записи"),
-    "AUD7-CODE-04": A(pkg="AUD7-B1", status="actionable", method="verified-2026-09-09",
-                       services="bot / Redis", note="из отчёта CODE-04; AC и зависимости в канонической записи"),
+    # AUD7-CODE-03 закрыт 2026-09-18 (PR #574).
+    # AUD7-CODE-04 закрыт 2026-09-18 (PR #574).
     # AUD7-CODE-05 закрыт 2026-09-17 (PR #564).
     # AUD7-CODE-06 закрыт 2026-09-17 (PR #563).
     "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
