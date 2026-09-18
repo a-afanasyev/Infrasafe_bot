@@ -156,3 +156,104 @@ async def test_client_4xx_not_retried(client, monkeypatch):
         await client.download_file("F3")
     assert calls["n"] == 1  # 4xx повторами не лечится — одна попытка
     assert "HTTP 404" in str(excinfo.value)  # диагностика сохранена, URL — нет
+
+
+# AUD7-ARCH-03 (остаток BUG-189): connect-таймауты уложены в бюджет, но общий
+# цикл — нет: каждая попытка заново зовёт get_file (до 15 с) и читает файл
+# (до 20 с), плюс ожидание семафора — по коду допустимы 47–62 с при бюджете
+# edge 30 с. Один общий deadline на очередь + get_file + чтение + ретраи.
+
+
+@pytest.fixture
+def virtual_clock(monkeypatch):
+    """Виртуальные часы клиента: тест сам «проматывает» время попыток."""
+    from app.services import telegram_client as tc
+
+    state = {"now": 1000.0}
+    monkeypatch.setattr(tc, "_monotonic", lambda: state["now"])
+    return state
+
+
+@pytest.mark.asyncio
+async def test_worst_case_three_read_timeouts_stay_within_budget(client, monkeypatch, virtual_clock):
+    """Три read-timeout подряд: цикл обязан оборваться до 30 с, а не дочитать
+    все попытки по 15 + 20 с каждая."""
+    from app.core.config import settings
+
+    attempts = []
+
+    class _SlowReadClient(_FakeAsyncClient):
+        def __init__(self, *args, **kwargs):
+            self.read_timeout = kwargs["timeout"].read
+
+        async def get(self, url):
+            attempts.append(virtual_clock["now"])
+            # Чтение виснет до read-таймаута, который передал клиент.
+            virtual_clock["now"] += self.read_timeout
+            raise httpx.ReadTimeout("read timed out", request=httpx.Request("GET", url))
+
+    async def slow_get_file(file_id):
+        virtual_clock["now"] += settings.telegram_api_timeout_seconds  # 15 с Bot API
+        return SimpleNamespace(file_path="photos/1.jpg")
+
+    monkeypatch.setattr(client, "get_file", slow_get_file)
+    monkeypatch.setattr(httpx, "AsyncClient", _SlowReadClient)
+    started = virtual_clock["now"]
+
+    with pytest.raises(TelegramDownloadError):
+        await client.download_file("F-slow")
+
+    elapsed = virtual_clock["now"] - started
+    assert elapsed < EDGE_BUDGET_SECONDS, f"цикл занял {elapsed} с виртуального времени"
+    assert len(attempts) < 3, "поздние попытки обязаны отсекаться общим deadline"
+
+
+@pytest.mark.asyncio
+async def test_hung_read_is_cancelled_by_total_budget(client, monkeypatch):
+    """Реальный таймер: повисшее чтение обрывается общим бюджетом, а не read-таймаутом."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "telegram_download_total_budget_seconds", 0.3)
+
+    class _HangingClient(_FakeAsyncClient):
+        async def get(self, url):
+            await asyncio.Event().wait()  # никогда
+
+    async def ok_get_file(file_id):
+        return SimpleNamespace(file_path="photos/1.jpg")
+
+    monkeypatch.setattr(client, "get_file", ok_get_file)
+    monkeypatch.setattr(httpx, "AsyncClient", _HangingClient)
+    loop = asyncio.get_running_loop()
+    t0 = loop.time()
+
+    with pytest.raises(TelegramDownloadError):
+        await client.download_file("F-hang")
+
+    assert loop.time() - t0 < 2.0
+
+
+@pytest.mark.asyncio
+async def test_semaphore_wait_counts_toward_budget(client, monkeypatch):
+    """Очередь семафора входит в бюджет: занятый семафор → отказ по deadline,
+    get_file даже не вызывается."""
+    from app.core.config import settings
+    from app.services import preview_cache
+
+    monkeypatch.setattr(settings, "telegram_download_total_budget_seconds", 0.3)
+    sem = asyncio.Semaphore(1)
+    await sem.acquire()  # держим единственный слот
+    monkeypatch.setattr(preview_cache, "download_semaphore", lambda: sem)
+    calls = []
+
+    async def counting_get_file(file_id):
+        calls.append(file_id)
+        return SimpleNamespace(file_path="photos/1.jpg")
+
+    monkeypatch.setattr(client, "get_file", counting_get_file)
+
+    with pytest.raises(TelegramDownloadError):
+        await client.download_file("F-queued")
+
+    assert calls == []
+    sem.release()
