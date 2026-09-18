@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { apiClient, publicClient } from '../api/client'
+import { apiClient, publicClient, refreshSessionQuietly } from '../api/client'
 
 // One-time migration purge: builds before the cookie-auth switch (§6.5)
 // stored access_token / refresh_token in localStorage. The current code never
@@ -29,6 +29,25 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
+type SetUser = (patch: Partial<AuthState>) => void
+
+let bootstrapInFlight: Promise<void> | null = null
+
+async function probeSession(set: SetUser): Promise<void> {
+  try {
+    const { data } = await publicClient.get('/api/v2/profile')
+    set({ user: data, isAuthenticated: true, hydrating: false })
+  } catch {
+    try {
+      await refreshSessionQuietly()
+      const { data } = await publicClient.get('/api/v2/profile')
+      set({ user: data, isAuthenticated: true, hydrating: false })
+    } catch {
+      set({ hydrating: false }) // сессии нет — guard'ы отправят на /login сами
+    }
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -42,23 +61,21 @@ export const useAuthStore = create<AuthState>()(
       // recover it. Uses publicClient (no 401-redirect interceptor) and a manual
       // refresh fallback so a merely-expired access cookie doesn't drop the session,
       // and a genuine no-session case fails quietly → guards redirect to /login.
-      bootstrap: async () => {
+      //
+      // AUD7-CODE-01: refresh-fallback идёт через координатор client.ts
+      // (refreshSessionQuietly — in-flight дедуп, Web Locks между вкладками,
+      // маркер свежести), а повторный bootstrap (StrictMode, несколько guard'ов)
+      // делит один in-flight промис — иначе один refresh-cookie уходил на сервер
+      // дважды, и второй запрос отзывал всю family как reuse.
+      bootstrap: () => {
         if (get().isAuthenticated) {
           set({ hydrating: false })
-          return
+          return Promise.resolve()
         }
-        try {
-          const { data } = await publicClient.get('/api/v2/profile')
-          set({ user: data, isAuthenticated: true, hydrating: false })
-        } catch {
-          try {
-            await publicClient.post('/api/v2/auth/refresh')
-            const { data } = await publicClient.get('/api/v2/profile')
-            set({ user: data, isAuthenticated: true, hydrating: false })
-          } catch {
-            set({ hydrating: false })
-          }
+        if (!bootstrapInFlight) {
+          bootstrapInFlight = probeSession(set).finally(() => { bootstrapInFlight = null })
         }
+        return bootstrapInFlight
       },
       login: async () => {
         // Cookies are already set by POST /api/v2/auth/login response;

@@ -135,7 +135,10 @@ async function coordinatedRefresh(): Promise<void> {
   const runUnderLock = async (): Promise<void> => {
     // Another tab may have refreshed while we waited for the lock — skip the
     // redundant network round-trip; the cookie is already fresh for this origin.
-    if (readRefreshMarker() > startedAt) return
+    // `>=`, не `>`: две холодные вкладки (deep-link target=_blank, StrictMode
+    // bootstrap) стартуют в одну миллисекунду, и refresh соседа, записанный в ту
+    // же ms, что и наш startedAt, — уже свежая cookie, а не «старая».
+    if (readRefreshMarker() >= startedAt) return
     await doNetworkRefresh()
   }
   const locks = (navigator as Navigator & { locks?: LockManager }).locks
@@ -156,13 +159,24 @@ async function coordinatedRefresh(): Promise<void> {
  * the login page and the rejection propagates.
  */
 export function refreshSession(): Promise<void> {
+  return refreshSessionQuietly().catch((err) => {
+    window.location.href = LOGIN_URL
+    throw err
+  })
+}
+
+/**
+ * AUD7-CODE-01: тот же координированный refresh (in-flight дедуп + Web Locks +
+ * маркер свежести), но БЕЗ редиректа на /login при отказе. Для cold-start
+ * bootstrap: «сессии нет» там — штатный исход, который guard'ы обрабатывают
+ * сами; редирект из недр клиента ломал бы страницы без авторизации. Раньше
+ * bootstrap ходил в /refresh напрямую мимо координатора: две холодные вкладки
+ * (или StrictMode) отправляли один refresh-cookie дважды, и после атомарной
+ * ротации второй запрос читался сервером как reuse → отзыв всей family.
+ */
+export function refreshSessionQuietly(): Promise<void> {
   if (!refreshPromise) {
-    refreshPromise = coordinatedRefresh()
-      .catch((err) => {
-        window.location.href = LOGIN_URL
-        throw err
-      })
-      .finally(() => { refreshPromise = null })
+    refreshPromise = coordinatedRefresh().finally(() => { refreshPromise = null })
   }
   return refreshPromise
 }
