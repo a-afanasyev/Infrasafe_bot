@@ -156,12 +156,9 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD7-ENG-02 закрыт 2026-09-17 (PR #571).
     # AUD7-ENG-03 закрыт 2026-09-17 (PR #572).
     # AUD7-ENG-04 закрыт 2026-09-17 (PR #571).
-    "AUD7-ENG-05": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
-                       services="Makefile / runbook", note="AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн"),
-    "AUD7-ENG-06": A(pkg="AUD7-E1", status="actionable", method="verified-2026-09-15",
-                       services="dev compose / README", note="в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск"),
-    "AUD7-ENG-07": A(pkg="AUD7-O1", status="actionable", method="verified-2026-09-09",
-                       services="DB / operations", note="прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh"),
+    # AUD7-ENG-05 закрыт 2026-09-18 (PR #577).
+    # AUD7-ENG-06 закрыт 2026-09-18 (PR #577).
+    # AUD7-ENG-07 закрыт 2026-09-18 (PR #578).
     # AUD7-ENG-08 закрыт 2026-09-17 (PR #566).
     # AUD7-DEP-01 закрыт 2026-09-17 (PR #570).
     # AUD7-CODE-07 закрыт 2026-09-17 (PR #563).

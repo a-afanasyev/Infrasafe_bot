@@ -33,7 +33,8 @@
 
 ## Эксплуатация
 
-- `backup-db.sh` + `crontab.production` — бэкапы.
+- Бэкапы — вне репо (кросс-бэкап хост-пиров); реестр, RPO/RTO и восстановление —
+  `docs/ops/BACKUPS.md`. Старые `backup-db.sh` + `crontab.production` списаны (AUD7-ENG-07).
 - `tag-deploy.sh <profk|infrasafe> --push` — annotated-тег после раскатки
   (AUD3-38): без него «что в проде» существует только как HEAD чекаута хоста.
 - `seed_e2e_user.py` — сид пользователя для E2E.

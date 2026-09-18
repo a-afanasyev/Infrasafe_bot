@@ -1,5 +1,0 @@
-# UK Management — Production Crontab
-# Install: crontab scripts/crontab.production
-#
-# Daily database backup at 03:00 UTC
-0 3 * * * /opt/uk-management/scripts/backup-db.sh >> /var/log/uk-backup.log 2>&1
