@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **490**
-- закрыто маркером: **471**
-- открыто маркером: **19**
+- закрыто маркером: **472**
+- открыто маркером: **18**
 
-  - `actionable` — **10**
+  - `actionable` — **9**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **6**
 
-Из них actionable по приоритету: P2=5, P3=5.
+Из них actionable по приоритету: P2=4, P3=5.
 
 Значения `status`:
 
@@ -58,7 +58,6 @@
 | `AUD7-SIMP-03` | P3 | actionable | verified-2026-09-09 | AUD7-C1 | — | UK work_reports / tests | — | из отчёта SIMP-03; AC и зависимости в канонической записи |
 | `AUD7-ENG-05` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | Makefile / runbook | — | AC расширен 2026-09-15: + docs/ops/RUNBOOK.md (downgrade из runtime API :111, поиск сообщения миграции в логах API :73) и дрейф refresh TTL ARCHITECTURE 30 дн ↔ код 7 дн |
 | `AUD7-ENG-06` | P2 | actionable | verified-2026-09-15 | AUD7-E1 | — | dev compose / README | — | в .env.example нет RESOURCE_POSTGRES_PASSWORD / RESOURCE_APP_PASSWORD / RESOURCE_SESSION_SECRET; AC расширен 2026-09-15: также обязательные ACCESS_* и DEPLOY_UID/GID — проверять весь документированный первый запуск |
-| `AUD7-ARCH-01` | P2 | actionable | verified-2026-09-09 | AUD7-M1 | — | media API | — | из отчёта ARCH-01; AC и зависимости в канонической записи |
 | `AUD7-ENG-07` | P2 | actionable | verified-2026-09-09 | AUD7-O1 | — | DB / operations | — | прод УЖЕ дампит все БД (кросс-бэкап profk↔105: 5 БД на profk, 4 на 105, payment с 2026-09-06); evidence-скрипты в репо мёртвые; остаток — реестр RPO/RTO в docs/ops + restore-rehearsal + списание scripts/backup-db.sh |
 | `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |

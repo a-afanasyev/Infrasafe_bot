@@ -143,8 +143,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD7-CODE-04 закрыт 2026-09-18 (PR #574).
     # AUD7-CODE-05 закрыт 2026-09-17 (PR #564).
     # AUD7-CODE-06 закрыт 2026-09-17 (PR #563).
-    "AUD7-ARCH-01": A(pkg="AUD7-M1", status="actionable", method="verified-2026-09-09",
-                       services="media API", note="из отчёта ARCH-01; AC и зависимости в канонической записи"),
+    # AUD7-ARCH-01 закрыт 2026-09-18 (PR #576).
     "AUD7-ARCH-02": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
                        services="UK services", note="импортируются сервисные функции api.*.service / схемы, не HTTP; ограниченный перенос, цикла нет"),
     "AUD7-SIMP-01": A(pkg="AUD7-C1", status="actionable", method="verified-2026-09-11",
