@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.webhooks.mappings import (
+from uk_management_bot.services.inbound_webhooks.mappings import (
     DEFAULT_CATEGORY,
     DEFAULT_URGENCY,
     ENGINEER_REQUIRED_CATEGORY,
@@ -21,8 +21,8 @@ from uk_management_bot.api.webhooks.mappings import (
     SEVERITY_TO_URGENCY,
     TYPE_TO_CATEGORY,
 )
-from uk_management_bot.api.webhooks.replay import is_replay
-from uk_management_bot.api.webhooks.schemas import AlertBlock, InfrasafeAlertIn
+from uk_management_bot.services.inbound_webhooks.replay import is_replay
+from uk_management_bot.services.inbound_webhooks.schemas import AlertBlock, InfrasafeAlertIn
 from uk_management_bot.utils.constants import normalize_urgency
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building

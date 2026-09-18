@@ -74,7 +74,7 @@ CATEGORY_DEFINITIONS = {
         "legacy_texts": ["Ремонт", "Установка"]
     },
     # Служебная очередь InfraSafe: `alert.engineer_required` пишет RU-лейбл
-    # (api/webhooks/mappings.py:ENGINEER_REQUIRED_CATEGORY). В каноне — чтобы
+    # (services/inbound_webhooks/mappings.py:ENGINEER_REQUIRED_CATEGORY). В каноне — чтобы
     # автодиспетчер раздавал и UI локализовал; в SELECTABLE не входит — человек
     # эту категорию не выбирает ни в одной форме.
     "engineering": {

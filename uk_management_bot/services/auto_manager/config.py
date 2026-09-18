@@ -7,7 +7,7 @@
 Sync-варианты (`load_config_sync`/`save_config_sync`, `Session`) — для бота
 (шедулер-job, хендлер меню). Async-варианты (`load_config`/`save_config`,
 `AsyncSession`) — для FastAPI-роутера дашборда. Паттерн load/save — клон
-board_config (api/board_config/service.py, router.py): толерантность к
+board_config (services/board_config/service.py, router.py): толерантность к
 отсутствующей строке/таблице (fallback на дефолт), upsert по id=CONFIG_ROW_ID.
 """
 from __future__ import annotations

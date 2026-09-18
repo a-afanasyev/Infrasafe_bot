@@ -178,8 +178,8 @@ def world(db):
 
 def _stored_board_config(phone: str) -> dict:
     """Строка board_config в РЕАЛЬНОЙ форме (contacts.dispatch_phone), через схему API."""
-    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
-    from uk_management_bot.api.board_config.schemas import StoredBoardConfigData
+    from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
+    from uk_management_bot.services.board_config.schemas import StoredBoardConfigData
 
     raw = copy.deepcopy(DEFAULT_BOARD_CONFIG)
     raw["contacts"]["dispatch_phone"] = phone

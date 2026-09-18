@@ -24,8 +24,8 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.schemas import WorkReportsCfg
-from uk_management_bot.api.board_config.service import load_board_config, merge_and_save_board_config
+from uk_management_bot.services.board_config.schemas import WorkReportsCfg
+from uk_management_bot.services.board_config.service import load_board_config, merge_and_save_board_config
 from uk_management_bot.api.dependencies import get_db, require_approved_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports import coordination

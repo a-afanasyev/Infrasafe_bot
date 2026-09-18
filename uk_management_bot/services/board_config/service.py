@@ -16,9 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG, enabled_module_ids
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG, enabled_module_ids
 from uk_management_bot.config.settings import settings
-from uk_management_bot.api.board_config.schemas import (
+from uk_management_bot.services.board_config.schemas import (
     BoardConfigResponse,
     StoredBoardConfigData,
     WorkingHourCfg,

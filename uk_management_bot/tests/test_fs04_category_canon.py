@@ -34,7 +34,7 @@ from uk_management_bot.constants.categories import get_specialization_for_catego
     ("Другое", "other"),
     ("Ремонт", "repair"),
     ("Установка", "repair"),
-    # InfraSafe `alert.engineer_required` пишет этот RU-лейбл (api/webhooks/mappings.py)
+    # InfraSafe `alert.engineer_required` пишет этот RU-лейбл (services/inbound_webhooks/mappings.py)
     ("Инженерный разбор", "engineering"),
     # уже канон-ключ → без изменений
     ("plumbing", "plumbing"),

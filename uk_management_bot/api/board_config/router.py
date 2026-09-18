@@ -12,8 +12,8 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.schemas import BoardConfigResponse, BoardConfigUpdateIn
-from uk_management_bot.api.board_config.service import (
+from uk_management_bot.services.board_config.schemas import BoardConfigResponse, BoardConfigUpdateIn
+from uk_management_bot.services.board_config.service import (
     load_board_config,
     merge_and_save_board_config,
     to_public_response,

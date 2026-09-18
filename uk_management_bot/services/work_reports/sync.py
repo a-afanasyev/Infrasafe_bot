@@ -11,7 +11,7 @@ from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from uk_management_bot.api.board_config.service import load_board_config
+from uk_management_bot.services.board_config.service import load_board_config
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.building import Building

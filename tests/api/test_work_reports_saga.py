@@ -15,7 +15,7 @@ from sqlalchemy import select
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.work_report import WorkReport
-from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.services.work_report_service import (
     WorkReportPublishError,

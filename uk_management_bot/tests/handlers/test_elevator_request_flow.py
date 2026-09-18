@@ -264,8 +264,8 @@ async def test_building_without_elevators_returns_to_category(world):
 
 def _stored_board_config(phone: str) -> dict:
     """Строка board_config в РЕАЛЬНОЙ форме (contacts.dispatch_phone), через схему API."""
-    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
-    from uk_management_bot.api.board_config.schemas import StoredBoardConfigData
+    from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
+    from uk_management_bot.services.board_config.schemas import StoredBoardConfigData
 
     raw = copy.deepcopy(DEFAULT_BOARD_CONFIG)
     raw["contacts"]["dispatch_phone"] = phone
@@ -295,7 +295,7 @@ async def test_dispatch_phone_is_html_escaped(world, db):
 @pytest.mark.asyncio
 async def test_default_board_config_phone_is_shown_as_stored(world, db):
     """Сид миграции хранит дефолт целиком — читаем ровно то, что лежит в contacts."""
-    from uk_management_bot.api.board_config.defaults import DEFAULT_BOARD_CONFIG
+    from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG
 
     db.add(BoardConfig(id=1, data=copy.deepcopy(DEFAULT_BOARD_CONFIG)))
     db.commit()

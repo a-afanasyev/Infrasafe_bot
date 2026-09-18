@@ -158,7 +158,7 @@ async def get_public_work_reports(
         rows, total = await api_service.published_page(db, limit=limit, offset=offset)
     except (OperationalError, ProgrammingError) as e:
         # Table not migrated yet — same graceful-degrade convention as
-        # api/board_config/service.py's load_board_config: never 500 the
+        # services/board_config/service.py's load_board_config: never 500 the
         # public page over a not-yet-migrated table.
         logger.warning("work_reports table unavailable for public feed: %s", e)
         return _empty_feed(limit, offset)

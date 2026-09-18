@@ -8,7 +8,7 @@ from typing import Any, Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.board_config.service import load_board_config
+from uk_management_bot.services.board_config.service import load_board_config
 from uk_management_bot.database.models.work_report import WorkReport
 from uk_management_bot.services.work_reports.media_selection import (
     apply_media_selection,

@@ -1,6 +1,6 @@
 """Конфиг модуля «Лифты»: строка ``elevators_config`` id=1 ← дефолты.
 
-Паттерн ``api/board_config/service.py:load_board_config``: нет строки / БД
+Паттерн ``services/board_config/service.py:load_board_config``: нет строки / БД
 недоступна / битые данные → дефолты, публичные потребители не падают.
 Неизвестные ключи сохранённого конфига логируются (один warning на чтение)
 и отбрасываются ``merge_config``. Commit — у вызывающего.

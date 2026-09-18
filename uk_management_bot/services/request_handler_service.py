@@ -80,7 +80,7 @@ class RequestHandlerService:
 
     def get_dispatch_phone(self) -> str:
         """Телефон диспетчера из сохранённого board_config (id=1): ``data.contacts.dispatch_phone``
-        (форма — ``api/board_config/schemas.py:ContactsCfg``). Нет строки → пусто."""
+        (форма — ``services/board_config/schemas.py:ContactsCfg``). Нет строки → пусто."""
         from uk_management_bot.database.models.board_config import BoardConfig
 
         row = self.db.get(BoardConfig, 1)
