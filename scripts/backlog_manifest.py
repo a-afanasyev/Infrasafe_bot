@@ -351,11 +351,11 @@ ASSIGNMENT: dict[str, dict] = {
     # `ci.yml`, пункт закрыт в бэклоге. Строка удалена, потому что `--check`
     # держит равенство ASSIGNMENT ↔ открытые пункты в обе стороны.
     # Аудит #8 (полное ревью 2026-09-19, docs/audit/2026-09-19-full-review.md): 16 пунктов.
-    "AUD8-SEC-01": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="media_storage.py:558,596 без html.escape; parse_mode=HTML"),
-    "AUD8-SEC-02": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="resident.py:445,483 без лимитера; образец code_rate_limit"),
-    "AUD8-SEC-03": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="registry.py:631 legacy redirect, :336 ILIKE без escape"),
-    "AUD8-SEC-04": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="imports.py:60 нет cap на unpacked; образец payment_control"),
-    "AUD8-ENG-01": A(pkg="AUD8-E1", status="actionable", method="verified-2026-09-19", note="docker-compose.yml:500 :+ вместо :?"),
+    # AUD8-SEC-01 закрыт 2026-09-19 (PR #590).
+    # AUD8-SEC-02 закрыт 2026-09-19 (PR #590).
+    # AUD8-SEC-03 закрыт 2026-09-19 (PR #590).
+    # AUD8-SEC-04 закрыт 2026-09-19 (PR #590).
+    # AUD8-ENG-01 закрыт 2026-09-19 (PR #590).
     "AUD8-ENG-02": A(pkg="AUD8-E1", status="decision", method="verified-2026-09-19", note="BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца"),
     "AUD8-ENG-03": A(pkg="AUD8-E1", status="actionable", method="verified-2026-09-19", note="actions по тегам, permissions, digest-пины, dev-порты"),
     "AUD8-CODE-01": A(pkg="AUD8-C1", status="actionable", method="verified-2026-09-19", note="handlers/shifts.py:139,307,371 except: pass"),
