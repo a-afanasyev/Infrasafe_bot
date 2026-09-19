@@ -19,7 +19,6 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
 from pydantic import Field
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -332,9 +331,24 @@ VehicleDetail.model_rebuild()
 # ------------------------------ хелперы ------------------------------
 
 
+def _escape_like(value: str) -> str:
+    """Экранировать метасимволы LIKE (`\\`, `%`, `_`) — escape-символ PostgreSQL по
+    умолчанию `\\`. AUD8-SEC-03: иначе `plate=%` расширял выборку до всей таблицы."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _plate_pat(plate: str) -> str:
     """ILIKE-паттерн contains по нормализованному номеру (нормализация — uppercase)."""
-    return f"%{plate.strip().upper()}%"
+    return f"%{_escape_like(plate.strip().upper())}%"
+
+
+def _photo_media_id(stored: str) -> str:
+    """`media://<id>` → id. Сырой storage/Telegram-URL наружу не отдаём: раньше
+    legacy-ветка делала RedirectResponse на него (open-redirect при любом новом
+    источнике raw URL — AUD8-SEC-03); сегодня все writer'ы пишут `media://`."""
+    if stored.startswith("media://"):
+        return stored[len("media://"):]
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
 
 
 def _where(conditions: list[str]) -> str:
@@ -621,15 +635,10 @@ async def get_photo(
     )
     db.commit()
 
-    if stored.startswith("media://"):
-        # Новый путь (§11): фото лежит в медиа-сервисе — стримим байты, сырой
-        # storage/Telegram-URL наружу не уходит.
-        media_id = stored[len("media://"):]
-        content, content_type = await media.fetch_file(media_id)
-        return Response(content=content, media_type=content_type)
-
-    # Обратная совместимость: сохранённый сырой storage-URL → redirect.
-    return RedirectResponse(url=stored, status_code=status.HTTP_302_FOUND)
+    # §11: фото лежит в медиа-сервисе — стримим байты, сырой URL наружу не уходит.
+    media_id = _photo_media_id(stored)
+    content, content_type = await media.fetch_file(media_id)
+    return Response(content=content, media_type=content_type)
 
 
 @router.get("/events", response_model=EventsPage)

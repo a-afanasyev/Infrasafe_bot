@@ -4,6 +4,7 @@ import csv
 import io
 import re
 import uuid
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -56,7 +57,36 @@ def _rows_from_csv(content: bytes) -> list[dict]:
     return [{(k or "").strip().lower(): (v or "").strip() for k, v in row.items()} for row in reader]
 
 
+# AUD8-SEC-04: cap 5 МБ на сжатый файл не ограничивает распакованный размер —
+# сильно сжатый лист XML раздувается в память при iter_rows. Образец —
+# payment_control/imports.py::_assert_unpacked_size (считаем фактические байты,
+# ZipInfo.file_size из заголовка подделывается).
+XLSX_MAX_UNPACKED_BYTES = 30 * 1024 * 1024
+XLSX_MAX_ENTRIES = 1000
+
+
+def _assert_xlsx_bounds(
+    content: bytes, *, max_entries: int | None = None, max_unpacked: int | None = None
+) -> None:
+    max_entries = XLSX_MAX_ENTRIES if max_entries is None else max_entries
+    max_unpacked = XLSX_MAX_UNPACKED_BYTES if max_unpacked is None else max_unpacked
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        if len(archive.infolist()) > max_entries:
+            raise ValueError("Слишком много файлов внутри XLSX")
+        total = 0
+        for info in archive.infolist():
+            with archive.open(info) as member:
+                while chunk := member.read(65536):
+                    total += len(chunk)
+                    if total > max_unpacked:
+                        raise ValueError("Распакованный XLSX слишком большой")
+
+
 def _rows_from_xlsx(content: bytes) -> list[dict]:
+    try:
+        _assert_xlsx_bounds(content)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Некорректный XLSX") from exc
     wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
     try:  # COR-06: read_only workbook holds the zip open until closed
         ws = wb.active
@@ -79,7 +109,10 @@ def _rows_from_xlsx(content: bytes) -> list[dict]:
 
 def parse_file(filename: str, content: bytes) -> list[dict]:
     if filename.lower().endswith((".xlsx", ".xlsm")):
-        raw = _rows_from_xlsx(content)
+        try:
+            raw = _rows_from_xlsx(content)
+        except ValueError as exc:
+            raise bad_request(str(exc))
     elif filename.lower().endswith(".csv"):
         raw = _rows_from_csv(content)
     else:

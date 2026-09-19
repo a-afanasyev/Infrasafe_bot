@@ -38,6 +38,8 @@ from access_control.api.registry import (
     VehicleRow,
     VehiclesPage,
 )
+from access_control.services.action_rate_limit import enforce_resident_write_limit
+from access_control.services.code_rate_limit import get_failure_store
 from access_control.services.resident import (
     ApartmentNotOwned,
     DecisionNotFound,
@@ -449,7 +451,11 @@ def post_request(
     db: Session = Depends(get_db),
     user=Depends(require_approved_roles(*RESIDENT_ROLES)),
 ) -> RequestRow:
-    """Создать заявку на постоянный авто (§6.4). 403 если квартира не своя."""
+    """Создать заявку на постоянный авто (§6.4). 403 если квартира не своя.
+
+    AUD8-SEC-02: per-user лимит попыток в окне → 429 (флуд очереди менеджера).
+    """
+    enforce_resident_write_limit(get_failure_store(), user_id=user.id, action="request")
     try:
         req = create_resident_request(
             db,
@@ -494,7 +500,10 @@ def post_pass(
 
     §9.3: гостевой пропуск без номера → в ответе РОВНО ОДИН раз возвращается
     PLAINTEXT одноразовый код (``one_time_code``); далее он недоступен (в БД хэш).
+
+    AUD8-SEC-02: per-user лимит попыток в окне → 429 (флуд гостевых кодов).
     """
+    enforce_resident_write_limit(get_failure_store(), user_id=user.id, action="pass")
     try:
         created = create_resident_pass(
             db,

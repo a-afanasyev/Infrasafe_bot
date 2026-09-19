@@ -33,7 +33,7 @@ services:
   app:
     environment:
       # ARCH-106: REDIS_URL строится из REDIS_PASSWORD; хост — uk-redis (п.4 выше).
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
     networks: !override
       - uk-internal
 
@@ -42,13 +42,13 @@ services:
   # неё не работает; поймано на первой раскатке 2026-08-22).
   group-intake-bot:
     environment:
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
     networks: !override
       - uk-internal
 
   api:
     environment:
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
       - FRONTEND_URL=https://profk.uz
     networks: !override
       - uk-network
@@ -56,7 +56,7 @@ services:
 
   access-api:
     environment:
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@uk-redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
     networks: !override
       - uk-network
       - uk-internal
