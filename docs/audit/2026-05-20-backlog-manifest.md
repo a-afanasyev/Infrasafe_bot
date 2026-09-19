@@ -23,11 +23,16 @@
 - открыто маркером: **13**
 
   - `actionable` — **1**
+- закрыто маркером: **489**
+- открыто маркером: **17**
+
+  - `actionable` — **5**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **8**
 
 Из них actionable по приоритету: P3=1.
+Из них actionable по приоритету: P2=1, P3=4.
 
 Значения `status`:
 
@@ -57,6 +62,11 @@
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
 | `AUD8-ENG-03` | P3 | actionable | verified-2026-09-19 | AUD8-E1 | — | — | — | actions по тегам, permissions, digest-пины, dev-порты |
+| `AUD8-FE-01` | P2 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | useAddresses.ts:87 all-apartments без инвалидации |
+| `AUD8-FE-02` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | KanbanColumn.tsx:195 ключа нет в ru/uz |
+| `AUD8-FE-03` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | EmployeesPage.tsx:145 deps без t |
+| `AUD8-FE-04` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | AccessEquipmentPage.tsx as never ×5 |
+| `AUD8-FE-05` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | useTheme/useResizableColumn/AutoManagerCard localStorage без try/catch |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
