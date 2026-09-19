@@ -350,6 +350,23 @@ ASSIGNMENT: dict[str, dict] = {
     # (`media_service/requirements.txt`) закрыт PR #261, подтверждено чтением
     # `ci.yml`, пункт закрыт в бэклоге. Строка удалена, потому что `--check`
     # держит равенство ASSIGNMENT ↔ открытые пункты в обе стороны.
+    # Аудит #8 (полное ревью 2026-09-19, docs/audit/2026-09-19-full-review.md): 16 пунктов.
+    "AUD8-SEC-01": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="media_storage.py:558,596 без html.escape; parse_mode=HTML"),
+    "AUD8-SEC-02": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="resident.py:445,483 без лимитера; образец code_rate_limit"),
+    "AUD8-SEC-03": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="registry.py:631 legacy redirect, :336 ILIKE без escape"),
+    "AUD8-SEC-04": A(pkg="AUD8-S1", status="actionable", method="verified-2026-09-19", note="imports.py:60 нет cap на unpacked; образец payment_control"),
+    "AUD8-ENG-01": A(pkg="AUD8-E1", status="actionable", method="verified-2026-09-19", note="docker-compose.yml:500 :+ вместо :?"),
+    "AUD8-ENG-02": A(pkg="AUD8-E1", status="decision", method="verified-2026-09-19", note="BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца"),
+    "AUD8-ENG-03": A(pkg="AUD8-E1", status="actionable", method="verified-2026-09-19", note="actions по тегам, permissions, digest-пины, dev-порты"),
+    "AUD8-CODE-01": A(pkg="AUD8-C1", status="actionable", method="verified-2026-09-19", note="handlers/shifts.py:139,307,371 except: pass"),
+    "AUD8-CODE-02": A(pkg="AUD8-C1", status="actionable", method="verified-2026-09-19", note="handlers/admin/lists.py:156 print()"),
+    "AUD8-FE-01": A(pkg="AUD8-F1", status="actionable", method="verified-2026-09-19", note="useAddresses.ts:87 all-apartments без инвалидации"),
+    "AUD8-FE-02": A(pkg="AUD8-F1", status="actionable", method="verified-2026-09-19", note="KanbanColumn.tsx:195 ключа нет в ru/uz"),
+    "AUD8-FE-03": A(pkg="AUD8-F1", status="actionable", method="verified-2026-09-19", note="EmployeesPage.tsx:145 deps без t"),
+    "AUD8-FE-04": A(pkg="AUD8-F1", status="actionable", method="verified-2026-09-19", note="AccessEquipmentPage.tsx as never ×5"),
+    "AUD8-FE-05": A(pkg="AUD8-F1", status="actionable", method="verified-2026-09-19", note="useTheme/useResizableColumn/AutoManagerCard localStorage без try/catch"),
+    "AUD8-DB-01": A(pkg="AUD8-C1", status="actionable", method="verified-2026-09-19", note="employees.py:342 → async_assignment_service.py:38 N+1"),
+    "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
 }
 
 

@@ -18,15 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **490**
+- пунктов всего (с Priority): **506**
 - закрыто маркером: **480**
-- открыто маркером: **10**
+- открыто маркером: **26**
 
-  - `decision` — **2**
+  - `actionable` — **14**
+  - `decision` — **3**
   - `no-pr` — **1**
-  - `deferred` — **7**
+  - `deferred` — **8**
 
-Из них actionable по приоритету: .
+Из них actionable по приоритету: P2=5, P3=9.
 
 Значения `status`:
 
@@ -53,6 +54,22 @@
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
 | `AUD7-DOC-01` | P3 | decision | verified-2026-09-15 | AUD7-S2 | — | docs | — | СВ-04: RBAC-документы от 2026-09-05, на которые опирается SEC-03, в main отсутствуют (есть на ветке unified-rbac и как .local-копии) — владелец выбирает каноническую версию |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
+| `AUD8-CODE-01` | P2 | actionable | verified-2026-09-19 | AUD8-C1 | — | — | — | handlers/shifts.py:139,307,371 except: pass |
+| `AUD8-CODE-02` | P3 | actionable | verified-2026-09-19 | AUD8-C1 | — | — | — | handlers/admin/lists.py:156 print() |
+| `AUD8-DB-01` | P3 | actionable | verified-2026-09-19 | AUD8-C1 | — | — | — | employees.py:342 → async_assignment_service.py:38 N+1 |
+| `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
+| `AUD8-ENG-01` | P2 | actionable | verified-2026-09-19 | AUD8-E1 | — | — | — | docker-compose.yml:500 :+ вместо :? |
+| `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
+| `AUD8-ENG-03` | P3 | actionable | verified-2026-09-19 | AUD8-E1 | — | — | — | actions по тегам, permissions, digest-пины, dev-порты |
+| `AUD8-FE-01` | P2 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | useAddresses.ts:87 all-apartments без инвалидации |
+| `AUD8-FE-02` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | KanbanColumn.tsx:195 ключа нет в ru/uz |
+| `AUD8-FE-03` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | EmployeesPage.tsx:145 deps без t |
+| `AUD8-FE-04` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | AccessEquipmentPage.tsx as never ×5 |
+| `AUD8-FE-05` | P3 | actionable | verified-2026-09-19 | AUD8-F1 | — | — | — | useTheme/useResizableColumn/AutoManagerCard localStorage без try/catch |
+| `AUD8-SEC-01` | P2 | actionable | verified-2026-09-19 | AUD8-S1 | — | — | — | media_storage.py:558,596 без html.escape; parse_mode=HTML |
+| `AUD8-SEC-02` | P2 | actionable | verified-2026-09-19 | AUD8-S1 | — | — | — | resident.py:445,483 без лимитера; образец code_rate_limit |
+| `AUD8-SEC-03` | P3 | actionable | verified-2026-09-19 | AUD8-S1 | — | — | — | registry.py:631 legacy redirect, :336 ILIKE без escape |
+| `AUD8-SEC-04` | P3 | actionable | verified-2026-09-19 | AUD8-S1 | — | — | — | imports.py:60 нет cap на unpacked; образец payment_control |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
