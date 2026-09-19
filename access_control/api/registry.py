@@ -621,6 +621,8 @@ async def get_photo(
     if not stored:
         # Валидная подпись, но фото нет — просмотра не произошло, аудит не пишем.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
+    # AUD8-SEC-03: не-`media://` значение → 404 ДО аудита (просмотра не будет).
+    media_id = _photo_media_id(stored)
 
     # Просмотр состоялся → аудит (§11/§6.2). Details PD-safe: без номера/URL.
     actor = _optional_actor(request)
@@ -636,7 +638,6 @@ async def get_photo(
     db.commit()
 
     # §11: фото лежит в медиа-сервисе — стримим байты, сырой URL наружу не уходит.
-    media_id = _photo_media_id(stored)
     content, content_type = await media.fetch_file(media_id)
     return Response(content=content, media_type=content_type)
 

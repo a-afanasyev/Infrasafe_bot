@@ -289,20 +289,28 @@ def test_photos_media_ref_streams_bytes_and_audits(pg_db, pilot) -> None:
     assert _audit_count(pg_db) == before + 1
 
 
-def test_photos_raw_url_still_redirects(pg_db, pilot) -> None:
-    """Обратная совместимость: сырой storage-URL → прежний 302 redirect, медиа не дёргаем."""
+def test_photos_raw_url_is_404_not_redirect(pg_db, pilot) -> None:
+    """AUD8-SEC-03: сырой storage-URL больше не редиректится (open-redirect при любом
+    новом источнике raw URL); на продах таких строк нет (все `media://`) — 404,
+    медиа не дёргаем, аудит просмотра не пишем."""
     ce = _seed_camera_event(
         pg_db, pilot, event_id="ev-raw", plate="01RAW00",
         plate_photo_url="https://cdn.example/plate/raw.jpg",
     )
     pg_db.commit()
+    before = pg_db.execute(
+        text("SELECT count(*) FROM access_audit_logs WHERE action = 'access.photo_view'")
+    ).scalar_one()
     fake = FakeMediaClient()
     client = TestClient(_app_with_media(fake))
     url = pu.sign(ce, "plate", ttl_seconds=300)
     resp = client.get(url, follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "https://cdn.example/plate/raw.jpg"
+    assert resp.status_code == 404
     assert fake.fetched == []  # медиа-сервис не вызывался для сырого URL
+    pg_db.commit()
+    assert pg_db.execute(
+        text("SELECT count(*) FROM access_audit_logs WHERE action = 'access.photo_view'")
+    ).scalar_one() == before
 
 
 # ------------------------------ симулятор (сквозной путь) ------------------------------

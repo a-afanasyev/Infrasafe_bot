@@ -96,8 +96,9 @@ def test_passes_limited_independently_and_per_user(pg_db, pilot) -> None:
     for _ in range(3):
         assert client.post("/api/v1/access/passes", json=_pass_body(pilot)).status_code == 201
     assert client.post("/api/v1/access/passes", json=_pass_body(pilot)).status_code == 429
-    # Другой житель — свой счётчик.
-    other = _seed_resident(pg_db, pilot)
+    # Другой житель той же квартиры — свой счётчик (зона↔двор уже связаны).
+    other = seed_user(pg_db, roles="applicant")
+    _link_user_apartment(pg_db, other, pilot.apartment_id, "approved")
     assert _client(other).post("/api/v1/access/passes", json=_pass_body(pilot)).status_code == 201
 
 
