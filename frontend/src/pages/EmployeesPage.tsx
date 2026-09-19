@@ -124,7 +124,8 @@ export default function EmployeesPage() {
   // опциональная цепочка делала клик пустым: ни запроса, ни ошибки.
   const approveEmployee = useApproveEmployee()
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ручная мемоизация намеренная; список зависимостей сохранён как есть во избежание пересоздания коллбэка при смене локали
+  // AUD8-FE-03: `t` в зависимостях обязателен — иначе после смены языка диалог
+  // блокировки открывался на прежнем языке (замыкание держало старый `t`).
   const handleBlockToggle = useCallback((e: EmployeeBrief) => {
     const empName = fullName(e, `#${e.id}`)
     const isBlocked = e.status === 'blocked'
@@ -142,7 +143,7 @@ export default function EmployeesPage() {
         }
       },
     })
-  }, [blockEmployee, unblockEmployee, fullName])
+  }, [blockEmployee, unblockEmployee, fullName, t])
 
   // Все плитки считаются по ВСЕЙ выборке, а не по загруженной странице.
   // Раньше здесь стояло `employees.length`, и при упёршемся в лимит списке
