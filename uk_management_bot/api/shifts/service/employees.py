@@ -339,8 +339,10 @@ async def soft_delete_employee(
                 Request.status.in_(ACTIVE_REQUEST_STATUSES),
             )
         )
-        for req in active_requests_result.scalars().all():
-            await _assignment_svc.reassign_executor(req.request_number, reassign_to)
+        # AUD8-DB-01: один запрос назначений на весь список, а не пара на заявку.
+        await _assignment_svc.reassign_executor_bulk(
+            list(active_requests_result.scalars().all()), reassign_to
+        )
 
     # Soft-delete the user
     user.deleted_at = datetime.now(timezone.utc)

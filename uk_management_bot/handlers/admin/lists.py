@@ -153,7 +153,7 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
         user_roles = parse_roles_safe(user.roles)
         has_access = any(role in ['admin', 'manager'] for role in user_roles)
     
-    print(f"🔧 Доступ к админ панели: {'✅ Есть' if has_access else '❌ Нет'}")
+    logger.debug("test_middleware: доступ к админ-панели: %s", has_access)
     
     lang = language
     await message.answer(get_text("admin.handlers.test_middleware_result", language=lang).format(
