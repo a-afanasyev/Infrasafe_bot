@@ -2,7 +2,7 @@
 # Этот Dockerfile предназначен для разработки с hot-reload
 # Код монтируется как volume, изменения применяются без пересборки
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5
 
 # Устанавливаем рабочую директорию
 WORKDIR /app

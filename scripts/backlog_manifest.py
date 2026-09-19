@@ -357,7 +357,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-SEC-04 закрыт 2026-09-19 (PR #590).
     # AUD8-ENG-01 закрыт 2026-09-19 (PR #590).
     "AUD8-ENG-02": A(pkg="AUD8-E1", status="decision", method="verified-2026-09-19", note="BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца"),
-    "AUD8-ENG-03": A(pkg="AUD8-E1", status="actionable", method="verified-2026-09-19", note="actions по тегам, permissions, digest-пины, dev-порты"),
+    # AUD8-ENG-03 закрыт 2026-09-19 (PR #593).
     # AUD8-CODE-01 закрыт 2026-09-19 (PR #591).
     # AUD8-CODE-02 закрыт 2026-09-19 (PR #591).
     # AUD8-FE-01 закрыт 2026-09-19 (PR #592).

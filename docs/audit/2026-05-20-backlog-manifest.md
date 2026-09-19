@@ -19,15 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **506**
-- закрыто маркером: **493**
-- открыто маркером: **13**
+- закрыто маркером: **494**
+- открыто маркером: **12**
 
-  - `actionable` — **1**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **8**
 
-Из них actionable по приоритету: P3=1.
+Из них actionable по приоритету: .
 
 Значения `status`:
 
@@ -56,7 +55,6 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `AUD8-ENG-03` | P3 | actionable | verified-2026-09-19 | AUD8-E1 | — | — | — | actions по тегам, permissions, digest-пины, dev-порты |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |
