@@ -1,5 +1,9 @@
 name: CI
 
+# AUD8-ENG-03: минимум прав GITHUB_TOKEN по умолчанию; write только в job\'ах, где нужен.
+permissions:
+  contents: read
+
 on:
   pull_request:
   push:
@@ -14,9 +18,9 @@ jobs:
     name: lint (ruff, whole scope)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -65,9 +69,9 @@ jobs:
     # 3118 ошибок, фактический замер 26.07 дал 3356 — +238 приехали без единого
     # сигнала. Логика гейта и обе его ветви — `ci/mypy_ratchet.py`.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -99,9 +103,9 @@ jobs:
     # blocking, не advisory-заглушка. Полный скан (Low/Medium — 63 находки,
     # типичный SAST-шум) — отдельный always-advisory шаг, НЕ blocking.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -158,9 +162,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
@@ -175,9 +179,9 @@ jobs:
     name: pip-audit (dependency CVE gate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -234,9 +238,9 @@ jobs:
       run:
         working-directory: media_service
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -279,9 +283,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
           cache: pip
@@ -411,9 +415,9 @@ jobs:
       ADMIN_PASSWORD: "ci-dummy-admin-pw-0123456"
       DEBUG: "true"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -534,9 +538,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -602,9 +606,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -717,9 +721,9 @@ jobs:
       ACCESS_SNAPSHOT_SIGNING_SEED: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
       ACCESS_DEVICE_HMAC_SEED: "pilot-test-hmac-seed"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
           cache: pip
@@ -1143,9 +1147,9 @@ jobs:
       # любая ветка могла бы подменить тег, с которого раскатывается прод.
       PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # Джоба до сих пор только ПРОВЕРЯЛА, что Dockerfile'ы собираются (push:
       # false, load: false). Сборка живых образов при этом происходила на
@@ -1170,14 +1174,14 @@ jobs:
       # .105 уже лежат ghcr.io/a-afanasyev/infrasafe-app:sha-*.
       - name: Login to GHCR
         if: env.PUBLISH == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build bot image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: Dockerfile
@@ -1190,7 +1194,7 @@ jobs:
           cache-to: "type=gha,mode=max"
 
       - name: Build api image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: Dockerfile.api
@@ -1206,7 +1210,7 @@ jobs:
       # чтобы поломка Dockerfile.access ловилась до деплоя. Отдельный cache-scope,
       # чтобы не тереть gha-кэш bot/api.
       - name: Build access image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: Dockerfile.access
@@ -1222,7 +1226,7 @@ jobs:
       # Dockerfile не собирался ни одним гейтом. Контекст здесь `media_service/`,
       # не корень: образ собирается из своего каталога (см. docker-compose).
       - name: Build media image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: media_service
           file: media_service/Dockerfile
@@ -1242,7 +1246,7 @@ jobs:
       # переключён на image:, все три обязаны получить ОДИН И ТОТ ЖЕ тег —
       # иначе миграции поедут из другой сборки, чем воркер.
       - name: Build resource image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: resource-accounting/backend
           file: resource-accounting/backend/Dockerfile
@@ -1258,7 +1262,7 @@ jobs:
       # frontend/Dockerfile или frontend/nginx.conf (его трогали по PENT-F08)
       # доезжала бы до прода незамеченной.
       - name: Build frontend image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: frontend
           file: frontend/Dockerfile
@@ -1274,7 +1278,7 @@ jobs:
       # docker-compose.payments.yml: payment-api + payment-migrate из ОДНОГО
       # образа, контекст — корень репо, как в compose). Отдельный cache-scope.
       - name: Build payment image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: payment_control/Dockerfile
@@ -1296,7 +1300,7 @@ jobs:
     # конфигурацию, даже `up -d postgres redis`. Гейт повторяет шаги 0–1 README
     # на чистом раннере без единого реального секрета.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: README steps 0–1 with example env
         run: |
@@ -1315,9 +1319,9 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
           cache: npm
