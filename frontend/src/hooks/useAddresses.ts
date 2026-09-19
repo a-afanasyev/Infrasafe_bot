@@ -277,6 +277,7 @@ export function useCreateApartment() {
     onSuccess: () => {
       toast.success(i18n.t('toast.apartmentCreated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-apartments'] }) // AUD8-FE-01: плоский список и пикер привязки
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
@@ -295,6 +296,7 @@ export function useUpdateApartment() {
     onSuccess: () => {
       toast.success(i18n.t('toast.apartmentUpdated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-apartments'] }) // AUD8-FE-01: плоский список и пикер привязки
       // Профиль квартиры и блок платежей читают лицевой счёт из apartment-detail
       // (staleTime 30 c): без этих инвалидаций после правки счёта карточка минуту
       // показывала старый номер, а суммы приходили уже по новому.
@@ -316,6 +318,7 @@ export function useDeleteApartment() {
     onSuccess: () => {
       toast.success(i18n.t('toast.apartmentDeleted'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-apartments'] }) // AUD8-FE-01: плоский список и пикер привязки
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },
@@ -335,6 +338,7 @@ export function usePurgeApartment() {
     onSuccess: () => {
       toast.success(i18n.t('toast.apartmentPurged'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-apartments'] }) // AUD8-FE-01: плоский список и пикер привязки
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] })
     },
@@ -353,6 +357,7 @@ export function useBulkCreateApartments() {
     onSuccess: () => {
       toast.success(i18n.t('toast.bulkCreated'))
       queryClient.invalidateQueries({ queryKey: ['apartments'] })
+      queryClient.invalidateQueries({ queryKey: ['all-apartments'] }) // AUD8-FE-01: плоский список и пикер привязки
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       queryClient.invalidateQueries({ queryKey: ['address-stats'] }) // FS-13: refresh KPI
     },

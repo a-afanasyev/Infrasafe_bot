@@ -57,6 +57,11 @@ import type {
   ControllerRow,
   SpotRow,
   AssignmentRow,
+  CreateSpotPayload,
+  CreateGatePayload,
+  CreateCameraPayload,
+  CreateBarrierPayload,
+  CreateControllerPayload,
 } from '../../types/access'
 
 /**
@@ -215,7 +220,7 @@ function SpotsPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[]
     label: t(`accessControl.status.${s}`),
   }))
 
-  const fields: FormField[] = [
+  const fields: FormField<CreateSpotPayload>[] = [
     { name: 'zone_id', type: 'numberSelect', label: t('accessControl.equipment.fields.zone'), required: true, options: zoneOptions },
     { name: 'code', type: 'text', label: t('accessControl.equipment.fields.code'), required: true },
     { name: 'status', type: 'select', label: t('accessControl.columns.status'), required: true, options: statusOptions, editOnly: true },
@@ -278,7 +283,7 @@ function SpotsPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[]
                   { onSuccess: () => setFormOpen(false) },
                 )
               } else {
-                create.mutate(payload as never, { onSuccess: () => setFormOpen(false) })
+                create.mutate(payload, { onSuccess: () => setFormOpen(false) })
               }
             }}
           />
@@ -495,7 +500,7 @@ function GatesPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[]
   const zoneOptions = zones.map((z) => ({ value: String(z.id), label: `${z.code} — ${z.name}` }))
   const directionOptions = (['entry', 'exit'] as const).map((d) => ({ value: d, label: t(`accessControl.direction.${d}`) }))
 
-  const fields: FormField[] = [
+  const fields: FormField<CreateGatePayload>[] = [
     { name: 'code', type: 'text', label: t('accessControl.equipment.fields.code'), required: true },
     { name: 'zone_id', type: 'numberSelect', label: t('accessControl.equipment.fields.zone'), required: true, options: zoneOptions },
     { name: 'direction', type: 'select', label: t('accessControl.columns.direction'), required: true, options: directionOptions },
@@ -541,7 +546,7 @@ function GatesPanel({ canManage, zones }: { canManage: boolean; zones: ZoneRow[]
               if (edit) {
                 updateGate.mutate({ id: edit.id, payload }, { onSuccess: () => setFormOpen(false) })
               } else {
-                createGate.mutate(payload as never, { onSuccess: () => setFormOpen(false) })
+                createGate.mutate(payload, { onSuccess: () => setFormOpen(false) })
               }
             }}
           />
@@ -580,7 +585,7 @@ function CamerasPanel({ gates }: { gates: GateRow[] }) {
   const gateOptions = gates.map((g) => ({ value: String(g.id), label: g.code }))
   const directionOptions = (['entry', 'exit'] as const).map((d) => ({ value: d, label: t(`accessControl.direction.${d}`) }))
 
-  const fields: FormField[] = [
+  const fields: FormField<CreateCameraPayload>[] = [
     { name: 'code', type: 'text', label: t('accessControl.equipment.fields.code'), required: true },
     { name: 'gate_id', type: 'numberSelect', label: t('accessControl.equipment.fields.gate'), required: true, options: gateOptions },
     { name: 'direction', type: 'select', label: t('accessControl.columns.direction'), required: true, options: directionOptions },
@@ -626,7 +631,7 @@ function CamerasPanel({ gates }: { gates: GateRow[] }) {
           if (edit) {
             update.mutate({ id: edit.id, payload }, { onSuccess: () => setFormOpen(false) })
           } else {
-            create.mutate(payload as never, { onSuccess: () => setFormOpen(false) })
+            create.mutate(payload, { onSuccess: () => setFormOpen(false) })
           }
         }}
       />
@@ -662,7 +667,7 @@ function BarriersPanel({ gates }: { gates: GateRow[] }) {
   const gateLabel = (id: number) => gates.find((g) => g.id === id)?.code ?? `#${id}`
   const gateOptions = gates.map((g) => ({ value: String(g.id), label: g.code }))
 
-  const fields: FormField[] = [
+  const fields: FormField<CreateBarrierPayload>[] = [
     { name: 'code', type: 'text', label: t('accessControl.equipment.fields.code'), required: true },
     { name: 'gate_id', type: 'numberSelect', label: t('accessControl.equipment.fields.gate'), required: true, options: gateOptions },
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
@@ -706,7 +711,7 @@ function BarriersPanel({ gates }: { gates: GateRow[] }) {
           if (edit) {
             update.mutate({ id: edit.id, payload }, { onSuccess: () => setFormOpen(false) })
           } else {
-            create.mutate(payload as never, { onSuccess: () => setFormOpen(false) })
+            create.mutate(payload, { onSuccess: () => setFormOpen(false) })
           }
         }}
       />
@@ -751,7 +756,7 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
     label: t(`accessControl.equipment.offlineMode.${m}`),
   }))
 
-  const fields: FormField[] = [
+  const fields: FormField<CreateControllerPayload>[] = [
     { name: 'controller_uid', type: 'text', label: t('accessControl.equipment.fields.controllerUid'), required: true },
     { name: 'name', type: 'text', label: t('accessControl.equipment.fields.name') },
     { name: 'zone_id', type: 'numberSelect', label: t('accessControl.equipment.fields.zone'), options: zoneOptions },
@@ -807,7 +812,7 @@ function ControllersPanel({ zones, gates }: { zones: ZoneRow[]; gates: GateRow[]
           if (edit) {
             update.mutate({ id: edit.id, payload }, { onSuccess: () => setFormOpen(false) })
           } else {
-            create.mutate(payload as never, {
+            create.mutate(payload, {
               onSuccess: (res) => {
                 setFormOpen(false)
                 setKeyResult({ uid: res.controller_uid, apiKey: res.api_key })

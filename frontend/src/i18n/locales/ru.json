@@ -1054,6 +1054,7 @@
     "workingRange": "рабочий диапазон",
     "unread": "Непрочитанное обновление",
     "unreadReply": "новый ответ",
+    "truncatedColumn": "Показано {{shown}} из {{total}}",
     "returnToWorkTitle": "Вернуть в работу",
     "returnReasonPlaceholder": "Что нужно переделать? Исполнитель увидит этот текст",
     "managerReturnReason": "↩️ Причина возврата менеджером:",

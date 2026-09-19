@@ -1054,6 +1054,7 @@
     "workingRange": "ish oralig'i",
     "unread": "Oʻqilmagan yangilanish",
     "unreadReply": "yangi javob",
+    "truncatedColumn": "{{total}} tadan {{shown}} tasi koʻrsatilgan",
     "returnToWorkTitle": "Ishga qaytarish",
     "returnReasonPlaceholder": "Nimani qayta qilish kerak? Ijrochi shu matnni koʻradi",
     "managerReturnReason": "↩️ Menejer qaytarish sababi:",

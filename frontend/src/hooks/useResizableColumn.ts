@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { readStorage, writeStorage } from '../utils/safeStorage'
 
 /**
  * Ширина колонки, которую пользователь тянет за правую кромку.
@@ -25,13 +26,13 @@ export function useResizableColumn(
   autoWidth?: number,
 ) {
   const [manualWidth, setManualWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem(storageKey))
+    const saved = Number(readStorage(storageKey))
     return Number.isFinite(saved) && saved >= min && saved <= max ? saved : defaultWidth
   })
   // Пользователь ЯВНО управлял шириной (сохранённая или drag в сессии)?
   // Пока нет — действует автоподбор под контент.
   const [touched, setTouched] = useState<boolean>(
-    () => localStorage.getItem(storageKey) !== null,
+    () => readStorage(storageKey) !== null,
   )
   const drag = useRef<{ startX: number; startW: number } | null>(null)
 
@@ -67,7 +68,7 @@ export function useResizableColumn(
     if (!drag.current) return
     drag.current = null
     setManualWidth(w => {
-      localStorage.setItem(storageKey, String(w))
+      writeStorage(storageKey, String(w))
       return w
     })
   }, [storageKey])

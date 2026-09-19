@@ -9,6 +9,7 @@ import LoadingSpinner from '../shared/LoadingSpinner'
 import AutoManagerToggle from '../shared/AutoManagerToggle'
 import { cn } from '@/lib/utils'
 import type { AutoManagerConfigData } from '../../types/autoManagerConfig'
+import { readStorage, writeStorage } from '../../utils/safeStorage'
 
 // Строгий HH:MM (00-23:00-59) — минимальная client-side проверка формы, ДО
 // сети. Полную бизнес-валидацию (IANA-таймзона, диапазон max_requests и т.д.)
@@ -35,12 +36,12 @@ export default function AutoManagerCard() {
   // Свёрнут по умолчанию (решение владельца 2026-08-27: карточка съедала
   // много места над расписанием). Выбор запоминается в localStorage.
   const [collapsed, setCollapsed] = useState<boolean>(
-    () => localStorage.getItem(COLLAPSED_KEY) !== '0',
+    () => readStorage(COLLAPSED_KEY) !== '0',
   )
   const toggleCollapsed = () => {
     setCollapsed(prev => {
       const next = !prev
-      localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0')
+      writeStorage(COLLAPSED_KEY, next ? '1' : '0')
       return next
     })
   }

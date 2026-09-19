@@ -35,8 +35,10 @@ export type FieldType =
   | 'csv'
   | 'json'
 
-export interface FormField {
-  name: string
+// AUD8-FE-04: имя поля — ключ конкретного payload'а панели, а не произвольная
+// строка: опечатка/лишнее поле в схеме формы не компилируется, а не даёт 422.
+export interface FormField<T = Record<string, unknown>> {
+  name: keyof T & string
   type: FieldType
   label: string
   placeholder?: string
@@ -50,16 +52,16 @@ export interface FormField {
 type FieldValue = string | boolean
 type FormState = Record<string, FieldValue>
 
-interface Props {
+interface Props<T extends object> {
   open: boolean
   title: string
   description?: string
-  fields: FormField[]
+  fields: FormField<T>[]
   /** Значения для режима редактирования (id присутствует → edit). */
   initial?: Record<string, unknown> | null
   loading?: boolean
   onClose: () => void
-  onSubmit: (payload: Record<string, unknown>) => void
+  onSubmit: (payload: T) => void
 }
 
 function toFieldValue(type: FieldType, raw: unknown): FieldValue {
@@ -88,7 +90,7 @@ function parseJsonObject(raw: string): { ok: boolean; value?: Record<string, unk
   }
 }
 
-function buildInitialState(fields: FormField[], initial?: Record<string, unknown> | null): FormState {
+function buildInitialState<T extends object>(fields: FormField<T>[], initial?: Record<string, unknown> | null): FormState {
   const state: FormState = {}
   for (const f of fields) {
     let value = toFieldValue(f.type, initial?.[f.name])
@@ -110,7 +112,7 @@ function buildInitialState(fields: FormField[], initial?: Record<string, unknown
   return state
 }
 
-export default function EquipmentFormDialog({
+export default function EquipmentFormDialog<T extends object = Record<string, unknown>>({
   open,
   title,
   description,
@@ -119,7 +121,7 @@ export default function EquipmentFormDialog({
   loading,
   onClose,
   onSubmit,
-}: Props) {
+}: Props<T>) {
   const { t } = useTranslation()
   const isEdit = Boolean(initial)
   const visibleFields = fields.filter((f) => !f.editOnly || isEdit)
@@ -175,7 +177,8 @@ export default function EquipmentFormDialog({
         if (s) payload[f.name] = s
       }
     }
-    onSubmit(payload)
+    // Единственное место приведения: payload собран по fields, чьи имена — keyof T.
+    onSubmit(payload as unknown as T)
   }
 
   return (
