@@ -5,7 +5,7 @@
 Authorization). Bearer/cookie НЕ требуется; короткий TTL компенсирует.
 
 Покрываем:
-* валидный sig → 302 redirect на сохранённый storage-URL + запись аудита
+* валидный sig → 200 стрим байт из медиа-сервиса (`media://<id>`) + запись аудита
   ``access.photo_view`` в ``access_audit_logs`` (PD-safe details, без номера);
 * протухший sig → 410, аудита просмотра нет;
 * подделанный sig → 403, аудита просмотра нет;
@@ -23,8 +23,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from access_control.app.main import create_app
+from access_control.integrations.media import get_access_media_client
 from access_control.services import photo_urls as pu
 from access_control.tests.conftest import seed_user
+from access_control.tests.test_access_media import FakeMediaClient, _app_with_media
 from access_control.tests.test_operator_read_api import _client, _seed_camera_event
 
 
@@ -41,23 +43,25 @@ def test_photos_route_registered() -> None:
     assert "/api/v1/access/photos/{kind}/{event_id}" in paths
 
 
-def test_valid_signed_url_redirects_and_audits(pg_db, pilot) -> None:
+def test_valid_signed_url_streams_and_audits(pg_db, pilot) -> None:
     ce = _seed_camera_event(
         pg_db,
         pilot,
         event_id="ev-ok",
         plate="01OK000",
-        plate_photo_url="https://cdn.example/plate/ev-ok.jpg",
+        plate_photo_url="media://501",
     )
     pg_db.commit()
     before = _audit_count(pg_db)
 
     url = pu.sign(ce, "plate", ttl_seconds=300)
-    # Без auth: capability по signed-URL.
-    client = TestClient(create_app())
+    # Без auth: capability по signed-URL; байты — из медиа-сервиса (§11).
+    fake = FakeMediaClient()
+    client = TestClient(_app_with_media(fake))
     resp = client.get(url, follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "https://cdn.example/plate/ev-ok.jpg"
+    assert resp.status_code == 200
+    assert resp.content == fake.stream_bytes
+    assert [str(x) for x in fake.fetched] == ["501"]
 
     pg_db.commit()  # увидеть запись, сделанную в сессии запроса
     assert _audit_count(pg_db) == before + 1
@@ -148,21 +152,23 @@ def test_registry_list_returns_signed_urls_for_photo_viewer(pg_db, pilot) -> Non
 
 
 def test_registry_signed_url_roundtrip_opens_photo(pg_db, pilot) -> None:
-    """URL из списка реально открывает фото (302 на сохранённый storage-URL)."""
+    """URL из списка реально открывает фото (200, байты из медиа-сервиса)."""
     uid = seed_user(pg_db, roles="manager")
     _seed_camera_event(
         pg_db, pilot, event_id="ev-rt", plate="01RT000",
-        plate_photo_url="https://cdn.example/plate/rt.jpg",
+        plate_photo_url="media://502",
     )
     pg_db.commit()
     client = _client(uid, "manager")
+    fake = FakeMediaClient()
+    client.app.dependency_overrides[get_access_media_client] = lambda: fake
     signed = client.get("/api/v1/access/events?plate=01RT000").json()[
         "items"
     ][0]["plate_photo_url"]
     # тем же app (без auth на /photos) идём по подписанному URL
     resp = client.get(signed, follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "https://cdn.example/plate/rt.jpg"
+    assert resp.status_code == 200
+    assert resp.content == fake.stream_bytes
 
 
 def test_registry_detail_returns_signed_urls(pg_db, pilot) -> None:

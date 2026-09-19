@@ -45,7 +45,7 @@ services:
       # перезаписал бы role-специфичный DATABASE_URL общим POSTGRES_USER/PASSWORD.
       # Подключение к Redis (ARCH-106: REDIS_URL строится из REDIS_PASSWORD, не берётся
       # целиком из .env — иначе Doppler-cutover REDIS_PASSWORD не давал бы эффекта здесь)
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0
 
       # Настройки логирования
       - LOG_LEVEL=INFO
@@ -124,7 +124,7 @@ services:
       - path: ./.secrets/roles/.env.bot
         required: false
     environment:
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       # Общий settings.py несёт eager prod-валидацию — core-секреты обязательны
@@ -196,7 +196,7 @@ services:
       # ./.secrets/roles/.env.api (env_file выше), под ролью uk_api_runtime —
       # не дублировать здесь (см. комментарий у сервиса app).
       # ARCH-106: REDIS_URL строится из REDIS_PASSWORD (Doppler), не берётся целиком из .env.
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0
       # REDIS_PUBSUB_URL intentionally NOT set here — settings.REDIS_PUBSUB_URL_RESOLVED
       # derives it from REDIS_URL (preserving auth). Hardcoding here without password
       # broke pubsub when REDIS_PASSWORD was enabled. See PR-B in spec
@@ -299,7 +299,7 @@ services:
       # ./.secrets/roles/.env.access (env_file выше), под ролью
       # uk_access_runtime — не дублировать здесь.
       # ARCH-106: REDIS_URL строится из REDIS_PASSWORD (Doppler), не берётся целиком из .env.
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       # Multi-worker-безопасные backend'ы (§9.1 anti-replay, §9.6 live-события):
@@ -497,7 +497,7 @@ services:
     restart: unless-stopped
     
     # Конфигурация Redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required}
     
     # Тома для хранения данных Redis
     volumes:
@@ -509,7 +509,7 @@ services:
     
     # Health check для проверки готовности Redis
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a $REDIS_PASSWORD} ping"]
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:?REDIS_PASSWORD required} ping"]
       interval: 10s
       timeout: 3s
       retries: 5

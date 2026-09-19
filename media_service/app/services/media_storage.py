@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from aiogram.types import BufferedInputFile, Message
 
 from app.models.media import MediaFile, MediaChannel, MediaTag
+import html
+
 from app.utils.display_tz import display_instant_str, display_now_str
 from app.services.telegram_client import TelegramClientService
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
@@ -554,12 +556,14 @@ class MediaStorageService:
         # Основная информация
         caption_parts.append(f"📋 #{request_number}")
 
+        # AUD8-SEC-01: parse_mode=HTML — любой свободный текст экранируется
+        # (канон BUG-174/178), иначе житель вставляет ссылку/теги в канал.
         if description:
-            caption_parts.append(f"📝 {description}")
+            caption_parts.append(f"📝 {html.escape(description)}")
 
         # Теги
         if tags:
-            hashtags = [f"#{tag.replace(' ', '_')}" for tag in tags]
+            hashtags = [f"#{html.escape(tag.replace(' ', '_'))}" for tag in tags]
             caption_parts.append(" ".join(hashtags))
 
         # Системная информация
@@ -590,13 +594,14 @@ class MediaStorageService:
     ) -> str:
         """Подпись для домен-нейтрального медиа (без привязки к заявке)."""
         caption_parts = []
+        # AUD8-SEC-01: html.escape всех свободных полей (parse_mode=HTML).
         if ref:
-            caption_parts.append(f"🔑 {ref}")
+            caption_parts.append(f"🔑 {html.escape(ref)}")
         if description:
-            caption_parts.append(f"📝 {description}")
+            caption_parts.append(f"📝 {html.escape(description)}")
         if tags:
             hashtags = [
-                "#" + t.replace(" ", "_").replace(":", "_").replace("|", "_")
+                "#" + html.escape(t.replace(" ", "_").replace(":", "_").replace("|", "_"))
                 for t in tags
             ]
             caption_parts.append(" ".join(hashtags))
@@ -841,6 +846,15 @@ class MediaStorageService:
         except Exception as e:
             logger.error(f"Failed to update caption for media {media_file.id}: {e}")
 
+    def _generate_archive_caption(self, media_file: MediaFile, archive_reason: Optional[str]) -> str:
+        """Подпись архивной копии; причина — свободный текст, экранируется (AUD8-SEC-01)."""
+        caption = "🗄️ АРХИВ\n"
+        caption += f"📋 #{media_file.request_number}\n"
+        caption += f"📅 Оригинал: {display_instant_str(media_file.uploaded_at)}\n"
+        if archive_reason:
+            caption += f"💬 {html.escape(archive_reason)}\n"
+        return caption
+
     async def _copy_to_archive(
         self,
         media_file: MediaFile,
@@ -856,12 +870,7 @@ class MediaStorageService:
             if not file_url:
                 raise ValueError("Failed to get file URL")
 
-            # Генерируем подпись для архива
-            archive_caption = "🗄️ АРХИВ\n"
-            archive_caption += f"📋 #{media_file.request_number}\n"
-            archive_caption += f"📅 Оригинал: {display_instant_str(media_file.uploaded_at)}\n"
-            if archive_reason:
-                archive_caption += f"💬 {archive_reason}\n"
+            archive_caption = self._generate_archive_caption(media_file, archive_reason)
 
             # Отправляем в архивный канал
             if media_file.is_image:

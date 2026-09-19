@@ -233,3 +233,22 @@ def test_payment_overlay_secrets_mapped():
     for service, variables in PAYMENTS_EXPECTED.items():
         problems += _check(PAYMENTS, service, variables)
     assert not problems, "Payment control SSOT: " + "; ".join(problems)
+
+
+def test_redis_password_is_mandatory_in_prod_compose():
+    """AUD8-ENG-01: без REDIS_PASSWORD Redis стартовал без auth (`:+`), а клиенты
+    profk ходили с пустым паролем — тихая деградация вместо fail-fast."""
+    base = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "${REDIS_PASSWORD:?" in base, "redis command в docker-compose.yml без :?"
+    assert "${REDIS_PASSWORD:+" not in base, "остался мягкий :+ для REDIS_PASSWORD"
+    soft_base = [line for line in base.splitlines() if "${REDIS_PASSWORD}" in line]
+    assert not soft_base, f"base REDIS_URL с мягкой подстановкой: {soft_base}"
+    profk = (ROOT / "docker-compose.profk.yml").read_text(encoding="utf-8")
+    soft = [line for line in profk.splitlines() if "${REDIS_PASSWORD}" in line]
+    assert not soft, f"profk REDIS_URL с мягкой подстановкой: {soft}"
+    assert "${REDIS_PASSWORD:?" in profk
+    example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert any(line.startswith("REDIS_PASSWORD=") for line in example.splitlines()), (
+        ".env.example без REDIS_PASSWORD — quick-start (`docker compose config`) упадёт на :?"
+    )
+
