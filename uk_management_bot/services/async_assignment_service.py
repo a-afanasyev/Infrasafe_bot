@@ -49,6 +49,30 @@ class AsyncAssignmentService:
         apply_executor_reassign(request, active, new_executor_id)
         return True
 
+    async def reassign_executor_bulk(self, requests: list[Request], new_executor_id: int) -> int:
+        """Массовая переброска уже загруженных заявок (soft-delete сотрудника).
+
+        AUD8-DB-01: вместо пары запросов на заявку (перечитать Request + найти
+        активное назначение) — один SELECT активных назначений по всем номерам;
+        правило переброски то же (`apply_executor_reassign`), БЕЗ commit.
+        Возвращает число переброшенных заявок.
+        """
+        if not requests:
+            return 0
+        numbers = [r.request_number for r in requests]
+        active_rows = (
+            await self.db.execute(
+                select(RequestAssignment).where(
+                    RequestAssignment.request_number.in_(numbers),
+                    RequestAssignment.status == ASSIGNMENT_STATUS_ACTIVE,
+                )
+            )
+        ).scalars().all()
+        active_by_number = {a.request_number: a for a in active_rows}
+        for request in requests:
+            apply_executor_reassign(request, active_by_number.get(request.request_number), new_executor_id)
+        return len(requests)
+
     async def _get_request_by_number(self, request_number: str) -> Optional[Request]:
         """Возвращает заявку по её номеру (ASYNC)."""
         if not request_number:

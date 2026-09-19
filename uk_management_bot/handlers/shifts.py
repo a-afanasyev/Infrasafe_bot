@@ -137,7 +137,10 @@ def _start_shift_unit(db, telegram_id: int) -> dict:
                 build_shift_started_message(user, shift, for_channel=True),
             )
     except Exception:
-        pass
+        # AUD8-CODE-01: раньше глушилось молча — исполнитель и канал оставались
+        # без уведомления, а в логах было пусто. Смена уже стартовала, ответ
+        # пользователю штатный; сбой уведомления — в лог с трассой.
+        logger.warning("start_shift: не удалось собрать уведомление (tg=%s)", telegram_id, exc_info=True)
 
     return {"lang": lang, "success": True, "notify": notify}
 
@@ -305,7 +308,8 @@ def _end_shift_by_id_unit(db, telegram_id: int, shift_id: int):
             build_shift_ended_message(user, shift, for_channel=True),
         )
     except Exception:
-        pass
+        # AUD8-CODE-01: см. _start_shift_unit — сбой билдера логируется, не глушится.
+        logger.warning("end_shift: не удалось собрать уведомление (user=%s)", getattr(user, "id", None), exc_info=True)
 
     payload = {
         "shift_id": shift.id,
@@ -369,7 +373,8 @@ async def start_shift(message: Message, roles: list[str] = None, active_role: st
             await send_to_user(bot, user_tg, user_text)
             await send_to_channel(bot, channel_text)
     except Exception:
-        pass
+        # AUD8-CODE-01: как в end-пути — ошибка отправки видна в логах.
+        logger.error("start_shift: ошибка отправки уведомлений", exc_info=True)
 
     # Автопредложение перейти в режим исполнителя
     try:
@@ -622,7 +627,7 @@ async def suggest_executor_skip(callback: CallbackQuery, language: str = "ru"):
         try:
             await callback.answer()
         except Exception:
-            pass
+            logger.debug("suggest_executor_skip: callback.answer не удался", exc_info=True)
 
 
 @router.message(F.text.in_(MY_SHIFT_TEXTS))
