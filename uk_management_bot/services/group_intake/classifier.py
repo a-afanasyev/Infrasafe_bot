@@ -49,6 +49,28 @@ class ClassificationResult:
 _NOT_REQUEST = ClassificationResult(outcome=Outcome.NOT_REQUEST)
 _ERROR = ClassificationResult(outcome=Outcome.PROCESSING_ERROR)
 
+# Попыток вызова LLM на одно сообщение: первая + один повтор при разовом сбое.
+_LLM_ATTEMPTS = 2
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Сбой, который имеет смысл повторить: таймаут, обрыв соединения, 5xx/429.
+
+    Логическая ошибка запроса (4xx кроме 429, невалидные данные) повтора не
+    заслуживает — тот же запрос упадёт так же и стоит денег.
+    """
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError, OSError)):
+        return True
+    try:
+        import anthropic
+    except ImportError:  # pragma: no cover — в тестах SDK может отсутствовать
+        return False
+    if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
+        return True
+    if isinstance(exc, anthropic.APIStatusError):
+        return exc.status_code == 429 or exc.status_code >= 500
+    return False
+
 # Ленивая инициализация: модуль импортируется и в окружениях без ключа
 # (тесты, выключенный флаг) — клиент создаётся при первом вызове.
 _client = None
@@ -228,18 +250,28 @@ async def classify_message(text: str) -> ClassificationResult:
     if keyword_category:
         content += _KEYWORD_HINT.format(kw=keyword_category)
 
-    try:
-        async with asyncio.timeout(settings.GROUP_INTAKE_LLM_TIMEOUT):
-            response = await _get_client().messages.create(
-                model=settings.GROUP_INTAKE_MODEL,
-                max_tokens=_MAX_TOKENS,
-                system=_system_prompt(),
-                messages=[{"role": "user", "content": content}],
-                output_config={"format": {"type": "json_schema", "schema": _schema()}},
-            )
-    except Exception as e:  # таймаут, сеть, 4xx/5xx, что угодно — best-effort
-        logger.warning("group_intake.processing_error: llm call failed: %s", type(e).__name__)
-        return _ERROR
+    response = None
+    for attempt in range(1, _LLM_ATTEMPTS + 1):
+        try:
+            async with asyncio.timeout(settings.GROUP_INTAKE_LLM_TIMEOUT):
+                response = await _get_client().messages.create(
+                    model=settings.GROUP_INTAKE_MODEL,
+                    max_tokens=_MAX_TOKENS,
+                    system=_system_prompt(),
+                    messages=[{"role": "user", "content": content}],
+                    output_config={"format": {"type": "json_schema", "schema": _schema()}},
+                )
+            break
+        except Exception as e:  # таймаут, сеть, 4xx/5xx, что угодно — best-effort
+            # Разовый обрыв сети/таймаут (инцидент profk 2026-09-22) — один
+            # повтор; логическая ошибка (4xx, невалидный запрос) — нет.
+            if attempt < _LLM_ATTEMPTS and _is_transient(e):
+                logger.warning(
+                    "group_intake.llm_retry: attempt=%s failed: %s", attempt, type(e).__name__
+                )
+                continue
+            logger.warning("group_intake.processing_error: llm call failed: %s", type(e).__name__)
+            return _ERROR
 
     if getattr(response, "stop_reason", None) in ("refusal", "max_tokens"):
         logger.warning(

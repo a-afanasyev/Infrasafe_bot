@@ -572,17 +572,23 @@ async def test_tagged_not_request_without_keywords_defaults_to_other(env, db):
     assert payload["category"] == "other"
 
 
-async def test_tagged_processing_error_stays_silent(env, db):
-    """PROCESSING_ERROR даже в тег-режиме — тишина (дефолтами не заменить)."""
+async def test_tagged_processing_error_asks_to_resend(env, db):
+    """PROCESSING_ERROR в тег-режиме — дефолтами не заменить, но и не тишина:
+    автору уходит просьба повторить (инцидент 2026-09-22), кандидат не создаётся.
+    Полный контракт — test_group_intake_tag_resilience.py."""
     from uk_management_bot.services.group_intake.classifier import (
         ClassificationResult as CR, Outcome as O,
     )
+    from uk_management_bot.utils.helpers import get_text
     seed_staff_group(db, require_tag=True)
     seed_staff_user(db)
     env.classify.return_value = CR(outcome=O.PROCESSING_ERROR)
     message = make_message(text="#заявка когда будет свет 23 дом")
     await run_entry(message, db)
-    message.reply.assert_not_awaited()
+    message.reply.assert_awaited_once_with(
+        get_text("group_intake.classifier_unavailable", language="ru")
+    )
+    env.store_candidate.assert_not_awaited()
 
 
 async def test_untagged_group_not_request_still_silent(env, db):
