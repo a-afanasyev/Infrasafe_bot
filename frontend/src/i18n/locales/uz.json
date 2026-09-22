@@ -257,8 +257,8 @@
       "resource_admin": "Administrator",
       "resource_operator": "Operator",
       "resource_reviewer": "Tekshiruvchi",
-      "resource_viewer": "Ko'rish",
-      "resource_meter_entry": "Nazoratchi"
+      "resource_viewer": "Faqat ko'rish",
+      "resource_meter_entry": "Ko'rsatkich nazoratchisi"
     },
     "meterStatus": {
       "active": "Faol",
@@ -300,7 +300,7 @@
       "reading": "Ko'rsatkich",
       "avgMonths": "{{n}} oylik o'rtacha",
       "changePrevMonth": "Oldingi oyga nisbatan o'zgarish",
-      "yearOverYear": "Yildan yilga",
+      "yearOverYear": "O'tgan yilga nisbatan",
       "editTitle": "Hisoblagichni tahrirlash",
       "correctTitle": "Hisoblagich raqamini tuzatish",
       "correctHint": "Raqamdagi xatoni tuzatish. Joriy raqam:",
@@ -375,7 +375,7 @@
       "code": "Kod",
       "type": "Turi",
       "parent": "Yuqori obyekt",
-      "root": "— asosiy (ildiz) —",
+      "root": "— yuqori daraja (ildiz) —",
       "sortOrder": "Tartib",
       "description": "Tavsif",
       "namePlaceholder": "Nomi…",
@@ -395,8 +395,8 @@
       "format": "Format",
       "provider": "Yetkazib beruvchi",
       "resource": "Resurs",
-      "correction": "Tuzatuvchi",
-      "correctionChip": "tuzat.",
+      "correction": "Tuzatish dalolatnomasi",
+      "correctionChip": "tuzatish",
       "history": "Tarix",
       "empty": "Hozircha dalolatnomalar yo'q",
       "rows": "Qatorlar",
@@ -413,8 +413,8 @@
       "confirm": "Tasdiqlash",
       "channels": {
         "email": "Email",
-        "edi": "EHA (elektron hujjat almashinuvi)",
-        "paper": "Qog'oz",
+        "edi": "EHA (elektron hujjat aylanishi)",
+        "paper": "Qog'ozda",
         "other": "Boshqa"
       },
       "status": {
@@ -449,7 +449,7 @@
     },
     "audit": {
       "title": "O'zgarishlar jurnali",
-      "entity": "Obyekt turi",
+      "entity": "Yozuv turi",
       "action": "Amal",
       "empty": "Yozuvlar topilmadi",
       "colDate": "Sana",
@@ -464,7 +464,7 @@
         "object": "Obyektlar",
         "export": "Dalolatnomalar",
         "provider": "Yetkazib beruvchilar",
-        "session": "Seanslar"
+        "session": "Sessiyalar"
       }
     }
   },
@@ -2420,7 +2420,7 @@
       "camera": "Kamera",
       "gallery": "Galereya",
       "remove": "Rasmni o‘chirish",
-      "uploadProgress": "Rasmlar yuklanmoqda {{done}}/{{total}}"
+      "uploadProgress": "Rasmlar yuklanmoqda: {{done}}/{{total}}"
     },
     "feedback": {
       "title": "Qayta aloqa",
