@@ -380,7 +380,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча"),
     "A9-P2-7": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="`POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции"),
     "A9-P2-8": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02)"),
-    "A9-P2-9": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="API: шесть самописных Telegram-клиентов на httpx мимо общего `api_bot`"),
+    # A9-P2-9 закрыт 2026-09-23 (PR #603).
     "A9-P2-10": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Доменный справочник категорий лежит в UI-слое `keyboards/requests.py`"),
     # A9-P2-11 закрыт 2026-09-23 (PR #602).
     "A9-P2-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: синхронный `db.query` в трёх async-ручках (остаток AUD7-ARCH-01)"),
