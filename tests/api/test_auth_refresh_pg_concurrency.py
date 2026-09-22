@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -29,6 +30,9 @@ from uk_management_bot.api.auth.service import hash_token, create_refresh_token_
 
 SCHEMA = "auth_refresh_race_test"
 _TABLES = [User.__table__, RefreshToken.__table__]
+
+
+_PG_UNREACHABLE = (OSError, sa_exc.OperationalError, sa_exc.InterfaceError)
 
 
 def _pg_url() -> str | None:
@@ -54,7 +58,10 @@ async def auth_pg_factory():
             await conn.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
             await conn.execute(text(f'CREATE SCHEMA "{SCHEMA}"'))
             await conn.run_sync(lambda sc: Base.metadata.create_all(sc, tables=_TABLES))
-    except Exception as exc:  # pragma: no cover — host without reachable PG
+    # A9-P2-18: skip — только если PG недоступен (сеть/аутентификация). Ошибка
+    # СХЕМЫ (нет таблицы под FK — так сюита молча скипалась в CI после
+    # миграции 017 «Лифты») обязана ронять тест, а не прятаться в skip.
+    except _PG_UNREACHABLE as exc:  # pragma: no cover — host without reachable PG
         await engine.dispose()
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 

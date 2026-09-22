@@ -7,6 +7,7 @@ import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
 export default function CompletionReport() {
   const { number } = useParams()
@@ -74,6 +75,7 @@ export default function CompletionReport() {
         <textarea
           value={report}
           onChange={(e) => setReport(e.target.value)}
+          maxLength={MAX_REQUEST_TEXT_LENGTH}
           placeholder={t('twa.exec.report.placeholder')}
           className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />

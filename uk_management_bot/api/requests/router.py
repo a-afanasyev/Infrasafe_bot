@@ -164,6 +164,11 @@ async def _cards(db: AsyncSession, rows, user: User) -> list[RequestCard]:
     ]
 
 
+async def _card(db: AsyncSession, req, exec_user, user: User) -> RequestCard:
+    """Одна карточка через `_cards()`: ответы PATCH несут лифт и язык, как GET."""
+    return (await _cards(db, [(req, exec_user)], user))[0]
+
+
 @router.get("/kanban", response_model=KanbanResponse)
 async def get_kanban(
     executor_id: Optional[int] = Query(None),
@@ -293,7 +298,6 @@ async def create_request(
             category=body.category,
             urgency=body.urgency,
             description=body.description,
-            media_files=body.media_files,
             source="twa",
             resolved=resolved,
             webhook_tag="twa",
@@ -331,7 +335,6 @@ async def create_inspector_request(
             category=body.category,
             urgency=body.urgency,
             description=body.description,
-            media_files=body.media_files,
             source="inspector",
             resolved=resolved,
             webhook_tag="inspector",
@@ -408,7 +411,10 @@ def _build_workflow_payload(target_status: str, updates: dict) -> dict:
 # `category` УБРАНА (2026-09-03): смена категории — своё действие канона
 # (MANAGER_CHANGE_CATEGORY) через PATCH /{number}/category; схема PATCH её и
 # раньше не пропускала (extra=forbid), ключ здесь был мёртвым.
-_MANAGER_EDIT_FIELDS = {"urgency", "notes", "description"}
+# `description` УБРАН (A9-P3-13): схема PATCH его не пропускает (extra=forbid),
+# ключ был мёртвым — как `category` выше. Понадобится правка описания — вводить
+# полем схемы с лимитом, тогда же вернуть сюда (тест держит белый список ⊆ схемы).
+_MANAGER_EDIT_FIELDS = {"urgency", "notes"}
 # Контент-поля исполнителя без смены статуса.
 _EXECUTOR_EDIT_FIELDS = {"completion_report", "requested_materials", "notes"}
 
@@ -457,7 +463,7 @@ async def change_request_category(
     if row is None:
         raise HTTPException(status_code=404, detail="Request not found")
     req, exec_user = row
-    card = _make_request_card(req, exec_user)
+    card = await _card(db, req, exec_user, user)
     return CategoryChangeOut(
         request=card,
         no_op=result.no_op,
@@ -647,7 +653,7 @@ async def update_request(
         if row is None:
             raise HTTPException(status_code=404, detail="Request not found")
         req, exec_user = row
-        return _make_request_card(req, exec_user)
+        return await _card(db, req, exec_user, user)
 
     # ═══════════════════ EDIT-ветка (без смены статуса) ═══════════════════
     req = await svc.request_for_update(db, request_number)
@@ -671,6 +677,13 @@ async def update_request(
             raise HTTPException(status_code=403, detail="Cannot update another user's request")
         if not set(updates.keys()).issubset({"rating"}):
             raise HTTPException(status_code=403, detail="Applicants can only update status and rating")
+        # A9-P3-13: оценка — часть приёмки (APPLICANT_ACCEPT), у заявки нет
+        # поля `rating`; одиночный {"rating"} раньше падал AttributeError → 500.
+        if "rating" in updates:
+            raise HTTPException(
+                status_code=422,
+                detail="rating is accepted only together with status 'Принято' (acceptance)",
+            )
 
     # ── Manager path: только не-workflow поля (deprecated workflow-поля дропаем —
     # их место в status-переходе через layer, не прямой записью) ──
@@ -679,22 +692,28 @@ async def update_request(
             if field not in _MANAGER_EDIT_FIELDS:
                 del updates[field]
 
-    # Urgency terminal-guard: финализированную заявку нельзя переприоритизировать.
-    if "urgency" in updates and req.status in _TERMINAL_STATUSES:
+    # Terminal-guard на ВСЕ поля edit-ветки (A9-P3-13; раньше — только urgency):
+    # финализированная заявка заморожена — исполнитель не дописывает отчёт/
+    # материалы закрытой заявке, менеджер не правит заметки задним числом.
+    if updates and normalize_status(req) in _TERMINAL_STATUSES:
         raise HTTPException(
             status_code=422,
-            detail="Cannot change urgency of a finalized request",
+            detail="Cannot edit a finalized request",
         )
 
-    changed = await svc.apply_request_edits(db, req, updates)
+    changed = await svc.apply_request_edits(db, req, updates, actor=user)
 
     # Реалтайм для канбана при реальном изменении поля.
     if changed:
         await publish_request_event("request.updated", {"number": request_number})
 
-    # _make_request_card отдаёт канон-статус (PR7): edit-путь может вернуть
-    # возвращённую заявку (правка urgency/rating) — менеджер видит «Возвращена».
-    return _make_request_card(req)
+    # Карточка — как у GET (A9-P3-13): с исполнителем и лифтом; канон-статус
+    # (PR7) — edit-путь может вернуть возвращённую заявку, менеджер видит «Возвращена».
+    row = await svc.request_with_executor(db, request_number)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req, exec_user = row
+    return await _card(db, req, exec_user, user)
 
 
 @router.get("/{request_number}/comments", response_model=list[CommentOut])
@@ -736,7 +755,6 @@ async def add_comment(
         user_id=user.id,
         text=body.text,
         is_internal=body.is_internal,
-        media_files=body.media_files,
     )
 
 

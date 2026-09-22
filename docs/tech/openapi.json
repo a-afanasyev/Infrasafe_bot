@@ -1455,27 +1455,15 @@
         "type": "object"
       },
       "CommentBody": {
+        "additionalProperties": false,
         "properties": {
           "is_internal": {
             "default": false,
             "title": "Is Internal",
             "type": "boolean"
           },
-          "media_files": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Media Files"
-          },
           "text": {
+            "maxLength": 2000,
             "title": "Text",
             "type": "string"
           }
@@ -1637,6 +1625,7 @@
             "type": "string"
           },
           "description": {
+            "maxLength": 2000,
             "title": "Description",
             "type": "string"
           },
@@ -1661,20 +1650,6 @@
               }
             ],
             "title": "Elevator Operational"
-          },
-          "media_files": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Media Files"
           },
           "urgency": {
             "title": "Urgency",
@@ -1768,6 +1743,7 @@
             "type": "string"
           },
           "description": {
+            "maxLength": 2000,
             "title": "Description",
             "type": "string"
           },
@@ -1792,20 +1768,6 @@
               }
             ],
             "title": "Elevator Operational"
-          },
-          "media_files": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Media Files"
           },
           "urgency": {
             "title": "Urgency",
@@ -9329,6 +9291,7 @@
           "completion_report": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -9351,6 +9314,7 @@
           "manager_confirmation_notes": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -9373,6 +9337,7 @@
           "notes": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -9395,6 +9360,7 @@
           "requested_materials": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -9406,6 +9372,7 @@
           "return_reason": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {

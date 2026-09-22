@@ -5,6 +5,7 @@ import { Send } from 'lucide-react'
 import { twaClient } from '../twaClient'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
 import { notifyError } from '../utils/errors'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../constants'
 
 interface Comment {
   id: number
@@ -103,6 +104,7 @@ export default function CommentThread({ requestNumber }: Props) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          maxLength={MAX_REQUEST_TEXT_LENGTH}
           placeholder={t('twa.detail.dialogPlaceholder')}
           rows={1}
           className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
