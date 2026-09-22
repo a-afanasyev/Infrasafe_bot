@@ -1,6 +1,9 @@
 """
 Утилиты для работы с номерами заявок в новом формате
 """
+import html
+
+from uk_management_bot.utils.user_names import full_name
 import logging
 from typing import Optional
 from uk_management_bot.services.request_number_service import RequestNumberService
@@ -80,9 +83,9 @@ def format_request_for_list(request, include_number=True):
     """
     if include_number:
         number_display = request.format_number_for_display()
-        return f"{number_display}\n📍 {request.address}\n🏷️ {request.category}\n📊 {request.status}"
+        return f"{number_display}\n📍 {html.escape(request.address or '')}\n🏷️ {html.escape(request.category or '')}\n📊 {request.status}"
     else:
-        return f"📍 {request.address}\n🏷️ {request.category}\n📊 {request.status}"
+        return f"📍 {html.escape(request.address or '')}\n🏷️ {html.escape(request.category or '')}\n📊 {request.status}"
 
 def format_request_details(request, language="ru", show_executor=True, active_role=None, db_session=None):
     """
@@ -133,12 +136,14 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     message_text += f"{labels['category']} {category_display}\n"
     message_text += f"{labels['status']} {status_display}\n"
     from uk_management_bot.utils.address_helpers import localize_address
-    message_text += f"{labels['address']} {localize_address(request.address, language)}\n"
-    message_text += f"{labels['description']} {request.description}\n"
+    # A9-P2-2: карточка уходит с parse_mode=HTML — пользовательский текст
+    # (адрес, описание, квартира, причины возврата, имя) экранируется.
+    message_text += f"{labels['address']} {html.escape(localize_address(request.address, language))}\n"
+    message_text += f"{labels['description']} {html.escape(request.description or '')}\n"
     message_text += f"{labels['urgency']} {get_urgency_display(request.urgency, language=language)}\n"
 
     if request.apartment:
-        message_text += f"{labels['apartment']} {request.apartment}\n"
+        message_text += f"{labels['apartment']} {html.escape(str(request.apartment))}\n"
 
     message_text += f"{labels['created']} {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
 
@@ -151,12 +156,12 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
     applicant_reason = getattr(request, 'return_reason', None)
     if applicant_reason:
         label = get_text('requests.applicant_return_reason_label', language=language)
-        message_text += f"\n{label} {applicant_reason}\n"
+        message_text += f"\n{label} {html.escape(applicant_reason)}\n"
 
     manager_reason = getattr(request, 'manager_return_reason', None)
     if manager_reason:
         label = get_text('requests.manager_return_reason_label', language=language)
-        message_text += f"\n{label} {manager_reason}\n"
+        message_text += f"\n{label} {html.escape(manager_reason)}\n"
 
     # Add executor info if needed
     if show_executor and active_role != "executor" and request.executor_id:
@@ -164,9 +169,9 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
             from uk_management_bot.database.models.user import User
             executor = db_session.query(User).filter(User.id == request.executor_id).first()
             if executor:
-                executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
+                executor_name = full_name(executor)
                 if executor_name:
-                    message_text += f"{labels['executor']} {executor_name}\n"
+                    message_text += f"{labels['executor']} {html.escape(executor_name)}\n"
 
     # Add media files count if present
     if hasattr(request, 'media_files') and request.media_files:
@@ -295,14 +300,14 @@ def format_request_list_item(
         if len(address) > 60:
             address = address[:60] + "…"
 
-        item_text += f"   {address_label} {address}\n"
+        item_text += f"   {address_label} {html.escape(address)}\n"
         item_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
 
         # Handle special statuses with notes
         if request.status == "Отменена" and request.notes:
             reason_label = get_text('requests.cancellation_reason_label', language=language)
             notes = request.notes[:100] + "..." if len(request.notes) > 100 else request.notes
-            item_text += f"   {reason_label} {notes}\n"
+            item_text += f"   {reason_label} {html.escape(notes)}\n"
 
         elif request.status == "Уточнение" and request.notes:
             clarification_label = get_text('requests.clarification_label', language=language)
@@ -313,7 +318,7 @@ def format_request_list_item(
                 preview = '\n'.join(last_messages)
                 if len(preview) > 80:
                     preview = preview[:77] + '...'
-                item_text += f"   {clarification_label} {preview}\n"
+                item_text += f"   {clarification_label} {html.escape(preview)}\n"
 
         item_text += "\n"
 

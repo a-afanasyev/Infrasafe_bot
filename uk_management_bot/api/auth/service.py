@@ -15,7 +15,6 @@ from jose import jwt, JWTError
 from jose.exceptions import ExpiredSignatureError, JWTClaimsError
 
 from uk_management_bot.config.settings import settings
-from uk_management_bot.utils.http_errors import describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -314,24 +313,25 @@ async def verify_otp(user_id: int, code: str) -> tuple[bool, str]:
 
 
 async def send_otp_via_bot(telegram_id: int, code: str) -> bool:
-    """Send OTP code to user via Telegram bot."""
-    import httpx
+    """Send OTP code to user via Telegram bot.
 
-    try:
-        url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json={
-                "chat_id": telegram_id,
-                "text": (
-                    f"\U0001f510 Код входа в панель управления: <b>{code}</b>\n\n"
-                    "Код действителен 5 минут. Не сообщайте его никому."
-                ),
-                "parse_mode": "HTML",
-            })
-            return resp.status_code == 200
-    except Exception as e:
-        logger.error("Failed to send OTP via bot: %s", describe_http_error(e))
-        return False
+    A9-P2-9: через общий модуль ``api/telegram_send`` (он не поднимает сетевых
+    исключений и не логирует URL с токеном). Контракт прежний: ``True`` —
+    Telegram принял сообщение; иначе ``False`` → роутер отвечает 503.
+    """
+    from uk_management_bot.api import telegram_send
+
+    result = await telegram_send.send_message(
+        telegram_id,
+        (
+            f"\U0001f510 Код входа в панель управления: <b>{code}</b>\n\n"
+            "Код действителен 5 минут. Не сообщайте его никому."
+        ),
+        parse_mode="HTML",
+    )
+    if not result.ok:
+        logger.error("Failed to send OTP via bot: %s", result.describe())
+    return result.ok
 
 
 # ---------------------------------------------------------------------------

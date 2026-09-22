@@ -1,4 +1,6 @@
 """Менеджер: просмотр заявок, медиа, подтверждение, пагинация."""
+import html
+
 from aiogram import F
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
@@ -32,7 +34,7 @@ from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 from uk_management_bot.services.completion_media import get_completion_media_file_ids
 from uk_management_bot.utils.auth_helpers import has_admin_access
-from uk_management_bot.utils.user_names import display_name
+from uk_management_bot.utils.user_names import display_name, full_name
 from uk_management_bot.states.request_acceptance import ManagerAcceptanceStates
 
 from ._router import router
@@ -67,14 +69,14 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
         # Получаем информацию о пользователе, создавшем заявку
         request_user = svc.get_user_by_id(request.user_id)
+        # A9-P2-2: карточка уходит с parse_mode=HTML (дефолт бота) — всё, что
+        # ввёл пользователь (имя из Telegram-профиля, адрес, описание,
+        # примечания с ответами на уточнения), экранируется в точке вывода.
+        # Сырой '<a href>' становился живой ссылкой, одиночный '<'/'&' давал
+        # Telegram-400, и менеджер не мог открыть заявку (класс BUG-174/178).
         if request_user:
-            # Формируем полное имя из first_name и last_name
-            full_name_parts = []
-            if request_user.first_name:
-                full_name_parts.append(request_user.first_name)
-            if request_user.last_name:
-                full_name_parts.append(request_user.last_name)
-            user_info = " ".join(full_name_parts) if full_name_parts else get_text("admin.handlers.user_by_id", language=lang).format(telegram_id=request_user.telegram_id)
+            name = full_name(request_user)
+            user_info = html.escape(name) if name else get_text("admin.handlers.user_by_id", language=lang).format(telegram_id=request_user.telegram_id)
         else:
             user_info = get_text("admin.handlers.unknown_user", language=lang)
         
@@ -86,11 +88,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
         urgency_display = get_urgency_display(request.urgency, language=lang) if request.urgency else ""
         message_text += get_text("admin.handlers.request_detail_category", language=lang).format(category=category_display) + "\n"
         message_text += get_text("admin.handlers.request_detail_status", language=lang).format(status=get_status_display(request.status, language=lang)) + "\n"
-        message_text += get_text("admin.handlers.request_detail_address", language=lang).format(address=request.address) + "\n"
-        message_text += get_text("admin.handlers.request_detail_description", language=lang).format(description=request.description) + "\n"
+        message_text += get_text("admin.handlers.request_detail_address", language=lang).format(address=html.escape(request.address or "")) + "\n"
+        message_text += get_text("admin.handlers.request_detail_description", language=lang).format(description=html.escape(request.description or "")) + "\n"
         message_text += get_text("admin.handlers.request_detail_urgency", language=lang).format(urgency=urgency_display) + "\n"
         if request.apartment:
-            message_text += get_text("admin.handlers.request_detail_apartment", language=lang).format(apartment=request.apartment) + "\n"
+            message_text += get_text("admin.handlers.request_detail_apartment", language=lang).format(apartment=html.escape(str(request.apartment))) + "\n"
         message_text += get_text("admin.handlers.request_detail_created", language=lang).format(created_at=request.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
         if request.updated_at:
             message_text += get_text("admin.handlers.request_detail_updated", language=lang).format(updated_at=request.updated_at.strftime('%d.%m.%Y %H:%M')) + "\n"
@@ -107,11 +109,11 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
                 # Индивидуальное назначение конкретному исполнителю
                 assigned_executor = svc.get_user_by_id(active_assignment.executor_id)
                 if assigned_executor:
-                    executor_name = display_name(assigned_executor)
+                    executor_name = html.escape(display_name(assigned_executor))
                     message_text += get_text("admin.handlers.assigned_executor", language=lang).format(executor_name=executor_name) + "\n"
 
         if request.notes:
-            message_text += get_text("admin.handlers.request_detail_notes", language=lang).format(notes=request.notes) + "\n"
+            message_text += get_text("admin.handlers.request_detail_notes", language=lang).format(notes=html.escape(request.notes)) + "\n"
 
         # Проверяем наличие медиафайлов. Фотоотчёт: SSOT — media-service
         # (дашборд/TWA грузят туда, минуя legacy-поле), фолбэк — completion_media.

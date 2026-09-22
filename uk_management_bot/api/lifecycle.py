@@ -145,6 +145,9 @@ async def lifespan(app: FastAPI):
         set_shared_bot(None)
     except Exception:
         _logger.exception("Error closing API notification bot")
+    # A9-P2-9: общий httpx-клиент Bot API (`api/telegram_send.py`); aclose() не поднимает.
+    from uk_management_bot.api import telegram_send
+    await telegram_send.aclose()
     # Dispose DB connection pools
     try:
         from uk_management_bot.database.session import async_engine

@@ -357,50 +357,20 @@ _PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 100
 _PDF = b"%PDF-1.7" + b"x" * 100
 
 
-class _FakeStream:
-    def __init__(self, chunks, status_code=200):
-        self._chunks = chunks
-        self.status_code = status_code
+def _telegram_files(telegram_api, *, file_path="documents/file.jpg", content=_JPEG,
+                    get_status=200):
+    """Bot API за транспортом общего клиента (A9-P2-9): getFile + скачивание."""
+    import httpx
 
-    async def __aenter__(self):
-        return self
+    def handler(request):
+        if "/file/" in request.url.path:
+            return httpx.Response(200, content=content)
+        if get_status != 200:
+            return httpx.Response(get_status, json={
+                "ok": False, "description": "Bad Request: wrong file_id"})
+        return httpx.Response(200, json={"ok": True, "result": {"file_path": file_path}})
 
-    async def __aexit__(self, *a):
-        return False
-
-    def raise_for_status(self):
-        return None
-
-    async def aiter_bytes(self):
-        for c in self._chunks:
-            yield c
-
-
-def _fake_client(*, file_path="documents/file.jpg", chunks=(_JPEG,), get_status=200):
-    class _C:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def get(self, url, params=None):
-            class _R:
-                status_code = get_status
-
-                def raise_for_status(self):
-                    return None
-
-                def json(self):
-                    return {"ok": True, "result": {"file_path": file_path}}
-            return _R()
-
-        def stream(self, method, url):
-            return _FakeStream(list(chunks))
-    return _C
+    telegram_api.handler = handler
 
 
 class TestDocumentProxy:
@@ -417,14 +387,13 @@ class TestDocumentProxy:
         assert r.json()[0]["document_type"] == "passport"
 
     async def test_image_is_served_inline_with_sniffed_type(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
     ):
         resident = await _resident(db_session, 6302)
         doc = await _doc(db_session, resident.id)
 
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                   _fake_client(chunks=(_PNG,))):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        _telegram_files(telegram_api, content=_PNG)
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
 
         assert r.status_code == 200
         # Тип от СОДЕРЖИМОГО, а не от расширения: file_name был passport.jpg.
@@ -434,69 +403,81 @@ class TestDocumentProxy:
         assert r.headers["cache-control"] == "private, max-age=300"
 
     async def test_pdf_is_forced_to_download(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
     ):
         """Просмотр PDF в браузере — исполнение чужого документа в контексте
         нашего домена, поэтому вложением."""
         resident = await _resident(db_session, 6303)
         doc = await _doc(db_session, resident.id)
 
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                   _fake_client(chunks=(_PDF,))):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        _telegram_files(telegram_api, content=_PDF)
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
 
         assert r.headers["content-type"] == "application/pdf"
         assert r.headers["content-disposition"].startswith("attachment")
 
     async def test_unsupported_content_is_refused(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
     ):
         resident = await _resident(db_session, 6304)
         doc = await _doc(db_session, resident.id)
 
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                   _fake_client(chunks=(b"<html>nope</html>",))):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        _telegram_files(telegram_api, content=b"<html>nope</html>")
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
         assert r.status_code == 415
 
     async def test_oversized_file_is_413_not_truncated_200(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
     ):
         """Лимит проверяется ДО отправки заголовков — иначе клиент получил бы
         обрезанный файл с кодом 200."""
         resident = await _resident(db_session, 6305)
         doc = await _doc(db_session, resident.id)
-        huge = [b"x" * (1024 * 1024)] * 21
+        _telegram_files(telegram_api, content=b"x" * (21 * 1024 * 1024))
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        assert r.status_code == 413
 
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                   _fake_client(chunks=huge)):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+    async def test_limit_boundary_exactly_20mb_ok_one_byte_more_413(
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
+    ):
+        """Граница лимита Bot API: ровно 20 МБ — отдаём, 20 МБ + 1 байт — 413.
+
+        Раньше буфер был «лимит + 1» при сравнении ``size > max_bytes``, и файл
+        на байт больше лимита уходил с 200."""
+        resident = await _resident(db_session, 6310)
+        doc = await _doc(db_session, resident.id)
+        limit = 20 * 1024 * 1024
+
+        _telegram_files(telegram_api, content=_JPEG + b"x" * (limit - len(_JPEG)))
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        assert r.status_code == 200
+        assert len(r.content) == limit
+
+        _telegram_files(telegram_api, content=_JPEG + b"x" * (limit + 1 - len(_JPEG)))
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
         assert r.status_code == 413
 
     async def test_missing_file_in_telegram_is_404(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
     ):
         resident = await _resident(db_session, 6306)
         doc = await _doc(db_session, resident.id)
 
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                   _fake_client(get_status=400)):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        _telegram_files(telegram_api, get_status=400)
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
         assert r.status_code == 404
 
-    async def test_telegram_down_is_502(self, client: AsyncClient, db_session: AsyncSession):
+    async def test_telegram_down_is_502(
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
+    ):
         resident = await _resident(db_session, 6307)
         doc = await _doc(db_session, resident.id)
 
-        class _Boom:
-            async def __aenter__(self):
-                raise RuntimeError("network down")
+        def _boom(request):
+            raise RuntimeError("network down")
 
-            async def __aexit__(self, *a):
-                return False
-
-        with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient", _Boom):
-            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        telegram_api.handler = _boom
+        r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
         assert r.status_code == 502
 
     async def test_foreign_document_is_404(self, client: AsyncClient, db_session: AsyncSession):

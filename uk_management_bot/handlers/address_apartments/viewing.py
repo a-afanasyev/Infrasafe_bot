@@ -1,3 +1,4 @@
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -147,7 +148,7 @@ async def show_apartments_list(callback: CallbackQuery, state: FSMContext | None
 
         # Добавляем кнопки для каждого здания
         for building in buildings:
-            yard_info = f" ({building.yard_name})" if building.yard_name else ""
+            yard_info = f" ({building.yard_name})" if building.yard_name else ""  # html-raw: подпись кнопки
             apt_count = building.apartments_count
             apartments_info = f" - {apt_count} {apt_suffix}" if apt_count > 0 else ""
 
@@ -197,7 +198,7 @@ async def show_apartments_by_building(callback: CallbackQuery, language: str = "
         building_address, total, markup = loaded
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
-            address=building_address,
+            address=html.escape(building_address),
             total=total
         )
 
@@ -231,7 +232,7 @@ async def paginate_apartments_by_building(callback: CallbackQuery, language: str
         building_address, total, markup = loaded
 
         text = get_text("address_apartments.handlers.building_apartments", language=lang).format(
-            address=building_address,
+            address=html.escape(building_address),
             total=total
         )
 
@@ -291,7 +292,7 @@ async def process_apartment_search(message: Message, state: FSMContext, language
         if not total:
             no_results_text = (
                 f"{get_text('requests.search_results_title', language=lang)}\n\n"
-                f"{get_text('requests.search_no_results', language=lang, query=query)}\n\n"
+                f"{get_text('requests.search_no_results', language=lang, query=html.escape(query))}\n\n"
                 f"{get_text('requests.search_no_results_action', language=lang)}"
             )
             await message.answer(
@@ -303,7 +304,7 @@ async def process_apartment_search(message: Message, state: FSMContext, language
 
         text = (
             f"{get_text('requests.search_results_title', language=lang)}\n\n"
-            f"{get_text('requests.search_query_label', language=lang, query=query)}\n"
+            f"{get_text('requests.search_query_label', language=lang, query=html.escape(query))}\n"
             f"{get_text('requests.search_found_count', language=lang, count=total)}\n\n"
             f"{get_text('requests.search_select_apartment', language=lang)}"
         )

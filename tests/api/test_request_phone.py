@@ -103,44 +103,32 @@ async def test_no_chat_becomes_409_with_reason(client, db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_connect_failure_is_retried_once(monkeypatch):
+async def test_connect_failure_is_retried_once(telegram_api):
     """Прод 2026-09-01: интермиттентный ConnectTimeout до Telegram. Соединение
     не установилось — сообщение не ушло, один ретрай безопасен (дубль
-    невозможен); второй connect-сбой подряд — честный VERDICT_ERROR."""
+    невозможен); второй connect-сбой подряд — честный VERDICT_ERROR.
+    A9-P2-9: ретрай живёт в общем модуле `api/telegram_send`."""
     import httpx
 
-    attempts = []
+    def handler(request):
+        if len(telegram_api.requests) == 1:
+            raise httpx.ConnectTimeout("boom", request=request)
+        return httpx.Response(200, json={"ok": True, "result": {}})
 
-    class _Client:
-        def __init__(self, *a, **k): ...
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-
-        async def post(self, url, json=None):
-            attempts.append(1)
-            if len(attempts) == 1:
-                raise httpx.ConnectTimeout("boom")
-            return httpx.Response(200, json={"ok": True})
-
-    monkeypatch.setattr(phone_request.httpx, "AsyncClient", _Client)
+    telegram_api.handler = handler
     verdict = await phone_request._send(1, {"text": "t"})
     assert verdict == phone_request.VERDICT_OK
-    assert len(attempts) == 2
+    assert len(telegram_api.requests) == 2
 
 
 @pytest.mark.asyncio
-async def test_two_connect_failures_become_error(monkeypatch):
+async def test_two_connect_failures_become_error(telegram_api):
     import httpx
 
-    class _Client:
-        def __init__(self, *a, **k): ...
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+    def handler(request):
+        raise httpx.ConnectTimeout("boom", request=request)
 
-        async def post(self, url, json=None):
-            raise httpx.ConnectTimeout("boom")
-
-    monkeypatch.setattr(phone_request.httpx, "AsyncClient", _Client)
+    telegram_api.handler = handler
     assert await phone_request._send(1, {"text": "t"}) == phone_request.VERDICT_ERROR
 
 

@@ -14,27 +14,26 @@
 
 2. **Файл скачивается в буфер ДО отправки заголовков.** Стримить и обрывать
    на превышении лимита нельзя: статус уже ушёл клиенту, и вместо 413 он
-   получит обрезанный файл с кодом 200. Лимит Bot API — 20 МБ, буфер на байт
-   больше, чтобы отличить «ровно 20» от «больше».
+   получит обрезанный файл с кодом 200. Лимит Bot API — 20 МБ: ровно 20
+   отдаём, больше — 413.
 
 3. **`Content-Disposition: attachment` для всего, кроме изображений** (PDF в
    том числе): просмотр pdf в браузере — это исполнение стороннего документа
    в контексте нашего домена.
 """
 import logging
+from typing import NoReturn
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.api import telegram_send
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import ResidentDocumentOut
-from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.residents import queries
 from uk_management_bot.services.residents.exceptions import ResidentNotFound
-from uk_management_bot.utils.http_errors import describe_http_error
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +41,9 @@ router = APIRouter()
 
 _manager_only = require_roles("manager")
 
-#: Лимит Bot API на скачивание файла. Буфер берём на байт больше, чтобы
-#: отличить «ровно лимит» от «больше лимита».
+#: Лимит Bot API на скачивание файла: ровно лимит — отдаём, больше — 413
+#: (`download_file` прерывает чтение при `size > max_bytes`).
 _TG_FILE_LIMIT = 20 * 1024 * 1024
-_SPOOL_LIMIT = _TG_FILE_LIMIT + 1
 _TIMEOUT = 30
 
 #: Что раздел готов ОТДАВАТЬ. Отдельно от `sniff_media_mime` — см. модульный
@@ -114,6 +112,16 @@ async def list_documents(
     ]
 
 
+def _telegram_unavailable(doc_id: int, resident_id: int, reason: str) -> NoReturn:
+    """Лог (причина — без URL с токеном) + 502 менеджеру."""
+    logger.warning("Не удалось получить документ %s жителя %s: %s",
+                   doc_id, resident_id, reason)
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Telegram недоступен",
+    )
+
+
 @router.get("/{resident_id}/documents/{doc_id}/file")
 @limiter.limit(_FILE_LIMIT)
 async def get_document_file(
@@ -128,56 +136,38 @@ async def get_document_file(
         raise ResidentNotFound("Житель не найден")
     doc = await _require_document(db, resident_id, doc_id)
 
-    token = settings.BOT_TOKEN
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            meta = await client.get(
-                f"https://api.telegram.org/bot{token}/getFile",
-                params={"file_id": doc.file_id},
-            )
-            if meta.status_code == 400:
-                # Telegram отвечает 400 и на протухший, и на удалённый файл —
-                # для менеджера это одно и то же: файла больше нет.
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Файл недоступен в Telegram",
-                )
-            meta.raise_for_status()
-            payload = meta.json()
-            file_path = (payload.get("result") or {}).get("file_path")
-            if not file_path:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Файл недоступен в Telegram",
-                )
-
-            # Буфер ДО заголовков: обрыв стрима после начала передачи дал бы
-            # обрезанный файл с кодом 200 вместо честного 413.
-            chunks: list[bytes] = []
-            size = 0
-            async with client.stream(
-                "GET", f"https://api.telegram.org/file/bot{token}/{file_path}"
-            ) as resp:
-                resp.raise_for_status()
-                async for chunk in resp.aiter_bytes():
-                    size += len(chunk)
-                    if size > _SPOOL_LIMIT:
-                        raise HTTPException(
-                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            detail="Файл больше лимита Telegram (20 МБ)",
-                        )
-                    chunks.append(chunk)
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001 — сеть/Telegram
-        logger.warning("Не удалось получить документ %s жителя %s: %s",
-                       doc_id, resident_id, describe_http_error(e))
+    # A9-P2-9: getFile и скачивание — через общий модуль отправки (общий
+    # клиент; текст сетевых ошибок без URL с токеном).
+    meta = await telegram_send.get_file(doc.file_id, timeout=_TIMEOUT)
+    if meta.http_status == 400:
+        # Telegram отвечает 400 и на протухший, и на удалённый файл —
+        # для менеджера это одно и то же: файла больше нет.
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Telegram недоступен",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл недоступен в Telegram",
+        )
+    if not meta.ok:
+        _telegram_unavailable(doc_id, resident_id, meta.describe())
+    file_path = meta.result.get("file_path") if isinstance(meta.result, dict) else None
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл недоступен в Telegram",
         )
 
-    body = b"".join(chunks)
+    # Буфер ДО заголовков: обрыв стрима после начала передачи дал бы
+    # обрезанный файл с кодом 200 вместо честного 413.
+    try:
+        body = await telegram_send.download_file(
+            file_path, max_bytes=_TG_FILE_LIMIT, timeout=_TIMEOUT)
+    except telegram_send.TelegramFileTooLarge:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Файл больше лимита Telegram (20 МБ)",
+        ) from None
+    except telegram_send.TelegramUnavailable as e:
+        _telegram_unavailable(doc_id, resident_id, str(e))
+
     content_type = _sniff_document_mime(body)
     if content_type is None:
         logger.warning("Документ %s жителя %s: неподдержанный тип содержимого",

@@ -11,6 +11,7 @@ ORM-строки (у ORM-объекта вне потока нет живой с
 в async-слое, вне сессии.
 """
 
+import html
 import logging
 from dataclasses import dataclass, field
 from typing import List
@@ -399,7 +400,8 @@ async def handle_comment_input(message: Message, state: FSMContext, language: st
         confirmation_text = get_text("comments.confirmation", language=lang).format(
             request_id=request_number,
             comment_type=get_comment_type_display_name(comment_type, lang),
-            comment_text=comment_text[:100] + "..." if len(comment_text) > 100 else comment_text
+            # A9-P2-2: эхо свободного текста в HTML-сообщении — экранируем.
+            comment_text=html.escape(comment_text[:100]) + "..." if len(comment_text) > 100 else html.escape(comment_text)
         )
 
         await message.answer(confirmation_text, reply_markup=keyboard)

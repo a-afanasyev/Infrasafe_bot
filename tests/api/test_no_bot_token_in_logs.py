@@ -27,6 +27,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_verification import (
     DocumentType, UserDocument,
@@ -66,24 +67,14 @@ async def _doc(db, user_id) -> UserDocument:
     return d
 
 
-def _raising_client(exc: Exception):
-    """httpx.AsyncClient, у которого getFile падает переданным исключением."""
-    class _C:
-        def __init__(self, *args, **kwargs):
-            pass
+def _raising(exc: Exception):
+    """Обработчик транспорта: любой запрос к Bot API падает переданным исключением.
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def get(self, url, params=None):
-            raise exc
-
-        def stream(self, method, url):  # pragma: no cover — до стрима не доходим
-            raise AssertionError("не должно вызываться")
-    return _C
+    A9-P2-9: вызовы идут через общий клиент `api/telegram_send` — подменяется
+    его транспорт (фикстура `telegram_api`), а не httpx в модуле вызова."""
+    def handler(request):
+        raise exc
+    return handler
 
 
 def _status_error() -> httpx.HTTPStatusError:
@@ -103,17 +94,17 @@ def _status_error() -> httpx.HTTPStatusError:
 class TestDocumentProxyLogging:
 
     async def test_token_absent_from_logs_on_telegram_5xx(
-        self, client: AsyncClient, db_session: AsyncSession, caplog,
+        self, client: AsyncClient, db_session: AsyncSession, caplog, telegram_api,
     ):
         resident = await _resident(db_session, 7401)
         doc = await _doc(db_session, resident.id)
         exc = _status_error()
         assert FAKE_SECRET in str(exc), "предпосылка теста: httpx кладёт URL в текст"
 
-        with caplog.at_level(logging.WARNING):
-            with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                       _raising_client(exc)):
-                r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        with caplog.at_level(logging.WARNING), \
+                patch.object(settings, "BOT_TOKEN", FAKE_TOKEN):
+            telegram_api.handler = _raising(exc)
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
 
         assert r.status_code == 502
         logged = "\n".join(rec.getMessage() for rec in caplog.records)
@@ -122,27 +113,31 @@ class TestDocumentProxyLogging:
         assert "7712345678" not in logged, "id бота — тоже часть токена"
 
     async def test_failure_is_still_diagnosable(
-        self, client: AsyncClient, db_session: AsyncSession, caplog,
+        self, client: AsyncClient, db_session: AsyncSession, caplog, telegram_api,
     ):
         """Убрать секрет — не значит ослепить дежурного.
 
         В логе обязаны остаться: что сломалось (id документа и жителя) и чем
-        именно (класс исключения). Иначе лечение утечки оплачено отладкой.
+        именно (класс исключения / HTTP-статус). Иначе лечение утечки
+        оплачено отладкой.
         """
         resident = await _resident(db_session, 7402)
         doc = await _doc(db_session, resident.id)
 
-        with caplog.at_level(logging.WARNING):
-            with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                       _raising_client(_status_error())):
-                await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        with caplog.at_level(logging.WARNING), \
+                patch.object(settings, "BOT_TOKEN", FAKE_TOKEN):
+            telegram_api.handler = _raising(_status_error())
+            await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+            telegram_api.handler = lambda r: httpx.Response(500, json={"ok": False})
+            await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
 
         logged = "\n".join(rec.getMessage() for rec in caplog.records)
         assert str(doc.id) in logged
         assert "HTTPStatusError" in logged
+        assert "HTTP 500" in logged
 
     async def test_token_absent_on_network_error(
-        self, client: AsyncClient, db_session: AsyncSession, caplog,
+        self, client: AsyncClient, db_session: AsyncSession, caplog, telegram_api,
     ):
         """Транспортные ошибки httpx тоже носят с собой request — и URL."""
         resident = await _resident(db_session, 7403)
@@ -153,23 +148,44 @@ class TestDocumentProxyLogging:
             request=request,
         )
 
-        with caplog.at_level(logging.WARNING):
-            with patch("uk_management_bot.api.residents.documents.httpx.AsyncClient",
-                       _raising_client(exc)):
-                r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        with caplog.at_level(logging.WARNING), \
+                patch.object(settings, "BOT_TOKEN", FAKE_TOKEN):
+            telegram_api.handler = _raising(exc)
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
 
         assert r.status_code == 502
         logged = "\n".join(rec.getMessage() for rec in caplog.records)
         assert FAKE_SECRET not in logged
+
+    async def test_token_absent_when_download_fails(
+        self, client: AsyncClient, db_session: AsyncSession, caplog, telegram_api,
+    ):
+        """Второй шаг — скачивание по `/file/bot<ТОКЕН>/…` — тот же риск."""
+        resident = await _resident(db_session, 7404)
+        doc = await _doc(db_session, resident.id)
+
+        def handler(request):
+            if "/file/" in request.url.path:
+                raise httpx.ReadTimeout(f"timed out for url {request.url}", request=request)
+            return httpx.Response(200, json={"ok": True, "result": {"file_path": "d/f.jpg"}})
+
+        with caplog.at_level(logging.WARNING), \
+                patch.object(settings, "BOT_TOKEN", FAKE_TOKEN):
+            telegram_api.handler = handler
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+
+        assert r.status_code == 502
+        logged = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert FAKE_SECRET not in logged
+        assert "ReadTimeout" in logged
 
 
 class TestInviteBotUsernameLogging:
     """Предсуществующий сайт с тем же дефектом: `getMe` при выдаче инвайт-ссылки
     (`api/shifts/router/_helpers.py`) логировал сырое исключение тем же способом."""
 
-    async def test_token_absent_from_logs(self, caplog):
+    async def test_token_absent_from_logs(self, caplog, telegram_api):
         from uk_management_bot.api.shifts import router as shifts_router
-        from uk_management_bot.config.settings import settings
 
         request = httpx.Request("GET", f"https://api.telegram.org/bot{FAKE_TOKEN}/getMe")
         response = httpx.Response(401, request=request)
@@ -181,13 +197,9 @@ class TestInviteBotUsernameLogging:
         # Хелпер уходит в сеть только когда username не закэширован, а токен есть.
         with patch.object(settings, "BOT_USERNAME", None), \
                 patch.object(settings, "BOT_TOKEN", FAKE_TOKEN), \
-                caplog.at_level(logging.ERROR):
-            # AUD5-ARCH-3 волна 8: httpx импортирован в _helpers-модуле пакета —
-            # патчим модуль РЕЗОЛВА имени, а не пакет (реэкспорт httpx из
-            # __init__ был бы мусорным namespace).
-            with patch("uk_management_bot.api.shifts.router._helpers.httpx.AsyncClient",
-                       _raising_client(boom)):
-                result = await shifts_router._resolve_bot_username()
+                caplog.at_level(logging.WARNING):
+            telegram_api.handler = _raising(boom)
+            result = await shifts_router._resolve_bot_username()
 
         assert result is None
         logged = "\n".join(rec.getMessage() for rec in caplog.records)

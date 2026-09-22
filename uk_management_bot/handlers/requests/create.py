@@ -239,8 +239,9 @@ async def handle_address_selection(callback: CallbackQuery, state: FSMContext, u
         yard_id=resolved.yard_id,
     )
     try:
+        import html as _html  # A9-P2-2: адрес дома из справочника в HTML
         await callback.message.edit_text(
-            get_text("requests.address_selected", language=lang, address=resolved.canonical_address)
+            get_text("requests.address_selected", language=lang, address=_html.escape(resolved.canonical_address))
         )
     except Exception:
         pass
@@ -432,12 +433,13 @@ async def show_confirmation(message: Message, state: FSMContext):
         # Fallback for old format (localized text was saved directly)
         urgency_display = urgency_key
 
+    import html as _html  # A9-P2-2: ввод жителя в HTML-сводке
     summary = get_text(
         "requests.confirmation_summary",
         language=lang,
         category=category_display,
-        address=data.get('address', ''),
-        description=data.get('description', ''),
+        address=_html.escape(data.get('address', '')),
+        description=_html.escape(data.get('description', '')),
         urgency=urgency_display,
         files_count=len(data.get('media_files', []))
     )

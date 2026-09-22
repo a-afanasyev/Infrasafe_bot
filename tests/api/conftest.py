@@ -161,3 +161,65 @@ def _reset_rate_limiter():
         limiter.reset()
     except Exception:
         pass
+
+
+# ── Telegram Bot API: подмена транспорта общего клиента (A9-P2-9) ────
+# Все вызовы Bot API из API-процесса идут через `api/telegram_send.py`.
+# Тесты подменяют не модуль, а транспорт httpx его общего клиента — так
+# проверяется реальный wire (URL-метод, JSON, parse_mode) и классификация.
+# По умолчанию (autouse) сеть закрыта: ответ как у Telegram на невалидный
+# токен (404 ok=false) — тот же исход, что давал живой вызов с ci-токеном.
+
+
+class TelegramStub:
+    """Записывает запросы к Bot API и отвечает заданным `handler`."""
+
+    def __init__(self):
+        self.requests: list = []
+        self.handler = lambda request: _tg_json(404, ok=False, description="Not Found")
+
+    def dispatch(self, request):
+        self.requests.append(request)
+        return self.handler(request)
+
+    def calls(self, method: str) -> list[dict]:
+        """JSON-тела вызовов метода Bot API (`sendMessage`, `getFile`, …)."""
+        import json
+
+        return [
+            json.loads(r.content or b"{}") for r in self.requests
+            if r.url.path.rsplit("/", 1)[-1] == method and "/file/" not in r.url.path
+        ]
+
+    def reply(self, status_code: int = 200, **body):
+        self.handler = lambda request: _tg_json(status_code, **body)
+
+
+def _tg_json(status_code: int, **body):
+    import httpx
+
+    body.setdefault("ok", 200 <= status_code < 300)
+    if not body["ok"]:
+        body.setdefault("error_code", status_code)
+    return httpx.Response(status_code, json=body)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def telegram_api():
+    # Без `monkeypatch`: autouse-фикстура conftest'а, запросившая monkeypatch,
+    # сдвигает его teardown ПОСЛЕ модульных autouse-фикстур (например,
+    # `restore_module` в test_rate_limit_trusted_proxies перечитал бы модуль
+    # ещё с «грязным» env). Транспорт ставим и снимаем вручную.
+    import httpx
+
+    from uk_management_bot.api import telegram_send
+
+    stub = TelegramStub()
+    previous = telegram_send._transport
+    await telegram_send.aclose()
+    telegram_send._transport = httpx.MockTransport(stub.dispatch)
+    try:
+        yield stub
+    finally:
+        telegram_send._transport = previous
+        await telegram_send.aclose()

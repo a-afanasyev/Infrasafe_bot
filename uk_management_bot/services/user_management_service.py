@@ -9,6 +9,7 @@
 """
 
 import json
+import html
 import logging
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from sqlalchemy import or_, and_
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles_safe
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.sql_search import ci_contains_any, escape_like, is_postgres
 
 logger = logging.getLogger(__name__)
@@ -503,9 +505,9 @@ class UserManagementService:
         """
         try:
             # Базовая информация
-            name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-            if not name:
-                name = user.username or f"ID{user.telegram_id}"
+            # A9-P2-2: текст уходит в Telegram с parse_mode=HTML — имя,
+            # username и телефон из профиля экранируются здесь, в рендере.
+            name = html.escape(display_name(user))
 
             # BUG-BOT-024: статус уже содержит emoji в локали (user_status.approved = "✅ Одобрен"),
             # отдельный emoji-префикс вызывает двойной значок (`✅ ✅ Одобрен`).
@@ -524,7 +526,7 @@ class UserManagementService:
             if detailed:
                 # BUG-BOT-024: для username показываем "Username не указан" вместо "@не указано"
                 if user.username:
-                    username_line = f"📱 @{user.username}"
+                    username_line = f"📱 @{html.escape(user.username)}"
                 else:
                     username_line = (
                         f"📱 {get_text('user_mgmt.handlers.username_not_specified', language=language)}"
@@ -544,7 +546,7 @@ class UserManagementService:
                 
                 # Контактная информация
                 if user.phone:
-                    info_parts.append(f"📞 {user.phone}")
+                    info_parts.append(f"📞 {html.escape(user.phone)}")
                 
                 info_parts.append(f"🆔 {user.telegram_id}")
                 

@@ -10,91 +10,60 @@ Fix: the API resolves the username via Telegram getMe() (using BOT_TOKEN) when
 BOT_USERNAME is unset, caching it back into settings. If it cannot be resolved,
 the endpoint must fail loudly instead of emitting a t.me/None link.
 """
+import httpx
 import pytest
 
-# AUD5-ARCH-3 волна 8: _resolve_bot_username и его httpx живут в _helpers-модуле
-# пакета роутера — берём модуль резолва имени (у пакета атрибута httpx нет).
+# A9-P2-9: getMe идёт через общий модуль `api/telegram_send` — подменяется
+# транспорт httpx его клиента (фикстура `telegram_api` из conftest).
 from uk_management_bot.api.shifts.router import _helpers as router_mod
 from uk_management_bot.config.settings import settings
 
 
-class _FakeResp:
-    def __init__(self, payload=None, raise_exc=None):
-        self._payload = payload or {}
-        self._raise = raise_exc
-
-    def raise_for_status(self):
-        if self._raise:
-            raise self._raise
-
-    def json(self):
-        return self._payload
-
-
-class _FakeClient:
-    def __init__(self, resp=None, exc=None):
-        self._resp = resp
-        self._exc = exc
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def get(self, url):
-        if self._exc:
-            raise self._exc
-        return self._resp
-
-
-def _patch_httpx(monkeypatch, *, resp=None, exc=None):
-    monkeypatch.setattr(
-        router_mod.httpx,
-        "AsyncClient",
-        lambda *a, **kw: _FakeClient(resp=resp, exc=exc),
-    )
-
-
 @pytest.mark.asyncio
-async def test_uses_configured_username_without_network(monkeypatch):
+async def test_uses_configured_username_without_network(monkeypatch, telegram_api):
     """When BOT_USERNAME is set, return it and never touch the network."""
     monkeypatch.setattr(settings, "BOT_USERNAME", "Work_space_away_bot")
 
-    def _boom(*a, **kw):
-        raise AssertionError("getMe() must not be called when BOT_USERNAME is set")
-
-    monkeypatch.setattr(router_mod.httpx, "AsyncClient", _boom)
-
     assert await router_mod._resolve_bot_username() == "Work_space_away_bot"
+    assert telegram_api.requests == []
 
 
 @pytest.mark.asyncio
-async def test_resolves_via_getme_and_caches(monkeypatch):
+async def test_resolves_via_getme_and_caches(monkeypatch, telegram_api):
     """When BOT_USERNAME is unset, resolve via getMe() and cache it."""
     monkeypatch.setattr(settings, "BOT_USERNAME", None)
     monkeypatch.setattr(settings, "BOT_TOKEN", "123:abc")
-    _patch_httpx(monkeypatch, resp=_FakeResp({"ok": True, "result": {"username": "infrasafebot"}}))
+    telegram_api.reply(200, result={"username": "infrasafebot"})
 
     assert await router_mod._resolve_bot_username() == "infrasafebot"
+    assert telegram_api.requests[0].url.path == "/bot123:abc/getMe"
     # Cached back into settings so subsequent requests are cheap.
     assert settings.BOT_USERNAME == "infrasafebot"
 
 
 @pytest.mark.asyncio
-async def test_returns_none_when_token_missing(monkeypatch):
+async def test_returns_none_when_token_missing(monkeypatch, telegram_api):
     """No BOT_USERNAME and no BOT_TOKEN → cannot resolve → None (never 'None' string)."""
     monkeypatch.setattr(settings, "BOT_USERNAME", None)
     monkeypatch.setattr(settings, "BOT_TOKEN", None)
 
     assert await router_mod._resolve_bot_username() is None
+    assert telegram_api.requests == []
+
+
+def _network_down(request):
+    raise httpx.ReadTimeout("network down", request=request)
 
 
 @pytest.mark.asyncio
-async def test_returns_none_when_getme_fails(monkeypatch):
+@pytest.mark.parametrize("handler", [
+    _network_down,
+    lambda r: httpx.Response(401, json={"ok": False, "description": "Unauthorized"}),
+])
+async def test_returns_none_when_getme_fails(monkeypatch, telegram_api, handler):
     """getMe() network/auth failure → None, not a broken username."""
     monkeypatch.setattr(settings, "BOT_USERNAME", None)
     monkeypatch.setattr(settings, "BOT_TOKEN", "123:abc")
-    _patch_httpx(monkeypatch, exc=RuntimeError("network down"))
+    telegram_api.handler = handler
 
     assert await router_mod._resolve_bot_username() is None
