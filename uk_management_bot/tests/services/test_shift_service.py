@@ -183,6 +183,10 @@ class TestStartShift:
                 # 2026-08-24) — «смены нет» обязано быть None и здесь, иначе
                 # MagicMock truthy и код уйдёт в ветку активации.
                 q.filter.return_value.order_by.return_value.first.return_value = None
+                # A9-P1-2: общий юнит (services/shift_lifecycle) берёт planned
+                # под FOR UPDATE — цепочка удлинилась на .with_for_update().
+                (q.filter.return_value.order_by.return_value
+                 .with_for_update.return_value.first.return_value) = None
             return q
 
         db.query.side_effect = _query

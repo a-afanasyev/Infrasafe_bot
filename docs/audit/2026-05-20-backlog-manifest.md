@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **568**
-- закрыто маркером: **498**
-- открыто маркером: **70**
+- пунктов всего (с Priority): **570**
+- закрыто маркером: **499**
+- открыто маркером: **71**
 
-  - `actionable` — **58**
+  - `actionable` — **59**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P1=1, P2=30, P3=27.
+Из них actionable по приоритету: P2=32, P3=27.
 
 Значения `status`:
 
@@ -55,7 +55,6 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P1-2` | P1 | actionable | verified-2026-09-22 | AUD9-W1 | — | api, frontend (TWA) | — | TWA-старт смены создаёт ad-hoc-дубль вместо активации запланированной; без аудита и уведомлений |
 | `A9-P2-1` | P2 | actionable | verified-2026-09-22 | AUD9-W2 | — | api | — | Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559) |
 | `A9-P2-11` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | `media_files: List[str]` в create-схемах без валидации; строки уходят в `answer_photo` |
 | `A9-P2-18` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api, CI | — | API: row-lock-семантика проверяется только на sqlite |
@@ -66,6 +65,8 @@
 | `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
 | `A9-P2-4` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W3 | — | bot | — | `/admin` + общий `ADMIN_PASSWORD` делают любой аккаунт manager'ом |
 | `A9-P3-1` | P3 | actionable | audit9-2026-09-22 | AUD9-W3 | — | bot | — | Инвайт-токен целиком пишется в лог в `/start join_…` |
+| `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
+| `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
 | `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |
 | `A9-P2-7` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | `POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции |
 | `A9-P2-8` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02) |

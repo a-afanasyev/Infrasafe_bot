@@ -12,6 +12,8 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
+from fastapi import BackgroundTasks
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -43,6 +45,28 @@ def _make_shift(
     return shift
 
 
+def _start_db():
+    """AsyncSession-мок старта: planned-смены в окне нет → ad-hoc.
+
+    A9-P1-2: старт идёт через общий юнит (services/shift_lifecycle): SELECT
+    идущей planned (execute) → add(Shift) → flush → add(AuditLog) → commit.
+    Выбор planned vs ad-hoc (SQL) пиннит tests/api/test_executor_shift_lifecycle.py
+    на реальной sqlite — мок здесь его проверить не может.
+    """
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    mock_db.commit = AsyncMock()
+    mock_db.flush = AsyncMock()
+    no_planned = MagicMock()
+    no_planned.scalars.return_value.first.return_value = None
+    mock_db.execute = AsyncMock(return_value=no_planned)
+    return mock_db
+
+
+def _added(mock_db, model):
+    return [c.args[0] for c in mock_db.add.call_args_list if isinstance(c.args[0], model)]
+
+
 # ── start_shift ──────────────────────────────────────────────────────
 
 
@@ -52,9 +76,7 @@ class TestStartShift:
         from uk_management_bot.api.shifts.executor_router import start_shift, StartShiftBody
 
         user = _make_user(id=1)
-        mock_db = AsyncMock()
-        mock_db.add = MagicMock()
-        mock_db.commit = AsyncMock()
+        mock_db = _start_db()
 
         created_shift = None
 
@@ -72,11 +94,14 @@ class TestStartShift:
         mock_db.refresh = capture_refresh
 
         body = StartShiftBody(notes=None)
-        result = await start_shift(body=body, user=user, db=mock_db)
+        result = await start_shift(body=body, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert result.status == "active"
         assert result.user_id == 1
-        mock_db.add.assert_called_once()
+        from uk_management_bot.database.models.audit import AuditLog
+        from uk_management_bot.database.models.shift import Shift
+        assert len(_added(mock_db, Shift)) == 1
+        assert len(_added(mock_db, AuditLog)) == 1
         mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -84,9 +109,7 @@ class TestStartShift:
         from uk_management_bot.api.shifts.executor_router import start_shift, StartShiftBody
 
         user = _make_user(id=2)
-        mock_db = AsyncMock()
-        mock_db.add = MagicMock()
-        mock_db.commit = AsyncMock()
+        mock_db = _start_db()
 
         async def capture_refresh(obj):
             obj.id = 5
@@ -99,7 +122,7 @@ class TestStartShift:
         mock_db.refresh = capture_refresh
 
         body = StartShiftBody(notes="test note")
-        result = await start_shift(body=body, user=user, db=mock_db)
+        result = await start_shift(body=body, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert result.notes == "test note"
 
@@ -108,9 +131,7 @@ class TestStartShift:
         from uk_management_bot.api.shifts.executor_router import start_shift, StartShiftBody, ShiftOut
 
         user = _make_user(id=3)
-        mock_db = AsyncMock()
-        mock_db.add = MagicMock()
-        mock_db.commit = AsyncMock()
+        mock_db = _start_db()
 
         async def capture_refresh(obj):
             obj.id = 7
@@ -123,7 +144,7 @@ class TestStartShift:
         mock_db.refresh = capture_refresh
 
         body = StartShiftBody()
-        result = await start_shift(body=body, user=user, db=mock_db)
+        result = await start_shift(body=body, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert isinstance(result, ShiftOut)
         assert result.id == 7
@@ -145,6 +166,7 @@ class TestEndShift:
         mock_result.scalar_one_or_none.return_value = shift
         mock_db.execute = AsyncMock(return_value=mock_result)
         mock_db.commit = AsyncMock()
+        mock_db.add = MagicMock()
 
         async def capture_refresh(obj):
             # end_time and status already mutated on the shift mock
@@ -152,10 +174,12 @@ class TestEndShift:
 
         mock_db.refresh = capture_refresh
 
-        result = await end_shift(shift_id=10, user=user, db=mock_db)
+        result = await end_shift(shift_id=10, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert result.status == "completed"
         assert shift.end_time is not None
+        from uk_management_bot.database.models.audit import AuditLog
+        assert len(_added(mock_db, AuditLog)) == 1  # A9-P1-2: end пишет audit
         mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -171,7 +195,7 @@ class TestEndShift:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
-            await end_shift(shift_id=999, user=user, db=mock_db)
+            await end_shift(shift_id=999, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert exc_info.value.status_code == 404
 
@@ -189,7 +213,7 @@ class TestEndShift:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
-            await end_shift(shift_id=10, user=user, db=mock_db)
+            await end_shift(shift_id=10, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert exc_info.value.status_code == 403
 
@@ -207,7 +231,7 @@ class TestEndShift:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
-            await end_shift(shift_id=10, user=user, db=mock_db)
+            await end_shift(shift_id=10, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert exc_info.value.status_code == 409
         assert "completed" in exc_info.value.detail
@@ -226,7 +250,7 @@ class TestEndShift:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(HTTPException) as exc_info:
-            await end_shift(shift_id=20, user=user, db=mock_db)
+            await end_shift(shift_id=20, background=BackgroundTasks(), user=user, db=mock_db)
 
         assert exc_info.value.status_code == 409
 

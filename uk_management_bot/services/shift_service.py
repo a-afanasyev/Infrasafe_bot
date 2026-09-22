@@ -11,10 +11,10 @@ from uk_management_bot.utils.constants import (
     SHIFT_STATUS_COMPLETED,
     ROLE_EXECUTOR,
     ROLE_MANAGER,
-    AUDIT_ACTION_SHIFT_STARTED,
     AUDIT_ACTION_SHIFT_ENDED,
 )
 from uk_management_bot.services.notification_service import notify_shift_started, notify_shift_ended
+from uk_management_bot.services.shift_lifecycle import end_shift_sync, start_shift_sync
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.datetime_utils import utc_now
 import logging
@@ -85,53 +85,13 @@ class ShiftService:
 
             # Расписание — источник истины (решение владельца 2026-08-24):
             # если у сотрудника есть ЗАПЛАНИРОВАННАЯ смена, чьё окно уже идёт,
-            # кнопка активирует ЕЁ, а не создаёт ad-hoc-дубль поверх. Тот же
-            # переход делает джоба авто-активации (shift_scheduler) — кнопка
-            # остаётся для нетерпеливых и как явный «я вышел».
-            now = datetime.now(timezone.utc)
-            planned = (
-                self.db.query(Shift)
-                .filter(
-                    Shift.user_id == user.id,
-                    Shift.status == "planned",
-                    Shift.start_time <= now,
-                    Shift.end_time > now,
-                )
-                .order_by(Shift.start_time)
-                .first()
-            )
-            if planned is not None:
-                planned.status = SHIFT_STATUS_ACTIVE
-                if notes:
-                    planned.notes = (planned.notes or "") + (
-                        f"\n{notes}" if planned.notes else notes
-                    )
-                shift = planned
-            else:
-                shift = Shift(
-                    user_id=user.id,
-                    start_time=now,
-                    status=SHIFT_STATUS_ACTIVE,
-                    notes=notes,
-                )
-                self.db.add(shift)
+            # кнопка активирует ЕЁ, а не создаёт ad-hoc-дубль поверх. Правило
+            # и audit — общий юнит с TWA-API (A9-P1-2, services/shift_lifecycle);
+            # смена и audit — одна транзакция.
+            shift = start_shift_sync(self.db, user, notes)
             self.db.commit()
             self.db.refresh(shift)
 
-            # Аудит и уведомление (best-effort)
-            try:
-                self.db.add(
-                    AuditLog(
-                        user_id=user.id,
-                        telegram_user_id=user.telegram_id,  # Telegram ID пользователя, который начал смену
-                        action=AUDIT_ACTION_SHIFT_STARTED,
-                        details={"shift_id": shift.id, "notes": notes},
-                    )
-                )
-                self.db.commit()
-            except Exception as e:
-                self.db.rollback()
-                logger.error(f"Ошибка записи аудита старта смены: {e}")
             try:
                 notify_shift_started(self.db, user, shift)
             except Exception as e:
@@ -152,27 +112,11 @@ class ShiftService:
             if not active:
                 return {"success": False, "message": "Нет активной смены", "shift": None}
 
-            active.end_time = datetime.now(timezone.utc)
-            active.status = SHIFT_STATUS_COMPLETED
-            if notes:
-                active.notes = (active.notes or "") + (f"\n{notes}" if active.notes else notes)
+            # A9-P1-2: общий юнит с TWA-API; смена и audit — одна транзакция.
+            end_shift_sync(self.db, user, active, notes)
             self.db.commit()
             self.db.refresh(active)
 
-            # Аудит и уведомление
-            try:
-                self.db.add(
-                    AuditLog(
-                        user_id=user.id,
-                        telegram_user_id=user.telegram_id,  # Telegram ID пользователя, который завершил смену
-                        action=AUDIT_ACTION_SHIFT_ENDED,
-                        details={"shift_id": active.id, "notes": notes},
-                    )
-                )
-                self.db.commit()
-            except Exception as e:
-                self.db.rollback()
-                logger.error(f"Ошибка записи аудита завершения смены: {e}")
             try:
                 notify_shift_ended(self.db, user, active)
             except Exception as e:

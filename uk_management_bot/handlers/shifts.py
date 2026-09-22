@@ -15,6 +15,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.services.shift_service import ShiftService
+from uk_management_bot.services.shift_lifecycle import end_shift_sync
 from uk_management_bot.services.notification_service.channel import (
     send_to_channel,
     send_to_user,
@@ -285,19 +286,8 @@ def _end_shift_by_id_unit(db, telegram_id: int, shift_id: int):
     if not shift:
         return lang, "no_shift", None
 
-    # Завершаем смену
-    shift.end_time = utc_now()
-    shift.status = "completed"
-
-    # Создаем audit log
-    from uk_management_bot.database.models.audit import AuditLog
-    audit = AuditLog(
-        user_id=user.id,
-        telegram_user_id=user.telegram_id,
-        action="SHIFT_ENDED",
-        details={"shift_id": shift.id, "specializations": shift.specialization_focus}
-    )
-    db.add(audit)
+    # Завершение + audit — общий юнит с TWA-API (A9-P1-2); одна транзакция.
+    end_shift_sync(db, user, shift)
     db.commit()
 
     notify = None
