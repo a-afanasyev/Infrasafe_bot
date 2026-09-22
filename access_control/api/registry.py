@@ -17,14 +17,22 @@ PD (§11): полный номер допустим в ответах уполн
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from pydantic import Field
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
-from access_control.integrations.media import AccessMediaClient, get_access_media_client
+from access_control.integrations.media import (
+    AccessMediaClient,
+    MediaConfigError,
+    get_access_media_client,
+)
 from access_control.services import photo_urls
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.management import write_audit
 from uk_management_bot.api.auth.service import verify_access_token
 from uk_management_bot.api.dependencies import (
@@ -34,6 +42,8 @@ from uk_management_bot.api.dependencies import (
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-registry"])
+
+logger = logging.getLogger(__name__)
 
 # RBAC-наборы ролей (§6.2/§6.3).
 EVENTS_PASSES_ROLES = ("security_operator", "manager", "system_admin")
@@ -581,6 +591,53 @@ def _optional_actor(request: Request) -> int | None:
         return None
 
 
+def _stored_photo_ref(db: Session, event_id: int, kind: str) -> str | None:
+    """Сохранённая ссылка на кадр события (sync SQL — вызывать из threadpool)."""
+    row = db.execute(
+        text(
+            "SELECT plate_photo_url, overview_photo_url FROM camera_events WHERE id = :id"
+        ),
+        {"id": event_id},
+    ).mappings().first()
+    if row is None:
+        return None
+    return row["plate_photo_url"] if kind == "plate" else row["overview_photo_url"]
+
+
+def _audit_photo_view(
+    db: Session, *, event_id: int, kind: str, actor: int | None, ip: str | None
+) -> None:
+    """Аудит ``access.photo_view`` + commit (sync SQL — вызывать из threadpool)."""
+    write_audit(
+        db,
+        actor_user_id=actor,
+        action="access.photo_view",
+        entity_type="camera_event",
+        entity_id=event_id,
+        details={"kind": kind, "source": "session" if actor else "signed_url"},
+        ip_address=ip,
+    )
+    db.commit()
+
+
+async def _fetch_photo_bytes(media: AccessMediaClient, media_id: str) -> tuple[bytes, str]:
+    """Байты кадра из медиа-сервиса; ошибки media → 404/502 (A9-P2-13).
+
+    404 от media (файл удалён ретеншном/вручную) → 404 клиенту; любая другая
+    ошибка (5xx, сеть, не сконфигурирован клиент) → 502: сбой зависимости, а не
+    ошибка access-api. Сырой URL/ключ в лог не пишем (§11).
+    """
+    try:
+        return await media.fetch_file(media_id)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
+        logger.warning("media fetch failed: status=%s", exc.response.status_code)
+    except (httpx.HTTPError, MediaConfigError) as exc:
+        logger.warning("media fetch failed: %s", type(exc).__name__)
+    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="media unavailable")
+
+
 @router.get("/photos/{kind}/{event_id}")
 async def get_photo(
     request: Request,
@@ -593,14 +650,19 @@ async def get_photo(
 ):
     """Выдать фото события по короткоживущему signed-URL (§11).
 
-    Capability по подписи (без Bearer): проверяет подпись+срок → пишет аудит
-    просмотра ``access.photo_view`` (PD-safe details) → отдаёт фото:
+    Capability по подписи (без Bearer): проверяет подпись+срок → получает байты
+    из медиа-сервиса по ``media://{media_id}`` → пишет аудит просмотра
+    ``access.photo_view`` (PD-safe details) → отдаёт байты с Content-Type.
 
-    * сохранённое значение вида ``media://{media_id}`` → СТРИМ байтов из
-      медиа-сервиса (``AccessMediaClient.fetch_file``) с корректным Content-Type;
-    * иначе (сырой storage-URL) → прежний 302 redirect (обратная совместимость).
+    Невалидная подпись → 403, протухшая → 410, отсутствующее фото/событие → 404
+    (в т.ч. 404 от медиа-сервиса), прочий сбой медиа-сервиса → 502.
 
-    Невалидная подпись → 403, протухшая → 410, отсутствующее фото/событие → 404.
+    A9-P2-13: аудит пишется ПОСЛЕ успешного получения байтов — это журнал
+    просмотров, а при сбое media просмотра не было (тот же принцип, что у 404
+    «фото нет» ниже и AUD8-SEC-03). Раньше аудит коммитился до запроса в media, и
+    сбой давал 500 при уже записанном «просмотре». Аудит коммитится ДО отдачи
+    ответа: не записался — байты не уходят (fail-closed). Синхронный SQL — в
+    threadpool, не в event loop.
     """
     try:
         photo_urls.verify(event_id, kind, exp, sig)
@@ -609,36 +671,25 @@ async def get_photo(
     except photo_urls.PhotoUrlInvalid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid signature")
 
-    row = db.execute(
-        text(
-            "SELECT plate_photo_url, overview_photo_url FROM camera_events WHERE id = :id"
-        ),
-        {"id": event_id},
-    ).mappings().first()
-    stored = None if row is None else (
-        row["plate_photo_url"] if kind == "plate" else row["overview_photo_url"]
-    )
+    stored = await run_in_threadpool(_stored_photo_ref, db, event_id, kind)
     if not stored:
         # Валидная подпись, но фото нет — просмотра не произошло, аудит не пишем.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
     # AUD8-SEC-03: не-`media://` значение → 404 ДО аудита (просмотра не будет).
     media_id = _photo_media_id(stored)
 
-    # Просмотр состоялся → аудит (§11/§6.2). Details PD-safe: без номера/URL.
-    actor = _optional_actor(request)
-    write_audit(
-        db,
-        actor_user_id=actor,
-        action="access.photo_view",
-        entity_type="camera_event",
-        entity_id=event_id,
-        details={"kind": kind, "source": "session" if actor else "signed_url"},
-        ip_address=request.client.host if request.client else None,
-    )
-    db.commit()
-
     # §11: фото лежит в медиа-сервисе — стримим байты, сырой URL наружу не уходит.
-    content, content_type = await media.fetch_file(media_id)
+    content, content_type = await _fetch_photo_bytes(media, media_id)
+
+    # Просмотр состоялся → аудит (§11/§6.2). Details PD-safe: без номера/URL.
+    await run_in_threadpool(
+        _audit_photo_view,
+        db,
+        event_id=event_id,
+        kind=kind,
+        actor=_optional_actor(request),
+        ip=resolve_client_ip(request),
+    )
     return Response(content=content, media_type=content_type)
 
 

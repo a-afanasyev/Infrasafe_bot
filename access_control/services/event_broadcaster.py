@@ -31,10 +31,21 @@ import logging
 import threading
 from typing import Protocol
 
+from access_control.services.redis_timeouts import (
+    REDIS_CONNECT_TIMEOUT_SECONDS,
+    REDIS_SOCKET_TIMEOUT_SECONDS,  # noqa: F401 — реэкспорт для тестов/потребителей
+    sync_redis_from_url,
+)
+
 logger = logging.getLogger(__name__)
 
 # Канал Redis pub/sub для событий доступа (используется RedisBroker).
 ACCESS_EVENT_CHANNEL = "access:events"
+
+# A9-P3-23: таймауты Redis (общие для access, см. redis_timeouts). publish зовётся
+# синхронно на пути ответа ingestion/резолюции. Подписке нужен только
+# connect-таймаут: блокирующее чтение канала (get_message(timeout=None)) с
+# socket_timeout падало бы в тишине без событий.
 
 
 @dataclasses.dataclass(frozen=True)
@@ -186,10 +197,13 @@ class _RedisSubscription:
     def __init__(self, url: str, channel: str) -> None:
         import redis.asyncio as aioredis
 
-        self._client = aioredis.from_url(url)
+        self._client = aioredis.from_url(
+            url, socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS
+        )
         self._pubsub = self._client.pubsub()
         self._channel = channel
         self._subscribed = False
+        self._close_task: asyncio.Task | None = None
 
     async def _ensure(self) -> None:
         if not self._subscribed:
@@ -209,11 +223,19 @@ class _RedisSubscription:
                 data = data.decode("utf-8")
             return AccessEventMessage.from_payload(json.loads(data))
 
-    def close(self) -> None:
-        # Закрытие async-ресурсов выполняется best-effort; WS-обработчик
-        # завершает соединение, GC закроет соединения Redis.
+    async def _aclose(self) -> None:
         try:
-            asyncio.get_running_loop().create_task(self._pubsub.aclose())
+            await self._pubsub.aclose()
+        finally:
+            # A9-P3-23: from_url создаёт пул на КАЖДУЮ подписку (WS-соединение);
+            # раньше закрывался только pubsub, пул клиента копился до GC.
+            await self._client.aclose()
+
+    def close(self) -> None:
+        # Best-effort: WS-обработчик уже завершает соединение. Ссылку на задачу
+        # держим, чтобы её не собрал GC до завершения закрытия.
+        try:
+            self._close_task = asyncio.get_running_loop().create_task(self._aclose())
         except RuntimeError:
             pass
 
@@ -226,11 +248,9 @@ class RedisBroker:
     """
 
     def __init__(self, url: str, channel: str = ACCESS_EVENT_CHANNEL) -> None:
-        import redis
-
         self._url = url
         self._channel = channel
-        self._sync_client = redis.Redis.from_url(url)
+        self._sync_client = sync_redis_from_url(url)
 
     def publish(self, message: AccessEventMessage) -> None:
         try:

@@ -12,9 +12,11 @@
 """
 from __future__ import annotations
 
+import hmac
 import logging
+import os
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -28,17 +30,36 @@ logger = logging.getLogger(__name__)
 
 # SEC-04 (аудит #4): JSON-сводка раскрывает инвентарь контроллеров/бэклог очереди
 # (числа, PD-safe, но операционно чувствительны) → гейтим на manager/system_admin.
-# Prometheus-текст (/metrics) остаётся без role-gate: его скрейпит внутренний
-# Prometheus (bearer-JWT недоступен скрейперу), доступ ограничивается на
-# сети/edge (не публикуется наружу).
+# Prometheus-текст (/metrics) без role-gate: его скрейпит alloy (bearer-JWT
+# скрейперу недоступен) — вместо роли сервис-токен ACCESS_METRICS_TOKEN (A9-P3-2).
 METRICS_ROLES = ("manager", "system_admin")
+
+# A9-P3-2: сервис-токен скрейпа /metrics (аналог UK HEALTH_METRICS_TOKEN).
+METRICS_TOKEN_ENV = "ACCESS_METRICS_TOKEN"
+
+
+def require_metrics_token(authorization: str | None = Header(default=None)) -> None:
+    """Гейт ``/metrics``: при заданном ``ACCESS_METRICS_TOKEN`` — ``Bearer`` обязателен.
+
+    Не задан → эндпоинт открыт (opt-in, НЕ fail-closed как UK
+    ``require_health_token``): alloy на обеих площадках скрейпит access
+    ``/metrics`` без bearer, и fail-closed уронил бы мониторинг в момент
+    раскатки. Порядок включения: bearer_token_file в alloy → переменная в
+    Doppler → пересоздание access-api. Сравнение — constant-time.
+    """
+    token = os.getenv(METRICS_TOKEN_ENV, "")
+    if not token:
+        return
+    expected = f"Bearer {token}"
+    if not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
 # /metrics — без префикса (конвенция Prometheus). JSON-сводка — под /api/v1/access.
 prometheus_router = APIRouter(tags=["access-metrics"])
 json_router = APIRouter(prefix="/api/v1/access", tags=["access-metrics"])
 
 
-@prometheus_router.get("/metrics")
+@prometheus_router.get("/metrics", dependencies=[Depends(require_metrics_token)])
 def get_prometheus_metrics(db: Session = Depends(get_db)) -> Response:
     """Метрики в формате Prometheus: латентность по фазам + очередь команд (§10.2)."""
     _refresh_queue_gauges(db)

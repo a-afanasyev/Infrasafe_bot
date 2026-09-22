@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from access_control.services import equipment_admin as svc
+from access_control.services.device_auth import resolve_client_ip
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
 
@@ -48,10 +49,6 @@ OfflineModeLit = Literal["fail_closed", "cached_permanent_only"]
 DirectionLit = Literal["entry", "exit"]
 ControllerStatusLit = Literal["active", "inactive", "decommissioned"]
 ParkingTypeLit = Literal["assigned", "shared"]
-
-
-def _client_ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
 
 
 # ------------------------------ response DTO ------------------------------
@@ -300,7 +297,7 @@ def create_zone(
             description=body.description, offline_mode=body.offline_mode,
             parking_type=body.parking_type, capacity=body.capacity,
             max_permanent_vehicles_per_apartment=body.max_permanent_per_apartment,
-            is_active=body.is_active, ip_address=_client_ip(request),
+            is_active=body.is_active, ip_address=resolve_client_ip(request),
         )
     except svc.DuplicateCode as exc:
         _raise_409_dup_code(exc)
@@ -323,7 +320,7 @@ def patch_zone(
     try:
         zone = svc.update_zone(
             db, zone_id=zone_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -343,7 +340,7 @@ def set_zone_yards(
     try:
         yard_ids = svc.set_zone_yards(
             db, zone_id=zone_id, actor_user_id=user.id, add=body.add,
-            remove=body.remove, ip_address=_client_ip(request),
+            remove=body.remove, ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -395,7 +392,7 @@ def create_gate(
         gate = svc.create_gate(
             db, actor_user_id=user.id, code=body.code, zone_id=body.zone_id,
             direction=body.direction, name=body.name, controller_id=body.controller_id,
-            is_active=body.is_active, ip_address=_client_ip(request),
+            is_active=body.is_active, ip_address=resolve_client_ip(request),
         )
     except svc.InvalidReference as exc:
         _raise_422_ref(exc)
@@ -416,7 +413,7 @@ def patch_gate(
     try:
         gate = svc.update_gate(
             db, gate_id=gate_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -477,7 +474,7 @@ def create_camera(
             db, actor_user_id=user.id, code=body.code, gate_id=body.gate_id,
             direction=body.direction, name=body.name, controller_id=body.controller_id,
             vendor=body.vendor, model=body.model, attributes=body.attributes,
-            is_active=body.is_active, ip_address=_client_ip(request),
+            is_active=body.is_active, ip_address=resolve_client_ip(request),
         )
     except svc.InvalidReference as exc:
         _raise_422_ref(exc)
@@ -498,7 +495,7 @@ def patch_camera(
     try:
         camera = svc.update_camera(
             db, camera_id=camera_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -557,7 +554,7 @@ def create_barrier(
             db, actor_user_id=user.id, code=body.code, gate_id=body.gate_id,
             name=body.name, controller_id=body.controller_id, relay_type=body.relay_type,
             relay_channel=body.relay_channel, config=body.config,
-            is_active=body.is_active, ip_address=_client_ip(request),
+            is_active=body.is_active, ip_address=resolve_client_ip(request),
         )
     except svc.InvalidReference as exc:
         _raise_422_ref(exc)
@@ -578,7 +575,7 @@ def patch_barrier(
     try:
         barrier = svc.update_barrier(
             db, barrier_id=barrier_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -645,7 +642,7 @@ def create_controller(
             name=body.name, zone_id=body.zone_id, gate_id=body.gate_id,
             offline_mode=body.offline_mode, ip_allowlist=body.ip_allowlist,
             pinned_public_key_id=body.pinned_public_key_id, status=body.status,
-            is_active=body.is_active, ip_address=_client_ip(request),
+            is_active=body.is_active, ip_address=resolve_client_ip(request),
         )
     except svc.DuplicateControllerUid as exc:
         _raise_409_dup_uid(exc)
@@ -668,7 +665,7 @@ def patch_controller(
     try:
         controller = svc.update_controller(
             db, controller_id=controller_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -688,7 +685,7 @@ def rotate_controller_key(
     try:
         controller, api_key = svc.rotate_controller_key(
             db, controller_id=controller_id, actor_user_id=user.id,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)

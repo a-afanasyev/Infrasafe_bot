@@ -1,7 +1,8 @@
 """Исполнитель retention-обязательств access-домена (AUD6-P1-5).
 
 ``expire_due_reviews`` (§9.5: тик «не реже раза в 10 с») и
-``purge_expired_photos`` (§11: фото номера/автомобиля — 30 дней, персданные)
+ретеншн фото (§11: фото номера/автомобиля — 30 дней, персданные; с A9-P2-16 —
+``run_photo_retention``: удаление файлов в медиа-сервисе, затем ссылок)
 существовали с полным тест-покрытием, но БЕЗ единого прод-вызова: планировщика
 в access_control не было вообще, и зелёный сьют маскировал невыполняемое
 обязательство. Этот модуль — их единственный штатный исполнитель; живёт в
@@ -63,16 +64,26 @@ def _review_tick() -> int:
         return expire_due_reviews(db)
 
 
+# Курсор/счётчик ретеншна фото между тиками (один воркер на процесс, --workers 1).
+_photo_state = None
+
+
 def _photo_tick() -> int:
+    global _photo_state
     from uk_management_bot.database.session import SessionLocal
 
-    from access_control.services.photo_retention import purge_expired_photos
+    from access_control.services.photo_retention import (
+        RetentionState,
+        advance_photo_retention,
+    )
 
-    with SessionLocal() as db:
-        # Контракт purge_expired_photos: «коммит — на стороне вызывающего».
-        count = purge_expired_photos(db)
-        db.commit()
-        return count
+    # A9-P2-16: «сначала файл в медиа-сервисе, потом ссылка», пачкой ≤ BATCH от
+    # курсора по кругу. Тик идёт в asyncio.to_thread — своего event loop у потока
+    # нет, поэтому сетевую часть проход исполняет через asyncio.run.
+    cleared, _photo_state = advance_photo_retention(
+        SessionLocal, _photo_state or RetentionState()
+    )
+    return cleared
 
 
 async def run_loop(
