@@ -349,6 +349,10 @@ services:
       #   MEDIA_API_KEY     — X-API-Key медиа-сервиса (Doppler, опционален по коду).
       - MEDIA_SERVICE_URL=${MEDIA_SERVICE_URL:-http://media-service:8000}
       - MEDIA_API_KEY=${MEDIA_API_KEY:-}
+      # A9-P3-2: Bearer-токен скрейпа /metrics. Опционален (:-): пусто — /metrics
+      # открыт, как раньше (alloy скрейпит без bearer). Включать ПОСЛЕ того, как
+      # alloy обеих площадок получил bearer_token_file (см. access_control/api/metrics.py).
+      - ACCESS_METRICS_TOKEN=${ACCESS_METRICS_TOKEN:-}
     # Отдельный host-порт (uk-management-api занимает 8085); контейнерный порт 8080.
     # Дефолт 8087: на shared-деплое с InfraSafe порт 8086 занят influxdb. Edge
     # ходит в access-api:8080 по docker-сети, host-порт нужен лишь для localhost.

@@ -33,6 +33,8 @@ PostgreSQL, Redis, каталог пользователей и адресов (
 | `ACCESS_EVENT_BROKER` | `redis` (много воркеров) или `memory` | да (compose: `redis`) |
 | `ACCESS_ENABLE_DOCS` | Swagger `/docs`; дефолт зависит от `DEBUG` (прод→выкл, dev→вкл) | нет |
 | `ACCESS_COMMAND_RECLAIM_ENABLED` | повторная выдача `barrier_commands` с истёкшей лизой (обрыв edge после lease). По умолчанию `false`: потерянная лиза = команда потеряна (fail-safe, шлагбаум повторно не откроется). Включать **только после подтверждения**, что edge-агент на площадке дедуплицирует по `command_id` персистентно (`FileProcessedStore`; `command_consumer` в репо — симулятор) | нет (compose: `false`) |
+| `ACCESS_METRICS_TOKEN` | Bearer-токен скрейпа `/metrics` (A9-P3-2); пусто — `/metrics` открыт. Включать ПОСЛЕ `bearer_token_file` в alloy обеих площадок | нет |
+| `ACCESS_TRUSTED_PROXIES` | IP прокси, чьему `X-Forwarded-For` доверяет `resolve_client_ip` (IP allowlist device-auth + `ip_address` аудита). **В проде держать ПУСТЫМ**: access-api стартует с `uvicorn --proxy-headers --forwarded-allow-ips $FORWARDED_ALLOW_IPS` (F-03), и `client.host` уже реальный IP. Два слоя доверия одновременно не заводить — второй будет разбирать XFF повторно. Нужна только при запуске без `--proxy-headers` | нет |
 
 Общего дефолтного значения для seed-ов в коде НЕТ (§9.1/§11): без них сервис
 падает `RuntimeError`. Сгенерировать:
@@ -96,7 +98,7 @@ WS   /ws/v1/access/security
 Метрики (§10.2):
 
 ```
-GET  /metrics                  # формат Prometheus (scrape)
+GET  /metrics                  # формат Prometheus (scrape); при ACCESS_METRICS_TOKEN — Bearer
 GET  /api/v1/access/metrics    # JSON: перцентили задержки + бюджет + очередь
 ```
 

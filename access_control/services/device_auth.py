@@ -186,8 +186,19 @@ class RedisNonceStore:
 
     def seen(self, key: str, ttl_seconds: int) -> bool:
         # SET key 1 NX EX ttl → True если выставлено (новый nonce), None если уже был.
-        was_set = self._client.set(name=f"ac:nonce:{key}", value="1", nx=True, ex=ttl_seconds)
+        import redis
+
+        try:
+            was_set = self._client.set(
+                name=f"ac:nonce:{key}", value="1", nx=True, ex=ttl_seconds
+            )
+        except redis.RedisError as exc:
+            raise NonceStoreUnavailable(type(exc).__name__) from exc
         return not bool(was_set)
+
+
+class NonceStoreUnavailable(RuntimeError):
+    """Anti-replay недоступен (Redis упал/таймаут) — запрос отклоняется (fail-closed)."""
 
 
 _default_store: NonceStore | None = None
@@ -215,11 +226,12 @@ def get_nonce_store() -> NonceStore:
     backend = backend.lower()
     if backend == "redis":
         try:
-            import redis  # type: ignore
-
+            from access_control.services.redis_timeouts import sync_redis_from_url
             from uk_management_bot.config.settings import settings
 
-            client = redis.Redis.from_url(settings.REDIS_URL)
+            # A9-P3-23: с таймаутами — Redis на паузе даёт быстрый 503, а не
+            # висящий до TCP-таймаута запрос (поток + соединение БД).
+            client = sync_redis_from_url(settings.REDIS_URL)
             client.ping()  # fail-fast: убедиться, что Redis действительно доступен
             _default_store = RedisNonceStore(client)
         except Exception as exc:  # noqa: BLE001
@@ -248,7 +260,7 @@ def reset_nonce_store(store: NonceStore | None = None) -> None:
 
 @dataclass(frozen=True)
 class DeviceAuthError(Exception):
-    """Ошибка device-auth с HTTP-кодом (401 — credential, 403 — IP allowlist)."""
+    """Ошибка device-auth с HTTP-кодом (401 — credential, 403 — IP allowlist, 503 — anti-replay недоступен)."""
 
     status_code: int
     detail: str
@@ -280,6 +292,18 @@ def resolve_client_ip(request: "Request") -> str | None:
     прокси allowlist всегда видел бы IP прокси и не работал. Без доверенных прокси
     (дефолт) — поведение как раньше: прямой ``client.host`` (XFF подделываем,
     поэтому НЕ доверяем заголовкам от непроверенного источника).
+
+    A9-P3-23: единственный источник IP и для device-auth, и для ``ip_address``
+    аудита всех access-роутеров (раньше — 6 локальных копий ``_client_ip`` на
+    голом ``client.host``).
+
+    ВАЖНО (прод): access-api стартует с ``uvicorn --proxy-headers
+    --forwarded-allow-ips $FORWARDED_ALLOW_IPS`` (F-03) — uvicorn уже подставил
+    реальный IP в ``client.host``, поэтому ``ACCESS_TRUSTED_PROXIES`` на проде
+    должен оставаться ПУСТЫМ. Два слоя доверия одновременно не заводить: если
+    здесь указать ещё и IP клиента/edge, повторный разбор XFF возьмёт левый,
+    подделываемый клиентом элемент. Переменная — только для запуска без
+    ``--proxy-headers`` (см. ``access_control/README.md``).
     """
     direct = request.client.host if request.client else None
     if direct is not None and direct in _trusted_proxies():
@@ -405,7 +429,16 @@ def authenticate(
         raise _unauthorized("invalid signature", controller_uid=controller_uid)
 
     # Anti-replay nonce (§9.1) — последним, чтобы невалидный запрос не гасил nonce.
-    if store.seen(f"{controller_uid}:{nonce}", nonce_ttl_seconds):
+    try:
+        replay = store.seen(f"{controller_uid}:{nonce}", nonce_ttl_seconds)
+    except NonceStoreUnavailable as exc:
+        # Fail-closed (M2): без anti-replay запрос не пропускаем, но отвечаем
+        # быстро и честно 503 (временно), а не 500/зависанием.
+        logger.warning(
+            "device-auth: anti-replay недоступен (%s) controller_uid=%s", exc, controller_uid
+        )
+        raise DeviceAuthError(503, "anti-replay unavailable")
+    if replay:
         raise _unauthorized("nonce replay detected", controller_uid=controller_uid)
 
     return controller

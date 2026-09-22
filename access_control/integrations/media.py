@@ -10,8 +10,10 @@
   опц. ``uploaded_by`` → 201 ``{media_file:{id, telegram_file_id, ...},
   file_url}``; нет канала access → 503;
 * ``GET {MEDIA_SERVICE_URL}/api/v1/media/{media_id}/file`` (``X-API-Key``) — стрим;
+* ``GET {MEDIA_SERVICE_URL}/api/v1/media/{media_id}`` (``X-API-Key``) — метаданные
+  (``status``), уточнение неоднозначных ответов DELETE для ретеншна;
 * ``DELETE {MEDIA_SERVICE_URL}/api/v1/media/{media_id}`` (``X-API-Key``) — удаление
-  (откат осиротевшей загрузки, 30-дневный ретеншн §11); 404 — файла уже нет.
+  (откат осиротевшей загрузки, 30-дневный ретеншн §11).
 
 Пакет ``media_service`` в access-образ НЕ импортируется (его там нет) — это
 самостоятельный httpx-клиент.
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
+from enum import Enum
 from typing import Any, BinaryIO, Iterable
 
 import httpx
@@ -144,6 +147,15 @@ class AccessMediaClient:
             content_type = resp.headers.get("content-type", "application/octet-stream")
             return resp.content, content_type
 
+    async def get_status(self, media_id: int | str) -> str | None:
+        """Статус файла в медиа-сервисе (``GET /media/{id}``); ``None`` — файла нет."""
+        async with self._client() as client:
+            resp = await client.get(f"/media/{int(media_id)}")
+            if resp.status_code == httpx.codes.NOT_FOUND:
+                return None
+            resp.raise_for_status()
+            return resp.json().get("status")
+
     async def delete_file(self, media_id: int | str) -> bool:
         """Удалить файл в медиа-сервисе (``DELETE /media/{media_id}``).
 
@@ -157,6 +169,81 @@ class AccessMediaClient:
                 return False
             resp.raise_for_status()
             return True
+
+
+class MediaRetireOutcome(str, Enum):
+    """Исход удаления файла для ретеншна (A9-P2-16)."""
+
+    # Файла у медиа-сервиса больше нет (удалён сейчас, раньше или неизвестен).
+    GONE = "gone"
+    # Файл удерживает сам медиа-сервис: publication-lock (его забрала публикация)
+    # или archived. Удалить через API нельзя, и файл уже не принадлежит событию —
+    # ссылку события обнулить можно: ПДн события анонимизированы, судьба файла —
+    # за удерживающей стороной. Пишется warning для ручного разбора.
+    RETAINED = "retained"
+    # Временный сбой (сеть, 5xx, 429/Telegram, транзиентный статус саги) —
+    # ссылку НЕ трогать: media_id хранится только в ней, повтор на следующем тике.
+    TRANSIENT = "transient"
+
+
+# Статусы media_files, при которых 409 на DELETE означает «удерживается».
+_RETAINED_STATUSES = frozenset({"active", "archived"})
+
+
+async def retire_media_file(
+    client: AccessMediaClient, media_id: int
+) -> MediaRetireOutcome:
+    """Удалить файл для ретеншна и классифицировать исход (никогда не бросает).
+
+    Контракт медиа-сервиса неоднозначен, поэтому спорные ответы уточняются
+    ``GET /media/{id}``:
+
+    * 2xx → удалён;
+    * 404 → «нет файла» ИЛИ Telegram-удаление упало и сага вернула ``active``:
+      GET 404/``deleted`` → GONE, иначе TRANSIENT;
+    * 409 → «не active или publication-lock»: ``deleted`` → GONE (удалён
+      раньше), ``active``/``archived`` → RETAINED, прочее (транзиентные
+      ``deleting``/``archiving``) → TRANSIENT;
+    * 5xx/429/сеть/нет конфигурации → TRANSIENT.
+    """
+    try:
+        if await client.delete_file(media_id):
+            return MediaRetireOutcome.GONE
+        status = await client.get_status(media_id)
+        if status in (None, "deleted"):
+            return MediaRetireOutcome.GONE
+        logger.warning(
+            "retention: media delete not applied media_id=%s status=%s", media_id, status
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == httpx.codes.CONFLICT:
+            return await _classify_conflict(client, media_id)
+        logger.warning(
+            "retention: media delete failed media_id=%s status=%s",
+            media_id, exc.response.status_code,
+        )
+    except (httpx.HTTPError, MediaConfigError) as exc:
+        logger.warning(
+            "retention: media delete failed media_id=%s (%s)", media_id, type(exc).__name__
+        )
+    return MediaRetireOutcome.TRANSIENT
+
+
+async def _classify_conflict(client: AccessMediaClient, media_id: int) -> MediaRetireOutcome:
+    try:
+        status = await client.get_status(media_id)
+    except (httpx.HTTPError, MediaConfigError):
+        return MediaRetireOutcome.TRANSIENT
+    if status in (None, "deleted"):
+        return MediaRetireOutcome.GONE
+    if status in _RETAINED_STATUSES:
+        logger.warning(
+            "retention: media_id=%s удерживается медиа-сервисом (%s) — ссылка "
+            "события обнулена, файл не удалён",
+            media_id, status,
+        )
+        return MediaRetireOutcome.RETAINED
+    return MediaRetireOutcome.TRANSIENT
 
 
 async def delete_media_best_effort(
