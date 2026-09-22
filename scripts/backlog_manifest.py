@@ -367,7 +367,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
-    "A9-P1-1": A(pkg="AUD9-W1", status="actionable", method="verified-2026-09-22", services="bot, group-intake-bot", note="Бот: альбомы фото молча теряются во всех FSM-сборщиках медиа"),
+    # A9-P1-1 закрыт 2026-09-23 (PR #598).
     "A9-P1-2": A(pkg="AUD9-W1", status="actionable", method="verified-2026-09-22", services="api, frontend (TWA)", note="TWA-старт смены создаёт ad-hoc-дубль вместо активации запланированной; без аудита и уведомлений"),
     # A9-P1-3 закрыт 2026-09-23 (PR #596).
     "A9-P2-1": A(pkg="AUD9-W2", status="actionable", method="verified-2026-09-22", services="api", note="Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559)"),
@@ -415,7 +415,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
     "A9-P3-13": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="api", note="PATCH заявки: `{rating}` → 500, правки без аудита/терминального гарда, карточка без лифта"),
     "A9-P3-14": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="БД", note="Уникальность Group Intake обходится при `source_chat_id IS NULL`"),
-    "A9-P3-15": A(pkg="AUD9-W1", status="actionable", method="audit9-2026-09-22", services="bot", note="Мелкие дефекты медиа-потока бота"),
+    # A9-P3-15 закрыт 2026-09-23 (PR #598).
     "A9-P3-16": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz"),
     "A9-P3-17": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: заглушки уведомлений и тесты, которые не могут упасть"),
     "A9-P3-18": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Чистка: мелкие символы без единой ссылки; скрытая инициализация логирования"),
