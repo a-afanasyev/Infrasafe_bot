@@ -2,6 +2,7 @@
 Сервис для работы с профилем пользователя
 """
 import json
+import html
 import logging
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
@@ -160,9 +161,10 @@ class ProfileService:
             full_name.append(profile_data['last_name'])
         
         if full_name:
-            text_parts.append(f"👤 {' '.join(full_name)}")
+            # A9-P2-2: профиль уходит с parse_mode=HTML — экранируем ввод.
+            text_parts.append(f"👤 {html.escape(' '.join(full_name))}")
         if profile_data.get('username'):
-            text_parts.append(f"📱 @{profile_data['username']}")
+            text_parts.append(f"📱 @{html.escape(profile_data['username'])}")
         
         text_parts.append("")  # пустая строка
         
@@ -184,7 +186,7 @@ class ProfileService:
         
         # Телефон
         phone = profile_data.get('phone')
-        phone_text = phone if phone else get_text("profile.phone_not_set", language=language)
+        phone_text = html.escape(phone) if phone else get_text("profile.phone_not_set", language=language)
         text_parts.append(f"{get_text('profile.phone', language=language)} {phone_text}")
         
         # Специализация (для исполнителей/менеджеров)
@@ -216,7 +218,7 @@ class ProfileService:
                 primary_marker = " ⭐" if apt.get('is_primary') else ""
                 owner_marker = f" ({get_text('profile.owner', language=language)})" if apt.get('is_owner') else ""
                 address = localize_address(apt['address'], language)
-            text_parts.append(f"  {address}{primary_marker}{owner_marker}")
+            text_parts.append(f"  {html.escape(address)}{primary_marker}{owner_marker}")
             logger.info(f"Форматирование адресов квартир: {len(apartments)} квартир")
         else:
             text_parts.append(f"  {get_text('profile.no_addresses', language=language)}")

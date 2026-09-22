@@ -162,7 +162,7 @@ def _category_glossary() -> str:
         ru = get_category_display(key, "ru")
         uz = get_category_display(key, "uz")
         quoted = ", ".join(f"«{example}»" for example in examples)
-        lines.append(f"- {key} ({ru} / {uz}): {description}. Примеры: {quoted}")
+        lines.append(f"- {key} ({ru} / {uz}): {description}. Примеры: {quoted}")  # html-raw: промпт LLM, не Telegram
     return "\n".join(lines)
 
 

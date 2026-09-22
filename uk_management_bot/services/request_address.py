@@ -94,7 +94,7 @@ def format_yard_address(yard: Yard) -> str:
 
 def format_building_address(building: Building) -> str:
     yard_name = building.yard.name if building.yard else None
-    return f"{building.address} ({yard_name})" if yard_name else building.address
+    return f"{building.address} ({yard_name})" if yard_name else building.address  # html-raw: канонический адрес для БД/API, экранируется при показе
 
 
 def format_apartment_address(apartment: Apartment) -> str:
@@ -111,10 +111,10 @@ def format_apartment_address(apartment: Apartment) -> str:
     try:
         building = apartment.building
         yard_name = building.yard.name if (building and building.yard) else None
-        base = f"{building.address}, кв. {number}" if building else f"кв. {number}"
-        return f"{base} ({yard_name})" if yard_name else base
+        base = f"{building.address}, кв. {number}" if building else f"кв. {number}"  # html-raw: канонический адрес для БД/API
+        return f"{base} ({yard_name})" if yard_name else base  # html-raw: канонический адрес для БД/API
     except (AttributeError, DetachedInstanceError):
-        return f"кв. {number}"
+        return f"кв. {number}"  # html-raw: канонический адрес для БД/API
 
 
 def _check_level_allowed(role: str, address_type: str) -> None:

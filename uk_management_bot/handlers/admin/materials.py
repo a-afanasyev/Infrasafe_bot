@@ -13,6 +13,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
 )
 
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.database.models.user import User
@@ -119,8 +120,8 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
             materials_val = final_materials.split(f'{procurement_separator}')[0].strip()
             history_entry = (
                 get_text("admin.handlers.purchase_history_completed_header", language=lang) + "\n"
-                + get_text("admin.handlers.purchase_history_materials_label", language=lang).format(materials=materials_val) + "\n"
-                + get_text("admin.handlers.purchase_history_comment_label", language=lang).format(comment=manager_comment) + "\n"
+                + get_text("admin.handlers.purchase_history_materials_label", language=lang).format(materials=materials_val) + "\n"  # html-raw: пишется в БД, экранируется при показе
+                + get_text("admin.handlers.purchase_history_comment_label", language=lang).format(comment=manager_comment) + "\n"  # html-raw: пишется в БД, экранируется при показе
                 + get_text("admin.handlers.purchase_history_date_label", language=lang).format(date=current_date)
             )
 
@@ -165,8 +166,9 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
         # Показываем обновленный список заявок в закупе
         text = get_text("admin.handlers.procurement_updated_list", language=lang) + "\n\n"
         for i, r in enumerate(requests, 1):
-            addr = r.address[:40] + ("…" if len(r.address) > 40 else "")
-            text += f"{i}. #{r.request_number} - {r.category}\n"
+            # A9-P2-2: адрес/категория — пользовательский текст в HTML.
+            addr = html.escape(r.address[:40]) + ("…" if len(r.address) > 40 else "")
+            text += f"{i}. #{r.request_number} - {html.escape(r.category or '')}\n"
             text += f"   📍 {addr}\n\n"
         
         await callback.message.edit_text(text, reply_markup=get_manager_main_keyboard(language=lang))
@@ -213,11 +215,11 @@ async def handle_edit_materials(callback: CallbackQuery, state: FSMContext, db: 
 
         text = get_text("admin.handlers.edit_materials_prompt", language=lang).format(
             request_number=request_number,
-            requested=requested
+            requested=html.escape(requested)
         )
 
         if manager_comment:
-            text += get_text("admin.handlers.edit_materials_current_comment", language=lang).format(comment=manager_comment) + "\n\n"
+            text += get_text("admin.handlers.edit_materials_current_comment", language=lang).format(comment=html.escape(manager_comment)) + "\n\n"
 
         text += get_text("admin.handlers.edit_materials_enter", language=lang)
         
@@ -267,8 +269,8 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
         # Обновляем историю закупов для сохранения данных
         requested_materials = request.requested_materials or get_text("admin.handlers.not_specified", language=lang)
         purchase_history_entry = (
-            get_text("admin.handlers.purchase_history_entry_materials", language=lang).format(materials=requested_materials) + "\n"
-            + get_text("admin.handlers.purchase_history_entry_comment", language=lang).format(comment=new_comment) + "\n"
+            get_text("admin.handlers.purchase_history_entry_materials", language=lang).format(materials=requested_materials) + "\n"  # html-raw: пишется в БД, экранируется при показе
+            + get_text("admin.handlers.purchase_history_entry_comment", language=lang).format(comment=new_comment) + "\n"  # html-raw: пишется в БД, экранируется при показе
             + get_text("admin.handlers.purchase_history_entry_updated", language=lang).format(date=fmt_datetime(utc_now()))
         )
 
@@ -284,8 +286,8 @@ async def handle_materials_edit_text(message: Message, state: FSMContext, db: Se
                 from uk_management_bot.services.comment_service import CommentService
                 comment_service = CommentService(db)
                 comment_text = get_text("admin.handlers.comment_changed_text", language=lang).format(
-                    old_comment=old_comment or get_text("admin.handlers.comment_absent", language=lang),
-                    new_comment=new_comment
+                    old_comment=old_comment or get_text("admin.handlers.comment_absent", language=lang),  # html-raw: пишется в БД, экранируется при показе
+                    new_comment=new_comment  # html-raw: пишется в БД, экранируется при показе
                 )
                 # BUG-159: здесь стояли три чужих keyword'а — request_id=,
                 # old_status=, comment= при сигнатуре

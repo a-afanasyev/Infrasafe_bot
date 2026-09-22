@@ -14,6 +14,7 @@ from uk_management_bot.keyboards.requests import (
     get_categories_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard
+import html
 import logging
 from uk_management_bot.services.request_service import RequestService
 
@@ -133,12 +134,14 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
             address_label = get_text("requests.address_label", language=lang) or "Адрес"
             created_label = get_text("requests.created_label", language=lang) or "Создана"
             from uk_management_bot.utils.address_helpers import localize_address
-            message_text += f"   {address_label} {localize_address(request.address, lang)}\n"
+            # A9-P2-2: адрес/причина/уточнение — пользовательский текст в
+            # HTML-сообщении; экранируем при показе (в БД — сырой текст).
+            message_text += f"   {address_label} {html.escape(localize_address(request.address, lang))}\n"
             message_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
             if request.status == "Отменена" and request.notes:
                 # TASK 17 Этап C: Локализованная метка
                 reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
-                message_text += f"   {reason_label} {request.notes}\n"
+                message_text += f"   {reason_label} {html.escape(request.notes)}\n"
             elif request.status == "Уточнение" and request.notes:
                 # Показываем последние сообщения из диалога уточнения
                 # TASK 17 Этап C: Локализованная метка
@@ -149,7 +152,7 @@ async def handle_pagination(callback: CallbackQuery, state: FSMContext):
                     preview = '\n'.join(last_messages)
                     if len(preview) > 100:
                         preview = preview[:97] + '...'
-                    message_text += f"   {clarification_label}: {preview}\n"
+                    message_text += f"   {clarification_label}: {html.escape(preview)}\n"
             message_text += "\n"
         
         # Создаем комбинированную клавиатуру: фильтр + кнопки ответа (по каждой) + пагинация

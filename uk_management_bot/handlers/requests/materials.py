@@ -14,6 +14,7 @@ ARCH-01: хендлер — тонкий FSM/UI-слой; доменный ORM �
 (guard + комментарий+commit) — в request_handler_service (штатный дом ORM
 этого хендлера), material_service остаётся чистым от бот-специфики.
 """
+import html
 import logging
 import re
 from decimal import Decimal
@@ -135,7 +136,7 @@ async def pick_material(callback: CallbackQuery, state: FSMContext):
             )
             await callback.message.edit_text(
                 get_text("materials.issue.enter_quantity", language=lang).format(
-                    name=material["name"],
+                    name=html.escape(material["name"]),
                     stock=_fmt_qty(material["stock"]),
                     unit=unit_label(material["unit"], lang),
                 )
@@ -172,7 +173,7 @@ async def enter_quantity(message: Message, state: FSMContext):
             await message.answer(
                 get_text("materials.issue.confirm", language=lang).format(
                     request_number=data["mat_request_number"],
-                    name=data["mat_material_name"],
+                    name=html.escape(data["mat_material_name"]),
                     qty=_fmt_qty(qty),
                     unit=unit,
                 ),
@@ -202,7 +203,7 @@ async def confirm_material_issue(callback: CallbackQuery, state: FSMContext):
             qty = Decimal(data["mat_qty"])
             # Текст журнала — по-русски (единый язык учётных записей)
             comment_text = get_text("materials.issue.comment", language="ru").format(
-                name=data["mat_material_name"],
+                name=data["mat_material_name"],  # html-raw: текст журнала списания в БД
                 qty=_fmt_qty(qty),
                 unit=unit_label(data["mat_material_unit"], "ru"),
             )
@@ -233,7 +234,7 @@ async def confirm_material_issue(callback: CallbackQuery, state: FSMContext):
             await state.clear()
             await callback.message.edit_text(
                 get_text("materials.issue.success", language=lang).format(
-                    name=issue.material_name,
+                    name=html.escape(issue.material_name),
                     qty=_fmt_qty(Decimal(str(issue.qty))),
                     unit=unit,
                     request_number=request_number,
