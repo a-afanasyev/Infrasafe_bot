@@ -153,6 +153,7 @@ def _build_group_pool_view(db_session: Session, user: User, lang: str):
     from uk_management_bot.keyboards.requests import (
         resolve_category_key, get_category_display)
     from uk_management_bot.utils.address_helpers import localize_address
+    import html as _html
 
     pool = RequestHandlerService(db_session).list_group_pool(user)
     title = get_text("requests.group_pool_title", language=lang) or "🆓 Свободные заявки"
@@ -167,7 +168,8 @@ def _build_group_pool_view(db_session: Session, user: User, lang: str):
     for i, r in enumerate(pool, 1):
         category_display = get_category_display(resolve_category_key(r.category), language=lang)
         lines.append(f"{i}. 🔧 #{r.request_number} — {category_display}")
-        lines.append(f"   {address_label} {localize_address(r.address, lang)}")
+        # A9-P2-2: адрес — пользовательский текст в HTML-сообщении.
+        lines.append(f"   {address_label} {_html.escape(localize_address(r.address, lang))}")
         lines.append("")
         rows.append([InlineKeyboardButton(
             text=f"{claim_text} #{r.request_number}",
@@ -240,9 +242,10 @@ async def _notify_group_pool_claimed(db_session: Session, request_number: str,
             # разобрано выше явно: пустое означало бы «уведомить всех».
             if not matches_required_specs(parse_specializations(ex), required):
                 continue
+            import html as _html  # A9-P2-2: имя из Telegram в HTML-уведомлении
             text = get_text("requests.claimed_by_other_notify",
                             language=(ex.language or "ru")).format(
-                request_number=request_number, executor=claimer_name)
+                request_number=request_number, executor=_html.escape(claimer_name))
             try:
                 await bot.send_message(chat_id=ex.telegram_id, text=text)
             except Exception as e:
@@ -597,7 +600,8 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
 
             # Формируем сообщение с результатом
             message_text = get_text("requests.request_completed_title", language=lang).format(request_number=request_number)
-            message_text += get_text("requests.comment_label", language=lang).format(comment=completion_comment)
+            import html as _html  # A9-P2-2: комментарий исполнителя в HTML
+            message_text += get_text("requests.comment_label", language=lang).format(comment=_html.escape(completion_comment or ""))
             if media_service_files:
                 message_text += get_text("requests.files_uploaded_to_media_service", language=lang).format(count=len(media_service_files))
             elif completion_media:

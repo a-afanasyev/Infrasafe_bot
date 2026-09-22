@@ -373,7 +373,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P1-2 закрыт 2026-09-23 (PR #599).
     # A9-P1-3 закрыт 2026-09-23 (PR #596).
     # A9-P2-1 закрыт 2026-09-23 (PR #600).
-    "A9-P2-2": A(pkg="AUD9-W3", status="actionable", method="verified-2026-09-22", services="bot", note="Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах"),
+    # A9-P2-2 закрыт 2026-09-23 (PR #605).
     # A9-P2-3 закрыт 2026-09-23 (PR #600).
     # A9-P2-4 закрыт 2026-09-23 (PR #601).
     "A9-P2-5": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="group-intake-bot, bot", note="Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного"),

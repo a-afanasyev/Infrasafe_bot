@@ -205,7 +205,7 @@ def _add_revision_comment(db, request_number: str, telegram_id: int, revision_re
         clarification=get_text(
             "request_reports.handlers.revision_comment",
             language=actor.language or "ru",
-        ).format(reason=revision_reason)
+        ).format(reason=revision_reason)  # html-raw: пишется комментарием в БД; уведомления экранируют текст
     )
     return notices
 
@@ -292,8 +292,8 @@ async def handle_approve_request(callback: CallbackQuery, state: FSMContext, lan
 
         confirmation_text = get_text("reports.approval_confirmation", language=lang).format(
             request_id=request_number,
-            category=brief.category,
-            address=brief.address
+            category=html.escape(brief.category or ""),
+            address=html.escape(brief.address or "")
         )
 
         await callback.message.edit_text(
@@ -478,7 +478,7 @@ async def handle_revision_reason_input(message: Message, state: FSMContext, lang
         lang = language
         success_text = get_text("reports.revision_requested", language=lang).format(
             request_id=request_number,
-            reason=revision_reason
+            reason=html.escape(revision_reason)
         )
 
         await message.answer(success_text)
@@ -510,7 +510,7 @@ def format_report_for_display(request: Request, report_comments: list, language:
             resolve_category_key(request.category), language=language
         )
         report_text += f"🏷️ **{get_text('request_reports.handlers.category', language=language)}**: {category_display}\n"
-        report_text += f"📍 **{get_text('request_reports.handlers.address', language=language)}**: {localize_address(request.address, language)}\n"
+        report_text += f"📍 **{get_text('request_reports.handlers.address', language=language)}**: {html.escape(localize_address(request.address, language))}\n"
         # Секревью A2: свободный текст пользователей — бот шлёт с parse_mode=
         # HTML по умолчанию (класс BUG-174), экранируем все такие подстановки.
         report_text += f"📝 **{get_text('request_reports.handlers.description', language=language)}**: {html.escape(request.description or '')}\n"

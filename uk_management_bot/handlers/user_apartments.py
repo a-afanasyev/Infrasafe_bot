@@ -287,7 +287,7 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
     user_apartment.reviewed_by = admin.id
     user_apartment.admin_comment = get_text(
         "user_apartments.admin_comment_approved", language=owner_lang
-    ).format(name=admin.first_name or admin_telegram_id)
+    ).format(name=admin.first_name or admin_telegram_id)  # html-raw: admin_comment пишется в БД, экранируется при показе
 
     db.commit()
     return "ok"
@@ -334,7 +334,7 @@ def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) 
     user_apartment.reviewed_by = admin.id
     user_apartment.admin_comment = get_text(
         "user_apartments.admin_comment_rejected", language=owner_lang
-    ).format(name=admin.first_name or admin_telegram_id)
+    ).format(name=admin.first_name or admin_telegram_id)  # html-raw: admin_comment пишется в БД, экранируется при показе
 
     db.commit()
     return "ok"
@@ -393,7 +393,7 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
         if approved:
             text += get_text("user_apartments.approved_header", language=lang) + "\n"
             for ua in approved:
-                address = ua.address
+                address = html.escape(ua.address)
                 primary_mark = " ⭐" if ua.is_primary else ""
                 owner_mark = " " + get_text("user_apartments.owner_label", language=lang) if ua.is_owner else ""
                 text += f"  • {address}{primary_mark}{owner_mark}\n"
@@ -402,14 +402,14 @@ async def show_my_apartments(callback: CallbackQuery, state: FSMContext, languag
         if pending:
             text += get_text("user_apartments.pending_header", language=lang) + "\n"
             for ua in pending:
-                address = ua.address
+                address = html.escape(ua.address)
                 text += f"  • {address}\n"
             text += "\n"
 
         if rejected:
             text += get_text("user_apartments.rejected_header", language=lang) + "\n"
             for ua in rejected:
-                address = ua.address
+                address = html.escape(ua.address)
                 # Секревью A2: admin_comment несёт свободный first_name
                 # админа, сообщение уходит с parse_mode=HTML (класс BUG-174).
                 reason = f" ({html.escape(ua.admin_comment)})" if ua.admin_comment else ""
@@ -505,7 +505,7 @@ async def view_apartment_details(callback: CallbackQuery, state: FSMContext, lan
             return
 
         # Формируем детальную информацию
-        address = user_apartment.address
+        address = html.escape(user_apartment.address)
 
         status_emoji = {
             'approved': '✅',
@@ -700,7 +700,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
             if approved:
                 text += get_text("user_apartments.admin_approved_header", language=lang) + "\n"
                 for ua in approved:
-                    address = ua.address
+                    address = html.escape(ua.address)
                     owner_status = get_text("user_apartments.owner_status_owner", language=lang) if ua.is_owner else get_text("user_apartments.owner_status_resident", language=lang)
                     primary_mark = " ⭐" if ua.is_primary else ""
                     text += f"  • {address}\n"
@@ -710,7 +710,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
             if pending:
                 text += get_text("user_apartments.pending_header", language=lang) + "\n"
                 for ua in pending:
-                    address = ua.address
+                    address = html.escape(ua.address)
                     owner_status = get_text("user_apartments.owner_status_owner", language=lang) if ua.is_owner else get_text("user_apartments.owner_status_resident", language=lang)
                     text += f"  • {address} ({owner_status})\n"
                 text += "\n"
@@ -718,7 +718,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
             if rejected:
                 text += get_text("user_apartments.rejected_header", language=lang) + "\n"
                 for ua in rejected:
-                    address = ua.address
+                    address = html.escape(ua.address)
                     reason = f" - {html.escape(ua.admin_comment)}" if ua.admin_comment else ""
                     text += f"  • {address}{reason}\n"
                 text += "\n"
@@ -757,7 +757,7 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, lan
             await callback.answer(get_text("user_apartments.apartment_not_found", language=lang), show_alert=True)
             return
 
-        address = user_apartment.address
+        address = html.escape(user_apartment.address)
 
         # Формируем детальную информацию
         text = get_text("user_apartments.details_title", language=lang) + "\n\n"

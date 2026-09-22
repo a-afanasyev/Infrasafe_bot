@@ -19,6 +19,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_CANCELLED,
 )
 
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.status_display import get_status_with_emoji
@@ -516,17 +517,19 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         return
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
-        addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
+        # A9-P2-2: адрес/категория/примечания — пользовательский текст в
+        # HTML-сообщении; экранируем после обрезки (в БД — сырой текст).
+        addr = html.escape(r.address[:60]) + ("…" if len(r.address) > 60 else "")
         text = (
-            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {r.category}\n"
+            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {html.escape(r.category or '')}\n"
             + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
             + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
         )
         if r.notes and r.notes.strip():
             if r.status == REQUEST_STATUS_CANCELLED:
-                text += "\n" + get_text("admin.handlers.archive_cancel_reason", language=lang).format(reason=r.notes.strip())
+                text += "\n" + get_text("admin.handlers.archive_cancel_reason", language=lang).format(reason=html.escape(r.notes.strip()))
             else:
-                text += "\n" + get_text("admin.handlers.archive_notes", language=lang).format(notes=r.notes.strip())
+                text += "\n" + get_text("admin.handlers.archive_notes", language=lang).format(notes=html.escape(r.notes.strip()))
         await message.answer(text)
     await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
 
@@ -552,20 +555,22 @@ async def list_procurement_requests(message: Message, db: Session, roles: list =
 
     # Каждую заявку отправляем отдельным сообщением
     for r in requests:
-        addr = r.address[:60] + ("…" if len(r.address) > 60 else "")
+        # A9-P2-2: адрес/категория/примечания — пользовательский текст в
+        # HTML-сообщении; экранируем после обрезки (в БД — сырой текст).
+        addr = html.escape(r.address[:60]) + ("…" if len(r.address) > 60 else "")
         text = (
-            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {r.category}\n"
+            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {html.escape(r.category or '')}\n"
             + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
             + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
         )
         # Показываем запрошенные материалы и комментарии менеджера
         if r.requested_materials:
-            text += "\n" + get_text("admin.handlers.procurement_requested", language=lang).format(materials=r.requested_materials)
+            text += "\n" + get_text("admin.handlers.procurement_requested", language=lang).format(materials=html.escape(r.requested_materials))
         if r.manager_materials_comment:
-            text += "\n" + get_text("admin.handlers.procurement_manager_comment", language=lang).format(comment=r.manager_materials_comment)
+            text += "\n" + get_text("admin.handlers.procurement_manager_comment", language=lang).format(comment=html.escape(r.manager_materials_comment))
         # Для совместимости со старыми записями
         if not r.requested_materials and r.purchase_materials:
-            text += "\n" + get_text("admin.handlers.procurement_materials", language=lang).format(materials=r.purchase_materials)
+            text += "\n" + get_text("admin.handlers.procurement_materials", language=lang).format(materials=html.escape(r.purchase_materials))
 
         # Создаем инлайн клавиатуру для действий с заявкой
         keyboard = InlineKeyboardMarkup(inline_keyboard=[

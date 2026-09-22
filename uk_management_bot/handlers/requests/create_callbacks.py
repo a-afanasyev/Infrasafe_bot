@@ -9,6 +9,7 @@ from uk_management_bot.keyboards.requests import (
 )
 from uk_management_bot.keyboards.base import get_user_contextual_keyboard
 from uk_management_bot.database.session import run_db
+import html
 import logging
 from typing import Optional
 
@@ -257,7 +258,7 @@ async def handle_confirmation(callback: CallbackQuery, state: FSMContext, user_s
                         language=lang,
                         request_number=request_number,
                         category=category_display,
-                        address=data.get('address', get_text("common.not_specified", language=lang)),
+                        address=html.escape(data['address']) if data.get('address') else get_text("common.not_specified", language=lang),
                         urgency=urgency_display
                     )
                 )
