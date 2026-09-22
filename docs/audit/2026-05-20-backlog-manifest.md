@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **499**
-- открыто маркером: **71**
+- закрыто маркером: **502**
+- открыто маркером: **68**
 
-  - `actionable` — **59**
+  - `actionable` — **56**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=32, P3=27.
+Из них actionable по приоритету: P2=30, P3=26.
 
 Значения `status`:
 
@@ -55,13 +55,10 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P2-1` | P2 | actionable | verified-2026-09-22 | AUD9-W2 | — | api | — | Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559) |
 | `A9-P2-11` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | `media_files: List[str]` в create-схемах без валидации; строки уходят в `answer_photo` |
 | `A9-P2-18` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api, CI | — | API: row-lock-семантика проверяется только на sqlite |
-| `A9-P2-3` | P2 | actionable | verified-2026-09-22 | AUD9-W2 | — | api | — | Upload: категория `completion_*` не привязана к роли — житель может подделать фотоотчёт исполнителя |
 | `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
 | `A9-P3-13` | P3 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | PATCH заявки: `{rating}` → 500, правки без аудита/терминального гарда, карточка без лифта |
-| `A9-P3-4` | P3 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | Upload читает до 50 МБ в память до проверки, без rate-limit; таймаут = бюджет edge |
 | `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
 | `A9-P2-4` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W3 | — | bot | — | `/admin` + общий `ADMIN_PASSWORD` делают любой аккаунт manager'ом |
 | `A9-P3-1` | P3 | actionable | audit9-2026-09-22 | AUD9-W3 | — | bot | — | Инвайт-токен целиком пишется в лог в `/start join_…` |
