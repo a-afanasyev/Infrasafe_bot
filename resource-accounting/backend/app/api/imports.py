@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from itsdangerous import BadSignature, URLSafeSerializer
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,45 +24,79 @@ from app.services.readings import EDITABLE_PERIOD_STATUSES
 router = APIRouter(prefix="/imports/readings", tags=["imports"])
 
 
-def _commit_serializer() -> URLSafeSerializer:
+# A9-P3-3: окно «предпросмотр → применить». Оператор просматривает таблицу
+# строк (ошибки, расход) и жмёт «Применить» — это минуты; 30 минут с запасом
+# покрывают сверку с бумажным журналом, а после истечения достаточно заново
+# загрузить тот же файл. Бессрочный токен позволял применить давно устаревший
+# предпросмотр.
+COMMIT_TOKEN_MAX_AGE_SECONDS = 30 * 60
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+
+def _commit_serializer() -> URLSafeTimedSerializer:
     # AUD6-P2-16(в): раньше токен был base64(sha256(payload)[:12] + payload) —
     # контрольная сумма, которую клиент пересчитывал сам, подменив payload
     # (прав не повышало — валидация серверная, — но давало неограниченный
     # N+1-усилитель). Подпись session_secret'ом закрывает подмену.
-    return URLSafeSerializer(get_settings().session_secret, salt="import-commit-token")
+    return URLSafeTimedSerializer(get_settings().session_secret, salt="import-commit-token")
+
+
+def issue_commit_token(user, month: str, rows: list[dict]) -> str:
+    """A9-P3-3: токен привязан к {пользователь, тенант, месяц} и несёт метку времени."""
+    return _commit_serializer().dumps(
+        {"user_id": str(user.id), "tenant_id": str(user.tenant_id), "month": month, "rows": rows}
+    )
+
+
+def read_commit_token(token: str, user, month: str) -> list[dict]:
+    """Строки предпросмотра из токена; любой отказ — 400 bad_request (канон сервиса)."""
+    try:
+        data = _commit_serializer().loads(token, max_age=COMMIT_TOKEN_MAX_AGE_SECONDS)
+    except SignatureExpired:
+        raise bad_request("Предпросмотр устарел: повторите загрузку файла")
+    except BadSignature:
+        raise bad_request("Недействительный commit_token: повторите предпросмотр")
+    binding = (str(user.id), str(user.tenant_id), month)
+    if not isinstance(data, dict) or (data.get("user_id"), data.get("tenant_id"), data.get("month")) != binding:
+        raise bad_request("commit_token выдан для другого пользователя или месяца: повторите предпросмотр")
+    rows = data.get("rows")
+    if not isinstance(rows, list) or not all(isinstance(item, dict) for item in rows):
+        raise bad_request("Недействительный commit_token: повторите предпросмотр")
+    return rows
 
 
 @router.post("/preview", response_model=dict)
 @limiter.limit(HEAVY_LIMIT)
-async def preview_import(
+def preview_import(
     request: Request,
     month: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*OPERATOR_ROLES)),
 ):
+    # A9-P2-13: обычный def — FastAPI выполняет его в threadpool. Раньше async
+    # def гонял openpyxl (с проверкой распакованного размера) и SQL
+    # build_preview прямо в event loop однопроцессного сервиса.
     period = get_period_or_404(db, user, month)
     if period.status not in EDITABLE_PERIOD_STATUSES:
         raise bad_request(f"Период {month} в статусе {period.status}: импорт невозможен")
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
         raise bad_request("Файл больше 5 МБ")
     raw_rows = parse_file(file.filename or "upload.csv", content)
     if not raw_rows:
         raise bad_request("Файл пуст")
     rows = build_preview(db, user.tenant_id, month, raw_rows)
-    payload = [asdict(r) for r in rows]
-    # Token binds commit to this exact previewed content (подписан, см.
-    # _commit_serializer; Decimal/date нормализуются в строки заранее).
-    token = _commit_serializer().dumps(json.loads(json.dumps(payload, default=str)))
+    # Decimal/date нормализуются в строки заранее — и для ответа, и для токена.
+    payload = json.loads(json.dumps([asdict(r) for r in rows], default=str))
     return {
         "data": {
             "month": month,
             "total": len(rows),
             "valid": sum(1 for r in rows if r.ok),
             "invalid": sum(1 for r in rows if not r.ok),
-            "rows": json.loads(json.dumps(payload, default=str)),
-            "commit_token": token,
+            "rows": payload,
+            "commit_token": issue_commit_token(user, month, payload),
         }
     }
 
@@ -85,10 +119,7 @@ def commit_import(
     if period.status not in EDITABLE_PERIOD_STATUSES:
         raise bad_request(f"Период {payload.month} в статусе {period.status}: импорт невозможен")
 
-    try:
-        previewed = _commit_serializer().loads(payload.commit_token)
-    except BadSignature:
-        raise bad_request("Недействительный commit_token: повторите предпросмотр")
+    previewed = read_commit_token(payload.commit_token, user, payload.month)
 
     # SEC-03: re-derive rows server-side from the user-supplied input ONLY; never
     # trust client-provided meter_id/errors/parsed_* from the token. build_preview
