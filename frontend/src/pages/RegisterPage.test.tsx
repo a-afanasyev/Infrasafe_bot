@@ -84,6 +84,71 @@ describe('RegisterPage', () => {
     expect(await screen.findByText('Вы уже зарегистрированы. Перейдите в приложение.')).toBeInTheDocument()
   })
 
+  // A9-P3-20: ветвление по машинному коду X-Error-Code, а не regex по тексту
+  // detail — формулировки ниже намеренно НЕ содержат «уже»/«контакт».
+  function conflict(code: string, detail = 'произвольный текст') {
+    return { isAxiosError: true, response: { status: 409, headers: { 'x-error-code': code }, data: { detail } } }
+  }
+
+  async function submitWith(err: unknown) {
+    mockReg.start.mockResolvedValue(START)
+    mockReg.submit.mockRejectedValue(err)
+    const user = userEvent.setup()
+    render(<RegisterPage />)
+    await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
+  }
+
+  it('submit 409 contact_required → шаг контакта с подсказкой', async () => {
+    await submitWith(conflict('contact_required'))
+    expect(await screen.findByText('stub-contact')).toBeInTheDocument()
+    expect(screen.getByText('Сначала поделитесь контактом в Telegram.')).toBeInTheDocument()
+  })
+
+  it.each(['already_registered', 'already_resident'])('submit 409 %s → экран already_registered', async (code) => {
+    await submitWith(conflict(code))
+    expect(await screen.findByText('Вы уже зарегистрированы. Перейдите в приложение.')).toBeInTheDocument()
+  })
+
+  it('submit 409 previous_rejected → текст сервера, шаг не меняется', async () => {
+    await submitWith(conflict('previous_rejected', 'Предыдущая заявка отклонена'))
+    expect(await screen.findByText('Предыдущая заявка отклонена')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отправить заявку' })).toBeInTheDocument()
+  })
+
+  it('submit 422 с detail-массивом не роняет рендер', async () => {
+    await submitWith({ isAxiosError: true, response: { status: 422, data: { detail: [{ loc: ['body', 'full_name'], msg: 'too short' }] } } })
+    expect(await screen.findByText('full_name: too short')).toBeInTheDocument()
+  })
+
+  // Фолбэк: нет X-Error-Code (старый бэкенд / вырезанный заголовок) — прежнее
+  // ветвление по тексту detail, а не generic-ошибка.
+  function legacyConflict(detail: string) {
+    return { isAxiosError: true, response: { status: 409, headers: {}, data: { detail } } }
+  }
+
+  it('нет заголовка, detail про контакт → шаг контакта (старое поведение)', async () => {
+    await submitWith(legacyConflict('Сначала поделитесь контактом в Telegram'))
+    expect(await screen.findByText('stub-contact')).toBeInTheDocument()
+    expect(screen.getByText('Сначала поделитесь контактом в Telegram.')).toBeInTheDocument()
+  })
+
+  it('нет заголовка, detail «уже подтверждены» → already_registered (старое поведение)', async () => {
+    await submitWith(legacyConflict('Вы уже подтверждены как житель этой квартиры'))
+    expect(await screen.findByText('Вы уже зарегистрированы. Перейдите в приложение.')).toBeInTheDocument()
+  })
+
+  it('нет заголовка, прочий detail → текст сервера', async () => {
+    await submitWith(legacyConflict('Предыдущая заявка отклонена'))
+    expect(await screen.findByText('Предыдущая заявка отклонена')).toBeInTheDocument()
+  })
+
+  it('start 409 с другим кодом → текст ошибки, а не already_registered', async () => {
+    mockReg.start.mockRejectedValue(conflict('address_conflict', 'Конфликт адреса'))
+    render(<RegisterPage />)
+    expect(await screen.findByText('Конфликт адреса')).toBeInTheDocument()
+  })
+
   it('без initData — просьба открыть из Telegram', async () => {
     mockReg.initData = ''
     render(<RegisterPage />)

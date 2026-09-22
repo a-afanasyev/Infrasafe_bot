@@ -8,18 +8,7 @@ import { tUrgency, tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
 import { ElevatorStatusDot } from '../elevators/ElevatorStatusBadge'
-
-// TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
-const URGENCY: Record<string, { bg: string; text: string }> = {
-  low:          { bg: 'bg-emerald/12',   text: 'text-emerald' },
-  medium:       { bg: 'bg-amber/12',     text: 'text-[#d97706]' },
-  high:         { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
-  critical:     { bg: 'bg-red/12',       text: 'text-red' },
-  'Обычная':    { bg: 'bg-emerald/12',   text: 'text-emerald' },
-  'Средняя':    { bg: 'bg-amber/12',     text: 'text-[#d97706]' },
-  'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
-  'Критическая':{ bg: 'bg-red/12',       text: 'text-red' },
-}
+import { getUrgencyStyle, type UrgencyStyle } from './urgencyStyle'
 
 const SOURCE_ICON: Record<string, string> = {
   bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
@@ -37,7 +26,7 @@ interface Props {
 }
 
 export default function RequestCard({ card, onClick, isOverlay, unread }: Props) {
-  const urgency = URGENCY[card.urgency ?? '']
+  const urgency = getUrgencyStyle(card.urgency)
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
   const frozen = FROZEN_STATUSES.has(card.status)
 
@@ -87,7 +76,7 @@ export default function RequestCard({ card, onClick, isOverlay, unread }: Props)
   )
 }
 
-function CardContent({ card, urgency, unread }: { card: TCard; urgency: { bg: string; text: string } | undefined; unread?: boolean }) {
+function CardContent({ card, urgency, unread }: { card: TCard; urgency: UrgencyStyle | null; unread?: boolean }) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
   // Бейдж «новый ответ» — только для уточнения: там непрочитанное означает

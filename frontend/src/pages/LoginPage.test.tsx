@@ -76,6 +76,24 @@ describe('LoginPage', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
   })
 
+  // A9-P3-20: сырой detail в JSX — массив 422 ронял рендер страницы логина.
+  it('422 с detail-массивом показывает текст, а не роняет рендер', async () => {
+    server.use(
+      http.post('*/api/v2/auth/login', () =>
+        HttpResponse.json(
+          { detail: [{ loc: ['body', 'email'], msg: 'value is not a valid email address' }] },
+          { status: 422 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    render(<LoginPage />)
+    await user.type(emailInput(), 'admin@example.com')
+    await user.type(passwordInput(), 'x')
+    await user.click(screen.getByRole('button', { name: 'Войти' }))
+    expect(await screen.findByText('email: value is not a valid email address')).toBeInTheDocument()
+  })
+
   // AUD5-APIFE-17: MFA-путь терял deep-link. Проверяется КУДА увело, а не факт
   // вызова navigate: маршрут /kanban отрисует маркер, а прежний хардкод
   // '/dashboard' не отрисует ничего.

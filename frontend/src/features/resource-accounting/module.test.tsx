@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react';
+import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { downloadUrl } from './api/client';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -66,5 +68,42 @@ describe('ResourceAccounting module mount', () => {
       </I18nextProvider>,
     );
     expect(await screen.findByRole('heading', { name: 'Ввод показаний' })).toBeInTheDocument();
+  });
+});
+
+// A9-P3-19: QueryClient модуля создавался в useMemo — React вправе сбросить
+// мемо, и кэш модуля пропал бы. Теперь useState(() => …): один клиент на mount,
+// даже при новом объекте config на каждом рендере хоста.
+describe('ResourceAccountingProvider — стабильный QueryClient', () => {
+  function Probe({ seen }: { seen: QueryClient[] }) {
+    seen.push(useQueryClient());
+    return null;
+  }
+
+  function tree(seen: QueryClient[], baseUrl: string) {
+    return (
+      <ResourceAccountingProvider config={{ baseUrl, onUnauthorized: () => {}, auth: { role: 'resource_admin', displayName: 'X' } }}>
+        <Probe seen={seen} />
+      </ResourceAccountingProvider>
+    );
+  }
+
+  it('один клиент на весь жизненный цикл, api переконфигурируется на смену baseUrl', () => {
+    const seen: QueryClient[] = [];
+    const { rerender } = render(tree(seen, '/a'));
+    rerender(tree(seen, '/b'));
+    expect(new Set(seen).size).toBe(1);
+    expect(downloadUrl('/v1/x')).toBe('/b/v1/x');
+  });
+
+  it('клиент хоста имеет приоритет', () => {
+    const host = new QueryClient();
+    const seen: QueryClient[] = [];
+    render(
+      <ResourceAccountingProvider config={{ baseUrl: '', onUnauthorized: () => {}, queryClient: host, auth: { role: 'resource_admin', displayName: 'X' } }}>
+        <Probe seen={seen} />
+      </ResourceAccountingProvider>,
+    );
+    expect(seen[0]).toBe(host);
   });
 });

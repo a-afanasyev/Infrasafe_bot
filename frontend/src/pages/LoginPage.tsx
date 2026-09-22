@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore'
 import { cn } from '@/lib/utils'
 import LanguageSwitcher from '../components/shared/LanguageSwitcher'
 import { safeNextPath } from '../utils/safeNextPath'
+import { safeErrorMessage } from '../utils/errorMessage'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { brand } from '../brand/brand'
 
@@ -119,9 +120,10 @@ export default function LoginPage() {
         navigate(next)
       }
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || t('login.error'))
-      toast.error(t('login.loginError'), { description: detail || t('login.error') })
+      // A9-P3-20: сырой detail (массив 422) ронял рендер — только через канон.
+      const message = safeErrorMessage(err, t('login.error'))
+      setError(message)
+      toast.error(t('login.loginError'), { description: message })
     } finally {
       setLoading(false)
     }
@@ -142,8 +144,7 @@ export default function LoginPage() {
       // и обычный вход.
       navigate(next)
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || t('login.otpInvalid'))
+      setError(safeErrorMessage(err, t('login.otpInvalid')))
     } finally {
       setLoading(false)
     }
