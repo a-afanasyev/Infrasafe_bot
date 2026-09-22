@@ -141,18 +141,6 @@ def awaiting_manager_clause() -> ColumnElement:
     )
 
 
-def is_returned_for_review(request) -> bool:
-    """Канон «Возвращена»: возвращена заявителем, ждёт разбора менеджером.
-
-    После cutover (PR3+4): status == «Возвращена» напрямую.
-    Legacy-кодировка (до cutover, страховка): Исполнено + is_returned=True.
-    """
-    if request.status == REQUEST_STATUS_RETURNED:
-        return True
-    return (request.status == REQUEST_STATUS_COMPLETED
-            and bool(getattr(request, "is_returned", False)))
-
-
 def returned_for_review_clause() -> ColumnElement:
     return or_(
         Request.status == REQUEST_STATUS_RETURNED,

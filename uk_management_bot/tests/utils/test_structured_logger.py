@@ -1,10 +1,8 @@
 """
 Unit tests for utils/structured_logger.py
 
-Tests StructuredFormatter, SecurityFilter, StructuredLogger,
-get_logger(), get_auth_logger() etc., log_function_call decorator.
+Tests StructuredFormatter, SecurityFilter, StructuredLogger, get_logger().
 """
-import asyncio
 import json
 import logging
 import pytest
@@ -309,14 +307,6 @@ class TestStructuredLogger:
             logger.critical("critical msg")
         assert mock_log.call_args[0][0] == logging.CRITICAL
 
-    def test_with_context_creates_new_logger(self):
-        from uk_management_bot.utils.structured_logger import StructuredLogger
-        logger = StructuredLogger("test.ctx", component="auth")
-        child = logger.with_context(user_id=42)
-        assert isinstance(child, StructuredLogger)
-        assert child.context.get("user_id") == 42
-        assert child.context.get("component") == "auth"
-
     def test_context_in_extra(self):
         from uk_management_bot.utils.structured_logger import StructuredLogger
         logger = StructuredLogger("test.extra", component="shifts")
@@ -328,7 +318,7 @@ class TestStructuredLogger:
 
 
 # ---------------------------------------------------------------------------
-# get_logger and predefined loggers
+# get_logger
 # ---------------------------------------------------------------------------
 
 class TestGetLogger:
@@ -341,105 +331,6 @@ class TestGetLogger:
         from uk_management_bot.utils.structured_logger import get_logger
         result = get_logger("test.ctx", component="requests")
         assert result.context.get("component") == "requests"
-
-    def test_get_auth_logger_has_component(self):
-        from uk_management_bot.utils.structured_logger import get_auth_logger
-        result = get_auth_logger()
-        assert result.context.get("component") == "auth"
-
-    def test_get_request_logger_has_component(self):
-        from uk_management_bot.utils.structured_logger import get_request_logger
-        result = get_request_logger()
-        assert result.context.get("component") == "requests"
-
-    def test_get_shift_logger_has_component(self):
-        from uk_management_bot.utils.structured_logger import get_shift_logger
-        result = get_shift_logger()
-        assert result.context.get("component") == "shifts"
-
-    def test_get_security_logger_has_component(self):
-        from uk_management_bot.utils.structured_logger import get_security_logger
-        result = get_security_logger()
-        assert result.context.get("component") == "security"
-
-    def test_get_performance_logger_has_component(self):
-        from uk_management_bot.utils.structured_logger import get_performance_logger
-        result = get_performance_logger()
-        assert result.context.get("component") == "performance"
-
-
-# ---------------------------------------------------------------------------
-# log_function_call decorator
-# ---------------------------------------------------------------------------
-
-class TestLogFunctionCallDecorator:
-    def test_sync_function_called_normally(self):
-        from uk_management_bot.utils.structured_logger import log_function_call, get_logger
-        logger = get_logger("test.decorator")
-
-        @log_function_call(logger=logger)
-        def add(a, b):
-            return a + b
-
-        result = add(2, 3)
-        assert result == 5
-
-    def test_sync_function_exception_re_raised(self):
-        from uk_management_bot.utils.structured_logger import log_function_call, get_logger
-        logger = get_logger("test.decorator2")
-
-        @log_function_call(logger=logger)
-        def fail():
-            raise ValueError("boom")
-
-        with pytest.raises(ValueError, match="boom"):
-            fail()
-
-    def test_async_function_called_normally(self):
-        from uk_management_bot.utils.structured_logger import log_function_call, get_logger
-        logger = get_logger("test.async_decorator")
-
-        @log_function_call(logger=logger)
-        async def async_add(a, b):
-            return a + b
-
-        result = asyncio.get_event_loop().run_until_complete(async_add(3, 4))
-        assert result == 7
-
-    def test_async_function_exception_re_raised(self):
-        from uk_management_bot.utils.structured_logger import log_function_call, get_logger
-        logger = get_logger("test.async_decorator3")
-
-        @log_function_call(logger=logger)
-        async def async_fail():
-            raise RuntimeError("async boom")
-
-        with pytest.raises(RuntimeError, match="async boom"):
-            asyncio.get_event_loop().run_until_complete(async_fail())
-
-    def test_decorator_without_explicit_logger(self):
-        """When no logger passed, one is created automatically."""
-        from uk_management_bot.utils.structured_logger import log_function_call
-
-        @log_function_call()
-        def multiply(a, b):
-            return a * b
-
-        assert multiply(3, 4) == 12
-
-    def test_info_level_used(self):
-        from uk_management_bot.utils.structured_logger import log_function_call, get_logger
-        logger = get_logger("test.level")
-
-        calls = []
-        logger.info = lambda msg, **kw: calls.append(("info", msg))
-
-        @log_function_call(logger=logger, level="info")
-        def greet(name):
-            return f"Hello {name}"
-
-        greet("World")
-        assert any("info" == lvl for lvl, _ in calls)
 
 
 class TestThirdPartyLoggerLevels:

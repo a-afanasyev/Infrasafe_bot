@@ -19,7 +19,6 @@ ORM-строки дворов — по канону они вызываются 
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.state import State, StatesGroup
 
 from uk_management_bot.database.session import run_db, session_scope
 from uk_management_bot.database.models import User, Yard
@@ -29,11 +28,6 @@ from uk_management_bot.utils.helpers import get_text, get_user_language
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-
-class UserYardsStates(StatesGroup):
-    """Состояния FSM для управления дворами пользователя"""
-    selecting_yard = State()  # Выбор двора для добавления
 
 
 # ============= КЛАВИАТУРЫ =============

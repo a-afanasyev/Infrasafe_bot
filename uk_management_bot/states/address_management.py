@@ -158,31 +158,3 @@ class ApartmentModerationStates(StatesGroup):
     viewing_request_details = State()
     """Просмотр деталей заявки (для сохранения контекста)"""
 
-
-class UserApartmentStates(StatesGroup):
-    """FSM состояния для пользовательской работы с квартирами"""
-
-    # ═══ ВЫБОР КВАРТИРЫ ПРИ РЕГИСТРАЦИИ ═══
-
-    waiting_for_yard_choice = State()
-    """Ожидание выбора двора пользователем"""
-
-    waiting_for_building_choice = State()
-    """Ожидание выбора здания пользователем"""
-
-    waiting_for_apartment_choice = State()
-    """Ожидание выбора квартиры пользователем"""
-
-    confirming_apartment_selection = State()
-    """Подтверждение выбранной квартиры"""
-
-    # ═══ УПРАВЛЕНИЕ СВОИМИ КВАРТИРАМИ ═══
-
-    viewing_my_apartments = State()
-    """Просмотр списка своих квартир"""
-
-    adding_additional_apartment = State()
-    """Добавление дополнительной квартиры"""
-
-    waiting_for_apartment_search_user = State()
-    """Ожидание поискового запроса от пользователя"""

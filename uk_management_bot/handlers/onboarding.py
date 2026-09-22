@@ -168,18 +168,6 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
 # обрабатывается handlers/phone_share.py.
 
 
-async def cancel_onboarding(message: Message, state: FSMContext, user_status: str = None, language: str = "ru"):
-    """Отменяет процесс онбординга"""
-    lang = language
-    
-    await message.answer(
-        get_text("onboarding.cancelled", language=lang),
-        reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], "approved", language=lang)
-    )
-
-    await state.clear()
-    logger.info(f"Онбординг отменен для пользователя {message.from_user.id}")
-
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
 # Регистрация по UPLOAD_DOCUMENTS_TEXTS мертва (генератор кнопки — мёртвая

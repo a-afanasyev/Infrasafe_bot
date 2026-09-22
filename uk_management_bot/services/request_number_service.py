@@ -22,7 +22,7 @@ DISPLAY_TZ канон показа (`utils/business_time.BUSINESS_TZ`) стал 
 import re
 import logging
 from datetime import date
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -207,67 +207,6 @@ class RequestNumberService:
             
         except (ValueError, IndexError):
             return False
-    
-    def get_requests_by_date(self, target_date: date) -> List[str]:
-        """
-        Получает все номера заявок за указанную дату
-        
-        Args:
-            target_date: Дата для поиска заявок
-            
-        Returns:
-            Список номеров заявок
-        """
-        date_prefix = target_date.strftime("%y%m%d")
-        
-        try:
-            result = self.db.execute(
-                text("""
-                    SELECT request_number 
-                    FROM requests 
-                    WHERE request_number LIKE :pattern 
-                    ORDER BY request_number ASC
-                """),
-                {"pattern": f"{date_prefix}-%"}
-            ).fetchall()
-            
-            return [row[0] for row in result]
-            
-        except Exception as e:
-            logger.error(f"Error getting requests by date {target_date}: {e}")
-            return []
-    
-    def get_daily_statistics(self, target_date: date) -> Dict[str, Any]:
-        """
-        Получает статистику заявок за день
-        
-        Args:
-            target_date: Дата для статистики
-            
-        Returns:
-            Словарь со статистикой
-        """
-        requests = self.get_requests_by_date(target_date)
-        
-        if not requests:
-            return {
-                "date": target_date,
-                "total_requests": 0,
-                "last_sequence": 0,
-                "next_available": 1
-            }
-        
-        # Парсим последний номер для получения следующего доступного
-        last_request = requests[-1]
-        parsed = self.parse_request_number(last_request)
-        
-        return {
-            "date": target_date,
-            "total_requests": len(requests),
-            "last_sequence": parsed.get("sequence", 0),
-            "next_available": parsed.get("sequence", 0) + 1,
-            "requests": requests
-        }
     
     @staticmethod
     def format_for_display(request_number: str) -> str:

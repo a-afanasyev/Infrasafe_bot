@@ -85,17 +85,6 @@ def parse_shift_specs(shift) -> set[str]:
         side="need", allow_universal=True)
 
 
-def parse_template_specs(template) -> set[str]:
-    """Требуемые специализации шаблона (`ShiftTemplate.required_specializations`).
-
-    Отдельная функция, а не переиспользование `parse_shift_specs`: поле у
-    шаблона называется иначе, и общий парсер читал бы у него пустоту.
-    """
-    return parse_specialization_values(
-        getattr(template, "required_specializations", None),
-        side="need", allow_universal=True)
-
-
 def matches_required_specs(user_specs: set[str], required: set[str]) -> bool:
     """Единственный ответ проекта на «подходит ли исполнитель под требование».
 
