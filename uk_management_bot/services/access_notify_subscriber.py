@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import html
 import logging
 import os
 
@@ -111,7 +112,7 @@ def build_notification_text(
     comment = (notification.comment or "").strip()
     if comment:
         base += get_text(
-            "access_control.notify.comment", language=language, comment=comment
+            "access_control.notify.comment", language=language, comment=html.escape(comment)
         )
     return base
 

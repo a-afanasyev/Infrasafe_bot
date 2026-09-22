@@ -12,6 +12,7 @@ from uk_management_bot.utils.business_time import (
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.utils.user_names import display_name
 import logging
 
 from ._types import ExecutorScore
@@ -62,7 +63,7 @@ class ScoringEngine:
         if specialization_score < 0:
             return ExecutorScore(
                 executor_id=executor.id,
-                executor_name=f"{executor.first_name} {executor.last_name}",
+                executor_name=display_name(executor),
                 total_score=-1.0,  # Блокирующая оценка
                 specialization_match=specialization_score,
                 workload_score=0.0,
@@ -120,7 +121,7 @@ class ScoringEngine:
 
         return ExecutorScore(
             executor_id=executor.id,
-            executor_name=f"{executor.first_name} {executor.last_name}",
+            executor_name=display_name(executor),
             total_score=max(0, total_score),  # Не может быть отрицательной
             specialization_match=specialization_score,
             workload_score=workload_score,

@@ -8,6 +8,7 @@
 - Подтверждение выбора
 - Отправка заявки на модерацию
 """
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -28,6 +29,7 @@ from uk_management_bot.utils.address_helpers import apartment_address
 from uk_management_bot.utils.button_texts import get_select_apartment_texts
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 
 logger = logging.getLogger(__name__)
 
@@ -207,11 +209,9 @@ def _load_admin_notification_texts(db, user_id: int, apartment_id: int) -> Optio
     if not user:
         return None
 
-    user_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    if not user_name:
-        user_name = f"ID: {user.telegram_id}"
-
-    username = f"@{user.username}" if user.username else "N/A"
+    # A9-P2-2: имя/username/адрес уходят админам в HTML-уведомлении.
+    user_name = html.escape(display_name(user))
+    username = html.escape(f"@{user.username}") if user.username else "N/A"
 
     apartment = db.get(Apartment, apartment_id)
 
@@ -237,7 +237,7 @@ def _load_admin_notification_texts(db, user_id: int, apartment_id: int) -> Optio
             user_name=user_name, username=username,
             telegram_id=user.telegram_id,
             apartment_address=(
-                apartment_address(apartment, admin_lang) if apartment else "—"
+                html.escape(apartment_address(apartment, admin_lang)) if apartment else "—"
             ),
         )
         notifications.append((admin_id, notification_text))
@@ -335,7 +335,7 @@ async def process_yard_selection(callback: CallbackQuery, state: FSMContext, lan
         await state.set_state(OnboardingStates.waiting_for_building_selection)
 
         await callback.message.edit_text(
-            get_text("user_apt_selection.handlers.select_building_step2", language=lang).format(yard_name=yard.yard_name),
+            get_text("user_apt_selection.handlers.select_building_step2", language=lang).format(yard_name=html.escape(yard.yard_name)),
             reply_markup=get_user_apartment_selection_keyboard(
                 yard.buildings,
                 "building",
@@ -387,7 +387,7 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext,
 
         await callback.message.edit_text(
             get_text("user_apt_selection.handlers.select_apartment_step3", language=lang).format(
-                yard_name=yard_name, building_address=building.address
+                yard_name=html.escape(yard_name), building_address=html.escape(building.address)
             ),
             reply_markup=get_user_apartment_selection_keyboard(
                 building.apartments,
@@ -452,7 +452,7 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
         await state.set_state(OnboardingStates.confirming_apartment)
 
         # Формируем информацию о квартире
-        apartment_info = get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+        apartment_info = get_text("user_apt_selection.handlers.apartment_label", language=lang).format(number=html.escape(str(apartment.apartment_number)))
         # BUG-152 п.5: значение 0 легитимно — сравнение по is not None.
         if apartment.entrance is not None:
             apartment_info += get_text("user_apt_selection.handlers.entrance_label", language=lang).format(entrance=apartment.entrance)
@@ -461,7 +461,7 @@ async def process_apartment_selection(callback: CallbackQuery, state: FSMContext
 
         await callback.message.edit_text(
             get_text("user_apt_selection.handlers.confirm_apartment_selection", language=lang).format(
-                yard_name=yard_name, building_address=building_address, apartment_info=apartment_info
+                yard_name=html.escape(yard_name), building_address=html.escape(building_address), apartment_info=apartment_info
             ),
             reply_markup=get_confirmation_keyboard(
                 confirm_callback="user_apartment_confirm",
@@ -518,7 +518,7 @@ async def confirm_apartment_request(callback: CallbackQuery, state: FSMContext, 
         full_address = await run_db(lambda s: _load_full_address(s, apartment_id, lang), db=_db)
 
         await callback.message.edit_text(
-            get_text("user_apt_selection.handlers.request_sent_success", language=lang).format(address=full_address)
+            get_text("user_apt_selection.handlers.request_sent_success", language=lang).format(address=html.escape(full_address))
         )
 
         logger.info(

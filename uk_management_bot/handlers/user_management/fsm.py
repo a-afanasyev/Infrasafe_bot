@@ -13,6 +13,7 @@ unblock_comment:340, delete_reason:387, document_request:734), три callback'�
 рождает keyboards/user_management.py (user_mgmt_cancel:444, user_mgmt_nop:99/115,
 user_mgmt_back_to_list:248). Мёртвых нет.
 """
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -228,7 +229,7 @@ async def process_approval_comment(message: Message, state: FSMContext, language
         if result.success:
             await message.answer(
                 get_text('moderation.user_approved_successfully', language=lang).format(
-                    user_name=result.user_name
+                    user_name=html.escape(result.user_name or "")
                 )
             )
 
@@ -293,7 +294,7 @@ async def process_block_reason(message: Message, state: FSMContext, language: st
         if result.success:
             await message.answer(
                 get_text('moderation.user_blocked_successfully', language=lang).format(
-                    user_name=result.user_name
+                    user_name=html.escape(result.user_name or "")
                 )
             )
 
@@ -335,7 +336,7 @@ async def process_unblock_comment(message: Message, state: FSMContext, language:
         if result.success:
             await message.answer(
                 get_text('moderation.user_unblocked_successfully', language=lang).format(
-                    user_name=result.user_name
+                    user_name=html.escape(result.user_name or "")
                 )
             )
 

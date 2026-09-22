@@ -16,6 +16,7 @@ ORM-строки дворов — по канону они вызываются 
 ``user_yard_add_confirm_`` — get_yard_selection_keyboard (обе в этом файле).
 Мёртвых нет.
 """
+import html
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -26,6 +27,7 @@ from uk_management_bot.database.models import User, Yard
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.helpers import get_text, get_user_language
+from uk_management_bot.utils.user_names import display_name
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -185,7 +187,8 @@ def _load_manage_screen(db, user_telegram_id: int, lang: str):
     if not target_user:
         return None
 
-    user_name = f"{target_user.first_name or ''} {target_user.last_name or ''}".strip() or f"ID: {user_telegram_id}"
+    # A9-P2-2: сырое имя (канон display_name); экранирует точка вывода.
+    user_name = display_name(target_user)
     return user_name, get_user_yards_keyboard(user_telegram_id, lang)
 
 
@@ -240,7 +243,7 @@ async def handle_manage_user_yards(callback: CallbackQuery, roles: list = None, 
 
         await callback.message.edit_text(
             get_text("user_yards.manage_yards_message", language=lang).format(
-                user_name=user_name,
+                user_name=html.escape(user_name),
                 user_telegram_id=user_telegram_id
             ),
             reply_markup=yards_keyboard
@@ -309,7 +312,7 @@ async def handle_confirm_add_yard(callback: CallbackQuery, roles: list = None, u
 
         # Добавляем двор
         granted_by_id = user.id
-        comment = f"Добавлено администратором {user.first_name or callback.from_user.id}"
+        comment = f"Добавлено администратором {user.first_name or callback.from_user.id}"  # html-raw: пишется в БД (комментарий выдачи двора)
         success = await run_db(
             lambda s: _apply_add_yard(s, user_telegram_id, yard_id, granted_by_id, comment),
             db=_db,
