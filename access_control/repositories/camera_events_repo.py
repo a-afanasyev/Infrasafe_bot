@@ -76,6 +76,19 @@ def find_window_duplicate(
     return row[0] if row else None
 
 
+def find_event_pk(db: Session, *, controller_id: int, event_id: str) -> int | None:
+    """``camera_events.id`` события по ключу ``(controller_id, event_id)`` или ``None``.
+
+    Простое чтение без блокировки: проверка «событие есть» ПЕРЕД медленной
+    загрузкой кадров (A9-P2-14), чтобы не грузить фото, которые некуда привязать.
+    """
+    row = db.execute(
+        text("SELECT id FROM camera_events WHERE controller_id = :c AND event_id = :e"),
+        {"c": controller_id, "e": event_id},
+    ).first()
+    return row[0] if row else None
+
+
 def update_photo_ref(
     db: Session, *, controller_id: int, event_id: str, kind: str, ref: str
 ) -> int | None:

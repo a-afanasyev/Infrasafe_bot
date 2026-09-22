@@ -10,6 +10,12 @@ barrier» и «резолюция уже просроченного».
 ``controller_id``. Для одного физического barrier/gate все пути берут один и тот
 же ключ, даже если barrier деактивирован после приёма события (тогда падаем на
 ``gate_id``). На не-postgres (sqlite CI/dev) lock — корректный no-op.
+
+A9-P3-23: ключ — пара ``(namespace, id)`` → ``pg_advisory_xact_lock(int4, int4)``.
+Раньше barrier/gate/controller делили одно пространство bigint-ключей: barrier 7,
+gate 7 и controller 7 сериализовались друг с другом, а однопараметрические ключи
+пересекались с чужими advisory-локами той же БД (hash-chain crc32, UK-ядро).
+Двухпараметрическая форма — отдельное пространство (objsubid=2 в ``pg_locks``).
 """
 from __future__ import annotations
 
@@ -19,6 +25,22 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Пространства ключей advisory-lock (§13.2). Значения произвольны, но стабильны:
+# это контракт сериализации между путями и воркерами — не менять без ревью.
+LOCK_NS_BARRIER = 0x41430001
+LOCK_NS_GATE = 0x41430002
+LOCK_NS_CONTROLLER = 0x41430003
+
+# Вторая половина ключа — int4; id (BIGINT identity) сворачиваем в диапазон int4.
+# Коллизия возможна только для id ≥ 2^31 — это лишняя сериализация, не потеря.
+_INT4_MASK = 0x7FFFFFFF
+
+LockKey = tuple[int, int]
+
+
+def _key(namespace: int, entity_id: int) -> LockKey:
+    return (namespace, int(entity_id) & _INT4_MASK)
 
 
 def _is_postgres(db: Session) -> bool:
@@ -50,17 +72,24 @@ def _is_postgres(db: Session) -> bool:
 
 def canonical_lock_key(
     barrier_id: int | None, gate_id: int | None, controller_id: int | None
-) -> int | None:
+) -> LockKey | None:
     """Канонический lock-ключ §13.2: barrier_id → gate_id → controller_id.
 
     ЕДИНЫЙ источник приоритета для ingestion/resolve/manual-open/expiry: один и
-    тот же физический barrier/gate всегда даёт один ключ.
+    тот же физический barrier/gate всегда даёт один ключ. Каждый уровень — в
+    своём пространстве (A9-P3-23), ``None`` — нечего лочить.
     """
-    return barrier_id or gate_id or controller_id
+    if barrier_id:
+        return _key(LOCK_NS_BARRIER, barrier_id)
+    if gate_id:
+        return _key(LOCK_NS_GATE, gate_id)
+    if controller_id:
+        return _key(LOCK_NS_CONTROLLER, controller_id)
+    return None
 
 
-def advisory_xact_lock(db: Session, key: int | None) -> None:
-    """Взять transaction-level advisory lock по произвольному ключу (§13.2).
+def advisory_xact_lock(db: Session, key: LockKey | None) -> None:
+    """Взять transaction-level advisory lock по ключу ``(namespace, id)`` (§13.2).
 
     Только postgres; на sqlite/неизвестном диалекте — no-op (см. ``_is_postgres``).
     ``key is None`` — нечего лочить (вызывающий обязан проверить заранее).
@@ -69,7 +98,11 @@ def advisory_xact_lock(db: Session, key: int | None) -> None:
         return
     if not _is_postgres(db):
         return
-    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": int(key)})
+    namespace, entity = key
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:ns, :id)"),
+        {"ns": int(namespace), "id": int(entity)},
+    )
 
 
 def barrier_advisory_lock(db: Session, barrier_id: int) -> None:
@@ -79,10 +112,10 @@ def barrier_advisory_lock(db: Session, barrier_id: int) -> None:
     (manual_open_barrier по path-параметру). Тот же ключ, что у ingestion, когда
     barrier активен.
     """
-    advisory_xact_lock(db, barrier_id)
+    advisory_xact_lock(db, canonical_lock_key(barrier_id, None, None))
 
 
-def lock_key_for_event(db: Session, camera_event_id: int) -> int | None:
+def lock_key_for_event(db: Session, camera_event_id: int) -> LockKey | None:
     """Канонический lock-ключ события по АВТОРИТЕТНОМУ источнику (§13.2).
 
     ``LEFT JOIN`` на активный barrier: если barrier деактивирован после приёма —

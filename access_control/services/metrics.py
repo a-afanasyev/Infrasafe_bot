@@ -95,6 +95,19 @@ _QUEUE_DEAD_GAUGE = Gauge(
     labelnames=("controller_id",),
     registry=REGISTRY,
 )
+# Ретеншн фото (A9-P2-16): сколько тиков подряд в пачке остаются события, чьи
+# файлы не удалось удалить (временный сбой media). Растёт — media недоступен или
+# файлы «застряли»; алерт по порогу, см. photo_retention.STUCK_WARN_TICKS.
+_PHOTO_RETENTION_STUCK_GAUGE = Gauge(
+    "access_photo_retention_stuck_ticks",
+    "Тиков ретеншна фото подряд с неудалёнными просроченными файлами (§11).",
+    registry=REGISTRY,
+)
+_PHOTO_RETENTION_PENDING_GAUGE = Gauge(
+    "access_photo_retention_pending_events",
+    "Событий последней пачки ретеншна, чьи ссылки остались (ждут повтора, §11).",
+    registry=REGISTRY,
+)
 
 
 def _percentile(sorted_samples: list[float], q: float) -> float:
@@ -233,6 +246,12 @@ def set_queue_gauges(
     _QUEUE_PENDING_GAUGE.labels(controller_id=label).set(pending)
     _QUEUE_LEASED_GAUGE.labels(controller_id=label).set(leased)
     _QUEUE_DEAD_GAUGE.labels(controller_id=label).set(dead)
+
+
+def set_photo_retention_gauges(*, stuck_ticks: int, pending_events: int) -> None:
+    """Обновить gauge'и ретеншна фото (A9-P2-16). Без ПД — только счётчики."""
+    _PHOTO_RETENTION_STUCK_GAUGE.set(stuck_ticks)
+    _PHOTO_RETENTION_PENDING_GAUGE.set(pending_events)
 
 
 def budget_report() -> dict:

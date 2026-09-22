@@ -126,11 +126,11 @@ def get_failure_store() -> FailureCounterStore:
     backend = backend.lower()
     if backend == "redis":
         try:
-            import redis  # type: ignore
-
+            from access_control.services.redis_timeouts import sync_redis_from_url
             from uk_management_bot.config.settings import settings
 
-            client = redis.Redis.from_url(settings.REDIS_URL)
+            # A9-P3-23: с таймаутами — Redis на паузе не вешает redeem-запрос.
+            client = sync_redis_from_url(settings.REDIS_URL)
             client.ping()
             _default_store = RedisFailureStore(client)
         except Exception as exc:  # noqa: BLE001

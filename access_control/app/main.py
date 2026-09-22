@@ -49,7 +49,7 @@ def _docs_enabled() -> bool:
 async def _lifespan(app: FastAPI):
     """AUD6-P1-5: единственный штатный исполнитель retention-обязательств.
 
-    ``expire_due_reviews`` (тик §9.5) и ``purge_expired_photos`` (30-дневный
+    ``expire_due_reviews`` (тик §9.5) и ретеншн фото (``run_photo_retention``, 30-дневный
     retention фото, §11) до этого lifespan'а не вызывались НИОТКУДА — зелёный
     сьют маскировал невыполняемое обязательство по персданным. Детали и
     выключатель ``ACCESS_WORKERS_ENABLED`` — в ``services/retention_worker``.

@@ -1,9 +1,8 @@
 """Retention фото (§11): отбор и анонимизация фото старше 30 дней.
 
 Базовая техническая политика §11: «Фото номера и автомобиля — 30 дней».
-Пилот синтетический и реального object-storage нет: механизм обнуляет
-``*_photo_url`` у старых ``camera_events`` (ссылки на фото) — реальное удаление
-байтов в приватном storage остаётся инфра-задачей (прод-долг, S3/MinIO).
+Механизм обнуляет ``*_photo_url`` у старых ``camera_events``; удаление самих
+файлов в медиа-сервисе (A9-P2-16) — ``test_a9_retention_metrics_redis.py``.
 
 ``camera_events`` — НЕ append-only (сырой слой, §9.7 hash-chain только на
 бизнес-журнале/аудите), поэтому UPDATE разрешён DB grants.
@@ -16,6 +15,7 @@ from sqlalchemy import text
 
 from access_control.services import photo_retention as pr
 from access_control.tests.conftest import utcnow
+from access_control.tests.test_access_media import FakeMediaClient
 from access_control.tests.test_operator_read_api import _seed_camera_event
 
 
@@ -49,11 +49,11 @@ def test_select_expired_picks_only_old_with_photos(pg_db, pilot) -> None:
     )
     pg_db.commit()
 
-    ids = pr.select_expired_photo_event_ids(pg_db, older_than_days=30, now=now)
-    assert ids == [old]
+    rows = pr.select_expired_photos(pg_db, older_than_days=30, now=now)
+    assert [row.event_pk for row in rows] == [old]
 
 
-def test_purge_nulls_old_photo_urls_only(pg_db, pilot) -> None:
+def test_purge_nulls_old_photo_urls_only(pg_db, pilot, _pg_sessionmaker) -> None:
     now = utcnow()
     old = _seed_camera_event(
         pg_db, pilot, event_id="ev-old2", plate="01OLD22",
@@ -68,7 +68,9 @@ def test_purge_nulls_old_photo_urls_only(pg_db, pilot) -> None:
     )
     pg_db.commit()
 
-    purged = pr.purge_expired_photos(pg_db, older_than_days=30, now=now)
+    purged = pr.run_photo_retention(
+        _pg_sessionmaker, client=FakeMediaClient(), older_than_days=30, now=now
+    )
     pg_db.commit()
     assert purged == 1
     assert _has_photos(pg_db, old) is False
