@@ -53,6 +53,10 @@ services:
       # DARK-гейт модуля «Лифты» (Ф3a): API /api/v2/elevators отвечает единым 404,
       # пока флаг выключен; бот читает тот же флаг. Несекретная переменная.
       - ELEVATORS_ENABLED=${ELEVATORS_ENABLED:-false}
+      # A9-P2-4: команда бота /admin (любой аккаунт + общий ADMIN_PASSWORD → manager).
+      # Выключена по умолчанию; в Doppler и .env прода НЕ задаётся. Включается разово
+      # для заведения первого менеджера — см. .claude/skills/uk-deploy/SKILL.md.
+      - ADMIN_COMMAND_ENABLED=${ADMIN_COMMAND_ENABLED:-false}
 
       # ARCH-106 (Doppler cutover, Phase 1): секреты приходят из Doppler через
       # `doppler run -- docker compose ...` (см. .claude/skills/uk-deploy/SKILL.md), не из

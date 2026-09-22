@@ -14,7 +14,8 @@ sync unit-of-work, исполняемый в worker-потоке через ``ru
 user_management/fsm.py и user_verification/access_decision.py; текстовые триггеры
 (профиль, смена роли, смена, помощь, назад, отмена, активные, архив) — кнопки
 главного меню из keyboards/base.py; ``RoleSwitchCB`` — get_role_switch_inline;
-/menu, /help, /admin — команды. Мёртвых нет.
+/menu, /help, /admin — команды (/admin — только при ADMIN_COMMAND_ENABLED,
+A9-P2-4). Мёртвых нет.
 """
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -55,7 +56,9 @@ from uk_management_bot.utils.button_texts import (
     get_back_texts,
     get_cancel_texts,
 )
+import html
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -274,11 +277,38 @@ def _apply_active_role(db, telegram_id: int, target: str):
     return True, build_role_switched_message(user, target)
 
 
-def _apply_admin_password(db, telegram_id: int, password: str):
+def _admin_command_enabled(_: Message) -> bool:
+    """A9-P2-4: фильтр /admin. Выключен → команда не матчится ни одним
+    хендлером и ведёт себя как неизвестная (ни подсказки, ни FSM)."""
+    return settings.ADMIN_COMMAND_ENABLED
+
+
+def _build_admin_grant_notices(db, telegram_id: int, display_name: str) -> list[tuple[int, str]]:
+    """A9-P2-4: тексты уведомлений действующим менеджерам о выдаче роли
+    через /admin — (telegram_id, текст на языке менеджера), без самого
+    получателя роли. Имя из Telegram экранируется (бот шлёт HTML)."""
+    from uk_management_bot.services.feedback_service import manager_telegram_ids_sync
+
+    ids = [tid for tid in manager_telegram_ids_sync(db) if tid != telegram_id]
+    if not ids:
+        return []
+    rows = db.query(User.telegram_id, User.language).filter(User.telegram_id.in_(ids)).all()
+    name = html.escape(display_name or "—")
+    return [
+        (tid, get_text(
+            "admin.granted_via_command_notice", language=lang or "ru",
+            name=name, telegram_id=telegram_id,
+        ))
+        for tid, lang in rows
+    ]
+
+
+def _apply_admin_password(db, telegram_id: int, password: str, display_name: str = ""):
     """Проверяет пароль и назначает администратора.
 
-    -> (success, roles_list, active_role). При неудачной проверке роли не
-    читаются вовсе — как и раньше.
+    -> (success, roles_list, active_role, notices). При неудачной проверке роли
+    не читаются вовсе — как и раньше. ``notices`` — уведомления действующим
+    менеджерам (A9-P2-4), отправляются хендлером вне сессии.
     """
     auth_service = AuthService(db)
 
@@ -289,7 +319,7 @@ def _apply_admin_password(db, telegram_id: int, password: str):
     )
 
     if not success:
-        return False, ["applicant"], "applicant"
+        return False, ["applicant"], "applicant", []
 
     # Перечитываем пользователя и строим меню в соответствии с активной ролью
     try:
@@ -310,13 +340,21 @@ def _apply_admin_password(db, telegram_id: int, password: str):
         roles_list = ["applicant"]
         active_role = "applicant"
 
-    return True, roles_list, active_role
+    return True, roles_list, active_role, _build_admin_grant_notices(db, telegram_id, display_name)
+
+
+def _mask_start_text(text: Optional[str]) -> Optional[str]:
+    """A9-P3-1: инвайт-токен из `/start join_<token>` в лог не пишем даже
+    префиксом (SEC-08: префикс статичен и бесполезен для корреляции)."""
+    if not text:
+        return text
+    return re.sub(r"join_\S+", "join_<скрыт>", text)
 
 
 @start_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext = None, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru", *, _db=None):
     """Обработчик команды /start"""
-    logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{message.text}'")
+    logger.info(f"Получена команда /start от пользователя {message.from_user.id}. Текст: '{_mask_start_text(message.text)}'")
     
     # Очищаем состояние FSM при команде /start (помогает выйти из зависших состояний)
     if state:
@@ -767,9 +805,13 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, roles: lis
         lang = language
         await cb.answer(get_text("errors.unknown_error", language=lang), show_alert=True)
 
-@router.message(Command("admin"))
+@router.message(Command("admin"), _admin_command_enabled)
 async def cmd_admin(message: Message, state: FSMContext, language: str = "ru"):
-    """Обработчик команды /admin - назначение администратора по паролю"""
+    """Обработчик команды /admin - назначение администратора по паролю.
+
+    A9-P2-4: только при ADMIN_COMMAND_ENABLED (в проде выключено) — фильтр
+    `_admin_command_enabled`.
+    """
     await state.set_state(AdminPasswordStates.waiting_for_password)
     lang = language
     await message.answer(
@@ -788,6 +830,19 @@ async def process_admin_password(message: Message, state: FSMContext, user_statu
         await message.answer(safe_get_text("errors.cancelled", language=lang), reply_markup=await get_user_contextual_keyboard(message.from_user.id))
         return
 
+    # A9-P2-4: общий пароль не остаётся в истории чата — удаляем сразу,
+    # до любой проверки. Сбой удаления не роняет поток.
+    try:
+        await message.delete()
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение с паролем /admin от {message.from_user.id}: {e}")
+
+    # A9-P2-4: флаг выключили, пока FSM ждал пароль — молча выходим из
+    # состояния (сервис всё равно откажет, но о команде не подсказываем).
+    if not settings.ADMIN_COMMAND_ENABLED:
+        await state.clear()
+        return
+
     # SEC-01: rate-limit на перебор пароля — 5 попыток за 5 минут с аккаунта.
     from uk_management_bot.utils.redis_rate_limiter import is_rate_limited
     if await is_rate_limited(f"admin_pwd:{message.from_user.id}", 5, 300):
@@ -801,8 +856,11 @@ async def process_admin_password(message: Message, state: FSMContext, user_statu
 
     # Проверяем пароль и назначаем администратора (и, при успехе, сразу
     # перечитываем роли — обе фазы в одном юните, как и раньше в одной сессии)
-    success, roles_list, active_role = await run_db(
-        lambda s: _apply_admin_password(s, message.from_user.id, message.text), db=_db
+    success, roles_list, active_role, notices = await run_db(
+        lambda s: _apply_admin_password(
+            s, message.from_user.id, message.text, message.from_user.full_name,
+        ),
+        db=_db,
     )
 
     await state.clear()
@@ -813,6 +871,10 @@ async def process_admin_password(message: Message, state: FSMContext, user_statu
             reply_markup=get_main_keyboard_for_role(active_role, roles_list, "approved", language=lang)
         )
         logger.info(f"Пользователь {message.from_user.id} назначен администратором")
+        # A9-P2-4: действующие менеджеры узнают о выдаче роли (best-effort,
+        # send_to_user сам логирует недоставку).
+        for manager_tg_id, notice in notices:
+            await send_to_user(message.bot, manager_tg_id, notice)
     else:
         await message.answer(
             safe_get_text("admin.assignment_failed", language=lang),

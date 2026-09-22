@@ -16,6 +16,8 @@ services:
       - LOG_LEVEL=DEBUG
       - DEBUG=true
       - PYTHONUNBUFFERED=1
+      # A9-P2-4: /admin в dev включён — заведение первого менеджера локально.
+      - ADMIN_COMMAND_ENABLED=true
     volumes:
       # Монтируем код для hot-reload
       - ./uk_management_bot:/app/uk_management_bot

@@ -598,6 +598,14 @@ class TestHandleRestartBot:
 class TestProcessAdminPasswordRateLimit:
     """SEC-01: rate-limit на перебор /admin-пароля (5 попыток / 5 минут)."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_command_enabled(self, monkeypatch):
+        # A9-P2-4: /admin работает только при включённом флаге. Патчим объект,
+        # который читает хендлер: после перезагрузки модуля settings в
+        # test_settings.py он может отличаться от config.settings.settings.
+        import uk_management_bot.handlers.base as base_module
+        monkeypatch.setattr(base_module.settings, "ADMIN_COMMAND_ENABLED", True)
+
     @pytest.mark.asyncio
     async def test_rate_limited_blocks_password_check(self):
         """При сработавшем лимите пароль НЕ проверяется, FSM очищается."""
