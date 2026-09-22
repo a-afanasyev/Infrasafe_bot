@@ -17,11 +17,17 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.11'
-      # AUD7-ENG-03: requirements.txt hash-locked — pip в hash-режиме требует
-      # хэши у всех пакетов одной команды, поэтому тест-инструменты отдельно.
-      - run: pip install --require-hashes -r payment_control/requirements.txt
-      - run: pip install pytest pytest-cov httpx
+      # A9-P3-25: dev-lock (рантайм + pytest/pytest-cov/httpx/mypy, hash-locked,
+      # по образцу resource-accounting) вместо `pip install pytest pytest-cov
+      # httpx` без версий — тот резолвился заново на каждом прогоне.
+      - run: pip install --require-hashes -r payment_control/requirements-dev.txt
       - run: python -m pytest payment_control/tests --cov=payment_control --cov-report=term --cov-fail-under=80
+      # A9-P3-24: mypy — блокирующий: на момент включения 0 ошибок (единственная
+      # найденная исправлена в том же PR), baseline не нужен.
+      - name: Mypy (blocking, 0 errors)
+        run: |
+          python -m mypy --ignore-missing-imports --explicit-package-bases --follow-imports=silent \
+               --exclude '(/tests/|/venv/)' payment_control
 
   migration-drift:
     # Дрейф проверяется на PostgreSQL, а не на sqlite: type affinity sqlite

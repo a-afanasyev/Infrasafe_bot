@@ -1,0 +1,13 @@
+5
+# A9-P3-24. Первое число файла — baseline, остальное игнорируется парсером
+# (ci/mypy_ratchet.py читает .split()[0]).
+#
+# Замер 2026-09-23, mypy==1.7.1 (из resource-accounting/backend/requirements-dev.txt),
+# Python 3.12 как в CI-джобе resource-tests, конфиг [tool.mypy] сервиса
+# (check_untyped_defs), из каталога resource-accounting/backend:
+#   mypy app
+# → Found 5 errors in 5 files (checked 40 source files)
+# (rowcount у Result ×2, Decimal-float в readings, Literal missing_reason в
+# imports, обработчик slowapi в main.)
+# Правила те же, что у ci/mypy-baseline.txt: растить только осознанно и с
+# объяснением в коммите; опускать, как только счётчик упал.
