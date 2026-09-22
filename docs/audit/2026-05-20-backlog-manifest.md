@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **507**
-- открыто маркером: **63**
+- закрыто маркером: **508**
+- открыто маркером: **62**
 
-  - `actionable` — **51**
+  - `actionable` — **50**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=27, P3=24.
+Из них actionable по приоритету: P2=26, P3=24.
 
 Значения `status`:
 
@@ -62,7 +62,6 @@
 | `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |
 | `A9-P2-7` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | `POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции |
 | `A9-P2-8` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02) |
-| `A9-P2-9` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | API: шесть самописных Telegram-клиентов на httpx мимо общего `api_bot` |
 | `A9-P3-10` | P3 | actionable | audit9-2026-09-22 | AUD9-W4 | — | bot, access-api | — | Четыре опасных «немых» `except` из 27 |
 | `A9-P3-14` | P3 | actionable | audit9-2026-09-22 | AUD9-W4 | — | БД | — | Уникальность Group Intake обходится при `source_chat_id IS NULL` |
 | `A9-P3-5` | P3 | actionable | owner-decision-2026-09-23 | AUD9-W4 | — | group-intake-bot | — | Group Intake: сырой текст групп жителей (ПДн) уходит внешнему LLM без маскирования |
