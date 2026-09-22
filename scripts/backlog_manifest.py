@@ -398,7 +398,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
     "A9-P2-25": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="scripts", note="Чистка: исторические скрипты (один падает на импорте, другой делает `create_all` в обход alembic)"),
     "A9-P2-26": A(pkg="AUD9-W8", status="deferred", method="owner-decision-2026-09-23", services="bot, БД", note="Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает"),
-    "A9-P2-27": A(pkg="AUD9-W8", status="actionable", method="owner-decision-2026-09-23", services="bot", note="Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40)"),
+    "A9-P2-27": A(pkg="AUD9-W8", status="decision", method="review-2026-09-23", services="bot", note="Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40)"),
     "A9-P2-28": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, доки", note="Чистка: `utils/enums.py` дублирует канон статусов и не используется прод-кодом"),
     "A9-P2-29": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: logout не чистит кэш `QueryClient`"),
     "A9-P2-30": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома"),
