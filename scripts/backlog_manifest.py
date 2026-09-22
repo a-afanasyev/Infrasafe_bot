@@ -367,8 +367,10 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
+    "A9-P2-33": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа"),
+    "A9-P2-32": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается"),
     # A9-P1-1 закрыт 2026-09-23 (PR #598).
-    "A9-P1-2": A(pkg="AUD9-W1", status="actionable", method="verified-2026-09-22", services="api, frontend (TWA)", note="TWA-старт смены создаёт ad-hoc-дубль вместо активации запланированной; без аудита и уведомлений"),
+    # A9-P1-2 закрыт 2026-09-23 (PR #599).
     # A9-P1-3 закрыт 2026-09-23 (PR #596).
     "A9-P2-1": A(pkg="AUD9-W2", status="actionable", method="verified-2026-09-22", services="api", note="Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559)"),
     "A9-P2-2": A(pkg="AUD9-W3", status="actionable", method="verified-2026-09-22", services="bot", note="Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах"),
