@@ -7,6 +7,7 @@ BUG-137: мёртвые хендлеры take_to_work_/purchase_materials_ ре�
 RequestStatusStates.waiting_for_materials, ввод ловит handle_materials_input.
 """
 
+import html
 import logging
 
 from aiogram.types import Message
@@ -72,12 +73,12 @@ async def handle_materials_input(message: Message, state: FSMContext, language: 
         confirmation_text = get_text("request_status_mgmt.handlers.purchase_status_set", language=lang).format(request_number=request_number)
 
         if res.requested_materials:
-            confirmation_text += get_text("request_status_mgmt.handlers.requested_materials", language=lang).format(materials=res.requested_materials)
+            confirmation_text += get_text("request_status_mgmt.handlers.requested_materials", language=lang).format(materials=html.escape(res.requested_materials))
 
         if res.manager_comment:
-            confirmation_text += get_text("request_status_mgmt.handlers.manager_comment", language=lang).format(comment=res.manager_comment)
+            confirmation_text += get_text("request_status_mgmt.handlers.manager_comment", language=lang).format(comment=html.escape(res.manager_comment))
 
-        confirmation_text += get_text("request_status_mgmt.handlers.new_input", language=lang).format(materials=materials)
+        confirmation_text += get_text("request_status_mgmt.handlers.new_input", language=lang).format(materials=html.escape(materials))
 
         await message.answer(confirmation_text)
 
@@ -85,8 +86,8 @@ async def handle_materials_input(message: Message, state: FSMContext, language: 
             # Показываем список активных заявок
             text = get_text("request_status_mgmt.handlers.active_requests_header", language=lang)
             for i, r in enumerate(res.active_requests, 1):
-                addr = r.address[:40] + ("…" if len(r.address) > 40 else "")
-                text += f"{i}. {get_status_with_emoji(r.status, language=lang)} #{r.request_number} - {r.category}\n"
+                addr = html.escape(r.address[:40]) + ("…" if len(r.address) > 40 else "")
+                text += f"{i}. {get_status_with_emoji(r.status, language=lang)} #{r.request_number} - {html.escape(r.category or '')}\n"
                 text += f"   📍 {addr}\n\n"
 
             from uk_management_bot.keyboards.admin import get_manager_main_keyboard

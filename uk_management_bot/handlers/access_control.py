@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import html
 import logging
 
 from aiogram import F, Router
@@ -140,7 +141,7 @@ def _apartment_keyboard(apartments: list[dict], prefix: str, language: str):
     kb = InlineKeyboardBuilder()
     for apt in apartments:
         label = get_text("access_control.apartment_label", language=language,
-                         number=apt.get("apartment_number"))
+                         number=apt.get("apartment_number"))  # html-raw: подпись кнопки
         kb.button(text=label, callback_data=f"{prefix}:{apt['id']}")
     kb.adjust(1)
     return kb.as_markup()
@@ -315,7 +316,7 @@ async def _finalize_vehicle_request(message: Message, state: FSMContext, db: Ses
     # уведомление жителю о решении — кросс-сервис, здесь не реализуется.
     await message.answer(
         get_text("access_control.vehicle.created", language=language,
-                 plate=req.plate_number_normalized)
+                 plate=html.escape(req.plate_number_normalized or ""))
     )
 
 
@@ -565,11 +566,13 @@ def _render_vehicles(rows: list[dict], language: str) -> str:
         return get_text("access_control.vehicles_empty", language=language)
     lines = [get_text("access_control.vehicles_title", language=language)]
     for r in rows:
+        # A9-P2-2: госномер/марка/цвет — ввод жителя, текст уходит с
+        # parse_mode=HTML (normalize_plate пропускает <>&").
         plate = r.get("plate_number_normalized") or r.get("plate_number_original") or "—"
         make = " ".join(p for p in (r.get("make"), r.get("color")) if p)
         status = r.get("status") or "—"
-        suffix = f" — {make}" if make else ""
-        lines.append(f"• {plate}{suffix} ({status})")
+        suffix = f" — {html.escape(make)}" if make else ""
+        lines.append(f"• {html.escape(plate)}{suffix} ({html.escape(status)})")
     return "\n".join(lines)
 
 
@@ -580,7 +583,7 @@ def _render_requests(rows: list[dict], language: str) -> str:
     for r in rows:
         plate = r.get("plate_number_normalized") or "—"
         status = r.get("status") or "—"
-        lines.append(f"• {plate} — {status}")
+        lines.append(f"• {html.escape(plate)} — {html.escape(status)}")
     return "\n".join(lines)
 
 
@@ -593,7 +596,7 @@ def _render_passes(rows: list[dict], language: str) -> str:
         plate = r.get("plate_number_normalized") or "—"
         status = r.get("status") or "—"
         until = _fmt_dt(r.get("valid_until"))
-        lines.append(f"• {pt} {plate} — {status} (до {until})")
+        lines.append(f"• {pt} {html.escape(plate)} — {html.escape(status)} (до {until})")
     return "\n".join(lines)
 
 

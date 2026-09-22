@@ -3,6 +3,7 @@
 AUD5-ARCH-3 (волна 1): перенос 1:1 из handlers/employee_management.py.
 """
 
+import html
 import logging
 
 
@@ -75,7 +76,7 @@ async def change_employee_role(callback: CallbackQuery, state: FSMContext, roles
         await state.set_state(EmployeeManagementStates.selecting_roles)
         
         # Формируем сообщение
-        user_name = _format_employee_name(employee)
+        user_name = html.escape(_format_employee_name(employee))
         message_text = f"🎯 {get_text('employee_management.change_role', language=lang)}: {user_name}\n\n"
         no_roles_text = get_text("employee_mgmt.handlers.no_roles", language=lang)
         # MGR-06: локализуем роли через канон-helper (roles.* namespace) вместо
@@ -149,7 +150,7 @@ async def change_employee_specialization(callback: CallbackQuery, state: FSMCont
         await state.set_state(EmployeeManagementStates.selecting_specializations)
         
         # Формируем сообщение
-        user_name = _format_employee_name(employee)
+        user_name = html.escape(_format_employee_name(employee))
         message_text = f"🛠️ {get_text('employee_management.specialization', language=lang)}: {user_name}\n\n"
         message_text += f"{get_text('specializations.current_specializations', language=lang)}: "
         
@@ -218,7 +219,7 @@ async def show_employee_specializations_management(callback: CallbackQuery, role
                 if employees:
                     for employee in employees:
                         # AUD5-CODE-8: имя через канон вместо инлайн-копии
-                        message_text += f"  - {_format_employee_name(employee)}\n"
+                        message_text += f"  - {html.escape(_format_employee_name(employee))}\n"
                 else:
                     message_text += f"  - {get_text('employee_mgmt.handlers.no_employees', language=lang)}\n"
                 

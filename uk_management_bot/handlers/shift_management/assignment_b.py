@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import timedelta
 
@@ -16,6 +17,7 @@ from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.user_names import display_name
 # BUG-166: единый предикат подбора по специализациям. Импорт МОДУЛЬНЫЙ — урок
 # BUG-161: локальный `from ... import` делает имя локальным для всей функции.
 from uk_management_bot.utils.specializations import (
@@ -383,7 +385,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
                     shifts_label = get_text("shift_management.shifts_count_label", language=lang)
 
                     keyboard.append([InlineKeyboardButton(
-                        text=f"{load_indicator} {executor.first_name} {executor.last_name} ({day_shifts} {shifts_label})",
+                        text=f"{load_indicator} {display_name(executor)} ({day_shifts} {shifts_label})",
                         callback_data=f"assign_executor_to_shift:{shift_id}:{executor.id}"
                     )])
 
@@ -463,9 +465,11 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                     sorted(required_specs)
                     or raw_specialization_tokens(shift.specialization_focus), lang)
 
+                # A9-P2-2: имя исполнителя — свободный текст из Telegram в
+                # HTML-сообщении: канон display_name + html.escape (здесь и ниже).
                 await callback.message.edit_text(
                     get_text("shift_management.spec_mismatch", language=lang,
-                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            executor_name=html.escape(display_name(executor)),
                             required=required_text,
                             available=available_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -519,7 +523,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                 shift_date_str = fmt_date(shift.start_time)
                 await callback.message.edit_text(
                     get_text("shift_management.spec_conflict", language=lang,
-                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            executor_name=html.escape(display_name(executor)),
                             date=shift_date_str),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text=get_text("shift_management.force_assign_button", language=lang), callback_data=f"force_assign:{shift_id}:{executor_id}")],
@@ -563,7 +567,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
                         date=shift_date_str,
                         start_time=start_time_str,
                         end_time=end_time_str,
-                        executor_name=f"{executor.first_name} {executor.last_name}",
+                        executor_name=html.escape(display_name(executor)),
                         specialization=spec_text),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
@@ -618,7 +622,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
 
                 await callback.message.edit_text(
                     get_text("shift_management.force_assign_impossible", language=lang,
-                            executor_name=f"{executor.first_name} {executor.last_name}",
+                            executor_name=html.escape(display_name(executor)),
                             required=required_text),
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"select_shift_for_assignment:{shift_id}")]
@@ -660,7 +664,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
                         date=shift_date,
                         start_time=start_time,
                         end_time=end_time,
-                        executor_name=f"{executor.first_name} {executor.last_name}"),
+                        executor_name=html.escape(display_name(executor))),
                 reply_markup=get_executor_assignment_keyboard(lang),
                 parse_mode="HTML"
             )

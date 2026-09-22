@@ -15,6 +15,7 @@ from uk_management_bot.database.models.user_verification import (
     VerificationStatus
 )
 from uk_management_bot.utils.address_helpers import apartment_address
+from uk_management_bot.utils.user_names import display_name
 
 # ==========================================================================
 # DTO + sync-юниты (AUD3-07). Сессия живёт только внутри юнита.
@@ -189,7 +190,7 @@ def _load_access_rights_card(db, user_id: int):
         AccessRights.user_id == user_id,
         AccessRights.is_active.is_(True)
     ).all()
-    name = f"{user.first_name} {user.last_name or ''}".strip()
+    name = display_name(user)
     return name, [
         _AccessRightRow(
             level_value=r.access_level.value,

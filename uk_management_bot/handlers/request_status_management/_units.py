@@ -71,7 +71,7 @@ def _apply_purchase(db, request_number: str, materials: str, actor_tg: int,
         if last_comment and last_comment != "Без комментариев":
             restored_comment = last_comment
 
-    final_materials = f"{base_materials}\n{materials}" if base_materials else materials
+    final_materials = f"{base_materials}\n{materials}" if base_materials else materials  # html-raw: пишется в БД
 
     # Канон-переход В работе→Закуп с материалами в payload
     # (EXECUTOR_PURCHASE / MANAGER_PURCHASE). requested_materials пишет

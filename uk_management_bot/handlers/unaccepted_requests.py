@@ -37,6 +37,7 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.business_time import fmt_datetime
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.user_names import full_name
 
 import html
 import logging
@@ -133,8 +134,8 @@ def _load_remind_context(db, request_number: str, lang: str) -> tuple:
     recipient_lang = applicant.language or "ru"
     notification_text = get_text("unaccepted.handlers.reminder_notification", language=recipient_lang).format(
         request_number=request.request_number,
-        category=request.category,
-        address=request.address or get_text("unaccepted.handlers.not_specified", language=recipient_lang),
+        category=html.escape(request.category or ""),
+        address=html.escape(request.address) if request.address else get_text("unaccepted.handlers.not_specified", language=recipient_lang),
         completed_str=completed_str
     )
 
@@ -380,12 +381,13 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
         # комментарий менеджера дописывается в manager_confirmation_notes
         # внутри run_command (Op.APPEND).
         # BUG-153 п.2: блок через локаль на языке менеджера (класс BUG-147).
+        manager_name = full_name(user) or "Unknown"
         manager_comment = get_text(
             "unaccepted.handlers.manager_comment_block", language=lang
         ).format(
             date=fmt_datetime(utc_now()),
-            name=f"{user.first_name or 'Unknown'} {user.last_name or ''}".strip(),
-            comment=comment,
+            name=manager_name,  # html-raw: пишется в manager_confirmation_notes
+            comment=comment,  # html-raw: пишется в manager_confirmation_notes
         )
 
         from uk_management_bot.database.session import SessionLocal
@@ -436,8 +438,8 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
                     chat_id=targets.applicant_telegram_id,
                     text=get_text("unaccepted.handlers.applicant_notification", language=targets.applicant_language).format(
                         request_number=request_number,
-                        category=ctx.category,
-                        address=ctx.address or get_text("unaccepted.handlers.not_specified", language=targets.applicant_language),
+                        category=html.escape(ctx.category or ""),
+                        address=html.escape(ctx.address) if ctx.address else get_text("unaccepted.handlers.not_specified", language=targets.applicant_language),
                         # Секревью A2: свободный текст менеджера в parse_mode=HTML.
                         comment=html.escape(comment)
                     ),
@@ -454,7 +456,7 @@ async def process_manager_acceptance_comment(message: Message, state: FSMContext
                     chat_id=targets.executor_telegram_id,
                     text=get_text("unaccepted.handlers.executor_notification", language=targets.executor_language).format(
                         request_number=request_number,
-                        category=ctx.category
+                        category=html.escape(ctx.category or "")
                     ),
                     parse_mode="HTML"
                 )

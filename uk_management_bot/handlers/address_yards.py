@@ -8,6 +8,7 @@
 - Редактирование двора
 - Удаление (деактивация) двора
 """
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -328,11 +329,11 @@ async def show_yard_details(callback: CallbackQuery, language: str = "ru", *, _d
         buildings_count = yard.buildings_count
 
         text = get_text("address_yards.handlers.yard_details", language=lang).format(
-            name=yard.name, status=status, buildings=buildings_count, gps=gps
+            name=html.escape(yard.name), status=status, buildings=buildings_count, gps=gps
         )
 
         if yard.description:
-            text += get_text("address_yards.handlers.description_label", language=lang).format(description=yard.description)
+            text += get_text("address_yards.handlers.description_label", language=lang).format(description=html.escape(yard.description))
 
         if yard.created_at:
             text += get_text("address_yards.handlers.created_label", language=lang).format(date=yard.created_at.strftime('%d.%m.%Y %H:%M'))
@@ -382,7 +383,7 @@ async def process_yard_name(message: Message, state: FSMContext, language: str =
     await state.set_state(YardManagementStates.waiting_for_yard_description)
 
     await message.answer(
-        get_text("address_yards.handlers.create_yard_description", language=lang).format(name=name),
+        get_text("address_yards.handlers.create_yard_description", language=lang).format(name=html.escape(name)),
         reply_markup=get_skip_or_cancel_keyboard()
     )
 
@@ -480,11 +481,11 @@ async def process_yard_gps(message: Message, state: FSMContext, language: str = 
 
         # BUG-149 п.3: координата 0.0 легитимна — сравнение по is not None.
         gps_info = f"📍 {gps_latitude}, {gps_longitude}" if gps_latitude is not None and gps_longitude is not None else get_text("address_yards.handlers.gps_not_set", language=lang)
-        desc_info = get_text("address_yards.handlers.description_info", language=lang).format(desc=data.get('description')) if data.get('description') else ""
+        desc_info = get_text("address_yards.handlers.description_info", language=lang).format(desc=html.escape(data.get('description'))) if data.get('description') else ""
 
         await message.answer(
             get_text("address_yards.handlers.yard_created_success", language=lang).format(
-                name=yard.name, gps=gps_info, desc_info=desc_info
+                name=html.escape(yard.name), gps=gps_info, desc_info=desc_info
             ),
             reply_markup=get_address_management_menu()
         )
@@ -559,7 +560,7 @@ async def process_new_yard_name(message: Message, state: FSMContext, language: s
             return
 
         await message.answer(
-            get_text("address_yards.handlers.yard_name_updated", language=lang).format(name=new_name),
+            get_text("address_yards.handlers.yard_name_updated", language=lang).format(name=html.escape(new_name)),
             reply_markup=get_main_keyboard_for_role("manager", ["manager"], language=lang)
         )
 
@@ -643,7 +644,7 @@ async def confirm_yard_deletion(callback: CallbackQuery, language: str = "ru", *
             )
 
         confirm_text = get_text("address_yards.handlers.confirm_delete_yard", language=lang).format(
-            name=yard.name
+            name=html.escape(yard.name)
         ) + warning
 
         await callback.message.edit_text(
