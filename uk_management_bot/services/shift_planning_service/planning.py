@@ -212,11 +212,11 @@ class PlanningMixin:
                                 results['statistics']['shifts_by_template'][template_name] += len(shifts)
                         
                         except Exception as e:
-                            error_msg = f"Ошибка создания смены по шаблону {template.name} на {current_date}: {e}"
+                            error_msg = f"Ошибка создания смены по шаблону {template.name} на {current_date}: {e}"  # html-raw: отчёт сервиса; экранируется при показе
                             results['errors'].append(error_msg)
                             logger.error(error_msg)
                     else:
-                        results['skipped_days'].append(f"{template.name} - {day_name}")
+                        results['skipped_days'].append(f"{template.name} - {day_name}")  # html-raw: отчёт сервиса; экранируется при показе
             
             # Обновляем расписание в таблице ShiftSchedule
             self._update_shift_schedule(week_start, results)
@@ -277,7 +277,7 @@ class PlanningMixin:
                                 shifts = self.create_shift_from_template(template.id, current_date)
                                 day_created += len(shifts)
                         except Exception as e:
-                            error_msg = f"Ошибка автосоздания смены {template.name} на {current_date}: {e}"
+                            error_msg = f"Ошибка автосоздания смены {template.name} на {current_date}: {e}"  # html-raw: отчёт сервиса; экранируется при показе
                             results['errors'].append(error_msg)
                             logger.error(error_msg)
                 

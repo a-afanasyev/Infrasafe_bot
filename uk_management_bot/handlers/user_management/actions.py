@@ -8,6 +8,7 @@ AUD3-07/AUD5-ARCH-1: DB-фаза каждого хендлера — цельн�
 event loop это была бы вторая блокирующая сессия. Сеть (send_document/send_photo,
 edit_text) — всегда в async-слое, вне сессии.
 """
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -24,6 +25,7 @@ from uk_management_bot.keyboards.user_management import (
 )
 from uk_management_bot.states.user_management import UserManagementStates
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
@@ -95,19 +97,18 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
     documents = verification_service.get_user_documents(target_user_id)
 
     if not documents:
-        unknown = get_text('user_mgmt.handlers.unknown_user', language=lang)
         return (
             "no_documents",
             _DocumentsView(
-                text=get_text('user_mgmt.handlers.documents_title', language=lang).format(name=target_user.first_name or target_user.username or unknown) + "\n\n"
+                text=get_text('user_mgmt.handlers.documents_title', language=lang).format(name=html.escape(display_name(target_user))) + "\n\n"
                 + get_text('user_mgmt.handlers.no_documents_uploaded', language=lang),
                 keyboard=None,
             ),
         )
 
     # Формируем список документов
-    unknown = get_text('user_mgmt.handlers.unknown_user', language=lang)
-    user_name = target_user.first_name or target_user.username or unknown
+    # A9-P2-2: имя, имя файла и комментарий проверки — в HTML-сообщении.
+    user_name = html.escape(display_name(target_user))
 
     documents_text = get_text('user_mgmt.handlers.documents_title', language=lang).format(name=user_name) + "\n\n"
 
@@ -118,7 +119,7 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
         # Получаем название типа документа
         doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{doc.document_type.value}', language=lang)
 
-        file_name = doc.file_name or get_text('user_mgmt.handlers.no_title', language=lang)
+        file_name = html.escape(doc.file_name) if doc.file_name else get_text('user_mgmt.handlers.no_title', language=lang)
 
         documents_text += f"{i}. {status_emoji} <b>{doc_type_name}</b>\n"
         documents_text += get_text('user_mgmt.handlers.doc_file', language=lang).format(name=file_name) + "\n"
@@ -128,7 +129,7 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
         documents_text += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=doc.created_at.strftime('%d.%m.%Y %H:%M') if doc.created_at else "—") + "\n"
 
         if doc.verification_notes:
-            documents_text += get_text('user_mgmt.handlers.doc_comment', language=lang).format(comment=doc.verification_notes) + "\n"
+            documents_text += get_text('user_mgmt.handlers.doc_comment', language=lang).format(comment=html.escape(doc.verification_notes)) + "\n"
 
         documents_text += "\n"
 

@@ -1,3 +1,4 @@
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,6 +9,7 @@ from aiogram.types import CallbackQuery
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.keyboards.address_management import get_apartment_details_keyboard
 
 from ._router import router
@@ -135,12 +137,13 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru", 
         pending_count = apartment.pending_count
 
         # MGR-08: локаль `apartment.details_title` уже содержит 🏠 — не дублируем эмодзи в шаблоне.
-        text = f"<b>{get_text('apartment.details_title', language=lang).format(number=apartment.apartment_number)}</b>\n\n"
+        text = f"<b>{get_text('apartment.details_title', language=lang).format(number=html.escape(str(apartment.apartment_number)))}</b>\n\n"
 
         if apartment.building_address is not None:
-            text += f"<b>{get_text('apartment.address_label', language=lang)}</b> {apartment.building_address}\n"
+            # A9-P2-2: адрес/двор/описание/имена — свободный текст в HTML.
+            text += f"<b>{get_text('apartment.address_label', language=lang)}</b> {html.escape(apartment.building_address)}\n"
             if apartment.yard_name:
-                text += f"<b>{get_text('apartment.yard_label', language=lang)}</b> {apartment.yard_name}\n"
+                text += f"<b>{get_text('apartment.yard_label', language=lang)}</b> {html.escape(apartment.yard_name)}\n"
 
         text += f"<b>{get_text('apartment.status_label', language=lang)}</b> {status_text}\n\n"
 
@@ -160,7 +163,7 @@ async def show_apartment_details(callback: CallbackQuery, language: str = "ru", 
             text += f"<b>{get_text('apartment.pending_requests_label', language=lang)}</b> {pending_count}\n"
 
         if apartment.description:
-            text += f"\n<b>{get_text('apartment.description_label', language=lang)}</b>\n{apartment.description}\n"
+            text += f"\n<b>{get_text('apartment.description_label', language=lang)}</b>\n{html.escape(apartment.description)}\n"
 
         if apartment.created_at:
             text += f"\n<b>{get_text('apartment.created_label', language=lang)}</b> {apartment.created_at.strftime('%d.%m.%Y %H:%M')}"
@@ -194,11 +197,11 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
         residents = view.residents
 
         text = get_text("address_apartments.handlers.residents_title", language=lang).format(
-            number=view.apartment_number
+            number=html.escape(str(view.apartment_number))
         ) + "\n\n"
 
         if view.building_address is not None:
-            text += f"<b>{get_text('address_apartments.handlers.address_label', language=lang)}</b> {view.building_address}\n\n"
+            text += f"<b>{get_text('address_apartments.handlers.address_label', language=lang)}</b> {html.escape(view.building_address)}\n\n"
 
         if not residents:
             text += get_text("address_apartments.handlers.residents_list_empty", language=lang)
@@ -210,7 +213,7 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
             if approved:
                 text += get_text("address_apartments.handlers.residents_approved", language=lang) + "\n"
                 for r in approved:
-                    user_name = f"{r.first_name or ''} {r.last_name or ''}".strip() or f"ID: {r.telegram_id}"
+                    user_name = html.escape(display_name(r))
                     owner_mark = " 👑" if r.is_owner else ""
                     primary_mark = " ⭐" if r.is_primary else ""
                     text += f"• {user_name}{owner_mark}{primary_mark}\n"
@@ -219,7 +222,7 @@ async def show_apartment_residents(callback: CallbackQuery, language: str = "ru"
             if pending:
                 text += get_text("address_apartments.handlers.residents_pending", language=lang).format(count=len(pending)) + "\n"
                 for r in pending:
-                    user_name = f"{r.first_name or ''} {r.last_name or ''}".strip() or f"ID: {r.telegram_id}"
+                    user_name = html.escape(display_name(r))
                     text += f"• {user_name}\n"
                 text += "\n"
 

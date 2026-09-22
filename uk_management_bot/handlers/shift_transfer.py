@@ -20,6 +20,7 @@ AUD3-37 (вариант (б), волна B2): DB-фаза каждого хен�
 keyword-only ``_db`` (sync-исполнение на переданной сессии).
 """
 
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -475,7 +476,8 @@ async def show_transfer_confirmation(message: Message, state: FSMContext, user_l
             shift_date=fmt_datetime(start_time),
             reason=reason_text,
             urgency=urgency_text,
-            comment=comment_val
+            # A9-P2-2: комментарий к передаче — ввод исполнителя в HTML.
+            comment=html.escape(comment_val)
         )
 
         if edit_message:
@@ -564,7 +566,7 @@ async def cmd_pending_transfers(message: Message, state: FSMContext = None,
         transfers_text = get_text("shift_transfer.handlers.pending_transfers_title", language=user_lang) + "\n\n"
 
         for executor_first_name, shift_start_time, reason, transfer_id in pending_rows:
-            executor_name = executor_first_name or get_text("shift_transfer.handlers.unknown", language=user_lang)
+            executor_name = html.escape(executor_first_name) if executor_first_name else get_text("shift_transfer.handlers.unknown", language=user_lang)
             shift_date = fmt_day_month_time(shift_start_time) if shift_start_time else "—"
             reason_text = get_text(f"shift_transfer.handlers.reason_{reason}", language=user_lang)
             transfers_text += f"• {executor_name} - {shift_date}\n  " + get_text("shift_transfer.handlers.reason_label", language=user_lang) + f": {reason_text}\n  /assign_{transfer_id}\n\n"

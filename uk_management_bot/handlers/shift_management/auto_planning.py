@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import timedelta
 
@@ -201,12 +202,12 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
             if stats['shifts_by_template']:
                 response += get_text("shift_management.shifts_by_template_header", language=lang)
                 for template, count in stats['shifts_by_template'].items():
-                    response += get_text("shift_management.shifts_count", language=lang, name=template, count=count)
+                    response += get_text("shift_management.shifts_count", language=lang, name=html.escape(str(template)), count=count)
 
             if results['errors']:
                 response += get_text("shift_management.errors_header", language=lang)
                 for error in results['errors'][:3]:  # Показываем только первые 3 ошибки
-                    response += f"• {error}\n"
+                    response += f"• {html.escape(str(error))}\n"
 
             await callback.message.edit_text(
                 response,
@@ -417,7 +418,7 @@ async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMC
                             total_shifts += len(shifts)
                             created_by_template[template.name] = len(shifts)
                     except Exception as e:
-                        errors.append(f"{template.name}: {str(e)}")
+                        errors.append(f"{template.name}: {str(e)}")  # html-raw: список ошибок; экранируется при показе
 
             response = get_text("shift_management.auto_plan_tomorrow_complete", language=lang,
                               date=fmt_date(tomorrow), total_shifts=total_shifts)

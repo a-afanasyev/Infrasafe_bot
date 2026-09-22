@@ -134,7 +134,7 @@ class ShiftService:
             active.end_time = datetime.now(timezone.utc)
             active.status = SHIFT_STATUS_COMPLETED
             if notes:
-                active.notes = (active.notes or "") + (f"\n{notes}" if active.notes else notes)
+                active.notes = (active.notes or "") + (f"\n{notes}" if active.notes else notes)  # html-raw: пишется в shift.notes
             self.db.commit()
             self.db.refresh(active)
 

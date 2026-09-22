@@ -31,7 +31,7 @@ def elevator_label(elevator: Elevator, language: str = DEFAULT_LANGUAGE) -> str:
     return get_text(
         LABEL_KEY,
         language=language,
-        building=address,
+        building=address,  # html-raw: подпись лифта (и для кнопок); экранируют elevator_hint и elevators/_texts
         entrance=elevator.entrance_number,
         elevator=elevator.elevator_number,
     )

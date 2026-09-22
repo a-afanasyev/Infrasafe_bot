@@ -186,8 +186,8 @@ class AssignmentService:
             self.db.refresh(assignment)
             
             # Создаем запись в аудите
-            executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()
-            self._create_audit_log(request_number, assigned_by, f"Назначена исполнителю: {executor_name}")
+            executor_name = f"{executor.first_name or ''} {executor.last_name or ''}".strip()  # html-raw: запись аудита в БД
+            self._create_audit_log(request_number, assigned_by, f"Назначена исполнителю: {executor_name}")  # html-raw: запись аудита в БД
 
             # BUG-185: внутреннего уведомления здесь не было никогда —
             # `_notify_executor_assignment` звал несуществующий метод и молчал.
@@ -342,7 +342,7 @@ class AssignmentService:
             audit_log = AuditLog(
                 user_id=user_id,
                 action=AUDIT_ACTION_REQUEST_ASSIGNED,
-                details=f"Заявка {request_number}: {action_description}",
+                details=f"Заявка {request_number}: {action_description}",  # html-raw: запись аудита в БД
             )
             self.db.add(audit_log)
         except Exception:

@@ -67,9 +67,9 @@ def validate_string_lengths(fields: Mapping[str, Any], table: Table = Elevator._
         if column is None or value is None or not isinstance(column.type, String):
             continue
         if not isinstance(value, str):
-            problems.append(f"{name}: ожидается строка")
+            problems.append(f"{name}: ожидается строка")  # html-raw: имя колонки в тексте ошибки валидации
         elif column.type.length is not None and len(value) > column.type.length:
-            problems.append(f"{name}: не длиннее {column.type.length} символов")
+            problems.append(f"{name}: не длиннее {column.type.length} символов")  # html-raw: имя колонки в тексте ошибки валидации
     if problems:
         raise ElevatorValidationError("; ".join(problems))
 
