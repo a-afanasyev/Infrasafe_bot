@@ -152,3 +152,51 @@ async def test_llm_counter_first_call_sets_window_and_limit_holds(redis_client, 
     assert await redis_client.get(key) == "5"
     assert 0 < await redis_client.ttl(key) <= pending._LLM_WINDOW
     await redis_client.delete(key)
+
+
+async def test_unmark_seen_lets_same_message_through_again(redis_client, ids):
+    """A9-P2-6: отказ лимитера снимает dedup — повтор того же id не «дубль»."""
+    chat_id, message_id = ids
+    assert await pending.mark_seen(chat_id, message_id) is True
+    assert await pending.mark_seen(chat_id, message_id) is False
+    await pending.unmark_seen(chat_id, message_id)
+    assert await pending.mark_seen(chat_id, message_id) is True
+    await redis_client.delete(f"gint:seen:{chat_id}:{message_id}")
+
+
+async def test_busy_notice_cooldown_once_per_window(redis_client, ids):
+    chat_id, author_id = ids
+    author_key = f"gint:busy:{chat_id}:{author_id}"
+    chat_key = f"gint:busy:{chat_id}"
+    assert await pending.busy_notice_allowed(chat_id, author_id) is True
+    assert await pending.busy_notice_allowed(chat_id, author_id) is False
+    assert 0 < await redis_client.ttl(chat_key) <= pending._LLM_WINDOW
+    assert 0 < await redis_client.ttl(author_key) <= pending.BUSY_AUTHOR_COOLDOWN_TTL
+    await redis_client.delete(author_key, chat_key)
+
+
+async def test_busy_notice_one_reply_per_chat_for_many_authors(redis_client, ids):
+    """Исчерпанный лимитер группы + 5 разных авторов → один ответ в чат, а не
+    пять (иначе бот сам флудит в группу, которую лимитер защищает)."""
+    chat_id, base = ids
+    authors = [base + n for n in range(5)]
+    results = await asyncio.gather(
+        *[pending.busy_notice_allowed(chat_id, author) for author in authors]
+    )
+    assert sorted(results) == [False, False, False, False, True]
+    await redis_client.delete(
+        f"gint:busy:{chat_id}", *[f"gint:busy:{chat_id}:{a}" for a in authors]
+    )
+
+
+async def test_busy_notice_author_cooldown_outlives_chat_window(redis_client, ids):
+    """Окно чата истекло — тот же автор всё ещё под своим (более длинным) cooldown."""
+    chat_id, author_id = ids
+    assert await pending.busy_notice_allowed(chat_id, author_id) is True
+    await redis_client.delete(f"gint:busy:{chat_id}")
+    assert await pending.busy_notice_allowed(chat_id, author_id) is False
+    assert await pending.busy_notice_allowed(chat_id, author_id + 1) is True
+    await redis_client.delete(
+        f"gint:busy:{chat_id}", f"gint:busy:{chat_id}:{author_id}",
+        f"gint:busy:{chat_id}:{author_id + 1}",
+    )

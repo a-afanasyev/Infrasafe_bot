@@ -8,6 +8,13 @@
 Сообщение в группе — НЕ заявка. Заявка возникает только после «Да» автора,
 успешного save_request и номера в ответе. Болтовня/ошибки → тишина
 (закреплённое сообщение группы объясняет «нет номера — нет заявки»).
+Исключение — тег-режим (require_tag): тег = явное намерение, поэтому сбой
+классификатора (PROCESSING_ERROR) и отказ LLM-лимитера отвечают автору
+просьбой повторить (``classifier_unavailable``; BUG-192, A9-P2-6).
+
+Фото из группы: file_id принадлежит ГРУППОВОМУ боту и основным ботом не
+открывается — в заявку он не кладётся; фото копируется в media-service и
+пишется маркером ``{"media_id", "type"}`` (A9-P2-5, ``save_request``).
 
 Staff-группы (фаза 2, решение владельца 2026-08-22 — менеджерская приёмка):
 автор обязан быть approved-сотрудником (executor|inspector|manager), гейт
@@ -27,6 +34,7 @@ AUD3-37: хендлеры не объявляют db — БД только че�
 """
 import html
 import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -499,19 +507,23 @@ def has_unsupported_media(message: Message) -> bool:
     )
 
 
+# Тег — целым словом (A9-P3-6): «#заявкам»/«#arizalar»/«пишу#заявка» — не
+# тег (подстрочный поиск пропускал их и оставлял хвост «м»/«lar» в тексте).
+_REQUEST_TAG_RE = re.compile(
+    r"(?<!\w)(?:" + "|".join(re.escape(tag) for tag in REQUEST_TAGS) + r")(?!\w)",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+
+
 def strip_request_tag(text: str) -> Optional[str]:
-    """Тег-режим (require_tag): найден ли тег #заявка/#ariza (casefold).
+    """Тег-режим (require_tag): найден ли тег #заявка/#ariza/… целым словом.
 
     Возвращает текст БЕЗ тега (тег — служебный маркер, ему не место ни в LLM,
     ни в описании заявки) либо None — тега нет, сообщение не обрабатывается.
     """
-    import re
-
-    folded = text.casefold()
-    if not any(tag in folded for tag in REQUEST_TAGS):
+    if not _REQUEST_TAG_RE.search(text):
         return None
-    pattern = "|".join(re.escape(tag) for tag in REQUEST_TAGS)
-    cleaned = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    cleaned = _REQUEST_TAG_RE.sub(" ", text)
     return " ".join(cleaned.split())
 
 
@@ -712,31 +724,35 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         if not tagged_text:
             return  # тег без текста — заявки из пустоты не бывает
         text = tagged_text
-        if has_unsupported_media(message):
-            # Тег = явное намерение, LLM не нужен: сразу просим фото.
-            lang = message.from_user.language_code or "ru"
-            await message.reply(
-                get_text("group_intake.photo_only", language=lang)
-            )
-            return
 
     staff_lang: Optional[str] = None
     if kind == GROUP_KIND_STAFF:
-        # Гейт автора ДО dedup/rate/LLM: чужое сообщение в служебном чате не
-        # уходит в Anthropic и не получает приглашений — полная тишина.
+        # Гейт автора ДО любого ответа/dedup/rate/LLM: чужое сообщение в
+        # служебном чате не уходит в Anthropic и не получает ответов — полная
+        # тишина (и с тегом + видео, A9-P3-6).
         staff_lang = await run_db(
             lambda s: _staff_author_lang_sync(s, message.from_user.id), db=_db
         )
         if staff_lang is None:
             return
 
+    if group.get("require_tag") and has_unsupported_media(message):
+        # Тег = явное намерение, LLM не нужен: сразу просим фото.
+        lang = staff_lang or message.from_user.language_code or "ru"
+        await message.reply(get_text("group_intake.photo_only", language=lang))
+        return
+
     if not await pending.mark_seen(message.chat.id, message.message_id):
         return
     if not await pending.llm_allowed(message.chat.id):
         logger.warning("group_intake.rate_limited: chat_id=%s", message.chat.id)
+        if group.get("require_tag"):
+            await _reply_rate_limited(message, staff_lang)
         return
 
-    result: ClassificationResult = await classify_message(text)
+    result: ClassificationResult = await classify_message(
+        text, retry_allowed=lambda: pending.llm_allowed(message.chat.id)
+    )
     if result.outcome is not Outcome.REQUEST:
         if group.get("require_tag") and result.outcome is Outcome.PROCESSING_ERROR:
             # Тег = явное намерение: сломанный классификатор не заменить
@@ -756,15 +772,20 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
         # тишина на помеченную заявку). Вердикт «не заявка»/низкая
         # уверенность переопределяется; извлечённых полей у NOT_REQUEST нет —
         # категория/срочность дефолтные (автор увидит их в промпте), адрес
-        # достаёт токен-фолбэк по полному тексту. PROCESSING_ERROR остаётся
-        # тишиной: сломанный классификатор не заменить дефолтами честно.
+        # достаёт токен-фолбэк по полному тексту. PROCESSING_ERROR сюда не
+        # доходит — он отвечает автору просьбой повторить (ветка выше).
         # у NOT_REQUEST категории нет — берём keyword-хит по тексту (и честно
-        # помечаем источник для аудита/метрики), иначе прежний дефолт «Другое»
+        # помечаем источник для аудита/метрики), иначе дефолт «Другое» с
+        # источником `default`: это не вердикт модели (A9-P3-6)
         keyword_category = None if result.category else guess_category(text)
+        if result.category:
+            category_source = result.category_source
+        else:
+            category_source = "keyword" if keyword_category else "default"
         result = ClassificationResult(
             outcome=Outcome.REQUEST,
             category=result.category or keyword_category or "other",
-            category_source="keyword" if keyword_category else result.category_source,
+            category_source=category_source,
             urgency=result.urgency or "low",
             confidence=result.confidence,
             location_scope=result.location_scope or "unknown",
@@ -842,6 +863,19 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
             await sent.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
+
+
+async def _reply_rate_limited(message: Message, staff_lang: Optional[str]) -> None:
+    """Тег-режим, отказ LLM-лимитера (флуд или недоступный Redis): тишина
+    недопустима — тег = явное намерение (A9-P2-6, класс BUG-192). Dedup-метка
+    снимается, чтобы повтор того же сообщения не посчитался дублем; ответ —
+    не больше одного в чат за окно лимитера и не чаще раза в 5 минут автору
+    (pending.busy_notice_allowed, fail-closed)."""
+    await pending.unmark_seen(message.chat.id, message.message_id)
+    if not await pending.busy_notice_allowed(message.chat.id, message.from_user.id):
+        return
+    lang = staff_lang or message.from_user.language_code or "ru"
+    await message.reply(get_text("group_intake.classifier_unavailable", language=lang))
 
 
 def _category_display(category: Optional[str], lang: str) -> str:
@@ -1128,7 +1162,9 @@ async def _create_from_candidate(callback: CallbackQuery, bot: Bot, candidate: d
         "address_type": candidate["selected_address"]["type"],
         "address_id": candidate["selected_address"]["id"],
         "description": candidate["text"],
-        "media_files": [photo_file_id] if photo_file_id else [],
+        # A9-P2-5: file_id группового бота основной бот не отправит — в
+        # колонку попадает только маркер media_id после копии в media-service.
+        "media_files": [],
         "source_chat_id": chat_id,
         "source_message_id": candidate.get("source_message_id"),
     }
@@ -1151,6 +1187,7 @@ async def _create_from_candidate(callback: CallbackQuery, bot: Bot, candidate: d
         # Р18: staff-группа — персонал (тот же признак, что даёт менеджерскую
         # приёмку); запрет заявок по лифту в работах на неё не распространяется.
         allow_under_works=is_staff,
+        foreign_media_file_ids=[photo_file_id] if photo_file_id else [],
     )
     if not request_number:
         # Честный error-текст (не тишина): создание могло упасть на
