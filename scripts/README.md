@@ -38,7 +38,7 @@
 - `tag-deploy.sh <profk|infrasafe> --push` — annotated-тег после раскатки
   (AUD3-38): без него «что в проде» существует только как HEAD чекаута хоста.
 - `seed_e2e_user.py` — сид пользователя для E2E.
-- `bootstrap_database.py`, `export_schema.py`, `apply_verification_migration.py`,
-  `cleanup_sql.sh`, `migrate_database.sh`, `test-media-service.sh` — редко
-  используемые/исторические утилиты; перед использованием сверяться с
-  актуальной процедурой в uk-deploy SKILL.md.
+- Исторические `bootstrap_database.py`, `export_schema.py`,
+  `apply_verification_migration.py`, `cleanup_sql.sh`, `migrate_database.sh`,
+  `test-media-service.sh` удалены (A9-P2-25): схема — только через alembic,
+  деплой/миграции — по uk-deploy SKILL.md.
