@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Optional
 
 from sqlalchemy import select
@@ -215,3 +216,38 @@ async def request_access_reason_async(db: AsyncSession, user, request) -> Option
 
 async def has_request_access_async(db: AsyncSession, user, request) -> bool:
     return (await request_access_reason_async(db, user, request)) is not None
+
+
+# ---------------------------------------------------------------------------
+# Право на фотоотчёт исполнителя (A9-P2-3)
+# ---------------------------------------------------------------------------
+
+#: Причины канона, дающие право загружать `completion_*`: менеджер или
+#: назначенный исполнитель (прямо, индивидуально или группой на смене).
+COMPLETION_UPLOAD_REASONS = frozenset({
+    "manager",
+    "executor_direct",
+    "executor_individual_assignment",
+    "executor_group_assignment_on_shift",
+})
+
+
+async def can_upload_completion_async(db: AsyncSession, user, request) -> bool:
+    """Может ли пользователь приложить фотоотчёт исполнителя к заявке.
+
+    Доступ к заявке ≠ право на фотоотчёт: житель-владелец и сосед видят заявку,
+    но их «фотоотчёт» бот при приёмке показал бы как работу исполнителя. Правила
+    назначения — те же, что в каноне доступа, поэтому спрашиваем его же, но
+    без фактов владельца и квартиры: канон проверяет владельца РАНЬШЕ
+    исполнителя, и назначенный исполнитель, сам создавший заявку, иначе
+    получил бы причину «owner» и отказ.
+    """
+    probe = SimpleNamespace(
+        request_number=request.request_number,
+        user_id=None,
+        executor_id=getattr(request, "executor_id", None),
+        status=getattr(request, "status", "") or "",
+        apartment_id=None,
+    )
+    reason = await request_access_reason_async(db, user, probe)
+    return reason in COMPLETION_UPLOAD_REASONS

@@ -13,13 +13,14 @@ from enum import Enum
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.dependencies_access import check_request_access
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.user import User
@@ -33,6 +34,7 @@ from uk_management_bot.integrations.http_retry import (
 from uk_management_bot.services.request_number_service import (
     REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
 )
+from uk_management_bot.services.request_access import can_upload_completion_async
 from uk_management_bot.utils.media_sniff import (
     MEDIA_SERVICE_ACCEPTED_TYPES,
     sniff_media_mime,
@@ -86,8 +88,23 @@ _MEDIA_MAX_BYTES = 50 * 1024 * 1024  # mirrors media_service max_file_size
 _sniff_media_mime = sniff_media_mime
 
 
+_COMPLETION_CATEGORIES = frozenset({
+    FileCategories.COMPLETION_PHOTO,
+    FileCategories.COMPLETION_VIDEO,
+    FileCategories.COMPLETION_DOCUMENT,
+})
+
+# A9-P3-4: лимит по канону проекта — на маршруте, ключ = реальный IP клиента
+# (`client_ip_key`). 60, а не 30: дашборд и TWA грузят пачку файлов
+# последовательно, по запросу на файл, а за одним офисным NAT сидят несколько
+# менеджеров — 30 в минуту такой бакет выбрал бы штатной работой.
+UPLOAD_RATE_LIMIT = "60/minute"
+
+
 @router.post("/api/v2/media/upload")
+@limiter.limit(UPLOAD_RATE_LIMIT)
 async def proxy_media_upload(
+    request: Request,
     file: UploadFile = File(...),
     request_number: str = Form(...),
     category: FileCategories = Form(FileCategories.REQUEST_PHOTO),
@@ -113,19 +130,44 @@ async def proxy_media_upload(
             detail="Invalid request_number format. Expected: YYMMDD-NNN",
         )
 
-    await check_request_access(request_number, db, user)
+    # Ссылка на строку живёт до записи маркера — `_append_media_marker`
+    # обязан перечитывать её с populate_existing (A9-P2-1).
+    request_row = await check_request_access(request_number, db, user)
+    # A9-P2-3: фотоотчёт исполнителя — только менеджер или назначенный
+    # исполнитель; одного доступа к заявке (житель, сосед) для него мало.
+    if category in _COMPLETION_CATEGORIES and not await can_upload_completion_async(db, user, request_row):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned executor or a manager can upload completion media",
+        )
 
     media_url = settings.MEDIA_SERVICE_URL.rstrip("/")
     if not media_url:
         raise HTTPException(status_code=503, detail="Media service not configured")
 
-    headers = {}
-    if settings.MEDIA_SERVICE_API_KEY:
-        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
+    file_bytes, sniffed_ct = await _read_verified_upload(file)
+    payload = await _forward_upload(
+        media_url,
+        files={"file": (file.filename, file_bytes, sniffed_ct)},
+        data={
+            "request_number": request_number,
+            "category": category.value,
+            "uploaded_by": str(user.id),
+        },
+    )
 
-    # H2: read once, enforce size, verify real content type via magic bytes,
-    # and forward the sniffed type (never the client-supplied content_type).
-    file_bytes = await file.read()
+    await _record_request_media_marker(db, request_number, category, payload)
+    return payload
+
+
+async def _read_verified_upload(file: UploadFile) -> tuple[bytes, str]:
+    """H2: прочитать один раз, проверить размер и НАСТОЯЩИЙ тип по magic bytes.
+
+    Дальше уходит тип, выведенный сервером, — никогда не клиентский
+    content_type. A9-P3-4: читаем не больше MAX+1 байт — лишнего байта
+    достаточно, чтобы понять «больше лимита», не поднимая в память весь файл.
+    """
+    file_bytes = await file.read(_MEDIA_MAX_BYTES + 1)
     if len(file_bytes) > _MEDIA_MAX_BYTES:
         raise HTTPException(status_code=422, detail="File too large (max 50MB)")
     sniffed_ct = _sniff_media_mime(file_bytes)
@@ -138,27 +180,41 @@ async def proxy_media_upload(
             status_code=422,
             detail="Unsupported file content (allowed: JPEG, PNG, GIF, MP4, MOV)",
         )
+    return file_bytes, sniffed_ct
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            f"{media_url}/api/v1/media/upload",
-            headers=headers,
-            files={"file": (file.filename, file_bytes, sniffed_ct)},
-            data={
-                "request_number": request_number,
-                "category": category.value,
-                "uploaded_by": str(user.id),
-            },
+
+async def _forward_upload(media_url: str, *, files: dict, data: dict) -> object:
+    """Отправить файл в media-service и вернуть его JSON-ответ.
+
+    A9-P3-4: таймаут — `_MEDIA_STREAM_TIMEOUT` (read 25 с), а не 30 с одним
+    числом: ответ обязан успеть раньше, чем edge отдаст браузеру 504 (BUG-189).
+    Недоступность media-service → 503, ответ не-JSON → 502 — а не 500 из
+    необработанного исключения. POST не ретраится: он не идемпотентен.
+    """
+    headers = {}
+    if settings.MEDIA_SERVICE_API_KEY:
+        headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
+    request_number = data.get("request_number")
+    try:
+        async with httpx.AsyncClient(timeout=_MEDIA_STREAM_TIMEOUT) as client:
+            resp = await client.post(
+                f"{media_url}/api/v1/media/upload", headers=headers, files=files, data=data,
+            )
+    except httpx.TransportError as exc:
+        _logger.warning(
+            "Media service unreachable for upload %s: %s", request_number, type(exc).__name__,
         )
-        if resp.status_code != 200 and resp.status_code != 201:
-            # AUD3-34: статус — да, тело downstream — нет. В ответе media-service
-            # может оказаться что угодно, включая эхо загруженного контента.
-            _logger.error("Media service upload error %s for %s", resp.status_code, request_number)
-            raise HTTPException(status_code=resp.status_code, detail="Media service error")
-        payload = resp.json()
-
-    await _record_request_media_marker(db, request_number, category, payload)
-    return payload
+        raise HTTPException(status_code=503, detail="Media service unavailable")
+    if resp.status_code != 200 and resp.status_code != 201:
+        # AUD3-34: статус — да, тело downstream — нет. В ответе media-service
+        # может оказаться что угодно, включая эхо загруженного контента.
+        _logger.error("Media service upload error %s for %s", resp.status_code, request_number)
+        raise HTTPException(status_code=resp.status_code, detail="Media service error")
+    try:
+        return resp.json()
+    except ValueError:
+        _logger.error("Media service upload %s: ответ не JSON", request_number)
+        raise HTTPException(status_code=502, detail="Invalid media service response")
 
 
 # Категория загрузки → тип записи-маркера в Request.media_files. Фотоотчёт
@@ -217,10 +273,14 @@ def _extract_media_id(payload: object) -> Optional[int]:
 async def _append_media_marker(db: AsyncSession, request_number: str, media_id: int, kind: str) -> None:
     # FOR UPDATE: две параллельные загрузки в одну заявку (две вкладки, бот и
     # дашборд) иначе читают один список и последняя запись затирает первую.
+    # A9-P2-1: populate_existing обязателен — `check_request_access` уже положил
+    # строку в identity map этой сессии, и без него ORM вернул бы СТАРЫЙ
+    # media_files, прочитанный до лока (канон `api/users/rename.py`).
     row = (await db.execute(
         select(RequestModel)
         .where(RequestModel.request_number == request_number)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )).scalar_one_or_none()
     if row is None:
         _logger.warning("media upload %s: заявка не найдена, маркер не записан", request_number)
