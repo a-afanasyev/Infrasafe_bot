@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -9,6 +8,7 @@ from sqlalchemy import select
 
 from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.shifts import service
+from uk_management_bot.services import shift_lifecycle
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.redis_pubsub import publish_shift_event, publish_request_event
@@ -145,31 +145,33 @@ async def get_my_shifts(
 @router.post("/start", response_model=ShiftOut, status_code=status.HTTP_201_CREATED)
 async def start_shift(
     body: StartShiftBody,
+    background: BackgroundTasks,
     user: User = Depends(require_roles("executor")),
     db: AsyncSession = Depends(get_db),
 ):
     """Creates a new active shift for the authenticated executor."""
-    now = datetime.now(timezone.utc)
-    shift = Shift(
-        user_id=user.id,
-        status="active",
-        start_time=now,
-        notes=body.notes,
-    )
-    db.add(shift)
+    # A9-P1-2: правило бота (services/shift_lifecycle) — идущая planned-смена
+    # активируется, ad-hoc создаётся только если такой нет (докстринг выше
+    # уходит в OpenAPI-снапшот — контракт не меняем). Audit — в той же tx;
+    # исполнитель и ops-канал уведомляются после ответа.
+    shift = await shift_lifecycle.start_shift_async(db, user, notes=body.notes)
     await db.commit()
     await db.refresh(shift)
+    background.add_task(_notify_shift, _shift_notify_payload(user, shift, started=True))
     return _shift_out(shift)
 
 
 @router.post("/{shift_id}/end", response_model=ShiftOut)
 async def end_shift(
     shift_id: int,
+    background: BackgroundTasks,
     user: User = Depends(require_roles("executor")),
     db: AsyncSession = Depends(get_db),
 ):
     """Ends a specific active shift belonging to the authenticated executor."""
-    result = await db.execute(select(Shift).where(Shift.id == shift_id))
+    # FOR UPDATE: двойной тап / бот+TWA — второй увидит completed → 409,
+    # без второго audit и уведомления (зеркало my_shifts._end_shift).
+    result = await db.execute(select(Shift).where(Shift.id == shift_id).with_for_update())
     shift = result.scalar_one_or_none()
 
     if shift is None:
@@ -182,11 +184,36 @@ async def end_shift(
             detail=f"Shift is not active (current status: {shift.status})",
         )
 
-    shift.end_time = datetime.now(timezone.utc)
-    shift.status = "completed"
+    await shift_lifecycle.end_shift_async(db, user, shift)
     await db.commit()
     await db.refresh(shift)
+    background.add_task(_notify_shift, _shift_notify_payload(user, shift, started=False))
     return _shift_out(shift)
+
+
+def _shift_notify_payload(user: User, shift: Shift, *, started: bool):
+    """Сбой билдера не валит уже закоммиченный старт/стоп (как AUD8-CODE-01 в боте)."""
+    try:
+        return shift_lifecycle.shift_notify_payload(user, shift, started=started)
+    except Exception:
+        logger.warning("shift notify: не удалось собрать уведомление (shift=%s)",
+                       shift.id, exc_info=True)
+        return None
+
+
+async def _notify_shift(payload) -> None:
+    """Best-effort уведомление о старте/конце смены (исполнитель + ops-канал) —
+    те же тексты и адресаты, что у бота. BackgroundTask после ответа; всё в
+    try (вкл. получение бота) — см. `_notify_many`."""
+    if not payload:
+        return
+    try:
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        bot = _get_shared_bot()
+    except Exception as e:
+        logger.warning("shift notify skipped — bot unavailable: %s", e)
+        return
+    await shift_lifecycle.send_shift_notify(bot, payload)
 
 
 # ---------------------------------------------------------------------------
