@@ -69,7 +69,8 @@ applicant-flow не перехватывал шаги (`inspector_requests.py:1-
 7. **Срочность.** Выбор из `URGENCY_KEYS` (`insp_urg:*`, строки 278-295). Канонические
    ключи срочности — low/medium/high/critical.
 8. **Медиа.** До 5 фото/видео, затем «Продолжить» (паритет с applicant-flow, строки
-   298-343). Лимит — `requests.max_5_files`.
+   298-343). Лимит — `requests.media_limit_reached`
+   (`utils/fsm_media.BOT_MEDIA_MAX_FILES`).
 9. **Подтверждение.** Итоговая сводка (адрес, категория, срочность, описание, число
    файлов) и inline-кнопка «Подтвердить» (`inspector.confirm_summary`, строки 315-343).
 10. **Сохранение.** Повторная проверка approved-обходчика, затем

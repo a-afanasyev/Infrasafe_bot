@@ -43,6 +43,7 @@ from uk_management_bot.keyboards.requests import (
     get_inline_confirmation_keyboard,
 )
 from uk_management_bot.keyboards.base import get_contextual_keyboard, get_user_contextual_keyboard
+from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_media
 from uk_management_bot.utils.validators import (
     validate_media_file
 )
@@ -355,31 +356,34 @@ async def process_media(message: Message, state: FSMContext):
     """Обработка медиафайлов"""
     lang = await _get_user_language(message=message)
 
-    data = await state.get_data()
-    media_files = data.get('media_files', [])
-
-    if len(media_files) >= 5:
-        await message.answer(get_text("requests.max_5_files", language=lang))
-        return
-
-    # Получаем file_id
+    # Получаем file_id и реальный размер (A9-P3-15: раньше в валидатор уходил 0)
     if message.photo:
-        file_id = message.photo[-1].file_id
+        media = message.photo[-1]
         file_type = "photo"
     else:
-        file_id = message.video.file_id
+        media = message.video
         file_type = "video"
 
-    # Проверяем размер файла (примерная проверка)
-    if not validate_media_file(0, file_type):  # Размер файла проверяется на уровне Telegram
+    # file_size в Telegram опционален; None → 0 пропускает проверку, но
+    # скачивание сверх 20 МБ всё равно отрежет сам Bot API (getFile).
+    if not validate_media_file(media.file_size or 0, file_type):
         await message.answer(get_text("requests.file_too_large", language=lang))
         return
 
-    media_files.append(file_id)
-    await state.update_data(media_files=media_files)
+    # A9-P1-1: атомарная дозапись — части альбома приходят конкурентно
+    result = await append_fsm_media(
+        state, "media_files", media.file_id, media_group_id=message.media_group_id,
+        message_id=message.message_id
+    )
+    if not result.added:
+        if result.notify:
+            await message.answer(
+                get_text("requests.media_limit_reached", language=lang, max=BOT_MEDIA_MAX_FILES)
+            )
+        return
 
     await message.answer(
-        get_text("requests.file_added", language=lang).replace("{...}", str(len(media_files))),
+        get_text("requests.file_added", language=lang, count=result.count, max=BOT_MEDIA_MAX_FILES),
         reply_markup=get_media_keyboard(language=lang)
     )
     logger.info(f"Пользователь {message.from_user.id} добавил медиафайл")

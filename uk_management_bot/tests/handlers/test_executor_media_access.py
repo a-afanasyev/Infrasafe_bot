@@ -28,6 +28,7 @@ def _callback(request_number: str = "260818-001", from_id: int = 777):
     cb.answer = AsyncMock()
     cb.message.answer_media_group = AsyncMock()
     cb.message.answer_photo = AsyncMock()
+    cb.message.answer = AsyncMock()
     return cb
 
 
@@ -107,8 +108,8 @@ async def test_authorized_user_receives_media():
 
     callback.message.answer_photo.assert_awaited_once_with(photo="AgAC-test", caption=None)
     callback.message.answer_media_group.assert_not_awaited()
-    callback.answer.assert_awaited_once()
-    assert callback.answer.await_args.args[0] != NOT_FOUND_TEXT
+    # A9-P3-15: callback отвечается ДО отправки/скачивания — без текста.
+    callback.answer.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
@@ -133,13 +134,14 @@ async def test_media_service_marker_is_downloaded_and_sent():
     group = callback.message.answer_media_group.await_args.kwargs["media"]
     assert group[0].media == "AgAC-test"
     assert group[1].media.filename == "media_42.jpg"
-    assert callback.answer.await_args.args[0] != NOT_FOUND_TEXT
+    callback.answer.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
 async def test_marker_without_media_client_falls_back_to_no_media_alert():
-    """Медиа-сервис выключен, в колонке только маркер → честный алерт «нет
-    файлов», а не падение и не пустая медиагруппа."""
+    """Медиа-сервис выключен, в колонке только маркер → честное «нет файлов»,
+    а не падение и не пустая медиагруппа. Callback к этому моменту уже отвечен
+    (A9-P3-15: answer до скачивания), поэтому «нет файлов» — сообщением."""
     callback = _callback()
     request = MagicMock()
     request.media_files = [{"media_id": 42, "type": "photo"}]
@@ -153,6 +155,26 @@ async def test_marker_without_media_client_falls_back_to_no_media_alert():
 
     callback.message.answer_media_group.assert_not_awaited()
     callback.message.answer_photo.assert_not_awaited()
+    callback.answer.assert_awaited_once_with()
+    callback.message.answer.assert_awaited_once_with(
+        get_text("requests.no_media_files", language="ru")
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_media_files_answers_alert_without_sending():
+    """Пустая колонка → алерт «нет файлов» сразу, скачивать нечего."""
+    callback = _callback()
+    request = MagicMock()
+    request.media_files = []
+    service = _service(request, user=MagicMock())
+
+    with patch.object(ex, "RequestHandlerService", return_value=service), \
+         patch.object(ex, "get_user_language", return_value="ru"), \
+         patch.object(ex, "has_request_access_sync", return_value=True):
+        await ex.executor_view_media(callback, _db=MagicMock())
+
     callback.answer.assert_awaited_once_with(
         get_text("requests.no_media_files", language="ru"), show_alert=True
     )
+    callback.message.answer.assert_not_awaited()

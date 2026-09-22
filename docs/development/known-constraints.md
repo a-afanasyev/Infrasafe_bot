@@ -1,18 +1,23 @@
 # Известные эксплуатационные ограничения
 
-> _Последнее редактирование: 2026-06-25_
+> _Последнее редактирование: 2026-09-23_
 
 Сознательно принятые ограничения системы (не баги). Каждое — со ссылкой на код и обоснованием.
 
 ## SEC-09 — Бот рассчитан на один воркер
 
-- **Где:** `uk_management_bot/middlewares/throttling.py` (`ThrottlingMiddleware._last_message`).
+- **Где:** `uk_management_bot/middlewares/throttling.py` (`ThrottlingMiddleware._last_message`, `_albums` — окно альбома, A9-P1-1).
 - **Суть:** per-user throttling хранит состояние в памяти процесса. При нескольких
   воркерах бота у каждого был бы свой счётчик → эффективный лимит умножается.
 - **Статус:** accepted-risk для пилота. Бот деплоится в одном воркере (`app` в
   `docker-compose.yml`, единственный процесс `python -m uk_management_bot.main`).
 - **Когда пересматривать:** при горизонтальном масштабировании бота — вынести
   throttle-состояние в Redis (как уже сделано для rate-limit API).
+- **Там же (A9-P1-1):** атомарная дозапись медиа в FSM (`uk_management_bot/utils/fsm_media.py`,
+  `append_fsm_media`) сериализует части альбома процессным `asyncio.Lock` на ключ
+  FSM. При нескольких воркерах части одного альбома могли бы уйти в разные
+  процессы → снова lost update; при масштабировании нужен распределённый замок
+  (FSM-данные aiogram в Redis — одно JSON-значение, атомарного `RPUSH` в нём нет).
 
 > Примечание: API (FastAPI) использует Redis-backed rate-limit (`api/rate_limit.py`)
 > и при деградации Redis fail-closed'ит auth-роуты (SEC-04) — это ограничение
