@@ -10,6 +10,7 @@ import MediaGallery from '../../components/MediaGallery'
 import CommentThread from '../../components/CommentThread'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
 const EXECUTOR_ACTIONS: Record<string, { label: string; target: string; color: string }[]> = {
   'Новая': [{ label: 'twa.exec.detail.takeWork', target: 'В работе', color: 'bg-emerald-500' }],
@@ -231,6 +232,7 @@ export default function TaskDetailPage() {
               autoFocus
               value={sheetText}
               onChange={(e) => setSheetText(e.target.value)}
+              maxLength={MAX_REQUEST_TEXT_LENGTH}
               placeholder={t(sheet === 'Закуп' ? 'twa.exec.detail.purchasePlaceholder' : 'twa.exec.detail.clarifyPlaceholder')}
               className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3"
             />

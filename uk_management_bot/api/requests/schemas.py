@@ -1,8 +1,10 @@
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
-from uk_management_bot.utils.constants import URGENCY_VALUES, validate_canonical_urgency
+from uk_management_bot.utils.constants import (
+    MAX_DESCRIPTION_LENGTH, URGENCY_VALUES, validate_canonical_urgency,
+)
 
 VALID_STATUSES = [
     "Новая", "В работе", "Закуп", "Уточнение",
@@ -175,10 +177,9 @@ class CreateRequestBody(_ElevatorFieldsMixin):
 
     category: str
     urgency: str
-    description: str
+    description: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
     address_type: Literal["yard", "building", "apartment"]
     address_id: int
-    media_files: Optional[List[str]] = None
 
     @field_validator("category")
     @classmethod
@@ -197,10 +198,9 @@ class CreateInspectorRequestBody(_ElevatorFieldsMixin):
 
     category: str
     urgency: str
-    description: str
+    description: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
     address_type: Literal["building"]
     address_id: int
-    media_files: Optional[List[str]] = None
 
     @field_validator("category")
     @classmethod
@@ -225,12 +225,14 @@ class UpdateRequestBody(BaseModel):
     status: Optional[str] = None
     urgency: Optional[str] = None
     executor_id: Optional[int] = None
-    notes: Optional[str] = None
-    completion_report: Optional[str] = None
+    # Текстовые поля — лимит канона (MAX_DESCRIPTION_LENGTH, им же бот режет
+    # описание); у фронта/TWA своего лимита на них нет. Колонки — Text.
+    notes: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
+    completion_report: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
     manager_confirmed: Optional[bool] = None
-    manager_confirmation_notes: Optional[str] = None
-    requested_materials: Optional[str] = None
-    return_reason: Optional[str] = None
+    manager_confirmation_notes: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
+    requested_materials: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
+    return_reason: Optional[str] = Field(None, max_length=MAX_DESCRIPTION_LENGTH)
     rating: Optional[int] = None
     # FEAT-группы (followup #2): дашборд «Назначить дежурному» — назначить на
     # ГРУППУ-специализацию по категории заявки (спец резолвит сервер по
@@ -298,9 +300,13 @@ class CategoryChangeOut(BaseModel):
 
 
 class CommentBody(BaseModel):
-    text: str
+    # A9-P2-11: `media_files` убран — строки уходили в Telegram как file_id
+    # (URL тоже принимается) без проверки и без лимита; клиенты поле не шлют.
+    # extra="forbid": незнакомый ключ — 422, а не тихий дроп (AUD5-APIFE-6).
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
     is_internal: bool = False
-    media_files: Optional[List[str]] = None
 
 
 class CommentOut(BaseModel):

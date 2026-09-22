@@ -23,6 +23,14 @@ export const CATEGORIES = [
   'other',
 ] as const
 
+/**
+ * Потолок длины текстовых полей заявки (описание, заметки, отчёт, материалы,
+ * причина возврата, комментарий подтверждения, комментарии). Совпадает с
+ * `MAX_DESCRIPTION_LENGTH` бэка (utils/constants.py): API отвечает 422 на
+ * более длинный текст, поэтому поле ввода не даёт его набрать.
+ */
+export const MAX_REQUEST_TEXT_LENGTH = 2000
+
 /** Urgency levels — canonical keys, synced with backend (TASK 17) */
 export const URGENCIES = [
   'low',

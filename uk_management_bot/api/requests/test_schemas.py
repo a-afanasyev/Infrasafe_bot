@@ -130,7 +130,8 @@ class TestCreateRequestBody:
         )
         assert body.address_type == "apartment"
         assert body.address_id == 1
-        assert body.media_files is None
+        # A9-P2-11: поля media_files в create-схеме больше нет.
+        assert "media_files" not in CreateRequestBody.model_fields
 
     def test_valid_with_all_fields(self):
         body = CreateRequestBody(
@@ -139,11 +140,9 @@ class TestCreateRequestBody:
             description="Потоп",
             address_type="building",
             address_id=5,
-            media_files=["file1.jpg"],
         )
         assert body.address_type == "building"
         assert body.address_id == 5
-        assert len(body.media_files) == 1
 
     def test_invalid_urgency_raises(self):
         with pytest.raises(Exception):
@@ -230,15 +229,15 @@ class TestCommentBody:
         c = CommentBody(text="Привет")
         assert c.text == "Привет"
         assert c.is_internal is False
-        assert c.media_files is None
 
     def test_internal_comment(self):
         c = CommentBody(text="Внутреннее", is_internal=True)
         assert c.is_internal is True
 
-    def test_with_media(self):
-        c = CommentBody(text="Фото", media_files=["a.jpg", "b.jpg"])
-        assert len(c.media_files) == 2
+    def test_media_files_rejected(self):
+        # A9-P2-11: поле убрано, extra="forbid" — 422, а не тихий дроп.
+        with pytest.raises(Exception):
+            CommentBody(text="Фото", media_files=["a.jpg", "b.jpg"])
 
 
 # ---------------------------------------------------------------------------

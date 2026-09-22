@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Routes, Route } from 'react-router'
 import { render, screen, waitFor, fireEvent } from '../../../test/test-utils'
 import CompletionReport from './CompletionReport'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
 // TEST-068: отчёт о выполнении — PATCH «Выполнена» с текстом отчёта, затем
 // фото под category=completion_photo (сбой фото не откатывает статус),
@@ -75,5 +76,12 @@ describe('CompletionReport', () => {
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled())
     expect(screen.getByText('Отчёт о выполнении')).toBeInTheDocument()
     expect(screen.queryByText('TASK LIST')).toBeNull()
+  })
+
+  it('поле отчёта ограничено лимитом API (MAX_REQUEST_TEXT_LENGTH = 2000)', async () => {
+    renderPage()
+    const field = await screen.findByPlaceholderText('Что было сделано...')
+    expect(MAX_REQUEST_TEXT_LENGTH).toBe(2000)
+    expect(field).toHaveAttribute('maxLength', '2000')
   })
 })
