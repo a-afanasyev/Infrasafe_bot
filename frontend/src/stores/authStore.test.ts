@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server'
 import { useAuthStore } from './authStore'
+import { queryClient } from '../api/queryClient'
 
 // Cold-start cookie probe (bootstrap): a fresh tab has no per-tab auth flag in
 // sessionStorage but may carry a valid shared httpOnly cookie. bootstrap probes
@@ -62,6 +63,50 @@ describe('authStore.bootstrap — shared-cookie session recovery', () => {
     expect(s.isAuthenticated).toBe(false)
     expect(s.user).toBeNull()
     expect(s.hydrating).toBe(false)
+  })
+})
+
+// A9-P2-29: следующий пользователь в той же вкладке не должен видеть кэш
+// предыдущего (канбан, ПДн жителей, media-blob) — logout/login чистят QueryClient.
+describe('authStore — изоляция кэша QueryClient между пользователями', () => {
+  it('logout чистит все запросы (включая media-blob)', async () => {
+    server.use(http.post('*/api/v2/auth/logout', () => HttpResponse.json({ ok: true })))
+    queryClient.setQueryData(['kanban', 'all'], [{ id: 1 }])
+    queryClient.setQueryData(['media-blob', 5], 'data:image/png;base64,AAAA')
+    useAuthStore.setState({ user: { id: 1, roles: ['manager'] }, isAuthenticated: true, hydrating: false })
+
+    await useAuthStore.getState().logout()
+
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  it('logout чистит кэш и при ошибке серверного вызова', async () => {
+    server.use(http.post('*/api/v2/auth/logout', () => new HttpResponse(null, { status: 500 })))
+    queryClient.setQueryData(['residents'], [{ id: 2 }])
+    await useAuthStore.getState().logout()
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('logout отменяет in-flight запрос: ответ старой сессии не попадает в кэш', async () => {
+    server.use(http.post('*/api/v2/auth/logout', () => HttpResponse.json({ ok: true })))
+    let resolveFetch: (v: string[]) => void = () => {}
+    const pending = queryClient.fetchQuery({
+      queryKey: ['residents', 'pii'],
+      queryFn: () => new Promise<string[]>((r) => { resolveFetch = r }),
+    }).catch(() => undefined)
+    await useAuthStore.getState().logout()
+    resolveFetch(['Иванов'])
+    await pending
+    expect(queryClient.getQueryData(['residents', 'pii'])).toBeUndefined()
+  })
+
+  it('login сбрасывает остатки прошлой сессии', async () => {
+    server.use(http.get('*/api/v2/profile', () => HttpResponse.json({ id: 3, roles: ['manager'] })))
+    queryClient.setQueryData(['kanban', 'all'], [{ id: 1 }])
+    await useAuthStore.getState().login()
+    expect(queryClient.getQueryData(['kanban', 'all'])).toBeUndefined()
+    expect(useAuthStore.getState().user).toEqual({ id: 3, roles: ['manager'] })
   })
 })
 
