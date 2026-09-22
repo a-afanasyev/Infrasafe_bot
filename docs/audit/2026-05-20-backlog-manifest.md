@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **508**
-- открыто маркером: **62**
+- закрыто маркером: **509**
+- открыто маркером: **61**
 
-  - `actionable` — **50**
+  - `actionable` — **49**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=26, P3=24.
+Из них actionable по приоритету: P2=25, P3=24.
 
 Значения `status`:
 
@@ -56,7 +56,6 @@
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
 | `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
-| `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
 | `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
 | `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
 | `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |
