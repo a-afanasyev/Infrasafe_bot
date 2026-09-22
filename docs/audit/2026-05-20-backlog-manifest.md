@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **504**
-- открыто маркером: **66**
+- закрыто маркером: **507**
+- открыто маркером: **63**
 
-  - `actionable` — **54**
+  - `actionable` — **51**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=29, P3=25.
+Из них actionable по приоритету: P2=27, P3=24.
 
 Значения `status`:
 
@@ -55,10 +55,7 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P2-11` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | `media_files: List[str]` в create-схемах без валидации; строки уходят в `answer_photo` |
-| `A9-P2-18` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api, CI | — | API: row-lock-семантика проверяется только на sqlite |
 | `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
-| `A9-P3-13` | P3 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | PATCH заявки: `{rating}` → 500, правки без аудита/терминального гарда, карточка без лифта |
 | `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
 | `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
 | `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
