@@ -141,11 +141,15 @@ async def initialize_scheduler(bot: Bot):
     try:
         # Запускаем планировщик (уведомления — через единый диспетчерский бот)
         await start_scheduler(bot=bot)
-        logger.info("Планировщик смен запущен успешно")
 
-        # Получаем и логируем статус
+        # Получаем и логируем статус. A9-P3-10: сбой настройки джоб не роняет
+        # бота, но планировщик тогда не запущен вовсе — это ERROR, не INFO.
         status = await get_scheduler_status()
-        logger.info(f"Планировщик: {status['jobs_count']} задач активно")
+        if status['is_running']:
+            logger.info(f"Планировщик: {status['jobs_count']} задач активно")
+        else:
+            # StructuredLogger: только message + **kwargs, позиционные %-аргументы не принимает.
+            logger.error(f"Планировщик смен НЕ запущен: {status.get('start_error')}")
 
     except Exception as e:
         logger.error(f"Ошибка инициализации планировщика: {e}")

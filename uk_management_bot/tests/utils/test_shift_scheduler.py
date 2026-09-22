@@ -85,11 +85,16 @@ class TestSetupJobs:
         # Should have called add_job multiple times (at least 8 jobs)
         assert mock_apscheduler.add_job.call_count >= 8
 
-    def test_setup_jobs_exception_handled(self):
+    def test_setup_jobs_exception_propagates(self):
+        # A9-P3-10: раньше ошибка глоталась, и планировщик стартовал без части
+        # джоб с is_running=True. Теперь решает start() (см.
+        # test_shift_scheduler_business_tz.py).
+        import pytest
+
         sched = _make_scheduler()
         sched._mock_apscheduler.add_job.side_effect = Exception("scheduler error")
-        # Should not raise — exception is caught internally
-        sched.setup_jobs()
+        with pytest.raises(Exception, match="scheduler error"):
+            sched.setup_jobs()
 
     def test_auto_manager_tick_job_registered(self):
         from datetime import timedelta
@@ -385,7 +390,7 @@ class TestAutoCreateShifts:
 
     def test_sends_notification_when_many_shifts_created(self):
         mock_notif = MagicMock()
-        mock_notif.send_manager_notification = AsyncMock()
+        mock_notif.send_manager_notification_i18n = AsyncMock()
         sched = _make_scheduler(notification_service=mock_notif)
 
         mock_db = _mock_db()
@@ -396,11 +401,11 @@ class TestAutoCreateShifts:
              patch(PLANNING_SVC_PATH, return_value=mock_planning):
             asyncio.get_event_loop().run_until_complete(sched._auto_create_shifts())
 
-        mock_notif.send_manager_notification.assert_called_once()
+        mock_notif.send_manager_notification_i18n.assert_called_once()
 
     def test_no_notification_when_few_shifts_created(self):
         mock_notif = MagicMock()
-        mock_notif.send_manager_notification = AsyncMock()
+        mock_notif.send_manager_notification_i18n = AsyncMock()
         sched = _make_scheduler(notification_service=mock_notif)
 
         mock_db = _mock_db()
@@ -411,7 +416,7 @@ class TestAutoCreateShifts:
              patch(PLANNING_SVC_PATH, return_value=mock_planning):
             asyncio.get_event_loop().run_until_complete(sched._auto_create_shifts())
 
-        mock_notif.send_manager_notification.assert_not_called()
+        mock_notif.send_manager_notification_i18n.assert_not_called()
 
 
 class TestRebalanceDailyAssignments:
