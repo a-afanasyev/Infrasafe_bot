@@ -21,21 +21,18 @@ def _file_part(name: str = "evidence.jpg", content: bytes = b"\xff\xd8\xff\xe0te
     return ("file", (name, io.BytesIO(content), "image/jpeg"))
 
 
-def _bypass_request_access(monkeypatch):
-    """The proxy gates uploads on check_request_access (request ownership).
-    These tests target the validation/forward layer, not access control, and
-    don't seed a request row — stub the access check to a no-op so we reach
-    the code under test instead of a 404.
+async def _seed_plain_request(db_session, request_number: str) -> None:
+    """Гейт доступа здесь НАСТОЯЩИЙ (A9-P2-1: заглушка `_noop` делала тесты
+    неспособными упасть). Клиент — менеджер из conftest; ему достаточно, чтобы
+    заявка существовала."""
+    from uk_management_bot.database.models.request import Request as RequestModel
 
-    ARCH-012: the media-proxy endpoints moved out of `api.main` into
-    `api.routes.media_proxy`; patch `check_request_access` where it is now
-    looked up."""
-    from uk_management_bot.api.routes import media_proxy
-
-    async def _noop(*a, **k):
-        return None
-
-    monkeypatch.setattr(media_proxy, "check_request_access", _noop)
+    db_session.add(RequestModel(
+        request_number=request_number, user_id=999999, category="Сантехника",
+        urgency="Срочная", description="t", address="ул. Тестовая, 1",
+        status="Новая", source="bot", media_files=[],
+    ))
+    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -72,7 +69,7 @@ async def test_invalid_category_rejected(client):
 
 
 @pytest.mark.asyncio
-async def test_well_formed_request_passes_validation_layer(client, monkeypatch):
+async def test_well_formed_request_passes_validation_layer(client, db_session, monkeypatch):
     """Valid request_number + category get past validation. We stub the
     outbound httpx call so the test doesn't actually need the Media Service —
     the assertion is that we move past validation and produce a normal proxy
@@ -107,7 +104,7 @@ async def test_well_formed_request_passes_validation_layer(client, monkeypatch):
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     # MEDIA_SERVICE_URL must be set for the proxy to not 503.
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
-    _bypass_request_access(monkeypatch)
+    await _seed_plain_request(db_session, "260524-001")
 
     resp = await client.post(
         "/api/v2/media/upload",
@@ -124,7 +121,7 @@ async def test_well_formed_request_passes_validation_layer(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_spoofed_content_rejected_by_magic_bytes(client, monkeypatch):
+async def test_spoofed_content_rejected_by_magic_bytes(client, db_session, monkeypatch):
     """H2: bytes that aren't a real media file are rejected even with a valid
     image Content-Type header, BEFORE any outbound media-service call."""
     from uk_management_bot.api import main as api_main
@@ -147,7 +144,7 @@ async def test_spoofed_content_rejected_by_magic_bytes(client, monkeypatch):
 
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
-    _bypass_request_access(monkeypatch)
+    await _seed_plain_request(db_session, "260524-001")
 
     resp = await client.post(
         "/api/v2/media/upload",
@@ -159,7 +156,7 @@ async def test_spoofed_content_rejected_by_magic_bytes(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_forwarded_content_type_is_sniffed_not_client(client, monkeypatch):
+async def test_forwarded_content_type_is_sniffed_not_client(client, db_session, monkeypatch):
     """H2: the proxy forwards a server-derived content_type (from magic bytes),
     not the client-supplied header — a client lying image/png over JPEG bytes
     is relayed as image/jpeg."""
@@ -191,7 +188,7 @@ async def test_forwarded_content_type_is_sniffed_not_client(client, monkeypatch)
 
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
-    _bypass_request_access(monkeypatch)
+    await _seed_plain_request(db_session, "260524-001")
 
     resp = await client.post(
         "/api/v2/media/upload",
@@ -248,7 +245,6 @@ def _stub_media_service(monkeypatch, media_id=42):
 
     monkeypatch.setattr(api_main.httpx, "AsyncClient", _StubClient)
     monkeypatch.setattr(api_main.settings, "MEDIA_SERVICE_URL", "http://stub-media")
-    _bypass_request_access(monkeypatch)
     return upload_payload
 
 
@@ -329,15 +325,15 @@ async def test_completion_upload_leaves_media_files_untouched(client, db_session
 
 
 @pytest.mark.asyncio
-async def test_marker_skipped_when_request_row_missing(client, monkeypatch):
-    """Access-гейт застаблен, строки заявки нет: загрузка в медиа-сервис уже
-    прошла, ответ остаётся 200 — маркер молча не пишется (с warning)."""
-    payload = _stub_media_service(monkeypatch, media_id=42)
+async def test_upload_to_missing_request_is_404_before_media_service(client, monkeypatch):
+    """Настоящий гейт: заявки нет — 404 ещё до похода в media-service.
+    Ветка «строка исчезла между гейтом и маркером» проверяется напрямую в
+    test_media_upload_hardening::test_append_marker_missing_row_is_noop."""
+    _stub_media_service(monkeypatch, media_id=42)
 
     resp = await _upload(client, "request_photo")
 
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == payload
+    assert resp.status_code == 404, resp.text
 
 
 @pytest.mark.asyncio
