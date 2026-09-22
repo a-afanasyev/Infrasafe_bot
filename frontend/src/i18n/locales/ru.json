@@ -830,7 +830,8 @@
     "back": "Назад",
     "change_address": "Изменить адрес",
     "address": "Адрес",
-    "phone_required": "Сначала поделитесь контактом в Telegram."
+    "phone_required": "Сначала поделитесь контактом в Telegram.",
+    "apartment_label": "кв {{number}}"
   },
   "status": {
     "new": "Новая",

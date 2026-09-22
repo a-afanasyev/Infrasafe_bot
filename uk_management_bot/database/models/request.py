@@ -49,6 +49,13 @@ class Request(Base):
             postgresql_where=text("source_message_id IS NOT NULL"),
             sqlite_where=text("source_message_id IS NOT NULL"),
         ),
+        # A9-P3-14: провенанс — оба поля или ни одного. Без пары уникальный
+        # индекс выше обходится при source_chat_id IS NULL (NULL ≠ NULL).
+        # Миграция 0020.
+        CheckConstraint(
+            "(source_message_id IS NULL) = (source_chat_id IS NULL)",
+            name="ck_requests_source_provenance_pair",
+        ),
     )
 
     # НОВЫЙ PRIMARY KEY - номер заявки в формате YYMMDD-NNN

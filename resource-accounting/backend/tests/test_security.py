@@ -89,11 +89,17 @@ def _forge_token(rows: list[dict]) -> str:
     return base64.b64encode(hashlib.sha256(source).digest()[:12] + source).decode()
 
 
-def _sign_token(rows: list[dict]) -> str:
-    """Валидно подписанный токен с произвольным содержимым (реплей/протухший preview)."""
-    from app.api.imports import _commit_serializer
+def _sign_token(rows: list[dict], month: str) -> str:
+    """Валидно подписанный (и привязанный к admin/месяцу, A9-P3-3) токен с произвольным содержимым."""
+    from sqlalchemy import select
 
-    return _commit_serializer().dumps(json.loads(json.dumps(rows, default=str)))
+    from app.api.imports import issue_commit_token
+    from app.db import SessionLocal
+    from app.models import User
+
+    with SessionLocal() as db:
+        user = db.execute(select(User).where(User.external_id == "user-resource_admin")).scalar_one()
+    return issue_commit_token(user, month, json.loads(json.dumps(rows, default=str)))
 
 
 def test_forged_commit_token_is_rederived_server_side(admin):
@@ -130,7 +136,7 @@ def test_forged_commit_token_is_rederived_server_side(admin):
     # (б) SEC-03 в силе и для ВАЛИДНО подписанного токена (реплей протухшего
     # preview): сервер пере-выводит строки сам — фантомный счётчик не пишется.
     resp = admin.post("/v1/imports/readings/commit", json={
-        "month": "2035-01", "commit_token": _sign_token(forged),
+        "month": "2035-01", "commit_token": _sign_token(forged, "2035-01"),
     })
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["saved"] == 0

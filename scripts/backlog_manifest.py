@@ -388,7 +388,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-14": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа"),
     "A9-P2-15": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: `Bot`/`AiohttpSession` и httpx-клиент создаются на каждый запрос и не закрываются"),
     "A9-P2-16": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, media-service", note="access: 30-дневный ретеншн фото ANPR не удаляет сами медиа"),
-    "A9-P2-17": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="resource-api, CI", note="resource: PG-тест блокировки периода никогда не выполняется в CI"),
+    # A9-P2-17 закрыт 2026-09-23 (PR #604).
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
     "A9-P2-19": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="образы bot/api/media, CI", note="Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями"),
     "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
@@ -405,7 +405,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-31": A(pkg="AUD9-W6", status="actionable", method="owner-decision-2026-09-23", services="frontend, TWA, bot", note="RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта"),
     # A9-P3-1 закрыт 2026-09-23 (PR #601).
     "A9-P3-2": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access-api `/metrics` без токена (требует подтверждения доступности через edge)"),
-    "A9-P3-3": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="resource-api", note="resource: `commit_token` импорта бессрочный и не привязан к пользователю/тенанту/месяцу"),
+    # A9-P3-3 закрыт 2026-09-23 (PR #604).
     # A9-P3-4 закрыт 2026-09-23 (PR #600).
     "A9-P3-5": A(pkg="AUD9-W4", status="actionable", method="owner-decision-2026-09-23", services="group-intake-bot", note="Group Intake: сырой текст групп жителей (ПДн) уходит внешнему LLM без маскирования"),
     "A9-P3-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake: ответ постороннему в staff-группе, теги подстрокой, завышенная метрика"),

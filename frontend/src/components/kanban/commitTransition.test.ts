@@ -117,6 +117,42 @@ describe('commitTransition — ключ кэша', () => {
   })
 })
 
+// A9-P3-19: без cancelQueries in-flight рефетч доски (WS-инвалидация, фокус),
+// начатый ДО перехода, завершался ПОСЛЕ оптимистичной записи и затирал её
+// старым снимком — карточка «прыгала» обратно до следующей инвалидации.
+describe('commitTransition — in-flight рефетч не затирает оптимизм', () => {
+  it('отменяет in-flight запросы канбана до setQueryData', async () => {
+    const key = kanbanQueryKey({})
+    seed(qc, key)
+    const staleBoard = qc.getQueryData(key)
+    let resolveStale: (v: unknown) => void = () => {}
+    void qc.fetchQuery({
+      queryKey: key,
+      queryFn: () => new Promise((r) => { resolveStale = r }),
+    }).catch(() => undefined)
+    let resolvePatch: (v: unknown) => void = () => {}
+    vi.mocked(apiClient.patch).mockImplementationOnce(
+      () => new Promise((r) => { resolvePatch = r }) as never,
+    )
+
+    const done = commitTransition({
+      queryClient: qc,
+      queryKey: key,
+      requestNumber: '260725-001',
+      data: { status: 'В работе' },
+      onError: () => {},
+    })
+    await vi.waitFor(() => expect(apiClient.patch).toHaveBeenCalled())
+    resolveStale(staleBoard) // старый снимок доезжает после оптимистичной записи
+    await new Promise((r) => setTimeout(r, 0))
+
+    const board = qc.getQueryData<{ columns: { status: string; count: number }[] }>(key)
+    expect(board?.columns.find(c => c.status === 'В работе')?.count).toBe(1)
+    resolvePatch({ data: {} })
+    await done
+  })
+})
+
 describe('commitTransition — реконсиляция с сервером', () => {
   it('УСПЕШНЫЙ PATCH инвалидирует канбан (не полагаемся на живой WS)', async () => {
     const key = kanbanQueryKey({})

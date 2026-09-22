@@ -46,8 +46,9 @@ def test_second_request_for_same_group_message_is_rejected(db):
 def test_requests_without_source_are_not_limited(db):
     db.add(_request("260918-001"))
     db.add(_request("260918-002"))
-    db.add(_request("260918-003", source_chat_id=-100500, source_message_id=None))
     db.commit()  # NULL-источник не участвует в уникальности
+    # Половинный провенанс (chat без message) с миграции 0020 запрещён CHECK'ом
+    # ck_requests_source_provenance_pair — см. tests/services/test_requests_source_pair_check.py.
 
 
 def test_same_message_id_in_different_chats_is_fine(db):

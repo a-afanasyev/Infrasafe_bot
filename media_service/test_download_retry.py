@@ -51,8 +51,11 @@ class _FakeAsyncClient:
     async def __aexit__(self, *exc):
         return False
 
-    async def get(self, url):
+    async def get(self, url, timeout=None):
         return _FakeResponse()
+
+    async def aclose(self):
+        pass
 
 
 @pytest.mark.asyncio
@@ -104,9 +107,11 @@ EDGE_BUDGET_SECONDS = 30.0
 async def test_download_timeouts_fit_edge_budget(client, monkeypatch):
     seen = {}
 
+    # A9-P2-15: клиент общий, таймаут (с остатком бюджета) — на каждый запрос.
     class _RecordingClient(_FakeAsyncClient):
-        def __init__(self, *args, **kwargs):
-            seen["timeout"] = kwargs.get("timeout")
+        async def get(self, url, timeout=None):
+            seen["timeout"] = timeout
+            return await super().get(url)
 
     async def ok_get_file(file_id):
         return SimpleNamespace(file_path="photos/1.jpg")
@@ -146,7 +151,7 @@ async def test_client_4xx_not_retried(client, monkeypatch):
         return SimpleNamespace(file_path="photos/1.jpg")
 
     class _NotFoundClient(_FakeAsyncClient):
-        async def get(self, url):
+        async def get(self, url, timeout=None):
             return _FakeResponse(status_code=404)
 
     monkeypatch.setattr(client, "get_file", ok_get_file)
@@ -183,13 +188,10 @@ async def test_worst_case_three_read_timeouts_stay_within_budget(client, monkeyp
     attempts = []
 
     class _SlowReadClient(_FakeAsyncClient):
-        def __init__(self, *args, **kwargs):
-            self.read_timeout = kwargs["timeout"].read
-
-        async def get(self, url):
+        async def get(self, url, timeout=None):
             attempts.append(virtual_clock["now"])
-            # Чтение виснет до read-таймаута, который передал клиент.
-            virtual_clock["now"] += self.read_timeout
+            # Чтение виснет до read-таймаута, переданного в запрос.
+            virtual_clock["now"] += timeout.read
             raise httpx.ReadTimeout("read timed out", request=httpx.Request("GET", url))
 
     async def slow_get_file(file_id):
@@ -216,7 +218,7 @@ async def test_hung_read_is_cancelled_by_total_budget(client, monkeypatch):
     monkeypatch.setattr(settings, "telegram_download_total_budget_seconds", 0.3)
 
     class _HangingClient(_FakeAsyncClient):
-        async def get(self, url):
+        async def get(self, url, timeout=None):
             await asyncio.Event().wait()  # никогда
 
     async def ok_get_file(file_id):

@@ -241,8 +241,12 @@ def require_role(required_roles: List[str]):
                     try:
                         from uk_management_bot.utils.helpers import get_user_language
                         language = get_user_language(telegram_id, db)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # A9-P3-10: best-effort — отказ уйдёт на ru, но сбой виден.
+                        logger.warning(
+                            "require_role: не удалось прочитать язык telegram_id=%s: %r",
+                            telegram_id, e,
+                        )
                 
                 text = get_text("auth.no_access", language=language or "ru")
                 

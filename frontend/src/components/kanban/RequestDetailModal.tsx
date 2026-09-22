@@ -39,18 +39,7 @@ import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExec
 import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
 import ElevatorStatusPromptDialog from '../elevators/ElevatorStatusPromptDialog'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
-
-// TASK 17: канон-ключи + legacy-рус (dual-read, снять рус в Фазе 2).
-const URGENCY: Record<string, { bg: string; text: string }> = {
-  low:          { bg: 'bg-emerald/12',  text: 'text-emerald' },
-  medium:       { bg: 'bg-amber/12',    text: 'text-amber' },
-  high:         { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
-  critical:     { bg: 'bg-red/12',      text: 'text-red' },
-  'Обычная':    { bg: 'bg-emerald/12',  text: 'text-emerald' },
-  'Средняя':    { bg: 'bg-amber/12',    text: 'text-amber' },
-  'Срочная':    { bg: 'bg-[#ea580c]/12', text: 'text-[#ea580c]' },
-  'Критическая':{ bg: 'bg-red/12',      text: 'text-red' },
-}
+import { getUrgencyStyle } from './urgencyStyle'
 
 /** Ответ PATCH /requests/{n}/category — см. api/requests/schemas.CategoryChangeOut. */
 interface CategoryChangeOut {
@@ -296,7 +285,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
 
   const statusStyle = STATUS_BADGE[request?.status as keyof typeof STATUS_BADGE]
     ?? { bg: 'bg-bg-surface', text: 'text-text-muted' }
-  const urgencyStyle = request?.urgency ? URGENCY[request.urgency] : null
+  const urgencyStyle = getUrgencyStyle(request?.urgency)
 
   return (
     <>

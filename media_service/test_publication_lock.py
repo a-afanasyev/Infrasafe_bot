@@ -16,6 +16,7 @@ Telegram мокается (access_test_utils.FakeTelegram) — реальные 
 не нужны (см. conftest.py).
 """
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,7 +37,6 @@ def _make_service(fail_on=None):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram(fail_on=fail_on)
-    svc.channels_cache = {}
     return svc
 
 
@@ -119,7 +119,6 @@ def client_and_service(monkeypatch):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram()
-    svc.channels_cache = {}
     app.dependency_overrides[get_storage_service] = lambda: svc
     try:
         with TestClient(app) as c:
@@ -348,7 +347,6 @@ async def test_archive_media_phase1_commits_before_phase2_io_resolves():
     from app.services.media_storage import MediaStorageService
 
     svc = MediaStorageService.__new__(MediaStorageService)
-    svc.channels_cache = {}
     _create_archive_channel()
     media_id = _create_media_file(status="active")
 
@@ -397,6 +395,139 @@ async def test_delete_media_compensates_on_io_failure():
     assert result is False
     status, _ = _get_status_and_lock(media_id)
     assert status == "active"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome_name, expected_result, expected_status", [
+    # Сообщение удалено — штатный путь.
+    ("DELETED", True, "deleted"),
+    # Сообщения уже нет — конечное состояние достигнуто.
+    ("ALREADY_GONE", True, "deleted"),
+    # Удалить нельзя НИКОГДА (нет can_delete_messages, старше 48 ч, Forbidden):
+    # повтор не поможет; файл скрывается из системы, как до A9-P3-23 —
+    # иначе GDPR-очистка и ретеншн проваливались бы систематически.
+    ("UNDELETABLE", True, "deleted"),
+    # Сеть/таймаут/5xx/429: повтор может помочь → компенсация в active и
+    # ошибка вызывающему (раньше сетевой сбой молча давал deleted).
+    ("TRANSIENT", False, "active"),
+])
+async def test_delete_saga_by_delete_outcome(outcome_name, expected_result, expected_status, caplog):
+    """A9-P3-23: сага различает категории отказа Telegram, а не bool."""
+    import logging
+    from app.services.telegram_client import DeleteOutcome, DeleteResult
+
+    svc = _make_service()
+    reason = "Bad Request: message can't be deleted" if outcome_name == "UNDELETABLE" else None
+    result_obj = DeleteResult(DeleteOutcome[outcome_name], reason=reason)
+
+    async def delete(chat_id, message_id):
+        svc.telegram.delete_message_calls.append({"chat_id": chat_id, "message_id": message_id})
+        return result_obj
+
+    svc.telegram.delete_message = delete
+    media_id = _create_media_file(status="active", telegram_channel_id=-100555, telegram_message_id=4321)
+
+    caplog.set_level(logging.WARNING, logger="app.services.media_storage")
+    result = await svc.delete_media(media_id)
+
+    assert result is expected_result
+    assert len(svc.telegram.delete_message_calls) == 1
+    assert _get_status_and_lock(media_id)[0] == expected_status
+    left_in_channel = [r for r in caplog.records
+                       if r.levelno == logging.WARNING and "осталось в канале" in r.getMessage()]
+    if outcome_name == "UNDELETABLE":
+        assert left_in_channel, "отказ Telegram не зафиксирован WARNING-ом"
+        msg = left_in_channel[0].getMessage()
+        assert "-100555" in msg and "4321" in msg
+        assert "message can't be deleted" in msg, "в WARNING нет причины отказа"
+    else:
+        assert not left_in_channel
+
+
+def test_delete_endpoint_undeletable_is_success_transient_is_error(monkeypatch):
+    """Контракт ручки DELETE: permanent-отказ — успех (файл скрыт), transient — ошибка."""
+    from app.main import app
+    from app.api.v1.media import get_storage_service
+    from app.services.media_storage import MediaStorageService
+    from app.services.telegram_client import DeleteOutcome, DeleteResult
+
+    svc = MediaStorageService.__new__(MediaStorageService)
+    svc.telegram = FakeTelegram()
+    outcome = {"v": DeleteOutcome.UNDELETABLE}
+
+    async def delete(chat_id, message_id):
+        return DeleteResult(outcome["v"], reason="x")
+
+    svc.telegram.delete_message = delete
+    app.dependency_overrides[get_storage_service] = lambda: svc
+    try:
+        client = TestClient(app)
+        permanent = _create_media_file(status="active")
+        resp = client.delete(f"/api/v1/media/{permanent}", headers={"X-API-Key": "testkey"})
+        assert resp.status_code == 200, resp.text
+        assert _get_status_and_lock(permanent)[0] == "deleted"
+
+        outcome["v"] = DeleteOutcome.TRANSIENT
+        transient = _create_media_file(status="active")
+        resp = client.delete(f"/api/v1/media/{transient}", headers={"X-API-Key": "testkey"})
+        assert resp.status_code == 404, resp.text  # прежний ответ-ошибка саги
+        assert _get_status_and_lock(transient)[0] == "active"
+    finally:
+        app.dependency_overrides.pop(get_storage_service, None)
+
+
+def _tg_error(kind: str):
+    from aiogram import exceptions as ae
+    from aiogram.methods import DeleteMessage
+
+    method = DeleteMessage(chat_id=-1, message_id=1)
+    if kind == "not_found":
+        return ae.TelegramBadRequest(method=method, message="Bad Request: message to delete not found")
+    if kind == "cant_delete":
+        return ae.TelegramBadRequest(method=method, message="Bad Request: message can't be deleted")
+    if kind == "forbidden":
+        return ae.TelegramForbiddenError(method=method, message="Forbidden: bot is not a member of the channel chat")
+    if kind == "chat_not_found":
+        return ae.TelegramNotFound(method=method, message="Not Found: chat not found")
+    if kind == "network":
+        return ae.TelegramNetworkError(method=method, message="ClientConnectorError")
+    if kind == "server":
+        return ae.TelegramServerError(method=method, message="Internal Server Error")
+    if kind == "flood":
+        return ae.TelegramRetryAfter(method=method, message="Too Many Requests", retry_after=5)
+    if kind == "timeout":
+        return TimeoutError()
+    raise AssertionError(kind)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind, expected", [
+    (None, "DELETED"),
+    ("not_found", "ALREADY_GONE"),
+    ("cant_delete", "UNDELETABLE"),
+    ("forbidden", "UNDELETABLE"),
+    ("chat_not_found", "UNDELETABLE"),
+    ("network", "TRANSIENT"),
+    ("server", "TRANSIENT"),
+    ("flood", "TRANSIENT"),
+    ("timeout", "TRANSIENT"),
+])
+async def test_telegram_delete_message_classifies_outcome(kind, expected):
+    from app.services.telegram_client import DeleteOutcome, TelegramClientService
+
+    svc = TelegramClientService.__new__(TelegramClientService)
+
+    async def fake_delete(**_kwargs):
+        if kind is not None:
+            raise _tg_error(kind)
+        return True
+
+    svc.bot = SimpleNamespace(delete_message=fake_delete)
+
+    result = await svc.delete_message(chat_id=-1, message_id=1)
+    assert result.outcome is DeleteOutcome[expected]
+    if kind in ("cant_delete", "forbidden", "chat_not_found"):
+        assert result.reason  # причина доезжает до WARNING саги
 
 
 # ---------- the race, both orderings ----------
