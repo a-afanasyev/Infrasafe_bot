@@ -86,7 +86,6 @@ def _storage(telegram=None):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = telegram or FakeTelegram()
-    svc.channels_cache = {}
     return svc
 
 
@@ -226,3 +225,77 @@ async def test_archive_saga_holds_no_session_during_telegram(tracker):
         assert db.query(MediaFile.status).filter(MediaFile.id == media_id).scalar() == "archived"
     finally:
         db.close()
+
+
+# A9-P2-12: остаток AUD7-ARCH-01 — три async-ручки исполняли `db.query` прямо в
+# event loop (сессия из Depends(get_db) создаётся в threadpool, но сам SQL —
+# в цикле). Проверяется нить, в которой РЕАЛЬНО идёт запрос к БД.
+
+
+@pytest.fixture
+def sql_threads():
+    """Нити, в которых исполняется SQL (событие движка, а не создание сессии)."""
+    from sqlalchemy import event
+    from app.db.database import engine
+
+    threads: list[int] = []
+
+    def _record(*_args, **_kwargs):
+        threads.append(threading.get_ident())
+
+    event.listen(engine, "before_cursor_execute", _record)
+    yield threads
+    event.remove(engine, "before_cursor_execute", _record)
+
+
+def _media_row(telegram_file_id: str) -> int:
+    from app.db.database import SessionLocal
+    from app.models.media import MediaFile
+
+    db = SessionLocal()
+    try:
+        mf = MediaFile(telegram_channel_id=-1, telegram_message_id=1,
+                       telegram_file_id=telegram_file_id, file_type="photo",
+                       original_filename="a.png", file_size=1, mime_type="image/png",
+                       request_number="250101-781", uploaded_by_user_id=1,
+                       category="request_photo", tags=[], upload_source="api", status="active")
+        db.add(mf)
+        db.commit()
+        return mf.id
+    finally:
+        db.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path_tpl, expect", [
+    ("/api/v1/media/{id}", 200),
+    ("/api/v1/media/{id}/url", 200),
+    ("/api/v1/media/telegram/{fid}", 200),
+    ("/api/v1/media/999999", 404),
+    ("/api/v1/media/999999/url", 404),
+])
+async def test_lookup_handlers_run_sql_off_event_loop(sql_threads, path_tpl, expect):
+    import httpx
+    from app.main import app
+    from app.api.v1.media import get_storage_service
+
+    fid = f"TG-{uuid.uuid4().hex[:10]}"
+    media_id = _media_row(fid)
+    app.dependency_overrides[get_storage_service] = lambda: _storage()
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            sql_threads.clear()
+            loop_thread = threading.get_ident()
+            resp = await client.get(path_tpl.format(id=media_id, fid=fid),
+                                    headers={"X-API-Key": "testkey"})
+    finally:
+        app.dependency_overrides.pop(get_storage_service, None)
+
+    assert resp.status_code == expect, resp.text
+    if expect == 200:
+        body = resp.json()
+        got_id = body["media_file"]["id"] if "media_file" in body else body.get("id", body.get("media_file_id"))
+        assert got_id == media_id
+    assert sql_threads, "ручка обязана сходить в БД"
+    assert loop_thread not in sql_threads, "sync SQL ручки исполнился в event loop"

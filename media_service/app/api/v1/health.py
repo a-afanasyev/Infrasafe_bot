@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.db.database import check_db_connection
 from app.schemas import HealthResponse
 from app.core.config import settings
-from app.services import TelegramClientService
+from app.services.telegram_client import get_telegram_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +55,9 @@ async def detailed_health_check():
 
         # Проверка Telegram API
         try:
-            telegram = TelegramClientService()
-            # Простая проверка - получение информации о боте
-            bot_info = await telegram.bot.get_me()
+            # A9-P2-15: общий процессный клиент — не создаётся и не закрывается здесь.
+            bot_info = await get_telegram_client().bot.get_me()
             dependencies["telegram"] = "ok" if bot_info else "error"
-            await telegram.close()
         except Exception:
             dependencies["telegram"] = "error"
             overall_status = "degraded"
@@ -115,12 +113,8 @@ async def telegram_health():
     Проверка состояния Telegram API
     """
     try:
-        telegram = TelegramClientService()
-
-        # Получаем информацию о боте
-        bot_info = await telegram.bot.get_me()
-
-        await telegram.close()
+        # Получаем информацию о боте (общий процессный клиент, A9-P2-15)
+        bot_info = await get_telegram_client().bot.get_me()
 
         if bot_info:
             return {
