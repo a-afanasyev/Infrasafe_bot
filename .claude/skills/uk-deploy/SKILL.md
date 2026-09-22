@@ -47,9 +47,18 @@ doppler run --project uk-management --config <profk|infrasafe> -- true && echo "
 
 ### Рутинный деплой (после bootstrap)
 
+**Единственный источник истины по набору compose-файлов — эта таблица** (A9-P1-3). RUNBOOK, PAYMENT_CONTROL и прочие документы ссылаются сюда и свои списки `-f` не ведут. КАЖДАЯ compose-команда на хосте (build/run/up/logs/ps/config) — с полным набором своей площадки, в указанном порядке, через `doppler run --`.
+
+| Площадка | Doppler `--config` | `COMPOSE` (порядок важен) | Почему |
+|---|---|---|---|
+| profk.uz | `profk` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` | profk-override (в т.ч. media-service); **payments включён на profk с 2026-09-06** — без третьего `-f` пересоздание `api` молча снимает `PAYMENT_SERVICE_URL/TOKEN`, раздел «Контроль платежей» отвечает 404/503 |
+| infrasafe.uz (105) | `infrasafe` | `-f docker-compose.yml -f docker-compose.media.yml` | media overlay; payments на 105 не поднят (нет секретов и флага) |
+
+Если на площадке включают/выключают overlay — сначала правится эта таблица, потом деплой. Гейт `uk_management_bot/tests/test_deploy_runbook_compose_ssot.py` держит: каждый overlay `docker-compose.*.yml` репо упомянут в этой таблице, а в документах деплоя нет profk-команды без payments.
+
 На infrasafe/105 media-service подключается overlay-файлом — оба `-f` обязательны в КАЖДОЙ команде (`docker-compose.media.yml`).
 
-⚠️ **С 2026-07-31 (AUD6-P2-38) `docker-compose.profk.yml` — больше НЕ standalone, а ТОНКИЙ override поверх базового `docker-compose.yml`.** Ломает мышечную память деплоя: на profk теперь ТОЖЕ оба `-f` в КАЖДОЙ команде — `-f docker-compose.yml -f docker-compose.profk.yml` (порядок важен, базовый первым). Одиночный `-f docker-compose.profk.yml` теперь = битый конфиг (в override нет build/образов большинства сервисов) — compose упадёт, а не поднимет урезанный стек.
+⚠️ **С 2026-07-31 (AUD6-P2-38) `docker-compose.profk.yml` — больше НЕ standalone, а ТОНКИЙ override поверх базового `docker-compose.yml`.** Ломает мышечную память деплоя: на profk теперь ТОЖЕ оба `-f` в КАЖДОЙ команде — `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` (порядок важен, базовый первым). Одиночный `-f docker-compose.profk.yml` теперь = битый конфиг (в override нет build/образов большинства сервисов) — compose упадёт, а не поднимет урезанный стек.
 
 ```bash
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
@@ -60,12 +69,12 @@ doppler run --project uk-management --config infrasafe -- docker compose -f dock
 doppler run --project uk-management --config infrasafe -- docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --wait --wait-timeout 120 access-api
 doppler run --project uk-management --config infrasafe -- docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --wait --wait-timeout 120 app
 
-# profk (те же шаги, COMPOSE=«-f docker-compose.yml -f docker-compose.profk.yml», --config profk):
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml build api access-api app migrate
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml run --rm --no-deps --name uk-migrate migrate
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d --no-deps --wait --wait-timeout 120 api
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d --no-deps --wait --wait-timeout 120 access-api
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d --no-deps --wait --wait-timeout 120 app
+# profk (те же шаги, COMPOSE=«-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml», --config profk):
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml build api access-api app migrate
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml run --rm --no-deps --name uk-migrate migrate
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d --no-deps --wait --wait-timeout 120 api
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d --no-deps --wait --wait-timeout 120 access-api
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d --no-deps --wait --wait-timeout 120 app
 ```
 
 `migrate`-шаг ОБЯЗАТЕЛЕН перед каждым `up` — иначе preflight уронит контейнер `exit 1` при малейшем schema drift. `--no-deps` — обязателен на каждой команде: без него Compose вправе (пере)создать `postgres`/`redis`/`resource-postgres` (stateful, не в routine-деплое). `redis`/`resource-postgres` в этот routine НЕ входят никогда — их ротация отдельная координированная процедура. ⚠️ После очистки `.env` ЛЮБАЯ compose-команда на прод-хосте без `doppler run --` падает на `:?`-интерполяции — это желаемый fail-fast, не чинить возвратом секретов в `.env`.
@@ -97,19 +106,27 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 ```bash
 # 1) завести RESOURCE_APP_PASSWORD в Doppler (оба конфига) — владелец, значения в чат не выводить
 # 2) создать роль (идемпотентно; повтор = ротация пароля):
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose [-f docker-compose.yml -f docker-compose.profk.yml] run --rm resource-provision-roles
+  docker compose $COMPOSE run --rm resource-provision-roles
 ```
 
 **Рутинный деплой (порядок обязателен — migrate ДО up, как у core):**
 
 ```bash
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose [-f docker-compose.yml -f docker-compose.profk.yml] build resource-api resource-worker resource-migrate
+  docker compose $COMPOSE build resource-api resource-worker resource-migrate
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose [-f docker-compose.yml -f docker-compose.profk.yml] run --rm resource-migrate
+  docker compose $COMPOSE run --rm resource-migrate
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose [-f docker-compose.yml -f docker-compose.profk.yml] up -d --no-deps --wait --wait-timeout 120 resource-api resource-worker
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 resource-api resource-worker
 ```
 
 Проверка least-privilege после раскатки: `CREATE TABLE` под `resource_app` в psql обязан дать `permission denied for schema public`; новые таблицы будущих миграций до-грантов не требуют (default privileges от роли `resource`).
@@ -164,8 +181,8 @@ ALTER SEQUENCE media_files_id_seq, media_tags_id_seq, media_channels_id_seq, med
 
 ```bash
 # profk:
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml build media-service
-doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d --no-deps --wait --wait-timeout 120 media-service
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml build media-service
+doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d --no-deps --wait --wait-timeout 120 media-service
 # infrasafe/105 — оба -f:
 doppler run --project uk-management --config infrasafe -- docker compose -f docker-compose.yml -f docker-compose.media.yml build media-service
 doppler run --project uk-management --config infrasafe -- docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --wait --wait-timeout 120 media-service

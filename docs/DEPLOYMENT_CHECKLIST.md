@@ -1,25 +1,12 @@
 # Production Deployment Checklist
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-09-23_
 
-> 🔴 **ВНИМАНИЕ: команды ниже ссылаются на несуществующий `docker-compose.production.yml`
-> и устарели.** Реальный прод-стек infrasafe (хост `~/uk`) — **`docker compose -f
-> docker-compose.yml -f docker-compose.media.yml`** (оба `-f` в каждой команде: media
-> подключается overlay-файлом); profk — `-f docker-compose.yml -f docker-compose.profk.yml`
-> (⚠️ с 2026-07-31 / AUD6-P2-38 profk-файл — тонкий override, одиночный `-f` больше не работает). Каноничная выкатка
-> (ARCH-106: секреты приходят из Doppler, `.env` от них очищен → без `doppler run --`
-> команда упадёт на `:?`; PR-7: `migrate`-шаг обязателен перед каждым `up`):
-> ```bash
-> cd ~/uk && git pull --ff-only
-> export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
-> D="doppler run --project uk-management --config infrasafe --"
-> C="docker compose -f docker-compose.yml -f docker-compose.media.yml"
-> $D $C build api access-api app migrate
-> $D $C run --rm --no-deps --name uk-migrate migrate     # ОБЯЗАТЕЛЕН перед up
-> $D $C up -d --no-deps --wait --wait-timeout 120 api access-api app
-> #  НИКОГДА не добавлять --remove-orphans (снесёт uk-media-service — он
-> #  подключается overlay-файлом, и без обоих -f Compose считает его лишним)
-> ```
+> 🔴 **Команды деплоя в этом файле не ведутся.** Набор compose-файлов площадки —
+> только таблица «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`
+> (profk: base + profk + payments; 105: base + media), пошаговая выкатка — там же и в
+> `docs/ops/RUNBOOK.md` §2 (ARCH-106: только через `doppler run --`; PR-7: `migrate`
+> обязателен перед каждым `up`; НИКОГДА `--remove-orphans`). A9-P1-3.
 > ⚠️ Устаревшее утверждение «миграции применяет сам `api` на старте» больше НЕ верно:
 > после PR-7 entrypoint делает только read-only preflight и падает `exit 1` при schema
 > drift — миграции гоняет отдельный one-shot `migrate`.
@@ -45,11 +32,7 @@
 
 ## Deploy
 
-```bash
-git pull origin main
-docker compose -f docker-compose.production.yml build
-docker compose -f docker-compose.production.yml up -d
-```
+См. `docs/ops/RUNBOOK.md` §2 — команды с `$COMPOSE` площадки из таблицы uk-deploy SKILL.
 
 ## Post-Deploy Verification
 

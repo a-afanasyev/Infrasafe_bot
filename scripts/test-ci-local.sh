@@ -87,6 +87,14 @@ CONFIG_MOUNTS=(
   # Тот же случай: лимит длины ФИО живёт в двух языках (валидация бэкенда и
   # клиентская проверка формы), и гейт сверяет их числами.
   -v "${ROOT}/frontend/src/utils/personName.ts:/app/frontend/src/utils/personName.ts:ro"
+  # A9-P1-3: гейт набора compose-файлов в документах деплоя читает сами документы.
+  -v "${ROOT}/.claude/skills/uk-deploy/SKILL.md:/app/.claude/skills/uk-deploy/SKILL.md:ro"
+  -v "${ROOT}/docs/ops/RUNBOOK.md:/app/docs/ops/RUNBOOK.md:ro"
+  -v "${ROOT}/docs/ROLLBACK.md:/app/docs/ROLLBACK.md:ro"
+  -v "${ROOT}/docs/tech/PAYMENT_CONTROL.md:/app/docs/tech/PAYMENT_CONTROL.md:ro"
+  -v "${ROOT}/docs/DEPLOYMENT_CHECKLIST.md:/app/docs/DEPLOYMENT_CHECKLIST.md:ro"
+  -v "${ROOT}/docs/tech/ARCHITECTURE.md:/app/docs/tech/ARCHITECTURE.md:ro"
+  -v "${ROOT}/docs/tech/ARCHITECTURE_DIAGRAMS.md:/app/docs/tech/ARCHITECTURE_DIAGRAMS.md:ro"
 )
 
 cleanup() {
