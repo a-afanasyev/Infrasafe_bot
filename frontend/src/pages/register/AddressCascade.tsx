@@ -48,11 +48,20 @@ export function AddressCascade({ ticket, api, onSelect }: Props) {
   useEffect(() => {
     let alive = true
     setError('')
+    // A9-P2-30: `alive` — на КАЖДОМ сеттере: поздний ответ по прежнему двору/дому
+    // не должен перезаписать список уже выбранного.
     const load = async () => {
       try {
-        if (step === 'yard') setYards(await api.yards(ticket))
-        else if (step === 'building' && yard) setBuildings(await api.buildings(ticket, yard.id))
-        else if (step === 'apartment' && building) setApartments(await api.apartments(ticket, building.id))
+        if (step === 'yard') {
+          const items = await api.yards(ticket)
+          if (alive) setYards(items)
+        } else if (step === 'building' && yard) {
+          const items = await api.buildings(ticket, yard.id)
+          if (alive) setBuildings(items)
+        } else if (step === 'apartment' && building) {
+          const items = await api.apartments(ticket, building.id)
+          if (alive) setApartments(items)
+        }
       } catch {
         if (alive) setError(t('register.error_generic'))
       }

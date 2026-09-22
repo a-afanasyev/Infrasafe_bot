@@ -11,6 +11,7 @@ import { groupBoardRows } from '../utils/boardRows'
 import WorkReportsModule from '../components/board/WorkReportsModule'
 import ElevatorsBoardModule from '../components/board/ElevatorsBoardModule'
 import { isElevatorsEnabled } from '../utils/featureFlags'
+import { toDisplayTz } from '../utils/timezone'
 
 // DARK-гейт модуля визуальных отчётов «до/после» на табло: монтируется только
 // при VITE_WORK_REPORTS_ENABLED=true (билд-арг), по умолчанию OFF.
@@ -33,8 +34,8 @@ function hm(t: string) {
 
 // ISO → "10.03, 09:00"; falls back to the raw string if unparseable.
 function formatPublished(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+  if (Number.isNaN(new Date(iso).getTime())) return iso
+  const d = toDisplayTz(iso)
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}, ${formatClock(d)}`
 }
 
@@ -90,11 +91,15 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
+  // A9-P3-19 (класс ARCH-116): часы/дата/«сегодня» — стенка display-зоны
+  // объекта, а не зоны браузера (киоск/ТВ с чужой зоной). `now` остаётся
+  // инстантом — для «прошло N минут».
+  const wallNow = toDisplayTz(now.toISOString())
 
   // Date formatting via i18n
   const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
   const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
-  const dateLabel = `${t(`days.full.${dayKeys[now.getDay()]}`)}, ${now.getDate()} ${t(`months.${monthKeys[now.getMonth()]}`)} ${now.getFullYear()}`
+  const dateLabel = `${t(`days.full.${dayKeys[wallNow.getDay()]}`)}, ${wallNow.getDate()} ${t(`months.${monthKeys[wallNow.getMonth()]}`)} ${wallNow.getFullYear()}`
 
   // Elapsed time helper — FE-035: takes the tracked `now` so it stays pure in
   // render (no impure Date.now() call; React Compiler no longer flags it).
@@ -111,7 +116,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
 
   const activeRequests = board?.active_requests ?? []
 
-  const todayDow = now.getDay() === 0 ? 6 : now.getDay() - 1
+  const todayDow = wallNow.getDay() === 0 ? 6 : wallNow.getDay() - 1
 
   const avgResH = board?.avg_resolution_hours != null
     ? board.avg_resolution_hours.toFixed(1)
@@ -347,7 +352,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
           <div style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: 2 }}>{loc(config.org.subtitle)}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', color: '#1a1a1a', letterSpacing: '-0.02em', lineHeight: 1 }}>{formatClock(now)}</div>
+          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', color: '#1a1a1a', letterSpacing: '-0.02em', lineHeight: 1 }}>{formatClock(wallNow)}</div>
           <div style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: 4 }}>{dateLabel}</div>
         </div>
       </header>
@@ -365,7 +370,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       <footer style={{ padding: '20px 48px', textAlign: 'center', color: '#9ca3af', fontSize: '0.82rem', borderTop: '1px solid rgba(0,0,0,0.06)', background: '#fff' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', display: 'inline-block', animation: 'rb-pulse 2s ease-in-out infinite' }} />
-          {t('board.footer.realtime', { time: formatUpdateTime(now) })}
+          {t('board.footer.realtime', { time: formatUpdateTime(wallNow) })}
         </span>
       </footer>
     </div>

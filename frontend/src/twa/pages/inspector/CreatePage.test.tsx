@@ -158,7 +158,8 @@ describe('InspectorCreatePage — мастер', () => {
     await user.click(screen.getByRole('button', { name: 'Далее' }))
     await user.click(screen.getByRole('button', { name: 'Отправить заявку' }))
 
-    expect(await screen.findByText('body.description: too short')).toBeInTheDocument()
+    // A9-P3-20: единый канон разбора (utils/errorMessage) срезает служебный 'body'.
+    expect(await screen.findByText('description: too short')).toBeInTheDocument()
     expect(toastMock.error).toHaveBeenCalled()
     expect(screen.getByText('Подтверждение')).toBeInTheDocument()
   })

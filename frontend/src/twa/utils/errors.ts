@@ -1,5 +1,7 @@
 import { toast } from 'sonner'
 
+import { apiErrorDetail } from '../../utils/errorMessage'
+
 /**
  * Extract a human-readable message from an axios/fetch error.
  *
@@ -10,30 +12,12 @@ import { toast } from 'sonner'
  *   4. fallback                            → caller-provided
  */
 export function getErrorMessage(err: unknown, fallback = 'Произошла ошибка'): string {
-  const anyErr = err as {
-    response?: { data?: { detail?: unknown } }
-    message?: string
-  }
+  // A9-P3-20: разбор detail — единый канон utils/errorMessage.apiErrorDetail.
+  const detail = apiErrorDetail(err)
+  if (detail) return detail
 
-  const detail = anyErr?.response?.data?.detail
-
-  if (Array.isArray(detail)) {
-    return detail
-      .map((d: { loc?: (string | number)[]; msg?: string }) => {
-        const path = Array.isArray(d.loc) ? d.loc.filter((p) => p !== 'body').join('.') : ''
-        return path ? `${path}: ${d.msg ?? ''}` : (d.msg ?? '')
-      })
-      .filter(Boolean)
-      .join('; ')
-  }
-
-  if (typeof detail === 'string' && detail.trim()) {
-    return detail
-  }
-
-  if (anyErr?.message) {
-    return anyErr.message
-  }
+  const message = (err as { message?: unknown } | null)?.message
+  if (typeof message === 'string' && message) return message
 
   return fallback
 }

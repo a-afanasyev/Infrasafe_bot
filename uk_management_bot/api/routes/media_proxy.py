@@ -6,11 +6,9 @@ are absolute and the router is included without a prefix, so the surface is
 unchanged. ``httpx``/``settings`` are module-level so existing tests that
 monkeypatch them on the shared objects keep working.
 """
-import json
 import logging
 import re
 from enum import Enum
-from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -35,6 +33,10 @@ from uk_management_bot.services.request_number_service import (
     REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
 )
 from uk_management_bot.services.request_access import can_upload_completion_async
+from uk_management_bot.services.request_media_markers import (
+    extract_media_id,
+    with_media_marker,
+)
 from uk_management_bot.utils.media_sniff import (
     MEDIA_SERVICE_ACCEPTED_TYPES,
     sniff_media_mime,
@@ -257,17 +259,8 @@ async def _record_request_media_marker(
         await db.rollback()
 
 
-def _extract_media_id(payload: object) -> Optional[int]:
-    """`MediaUploadResponse` медиа-сервиса — конверт `{"media_file": {"id": …},
-    "file_url", "message"}` (media_service/app/schemas/media.py), не плоский
-    объект; плоский `id` принимается как запасная форма."""
-    if not isinstance(payload, dict):
-        return None
-    nested = payload.get("media_file")
-    candidate = nested.get("id") if isinstance(nested, dict) else payload.get("id")
-    if isinstance(candidate, bool) or not isinstance(candidate, int):
-        return None
-    return candidate
+# Формат маркера и разбор ответа медиа-сервиса — общие с ботом (A9-P2-5).
+_extract_media_id = extract_media_id
 
 
 async def _append_media_marker(db: AsyncSession, request_number: str, media_id: int, kind: str) -> None:
@@ -285,22 +278,13 @@ async def _append_media_marker(db: AsyncSession, request_number: str, media_id: 
     if row is None:
         _logger.warning("media upload %s: заявка не найдена, маркер не записан", request_number)
         return
-    current = row.media_files or []
-    if isinstance(current, str):  # legacy: JSON-строка вместо списка
-        try:
-            current = json.loads(current) or []
-        except (json.JSONDecodeError, TypeError):
-            current = []
-    if not isinstance(current, list):
-        # Не список (строка file_id / dict): `[*current]` разложил бы строку
-        # посимвольно и необратимо испортил колонку — сохраняем как элемент.
-        _logger.warning("media upload %s: media_files не список (%s), оборачиваю", request_number, type(current).__name__)
-        current = [current]
-    if any(isinstance(m, dict) and m.get("media_id") == media_id for m in current):
+    # Legacy-формы колонки и дедуп маркера — в with_media_marker (общий с ботом).
+    updated = with_media_marker(row.media_files, media_id, kind)
+    if updated is None:
         return
     # Колонка — plain JSON без MutableList: только переприсваивание
     # помечает строку грязной (прецедент RequestService.add_media_to_request).
-    row.media_files = [*current, {"media_id": media_id, "type": kind}]
+    row.media_files = updated
     await db.commit()
 
 

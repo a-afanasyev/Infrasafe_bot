@@ -18,16 +18,24 @@ from __future__ import annotations
 import json
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 
 from access_control.domain.enums import Direction, EventSource
 from access_control.domain.equipment import EdgeController
-from access_control.integrations.media import AccessMediaClient, get_access_media_client
+from access_control.integrations.media import (
+    KINDS as PHOTO_KINDS,
+    AccessMediaClient,
+    MediaConfigError,
+    delete_media_best_effort,
+    get_access_media_client,
+)
 from access_control.repositories import camera_events_repo
 from access_control.services.device_auth import authenticate_edge
 from access_control.services.snapshot_signing import build_snapshot, sign_snapshot
@@ -192,43 +200,109 @@ async def post_camera_event_photos(
     как ``media://{media_id}``. Идемпотентно: повторная загрузка перезаписывает
     ссылку того же ``kind``. Ответ: ``{ok, updated:[kind...]}``.
 
+    A9-P2-14: порядок «проверка события (короткое чтение) → загрузка всех кадров
+    БЕЗ открытой транзакции → одна короткая транзакция записи ссылок». Раньше
+    UPDATE plate держал row-lock ``camera_events`` на время загрузки overview (до
+    30 с), а при неизвестном событии кадр успевал загрузиться и осиротеть. Сбой
+    медиа-сервиса → 502 и best-effort удаление уже загруженного; событие исчезло
+    до записи → 404 и то же удаление. SQL — в threadpool, не в event loop.
+
     Multipart парсится вручную (``request.form()``), а не через ``File(...)``:
     device-auth (``authenticate_edge``) уже прочитал и закэшировал тело для HMAC,
     а декларация ``File`` заставила бы FastAPI прочитать форму ПЕРВОЙ и «съесть»
     поток до device-auth (Stream consumed). Парсинг из кэша тела безопасен.
     """
     form = await request.form()
-    ref = f"{controller_id}|{event_id}"
-    updated: list[str] = []
-    for kind in ("plate", "overview"):
+    frames = []
+    for kind in PHOTO_KINDS:
         upload = form.get(kind)
         # Берём только файловые поля (UploadFile); строковые значения игнорируем.
-        if not isinstance(upload, UploadFile):
-            continue
-        content = await upload.read()
-        result = await media.upload_access_photo(
-            kind=kind,
-            ref=ref,
-            file_data=content,
-            filename=upload.filename or f"{kind}.jpg",
-            content_type=upload.content_type or "image/jpeg",
+        if isinstance(upload, UploadFile):
+            frames.append((kind, upload, await upload.read()))
+
+    # A9-P2-14: controller.id — до завершения транзакции (expire_on_commit).
+    controller_pk = controller.id
+    exists = await run_in_threadpool(_event_exists, db, controller_pk, event_id)
+    if not exists:
+        # Событие неизвестно этому контроллеру — кадры некуда привязать, не грузим.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="camera event not found"
         )
-        media_id = result["media_id"]
-        found = camera_events_repo.update_photo_ref(
-            db,
-            controller_id=controller.id,
-            event_id=event_id,
-            kind=kind,
-            ref=f"media://{media_id}",
+
+    uploaded = await _upload_frames(media, frames, ref=f"{controller_id}|{event_id}")
+    try:
+        found = await run_in_threadpool(
+            _write_photo_refs, db, controller_pk, event_id, uploaded
         )
-        if found is None:
-            # Событие неизвестно этому контроллеру — фото некуда привязать.
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="camera event not found"
+    except Exception:
+        await delete_media_best_effort(media, uploaded.values())
+        raise
+    if not found:
+        # Событие исчезло между проверкой и записью — загруженное не нужно.
+        await delete_media_best_effort(media, uploaded.values())
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="camera event not found"
+        )
+    return JSONResponse(content={"ok": True, "updated": list(uploaded)})
+
+
+def _event_exists(db: Session, controller_pk: int, event_id: str) -> bool:
+    """Короткая проверка события; транзакция закрывается ДО загрузки кадров."""
+    try:
+        pk = camera_events_repo.find_event_pk(
+            db, controller_id=controller_pk, event_id=event_id
+        )
+    finally:
+        # Не держать соединение «idle in transaction» на время загрузки (до 30 с).
+        db.rollback()
+    return pk is not None
+
+
+async def _upload_frames(
+    media: AccessMediaClient, frames: list, *, ref: str
+) -> dict[str, int]:
+    """Загрузить все кадры; при сбое — best-effort откат уже загруженных, 502."""
+    uploaded: dict[str, int] = {}
+    try:
+        for kind, upload, content in frames:
+            result = await media.upload_access_photo(
+                kind=kind,
+                ref=ref,
+                file_data=content,
+                filename=upload.filename or f"{kind}.jpg",
+                content_type=upload.content_type or "image/jpeg",
             )
-        updated.append(kind)
-    db.commit()
-    return JSONResponse(content={"ok": True, "updated": updated})
+            uploaded[kind] = result["media_id"]
+    except (httpx.HTTPError, MediaConfigError) as exc:
+        await delete_media_best_effort(media, uploaded.values())
+        logger.warning("camera photo upload failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="media unavailable"
+        )
+    return uploaded
+
+
+def _write_photo_refs(
+    db: Session, controller_pk: int, event_id: str, uploaded: dict[str, int]
+) -> bool:
+    """Одна короткая транзакция на запись всех ссылок; False — события нет."""
+    try:
+        for kind, media_id in uploaded.items():
+            found = camera_events_repo.update_photo_ref(
+                db,
+                controller_id=controller_pk,
+                event_id=event_id,
+                kind=kind,
+                ref=f"media://{media_id}",
+            )
+            if found is None:
+                db.rollback()
+                return False
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return True
 
 
 # ------------------------------ access-snapshot (§8.2) --------------------------
