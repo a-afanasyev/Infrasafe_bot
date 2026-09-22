@@ -31,4 +31,4 @@ def localized_month_name(month_index: int, language: str = "ru") -> str:
 def localized_month_year(dt: Union[date, datetime], language: str = "ru") -> str:
     """`date(2026, 5, 1)` + `ru` → `Май 2026`."""
     name = localized_month_name(dt.month, language=language)
-    return f"{name} {dt.year}"
+    return f"{name} {dt.year}"  # html-raw: название месяца из локали

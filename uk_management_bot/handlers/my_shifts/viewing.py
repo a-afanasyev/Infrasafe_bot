@@ -3,6 +3,7 @@
 AUD5-ARCH-3 (волна 7): перенос 1:1 из handlers/my_shifts.py.
 """
 
+import html
 import logging
 
 from datetime import timedelta
@@ -329,7 +330,7 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
 
         # Заметки
         if shift.notes:
-            details_text += f"\n<b>{get_text('my_shifts.handlers.notes_label', language=lang)}:</b>\n{shift.notes}"
+            details_text += f"\n<b>{get_text('my_shifts.handlers.notes_label', language=lang)}:</b>\n{html.escape(shift.notes)}"
 
         await callback.message.edit_text(
             details_text,

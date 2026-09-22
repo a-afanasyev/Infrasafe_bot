@@ -3,6 +3,7 @@
 AUD5-ARCH-3 (волна 11): перенос 1:1 из handlers/user_verification.py.
 """
 
+import html
 import logging
 
 from aiogram import F
@@ -85,11 +86,12 @@ async def show_user_verification(callback: CallbackQuery, roles: list = None, la
 
         # Формируем информацию о пользователе
         not_specified = get_text("user_verification.handlers.not_specified", language=lang)
+        # A9-P2-2: поля профиля и адреса — свободный текст в HTML-сообщении.
         user_info = get_text("user_verification.handlers.user_info_header", language=lang).format(
-            first_name=card.first_name or not_specified,
-            last_name=card.last_name or not_specified,
-            username=card.username or not_specified,
-            phone=card.phone or not_specified
+            first_name=html.escape(card.first_name) if card.first_name else not_specified,
+            last_name=html.escape(card.last_name) if card.last_name else not_specified,
+            username=html.escape(card.username) if card.username else not_specified,
+            phone=html.escape(card.phone) if card.phone else not_specified
         )
 
         # ОБНОВЛЕНО: Используем новую систему квартир
@@ -99,7 +101,7 @@ async def show_user_verification(callback: CallbackQuery, roles: list = None, la
                 for apt in card.approved_apartments:
                     primary_marker = " ⭐" if apt.is_primary else ""
                     owner_marker = " (" + get_text("user_verification.handlers.owner", language=lang) + ")" if apt.is_owner else ""
-                    user_info += f"• {apt.address}{primary_marker}{owner_marker}\n"
+                    user_info += f"• {html.escape(apt.address)}{primary_marker}{owner_marker}\n"
             else:
                 user_info += "\n• " + get_text("user_verification.handlers.addresses_pending", language=lang) + "\n"
         else:
@@ -109,7 +111,7 @@ async def show_user_verification(callback: CallbackQuery, roles: list = None, la
         user_info += "\n\n📋 <b>" + get_text("user_verification.handlers.verification_status_label", language=lang) + ":</b> " + verification_status
 
         if card.verification_notes:
-            user_info += "\n📝 <b>" + get_text("user_verification.handlers.comments_label", language=lang) + ":</b> " + card.verification_notes
+            user_info += "\n📝 <b>" + get_text("user_verification.handlers.comments_label", language=lang) + ":</b> " + html.escape(card.verification_notes)
 
         # Добавляем информацию о документах
         if card.documents:
@@ -127,11 +129,11 @@ async def show_user_verification(callback: CallbackQuery, roles: list = None, la
             for right in card.access_rights:
                 user_info += f"\n• {right.level_value}"
                 if right.apartment_number:
-                    user_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {right.apartment_number})"
+                    user_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {html.escape(str(right.apartment_number))})"
                 elif right.house_number:
-                    user_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {right.house_number})"
+                    user_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {html.escape(str(right.house_number))})"
                 elif right.yard_name:
-                    user_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {right.yard_name})"
+                    user_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {html.escape(right.yard_name)})"
 
         await callback.message.edit_text(
             user_info,

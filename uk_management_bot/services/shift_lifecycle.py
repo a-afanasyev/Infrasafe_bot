@@ -65,7 +65,7 @@ def _running_planned_filter(user_id: int, now: datetime):
 def _append_notes(current: Optional[str], notes: Optional[str]) -> Optional[str]:
     if not notes:
         return current
-    return f"{current}\n{notes}" if current else notes
+    return f"{current}\n{notes}" if current else notes  # html-raw: пишется в shift.notes
 
 
 def _apply_start(planned: Optional[Shift], *, user_id: int, now: datetime,

@@ -30,6 +30,7 @@ from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
 from uk_management_bot.keyboards.contact import get_share_contact_keyboard
 from aiogram.types import ReplyKeyboardRemove
+import html
 import logging
 
 from uk_management_bot.utils.button_texts import get_cancel_texts, get_login_texts
@@ -354,7 +355,7 @@ async def join_with_invite(message: Message, state: FSMContext, language: str = 
     # маскируем второй аргумент той же схемой что и на выходе хендлера.
     _join_parts = (message.text or "").split(maxsplit=1)
     _token_arg = _join_parts[1] if len(_join_parts) > 1 else ""
-    _masked = f"{_token_arg[:8]}…" if _token_arg else "(empty)"
+    _masked = f"{_token_arg[:8]}…" if _token_arg else "(empty)"  # html-raw: только для лога
     logger.info(f"Команда /join получена от пользователя {message.from_user.id}: /join {_masked}")
     lang = language
 
@@ -421,8 +422,8 @@ async def _send_confirmation(message: Message, data: dict, lang: str) -> None:
     role = data.get("invite_role")
     specialization = data.get("invite_specialization", "")
     role_name = get_text(f"roles.{role}", language=lang)
-    confirmation_text = f"✅ ФИО: {data.get('full_name')}\n"
-    confirmation_text += f"📱 Телефон: {data.get('employee_phone')}\n\n"
+    confirmation_text = f"✅ ФИО: {html.escape(data.get('full_name') or '')}\n"
+    confirmation_text += f"📱 Телефон: {html.escape(data.get('employee_phone') or '')}\n\n"
     confirmation_text += f"🎯 Роль: {role_name}\n"
     if role == "executor" and specialization:
         specializations = specialization.split(",")
@@ -455,7 +456,7 @@ async def handle_phone_contact(message: Message, state: FSMContext, language: st
     await state.update_data(employee_phone=phone)
     data = {**(await state.get_data()), "employee_phone": phone}
     await message.answer(
-        get_text("onboarding.phone_saved", language=lang, phone=phone),
+        get_text("onboarding.phone_saved", language=lang, phone=html.escape(phone)),
         reply_markup=ReplyKeyboardRemove(),
     )
     await _send_confirmation(message, data, lang)
@@ -525,8 +526,8 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
 
         # Формируем сообщение для админа
         admin_message = f"{get_text('auth.registration_admin_title', language='ru')}\n\n"
-        admin_message += f"{get_text('auth.user_field', language='ru')} {full_name}\n"
-        admin_message += f"{get_text('auth.phone_field', language='ru')} {phone}\n"
+        admin_message += f"{get_text('auth.user_field', language='ru')} {html.escape(full_name or '')}\n"
+        admin_message += f"{get_text('auth.phone_field', language='ru')} {html.escape(phone or '')}\n"
         admin_message += f"{get_text('auth.telegram_id_field', language='ru')} {callback.from_user.id}\n"
         admin_message += f"{get_text('auth.role_field', language='ru')} {get_text(f'roles.{role}', language='ru')}\n"
         
@@ -553,8 +554,8 @@ async def handle_position_confirmation(callback: CallbackQuery, state: FSMContex
         # Отправляем подтверждение пользователю
         await callback.message.edit_text(
             f"{get_text('auth.registration_complete', language=lang)}\n\n"
-            f"{get_text('auth.full_name_field', language=lang)} {full_name}\n"
-            f"{get_text('auth.phone_field', language=lang)} {phone}\n"
+            f"{get_text('auth.full_name_field', language=lang)} {html.escape(full_name or '')}\n"
+            f"{get_text('auth.phone_field', language=lang)} {html.escape(phone or '')}\n"
             f"{get_text('auth.role_field', language=lang)} {get_text(f'roles.{role}', language=lang)}\n\n"
             f"{get_text('auth.registration_submitted', language=lang)}"
         )

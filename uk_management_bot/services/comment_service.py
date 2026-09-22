@@ -22,6 +22,7 @@ from uk_management_bot.utils.constants import (
     AUDIT_ACTION_REQUEST_STATUS_CHANGED
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import full_name
 from dataclasses import dataclass
 import html
 
@@ -166,12 +167,10 @@ class CommentService:
         for comment in comments:
             # Получаем информацию о пользователе
             user = self.db.query(User).filter(User.id == comment.user_id).first()
-            if user:
-                user_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-                if not user_name:
-                    user_name = f"Пользователь {comment.user_id}"
-            else:
-                user_name = f"Пользователь {comment.user_id}"
+            # A9-P2-2: текст уходит в Telegram с parse_mode=HTML — имя автора
+            # и сам комментарий (свободный ввод жителя/исполнителя) экранируются
+            # здесь, в рендере; в БД хранится сырой текст.
+            user_name = html.escape(full_name(user) or f"Пользователь {comment.user_id}")
             
             # Форматируем дату
             date_str = comment.created_at.strftime("%d.%m.%Y %H:%M") if comment.created_at else "Неизвестно"
@@ -186,7 +185,7 @@ class CommentService:
             if comment.comment_type == COMMENT_TYPE_STATUS_CHANGE and comment.previous_status and comment.new_status:
                 formatted_text += f"📊 Статус изменен: {comment.previous_status} → {comment.new_status}\n"
             
-            formatted_text += f"💬 {comment.comment_text}\n\n"
+            formatted_text += f"💬 {html.escape(comment.comment_text or '')}\n\n"
         
         return formatted_text
     
@@ -214,7 +213,7 @@ class CommentService:
         # Формируем текст комментария
         comment_text = f"Статус изменен с '{previous_status}' на '{new_status}'"
         if additional_comment:
-            comment_text += f"\n\nДополнительно: {additional_comment}"
+            comment_text += f"\n\nДополнительно: {additional_comment}"  # html-raw: пишется в БД; показ экранирует format_comments_for_display
         
         return self.add_comment(
             request_id=request.request_number,
@@ -322,7 +321,7 @@ class CommentService:
             audit_log = AuditLog(
                 user_id=user_id,
                 action=AUDIT_ACTION_REQUEST_STATUS_CHANGED,
-                details=f"Заявка {request_number}: {action_description}",
+                details=f"Заявка {request_number}: {action_description}",  # html-raw: запись аудита в БД
             )
             self.db.add(audit_log)
         except Exception as e:

@@ -1,8 +1,8 @@
 """Уведомления жителю о решениях менеджера (Т11).
 
-Прямой вызов Bot API через httpx, а не aiogram: у API-процесса нет своего
-экземпляра бота, и заводить его ради одного `sendMessage` незачем (тот же
-приём, что в `api/registration/notify.py`).
+Отправка — через общий модуль API `api/telegram_send.py` (A9-P2-9): один
+переиспользуемый клиент, общая таймаут-политика, 403 «бот заблокирован»
+проставляет `users.bot_blocked_at`.
 
 **Никогда не поднимает исключение.** Решение менеджера уже зафиксировано в БД;
 недоступный Telegram не имеет права превратить успешную операцию в 500.
@@ -18,16 +18,12 @@ import logging
 from collections.abc import Iterable
 from typing import Protocol
 
-import httpx
-
-from uk_management_bot.config.settings import settings
+from uk_management_bot.api import telegram_send
 from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
 
 logger = logging.getLogger(__name__)
-
-_TIMEOUT = 10
 
 
 class PlainMessage(Protocol):
@@ -40,26 +36,16 @@ class PlainMessage(Protocol):
 async def _send(
     chat_id: int, text: str, reply_markup: dict | None = None, *, parse_mode: str | None = None,
 ) -> bool:
-    """Один ``sendMessage``; ``True`` — Telegram принял (HTTP 200), иначе ``False`` (в лог).
+    """Один ``sendMessage``; ``True`` — Telegram принял, иначе ``False`` (в лог).
 
-    Не-200 (403 «бот заблокирован», 400 «чат не найден») — штатный прод-кейс,
+    Не-2xx (403 «бот заблокирован», 400 «чат не найден») — штатный прод-кейс,
     не исключение: вызывающий по возвращаемому значению считает доставленных.
+    Лог отказа и штамп ``bot_blocked_at`` — в ``telegram_send.send_message``.
     """
-    url = f"https://api.telegram.org/bot{settings.BOT_TOKEN}/sendMessage"
-    payload: dict = {"chat_id": chat_id, "text": text}
-    if reply_markup is not None:
-        payload["reply_markup"] = reply_markup
-    if parse_mode is not None:
-        payload["parse_mode"] = parse_mode
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        response = await client.post(url, json=payload)
-        if response.status_code != 200:
-            logger.warning(
-                "Telegram отклонил уведомление жителю %s: HTTP %s",
-                chat_id, response.status_code,
-            )
-            return False
-        return True
+    result = await telegram_send.send_message(
+        chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup,
+    )
+    return result.ok
 
 
 async def _safe_send(resident: User, text: str, reply_markup: dict | None = None) -> None:
@@ -77,20 +63,14 @@ async def send_plain_messages(
     Считаются только принятые Telegram (HTTP 200): отказ 400/403 (бот
     заблокирован жителем) — не доставка. Best-effort: вызывать строго ПОСЛЕ
     commit; сбой одного адресата не останавливает остальных и не поднимается
-    наружу. Текст исключения httpx не логируется — он несёт URL с токеном
-    бота (``describe_http_error``).
+    наружу (``telegram_send`` не поднимает сетевые исключения и не логирует
+    URL с токеном).
     """
     delivered = 0
     for message in messages:
-        try:
-            accepted = await _send(message.telegram_id, message.text, parse_mode=parse_mode)
-        except httpx.HTTPError as exc:
-            logger.error(
-                "Не удалось доставить сообщение %s: %s",
-                message.telegram_id, describe_http_error(exc),
-            )
-            continue
-        if accepted:
+        # Сетевые сбои и отказы модуль отправки не поднимает — лог и
+        # результат там же (URL с токеном не логируется).
+        if await _send(message.telegram_id, message.text, parse_mode=parse_mode):
             delivered += 1
     return delivered
 

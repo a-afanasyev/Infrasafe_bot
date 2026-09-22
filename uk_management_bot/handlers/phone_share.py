@@ -9,6 +9,7 @@ FSM-сценарии не перехватываем), только СВОЙ к�
 контакт — не подтверждение владения номером).
 """
 
+import html
 import logging
 
 from aiogram import F, Router
@@ -57,7 +58,7 @@ async def receive_shared_contact(message: Message, language: str = "ru", *, _db=
     if saved:
         logger.info("Сохранён телефон по запросу менеджера для %s", message.from_user.id)
         await message.answer(
-            get_text("onboarding.phone_saved", language=lang, phone=phone_number),
+            get_text("onboarding.phone_saved", language=lang, phone=html.escape(phone_number)),
             reply_markup=ReplyKeyboardRemove(),
         )
         # Спека 2026-09-03 §3.2: контакт — первый шаг онбординга жителя (и в

@@ -3,7 +3,6 @@
 Тела перенесены байт-в-байт; см. __init__.py пакета.
 """
 import logging
-import httpx
 from typing import Optional
 
 from fastapi import HTTPException
@@ -12,7 +11,6 @@ from uk_management_bot.api.dependencies import _parse_user_roles
 from uk_management_bot.api.shifts.schemas import ShiftBrief, ShiftDetail
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
@@ -45,15 +43,16 @@ async def _resolve_bot_username() -> Optional[str]:
         logger.error("Cannot resolve bot username: BOT_USERNAME and BOT_TOKEN are both unset")
         return None
 
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(f"https://api.telegram.org/bot{token}/getMe")
-            resp.raise_for_status()
-            username = (resp.json().get("result") or {}).get("username")
-    except Exception as exc:  # network/auth issues — never crash the request
+    # A9-P2-9: через общий модуль отправки (он не поднимает сетевых исключений
+    # и не логирует URL с токеном).
+    from uk_management_bot.api import telegram_send
+
+    result = await telegram_send.get_me()
+    if not result.ok:
         logger.error("getMe() failed while resolving bot username for invite link: %s",
-                     describe_http_error(exc))
+                     result.describe())
         return None
+    username = (result.result or {}).get("username")
 
     if username:
         app_settings.BOT_USERNAME = username  # cache for subsequent requests

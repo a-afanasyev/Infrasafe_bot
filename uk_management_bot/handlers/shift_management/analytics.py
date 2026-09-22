@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import timedelta
 
@@ -159,7 +160,7 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
                 rec_list = ""
                 for i, rec in enumerate(recommendations, 1):
                     rec_text = rec.get('description', rec.get('recommendation', no_description))
-                    rec_list += f"{i}. {rec_text[:100]}...\n"
+                    rec_list += f"{i}. {html.escape(str(rec_text)[:100])}...\n"
                 recommendations_text = get_text("shift_management.recommendations_section", language=lang,
                                               recommendations=rec_list)
 
@@ -313,8 +314,8 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
                         'low': '🟢'
                     }.get(action.get('urgency', 'medium'), '⚪')
 
-                    priority_list += f"{urgency_emoji} {action['description']}\n"
-                    priority_list += f"   → {action['action']}\n\n"
+                    priority_list += f"{urgency_emoji} {html.escape(str(action['description']))}\n"
+                    priority_list += f"   → {html.escape(str(action['action']))}\n\n"
 
             # Build optimization suggestions list
             optimization_list = ""
@@ -322,8 +323,8 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
             if optimization_suggestions:
                 action_label = get_text("shift_management.action_label", language=lang)
                 for suggestion in optimization_suggestions:
-                    optimization_list += f"• {suggestion['description']}\n"
-                    optimization_list += f"  {action_label}: {suggestion['action']}\n\n"
+                    optimization_list += f"• {html.escape(str(suggestion['description']))}\n"
+                    optimization_list += f"  {action_label}: {html.escape(str(suggestion['action']))}\n\n"
 
             # Build AI recommendations list
             ai_recs_list = ""
@@ -333,7 +334,7 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
                     no_description = get_text("shift_management.no_description", language=lang)
                     for rec in ai_recs['recommendations'][:2]:
                         rec_text = rec.get('description', rec.get('recommendation', no_description))
-                        ai_recs_list += f"• {rec_text[:80]}...\n"
+                        ai_recs_list += f"• {html.escape(str(rec_text)[:80])}...\n"
 
             # All good message if no actions
             all_good_text = ""

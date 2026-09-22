@@ -1,3 +1,5 @@
+import html
+
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -41,7 +43,9 @@ def notify_status_changed(db: Session, request: Request, old_status: str, new_st
 def _build_request_status_message_channel(request: Request, old_status: str, new_status: str) -> str:
     return (
         f"🔔 Заявка #{request.request_number}: {old_status} → {new_status}\n"
-        f"Категория: {request.category}"
+        # A9-P2-2: канал получает статус-апдейты по любым заявкам, включая
+        # легаси-строки, где category — сырое значение из БД; бот шлёт HTML.
+        f"Категория: {html.escape(request.category or '')}"
     )
 
 

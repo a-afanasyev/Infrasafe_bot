@@ -22,6 +22,7 @@ god-файл); здесь живут DTO, sync-юниты и render-хелпер
 ``_return_to_employee_info``, хендлеры — в соседних под-модулях.
 """
 
+import html
 import logging
 
 from dataclasses import dataclass
@@ -288,11 +289,12 @@ async def _return_to_employee_info(callback: CallbackQuery, employee_id: int,
     employee_info = f"👤 {get_text('employee_management.employee_info', language=lang)}\n\n"
 
     # AUD5-CODE-8: имя через канон вместо инлайн-копии той же логики
-    full_name = _format_employee_name(employee)
+    # A9-P2-2: имя/телефон из профиля — в HTML-сообщении, экранируем.
+    full_name = html.escape(_format_employee_name(employee))
 
     not_specified = get_text('employee_mgmt.handlers.not_specified', language=lang)
     employee_info += f"📝 {get_text('employee_management.full_name', language=lang)}: {full_name}\n"
-    employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {employee.phone or not_specified}\n"
+    employee_info += f"📱 {get_text('employee_management.phone', language=lang)}: {html.escape(employee.phone) if employee.phone else not_specified}\n"
     employee_info += f"🎯 {get_text('employee_management.role', language=lang)}: {format_roles(employee.roles, lang)}\n"
     employee_info += f"📊 {get_text('employee_management.status', language=lang)}: {format_user_status(employee.status, lang)}\n"
 

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
@@ -52,7 +53,7 @@ class NotificationService:
         message = (
             f"{get_text('notifications.request_additional_info_title', language=lang)}\n\n"
             f"{get_text('notifications.admin_requests_info', language=lang).replace('{info_name}', info_name)}\n\n"
-            f"{get_text('notifications.comment', language=lang).replace('{comment}', comment)}\n\n"
+            f"{get_text('notifications.comment', language=lang).replace('{comment}', html.escape(comment or ''))}\n\n"
             f"{get_text('notifications.please_provide_info', language=lang)}"
         )
         return user.telegram_id, message
@@ -214,7 +215,7 @@ class NotificationService:
             )
 
             if reason:
-                message += f"\n\n{get_text('notifications.document_rejected_reason', language=lang).replace('{reason}', reason)}"
+                message += f"\n\n{get_text('notifications.document_rejected_reason', language=lang).replace('{reason}', html.escape(reason))}"
 
             message += f"\n\n{get_text('notifications.please_upload_correct', language=lang)}"
             
@@ -288,7 +289,7 @@ class NotificationService:
             )
 
             if reason:
-                message += f"\n\n{get_text('notifications.access_revoked_reason', language=lang).replace('{reason}', reason)}"
+                message += f"\n\n{get_text('notifications.access_revoked_reason', language=lang).replace('{reason}', html.escape(reason))}"
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
@@ -321,7 +322,7 @@ class NotificationService:
                 logger.warning(f"notify_user: пользователь user_id={user_id} не найден")
                 return
 
-            text = f"{title}\n{message}" if title else message
+            text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
             bot = self._get_bot()
 
             import asyncio
@@ -375,7 +376,7 @@ class NotificationService:
             logger.warning(f"notify_user_async: пользователь user_id={user_id} не найден")
             return False
 
-        text = f"{title}\n{message}" if title else message
+        text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
         bot = self._get_bot()
         return await send_to_user(bot, user.telegram_id, text)
 
@@ -389,7 +390,7 @@ class NotificationService:
         """
         try:
             bot = self._get_bot()
-            system_message = f"{title}\n{message}"
+            system_message = f"{title}\n{message}"  # html-raw: title передаёт вызывающий готовым текстом
             await send_to_channel(bot, system_message)
             logger.info(f"Системное уведомление отправлено: {title}")
         except Exception as e:
@@ -407,7 +408,7 @@ class NotificationService:
         from uk_management_bot.services.feedback_service import manager_telegram_ids_sync
 
         bot = self._get_bot()
-        text = f"{title}\n{message}" if title else message
+        text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
         try:
             tg_ids = manager_telegram_ids_sync(self.db)
         except Exception as e:
