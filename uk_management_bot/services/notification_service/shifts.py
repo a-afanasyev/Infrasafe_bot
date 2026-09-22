@@ -16,20 +16,6 @@ from uk_management_bot.services.notification_service.channel import (
 logger = logging.getLogger(__name__)
 
 
-def notify_shift_started(db: Session, user: User, shift: Shift) -> None:
-    try:
-        logger.info(f"Notification: shift_started user_id={user.id} shift_id={shift.id}")
-    except Exception as e:
-        logger.error(f"Ошибка уведомления о старте смены: {e}")
-
-
-def notify_shift_ended(db: Session, user: User, shift: Shift) -> None:
-    try:
-        logger.info(f"Notification: shift_ended user_id={user.id} shift_id={shift.id}")
-    except Exception as e:
-        logger.error(f"Ошибка уведомления о завершении смены: {e}")
-
-
 # ====== Async helpers for full notifications (3.3) ======
 def _format_duration_hm(start_time: datetime, end_time: datetime | None) -> tuple[int, int]:
     # ARCH-137 A2: вычитание идёт в Python, а start_time приезжает из БД aware

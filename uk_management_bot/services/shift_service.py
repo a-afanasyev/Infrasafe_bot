@@ -13,7 +13,6 @@ from uk_management_bot.utils.constants import (
     ROLE_MANAGER,
     AUDIT_ACTION_SHIFT_ENDED,
 )
-from uk_management_bot.services.notification_service import notify_shift_started, notify_shift_ended
 from uk_management_bot.services.shift_lifecycle import end_shift_sync, start_shift_sync
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.datetime_utils import utc_now
@@ -92,11 +91,6 @@ class ShiftService:
             self.db.commit()
             self.db.refresh(shift)
 
-            try:
-                notify_shift_started(self.db, user, shift)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления о старте смены: {e}")
-
             return {"success": True, "message": "Смена начата", "shift": shift}
         except Exception as e:
             self.db.rollback()
@@ -116,11 +110,6 @@ class ShiftService:
             end_shift_sync(self.db, user, active, notes)
             self.db.commit()
             self.db.refresh(active)
-
-            try:
-                notify_shift_ended(self.db, user, active)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления о завершении смены: {e}")
 
             return {"success": True, "message": "Смена завершена", "shift": active}
         except Exception as e:
@@ -165,10 +154,6 @@ class ShiftService:
             except Exception as e:
                 self.db.rollback()
                 logger.error(f"Ошибка аудита force-end смены: {e}")
-            try:
-                notify_shift_ended(self.db, manager, active)
-            except Exception as e:
-                logger.error(f"Ошибка уведомления force-end: {e}")
 
             return {"success": True, "message": "Смена завершена менеджером", "shift": active}
         except Exception as e:
