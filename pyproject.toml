@@ -62,7 +62,8 @@ force-exclude = true
 
 [tool.ruff.lint]
 # Mirror the legacy flake8 baseline (pycodestyle E + pyflakes F). E501
-# (line-too-long) is delegated to black (the formatter); E203 is black-compatible.
+# (line-too-long) и E203 не гейтятся: форматтера в цепочке нет (black/isort
+# сняты по A9-P2-22, решение владельца — без массового переформатирования).
 select = ["E", "F"]
 ignore = ["E203", "E501"]
 
