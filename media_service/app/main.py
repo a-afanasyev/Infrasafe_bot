@@ -15,6 +15,7 @@ import time
 
 from app.core.config import settings
 from app.db.database import init_db, check_db_connection
+from app.services.telegram_client import close_telegram_client, get_telegram_client
 from app.api.v1.router import api_router
 from app.schemas import ErrorResponse, ValidationErrorResponse
 
@@ -74,16 +75,22 @@ async def lifespan(app: FastAPI):
             logger.error("Database connection failed!")
             raise RuntimeError("Database connection failed")
 
+        # A9-P2-15: один Telegram-клиент (Bot + aiohttp-сессия + httpx-пул)
+        # на процесс; раньше — новый на каждый запрос и без закрытия.
+        get_telegram_client()
+
         logger.info("Media Service started successfully")
 
     except Exception as e:
         logger.error(f"Failed to start Media Service: {e}")
         raise
 
-    yield
-
-    # Shutdown
-    logger.info("Shutting down Media Service...")
+    try:
+        yield
+    finally:
+        # Shutdown
+        logger.info("Shutting down Media Service...")
+        await close_telegram_client()
 
 
 # Создание FastAPI приложения
