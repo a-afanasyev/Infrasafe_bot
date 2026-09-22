@@ -155,7 +155,7 @@ export default function InspectorCreatePage() {
     onSuccess: ({ photoFailures }) => {
       haptic('notification')
       if (photoFailures.length > 0) {
-        toast.warning(`Заявка создана, не загрузились фото №${photoFailures.join(', ')}`)
+        toast.warning(t('twa.create.photoUploadFailed', { numbers: photoFailures.join(', ') }))
       } else {
         toast.success(t('twa.create.submitted'))
       }
@@ -263,7 +263,7 @@ export default function InspectorCreatePage() {
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
       {uploadProgress && uploadProgress.total > 0 && (
         <div className="mt-3 text-center text-[12px] text-gray-500 dark:text-gray-400">
-          Загрузка фото {uploadProgress.done}/{uploadProgress.total}
+          {t('twa.photo.uploadProgress', { done: uploadProgress.done, total: uploadProgress.total })}
         </div>
       )}
       {createMutation.isError && (

@@ -216,7 +216,7 @@ export default function LoginPage() {
             className="w-[52px] h-[52px] mb-3 rounded-full shadow-[var(--auth-logo-shadow)]"
           />
           <div className="font-[family-name:var(--font-display)] font-bold text-[22px] text-text-primary tracking-tight">
-            Сервисная панель
+            {t('login.panelTitle')}
           </div>
           <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
             {t('login.subtitle')}
@@ -244,7 +244,7 @@ export default function LoginPage() {
             <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
               <div className="text-center mb-1">
                 <div className="text-sm text-text-secondary font-[family-name:var(--font-body)]">
-                  Код отправлен в Telegram
+                  {t('login.otpSent')}
                 </div>
                 {otpTimer > 0 && (
                   <div className="text-xs text-text-muted font-[family-name:var(--font-body)] mt-1">
@@ -255,7 +255,7 @@ export default function LoginPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1.5 font-[family-name:var(--font-display)] tracking-wide">
-                  Код подтверждения
+                  {t('login.otpLabel')}
                 </label>
                 <input
                   type="text"
@@ -294,7 +294,7 @@ export default function LoginPage() {
                     : 'bg-accent cursor-pointer hover:bg-[var(--accent-hover)]'
                 )}
               >
-                {loading ? t('login.submitting') : 'Подтвердить'}
+                {loading ? t('login.submitting') : t('login.otpConfirm')}
               </button>
 
               <div className="flex items-center justify-between text-xs font-[family-name:var(--font-body)]">
@@ -303,7 +303,7 @@ export default function LoginPage() {
                   onClick={() => { setMfaToken(null); setOtpCode(''); setError(''); setOtpTimer(0) }}
                   className="text-text-muted hover:text-text-secondary transition-colors cursor-pointer bg-transparent border-none p-0"
                 >
-                  Назад
+                  {t('login.back')}
                 </button>
                 <button
                   type="button"
@@ -316,7 +316,7 @@ export default function LoginPage() {
                       : 'text-text-muted cursor-not-allowed'
                   )}
                 >
-                  Отправить повторно
+                  {t('login.otpResend')}
                 </button>
               </div>
             </form>

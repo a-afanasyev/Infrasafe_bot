@@ -75,7 +75,7 @@ export default function TaskDetailPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось изменить статус')
+      notifyError(err, t('twa.exec.detail.statusChangeFailed'))
     },
   })
 
@@ -96,7 +96,7 @@ export default function TaskDetailPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось отправить уточнение')
+      notifyError(err, t('twa.exec.detail.clarifyFailed'))
     },
   })
 

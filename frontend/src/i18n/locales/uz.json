@@ -801,7 +801,13 @@
     "or": "yoki",
     "otpInvalid": "Noto'g'ri kod",
     "otpResent": "Kod qayta yuborildi",
-    "otpResendFailed": "Kodni yuborib bo'lmadi"
+    "otpResendFailed": "Kodni yuborib bo'lmadi",
+    "panelTitle": "Xizmat paneli",
+    "otpSent": "Kod Telegramga yuborildi",
+    "otpLabel": "Tasdiqlash kodi",
+    "otpConfirm": "Tasdiqlash",
+    "back": "Orqaga",
+    "otpResend": "Qayta yuborish"
   },
   "register": {
     "title": "Aholini ro'yxatdan o'tkazish",
@@ -1995,7 +2001,9 @@
         "blockedPickAnother": "Boshqa liftni tanlang yoki toifaga qayting.",
         "hintUnderRepair": "Lift allaqachon ta'mirda — ariza joriy ta'mirga qo'shiladi.",
         "hintMaintenance": "Lift texnik xizmatda — ariza xizmat ko'rsatuvchi tashkilotga uzatiladi."
-      }
+      },
+      "photoUploadFailed": "Ariza yaratildi, lekin №{{numbers}} rasm(lar) yuklanmadi",
+      "submittedWithPhotos": "Ariza yaratildi (rasmlar: {{count}})"
     },
     "inspector": {
       "selectYard": "Hovlini tanlang",
@@ -2047,7 +2055,9 @@
         "active": "Smena faol",
         "inactive": "Smena boshlanmagan",
         "start": "Smenani boshlash",
-        "end": "Smenani tugatish"
+        "end": "Smenani tugatish",
+        "startFailed": "Smenani boshlab bo'lmadi",
+        "endFailed": "Smenani tugatib bo'lmadi"
       },
       "purchase": {
         "title": "Materiallar xaridi",
@@ -2073,7 +2083,9 @@
         "purchaseTitle": "Nima xarid qilish kerak?",
         "purchasePlaceholder": "Materiallar ro'yxati...",
         "clarifyTitle": "Nimani aniqlashtirish kerak?",
-        "clarifyPlaceholder": "Nimani aniqlashtirish kerakligini yozing..."
+        "clarifyPlaceholder": "Nimani aniqlashtirish kerakligini yozing...",
+        "statusChangeFailed": "Holatni o'zgartirib bo'lmadi",
+        "clarifyFailed": "Aniqlashtirishni yuborib bo'lmadi"
       },
       "myShifts": {
         "title": "Mening smenalarim",
@@ -2133,7 +2145,9 @@
         "description": "Nima qilinganini tasvirlang",
         "placeholder": "Nima qilindi...",
         "photos": "Bajarilgan ishlar fotosurati",
-        "submit": "Bajarilgan deb belgilash"
+        "submit": "Bajarilgan deb belgilash",
+        "photoUploadFailed": "Ariza yakunlandi, lekin №{{numbers}} rasm(lar) yuklanmadi",
+        "completeFailed": "Arizani yakunlab bo'lmadi"
       }
     },
     "timeline": {
@@ -2160,7 +2174,8 @@
       "maxFiles": "Ko'pi bilan {{count}} ta fayl",
       "camera": "Kamera",
       "gallery": "Galereya",
-      "remove": "Rasmni o‘chirish"
+      "remove": "Rasmni o‘chirish",
+      "uploadProgress": "Rasmlar yuklanmoqda {{done}}/{{total}}"
     },
     "feedback": {
       "title": "Qayta aloqa",
@@ -2175,7 +2190,10 @@
       "error": "Murojaatni yuborib bo‘lmadi"
     },
     "authError": "Telegram orqali kirish muvaffaqiyatsiz tugadi. Ulanishni tekshirib, qaytadan urinib ko'ring.",
-    "retry": "Qaytadan urinish"
+    "retry": "Qaytadan urinish",
+    "errors": {
+      "generic": "Xatolik yuz berdi"
+    }
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",
