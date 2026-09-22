@@ -26,6 +26,7 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_media
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import (
     CATEGORY_KEYS,
@@ -392,16 +393,20 @@ async def inspector_urgency_selected(callback: CallbackQuery, state: FSMContext)
 @router.message(InspectorRequestStates.media, F.photo | F.video)
 async def inspector_media(message: Message, state: FSMContext):
     lang = await _lang(message)
-    data = await state.get_data()
-    media_files = data.get("media_files", [])
-    if len(media_files) >= 5:
-        await message.answer(get_text("requests.max_5_files", language=lang))
-        return
     file_id = message.photo[-1].file_id if message.photo else message.video.file_id
-    media_files.append(file_id)
-    await state.update_data(media_files=media_files)
+    # A9-P1-1: атомарная дозапись — части альбома приходят конкурентно
+    result = await append_fsm_media(
+        state, "media_files", file_id, media_group_id=message.media_group_id,
+        message_id=message.message_id
+    )
+    if not result.added:
+        if result.notify:
+            await message.answer(
+                get_text("requests.media_limit_reached", language=lang, max=BOT_MEDIA_MAX_FILES)
+            )
+        return
     await message.answer(
-        get_text("requests.file_added", language=lang).replace("{...}", str(len(media_files))),
+        get_text("requests.file_added", language=lang, count=result.count, max=BOT_MEDIA_MAX_FILES),
         reply_markup=get_media_keyboard(language=lang),
     )
 

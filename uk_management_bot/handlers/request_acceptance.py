@@ -51,6 +51,7 @@ from uk_management_bot.utils.workflow_predicates import (
 )
 
 from uk_management_bot.utils.button_texts import get_acceptance_texts
+from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_media
 from uk_management_bot.utils.helpers import get_text
 
 import logging
@@ -639,13 +640,20 @@ async def save_return_media(message: Message, state: FSMContext, language: str =
             file_id = message.video.file_id
 
         if file_id:
-            # Сохраняем file_id в state
-            data = await state.get_data()
-            return_media = data.get('return_media', [])
-            return_media.append(file_id)
-            await state.update_data(return_media=return_media)
-
+            # A9-P1-1: атомарная дозапись — части альбома приходят конкурентно
             lang = language
+            result = await append_fsm_media(
+                state, "return_media", file_id, media_group_id=message.media_group_id,
+                message_id=message.message_id
+            )
+            if not result.added:
+                if result.notify:
+                    await message.answer(
+                        get_text("requests.media_limit_reached", language=lang, max=BOT_MEDIA_MAX_FILES),
+                        reply_markup=get_skip_media_keyboard()
+                    )
+                return
+
             await message.answer(
                 get_text("request_acceptance.handlers.media_saved", language=lang),
                 reply_markup=get_skip_media_keyboard()

@@ -13,6 +13,7 @@ from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 
 from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_media
 import logging
 
 # Localization imports - TASK 17 Phase 2
@@ -66,6 +67,7 @@ class ExecutorRequestStates(StatesGroup):
 @router.callback_query(F.data.startswith("executor_view_media_"))
 async def executor_view_media(callback: CallbackQuery, *, _db=None):
     """Просмотр медиа-файлов заявки исполнителем"""
+    answered = False
     try:
         request_number = callback.data.replace("executor_view_media_", "")
         with _db_scope(_db) as db_session:
@@ -92,17 +94,25 @@ async def executor_view_media(callback: CallbackQuery, *, _db=None):
         # Отправка — services/request_media_entries.py: три формы элементов
         # (в т.ч. файлы медиа-сервиса байтами), чанки по лимиту Telegram.
         entries = parse_media_entries(request_media_files)
-        sent = await send_media_entries(callback.message, entries, get_media_client())
-
-        if sent:
-            await callback.answer(get_text("requests.media_files_sent", language=lang))
-        else:
+        if not entries:
             await callback.answer(get_text("requests.no_media_files", language=lang), show_alert=True)
+            return
+
+        # A9-P3-15: callback отвечаем ДО скачивания/отправки — файлы медиа-сервиса
+        # тянутся байтами последовательно, и поздний answer ловил «query is too old».
+        await callback.answer()
+        answered = True
+        sent = await send_media_entries(callback.message, entries, get_media_client())
+        if not sent:
+            await callback.message.answer(get_text("requests.no_media_files", language=lang))
 
     except Exception as e:
         logger.error(f"Ошибка просмотра медиа исполнителем: {e}")
         lang = "ru"            # ARCH-013: не открываем вторую сессию на error-path
-        await callback.answer(get_text("common.error", language=lang), show_alert=True)
+        if answered:
+            await callback.message.answer(get_text("common.error", language=lang))
+        else:
+            await callback.answer(get_text("common.error", language=lang), show_alert=True)
 
 
 def _run_executor_command(request_number: str, user_id, action, payload: dict,
@@ -443,31 +453,40 @@ async def executor_collect_completion_media(message: Message, state: FSMContext)
     """Сбор медиа-файлов для завершения заявки"""
     try:
         data = await state.get_data()
-        completion_media = data.get("completion_media", [])
         request_number = data.get("executor_request_number")
 
         with _db_scope(None) as db_session:
             lang = get_user_language(message.from_user.id, db_session)
 
-        # Добавляем файл в список
         if message.photo:
-            completion_media.append({"type": "photo", "file_id": message.photo[-1].file_id})
+            item = {"type": "photo", "file_id": message.photo[-1].file_id}
         elif message.video:
-            completion_media.append({"type": "video", "file_id": message.video.file_id})
-        elif message.document:
-            completion_media.append({"type": "document", "file_id": message.document.file_id})
+            item = {"type": "video", "file_id": message.video.file_id}
+        else:
+            item = {"type": "document", "file_id": message.document.file_id}
 
-        await state.update_data(completion_media=completion_media)
+        # A9-P1-1: атомарная дозапись — части альбома приходят конкурентно;
+        # A9-P3-15: лимит тот же, что у создания заявки (раньше его не было).
+        result = await append_fsm_media(
+            state, "completion_media", item, media_group_id=message.media_group_id,
+            message_id=message.message_id
+        )
+        if not result.added:
+            if result.notify:
+                await message.answer(
+                    get_text("requests.media_limit_reached", language=lang, max=BOT_MEDIA_MAX_FILES)
+                )
+            return
 
         # Обновляем клавиатуру с счетчиком
-        finish_button_text = get_text("requests.finish_with_files", language=lang).format(count=len(completion_media))
+        finish_button_text = get_text("requests.finish_with_files", language=lang).format(count=result.count)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=finish_button_text, callback_data=f"executor_finish_completion_{request_number}")],
             [InlineKeyboardButton(text=get_text("common.cancel", language=lang), callback_data=f"view_request_{request_number}")]
         ])
 
         await message.answer(
-            get_text("requests.file_added_send_more", language=lang).format(count=len(completion_media)),
+            get_text("requests.file_added_send_more", language=lang).format(count=result.count),
             reply_markup=keyboard
         )
 

@@ -1,5 +1,7 @@
 """Unit tests for middlewares/throttling.py."""
 import time
+from dataclasses import replace
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -19,6 +21,13 @@ def _make_message(user_id: int = 1001):
     msg = MagicMock()
     msg.from_user = MagicMock()
     msg.from_user.id = user_id
+    msg.media_group_id = None
+    return msg
+
+
+def _make_album_part(user_id: int = 1001, media_group_id: str = "album-1"):
+    msg = _make_message(user_id)
+    msg.media_group_id = media_group_id
     return msg
 
 
@@ -118,6 +127,7 @@ class TestThrottlingMiddlewareCall:
         mw = ThrottlingMiddleware(rate_limit=10.0)
         msg = MagicMock()
         msg.from_user = None
+        msg.media_group_id = None
 
         data = {}
         result = await mw(handler=_noop_handler, event=msg, data=data)
@@ -130,11 +140,149 @@ class TestThrottlingMiddlewareCall:
         mw = ThrottlingMiddleware(rate_limit=10.0)
         msg = MagicMock()
         msg.from_user = None
+        msg.media_group_id = None
 
         await mw(handler=_noop_handler, event=msg, data={})
         result = await mw(handler=_noop_handler, event=msg, data={})
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: albums (A9-P1-1)
+# ---------------------------------------------------------------------------
+
+class TestThrottlingAlbums:
+    """Альбом = одно действие пользователя, которое Telegram присылает N
+    апдейтами за миллисекунды. Троттлинг считает альбом одним сообщением:
+    старт альбома подчиняется rate_limit, его части (≤10, в коротком окне)
+    проходят. ``media_group_id`` задаёт клиент — полный пропуск снял бы
+    антифлуд (юзербот шлёт альбомы в цикле)."""
+
+    @staticmethod
+    async def _send(mw, msgs):
+        return [await mw(handler=_noop_handler, event=m, data={}) for m in msgs]
+
+    @pytest.mark.asyncio
+    async def test_all_parts_of_album_pass(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        calls = []
+
+        async def handler(event, data):
+            calls.append(event)
+            return "ok"
+
+        album = [_make_album_part(1001) for _ in range(5)]
+        results = [await mw(handler=handler, event=m, data={}) for m in album]
+
+        assert results == ["ok"] * 5
+        assert calls == album
+
+    @pytest.mark.asyncio
+    async def test_full_album_of_ten_passes(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        results = await self._send(mw, [_make_album_part(1001) for _ in range(10)])
+        assert results == ["ok"] * 10
+
+    @pytest.mark.asyncio
+    async def test_eleventh_part_of_same_album_dropped(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        results = await self._send(mw, [_make_album_part(1001) for _ in range(11)])
+        assert results == ["ok"] * 10 + [None]
+
+    @pytest.mark.asyncio
+    async def test_album_flood_only_first_album_passes(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        msgs = [
+            _make_album_part(1001, media_group_id=f"album-{a}")
+            for a in range(3) for _ in range(4)
+        ]
+        results = await self._send(mw, msgs)
+        assert results == ["ok"] * 4 + [None] * 8
+
+    @staticmethod
+    def _age(mw, user_id, seconds):
+        """Сдвинуть в прошлое всё per-user состояние (без патча time.monotonic)."""
+        mw._last_message[user_id] -= seconds
+        album = mw._albums[user_id]
+        mw._albums[user_id] = replace(album, started_at=album.started_at - seconds)
+
+    @pytest.mark.asyncio
+    async def test_second_album_soon_after_first_is_dropped(self):
+        """Старт нового альбома — не чаще _ALBUM_START_INTERVAL (≥2 с), иначе
+        худший случай 10 фото каждые rate_limit = 20 msg/s."""
+        mw = ThrottlingMiddleware(rate_limit=0.5)
+        first = await self._send(mw, [_make_album_part(1001, "a1") for _ in range(3)])
+        self._age(mw, 1001, 0.6)
+        second = await self._send(mw, [_make_album_part(1001, "a2") for _ in range(3)])
+
+        assert first == ["ok"] * 3
+        assert second == [None] * 3
+
+    @pytest.mark.asyncio
+    async def test_second_album_after_start_interval_passes(self):
+        mw = ThrottlingMiddleware(rate_limit=0.5)
+        await self._send(mw, [_make_album_part(1001, "a1") for _ in range(3)])
+        self._age(mw, 1001, 2.1)
+        second = await self._send(mw, [_make_album_part(1001, "a2") for _ in range(3)])
+
+        assert second == ["ok"] * 3
+
+    @pytest.mark.asyncio
+    async def test_text_is_not_slowed_by_album_start_interval(self):
+        """Обычные сообщения по-прежнему по rate_limit, а не по интервалу альбомов."""
+        mw = ThrottlingMiddleware(rate_limit=0.5)
+        await self._send(mw, [_make_album_part(1001, "a1") for _ in range(3)])
+        self._age(mw, 1001, 0.6)
+
+        result = await mw(handler=_noop_handler, event=_make_message(1001), data={})
+
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_same_album_part_after_window_dropped(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        await self._send(mw, [_make_album_part(1001) for _ in range(2)])
+        # окно альбома давно истекло (и rate_limit тоже — не он режет)
+        album = mw._albums[1001]
+        mw._albums[1001] = replace(album, started_at=album.started_at - 100.0)
+        mw._last_message[1001] -= 100.0
+
+        result = await mw(handler=_noop_handler, event=_make_album_part(1001), data={})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_album_right_after_text_is_throttled(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        await mw(handler=_noop_handler, event=_make_message(1001), data={})
+
+        results = await self._send(mw, [_make_album_part(1001) for _ in range(3)])
+
+        assert results == [None] * 3
+
+    @pytest.mark.asyncio
+    async def test_text_right_after_album_is_throttled(self):
+        mw = ThrottlingMiddleware(rate_limit=10.0)
+        await self._send(mw, [_make_album_part(1001) for _ in range(3)])
+
+        result = await mw(handler=_noop_handler, event=_make_message(1001), data={})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_album_state_is_evicted_with_stale_users(self):
+        mw = ThrottlingMiddleware(rate_limit=0.5)
+        await mw(handler=_noop_handler, event=_make_album_part(1), data={})
+        template = mw._albums[1]
+        stale = time.monotonic() - 100.0
+        for uid in range(_EVICTION_THRESHOLD + 1):
+            mw._last_message[uid] = stale
+            mw._albums[uid] = replace(template, started_at=stale)
+
+        await mw(handler=_noop_handler, event=_make_album_part(10**9), data={})
+
+        assert list(mw._albums) == [10**9]
 
 
 # ---------------------------------------------------------------------------
