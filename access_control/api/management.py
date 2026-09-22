@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from access_control.api.registry import ApartmentLink, PassRow, VehicleRow
 from access_control.domain.passes import AccessPass
 from access_control.domain.vehicles import Vehicle, VehicleApartment
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.management import (
     InvalidReviewAction,
     PassNotFound,
@@ -55,11 +56,6 @@ _PLATE_MAX_LEN = 32
 _REASON_MAX_LEN = 2000
 _TEXT_MAX_LEN = 64
 _COMMENT_MAX_LEN = 2000
-
-
-def _client_ip(request: Request) -> str | None:
-    """IP источника для audit (§6.2). Для пилота достаточно client.host."""
-    return request.client.host if request.client else None
 
 
 # ------------------------------ тела запросов ------------------------------
@@ -252,7 +248,7 @@ def post_vehicle(
             apartment_id=body.apartment_id,
             relation_type=body.relation_type,
             zone_id=body.zone_id,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except VehicleAlreadyExists as exc:
         raise HTTPException(
@@ -278,7 +274,7 @@ def patch_vehicle_status(
             status=body.status,
             actor_user_id=user.id,
             reason=body.reason,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except VehicleNotFound:
         raise HTTPException(
@@ -306,7 +302,7 @@ def patch_vehicle(
             vehicle_id=vehicle_id,
             actor_user_id=user.id,
             fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except VehicleNotFound:
         raise HTTPException(
@@ -343,7 +339,7 @@ def post_taxi_pass(
         plate_number_original=body.plate_number_original,
         valid_from=body.valid_from,
         max_entries=body.max_entries,
-        ip_address=_client_ip(request),
+        ip_address=resolve_client_ip(request),
     )
     return _pass_response(ap)
 
@@ -364,7 +360,7 @@ def patch_pass(
             pass_id=pass_id,
             actor_user_id=user.id,
             fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except PassNotFound:
         raise HTTPException(
@@ -391,7 +387,7 @@ def post_review(
             comment=body.comment,
             zone_id=body.zone_id,
             zone_ids=body.zone_ids,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except RequestNotFound:
         raise HTTPException(
