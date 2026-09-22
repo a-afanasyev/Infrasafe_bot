@@ -8503,6 +8503,7 @@
     "staff_pick_address": "🛠 Bu ariza kabi ko'rinadi: {category}, shoshilinchlik — {urgency}.\nManzilni tanlang:",
     "staff_no_address": "Manzilni aniqlab bo'lmadi. Xabar matnida uy yoki hovlini ko'rsating va uni qayta yuboring.",
     "photo_only": "📷 Video va video-xabarlar arizaga biriktirilmaydi. Iltimos, o'sha tavsif bilan foto yuboring.",
+    "classifier_unavailable": "⚠️ Xabarni qayta ishlab bo'lmadi: aniqlash xizmati vaqtincha ishlamayapti. Arizani teg bilan bir daqiqadan so'ng qayta yuboring.",
     "staff_only": "Arizalarni faqat xodim tasdiqlashi mumkin",
     "elevator": {
       "pick_prompt": "🛗 Lift bo'yicha ariza. Qaysi lift haqida gap ketmoqda? Tanlang:",

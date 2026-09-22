@@ -738,10 +738,18 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
 
     result: ClassificationResult = await classify_message(text)
     if result.outcome is not Outcome.REQUEST:
+        if group.get("require_tag") and result.outcome is Outcome.PROCESSING_ERROR:
+            # Тег = явное намерение: сломанный классификатор не заменить
+            # дефолтами честно, но и тишина недопустима (инцидент 2026-09-22:
+            # помеченная заявка пропала после разового таймаута) — просим
+            # повторить, повтор придёт новым message_id мимо dedup.
+            lang = message.from_user.language_code or "ru"
+            await message.reply(get_text("group_intake.classifier_unavailable", language=lang))
+            return
         if not (group.get("require_tag")
                 and result.outcome is Outcome.NOT_REQUEST):
-            # NOT_REQUEST и PROCESSING_ERROR в группе неразличимы (тишина);
-            # различие живёт в логах classifier'а.
+            # Без тега NOT_REQUEST и PROCESSING_ERROR в группе неразличимы
+            # (тишина); различие живёт в логах classifier'а.
             return
         # Тег-режим: тег — явное намерение автора, LLM не гейткипер (живой
         # smoke: «#заявка когда будет свет 23 дом» LLM счёл вопросом →

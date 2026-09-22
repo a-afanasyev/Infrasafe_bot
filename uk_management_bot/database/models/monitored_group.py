@@ -30,7 +30,9 @@ GROUP_KIND_STAFF = "staff"
 GROUP_KINDS = (GROUP_KIND_RESIDENTS, GROUP_KIND_STAFF)
 
 # Теги-триггеры для групп в require_tag-режиме (сравнение casefold).
-REQUEST_TAGS = ("#заявка", "#ariza")
+# Кириллический «#ариза» и латинский «#zayavka» — живые варианты из чатов
+# сотрудников (инцидент 2026-09-22: «#ариза» молча ронялось).
+REQUEST_TAGS = ("#заявка", "#ariza", "#ариза", "#zayavka")
 
 
 class MonitoredGroup(Base):

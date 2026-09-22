@@ -204,7 +204,7 @@ flowchart TD
     F1 --> CT[candidate_text ≤2000\nтекст или caption]
     CT --> CMD{Команда?}
     CMD -->|да| SILENT
-    CMD --> TAG{"Тег #заявка/#ariza?"}
+    CMD --> TAG{"Тег #заявка/#ариза/#ariza/#zayavka?"}
     TAG -->|есть| REG
     TAG -->|нет| PRE{Префильтр\nдлина/маркеры/фото}
     PRE -->|отсев| SILENT
@@ -221,7 +221,7 @@ flowchart TD
     PH --> DED[Дедуп + rate-limit LLM]
     DED --> LLM{"LLM classify\n(тег переопределяет NOT_REQUEST)"}
     LLM -->|NOT_REQUEST| SILENT
-    LLM -->|PROCESSING_ERROR| LOGGED[Тишина + лог-маркер]
+    LLM -->|PROCESSING_ERROR| LOGGED["Один ретрай при сетевом сбое;\nтег-режим: просьба повторить,\nиначе тишина + лог-маркер"]
     LLM -->|REQUEST| ADDRM["Адресный матчер:\nквартиры автора (residents)\nдом/двор по тексту (staff)\nтранслит + токены"]
     ADDRM -->|нет адреса| INVITE[Приглашение в личный бот\ncooldown 1/час]
     ADDRM -->|1..4 кандидата| PROMPT["Промпт: Да / Нет / Другой адрес\n(staff: выбор адреса, любой сотрудник)"]

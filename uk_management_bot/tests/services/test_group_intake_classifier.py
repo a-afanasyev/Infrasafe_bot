@@ -142,3 +142,54 @@ def test_service_category_leaked_by_model_yields_to_keyword():
     res = _parse_response(_payload("engineering"), keyword_category="plumbing")
     assert res.category == "plumbing"
     assert res.category_source == "keyword"
+
+
+# ───────────── 2026-09-22: ретрай разового сетевого сбоя (инцидент profk) ─────────────
+
+
+def _ok_response(payload=None):
+    return SimpleNamespace(
+        stop_reason="end_turn",
+        content=[SimpleNamespace(type="text", text=json.dumps(payload or _payload("other")))],
+    )
+
+
+@pytest.mark.asyncio
+async def test_llm_timeout_is_retried_once_and_succeeds(monkeypatch):
+    create = AsyncMock(side_effect=[TimeoutError(), _ok_response()])
+    client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(classifier, "_get_client", lambda: client)
+    res = await classify_message("нет света в подъезде дома 12")
+    assert res.outcome is Outcome.REQUEST
+    assert create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_connection_error_is_retried_once(monkeypatch):
+    create = AsyncMock(side_effect=[ConnectionResetError(), _ok_response()])
+    client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(classifier, "_get_client", lambda: client)
+    res = await classify_message("нет света в подъезде дома 12")
+    assert res.outcome is Outcome.REQUEST
+    assert create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_two_transient_failures_yield_processing_error(monkeypatch):
+    create = AsyncMock(side_effect=[TimeoutError(), TimeoutError()])
+    client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(classifier, "_get_client", lambda: client)
+    res = await classify_message("нет света в подъезде дома 12")
+    assert res.outcome is Outcome.PROCESSING_ERROR
+    assert create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_non_transient_error_is_not_retried(monkeypatch):
+    """4xx/логическая ошибка — повтор бессмыслен (и стоит денег)."""
+    create = AsyncMock(side_effect=ValueError("bad request"))
+    client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(classifier, "_get_client", lambda: client)
+    res = await classify_message("нет света в подъезде дома 12")
+    assert res.outcome is Outcome.PROCESSING_ERROR
+    assert create.await_count == 1
