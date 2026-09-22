@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
 
-from uk_management_bot.utils.business_time import business_today
+from uk_management_bot.utils.business_time import BUSINESS_TZ, business_today
 from typing import Optional, Dict, Any, List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -41,12 +41,18 @@ class ShiftScheduler:
     """Планировщик задач для автоматизации работы с сменами"""
 
     def __init__(self, notification_service: Optional[NotificationService] = None, bot=None):
-        self.scheduler = AsyncIOScheduler()
+        # A9-P3-8 (решение владельца 2026-09-23): планировщик живёт в бизнес-
+        # зоне, а не в UTC контейнера. Зона продублирована на каждом
+        # CronTrigger (см. _cron): APScheduler 3.x берёт зону триггера из
+        # tzlocal В МОМЕНТ его конструирования, а не из планировщика.
+        self.scheduler = AsyncIOScheduler(timezone=BUSINESS_TZ)
         # Инжектируемый сервис (тестовый seam). В проде остаётся None, а
         # уведомления строятся per-job на свежей сессии через self._notifier().
         self.notification_service = notification_service
         self._bot = bot
         self.is_running = False
+        # A9-P3-10: health-флаг — почему планировщик не запустился (None = ок).
+        self.start_error: Optional[str] = None
 
         # Единственный экземпляр на процесс — держит между tick-ами
         # анти-starvation курсоры/cooldown/дедуп уведомлений (Task 6).
@@ -76,7 +82,7 @@ class ShiftScheduler:
             return self.notification_service
         return NotificationService(db, bot=self._bot)
 
-    async def _notify_managers(self, title: str, body: str) -> None:
+    async def _notify_managers(self, title_key: str, body_key: str, **params) -> None:
         """Сетевая фаза job'а: ПОСЛЕ db-фазы и на СВОЕЙ короткой сессии.
 
         Сессия рабочего потока сюда не приезжает намеренно (AUD5-CODE-5):
@@ -84,194 +90,231 @@ class ShiftScheduler:
         потоке — дописали в event loop» выглядит именно так. Оставшийся здесь
         sync-запрос один и маленький (telegram_id менеджеров) — на фоне
         пакетов планирования он не считается.
+
+        Тексты — ключи локали (A9-P3-8): каждый менеджер получает их на своём
+        языке, рендер — в `send_manager_notification_i18n`.
         """
         if not self._notifications_enabled:
             return
         if self.notification_service is not None:
-            await self.notification_service.send_manager_notification(title, body)
+            await self.notification_service.send_manager_notification_i18n(
+                title_key, body_key, **params
+            )
             return
         db = SessionLocal()
         try:
-            await NotificationService(db, bot=self._bot).send_manager_notification(title, body)
+            await NotificationService(db, bot=self._bot).send_manager_notification_i18n(
+                title_key, body_key, **params
+            )
         finally:
             db.close()
 
+    @staticmethod
+    def _cron(**fields) -> CronTrigger:
+        """CronTrigger в бизнес-зоне: время полей = местное время (Ташкент)."""
+        return CronTrigger(timezone=BUSINESS_TZ, **fields)
+
     def setup_jobs(self):
-        """Настройка всех задач планировщика"""
-        try:
-            # 0. Жизненный цикл смен по РАСПИСАНИЮ (решение владельца 2026-08-24):
-            #    planned с исполнителем в наступившем окне → active;
-            #    active с истёкшим end_time → completed. Без этой джобы
-            #    расписание было декоративным: все потребители «кто на смене»
-            #    (_on_shift_filter, select_executor, профиль) требуют active,
-            #    а planned→active не переводил никто — сотрудники из
-            #    расписания не получали заявок («в профиле без смены»).
+        """Настройка всех задач планировщика.
+
+        A9-P3-10: ошибка НЕ глотается — раньше она только логировалась, и
+        планировщик стартовал без части джоб с is_running=True. Решение о
+        судьбе процесса принимает `start()`.
+        """
+        # 0. Жизненный цикл смен по РАСПИСАНИЮ (решение владельца 2026-08-24):
+        #    planned с исполнителем в наступившем окне → active;
+        #    active с истёкшим end_time → completed. Без этой джобы
+        #    расписание было декоративным: все потребители «кто на смене»
+        #    (_on_shift_filter, select_executor, профиль) требуют active,
+        #    а planned→active не переводил никто — сотрудники из
+        #    расписания не получали заявок («в профиле без смены»).
+        self.scheduler.add_job(
+            self._activate_scheduled_shifts,
+            IntervalTrigger(minutes=3),
+            id='activate_scheduled',
+            name='Активация смен по расписанию',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # Время cron-джоб ниже — местное время бизнес-зоны (Ташкент,
+        # UTC+5), см. _cron. До A9-P3-8 они срабатывали по UTC контейнера,
+        # т.е. на 5 часов позже написанного.
+
+        # 1. Автоматическое создание смен (каждый день в 00:30 по Ташкенту)
+        self.scheduler.add_job(
+            self._auto_create_shifts,
+            self._cron(hour=0, minute=30),
+            id='auto_create_shifts',
+            name='Автоматическое создание смен',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 2. Перебалансировка назначений (каждый день в 06:00 по Ташкенту)
+        self.scheduler.add_job(
+            self._rebalance_daily_assignments,
+            self._cron(hour=6, minute=0),
+            id='rebalance_assignments',
+            name='Перебалансировка назначений',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 3. Обработка истекших передач (каждые 2 часа)
+        self.scheduler.add_job(
+            self._process_expired_transfers,
+            IntervalTrigger(hours=2),
+            id='process_transfers',
+            name='Обработка истекших передач',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 4. Очистка устаревших данных (воскресенье 02:00 по Ташкенту;
+        #    day_of_week у APScheduler: 0 = понедельник, 6 = воскресенье)
+        self.scheduler.add_job(
+            self._cleanup_expired_data,
+            self._cron(day_of_week=6, hour=2, minute=0),
+            id='cleanup_expired',
+            name='Очистка устаревших данных',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 5. Уведомления о предстоящих сменах — круглосуточно каждые 30 мин.
+        #    Раньше стоял CronTrigger(hour='8-20') — планировщик тогда жил в
+        #    UTC контейнера, так что это было 13:00–01:30 по Ташкенту, и окно
+        #    «за ≤2 часа до начала» утренних смен (старт 08:00–09:00
+        #    местного = 03:00–04:00 UTC) не попадало в график НИКОГДА —
+        #    утренние напоминания не отправлялись (SHIFTS.md, находка №2).
+        #    Когда есть что слать — решает сам фильтр «смены в ближайшие
+        #    2 часа»: ночью смен нет — джоба молчит сама.
+        self.scheduler.add_job(
+            self._notify_upcoming_shifts,
+            IntervalTrigger(minutes=30),
+            id='notify_upcoming',
+            name='Уведомления о предстоящих сменах',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 6. Автоназначение исполнителей на незаполненные смены (каждые 15 минут)
+        self.scheduler.add_job(
+            self._auto_assign_empty_shifts,
+            IntervalTrigger(minutes=15),
+            id='auto_assign_empty',
+            name='Автоназначение на пустые смены',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # Джобы №8 (автоназначение заявок исполнителям) и №9 (синхронизация
+        # назначений со сменами) ретайрены — BUG-148: их путь
+        # (RequestAssignmentEngine → smart_assign_request → SmartDispatcher)
+        # был мёртв с рождения и всегда отчитывался failed. Реальное
+        # авто-назначение — auto_manager_tick ниже.
+
+        # 10. Автоматический менеджер — назначение дежурных на ночные заявки (каждые 2 минуты)
+        self.scheduler.add_job(
+            self._auto_manager_tick,
+            IntervalTrigger(minutes=2),
+            id='auto_manager_tick',
+            name='Автоматический менеджер — назначение дежурных',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 11. Визуальные отчёты «до/после» — автопост/автопубликация/отзыв
+        #     (каждые 10 минут). Без этой задачи тумблер «Автопост» ничего
+        #     не автоматизировал: черновики создавались только когда
+        #     менеджер вручную жал «Синхронизировать» на своей странице, а
+        #     отзыв возвращённых заявок — только когда кто-то открывал
+        #     публичную витрину.
+        self.scheduler.add_job(
+            self._work_reports_tick,
+            IntervalTrigger(minutes=10),
+            id='work_reports_sync',
+            name='Отчёты о работах — автопост и автопубликация',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 7. Еженедельное планирование (понедельник 08:00 по Ташкенту)
+        self.scheduler.add_job(
+            self._weekly_planning,
+            self._cron(day_of_week=0, hour=8, minute=0),
+            id='weekly_planning',
+            name='Еженедельное планирование',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 12. Лифты (Ф6): напоминания персоналу о ТО/освидетельствовании,
+        #     просрочках, договоре и длительном простое. Интервал, а не
+        #     cron: «за N дней» считается по бизнес-дате внутри тика — час
+        #     запуска ни на что не влияет, тик идемпотентен.
+        #     Флаг читается ОДИН раз, здесь: выключенный модуль = джобы
+        #     нет вовсе (а не пустой тик каждый час); включение требует
+        #     рестарта бота, как и остальные ELEVATORS_*-настройки.
+        #     TODO(multi-replica): max_instances=1 защищает от наложения
+        #     тиков только внутри ОДНОГО процесса; вторая реплика бота даст
+        #     дубли напоминаний (как и у всех джоб этого файла) — нужен
+        #     внешний лок (advisory lock / redis) при горизонтальном
+        #     масштабировании.
+        from uk_management_bot.config.settings import settings
+        if settings.ELEVATORS_ENABLED:
             self.scheduler.add_job(
-                self._activate_scheduled_shifts,
-                IntervalTrigger(minutes=3),
-                id='activate_scheduled',
-                name='Активация смен по расписанию',
+                self._elevator_reminders_tick,
+                IntervalTrigger(hours=1),
+                id='elevator_reminders',
+                name='Лифты — напоминания персоналу',
                 max_instances=1,
                 coalesce=True
             )
 
-            # 1. Автоматическое создание смен (каждый день в 00:30)
-            self.scheduler.add_job(
-                self._auto_create_shifts,
-                CronTrigger(hour=0, minute=30),
-                id='auto_create_shifts',
-                name='Автоматическое создание смен',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 2. Перебалансировка назначений (каждый день в 06:00)
-            self.scheduler.add_job(
-                self._rebalance_daily_assignments,
-                CronTrigger(hour=6, minute=0),
-                id='rebalance_assignments',
-                name='Перебалансировка назначений',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 3. Обработка истекших передач (каждые 2 часа)
-            self.scheduler.add_job(
-                self._process_expired_transfers,
-                IntervalTrigger(hours=2),
-                id='process_transfers',
-                name='Обработка истекших передач',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 4. Очистка устаревших данных (каждую неделю в воскресенье в 02:00)
-            self.scheduler.add_job(
-                self._cleanup_expired_data,
-                CronTrigger(day_of_week=6, hour=2, minute=0),
-                id='cleanup_expired',
-                name='Очистка устаревших данных',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 5. Уведомления о предстоящих сменах — круглосуточно каждые 30 мин.
-            #    Раньше стоял CronTrigger(hour='8-20') — планировщик живёт в UTC
-            #    контейнера, так что это было 13:00–01:30 по Ташкенту, и окно
-            #    «за ≤2 часа до начала» утренних смен (старт 08:00–09:00
-            #    местного = 03:00–04:00 UTC) не попадало в график НИКОГДА —
-            #    утренние напоминания не отправлялись (SHIFTS.md, находка №2).
-            #    Когда есть что слать — решает сам фильтр «смены в ближайшие
-            #    2 часа»: ночью смен нет — джоба молчит сама.
-            self.scheduler.add_job(
-                self._notify_upcoming_shifts,
-                IntervalTrigger(minutes=30),
-                id='notify_upcoming',
-                name='Уведомления о предстоящих сменах',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 6. Автоназначение исполнителей на незаполненные смены (каждые 15 минут)
-            self.scheduler.add_job(
-                self._auto_assign_empty_shifts,
-                IntervalTrigger(minutes=15),
-                id='auto_assign_empty',
-                name='Автоназначение на пустые смены',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # Джобы №8 (автоназначение заявок исполнителям) и №9 (синхронизация
-            # назначений со сменами) ретайрены — BUG-148: их путь
-            # (RequestAssignmentEngine → smart_assign_request → SmartDispatcher)
-            # был мёртв с рождения и всегда отчитывался failed. Реальное
-            # авто-назначение — auto_manager_tick ниже.
-
-            # 10. Автоматический менеджер — назначение дежурных на ночные заявки (каждые 2 минуты)
-            self.scheduler.add_job(
-                self._auto_manager_tick,
-                IntervalTrigger(minutes=2),
-                id='auto_manager_tick',
-                name='Автоматический менеджер — назначение дежурных',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 11. Визуальные отчёты «до/после» — автопост/автопубликация/отзыв
-            #     (каждые 10 минут). Без этой задачи тумблер «Автопост» ничего
-            #     не автоматизировал: черновики создавались только когда
-            #     менеджер вручную жал «Синхронизировать» на своей странице, а
-            #     отзыв возвращённых заявок — только когда кто-то открывал
-            #     публичную витрину.
-            self.scheduler.add_job(
-                self._work_reports_tick,
-                IntervalTrigger(minutes=10),
-                id='work_reports_sync',
-                name='Отчёты о работах — автопост и автопубликация',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 7. Еженедельное планирование (понедельник в 08:00)
-            self.scheduler.add_job(
-                self._weekly_planning,
-                CronTrigger(day_of_week=0, hour=8, minute=0),
-                id='weekly_planning',
-                name='Еженедельное планирование',
-                max_instances=1,
-                coalesce=True
-            )
-
-            # 12. Лифты (Ф6): напоминания персоналу о ТО/освидетельствовании,
-            #     просрочках, договоре и длительном простое. Интервал, а не
-            #     cron: планировщик живёт в UTC (см. №5), а «за N дней»
-            #     считается по бизнес-дате внутри тика — час запуска ни на что
-            #     не влияет, тик идемпотентен.
-            #     Флаг читается ОДИН раз, здесь: выключенный модуль = джобы
-            #     нет вовсе (а не пустой тик каждый час); включение требует
-            #     рестарта бота, как и остальные ELEVATORS_*-настройки.
-            #     TODO(multi-replica): max_instances=1 защищает от наложения
-            #     тиков только внутри ОДНОГО процесса; вторая реплика бота даст
-            #     дубли напоминаний (как и у всех джоб этого файла) — нужен
-            #     внешний лок (advisory lock / redis) при горизонтальном
-            #     масштабировании.
-            from uk_management_bot.config.settings import settings
-            if settings.ELEVATORS_ENABLED:
-                self.scheduler.add_job(
-                    self._elevator_reminders_tick,
-                    IntervalTrigger(hours=1),
-                    id='elevator_reminders',
-                    name='Лифты — напоминания персоналу',
-                    max_instances=1,
-                    coalesce=True
-                )
-
-            logger.info("Задачи планировщика смен настроены успешно")
-
-        except Exception as e:
-            logger.error(f"Ошибка настройки задач планировщика: {e}")
+        logger.info("Задачи планировщика смен настроены успешно")
 
     async def start(self):
-        """Запуск планировщика"""
-        try:
-            if not self.is_running:
-                self.setup_jobs()
-                self.scheduler.start()
-                self.is_running = True
-                logger.info("Планировщик смен запущен")
+        """Запуск планировщика.
 
-                # Отправляем уведомление о запуске (короткоживущая сессия)
-                if self._notifications_enabled:
-                    from uk_management_bot.database.session import session_scope
-                    with session_scope() as db:
-                        await self._notifier(db).send_system_notification(
-                            "🤖 Планировщик смен запущен",
-                            "Автоматическое управление сменами активировано"
-                        )
+        A9-P3-10: сбой setup_jobs → планировщик НЕ стартует вовсе (частично
+        зарегистрированные джобы снимаются), is_running=False, причина — в
+        `start_error` и в get_status(). Исключение наружу не летит намеренно:
+        бот (main.initialize_scheduler) стартует и без планировщика — заявки,
+        регистрация и уведомления из хендлеров от него не зависят, а падение
+        всего процесса из-за фоновых джоб отключило бы бота целиком. Состояние
+        видно в стартовом уведомлении («⏸️ Планировщик: Остановлен») и в логе
+        уровня ERROR.
+        """
+        if self.is_running:
+            return
+        try:
+            self.setup_jobs()
+        except Exception as e:
+            self.scheduler.remove_all_jobs()
+            self.start_error = f"setup_jobs: {e!r}"
+            logger.exception("Планировщик смен НЕ запущен: ошибка настройки задач")
+            return
+        try:
+            self.scheduler.start()
+            self.is_running = True
+            self.start_error = None
+            logger.info("Планировщик смен запущен")
+
+            # Отправляем уведомление о запуске (короткоживущая сессия)
+            if self._notifications_enabled:
+                from uk_management_bot.database.session import session_scope
+                with session_scope() as db:
+                    await self._notifier(db).send_system_notification(
+                        "🤖 Планировщик смен запущен",
+                        "Автоматическое управление сменами активировано"
+                    )
 
         except Exception as e:
-            logger.error(f"Ошибка запуска планировщика: {e}")
+            if not self.is_running:
+                self.start_error = f"start: {e!r}"
+            logger.exception("Ошибка запуска планировщика: %r", e)
 
     async def stop(self):
         """Остановка планировщика"""
@@ -299,6 +342,7 @@ class ShiftScheduler:
 
         return {
             'is_running': self.is_running,
+            'start_error': self.start_error,
             'jobs_count': len(jobs_info),
             'jobs': jobs_info,
             'stats': self.task_stats
@@ -329,8 +373,9 @@ class ShiftScheduler:
             # Отправляем уведомление если создано много смен
             if total_created > 10:
                 await self._notify_managers(
-                    "🏗️ Автосоздание смен завершено",
-                    f"Создано {total_created} новых смен на ближайшие 7 дней"
+                    "shift_scheduler.auto_created_title",
+                    "shift_scheduler.auto_created_body",
+                    total=total_created,
                 )
 
         except Exception as e:
@@ -406,8 +451,9 @@ class ShiftScheduler:
             if processed > 0:
                 logger.info(f"Обработано {processed} истекших передач")
                 await self._notify_managers(
-                    "⏰ Обработка истекших передач",
-                    f"Автоматически обработано {processed} передач"
+                    "shift_scheduler.transfers_expired_title",
+                    "shift_scheduler.transfers_expired_body",
+                    total=processed,
                 )
 
         except Exception as e:
@@ -668,8 +714,9 @@ class ShiftScheduler:
             # Уведомляем менеджеров о результатах планирования
             if total_shifts > 0:
                 await self._notify_managers(
-                    "📅 Еженедельное планирование",
-                    f"Запланировано {total_shifts} смен на следующую неделю"
+                    "shift_scheduler.weekly_planning_title",
+                    "shift_scheduler.weekly_planning_body",
+                    total=total_shifts,
                 )
 
         except Exception as e:

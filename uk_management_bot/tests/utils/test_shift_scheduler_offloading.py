@@ -136,7 +136,7 @@ async def test_notification_does_not_reuse_the_worker_thread_session():
     planning.auto_create_shifts.return_value = {"total_created": 42}  # > 10 → уведомление
 
     notifier = MagicMock()
-    notifier.send_manager_notification = AsyncMock(
+    notifier.send_manager_notification_i18n = AsyncMock(
         side_effect=lambda *a, **k: log.append(("notified", threading.get_ident()))
     )
 

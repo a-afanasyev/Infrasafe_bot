@@ -8633,5 +8633,13 @@
       "occ_state_error": "❌ Этот пункт графика уже закрыт или отменён.",
       "occ_invalid": "❌ Данные не приняты: проверьте номер акта, дату и ссылку."
     }
+  },
+  "shift_scheduler": {
+    "auto_created_title": "🏗️ Автосоздание смен завершено",
+    "auto_created_body": "Создано новых смен на ближайшие 7 дней: {total}",
+    "transfers_expired_title": "⏰ Обработка истекших передач смен",
+    "transfers_expired_body": "Автоматически обработано передач: {total}",
+    "weekly_planning_title": "📅 Еженедельное планирование",
+    "weekly_planning_body": "Запланировано смен на следующую неделю: {total}"
   }
 }
