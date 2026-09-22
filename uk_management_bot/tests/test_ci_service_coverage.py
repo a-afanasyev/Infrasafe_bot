@@ -108,6 +108,11 @@ def _covered_by(dirname: Path, targets: set[str]) -> bool:
 def dockerfiles() -> set[Path]:
     files = _compose_dockerfiles()
     assert files, "compose без единой секции build — поправь гейт"
+    # В образе (make test-ci) нет каталогов сателлитов — гейт про полный
+    # чекаут, признак тот же, что у остальных тестов модуля (см. _ci): нет
+    # .github — значит запуск внутри образа. В CI backend-tests чекаут полный.
+    if not CI_WORKFLOW.exists():
+        pytest.skip(f"{CI_WORKFLOW} отсутствует (запуск внутри образа, не чекаут)")
     return files
 
 

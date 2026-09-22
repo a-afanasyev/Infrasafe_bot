@@ -87,6 +87,22 @@ CONFIG_MOUNTS=(
   # Тот же случай: лимит длины ФИО живёт в двух языках (валидация бэкенда и
   # клиентская проверка формы), и гейт сверяет их числами.
   -v "${ROOT}/frontend/src/utils/personName.ts:/app/frontend/src/utils/personName.ts:ro"
+  # Реестр бэкапов (AUD7-ENG-07) читает BACKUPS.md: в CI — полный чекаут, в
+  # образе файла нет, и гейт падал «нет реестра» только в эталоне.
+  -v "${ROOT}/docs/ops/BACKUPS.md:/app/docs/ops/BACKUPS.md:ro"
+  # Supply-chain гейты аудита #8 (tests/services/test_ci_supply_chain_gates.py,
+  # test_compose_secret_env_ssot.py) читают все Dockerfile'ы, dev-compose и
+  # .env.example — в образе их нет, в CI-чекауте есть.
+  -v "${ROOT}/Dockerfile:/app/Dockerfile:ro"
+  -v "${ROOT}/Dockerfile.api:/app/Dockerfile.api:ro"
+  -v "${ROOT}/Dockerfile.access:/app/Dockerfile.access:ro"
+  -v "${ROOT}/Dockerfile.dev:/app/Dockerfile.dev:ro"
+  -v "${ROOT}/frontend/Dockerfile:/app/frontend/Dockerfile:ro"
+  -v "${ROOT}/media_service/Dockerfile:/app/media_service/Dockerfile:ro"
+  -v "${ROOT}/payment_control/Dockerfile:/app/payment_control/Dockerfile:ro"
+  -v "${ROOT}/resource-accounting/backend/Dockerfile:/app/resource-accounting/backend/Dockerfile:ro"
+  -v "${ROOT}/docker-compose.dev.yml:/app/docker-compose.dev.yml:ro"
+  -v "${ROOT}/.env.example:/app/.env.example:ro"
   # A9-P1-3: гейт набора compose-файлов в документах деплоя читает сами документы.
   -v "${ROOT}/.claude/skills/uk-deploy/SKILL.md:/app/.claude/skills/uk-deploy/SKILL.md:ro"
   -v "${ROOT}/docs/ops/RUNBOOK.md:/app/docs/ops/RUNBOOK.md:ro"
