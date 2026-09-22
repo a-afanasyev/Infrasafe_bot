@@ -3,6 +3,13 @@ import { fireEvent, render, screen, within } from '../../test/test-utils'
 import CalendarHeatmap from './CalendarHeatmap'
 import ShiftTimeline from './ShiftTimeline'
 import type { ShiftBrief } from '../../hooks/useShifts'
+import { DEFAULT_DISPLAY_TZ, setDisplayTz } from '../../utils/timezone'
+import { shiftTypeColor } from '../../utils/shiftWeek'
+
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
+}
 
 // TEST-068: месячная тепловая карта и дневная лента смен. Оба считают дни в
 // display-tz (Asia/Tashkent), поэтому времена в фикстурах даны с +05:00.
@@ -121,6 +128,29 @@ describe('ShiftTimeline', () => {
     // Строка второго исполнителя есть, блоков у неё нет.
     expect(screen.getByText('Пётр Второй')).toBeInTheDocument()
     expect(screen.queryByText('10:00 — 12:00 · Активна')).toBeNull()
+  })
+
+  // A9-P3-19 (класс ARCH-116): «сегодня» и текущий час считались по зоне
+  // браузера. Display-зона +14 (Kiritimati): 10:30Z = 00:30 следующих суток —
+  // в любой зоне раннера, кроме +14, старый код не подсветил бы час 00.
+  it('текущий час и «сегодня» — в display-зоне, а не в зоне браузера', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-06-05T10:30:00Z'))
+    setDisplayTz('Pacific/Kiritimati')
+    try {
+      render(<ShiftTimeline shifts={[makeShift()]} date={new Date(2026, 5, 6)} onShiftClick={() => {}} />)
+      expect(screen.getByText('00').className).toContain('text-accent')
+      expect(screen.getByText('10').className).not.toContain('text-accent')
+    } finally {
+      setDisplayTz(DEFAULT_DISPLAY_TZ)
+      vi.useRealTimers()
+    }
+  })
+
+  it('цвет блока — из канона shiftTypeColor()', () => {
+    render(<ShiftTimeline shifts={[makeShift({ shift_type: 'emergency' })]} date={day} onShiftClick={() => {}} />)
+    const label = screen.getByText('10:00 — 12:00 · Активна')
+    expect(label.style.color).toBe(hexToRgb(shiftTypeColor('emergency')))
   })
 
   it('наведение подсвечивает блок и возвращает фон при уходе', () => {

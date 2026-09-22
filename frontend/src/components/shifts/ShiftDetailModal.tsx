@@ -6,6 +6,7 @@ import { useEmployeePicker } from '../../hooks/useEmployeePicker'
 import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { useHasRole } from '../../hooks/useHasRole'
 import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
+import { shiftTypeColor } from '../../utils/shiftWeek'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import {
@@ -23,13 +24,6 @@ interface Props {
   shiftId: number | null
   onClose: () => void
   onEdit?: (shift: ShiftDetail) => void
-}
-
-const SHIFT_TYPE_COLORS: Record<string, string> = {
-  regular: '#3b82f6',
-  emergency: '#ef4444',
-  overtime: '#f59e0b',
-  maintenance: '#8b5cf6',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -87,7 +81,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
     }
   }
 
-  const typeColor = SHIFT_TYPE_COLORS[shift?.shift_type ?? 'regular'] ?? '#3b82f6'
+  const typeColor = shiftTypeColor(shift?.shift_type)
   const statusColor = STATUS_COLORS[shift?.status ?? 'active'] ?? 'var(--accent)'
 
   return (

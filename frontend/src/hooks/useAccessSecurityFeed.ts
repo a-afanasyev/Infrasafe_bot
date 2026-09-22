@@ -92,7 +92,10 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const attemptsRef = useRef(0)
   const lastExpiredRefreshAt = useRef(0)
-  const closedByCaller = useRef(false)
+  // A9-P3-19: поколение эффекта (как в useWebSocket). Булев closedByCaller
+  // сбрасывался следующим mount'ом (StrictMode: mount → cleanup → mount), и
+  // поздний close первого сокета / resolve его refresh поднимал лишний сокет.
+  const generationRef = useRef(0)
   // Реконнект вызывает connect рекурсивно из onclose. Маршрутизируем через ref,
   // чтобы не ссылаться на binding connect до его объявления (TDZ-смелл).
   const connectRef = useRef<() => void>(() => {})
@@ -110,6 +113,8 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
       return
     }
     wsRef.current = ws
+    const generation = generationRef.current
+    const isCurrent = (): boolean => generation === generationRef.current
 
     ws.onopen = () => {
       attemptsRef.current = 0
@@ -159,7 +164,7 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
     }
 
     ws.onclose = (event) => {
-      if (closedByCaller.current) return
+      if (!isCurrent()) return // поздний close после cleanup / StrictMode-remount
       // F-04: истёк JWT — обновляем cookie-сессию и переподключаемся один раз.
       if (event.code === WS_TOKEN_EXPIRED) {
         const now = Date.now()
@@ -171,9 +176,9 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
         setStatus('connecting')
         refreshSession()
           .then(() => {
-            if (!closedByCaller.current) connectRef.current()
+            if (isCurrent()) connectRef.current()
           })
-          .catch(() => setStatus('error')) // редирект на /login уже внутри refreshSession
+          .catch(() => { if (isCurrent()) setStatus('error') }) // редирект на /login уже внутри refreshSession
         return
       }
       // 1008 (policy violation) = отказ авторизации: реконнект не поможет.
@@ -193,12 +198,11 @@ export function useAccessSecurityFeed(): AccessSecurityFeed {
   }, [])
 
   useEffect(() => {
-    closedByCaller.current = false
     connectRef.current = connect
     // eslint-disable-next-line react-hooks/set-state-in-effect -- подписка на WebSocket-фид на mount; setState происходит в колбэках соединения
     connect()
     return () => {
-      closedByCaller.current = true
+      generationRef.current += 1 // всё от этого поколения — мимо
       clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }

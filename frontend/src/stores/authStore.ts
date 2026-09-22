@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { apiClient, publicClient, refreshSessionQuietly } from '../api/client'
+import { resetSessionCache } from '../api/queryClient'
 
 // One-time migration purge: builds before the cookie-auth switch (§6.5)
 // stored access_token / refresh_token in localStorage. The current code never
@@ -81,12 +82,19 @@ export const useAuthStore = create<AuthState>()(
         // Cookies are already set by POST /api/v2/auth/login response;
         // fetch profile to materialise UI-facing identity.
         const { data } = await apiClient.get('/api/v2/profile')
+        // A9-P2-29: остатки прошлой сессии (если выход был не через logout).
+        resetSessionCache()
         set({ user: data, isAuthenticated: true, hydrating: false })
       },
       logout: async () => {
         // Server clears uk_access / uk_refresh cookies; no body needed.
         await apiClient.post('/api/v2/auth/logout').catch(() => {})
+        // A9-P2-29: set и clear идут синхронно подряд, до ближайшего рендера.
+        // clear() не будит смонтированные observer'ы (удаление из кэша их не
+        // рефетчит), а следующий рендер с isAuthenticated=false размонтирует
+        // защищённые страницы раньше, чем они успели бы запросить данные снова.
         set({ user: null, isAuthenticated: false })
+        resetSessionCache()
       },
     }),
     {
