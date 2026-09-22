@@ -245,8 +245,9 @@ def _load_profile_screen(db, telegram_id: int):
 def _load_roles_fallback(db, telegram_id: int):
     """-> (roles, active_role) | None. Фолбэк из БД, если roles пришли усечёнными.
 
-    Исходный ``except Exception: pass`` сохранён 1:1 — при любой ошибке
-    хендлер остаётся на ролях из DI.
+    При любой ошибке хендлер остаётся на ролях из DI (поведение прежнее), но
+    сбой логируется (A9-P3-10): раньше ``except: pass`` делал ошибку БД
+    неотличимой от «пользователь не найден».
     """
     try:
         from uk_management_bot.utils.auth_helpers import get_user_roles, get_active_role
@@ -256,8 +257,11 @@ def _load_roles_fallback(db, telegram_id: int):
         if user:
             # Используем универсальную функцию парсинга ролей (поддерживает CSV и JSON)
             return get_user_roles(user), get_active_role(user)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Фолбэк ролей из БД не удался (telegram_id=%s), остаёмся на ролях из DI: %r",
+            telegram_id, e,
+        )
     return None
 
 

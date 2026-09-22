@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift_template import ShiftTemplate
 from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.utils.business_time import business_day_window, business_today
 import logging
 
 logger = logging.getLogger(__name__)
@@ -545,12 +546,18 @@ class TemplateManager:
             if not template.auto_create:
                 return 0.0
 
-            # Количество дней за последний месяц
-            thirty_days_ago = date.today() - timedelta(days=30)
+            # Количество дней за последний месяц — по бизнес-дате (A9-P3-8):
+            # date.today() в UTC-контейнере с 19:00Z называл «сегодня» вчерашний
+            # по Ташкенту день.
+            today = business_today()
+            thirty_days_ago = today - timedelta(days=30)
+            # created_at — timestamptz: сравниваем с UTC-инстантом полуночи
+            # бизнес-зоны, а не с голой датой (та = полночь UTC/зоны сессии БД).
+            window_start, _ = business_day_window(thirty_days_ago)
             expected_shifts = 0
 
             current_date = thirty_days_ago
-            while current_date <= date.today():
+            while current_date <= today:
                 if template.is_date_included(current_date):
                     expected_shifts += 1
                 current_date += timedelta(days=1)
@@ -559,7 +566,7 @@ class TemplateManager:
             actual_shifts = self.db.query(Shift).filter(
                 and_(
                     Shift.shift_template_id == template.id,
-                    Shift.created_at >= thirty_days_ago
+                    Shift.created_at >= window_start
                 )
             ).count()
             
