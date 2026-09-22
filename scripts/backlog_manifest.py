@@ -369,7 +369,7 @@ ASSIGNMENT: dict[str, dict] = {
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
     "A9-P1-1": A(pkg="AUD9-W1", status="actionable", method="verified-2026-09-22", services="bot, group-intake-bot", note="Бот: альбомы фото молча теряются во всех FSM-сборщиках медиа"),
     "A9-P1-2": A(pkg="AUD9-W1", status="actionable", method="verified-2026-09-22", services="api, frontend (TWA)", note="TWA-старт смены создаёт ad-hoc-дубль вместо активации запланированной; без аудита и уведомлений"),
-    "A9-P1-3": A(pkg="AUD9-W1", status="actionable", method="audit9-2026-09-22", services="деплой profk/105 (доки)", note="Деплой-ранбуки расходятся в наборе compose-файлов: payments-overlay потерян для profk"),
+    # A9-P1-3 закрыт 2026-09-23 (PR #596).
     "A9-P2-1": A(pkg="AUD9-W2", status="actionable", method="verified-2026-09-22", services="api", note="Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559)"),
     "A9-P2-2": A(pkg="AUD9-W3", status="actionable", method="verified-2026-09-22", services="bot", note="Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах"),
     "A9-P2-3": A(pkg="AUD9-W2", status="actionable", method="verified-2026-09-22", services="api", note="Upload: категория `completion_*` не привязана к роли — житель может подделать фотоотчёт исполнителя"),
