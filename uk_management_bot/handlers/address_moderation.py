@@ -30,6 +30,7 @@ from uk_management_bot.keyboards.address_management import (
 )
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +184,12 @@ def _load_decision_context(db, user_apartment_id: int, reviewer_telegram_id: int
     # Сохраняем данные для уведомления
     user_telegram_id = user_apartment.user.telegram_id
     apartment = user_apartment.apartment
-    apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=apartment.apartment_number)
+    apartment_address = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=html.escape(str(apartment.apartment_number)))
+    # A9-P2-2: адрес/двор уходят жителю в HTML-уведомлении — экранируем.
     if apartment.building:
-        apartment_address = f"{apartment_address}, {apartment.building.address}"
+        apartment_address = f"{apartment_address}, {html.escape(apartment.building.address or '')}"
         if apartment.building.yard:
-            apartment_address = f"{apartment_address} ({apartment.building.yard.name})"
+            apartment_address = f"{apartment_address} ({html.escape(apartment.building.yard.name or '')})"
 
     # Получаем reviewer.id из базы данных (не telegram_id!)
     from uk_management_bot.database.models.user import User
@@ -232,7 +234,7 @@ def _render_user_notification(db, user_telegram_id: int, template_key: str, **fm
 
     if template_key == "approval":
         # Формируем текст уведомления
-        notification_text = get_text("address_moderation.handlers.approval_notification", language=lang).format(apartment_address=fmt["apartment_address"])
+        notification_text = get_text("address_moderation.handlers.approval_notification", language=lang).format(apartment_address=fmt["apartment_address"])  # html-raw: apartment_address собран с экранированием в _load_decision_context
 
         if fmt.get("comment"):
             # Секревью A2: комментарий — свободный текст менеджера, сообщение
@@ -244,7 +246,7 @@ def _render_user_notification(db, user_telegram_id: int, template_key: str, **fm
 
     # Формируем текст уведомления
     return get_text("address_moderation.handlers.rejection_notification", language=lang).format(
-        apartment_address=fmt["apartment_address"], comment=html.escape(fmt["comment"])
+        apartment_address=fmt["apartment_address"], comment=html.escape(fmt["comment"])  # html-raw: apartment_address собран с экранированием в _load_decision_context
     )
 
 
@@ -327,22 +329,22 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext, la
             )
             return
 
-        # Информация о пользователе
-        user_name = f"{details.first_name or ''} {details.last_name or ''}".strip()
-        if not user_name:
-            user_name = f"ID: {details.telegram_id}"
+        # A9-P2-2: имя/username из Telegram-профиля и адрес — свободный
+        # текст в HTML-сообщении (parse_mode=HTML по умолчанию): экранируем в
+        # точке вывода. Имя — через канон display_name (без «Иван None»).
+        user_name = html.escape(display_name(details))
 
         lang = language
-        username = f"@{details.username}" if details.username else get_text("address_moderation.handlers.no_username", language=lang)
-        phone = details.phone if details.phone else get_text("address_moderation.handlers.not_specified", language=lang)
+        username = html.escape(f"@{details.username}") if details.username else get_text("address_moderation.handlers.no_username", language=lang)
+        phone = html.escape(details.phone) if details.phone else get_text("address_moderation.handlers.not_specified", language=lang)
 
         # Информация о квартире
-        apartment_info = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=details.apartment_number)
+        apartment_info = get_text("address_moderation.handlers.apartment_label", language=lang).format(number=html.escape(str(details.apartment_number)))
 
         if details.building_address:
-            apartment_info = f"{apartment_info}, {details.building_address}"
+            apartment_info = f"{apartment_info}, {html.escape(details.building_address)}"
             if details.yard_name:
-                apartment_info = f"{apartment_info} ({details.yard_name})"
+                apartment_info = f"{apartment_info} ({html.escape(details.yard_name)})"
 
         # Дополнительная информация
         requested_date = details.requested_at.strftime('%d.%m.%Y %H:%M') if details.requested_at else get_text("address_moderation.handlers.unknown", language=lang)

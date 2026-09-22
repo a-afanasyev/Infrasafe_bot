@@ -1,3 +1,4 @@
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -82,10 +83,10 @@ async def start_autofill_apartments(callback: CallbackQuery, state: FSMContext, 
         await state.update_data(autofill_building_id=building_id)
         await state.set_state(ApartmentManagementStates.waiting_for_autofill_range)
 
-        yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {building.yard_name}" if building.yard_name else ""
+        yard_line = f"<b>{get_text('address_apartments.handlers.yard_label', language=lang)}</b> {html.escape(building.yard_name)}" if building.yard_name else ""
 
         text = get_text("address_apartments.handlers.autofill_prompt", language=lang).format(
-            address=building.address,
+            address=html.escape(building.address),
             yard_line=yard_line
         )
 

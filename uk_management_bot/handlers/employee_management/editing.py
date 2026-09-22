@@ -9,6 +9,7 @@ AUD5-ARCH-3 (волна 1): перенос 1:1 из handlers/employee_management
 как legacy-вход для клавиатур, уже отрисованных в чатах.
 """
 
+import html
 import logging
 
 
@@ -64,7 +65,7 @@ async def edit_employee_entry(callback: CallbackQuery, roles: list = None, activ
 
         await callback.message.edit_text(
             get_text("employee_mgmt.handlers.edit_menu", language=lang).format(
-                employee_name=_format_employee_name(employee)
+                employee_name=html.escape(_format_employee_name(employee))
             ),
             reply_markup=get_employee_edit_keyboard(employee_id, lang),
             parse_mode="HTML",
@@ -115,8 +116,8 @@ async def edit_employee_phone(callback: CallbackQuery, state: FSMContext, roles:
         # Запрашиваем новый телефон
         await callback.message.edit_text(
             get_text("employee_mgmt.handlers.enter_new_phone", language=lang).format(
-                employee_name=_format_employee_name(employee),
-                current_phone=employee.phone or get_text("employee_mgmt.handlers.not_specified", language=lang)
+                employee_name=html.escape(_format_employee_name(employee)),
+                current_phone=html.escape(employee.phone) if employee.phone else get_text("employee_mgmt.handlers.not_specified", language=lang)
             ),
             reply_markup=get_cancel_keyboard(lang)
         )
@@ -148,7 +149,7 @@ async def process_employee_phone_edit(message: Message, state: FSMContext, langu
         updated = await run_db(lambda s: _update_employee_phone(s, target_employee_id, new_phone), db=_db)
         if updated:
             lang = language
-            await message.answer(get_text("employee_mgmt.handlers.phone_updated", language=lang).format(phone=new_phone))
+            await message.answer(get_text("employee_mgmt.handlers.phone_updated", language=lang).format(phone=html.escape(new_phone)))
         else:
             lang = language
             await message.answer(get_text("employee_mgmt.handlers.employee_not_found", language=lang))

@@ -9,6 +9,7 @@
 - Удаление (деактивация) здания
 - Фильтрация зданий по двору
 """
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -245,7 +246,7 @@ async def show_buildings_by_yard(callback: CallbackQuery, language: str = "ru", 
 
         yard_name, buildings = loaded
 
-        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard_name, total=len(buildings))
+        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=html.escape(yard_name), total=len(buildings))
 
         if not buildings:
             text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
@@ -287,7 +288,7 @@ async def show_buildings_by_yard_page(callback: CallbackQuery, language: str = "
             return
 
         yard_name, buildings = loaded
-        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=yard_name, total=len(buildings))
+        text = get_text("address_buildings.handlers.buildings_by_yard", language=lang).format(yard=html.escape(yard_name), total=len(buildings))
 
         if not buildings:
             text += "\n" + get_text("address_buildings.handlers.buildings_list_empty_short", language=lang)
@@ -327,16 +328,17 @@ async def show_building_details(callback: CallbackQuery, language: str = "ru", *
         # BUG-151 п.7: координата 0.0 легитимна — сравнение по is not None.
         gps = f"📍 {building.gps_latitude}, {building.gps_longitude}" if building.gps_latitude is not None and building.gps_longitude is not None else get_text("address_buildings.handlers.gps_not_set", language=lang)
         apartments_count = building.apartments_count
-        yard_name = building.yard_name if building.yard_name else get_text("address_buildings.handlers.not_specified", language=lang)
+        # A9-P2-2: адрес/двор/описание — свободный текст в HTML-сообщении.
+        yard_name = html.escape(building.yard_name) if building.yard_name else get_text("address_buildings.handlers.not_specified", language=lang)
 
         text = get_text("address_buildings.handlers.building_details", language=lang).format(
-            address=building.address, yard=yard_name, status=status,
+            address=html.escape(building.address), yard=yard_name, status=status,
             entrances=building.entrance_count, floors=building.floor_count,
             apartments=apartments_count, gps=gps
         )
 
         if building.description:
-            text += get_text("address_buildings.handlers.description_label", language=lang).format(description=building.description)
+            text += get_text("address_buildings.handlers.description_label", language=lang).format(description=html.escape(building.description))
 
         if building.created_at:
             text += get_text("address_buildings.handlers.created_label", language=lang).format(date=building.created_at.strftime('%d.%m.%Y %H:%M'))
@@ -400,7 +402,7 @@ async def process_building_yard_selection(callback: CallbackQuery, state: FSMCon
     await state.set_state(BuildingManagementStates.waiting_for_building_address)
 
     await callback.message.edit_text(
-        get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard=yard_name),
+        get_text("address_buildings.handlers.create_building_step2", language=lang).format(yard=html.escape(yard_name)),
         reply_markup=get_cancel_keyboard_inline()
     )
 
@@ -429,7 +431,7 @@ async def process_building_address(message: Message, state: FSMContext, language
     data = await state.get_data()
     await message.answer(
         get_text("address_buildings.handlers.create_building_step3", language=lang).format(
-            yard=data.get('yard_name', ''), address=address
+            yard=html.escape(data.get('yard_name', '')), address=html.escape(address)
         ),
         reply_markup=get_skip_or_cancel_keyboard()
     )
@@ -500,7 +502,7 @@ async def process_floor_count(message: Message, state: FSMContext, language: str
     data = await state.get_data()
     await message.answer(
         get_text("address_buildings.handlers.create_building_step4", language=lang).format(
-            yard=data.get('yard_name', ''), address=data.get('address', ''), floors=floor_count
+            yard=html.escape(data.get('yard_name', '')), address=html.escape(data.get('address', '')), floors=floor_count
         ),
         reply_markup=get_skip_or_cancel_keyboard()
     )
@@ -580,7 +582,7 @@ async def process_building_gps(message: Message, state: FSMContext, language: st
 
         await message.answer(
             get_text("address_buildings.handlers.building_created_success", language=lang).format(
-                address=building.address, yard=data.get('yard_name', ''),
+                address=html.escape(building.address), yard=html.escape(data.get('yard_name', '')),
                 entrances=building.entrance_count, floors=building.floor_count, gps=gps_info
             ),
             reply_markup=get_address_management_menu()
@@ -683,7 +685,7 @@ async def confirm_building_deletion(callback: CallbackQuery, language: str = "ru
             )
 
         confirm_text = get_text("address_buildings.handlers.confirm_delete_building", language=lang).format(
-            address=building.address
+            address=html.escape(building.address)
         ) + warning
 
         await callback.message.edit_text(

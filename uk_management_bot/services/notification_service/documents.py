@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
+import html
 import logging
 
 from uk_management_bot.services.notification_service.channel import (
@@ -27,15 +28,16 @@ def _document_name(document_type: str, language: str) -> str:
 def build_document_request_message(user: User, request_text: str, document_type: str = None, for_channel: bool = False) -> str:
     """Формирует сообщение о запросе документов"""
     if for_channel:
-        return f"📋 Запрос документов: user_id={user.telegram_id}, тип: {document_type}, запрос: {request_text}"
+        return f"📋 Запрос документов: user_id={user.telegram_id}, тип: {document_type}, запрос: {html.escape(request_text or '')}"
 
     lang = _user_lang(user)
     doc_name = _document_name(document_type, lang)
 
-    # BUG-146: без markdown-разметки — отправка идёт raw (parse_mode нет).
+    # BUG-146: без markdown-разметки. parse_mode явно не задан, но общий бот
+    # собран build_bot(html=True) — текст уходит как HTML, ввод экранируем (A9-P2-2).
     message = "📋 Администратор запросил документы\n\n"
     message += f"🔍 Требуемый документ: {doc_name}\n\n"
-    message += f"💬 Комментарий:\n{request_text}\n\n"
+    message += f"💬 Комментарий:\n{html.escape(request_text or '')}\n\n"
     message += "📤 Пожалуйста, загрузите запрошенный документ в ближайшее время."
 
     return message
@@ -53,15 +55,16 @@ async def async_notify_document_request(bot, db: Session, user: User, request_te
 def build_multiple_documents_request_message(user: User, request_text: str, document_types: list, for_channel: bool = False) -> str:
     """Формирует сообщение о запросе множественных документов"""
     if for_channel:
-        return f"📋 Запрос документов: user_id={user.telegram_id}, типы: {document_types}, запрос: {request_text}"
+        return f"📋 Запрос документов: user_id={user.telegram_id}, типы: {document_types}, запрос: {html.escape(request_text or '')}"
 
     lang = _user_lang(user)
     doc_list = ", ".join(_document_name(doc_type, lang) for doc_type in document_types)
 
-    # BUG-146: без markdown-разметки — отправка идёт raw (parse_mode нет).
+    # BUG-146: без markdown-разметки. parse_mode явно не задан, но общий бот
+    # собран build_bot(html=True) — текст уходит как HTML, ввод экранируем (A9-P2-2).
     message = "📋 Администратор запросил документы\n\n"
     message += f"🔍 Требуемые документы:\n{doc_list}\n\n"
-    message += f"💬 Комментарий:\n{request_text}\n\n"
+    message += f"💬 Комментарий:\n{html.escape(request_text or '')}\n\n"
     message += "📤 Пожалуйста, загрузите все запрошенные документы в ближайшее время."
 
     return message

@@ -216,12 +216,13 @@ def _collect_return_notifications(db, request_number: str, outcome, return_reaso
             User.status == "approved"
         ).all()
         manager_ids = [m.telegram_id for m in managers if m.telegram_id]
+        import html as _html  # A9-P2-2: причина возврата — ввод жителя
         manager_text = get_text(
             "request_acceptance.handlers.manager_return_notification", language="ru"
         ).format(
             request_number=request.format_number_for_display(),
-            category=request.category,
-            return_reason=return_reason,
+            category=_html.escape(request.category or ''),
+            return_reason=_html.escape(return_reason or ''),
         )
     return messages, channel_text, manager_ids, manager_text
 
@@ -256,8 +257,9 @@ async def show_pending_acceptance_requests(message: Message, *, _db=None):
         builder = []
         for req in requests:
             text += f"📋 <b>#{req.request_number}</b>\n"
-            text += f"   {get_text('requests.category_label', language=lang)} {req.category}\n"
-            address_text = req.address or get_text("requests.address_not_specified", language=lang) or "Не указан"
+            import html as _html  # A9-P2-2: поля заявки в HTML-списке
+            text += f"   {get_text('requests.category_label', language=lang)} {_html.escape(req.category or '')}\n"
+            address_text = _html.escape(req.address) if req.address else (get_text("requests.address_not_specified", language=lang) or "Не указан")
             text += f"   {get_text('requests.address_label', language=lang)} {address_text}\n"
             text += f"   {get_text('requests.updated_at', language=lang)} {req.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
 
@@ -307,13 +309,15 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
 
         # Формируем информацию о заявке
         text = f"📋 <b>{get_text('request_acceptance.handlers.request_title', language=lang)} #{view.request_number}</b>\n\n"
-        text += f"📂 {get_text('request_acceptance.handlers.category', language=lang)}: {view.category}\n"
-        text += f"📍 {get_text('request_acceptance.handlers.address', language=lang)}: {view.address}\n"
-        text += f"📝 {get_text('request_acceptance.handlers.description', language=lang)}: {view.description}\n\n"
+        # A9-P2-2: поля заявки — пользовательский текст в HTML-сообщении.
+        import html as _html
+        text += f"📂 {get_text('request_acceptance.handlers.category', language=lang)}: {_html.escape(view.category or '')}\n"
+        text += f"📍 {get_text('request_acceptance.handlers.address', language=lang)}: {_html.escape(view.address or '')}\n"
+        text += f"📝 {get_text('request_acceptance.handlers.description', language=lang)}: {_html.escape(view.description or '')}\n\n"
 
         text += f"✅ <b>{get_text('request_acceptance.handlers.completion_report', language=lang)}:</b>\n"
         if view.completion_report:
-            text += f"{view.completion_report}\n\n"
+            text += f"{_html.escape(view.completion_report)}\n\n"
         else:
             text += get_text("request_acceptance.handlers.no_report", language=lang) + "\n\n"
 

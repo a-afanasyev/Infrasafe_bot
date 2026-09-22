@@ -13,6 +13,7 @@ from uk_management_bot.constants.categories import get_specialization_for_catego
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
@@ -287,7 +288,7 @@ async def handle_back_to_assignment_type_admin(callback: CallbackQuery, db: Sess
             get_text("admin.handlers.request_accepted_choose_assignment", language=lang).format(
                 request_number=request_number,
                 category=get_category_display(resolve_category_key(request.category), language=lang),
-                address=request.address
+                address=html.escape(request.address or "")
             ),
             reply_markup=get_assignment_type_keyboard(request_number, language=lang),
             parse_mode="HTML"

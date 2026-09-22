@@ -1,4 +1,5 @@
 """Управление ролями и специализациями пользователя."""
+import html
 import logging
 
 from aiogram import F
@@ -57,7 +58,7 @@ def _load_roles_screen_text(db: Session, target_user_id: int, lang: str) -> str:
     """
     user_mgmt_service = UserManagementService(db)
     target_user = user_mgmt_service.get_user_by_id(target_user_id)
-    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+    user_name = html.escape(target_user.first_name or target_user.username or str(target_user.telegram_id))
 
     message_text = get_text('moderation.select_roles', language=lang).format(user_name=user_name)
     message_text += f"\n\n{get_text('moderation.current_roles', language=lang)}: "
@@ -83,7 +84,7 @@ def _load_specializations_screen_text(db: Session, target_user_id: int,
     spec_service = SpecializationService(db)
     user_mgmt_service = UserManagementService(db)
     target_user = user_mgmt_service.get_user_by_id(target_user_id)
-    user_name = target_user.first_name or target_user.username or str(target_user.telegram_id)
+    user_name = html.escape(target_user.first_name or target_user.username or str(target_user.telegram_id))
 
     message_text = get_text('specializations.select_specializations', language=lang).format(user_name=user_name)
     message_text += f"\n\n{get_text('specializations.current_specializations', language=lang)}: "
@@ -417,7 +418,7 @@ async def process_role_change_comment(message: Message, state: FSMContext, langu
         if success:
             await message.answer(
                 get_text('moderation.roles_updated_successfully', language=lang).format(
-                    user_name=user_name
+                    user_name=html.escape(user_name)
                 )
             )
 
@@ -644,7 +645,7 @@ async def process_specialization_change_comment(message: Message, state: FSMCont
         if success:
             await message.answer(
                 get_text('specializations.specializations_updated', language=lang).format(
-                    user_name=user_name
+                    user_name=html.escape(user_name)
                 )
             )
 

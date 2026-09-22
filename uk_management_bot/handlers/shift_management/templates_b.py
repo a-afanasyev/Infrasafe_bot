@@ -20,6 +20,7 @@ handle_edit_template_details) идут теперь с ``db=None`` — их со
 template_spec_toggle_/template_spec_save_ и template_delete_confirm_/
 template_force_delete_ рождают клавиатуры этого же файла. Мёртвых нет.
 """
+import html
 import logging
 
 from aiogram import F
@@ -224,7 +225,7 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
 
         logger.info(f"Создание шаблона: name={template_name}, start_hour={start_hour}, start_minute={start_minute}, duration={duration}, specs={selected_specs}")
 
-        description = get_text("shift_management.template_default_description", language=lang).format(name=template_name)
+        description = get_text("shift_management.template_default_description", language=lang).format(name=template_name)  # html-raw: описание шаблона по умолчанию пишется в БД
         template = await run_db(
             lambda s: _apply_create_template(
                 s, template_name, start_hour, start_minute, duration, description, selected_specs
@@ -240,7 +241,7 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
 
             await callback.message.edit_text(
                 get_text("shift_management.template_created_success", language=lang,
-                        name=created_name,
+                        name=html.escape(created_name),
                         time=f"{created_hour:02d}:{(created_minute or 0):02d}",
                         duration=created_duration,
                         specializations=selected_text,
@@ -310,7 +311,7 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
 
         await callback.message.edit_text(
             get_text("shift_management.edit_specializations_title", language=lang,
-                    template_name=template_name,
+                    template_name=html.escape(template_name),
                     current_specs=specializations_text),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode="HTML"
@@ -368,7 +369,7 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
         try:
             await callback.message.edit_text(
                 get_text("shift_management.edit_specializations_title", language=lang,
-                        template_name=template_name,
+                        template_name=html.escape(template_name),
                         current_specs=specializations_text),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
                 parse_mode="HTML"
@@ -433,7 +434,7 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, rol
 
         # Показываем подтверждение удаления
         await callback.message.edit_text(
-            get_text("shift_management.delete_template_confirm", language=lang, name=template_name),
+            get_text("shift_management.delete_template_confirm", language=lang, name=html.escape(template_name)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text=get_text("shift_management.delete_yes_button", language=lang),
@@ -478,7 +479,7 @@ async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMCont
         else:
             # Показываем опцию принудительного удаления
             await callback.message.edit_text(
-                get_text("shift_management.template_delete_failed", language=lang, name=template_name),
+                get_text("shift_management.template_delete_failed", language=lang, name=html.escape(template_name)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=get_text("shift_management.force_delete_button", language=lang),
                                         callback_data=f"template_force_delete_{template_id}")],
