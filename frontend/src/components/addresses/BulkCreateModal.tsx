@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useBulkCreateApartments } from '../../hooks/useAddresses'
 import type { BulkCreateResult } from '../../types/api'
+import { safeErrorMessage } from '../../utils/errorMessage'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -110,7 +111,7 @@ export default function BulkCreateModal({ buildingId, buildingAddress, onClose }
 
               {bulkCreate.error && (
                 <div className="text-red text-[13px] font-[family-name:var(--font-display)]">
-                  {(bulkCreate.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || (bulkCreate.error as Error).message || t('addressForms.createError')}
+                  {safeErrorMessage(bulkCreate.error, t('addressForms.createError'))}
                 </div>
               )}
             </>

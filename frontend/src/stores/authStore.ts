@@ -89,8 +89,10 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         // Server clears uk_access / uk_refresh cookies; no body needed.
         await apiClient.post('/api/v2/auth/logout').catch(() => {})
-        // A9-P2-29: сначала снимаем флаг (guard'ы размонтируют защищённые
-        // страницы), затем чистим кэш — observer'ам уже некому рефетчить.
+        // A9-P2-29: set и clear идут синхронно подряд, до ближайшего рендера.
+        // clear() не будит смонтированные observer'ы (удаление из кэша их не
+        // рефетчит), а следующий рендер с isAuthenticated=false размонтирует
+        // защищённые страницы раньше, чем они успели бы запросить данные снова.
         set({ user: null, isAuthenticated: false })
         resetSessionCache()
       },

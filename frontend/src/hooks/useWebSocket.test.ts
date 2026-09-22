@@ -237,6 +237,19 @@ describe('useWebSocket — восстановление по online / visibility
     expect(FakeWebSocket.instances).toHaveLength(1)
   })
 
+  // A9-P3-19: после 4003/1008 «оживление» по online/visibilitychange поднимало
+  // сокет, который сервер снова закрывал — стоп должен быть окончательным.
+  it.each([4003, 1008])('после %i online/visibilitychange не переподключают', async (code) => {
+    renderHook(() => useWebSocket('kanban', () => {}))
+    await openLast()
+    await closeWith(code)
+
+    await act(async () => { window.dispatchEvent(new Event('online')) })
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+
   it('после размонтирования события больше не поднимают соединений', async () => {
     const { unmount } = renderHook(() => useWebSocket('kanban', () => {}))
     await openLast()

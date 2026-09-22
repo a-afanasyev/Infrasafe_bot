@@ -45,6 +45,13 @@ async function closeWith(code: number) {
   })
 }
 
+async function closeWithOn(sock: FakeWebSocket, code: number) {
+  await act(async () => {
+    sock.onclose?.({ code })
+    await Promise.resolve()
+  })
+}
+
 describe('useAccessSecurityFeed — F-04 token expiry (4001)', () => {
   it('на 4001 обновляет сессию и переподключается', async () => {
     const { result } = renderHook(() => useAccessSecurityFeed())
@@ -86,5 +93,42 @@ describe('useAccessSecurityFeed — F-04 token expiry (4001)', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1)
     expect(result.current.status).toBe('error')
+  })
+})
+
+// A9-P3-19: булев closedByCaller сбрасывался следующим mount'ом (StrictMode:
+// mount → cleanup → mount), и поздний close ПЕРВОГО сокета, который браузер
+// доставляет асинхронно, запускал реконнект — лишний сокет рядом с живым.
+describe('useAccessSecurityFeed — поколение эффекта (StrictMode)', () => {
+  it('поздний close сокета прошлого поколения не создаёт лишний сокет', async () => {
+    vi.useFakeTimers()
+    try {
+      renderHook(() => useAccessSecurityFeed(), { reactStrictMode: true })
+      expect(FakeWebSocket.instances).toHaveLength(2) // mount → cleanup → mount
+      const stale = FakeWebSocket.instances[0]
+
+      await act(async () => {
+        stale.onclose?.({ code: 1006 })
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+
+      expect(FakeWebSocket.instances).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('поздний 4001 сокета прошлого поколения не дёргает refresh и не создаёт сокет', async () => {
+    renderHook(() => useAccessSecurityFeed(), { reactStrictMode: true })
+    await closeWithOn(FakeWebSocket.instances[0], 4001)
+    expect(refreshSession).not.toHaveBeenCalled()
+    expect(FakeWebSocket.instances).toHaveLength(2)
+  })
+
+  it('контроль: 4001 живого сокета по-прежнему обновляет сессию и переподключает', async () => {
+    renderHook(() => useAccessSecurityFeed(), { reactStrictMode: true })
+    await closeWithOn(FakeWebSocket.instances[1], 4001)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+    expect(FakeWebSocket.instances).toHaveLength(3)
   })
 })

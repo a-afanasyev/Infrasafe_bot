@@ -84,6 +84,9 @@ export async function commitTransition({
   onError,
   onSuccess,
 }: CommitTransitionArgs): Promise<void> {
+  // A9-P3-19: in-flight рефетч доски, начатый до перехода, иначе доезжает
+  // после оптимистичной записи и затирает её старым снимком.
+  await queryClient.cancelQueries({ queryKey: KANBAN_QUERY_PREFIX })
   queryClient.setQueryData(queryKey, (old: KanbanBoardData | undefined) =>
     applyOptimisticTransition(old, requestNumber, data.status),
   )
