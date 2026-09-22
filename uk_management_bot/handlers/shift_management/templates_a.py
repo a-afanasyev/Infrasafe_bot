@@ -1,3 +1,4 @@
+import html
 import logging
 
 from aiogram import F
@@ -107,9 +108,10 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
                     if len(template.required_specializations) > 2:
                         specialization_info += f" (+{len(template.required_specializations)-2})"
             
-                description = template.description or get_text("shift_management.no_description", language=lang)
+                # A9-P2-2: название/описание шаблона — свободный текст в HTML.
+                description = html.escape(template.description) if template.description else get_text("shift_management.no_description", language=lang)
                 templates_text += (
-                    f"{i}. {status_emoji} <b>{template.name}</b>\n"
+                    f"{i}. {status_emoji} <b>{html.escape(template.name)}</b>\n"
                     f"   🕒 {time_info} ({duration_info}){specialization_info}\n"
                     f"   📝 {description}\n\n"
                 )
@@ -163,7 +165,7 @@ async def handle_template_name_input(message: Message, state: FSMContext, db=Non
         
             # Переходим к вводу времени начала
             await message.answer(
-                get_text("shift_management.name_saved_enter_time", language=lang, name=template_name),
+                get_text("shift_management.name_saved_enter_time", language=lang, name=html.escape(template_name)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang),
                                         callback_data="template_management")]
@@ -323,7 +325,7 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
                 status_emoji = "✅" if template.is_active else "❌"
                 time_info = f"{template.start_hour:02d}:{template.start_minute or 0:02d}"
             
-                button_text = f"{status_emoji} {template.name} ({time_info})"
+                button_text = f"{status_emoji} {template.name} ({time_info})"  # html-raw: подпись кнопки
                 keyboard.append([
                     InlineKeyboardButton(
                         text=button_text,
@@ -384,10 +386,10 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
                 from uk_management_bot.utils.constants import SPECIALIZATIONS
                 specialization_info = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in template.required_specializations])
 
-            description = template.description or get_text("shift_management.description_not_specified", language=lang)
+            description = html.escape(template.description) if template.description else get_text("shift_management.description_not_specified", language=lang)
 
             template_info = get_text("shift_management.edit_template_details", language=lang,
-                                    name=template.name,
+                                    name=html.escape(template.name),
                                     description=description,
                                     time=time_info,
                                     duration=template.duration_hours,
@@ -486,7 +488,7 @@ async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, 
                 return
 
             await callback.message.edit_text(
-                get_text("shift_management.edit_name_prompt", language=lang, current_name=template.name),
+                get_text("shift_management.edit_name_prompt", language=lang, current_name=html.escape(template.name)),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=get_text("shift_management.cancel_button", language=lang), callback_data=f"template_edit_{template_id}")]
                 ]),
@@ -518,7 +520,7 @@ async def handle_edit_template_description(callback: CallbackQuery, state: FSMCo
                 await callback.answer(get_text("shift_management.template_not_found", language=lang), show_alert=True)
                 return
 
-            current_desc = template.description or get_text("shift_management.description_not_specified", language=lang)
+            current_desc = html.escape(template.description) if template.description else get_text("shift_management.description_not_specified", language=lang)
             await callback.message.edit_text(
                 get_text("shift_management.edit_description_prompt", language=lang, current_description=current_desc),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[

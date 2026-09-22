@@ -195,7 +195,7 @@ def _public_label(level: str, apartment, lang: str) -> str:
     """Публичная форма адреса для промпта в группе — БЕЗ номера квартиры."""
     if level == "apartment":
         return get_text("group_intake.address_public_apartment", language=lang).format(
-            building=apartment.building.address if apartment.building else "?"
+            building=apartment.building.address if apartment.building else "?"  # html-raw: label_public экранируется при выводе
         )
     if level == "building":
         return format_building_address(apartment.building)

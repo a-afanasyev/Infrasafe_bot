@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import timedelta
 
@@ -14,6 +15,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.user_names import display_name
 
 from ._router import router
 from .shared import _db_scope, _format_end_label, translate_specializations
@@ -122,7 +124,7 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
 
             if result.get('error'):
                 await callback.message.edit_text(
-                    get_text("shift_management.ai_assignment_error_msg", language=lang, error=result['error']),
+                    get_text("shift_management.ai_assignment_error_msg", language=lang, error=html.escape(str(result['error']))),
                     reply_markup=get_executor_assignment_keyboard(lang),
                     parse_mode="HTML"
                 )
@@ -140,7 +142,8 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
             assignments_list = ""
             if assignments:
                 for a in assignments[:5]:
-                    name = a.get('executor_name') or f"#{a.get('executor_id')}"
+                    # A9-P2-2: executor_name — имя из Telegram-профиля.
+                    name = html.escape(a.get('executor_name') or f"#{a.get('executor_id')}")
                     score = a.get('assignment_score') or 0
                     assignments_list += f"• №{a.get('shift_id')} → {name} ({score:.0%})\n"
                 if len(assignments) > 5:
@@ -150,7 +153,7 @@ async def handle_ai_assignment(callback: CallbackQuery, state: FSMContext, db: S
             conflicts_list = ""
             if conflicts:
                 for c in conflicts[:3]:
-                    reason = c.get('description') or get_text("shift_management.unknown_reason", language=lang)
+                    reason = html.escape(c.get('description') or get_text("shift_management.unknown_reason", language=lang))
                     conflicts_list += f"• #{c.get('shift_id')} - {reason}\n"
                 if len(conflicts) > 3:
                     more_text = get_text("shift_management.and_more_conflicts", language=lang, count=len(conflicts) - 3)
@@ -250,14 +253,16 @@ async def handle_workload_analysis(callback: CallbackQuery, state: FSMContext, d
                     load_level = "🔴" if hours > 40 else "🟡" if hours > 20 else "🟢"
                     shifts_label = get_text("shift_management.shifts_count_label", language=lang)
                     hours_label = get_text("shift_management.hours_label", language=lang)
-                    workload_list += (f"{load_level} <b>{stat.first_name} {stat.last_name}</b>\n"
+                    # A9-P2-2: имя из Telegram-профиля в HTML-тексте —
+                    # канон display_name (без «Иван None») + html.escape.
+                    workload_list += (f"{load_level} <b>{html.escape(display_name(stat))}</b>\n"
                                      f"   {shifts_label}: {stat.shift_count}, {hours_label}: {hours:.1f}ч\n")
 
             # Build free executors list
             free_list = ""
             if unassigned_executors:
                 for executor in unassigned_executors[:5]:  # Показываем первых 5
-                    free_list += f"• {executor.first_name} {executor.last_name}\n"
+                    free_list += f"• {html.escape(display_name(executor))}\n"
 
                 if len(unassigned_executors) > 5:
                     more_text = get_text("shift_management.and_more_executors", language=lang, count=len(unassigned_executors) - 5)
@@ -438,7 +443,7 @@ async def handle_schedule_conflicts(callback: CallbackQuery, state: FSMContext, 
                     shift2 = conflict['shift2']
                     conflict_type = conflict['type']
 
-                    name = f"{executor.first_name} {executor.last_name}" if executor else "—"
+                    name = html.escape(display_name(executor)) if executor else "—"
                     conflicts_list += f"<b>{i}. {name}</b>\n"
                     conflicts_list += f"📅 {fmt_date(shift1.start_time)}\n"
 

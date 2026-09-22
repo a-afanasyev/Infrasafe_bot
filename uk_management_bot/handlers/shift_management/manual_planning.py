@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import timedelta
 
@@ -87,7 +88,7 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
 
             await callback.message.edit_text(
                 get_text("shift_management.select_date_for_shift", language=lang,
-                        template_name=template.name,
+                        template_name=html.escape(template.name),
                         start_time=f"{template.start_hour:02d}:{template.start_minute or 0:02d}",
                         end_time=f"{(template.start_hour + template.duration_hours) % 24:02d}:00",
                         specializations=specializations),
@@ -248,14 +249,14 @@ async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMCont
                 by_template_label = get_text("shift_management.by_template_label", language=lang)
                 by_template = f"\n<b>{by_template_label}:</b>\n"
                 for template_name, count in stats['shifts_by_template'].items():
-                    by_template += f"• {template_name}: {count} {shifts_label}\n"
+                    by_template += f"• {html.escape(str(template_name))}: {count} {shifts_label}\n"
 
             errors_text = ""
             if results['errors']:
                 errors_label = get_text("shift_management.errors_label", language=lang)
                 errors_text = f"\n⚠️ <b>{errors_label}:</b>\n"
                 for error in results['errors'][:3]:  # Показываем только первые 3 ошибки
-                    errors_text += f"• {error}\n"
+                    errors_text += f"• {html.escape(str(error))}\n"
 
             week_info = get_text("shift_management.weekly_planning_complete", language=lang,
                                 timestamp=timestamp,

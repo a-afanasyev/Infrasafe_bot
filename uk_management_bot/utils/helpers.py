@@ -1,4 +1,5 @@
 import json
+import html
 import logging
 import os
 from typing import Dict, Any
@@ -222,7 +223,7 @@ def format_request_details(request, locale: Dict[str, Any]) -> str:
         # Заявка привязана к квартире из справочника
         from uk_management_bot.services.address_service import AddressService
         formatted_address = AddressService.format_apartment_address(request.apartment_obj)
-        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {formatted_address} 🏢\n"
+        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {html.escape(formatted_address)} 🏢\n"
 
         # Дополнительная информация о квартире
         apartment = request.apartment_obj
@@ -240,18 +241,18 @@ def format_request_details(request, locale: Dict[str, Any]) -> str:
             details += ", ".join(apt_details) + "\n"
     else:
         # Legacy: текстовый адрес
-        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {request.address}\n"
+        details += f"📍 {locale.get('requests', {}).get('address', 'Адрес')}: {html.escape(request.address or '')}\n"
         if request.apartment:
-            details += f"🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: {request.apartment}\n"
+            details += f"🏠 {locale.get('requests', {}).get('apartment', 'Квартира')}: {html.escape(str(request.apartment))}\n"
 
-    details += f"""📝 {locale.get('requests', {}).get('description', 'Описание')}: {request.description}
+    details += f"""📝 {locale.get('requests', {}).get('description', 'Описание')}: {html.escape(request.description or '')}
 ⚡ {locale.get('requests', {}).get('urgency', 'Срочность')}: {locale.get('urgency', {}).get(request.urgency, request.urgency)}
 📊 {locale.get('requests', {}).get('status', 'Статус')}: {request.status}
 🕐 {locale.get('requests', {}).get('created_at', 'Создана')}: {request.created_at.strftime('%d.%m.%Y %H:%M')}
 """
 
     if request.executor:
-        details += f"👤 {locale.get('requests', {}).get('executor', 'Исполнитель')}: {request.executor.first_name or request.executor.username or 'Не указан'}\n"
+        details += f"👤 {locale.get('requests', {}).get('executor', 'Исполнитель')}: {html.escape(request.executor.first_name or request.executor.username or 'Не указан')}\n"
 
     return details
 

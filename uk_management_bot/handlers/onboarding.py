@@ -24,6 +24,7 @@ BUG-158 (ретайр 2026-08-19): четыре мёртвых хендлера 
 «🏠 Указать адрес» не рождал никто). Что на их триггеры больше никто не
 отвечает, пиннит ``tests/handlers/test_dead_handlers_retired.py``.
 """
+import html
 import logging
 from typing import Optional
 
@@ -333,7 +334,7 @@ async def process_document_file(message: Message, state: FSMContext, language: s
     confirmation_text = (
         f"📄 {get_text('onboarding.documents.confirm_upload', language=lang)}\n\n"
         f"{get_text('onboarding.handlers.doc_type_field', language=lang)}: {document_type_name}\n"
-        f"{get_text('onboarding.handlers.file_field', language=lang)}: {file_name}\n"
+        f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}\n"
         f"{get_text('onboarding.handlers.size_field', language=lang)}: {file_size // 1024} KB"
     )
     
@@ -418,7 +419,7 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         await message.answer(
             f"✅ {get_text('onboarding.documents.document_saved', language=lang)}\n\n"
             f"{get_text('onboarding.handlers.type_short_field', language=lang)}: {document_type_name}\n"
-            f"{get_text('onboarding.handlers.file_field', language=lang)}: {file_name}",
+            f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}",
             reply_markup=get_onboarding_completion_keyboard(lang)
         )
         
