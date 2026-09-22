@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from aiogram.types import BufferedInputFile, Message
 
@@ -14,9 +15,9 @@ from app.models.media import MediaFile, MediaChannel, MediaTag
 import html
 
 from app.utils.display_tz import display_instant_str, display_now_str
-from app.services.telegram_client import TelegramClientService
+from app.services.telegram_client import DeleteOutcome, TelegramClientService, get_telegram_client
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
-from dataclasses import dataclass, replace as dc_replace
+from dataclasses import dataclass
 
 from app.db.database import get_db_context, run_sync, sync_unit
 
@@ -63,12 +64,31 @@ class ChannelRef:
             channel_username=row.channel_username,
         )
 
-class MediaStorageService:
-    """Основной сервис для работы с медиа-хранилищем в Telegram каналах"""
+def _find_active_channel(db: Session, channel_purpose: str) -> Optional[MediaChannel]:
+    """Активный канал по purpose (или None).
 
-    def __init__(self):
-        self.telegram = TelegramClientService()
-        self.channels_cache = {}
+    `.is_(True)` — SQL-предикат, а не питоновское сравнение: даёт тот же
+    `WHERE is_active` и снимает E712, не полагаясь на неявную истинность колонки.
+    """
+    return db.query(MediaChannel).filter(
+        MediaChannel.purpose == channel_purpose,
+        MediaChannel.is_active.is_(True),
+    ).first()
+
+
+class MediaStorageService:
+    """Основной сервис для работы с медиа-хранилищем в Telegram каналах
+
+    A9-P2-15: сервис лёгкий и живёт один запрос, а Telegram-клиент (Bot +
+    aiohttp-сессия + httpx-пул) — общий процессный, им владеет lifespan
+    приложения. Поэтому у сервиса нет close(): закрытие отсюда рвало бы
+    сессию всем остальным запросам. Прежний `channels_cache` жил столько же,
+    сколько сервис (один запрос) и ничего не кэшировал — убран: канал читается
+    одной короткой выборкой.
+    """
+
+    def __init__(self, telegram: Optional[TelegramClientService] = None):
+        self.telegram = telegram if telegram is not None else get_telegram_client()
 
     async def upload_request_media(
         self,
@@ -382,10 +402,33 @@ class MediaStorageService:
                 )
                 logger.info(f"Media file {media_file_id} archived successfully")
             else:
-                await self.telegram.delete_message(
+                # A9-P3-23: delete_message не бросает — итог категорией.
+                # Раньше результат не проверялся, и сетевой сбой молча давал
+                # «deleted». Теперь:
+                #   TRANSIENT (сеть/5xx/429) → компенсация ниже, вызывающий повторит;
+                #   UNDELETABLE (нет can_delete_messages, старше 48 ч, Forbidden)
+                #     → повтор не поможет: файл скрывается из системы, как и до
+                #     фикса (иначе GDPR-очистка и ретеншн проваливались бы
+                #     систематически), сообщение в канале фиксируется WARNING-ом.
+                result = await self.telegram.delete_message(
                     chat_id=media_file.telegram_channel_id,
                     message_id=media_file.telegram_message_id
                 )
+                outcome = result.outcome
+                if outcome is DeleteOutcome.TRANSIENT:
+                    raise RuntimeError(
+                        f"Telegram временно не удалил сообщение {media_file.telegram_message_id} "
+                        f"в {media_file.telegram_channel_id}: {result.reason}"
+                    )
+                if outcome is DeleteOutcome.UNDELETABLE:
+                    logger.warning(
+                        "Media file %s: сообщение осталось в канале, удалить нельзя: "
+                        "%s (channel=%s message_id=%s)",
+                        media_file_id, result.reason, media_file.telegram_channel_id,
+                        media_file.telegram_message_id,
+                    )
+                elif outcome not in (DeleteOutcome.DELETED, DeleteOutcome.ALREADY_GONE):
+                    raise RuntimeError(f"Неожиданный итог delete_message: {outcome!r}")
                 await run_sync(self._set_status_sync, media_file_id, "deleted")
                 logger.info(f"Media file {media_file_id} deleted successfully")
 
@@ -617,12 +660,34 @@ class MediaStorageService:
         развёрнутых инсталляциях (init_db создаёт дефолтные каналы лишь на пустой
         БД). Здесь создаём строку из env-значения идемпотентно. Своя короткая
         сессия (AUD7-ARCH-01), закрыта до Telegram I/O.
+
+        A9-P3-23: две первые загрузки в новый домен обе видят «канала нет» и
+        обе вставляют `uk_media_<purpose>` (channel_name UNIQUE) — проигравший
+        получал IntegrityError → 500. Теперь проигравший перечитывает строку
+        победителя новой сессией.
         """
+        try:
+            return self._get_or_create_domain_channel_sync(channel_purpose, configured_value)
+        except IntegrityError:
+            logger.info(
+                "Concurrent auto-provision of media channel purpose=%s: "
+                "reusing the row created by the parallel request",
+                channel_purpose,
+            )
+            with get_db_context() as db:
+                channel = _find_active_channel(db, channel_purpose)
+                if channel is None:
+                    # Конфликт не с активным каналом нашего purpose (например,
+                    # деактивированная строка с тем же channel_name) — это
+                    # конфигурационная проблема, а не гонка.
+                    raise
+                return ChannelRef.from_row(channel)
+
+    def _get_or_create_domain_channel_sync(
+        self, channel_purpose: str, configured_value: str
+    ) -> ChannelRef:
         with get_db_context() as db:
-            channel = db.query(MediaChannel).filter(
-                MediaChannel.purpose == channel_purpose,
-                MediaChannel.is_active == True  # noqa: E712
-            ).first()
+            channel = _find_active_channel(db, channel_purpose)
             if channel is None:
                 channel = MediaChannel(
                     channel_name=f"uk_media_{channel_purpose}",
@@ -645,26 +710,11 @@ class MediaStorageService:
         """
         channel_purpose = FileCategories.get_channel_for_category(category)
 
-        # Проверяем кэш
-        cached = self.channels_cache.get(channel_purpose)
-        if cached is not None:
-            return cached
-
         with get_db_context() as db:
-            channel = db.query(MediaChannel).filter(
-                MediaChannel.purpose == channel_purpose,
-                # `.is_(True)` — SQL-предикат, а не питоновское сравнение: даёт тот же
-                # `WHERE is_active` и снимает E712, не полагаясь на неявную истинность
-                # колонки (ruff предлагал именно её).
-                MediaChannel.is_active.is_(True)
-            ).first()
+            channel = _find_active_channel(db, channel_purpose)
             if not channel:
                 raise ValueError(f"{ErrorMessages.CHANNEL_NOT_FOUND}: {channel_purpose}")
-            ref = ChannelRef.from_row(channel)
-
-        # Кэшируем снимок
-        self.channels_cache[channel_purpose] = ref
-        return ref
+            return ChannelRef.from_row(channel)
 
     def _remember_channel_id_sync(self, channel: ChannelRef, chat_id: int) -> None:
         """Первая отправка в канал по username: запомнить numeric chat_id."""
@@ -672,7 +722,6 @@ class MediaStorageService:
             db_channel = db.query(MediaChannel).filter(MediaChannel.id == channel.id).first()
             if db_channel:
                 db_channel.channel_id = chat_id
-        self.channels_cache[channel.purpose] = dc_replace(channel, channel_id=chat_id)
 
     async def _upload_to_channel(
         self,
@@ -889,9 +938,3 @@ class MediaStorageService:
         except Exception as e:
             logger.error(f"Failed to copy media {media_file.id} to archive: {e}")
             raise
-
-    async def close(self):
-        """
-        Закрытие соединений
-        """
-        await self.telegram.close()

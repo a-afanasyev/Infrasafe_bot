@@ -33,7 +33,6 @@ def _make_service(channel_access="@uk_media_access_private", monkeypatch=None):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram()
-    svc.channels_cache = {}
     return svc
 
 
@@ -123,6 +122,59 @@ async def test_access_channel_not_configured_raises(monkeypatch):
     assert svc.telegram.send_photo_calls == []
 
 
+@pytest.mark.asyncio
+async def test_concurrent_channel_auto_provision_race_reuses_winner(monkeypatch):
+    """A9-P3-23: две первые загрузки в новый домен читают «канала нет» и обе
+    вставляют `uk_media_<purpose>` (channel_name UNIQUE). Проигравший раньше
+    получал IntegrityError → 500. Моделируем проигравшего: его SELECT видит
+    «нет», а победитель уже закоммитил строку."""
+    from app.core.config import TelegramChannels, FileCategories
+    from app.db.database import SessionLocal
+    from app.models.media import MediaChannel
+    from app.services import media_storage
+
+    db = SessionLocal()
+    try:
+        winner = MediaChannel(channel_name=f"uk_media_{TelegramChannels.ACCESS}",
+                              channel_username="@uk_media_access_private", channel_id=-4242,
+                              purpose=TelegramChannels.ACCESS, category="photo", is_active=True)
+        db.add(winner)
+        db.commit()
+        winner_id = winner.id
+    finally:
+        db.close()
+
+    real_find = media_storage._find_active_channel
+    stale = {"left": 1}
+
+    def stale_then_real(session, purpose):
+        if stale["left"]:
+            stale["left"] -= 1
+            return None  # чтение до коммита победителя
+        return real_find(session, purpose)
+
+    monkeypatch.setattr(media_storage, "_find_active_channel", stale_then_real)
+    svc = _make_service(monkeypatch=monkeypatch)
+
+    media = await svc.upload_domain_media(
+        channel_purpose=TelegramChannels.ACCESS,
+        category=FileCategories.ACCESS_PLATE,
+        ref="RACE|1",
+        file_data=PNG_1x1,
+        filename="p.png",
+        content_type="image/png",
+    )
+
+    assert media.id is not None
+    assert svc.telegram.send_photo_calls[0]["chat_id"] == -4242  # канал победителя
+    db = SessionLocal()
+    try:
+        rows = db.query(MediaChannel).filter(MediaChannel.purpose == TelegramChannels.ACCESS).all()
+        assert [r.id for r in rows] == [winner_id]
+    finally:
+        db.close()
+
+
 # ---------- endpoint-level ----------
 
 @pytest.fixture
@@ -136,7 +188,6 @@ def client_and_service(monkeypatch):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram()
-    svc.channels_cache = {}
     app.dependency_overrides[get_storage_service] = lambda: svc
     try:
         with TestClient(app) as c:
@@ -203,7 +254,6 @@ def test_endpoint_access_not_configured_returns_503(monkeypatch):
     monkeypatch.setattr(settings, "channel_access", "")
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram()
-    svc.channels_cache = {}
     app.dependency_overrides[get_storage_service] = lambda: svc
     try:
         with TestClient(app) as c:
@@ -229,7 +279,6 @@ def test_request_upload_flow_still_works(monkeypatch):
 
     svc = MediaStorageService.__new__(MediaStorageService)
     svc.telegram = FakeTelegram()
-    svc.channels_cache = {}
     app.dependency_overrides[get_storage_service] = lambda: svc
     try:
         with TestClient(app) as c:

@@ -8634,5 +8634,13 @@
       "occ_state_error": "❌ Bu jadval bandi allaqachon yopilgan yoki bekor qilingan.",
       "occ_invalid": "❌ Ma'lumotlar qabul qilinmadi: dalolatnoma raqami, sana va havolani tekshiring."
     }
+  },
+  "shift_scheduler": {
+    "auto_created_title": "🏗️ Smenalarni avtomatik yaratish yakunlandi",
+    "auto_created_body": "Keyingi 7 kun uchun yaratilgan yangi smenalar: {total}",
+    "transfers_expired_title": "⏰ Muddati o'tgan smena topshirishlari qayta ishlandi",
+    "transfers_expired_body": "Avtomatik qayta ishlangan topshirishlar: {total}",
+    "weekly_planning_title": "📅 Haftalik rejalashtirish",
+    "weekly_planning_body": "Keyingi haftaga rejalashtirilgan smenalar: {total}"
   }
 }

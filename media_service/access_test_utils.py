@@ -58,7 +58,9 @@ class FakeTelegram:
         self.delete_message_calls.append({"chat_id": chat_id, "message_id": message_id})
         if "delete_message" in self.fail_on:
             raise RuntimeError("simulated delete_message failure")
-        return True
+        from app.services.telegram_client import DeleteOutcome, DeleteResult
+
+        return DeleteResult(DeleteOutcome.DELETED)
 
     async def download_file(self, file_id):
         self.download_file_calls.append(file_id)

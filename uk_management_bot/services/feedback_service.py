@@ -60,6 +60,15 @@ def manager_telegram_ids_sync(db: Session) -> list[int]:
     return [u.telegram_id for u in rows if u.telegram_id]
 
 
+def manager_recipients_sync(db: Session) -> list[tuple[int, str]]:
+    """Та же аудитория, что `manager_telegram_ids_sync`, + язык каждого.
+
+    Для рассылок, которые рендерятся на языке получателя (A9-P3-8).
+    """
+    rows = db.query(User).filter(_MANAGER_FILTER, _ACTIVE_FILTER).all()
+    return [(u.telegram_id, u.language or "ru") for u in rows if u.telegram_id]
+
+
 async def manager_telegram_ids_async(db) -> list[int]:  # db: AsyncSession
 
     res = await db.execute(select(User).where(_MANAGER_FILTER, _ACTIVE_FILTER))

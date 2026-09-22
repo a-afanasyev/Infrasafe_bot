@@ -21,6 +21,7 @@ lock_periods_from (не затронута), и её FOR UPDATE на строк�
 зелёным и под мутацией, он проверяет lock_periods_from, а не lock_period.
 """
 
+import os
 import threading
 import time
 import uuid
@@ -38,6 +39,12 @@ from app.services.readings import apply_correction, upsert_reading
 from tests.conftest import fill_missing, make_meter, make_object, make_period
 
 pytestmark = pytest.mark.skipif(engine.dialect.name != "postgresql", reason="FOR UPDATE — только PostgreSQL")
+
+# A9-P2-17: CI-шаг «Concurrency tests» выставляет этот флаг — там skip означал
+# бы зелёный шаг без единого исполненного теста (URL потерялся, conftest ушёл в
+# sqlite). Под флагом не-PG движок — ошибка сбора, шаг краснеет.
+if os.environ.get("RESOURCE_REQUIRE_PG_TESTS") == "1" and engine.dialect.name != "postgresql":
+    raise RuntimeError(f"RESOURCE_REQUIRE_PG_TESTS=1, но движок {engine.dialect.name!r}: PG-тесты не исполнятся")
 
 
 def _tenant_id() -> uuid.UUID:

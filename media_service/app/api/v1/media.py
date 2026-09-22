@@ -9,9 +9,7 @@ from typing import List, Optional
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
-
-from app.db.database import get_db, SessionLocal
+from app.db.database import SessionLocal, run_sync
 from app.services import MediaStorageService, MediaSearchService
 from app.services import preview_cache
 from app.schemas import (
@@ -23,6 +21,7 @@ from app.schemas import (
 )
 from app.core.config import settings, TelegramChannels, FileCategories
 from app.services.media_storage import ChannelNotConfiguredError, PublicationReservationError
+from app.services.telegram_client import get_telegram_client
 from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
@@ -97,9 +96,10 @@ def _sniff_image_mime(data: bytes) -> Optional[str]:
     return None
 
 
-# Dependency для сервисов
+# Dependency для сервисов. A9-P2-15: сервис per-request и лёгкий, Telegram-клиент
+# под ним — процессный (создаётся в lifespan, закрывается на shutdown).
 async def get_storage_service() -> MediaStorageService:
-    return MediaStorageService()
+    return MediaStorageService(telegram=get_telegram_client())
 
 
 async def get_search_service() -> MediaSearchService:
@@ -642,29 +642,51 @@ async def get_media_file_stream(
     return _image_response(file_bytes, meta, content_type)
 
 
+def _media_response_sync(media_id: int) -> Optional[MediaFileResponse]:
+    """A9-P2-12: чтение одной строки коротким sync-юнитом (через run_sync).
+
+    Раньше три async-ручки делали `db.query` прямо в event loop на сессии из
+    `Depends(get_db)` — единственный воркер стоял на время round-trip к БД.
+    DTO собирается внутри сессии: наружу не уходит ORM-объект.
+    """
+    from app.models.media import MediaFile
+
+    with SessionLocal() as db:
+        row = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        return MediaFileResponse.model_validate(row) if row is not None else None
+
+
+def _telegram_lookup_sync(telegram_file_id: str) -> Optional[MediaTelegramLookupResponse]:
+    """A9-P2-12: DB-ветка поиска по telegram_file_id — sync-юнит (через run_sync)."""
+    from app.models.media import MediaFile
+
+    with SessionLocal() as db:
+        row = db.query(MediaFile).filter(MediaFile.telegram_file_id == telegram_file_id).first()
+        if row is None:
+            return None
+        return MediaTelegramLookupResponse(
+            source="database",
+            telegram_file_id=row.telegram_file_id,
+            telegram_file_unique_id=row.telegram_file_unique_id,
+            file_size=row.file_size,
+            file_path=None,
+            file_url=f"/api/v1/media/{row.id}/file",
+            media_file=MediaFileResponse.model_validate(row),
+        )
+
+
 @router.get("/telegram/{telegram_file_id}", response_model=MediaTelegramLookupResponse)
 async def get_media_by_telegram_file_id(
     telegram_file_id: str,
     storage_service: MediaStorageService = Depends(get_storage_service),
-    db: Session = Depends(get_db)
 ):
     """
     Получение информации о медиа-файле по Telegram file_id
     """
     try:
-        from app.models.media import MediaFile
-        media_file = db.query(MediaFile).filter(MediaFile.telegram_file_id == telegram_file_id).first()
-
-        if media_file:
-            return MediaTelegramLookupResponse(
-                source="database",
-                telegram_file_id=media_file.telegram_file_id,
-                telegram_file_unique_id=media_file.telegram_file_unique_id,
-                file_size=media_file.file_size,
-                file_path=None,
-                file_url=f"/api/v1/media/{media_file.id}/file",
-                media_file=MediaFileResponse.model_validate(media_file)
-            )
+        found = await run_sync(_telegram_lookup_sync, telegram_file_id)
+        if found is not None:
+            return found
 
         # Fallback to Telegram API — file not in our DB
         try:
@@ -720,21 +742,16 @@ async def stream_telegram_file(
 
 
 @router.get("/{media_id}", response_model=MediaFileResponse)
-async def get_media(
-    media_id: int,
-    db: Session = Depends(get_db)
-):
+async def get_media(media_id: int):
     """
     Получение информации о медиа-файле по ID
     """
     try:
-        from app.models.media import MediaFile
-
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        media_file = await run_sync(_media_response_sync, media_id)
         if not media_file:
             raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 
-        return MediaFileResponse.model_validate(media_file)
+        return media_file
 
     except HTTPException:
         raise
@@ -744,18 +761,12 @@ async def get_media(
 
 
 @router.get("/{media_id}/url", response_model=MediaFileUrlResponse)
-async def get_media_url(
-    media_id: int,
-    storage_service: MediaStorageService = Depends(get_storage_service),
-    db: Session = Depends(get_db)
-):
+async def get_media_url(media_id: int):
     """
     Получение URL для доступа к медиа-файлу
     """
     try:
-        from app.models.media import MediaFile
-
-        media_file = db.query(MediaFile).filter(MediaFile.id == media_id).first()
+        media_file = await run_sync(_media_response_sync, media_id)
         if not media_file:
             raise HTTPException(status_code=404, detail="Медиа-файл не найден")
 

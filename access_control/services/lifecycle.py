@@ -20,6 +20,7 @@ expiry: если pending просрочен, resolve сначала перево
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -42,6 +43,8 @@ from access_control.services.locks import (
 # AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
 # репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
 from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
+
+logger = logging.getLogger(__name__)
 
 # TTL ручной команды открытия (§9.2): согласован с ingestion DEFAULT_COMMAND_TTL.
 MANUAL_COMMAND_TTL_SECONDS = 120
@@ -136,8 +139,14 @@ def _publish_lifecycle_event(
                 occurred_at=now.isoformat(),
             )
         )
-    except Exception:  # noqa: BLE001 — трансляция не критична
-        pass
+    except Exception as exc:  # noqa: BLE001 — трансляция не критична
+        # A9-P3-10: переход уже закоммичен — не бросаем, но потерю live-события
+        # охране фиксируем. Только исход: без номера/фото (§11) и без reason —
+        # он может быть свободным текстом оператора.
+        logger.warning(
+            "live-событие охране не опубликовано: decision=%s status=%s: %r",
+            decision, status, exc,
+        )
 
 
 # --------------------------- чтение состояния ---------------------------

@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **509**
-- открыто маркером: **61**
+- закрыто маркером: **511**
+- открыто маркером: **59**
 
-  - `actionable` — **49**
+  - `actionable` — **47**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=25, P3=24.
+Из них actionable по приоритету: P2=24, P3=23.
 
 Значения `status`:
 
@@ -73,11 +73,9 @@
 | `A9-P2-14` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа |
 | `A9-P2-15` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | media-service | — | media: `Bot`/`AiohttpSession` и httpx-клиент создаются на каждый запрос и не закрываются |
 | `A9-P2-16` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api, media-service | — | access: 30-дневный ретеншн фото ANPR не удаляет сами медиа |
-| `A9-P2-17` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | resource-api, CI | — | resource: PG-тест блокировки периода никогда не выполняется в CI |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
 | `A9-P3-2` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access-api `/metrics` без токена (требует подтверждения доступности через edge) |
 | `A9-P3-23` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | media-service, access-api | — | Сателлиты: мелкие дефекты саги, гонок, Redis и дубли `_client_ip` |
-| `A9-P3-3` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | resource-api | — | resource: `commit_token` импорта бессрочный и не привязан к пользователю/тенанту/месяцу |
 | `A9-P2-29` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: logout не чистит кэш `QueryClient` |
 | `A9-P2-30` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома |
 | `A9-P2-31` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W6 | — | frontend, TWA, bot | — | RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта |
