@@ -1,21 +1,25 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError, downloadUrl } from '../api/client';
 import type { ExportFormat, ExportItem, Period, Provider, ResourceType } from '../api/types';
+import { EXPORT_STATUS_KEYS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { Modal } from '../components/Modal';
-import { formatDateTime, formatMonth } from '../utils/format';
+import { useResourceFormat } from '../utils/useResourceFormat';
 import { canEnterReadings } from '../auth/roles';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
 
-const EXPORT_STATUS_LABELS: Record<string, string> = {
-  created: 'Создан',
-  generated: 'Сформирован',
-  sent: 'Отправлен',
-  cancelled: 'Отменён',
+const CHANNEL_KEYS: Record<string, string> = {
+  email: 'resourceAccounting.exports.channels.email',
+  edi: 'resourceAccounting.exports.channels.edi',
+  paper: 'resourceAccounting.exports.channels.paper',
+  other: 'resourceAccounting.exports.channels.other',
 };
 
 export function ExportsPage() {
+  const { t } = useTranslation();
+  const { formatDateTime, formatMonth } = useResourceFormat();
   const { role } = useResourceAuth();
   const canCreate = canEnterReadings(role);
   const queryClient = useQueryClient();
@@ -63,7 +67,7 @@ export function ExportsPage() {
       setCreateError(null);
       invalidate();
     },
-    onError: (e) => setCreateError(e instanceof ApiError ? e.message : 'Ошибка создания акта'),
+    onError: (e) => setCreateError(e instanceof ApiError ? e.message : t('resourceAccounting.exports.createError')),
   });
 
   const markSent = useMutation({
@@ -78,13 +82,13 @@ export function ExportsPage() {
       setComment('');
       invalidate();
     },
-    onError: (e) => setActionError(e instanceof ApiError ? e.message : 'Ошибка'),
+    onError: (e) => setActionError(e instanceof ApiError ? e.message : t('resourceAccounting.common.error')),
   });
 
   const cancelExport = useMutation({
     mutationFn: (exp: ExportItem) => api(`/v1/exports/${exp.id}/cancel`, { method: 'POST' }),
     onSuccess: invalidate,
-    onError: (e) => setActionError(e instanceof ApiError ? e.message : 'Ошибка'),
+    onError: (e) => setActionError(e instanceof ApiError ? e.message : t('resourceAccounting.common.error')),
   });
 
   const periods = [...(periodsQuery.data ?? [])].sort((a, b) => b.month.localeCompare(a.month));
@@ -92,17 +96,17 @@ export function ExportsPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Акты сверки</h1>
+        <h1>{t('resourceAccounting.exports.title')}</h1>
       </div>
 
       {canCreate && (
         <div className="panel">
-          <h2>Создать акт</h2>
+          <h2>{t('resourceAccounting.exports.createTitle')}</h2>
           <div className="toolbar">
             <label className="field-inline">
-              <span>Период</span>
+              <span>{t('resourceAccounting.exports.period')}</span>
               <select value={month} onChange={(e) => setMonth(e.target.value)}>
-                <option value="">— выберите —</option>
+                <option value="">{t('resourceAccounting.exports.choose')}</option>
                 {periods.map((p) => (
                   <option key={p.id} value={p.month}>
                     {formatMonth(p.month)}
@@ -111,7 +115,7 @@ export function ExportsPage() {
               </select>
             </label>
             <label className="field-inline">
-              <span>Формат</span>
+              <span>{t('resourceAccounting.exports.format')}</span>
               <select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
                 <option value="xlsx">XLSX</option>
                 <option value="csv">CSV</option>
@@ -119,9 +123,9 @@ export function ExportsPage() {
               </select>
             </label>
             <label className="field-inline">
-              <span>Поставщик</span>
+              <span>{t('resourceAccounting.exports.provider')}</span>
               <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
-                <option value="">Все</option>
+                <option value="">{t('resourceAccounting.common.all')}</option>
                 {(providersQuery.data ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -130,14 +134,14 @@ export function ExportsPage() {
               </select>
             </label>
             <label className="field-inline">
-              <span>Ресурс</span>
+              <span>{t('resourceAccounting.exports.resource')}</span>
               <select
                 value={resourceType}
                 onChange={(e) => setResourceType(e.target.value as '' | ResourceType)}
               >
-                <option value="">Все</option>
-                <option value="electricity">Электроэнергия</option>
-                <option value="cold_water">Холодная вода</option>
+                <option value="">{t('resourceAccounting.common.all')}</option>
+                <option value="electricity">{t('resourceAccounting.resourceTypes.electricity')}</option>
+                <option value="cold_water">{t('resourceAccounting.resourceTypes.cold_water')}</option>
               </select>
             </label>
             <label className="checkbox-inline">
@@ -146,14 +150,14 @@ export function ExportsPage() {
                 checked={isCorrection}
                 onChange={(e) => setIsCorrection(e.target.checked)}
               />
-              Корректировочный
+              {t('resourceAccounting.exports.correction')}
             </label>
             <button
               className="btn btn-primary"
               disabled={!month || createExport.isPending}
               onClick={() => createExport.mutate()}
             >
-              {createExport.isPending ? 'Создание…' : 'Создать акт'}
+              {createExport.isPending ? t('resourceAccounting.exports.creating') : t('resourceAccounting.exports.createTitle')}
             </button>
           </div>
           {createError && <div className="form-error">{createError}</div>}
@@ -170,25 +174,25 @@ export function ExportsPage() {
       )}
 
       <div className="panel">
-        <h2>История</h2>
+        <h2>{t('resourceAccounting.exports.history')}</h2>
         {exportsQuery.isLoading ? (
           <Loading />
         ) : exportsQuery.isError ? (
           <ErrorState error={exportsQuery.error} onRetry={() => exportsQuery.refetch()} />
         ) : (exportsQuery.data ?? []).length === 0 ? (
-          <Empty text="Актов пока нет" />
+          <Empty text={t('resourceAccounting.exports.empty')} />
         ) : (
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Период</th>
-                  <th>Формат</th>
-                  <th>Поставщик</th>
-                  <th>Строк</th>
-                  <th>Статус</th>
-                  <th>Создан</th>
-                  <th>Отправлен</th>
+                  <th>{t('resourceAccounting.exports.period')}</th>
+                  <th>{t('resourceAccounting.exports.format')}</th>
+                  <th>{t('resourceAccounting.exports.provider')}</th>
+                  <th>{t('resourceAccounting.exports.rows')}</th>
+                  <th>{t('resourceAccounting.exports.colStatus')}</th>
+                  <th>{t('resourceAccounting.exports.colCreated')}</th>
+                  <th>{t('resourceAccounting.exports.colSent')}</th>
                   <th />
                 </tr>
               </thead>
@@ -197,16 +201,16 @@ export function ExportsPage() {
                   <tr key={exp.id}>
                     <td>
                       {exp.period_month ? formatMonth(exp.period_month) : '—'}
-                      {exp.is_correction && <span className="chip">корр.</span>}
+                      {exp.is_correction && <span className="chip">{t('resourceAccounting.exports.correctionChip')}</span>}
                     </td>
                     <td className="mono">{exp.format.toUpperCase()}</td>
-                    <td>{exp.provider_name ?? 'Все'}</td>
+                    <td>{exp.provider_name ?? t('resourceAccounting.common.all')}</td>
                     <td className="num">{exp.row_count ?? '—'}</td>
-                    <td>{EXPORT_STATUS_LABELS[exp.status] ?? exp.status}</td>
+                    <td>{EXPORT_STATUS_KEYS[exp.status] ? t(EXPORT_STATUS_KEYS[exp.status]) : exp.status}</td>
                     <td className="small">{formatDateTime(exp.created_at)}</td>
                     <td className="small">
                       {exp.sent_at
-                        ? `${formatDateTime(exp.sent_at)}${exp.sent_channel ? ` (${exp.sent_channel})` : ''}`
+                        ? `${formatDateTime(exp.sent_at)}${exp.sent_channel ? ` (${CHANNEL_KEYS[exp.sent_channel] ? t(CHANNEL_KEYS[exp.sent_channel]) : exp.sent_channel})` : ''}`
                         : '—'}
                     </td>
                     <td className="cell-actions">
@@ -215,21 +219,21 @@ export function ExportsPage() {
                           className="btn btn-sm"
                           onClick={() => window.open(downloadUrl(`/v1/exports/${exp.id}/download`))}
                         >
-                          Скачать
+                          {t('resourceAccounting.exports.download')}
                         </button>
                       )}
                       {canCreate && exp.status !== 'cancelled' && !exp.sent_at && (
                         <>
                           <button className="btn btn-sm" onClick={() => setMarkSentFor(exp)}>
-                            Отправлен
+                            {t('resourceAccounting.exports.markSentButton')}
                           </button>
                           <button
                             className="btn btn-sm btn-ghost text-error"
                             onClick={() => {
-                              if (window.confirm('Отменить акт?')) cancelExport.mutate(exp);
+                              if (window.confirm(t('resourceAccounting.exports.cancelConfirm'))) cancelExport.mutate(exp);
                             }}
                           >
-                            Отменить
+                            {t('resourceAccounting.exports.cancelExport')}
                           </button>
                         </>
                       )}
@@ -243,30 +247,30 @@ export function ExportsPage() {
       </div>
 
       {markSentFor && (
-        <Modal title="Отметить как отправленный" onClose={() => setMarkSentFor(null)}>
+        <Modal title={t('resourceAccounting.exports.markSentTitle')} onClose={() => setMarkSentFor(null)}>
           <label className="field">
-            <span>Канал отправки *</span>
+            <span>{t('resourceAccounting.exports.channel')}</span>
             <select value={channel} onChange={(e) => setChannel(e.target.value)}>
-              <option value="email">Email</option>
-              <option value="edi">ЭДО</option>
-              <option value="paper">Бумажный</option>
-              <option value="other">Другое</option>
+              <option value="email">{t('resourceAccounting.exports.channels.email')}</option>
+              <option value="edi">{t('resourceAccounting.exports.channels.edi')}</option>
+              <option value="paper">{t('resourceAccounting.exports.channels.paper')}</option>
+              <option value="other">{t('resourceAccounting.exports.channels.other')}</option>
             </select>
           </label>
           <label className="field">
-            <span>Комментарий</span>
+            <span>{t('resourceAccounting.exports.comment')}</span>
             <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
           </label>
           <div className="modal-actions">
             <button className="btn" onClick={() => setMarkSentFor(null)}>
-              Отмена
+              {t('resourceAccounting.common.cancel')}
             </button>
             <button
               className="btn btn-primary"
               disabled={markSent.isPending}
               onClick={() => markSent.mutate(markSentFor)}
             >
-              Подтвердить
+              {t('resourceAccounting.exports.confirm')}
             </button>
           </div>
         </Modal>

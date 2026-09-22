@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { apiPaged, api, ApiError } from '../api/client';
 import type {
@@ -9,7 +10,7 @@ import type {
   Provider,
   ResourceType,
 } from '../api/types';
-import { METER_STATUS_LABELS, RESOURCE_TYPE_LABELS } from '../api/types';
+import { METER_STATUS_KEYS, RESOURCE_TYPE_KEYS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { Modal } from '../components/Modal';
 import { MeterForm } from '../components/MeterForm';
@@ -22,6 +23,7 @@ const PER_PAGE = 25;
 
 export function MetersPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const link = useResourceLink();
   const { role } = useResourceAuth();
   const queryClient = useQueryClient();
@@ -36,11 +38,11 @@ export function MetersPage() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setDebouncedQ(q);
       setPage(1);
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q]);
 
   const providersQuery = useQuery({
@@ -82,7 +84,7 @@ export function MetersPage() {
       void queryClient.invalidateQueries({ queryKey: ['meters'] });
       navigate(link(`/meters/${meter.id}`));
     },
-    onError: (e) => setCreateError(e instanceof ApiError ? e.message : 'Ошибка сохранения'),
+    onError: (e) => setCreateError(e instanceof ApiError ? e.message : t('resourceAccounting.common.saveError')),
   });
 
   const meta = metersQuery.data?.meta;
@@ -94,10 +96,10 @@ export function MetersPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Счётчики</h1>
+        <h1>{t('resourceAccounting.meters.title')}</h1>
         {canEnterReadings(role) && (
           <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
-            + Новый счётчик
+            {t('resourceAccounting.meters.newMeterButton')}
           </button>
         )}
       </div>
@@ -105,12 +107,12 @@ export function MetersPage() {
       <div className="toolbar">
         <input
           className="search-input"
-          placeholder="Поиск (номер, название)…"
+          placeholder={t('resourceAccounting.meters.searchPlaceholder')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <label className="field-inline">
-          <span>Ресурс</span>
+          <span>{t('resourceAccounting.meters.resource')}</span>
           <select
             value={resourceType}
             onChange={(e) => {
@@ -118,13 +120,13 @@ export function MetersPage() {
               setPage(1);
             }}
           >
-            <option value="">Все</option>
-            <option value="electricity">Электроэнергия</option>
-            <option value="cold_water">Холодная вода</option>
+            <option value="">{t('resourceAccounting.common.all')}</option>
+            <option value="electricity">{t('resourceAccounting.resourceTypes.electricity')}</option>
+            <option value="cold_water">{t('resourceAccounting.resourceTypes.cold_water')}</option>
           </select>
         </label>
         <label className="field-inline">
-          <span>Статус</span>
+          <span>{t('resourceAccounting.meters.status')}</span>
           <select
             value={status}
             onChange={(e) => {
@@ -132,14 +134,14 @@ export function MetersPage() {
               setPage(1);
             }}
           >
-            <option value="">Все</option>
-            <option value="active">Активные</option>
-            <option value="decommissioned">Снятые</option>
-            <option value="archived">Архив</option>
+            <option value="">{t('resourceAccounting.common.all')}</option>
+            <option value="active">{t('resourceAccounting.meters.filterActive')}</option>
+            <option value="decommissioned">{t('resourceAccounting.meters.filterDecommissioned')}</option>
+            <option value="archived">{t('resourceAccounting.meters.filterArchived')}</option>
           </select>
         </label>
         <label className="field-inline">
-          <span>Поставщик</span>
+          <span>{t('resourceAccounting.meters.provider')}</span>
           <select
             value={providerId}
             onChange={(e) => {
@@ -147,7 +149,7 @@ export function MetersPage() {
               setPage(1);
             }}
           >
-            <option value="">Все</option>
+            <option value="">{t('resourceAccounting.common.all')}</option>
             {(providersQuery.data ?? []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -162,21 +164,21 @@ export function MetersPage() {
       ) : metersQuery.isError ? (
         <ErrorState error={metersQuery.error} onRetry={() => metersQuery.refetch()} />
       ) : metersQuery.data!.data.length === 0 ? (
-        <Empty text="Счётчики не найдены" />
+        <Empty text={t('resourceAccounting.meters.notFound')} />
       ) : (
         <>
           <div className="table-wrap">
             <table className="table table-clickable">
               <thead>
                 <tr>
-                  <th>Номер</th>
-                  <th>Название</th>
-                  <th>Ресурс</th>
-                  <th>Объект</th>
-                  <th>Место установки</th>
-                  <th>Расход, 6 мес</th>
-                  <th>Поставщик / лиц. счёт</th>
-                  <th>Статус</th>
+                  <th>{t('resourceAccounting.meters.colNumber')}</th>
+                  <th>{t('resourceAccounting.meters.colName')}</th>
+                  <th>{t('resourceAccounting.meters.resource')}</th>
+                  <th>{t('resourceAccounting.meters.colObject')}</th>
+                  <th>{t('resourceAccounting.meters.colInstallLocation')}</th>
+                  <th>{t('resourceAccounting.meters.colConsumption6m')}</th>
+                  <th>{t('resourceAccounting.meters.colProviderAccount')}</th>
+                  <th>{t('resourceAccounting.meters.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,7 +186,7 @@ export function MetersPage() {
                   <tr key={m.id} onClick={() => navigate(link(`/meters/${m.id}`))}>
                     <td className="mono">{m.meter_number}</td>
                     <td>{m.name}</td>
-                    <td>{RESOURCE_TYPE_LABELS[m.resource_type]}</td>
+                    <td>{t(RESOURCE_TYPE_KEYS[m.resource_type])}</td>
                     <td>{m.primary_object_name ?? '—'}</td>
                     <td className="small">{m.install_location}</td>
                     <td>
@@ -200,7 +202,7 @@ export function MetersPage() {
                           }`.trim() || '—'
                         : '—'}
                     </td>
-                    <td>{METER_STATUS_LABELS[m.status] ?? m.status}</td>
+                    <td>{METER_STATUS_KEYS[m.status] ? t(METER_STATUS_KEYS[m.status]) : m.status}</td>
                   </tr>
                 ))}
               </tbody>
@@ -208,29 +210,29 @@ export function MetersPage() {
           </div>
           <div className="pagination">
             <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              ← Назад
+              {t('resourceAccounting.common.prev')}
             </button>
             <span>
-              Стр. {page} из {totalPages} (всего {meta?.total ?? 0})
+              {t('resourceAccounting.common.pageOf', { page, total: totalPages, count: meta?.total ?? 0 })}
             </span>
             <button
               className="btn btn-sm"
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
             >
-              Вперёд →
+              {t('resourceAccounting.common.next')}
             </button>
           </div>
         </>
       )}
 
       {createOpen && (
-        <Modal title="Новый счётчик" width={680} onClose={() => setCreateOpen(false)}>
+        <Modal title={t('resourceAccounting.meters.newMeterTitle')} width={680} onClose={() => setCreateOpen(false)}>
           <MeterForm
             mode="create"
             pending={createMeter.isPending}
             error={createError}
-            submitLabel="Создать"
+            submitLabel={t('resourceAccounting.common.create')}
             onSubmit={(payload) => createMeter.mutate(payload)}
             onCancel={() => setCreateOpen(false)}
           />

@@ -20,7 +20,7 @@ const ResourceAuthContext = createContext<ResourceAuthValue | null>(null);
 // eslint-disable-next-line react-refresh/only-export-components -- ported module: auth hook co-located with its provider
 export function useResourceAuth(): ResourceAuthValue {
   const ctx = useContext(ResourceAuthContext);
-  if (!ctx) throw new Error('useResourceAuth должен использоваться внутри ResourceAuthProvider');
+  if (!ctx) throw new Error('useResourceAuth must be used within ResourceAuthProvider');
   return ctx;
 }
 

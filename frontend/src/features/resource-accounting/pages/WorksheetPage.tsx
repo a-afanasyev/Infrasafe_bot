@@ -12,7 +12,8 @@ import type {
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { PeriodStatusBadge, ReadingStatusBadge } from '../components/StatusBadge';
 import { Modal } from '../components/Modal';
-import { formatMonth, formatNumber } from '../utils/format';
+import { formatNumber } from '../utils/format';
+import { useResourceFormat } from '../utils/useResourceFormat';
 import { type DraftRow, pruneSubmittedDrafts } from '../utils/drafts';
 import { canEnterReadings, canReview } from '../auth/roles';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
@@ -33,6 +34,7 @@ function defaultMonth(): string {
 
 export function WorksheetPage({ entryMode = false }: { entryMode?: boolean } = {}) {
   const { t } = useTranslation();
+  const { formatMonth } = useResourceFormat();
   const { role } = useResourceAuth();
   const queryClient = useQueryClient();
 
