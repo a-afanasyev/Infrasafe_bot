@@ -1,8 +1,10 @@
 # Development dependencies
+# A9-P2-19: ЕДИНСТВЕННЫЙ источник версий тест-инструментов (pytest*, coverage) —
+# в runtime requirements.in их нет. pytest-mock удалён: фикстура mocker не
+# используется нигде.
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-cov==4.1.0
-pytest-mock==3.12.0
 # black остаётся ГЕЙТОМ, а не «форматтером на любителя»: ruff здесь настроен на
 # select=["E","F"] без правила I, а E501 (длина строки) сознательно делегирован
 # black (см. pyproject [tool.ruff]). Убрать black/isort можно только вместе с

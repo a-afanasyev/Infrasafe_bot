@@ -244,10 +244,12 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: media_service/requirements.txt
+          cache-dependency-path: media_service/requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      # A9-P2-19: pytest вынесен из рантайм-лока (уезжал в прод-образ) в
+      # hash-locked requirements-dev.txt = рантайм-лок + тест-инструменты.
+      - name: Install dependencies (dev lock)
+        run: pip install --require-hashes -r requirements-dev.txt
 
       # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
       # окружение выставляет сам (os.environ.setdefault — см. его докстринг).

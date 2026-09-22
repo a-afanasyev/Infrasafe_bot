@@ -70,11 +70,16 @@ test-resource: ## Тесты resource-accounting (sqlite, как CI-джоба r
 test-frontend: ## Запустить vitest
 	@cd frontend && npm test
 
-build: ## Пересобрать все образы
-	@$(COMPOSE) build
+# A9-P2-19: в Dockerfile бота INSTALL_DEV=false по умолчанию (прод без pytest).
+# Локальные цели сборки включают dev-зависимости явно — иначе `make test`
+# (docker exec … pytest) в свежесобранном контейнере не найдёт pytest.
+DEV_BUILD_ARGS=--build-arg INSTALL_DEV=true
 
-build-bot: ## Пересобрать и перезапустить бота
-	@$(COMPOSE) build app && $(COMPOSE) up -d app
+build: ## Пересобрать все образы (бот — с dev-зависимостями для make test)
+	@$(COMPOSE) build $(DEV_BUILD_ARGS)
+
+build-bot: ## Пересобрать и перезапустить бота (с dev-зависимостями для make test)
+	@$(COMPOSE) build $(DEV_BUILD_ARGS) app && $(COMPOSE) up -d app
 
 up: ## Запустить с пересборкой
 	@$(COMPOSE) up -d --build
