@@ -383,10 +383,10 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-9 закрыт 2026-09-23 (PR #603).
     "A9-P2-10": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Доменный справочник категорий лежит в UI-слое `keyboards/requests.py`"),
     # A9-P2-11 закрыт 2026-09-23 (PR #602).
-    "A9-P2-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: синхронный `db.query` в трёх async-ручках (остаток AUD7-ARCH-01)"),
+    # A9-P2-12 закрыт 2026-09-23 (PR #607).
     "A9-P2-13": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, resource-api", note="access/resource: блокирующий I/O в async-эндпоинтах; `get_photo` отдаёт 500 при ошибке media"),
     "A9-P2-14": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа"),
-    "A9-P2-15": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: `Bot`/`AiohttpSession` и httpx-клиент создаются на каждый запрос и не закрываются"),
+    # A9-P2-15 закрыт 2026-09-23 (PR #607).
     "A9-P2-16": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, media-service", note="access: 30-дневный ретеншн фото ANPR не удаляет сами медиа"),
     # A9-P2-17 закрыт 2026-09-23 (PR #604).
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
@@ -410,9 +410,9 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-5": A(pkg="AUD9-W4", status="actionable", method="owner-decision-2026-09-23", services="group-intake-bot", note="Group Intake: сырой текст групп жителей (ПДн) уходит внешнему LLM без маскирования"),
     "A9-P3-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake: ответ постороннему в staff-группе, теги подстрокой, завышенная метрика"),
     "A9-P3-7": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Ретрай LLM (PR #594) без backoff и мимо лимитера; докстринги противоречат поведению"),
-    "A9-P3-8": A(pkg="AUD9-W4", status="actionable", method="owner-decision-2026-09-23", services="bot", note="Планировщик смен: cron-триггеры в UTC при комментариях про местное время"),
-    "A9-P3-9": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="bot", note="Fire-and-forget `create_task` без сильной ссылки (ранее закрыт по неверной посылке)"),
-    "A9-P3-10": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="bot, access-api", note="Четыре опасных «немых» `except` из 27"),
+    # A9-P3-8 закрыт 2026-09-23 (PR #606).
+    # A9-P3-9 закрыт 2026-09-23 (PR #606).
+    # A9-P3-10 закрыт 2026-09-23 (PR #606).
     "A9-P3-11": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api, access-api", note="Инверсии слоёв и два резолвера ролей с разным фолбэком"),
     "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
     # A9-P3-13 закрыт 2026-09-23 (PR #602).
