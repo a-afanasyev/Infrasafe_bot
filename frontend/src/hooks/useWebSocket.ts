@@ -53,9 +53,11 @@ export function useWebSocket(
   // поднимался сокет, который никто не закроет; при смене endpoint он ещё и
   // оживлял старый endpoint. Каждый сокет запоминает поколение, в котором создан;
   // cleanup его инвалидирует, и всё «позднее» от старого поколения молча
-  // игнорируется (эталон — closedByCaller в useAccessSecurityFeed, здесь
-  // булев флаг недостаточен: следующий mount сбрасывал бы его в false).
+  // игнорируется (булев флаг недостаточен: следующий mount сбрасывал бы его в
+  // false; тот же приём — в useAccessSecurityFeed, A9-P3-19).
   const generationRef = useRef(0)
+  // A9-P3-19: сервер отказал окончательно (4003/1008) — не оживлять.
+  const stoppedRef = useRef(false)
   const onMessageRef = useRef(onMessage)
   onMessageRef.current = onMessage
 
@@ -104,6 +106,9 @@ export function useWebSocket(
         // Policy violation / доступ отозван — ретраи бессмысленны, стоп.
         // 1008 достижим только для cookieless-клиентов (first-message auth):
         // у SPA отказ аутентификации приходит ветвью ниже.
+        // A9-P3-19: стоп окончательный — revive по online/visibilitychange
+        // его уважает (иначе сервер закрывал бы каждый «оживлённый» сокет).
+        stoppedRef.current = true
         return
       }
       if (!openedRef.current && refreshAndReconnect()) {
@@ -119,6 +124,7 @@ export function useWebSocket(
   }, [endpoint])
 
   useEffect(() => {
+    stoppedRef.current = false // новое поколение (mount / смена endpoint)
     connect()
     return () => {
       generationRef.current += 1 // всё от этого поколения — мимо
@@ -133,6 +139,7 @@ export function useWebSocket(
   useEffect(() => {
     const revive = () => {
       if (document.visibilityState === 'hidden') return
+      if (stoppedRef.current) return // 4003/1008 — ретраи бессмысленны
       const ws = wsRef.current
       if (ws && (ws.readyState === WS_STATE_OPEN || ws.readyState === WS_STATE_CONNECTING)) {
         return // соединение живо или уже поднимается — второй сокет не нужен

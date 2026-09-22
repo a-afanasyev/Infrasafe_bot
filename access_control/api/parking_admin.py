@@ -29,6 +29,7 @@ from access_control.api.registry import AddressInfo, _addresses_for
 from access_control.repositories import presence_repo
 from access_control.services import equipment_admin as eq_svc
 from access_control.services import parking_admin as svc
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.parking_occupancy import zone_occupancy
 from uk_management_bot.api.dependencies import require_approved_roles
 from uk_management_bot.database.session import get_db
@@ -52,10 +53,6 @@ _CODE_MAX = 64
 SpotStatusLit = Literal["active", "inactive", "archived"]
 OwnershipTypeLit = Literal["owned", "rented"]
 AssignmentStatusLit = Literal["active", "expired", "revoked", "archived"]
-
-
-def _client_ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
 
 
 # ------------------------------ response DTO ------------------------------
@@ -209,7 +206,7 @@ def create_spot(
     try:
         spot = svc.create_spot(
             db, actor_user_id=user.id, zone_id=body.zone_id, code=body.code,
-            status=body.status, ip_address=_client_ip(request),
+            status=body.status, ip_address=resolve_client_ip(request),
         )
     except svc.InvalidReference as exc:
         _raise_422_ref(exc)
@@ -230,7 +227,7 @@ def patch_spot(
     try:
         spot = svc.update_spot(
             db, spot_id=spot_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)
@@ -293,7 +290,7 @@ def create_spot_assignment(
             db, actor_user_id=user.id, spot_id=body.spot_id,
             apartment_id=body.apartment_id, ownership_type=body.ownership_type,
             valid_from=body.valid_from, valid_until=body.valid_until,
-            status=body.status, ip_address=_client_ip(request),
+            status=body.status, ip_address=resolve_client_ip(request),
         )
     except svc.InvalidReference as exc:
         _raise_422_ref(exc)
@@ -314,7 +311,7 @@ def patch_spot_assignment(
     try:
         assignment = svc.update_spot_assignment(
             db, assignment_id=assignment_id, actor_user_id=user.id, fields=fields,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except svc.NotFound as exc:
         _raise_404(exc)

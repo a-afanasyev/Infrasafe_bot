@@ -7,6 +7,7 @@ import { brand } from '../brand/brand'
 import { ContactStep } from './register/ContactStep'
 import { AddressCascade, type AddressLabels } from './register/AddressCascade'
 import { ConfirmStep } from './register/ConfirmStep'
+import { apiErrorCode, apiErrorDetail, apiErrorStatus, safeErrorMessage } from '../utils/errorMessage'
 
 // Спека 2026-09-03 §5.1: contact → address → confirm → pending.
 // Контакт — только через Telegram (requestContact), квартира — каскадом
@@ -25,18 +26,26 @@ interface SelectedAddress {
   labels: AddressLabels
 }
 
-function addressLabel(sel: SelectedAddress): string {
-  return [sel.labels.yard, sel.labels.building, `кв ${sel.apartment.apartment_number}`]
-    .filter(Boolean)
-    .join(' · ')
-}
+// A9-P3-20: машинные коды 409 регистрации (заголовок X-Error-Code,
+// uk_management_bot/api/registration/router.py) — ветвимся по ним, а не regex
+// по тексту detail: правка формулировки на бэке ломала сценарий.
+const CODE_ALREADY_REGISTERED = 'already_registered'
+const CODE_ALREADY_RESIDENT = 'already_resident'
+const CODE_CONTACT_REQUIRED = 'contact_required'
 
-function getDetail(err: unknown): string | undefined {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-}
-
-function getStatus(err: unknown): number | undefined {
-  return (err as { response?: { status?: number } })?.response?.status
+/**
+ * Код 409 для ветвления. Если заголовка X-Error-Code нет (старый бэкенд во
+ * время неатомарной раскатки или заголовок вырезан по пути) — фолбэк на
+ * прежнее ветвление по тексту detail, чтобы UX не деградировал до generic.
+ */
+function submitConflictCode(err: unknown): string | null {
+  const code = apiErrorCode(err)
+  if (code) return code
+  const detail = apiErrorDetail(err)
+  if (!detail) return null
+  if (/контакт|kontakt/i.test(detail)) return CODE_CONTACT_REQUIRED
+  if (/уже подтверждены|already/i.test(detail)) return CODE_ALREADY_REGISTERED
+  return null
 }
 
 export default function RegisterPage() {
@@ -54,6 +63,13 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false)
   const startedRef = useRef(false)
 
+  // A9-P3-20: «кв» — через i18n (было захардкожено по-русски и в UZ).
+  function addressLabel(sel: SelectedAddress): string {
+    return [sel.labels.yard, sel.labels.building, t('register.apartment_label', { number: sel.apartment.apartment_number })]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
   async function runStart(): Promise<boolean> {
     setError('')
     try {
@@ -67,19 +83,19 @@ export default function RegisterPage() {
       setPhase(knownPhone || phone ? 'address' : 'contact')
       return true
     } catch (err: unknown) {
-      const status = getStatus(err)
-      if (status === 409) {
-        const detail = getDetail(err)
-        // "already approved" → user already has an account.
-        if (!detail || /already|уже/i.test(detail)) {
+      if (apiErrorStatus(err) === 409) {
+        // У /start единственный 409 — «уже зарегистрирован»; без кода (старый
+        // бэк) трактуем так же.
+        const code = apiErrorCode(err)
+        if (code === null || code === CODE_ALREADY_REGISTERED) {
           setPhase('already_registered')
         } else {
-          setError(detail)
+          setError(safeErrorMessage(err, t('register.error_generic')))
           setPhase('contact')
         }
         return false
       }
-      setError(getDetail(err) || t('register.error_generic'))
+      setError(safeErrorMessage(err, t('register.error_generic')))
       setPhase('contact')
       return false
     }
@@ -122,22 +138,23 @@ export default function RegisterPage() {
       await submit(ticket, { full_name: fullName.trim(), apartment_id: selected.apartment.id })
       setPhase('pending')
     } catch (err: unknown) {
-      const status = getStatus(err)
-      const detail = getDetail(err)
+      const status = apiErrorStatus(err)
+      const code = status === 409 ? submitConflictCode(err) : null
+      const message = safeErrorMessage(err, t('register.error_generic'))
       if (status === 401) {
         // Ticket expired (30 min) → fetch a fresh one and let the user resubmit.
         await runStart()
         setPhase('confirm')
-        setError(detail || t('register.error_generic'))
-      } else if (status === 409 && detail && /контакт|kontakt/i.test(detail)) {
+        setError(message)
+      } else if (code === CODE_CONTACT_REQUIRED) {
         // Телефон в БД не появился — вернуть на шаг контакта.
         setPhone('')
         setPhase('contact')
         setError(t('register.phone_required'))
-      } else if (status === 409 && detail && /уже подтверждены|already/i.test(detail)) {
+      } else if (code === CODE_ALREADY_REGISTERED || code === CODE_ALREADY_RESIDENT) {
         setPhase('already_registered')
       } else {
-        setError(detail || t('register.error_generic'))
+        setError(message)
       }
     } finally {
       setSubmitting(false)

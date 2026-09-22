@@ -27,6 +27,7 @@ from access_control.services.code_rate_limit import (
     rate_limit_keys,
     record_failures,
 )
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.lifecycle import (
     BarrierUnavailableError,
     DecisionIdMismatch,
@@ -71,15 +72,6 @@ _SOURCE_MAX_LEN = 64
 # через АСИНХРОННУЮ (две разные сессии в одном запросе). Для пилота приемлемо
 # (auth-чтение и доменная запись не делят транзакцию). Унификация sync/async —
 # отдельная задача после пилота.
-
-
-def _client_ip(request: Request) -> str | None:
-    """IP источника запроса для audit (§6.3). Для пилота достаточно client.host.
-
-    Known-limitation: за доверенным прокси корректнее читать первый hop из
-    ``X-Forwarded-For``; в пилоте прямой client.host достаточен.
-    """
-    return request.client.host if request.client else None
 
 
 class ResolveRequest(BaseModel):
@@ -190,7 +182,7 @@ def post_resolve(
             barrier_id=body.barrier_id,
             decision_id=body.decision_id,
             source="operator_resolve",
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except NoPendingReviewError:
         raise HTTPException(
@@ -244,7 +236,7 @@ def post_manual_open(
             operator_user_id=user.id,
             reason=body.reason,
             source=body.source,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except PendingReviewConflict as exc:
         logger.info(
@@ -312,7 +304,7 @@ def post_presence_close(
             session_id=session_id,
             operator_user_id=user.id,
             close_reason=body.reason.strip(),
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except PresenceSessionNotFound:
         raise HTTPException(
@@ -340,7 +332,7 @@ def post_redeem_code(
     ошибка 422 (no enumeration: существование кода/квартиры не раскрывается).
     Успех → раскрытие квартиры/типа + durable-команда открытия. Код НЕ логируется.
     """
-    ip = _client_ip(request)
+    ip = resolve_client_ip(request)
     # Ключ по ХЭШУ кода, не по самому коду (§9.3 — код не выходит за пределы запроса).
     code_hash = hash_code(body.code)
     keys = rate_limit_keys(operator_user_id=user.id, source_ip=ip, code_hash=code_hash)

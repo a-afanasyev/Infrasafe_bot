@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from access_control.domain.enums import EventSource
 from access_control.repositories import equipment_repo
 from access_control.services import equipment_admin as svc
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.ingestion import (
     AnprIngestInput,
     IngestResult,
@@ -52,12 +53,6 @@ DEFAULT_DIAG_PLATE = "DIAG0001"
 DEFAULT_DIAG_CONFIDENCE = 0.99
 
 DirectionLit = Literal["entry", "exit"]
-
-
-def _client_ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
-
-
 
 
 class TestEventRequest(BaseModel):
@@ -140,7 +135,7 @@ def post_test_event(
             "direction": body.direction,
             "event_id": event_id,
         },
-        ip_address=_client_ip(request),
+        ip_address=resolve_client_ip(request),
     )
     db.commit()
 

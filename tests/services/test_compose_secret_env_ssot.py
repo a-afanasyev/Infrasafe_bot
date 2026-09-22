@@ -70,6 +70,8 @@ EXPECTED = {
         "MEDIA_API_KEY",
         # ARCH-107: верификатор JWT в access-api обязан знать оба ключа окна.
         "JWT_SECRET_NEXT",
+        # A9-P3-2: опциональный Bearer-токен скрейпа /metrics.
+        "ACCESS_METRICS_TOKEN",
     ),
     "migrate": CORE_REQUIRED,
     # AUD6-P1-2: runtime — под least-privilege ролью resource_app (пароль

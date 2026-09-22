@@ -48,7 +48,7 @@ from uk_management_bot.utils.validators import (
     validate_media_file
 )
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text
@@ -649,6 +649,47 @@ def save_request_sync(
         return None
 
 
+async def _attach_foreign_media(bot: Bot, file_ids: list, request_number: str,
+                                owner_id: int, _db=None) -> None:
+    """Чужие file_id → media-service → маркеры media_id в заявке (A9-P2-5).
+
+    Best-effort, как и вся загрузка медиа после commit: заявка уже durable;
+    сбой загрузки/записи оставляет её без фото, но не с битым file_id.
+
+    Осознанный trade-off: при недоступном media-service заявка создаётся
+    без фото и автору об этом не сообщается — ответ в группу был бы шумом,
+    а фото из группы без media-service всё равно не показать (file_id
+    группового бота основному не годится). След — ERROR/WARNING в логе с
+    номером заявки; фото автор может добавить из основного бота.
+    """
+    from uk_management_bot.services.request_media_markers import (
+        append_media_markers_sync,
+        extract_media_id,
+    )
+    from uk_management_bot.utils.media_helpers import upload_multiple_telegram_files
+
+    try:
+        uploaded = await upload_multiple_telegram_files(
+            bot=bot, file_ids=file_ids, request_number=request_number, uploaded_by=owner_id
+        )
+        media_ids = [m for m in (extract_media_id(item) for item in uploaded) if m is not None]
+        if len(media_ids) < len(file_ids):
+            logger.warning(
+                "[SAVE_REQUEST] %s: в media-service легло %s из %s файлов группы",
+                request_number, len(media_ids), len(file_ids),
+            )
+        if media_ids:
+            await run_db(
+                lambda s: append_media_markers_sync(s, request_number, media_ids, "photo"),
+                db=_db,
+            )
+    except Exception as e:
+        logger.error(
+            "[SAVE_REQUEST] %s: фото группы не прикреплено: %s",
+            request_number, type(e).__name__, exc_info=True,
+        )
+
+
 async def save_request(
     data: dict,
     user_id: int,
@@ -657,8 +698,15 @@ async def save_request(
     source: str = "bot",
     role: str = "applicant",
     allow_under_works: bool = False,
+    foreign_media_file_ids: Sequence[str] = (),
 ) -> Optional[str]:
     """Сохранение заявки в базу данных. Возвращает номер заявки (str) или None.
+
+    ``foreign_media_file_ids`` — file_id, действительные только для ``bot``
+    (Group Intake: фото получил ГРУППОВОЙ бот). В колонку они не пишутся —
+    основной бот отдал бы их Telegram как свои («wrong file identifier»):
+    файл копируется в media-service, в ``media_files`` уходит маркер
+    ``{"media_id", "type"}`` (A9-P2-5), который читатели отдают байтами.
 
     Async-обёртка над ``save_request_sync``: БД-фаза уезжает в worker-поток
     через run_db, сетевая загрузка медиа остаётся здесь — она и раньше шла
@@ -701,6 +749,10 @@ async def save_request(
             except Exception as e:
                 logger.error(f"[SAVE_REQUEST] Ошибка загрузки файлов в Media Service: {e}", exc_info=True)
                 # Заявка уже сохранена; недогруженные медиа не блокируют создание
+
+        if foreign_media_file_ids and bot:
+            await _attach_foreign_media(bot, list(foreign_media_file_ids),
+                                        request_number, owner_id, _db)
 
         return request_number
     except Exception as e:

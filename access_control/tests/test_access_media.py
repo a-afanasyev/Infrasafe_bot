@@ -45,6 +45,7 @@ class FakeMediaClient:
     def __init__(self) -> None:
         self.uploads: list[dict] = []
         self.fetched: list[int] = []
+        self.deleted: list[int] = []
         self._next_id = 100
         self.stream_bytes = b"\xff\xd8\xffSYNTHETIC-JPEG"
         self.stream_content_type = "image/jpeg"
@@ -73,6 +74,10 @@ class FakeMediaClient:
     async def fetch_file(self, media_id) -> tuple[bytes, str]:
         self.fetched.append(int(media_id))
         return self.stream_bytes, self.stream_content_type
+
+    async def delete_file(self, media_id) -> bool:
+        self.deleted.append(int(media_id))
+        return True
 
 
 def _app_with_media(fake: FakeMediaClient):
