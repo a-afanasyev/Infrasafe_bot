@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **568**
-- закрыто маркером: **495**
-- открыто маркером: **73**
+- закрыто маркером: **496**
+- открыто маркером: **72**
 
-  - `actionable` — **61**
+  - `actionable` — **60**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P1=3, P2=30, P3=28.
+Из них actionable по приоритету: P1=2, P2=30, P3=28.
 
 Значения `status`:
 
@@ -57,7 +57,6 @@
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
 | `A9-P1-1` | P1 | actionable | verified-2026-09-22 | AUD9-W1 | — | bot, group-intake-bot | — | Бот: альбомы фото молча теряются во всех FSM-сборщиках медиа |
 | `A9-P1-2` | P1 | actionable | verified-2026-09-22 | AUD9-W1 | — | api, frontend (TWA) | — | TWA-старт смены создаёт ad-hoc-дубль вместо активации запланированной; без аудита и уведомлений |
-| `A9-P1-3` | P1 | actionable | audit9-2026-09-22 | AUD9-W1 | — | деплой profk/105 (доки) | — | Деплой-ранбуки расходятся в наборе compose-файлов: payments-overlay потерян для profk |
 | `A9-P3-15` | P3 | actionable | audit9-2026-09-22 | AUD9-W1 | — | bot | — | Мелкие дефекты медиа-потока бота |
 | `A9-P2-1` | P2 | actionable | verified-2026-09-22 | AUD9-W2 | — | api | — | Маркер фото заявки: `FOR UPDATE` без `populate_existing` — lost update (PR #559) |
 | `A9-P2-11` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | `media_files: List[str]` в create-схемах без валидации; строки уходят в `answer_photo` |

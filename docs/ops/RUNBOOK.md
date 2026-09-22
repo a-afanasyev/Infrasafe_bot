@@ -10,7 +10,7 @@
 
 ## 1. Карта контейнеров и портов
 
-Прод-стек поднимается двумя compose-файлами: `docker-compose.yml` + `docker-compose.media.yml`. Контроль доступа (`access-api`) объявлен в основном `docker-compose.yml`.
+Набор compose-файлов зависит от площадки — **единственный источник истины: таблица «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`** (profk: base + `docker-compose.profk.yml` + `docker-compose.payments.yml`; 105: base + `docker-compose.media.yml`). Ниже `$COMPOSE` — значение из этой таблицы. Контроль доступа (`access-api`) объявлен в основном `docker-compose.yml`.
 
 | Контейнер | Сервис (compose) | Образ / сборка | Host-порт (127.0.0.1) | Порт в контейнере | Роль |
 |---|---|---|---|---|---|
@@ -36,35 +36,39 @@
 
 ## 2. Каноничная выкатка на прод
 
-Выполнять из корня репозитория на прод-хосте. Оба compose-файла указываются в каждой команде. **ARCH-106: `.env` и `media_service/.env` на прод-хостах очищены от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту. Mapping имён media (`MEDIA_*` в Doppler → `TELEGRAM_BOT_TOKEN`/`SECRET_KEY`/`DATABASE_URL` в контейнере) и ротация webhook-секретов → `.claude/skills/uk-deploy/SKILL.md`.
+Выполнять из корня репозитория на прод-хосте. Полный набор compose-файлов площадки (`$COMPOSE` из таблицы SKILL) указывается в каждой команде. **ARCH-106: `.env` и `media_service/.env` на прод-хостах очищены от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту. Mapping имён media (`MEDIA_*` в Doppler → `TELEGRAM_BOT_TOKEN`/`SECRET_KEY`/`DATABASE_URL` в контейнере) и ротация webhook-секретов → `.claude/skills/uk-deploy/SKILL.md`.
 
 ```bash
 # 0. Обязательное окружение (PR-7 provision-roles интерполируется на уровне файла)
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 
 # 1. Забрать код
 git pull --ff-only
 
 # 2. Пересобрать образы (bot/api/access-api/migrate/frontend/media-service)
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml build
+  docker compose $COMPOSE build
 
 # 3. Миграции — ОБЯЗАТЕЛЬНЫЙ шаг перед up (см. §4)
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm --no-deps --name uk-migrate migrate
+  docker compose $COMPOSE run --rm --no-deps --name uk-migrate migrate
 # 3b. media-service: тот же «до up» контракт, но ТОЛЬКО если появился новый файл
 #     в media_service/migrations/ (Base.metadata.create_all не альтерит существующие
 #     таблицы — см. §4). profiles: ["tools"], поэтому bare `up -d` его не подхватит:
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm --no-deps --name uk-media-migrate media-migrate
+  docker compose $COMPOSE run --rm --no-deps --name uk-media-migrate media-migrate
 
 # 4. Поднять core-сервисы (--no-deps: не трогать stateful postgres/redis/resource-postgres)
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --wait --wait-timeout 120 api access-api app
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 api access-api app
 
 # 5. Остальное по необходимости (frontend/media-service — если менялись)
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps frontend media-service
+  docker compose $COMPOSE up -d --no-deps frontend media-service
 #    media-service: секреты тоже из Doppler (ARCH-106 Phase 2). Меняли несекретную часть
 #    media_service/.env (каналы, ALLOWED_ORIGINS) — добавить --force-recreate: env_file
 #    не входит в config-hash, а docker restart файл вообще не перечитывает.
@@ -84,10 +88,11 @@ docker exec uk-postgres psql -U uk_admin -d <profk_management|uk_management> -At
 - Сборка/деплой по SSH — запускать в detached/`nohup`-режиме, чтобы обрыв сессии не прервал `build` (см. память по detached-build).
 - Точечная пересборка одного сервиса (например, только фронт):
   ```bash
+  : "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL (см. §2 шаг 0)}"
   doppler run --project uk-management --config <cfg> -- \
-    docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend
+    docker compose $COMPOSE build frontend
   doppler run --project uk-management --config <cfg> -- \
-    docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --force-recreate frontend
+    docker compose $COMPOSE up -d --no-deps --force-recreate frontend
   ```
   Проверить имя сервиса (`frontend`, не `uk-frontend`) — команды compose оперируют именами сервисов, а не `container_name`. Doppler-обёртка нужна даже фронту: `:?`-гарды интерполируются на уровне всего файла.
 
@@ -100,18 +105,23 @@ docker exec uk-postgres psql -U uk_admin -d <profk_management|uk_management> -At
 git log --oneline -n 10          # найти предыдущий рабочий SHA
 git checkout <good-sha>          # или git reset --hard <good-sha> — ТОЛЬКО с подтверждением владельца
 
-# 2. Пересобрать и пересоздать (doppler-обёртка обязательна — .env без секретов, ARCH-106)
+# 2. Пересобрать и пересоздать (doppler-обёртка обязательна — .env без секретов, ARCH-106;
+#    $COMPOSE — из таблицы SKILL, как в §2)
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml build
+  docker compose $COMPOSE build
 doppler run --project uk-management --config <cfg> -- \
-  docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --no-deps --force-recreate api access-api app
+  docker compose $COMPOSE up -d --no-deps --force-recreate api access-api app
 ```
 
 Важно про откат миграций:
 - Alembic-миграции **не откатываются автоматически** откатом кода. Прод-схема останется на `head` предыдущего деплоя.
 - Откат схемы (`alembic downgrade`) выполнять только вручную и только при подтверждённой необходимости — многие миграции необратимы/содержат backfill. Downgrade — тем же one-shot сервисом `migrate` под `uk_migrator` (runtime-роли api DDL не имеют, см. §4):
-  `doppler run --project uk-management --config <cfg> -- docker compose <оба -f> run --rm --no-deps migrate python -m alembic downgrade <rev>`.
+  `doppler run --project uk-management --config <cfg> -- docker compose $COMPOSE run --rm --no-deps migrate python -m alembic downgrade <rev>`.
 - Деструктивные git-операции (`reset --hard`, `force push`) — только с явным подтверждением владельца.
 
 ### Откат media_service/migrations/0001_publication_lock.sql
@@ -208,7 +218,7 @@ docker exec infrasafe-nginx-1 nginx -s reload
 | access-api порт | Конфликт с influxdb | Host-порт = 8087, НЕ 8086 (`docker-compose.yml:157`) |
 | Stale-chunk фронта | «Ошибка загрузки страницы» на lazy-роутах у открытой сессии после редеплоя фронта (404 стухшего chunk) | Авто-reload по `vite:preloadError` (PR #175); воркэраунд — `Ctrl+Shift+R` |
 | Redis под паролем | pub/sub/rate-limit не работают, если `REDIS_PASSWORD` задан, но URL без auth | `REDIS_PUBSUB_URL` не хардкодить — деривится из `REDIS_URL` с паролем (`docker-compose.yml:83-87`) |
-| compose orphan `uk-caddy` | — | Прод-деплой всегда `-f docker-compose.yml -f docker-compose.media.yml`, без `--remove-orphans` |
+| compose orphan `uk-caddy` | — | Прод-деплой всегда полным набором `$COMPOSE` площадки (таблица SKILL), без `--remove-orphans` |
 | `media-migrate` без полного env | Падает ДО применения миграций (импорт `Settings` эагерно валидирует переменные) | Нужны все Doppler-секреты без безопасного дефолта в `Settings` — те же, что у `media-service` (не только `MEDIA_DATABASE_URL`); `REDIS_URL` — единственное сознательное исключение (migrate не трогает Redis, `redis_url` имеет дефолт) — частичный env иначе крашится на импорте |
 
 ---
@@ -218,8 +228,9 @@ docker exec infrasafe-nginx-1 nginx -s reload
 Прод использует реальные имена контейнеров (`uk-*`), **не** `*-dev` (те — из `docker-compose.dev.yml`, локальная разработка).
 
 ```bash
-# Статус и health всех сервисов
-docker compose -f docker-compose.yml -f docker-compose.media.yml ps
+# Статус и health всех сервисов ($COMPOSE — из таблицы SKILL, см. §2 шаг 0)
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL}"
+doppler run --project uk-management --config <cfg> -- docker compose $COMPOSE ps
 
 # Логи
 docker logs uk-management-bot --tail 50
@@ -257,5 +268,5 @@ docker exec uk-media-service curl -sf http://localhost:8000/api/v1/health
 - Dev-окружение и добавление страниц: `docs/DEVELOPMENT.md`
 - Фронтенд: `frontend/README.md`
 - Локализация: `docs/LOCALIZATION_GUIDE.md`
-- Compose: `docker-compose.yml`, `docker-compose.media.yml`, `docker-compose.dev.yml`
+- Compose: `docker-compose.yml`, `docker-compose.media.yml`, `docker-compose.profk.yml`, `docker-compose.payments.yml`, `docker-compose.dev.yml` (какие поднимать на площадке — таблица в SKILL)
 - Entrypoint API (миграции): `scripts/entrypoint-api.sh`

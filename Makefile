@@ -1,7 +1,9 @@
 # UK Management — Makefile
 # DEAD-10 (PR-10): unified-стек удалён; канонические compose-файлы:
 #   docker-compose.yml        — основной стек (app, api, frontend, postgres, redis)
-#   docker-compose.media.yml  — override для media-service (прод)
+#   docker-compose.media.yml  — override для media-service (прод 105)
+#   Прод-деплой — НЕ через make: doppler run + набор -f площадки из
+#   .claude/skills/uk-deploy/SKILL.md (таблица «Площадка → COMPOSE», A9-P1-3).
 #   docker-compose.dev.yml    — dev с hot-reload (bot + alembic bind-mount)
 
 .PHONY: help start stop restart logs status test build up down clean ps backup-db
@@ -13,7 +15,6 @@ BLUE=\033[0;34m
 NC=\033[0m # No Color
 
 COMPOSE=docker compose
-COMPOSE_PROD=docker compose -f docker-compose.yml -f docker-compose.media.yml
 
 help: ## Показать справку
 	@echo "$(BLUE)UK Management System$(NC)"
@@ -80,9 +81,6 @@ up: ## Запустить с пересборкой
 
 down: ## Остановить и удалить контейнеры
 	@$(COMPOSE) down
-
-prod-up: ## Прод-стек (на сервере): основной + media; БЕЗ --remove-orphans (orphan uk-caddy)
-	@$(COMPOSE_PROD) up -d
 
 dev-up: ## Dev-стек с hot-reload (код + alembic без rebuild)
 	@docker compose -f docker-compose.dev.yml up -d

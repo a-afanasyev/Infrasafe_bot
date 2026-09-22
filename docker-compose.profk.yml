@@ -3,8 +3,9 @@
 # standalone-файл (~560 строк, ~80% копипаста базового) — теперь здесь ТОЛЬКО
 # profk-дельты, всё общее живёт в docker-compose.yml.
 #
-# Запуск (⚠️ ОБА файла, порядок важен):
-#   doppler run ... -- docker compose -f docker-compose.yml -f docker-compose.profk.yml up -d
+# Запуск (⚠️ полный набор площадки, порядок важен; канон — таблица «Площадка → COMPOSE»
+# в .claude/skills/uk-deploy/SKILL.md; payments на profk включён с 2026-09-06):
+#   doppler run ... -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d
 #
 # Отличия от боевого docker-compose.yml (infrasafe.uz / 105) — ТОЛЬКО инфраструктура:
 #   1. uk-network = external (её создаёт InfraSafe вне compose; мы подключаемся).
@@ -149,7 +150,7 @@ services:
   # НЕ покрывает (create_all создаёт только отсутствующие таблицы, существующие
   # не меняет). Та же форма, что у бот-side `migrate`-сервиса: profiles: ["tools"]
   # держит его вне `up -d`, инвокация явная:
-  #   docker compose -f docker-compose.yml -f docker-compose.profk.yml run --rm media-migrate
+  #   docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml run --rm media-migrate
   media-migrate:
     build:
       context: ./media_service

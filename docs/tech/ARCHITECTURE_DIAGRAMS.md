@@ -551,7 +551,7 @@ sequenceDiagram
 
 | Артефакт | infrasafe/105 | profk |
 |---|---|---|
-| Compose | `-f docker-compose.yml -f docker-compose.media.yml` | `-f docker-compose.yml -f docker-compose.profk.yml` (тонкий override, оба -f обязательны) |
+| Compose | `-f docker-compose.yml -f docker-compose.media.yml` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` (тонкий override + payments; канон — таблица в uk-deploy SKILL) |
 | БД | `uk_management` | `profk_management` |
 | Бренд фронта | `infrasafe` | `VITE_BRAND=profk` |
 | Group Intake | выключен | включён (profile `group-intake`) |

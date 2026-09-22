@@ -1,100 +1,30 @@
 # Rollback Procedure
 
-> _Последнее редактирование: 2026-07-06_
+> _Последнее редактирование: 2026-09-23_
 
-> 🔴 **Команды ниже используют несуществующий `docker-compose.production.yml`.**
-> Реальный откат на хосте `~/uk`:
-> ```bash
-> cd ~/uk && git checkout <prev-tag-or-sha>
-> docker compose -f docker-compose.yml -f docker-compose.media.yml build frontend api app
-> docker compose -f docker-compose.yml -f docker-compose.media.yml up -d --force-recreate frontend api app
-> # откат схемы (если нужно): docker exec uk-management-api alembic downgrade <rev>
-> #  НИКОГДА не --remove-orphans
-> ```
-> Имена контейнеров/структура шагов ниже корректны, но compose-файл в каждой команде
-> заменить на `-f docker-compose.yml -f docker-compose.media.yml`.
+Прежняя версия этого файла описывала откат через несуществующий
+`docker-compose.production.yml` и была помечена неверной (A9-P1-3). Канон
+отката теперь один — чтобы процедуры не расходились с реальным прод-стеком:
 
-## Release Tagging Convention
+- **Команды отката кода и схемы** — `docs/ops/RUNBOOK.md`, §3 «Откат».
+- **Набор compose-файлов площадки** (`$COMPOSE`) — только таблица
+  «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`
+  (profk: base + profk + payments; 105: base + media). Все команды — через
+  `doppler run --project uk-management --config <profk|infrasafe> --`.
+- **Бэкапы и восстановление данных** — `docs/ops/BACKUPS.md`.
 
-Every production deploy must be tagged:
+Коротко (подробности и предупреждения — в RUNBOOK §3):
 
 ```bash
-git tag -a v1.2.3 -m "Release 1.2.3"
-docker compose -f docker-compose.production.yml build
-docker tag uk-management-bot:latest uk-management-bot:v1.2.3
-docker tag uk-management-api:latest uk-management-api:v1.2.3
+cd <deploy-каталог> && git checkout <предыдущий тег profk-YYYY-MM-DD / infrasafe-YYYY-MM-DD>
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
+doppler run --project uk-management --config <cfg> -- docker compose $COMPOSE build api access-api app migrate
+doppler run --project uk-management --config <cfg> -- docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 --force-recreate api access-api app
+# НИКОГДА --remove-orphans. Откат схемы — только вручную через one-shot migrate (RUNBOOK §3).
 ```
 
-## Pre-Deploy Backup (mandatory)
-
-Before every deploy, create a tagged backup:
-
-```bash
-docker exec uk-postgres pg_dump -U $POSTGRES_USER $POSTGRES_DB | \
-  gzip > /opt/uk-management/backups/uk_management_PRE_DEPLOY_$(date +%Y%m%d_%H%M%S).sql.gz
-```
-
-## Quick Rollback (to previous release)
-
-1. Identify last known-good release tag:
-
-   ```bash
-   git tag --sort=-creatordate | head -5
-   ```
-
-2. Checkout the release:
-
-   ```bash
-   git checkout v1.2.2  # specific known-good tag
-   ```
-
-3. Rebuild and restart:
-
-   ```bash
-   docker compose -f docker-compose.production.yml build
-   docker compose -f docker-compose.production.yml up -d
-   ```
-
-4. Verify:
-
-   ```bash
-   curl -s https://your-domain.com/health | jq .
-   docker logs uk-management-api --tail 20
-   docker logs uk-management-bot --tail 20
-   ```
-
-5. Return to main branch after fix:
-
-   ```bash
-   git checkout main
-   ```
-
-## Database Rollback
-
-### Schema-only rollback (migration revert)
-
-Only safe if the new migration was additive (new columns/tables):
-
-```bash
-docker exec uk-management-api python -m alembic current
-docker exec uk-management-api python -m alembic downgrade -1
-```
-
-### Data restore from backup
-
-If migration was destructive or data is corrupted:
-
-```bash
-# 1. Stop app and API (keep DB running)
-docker compose -f docker-compose.production.yml stop app api
-
-# 2. Restore from the pre-deploy backup
-gunzip < /opt/uk-management/backups/uk_management_PRE_DEPLOY_YYYYMMDD.sql.gz | \
-  docker exec -i uk-postgres psql -U $POSTGRES_USER -d $POSTGRES_DB
-
-# 3. Run migrations for the rollback target version
-docker exec uk-management-api python -m alembic upgrade head
-
-# 4. Restart services
-docker compose -f docker-compose.production.yml up -d app api
-```
+Теги релизов ставит `scripts/tag-deploy.sh` (`<host>-YYYY-MM-DD[.n]`).

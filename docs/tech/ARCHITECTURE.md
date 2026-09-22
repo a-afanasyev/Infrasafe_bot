@@ -45,9 +45,9 @@ PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`) и несекретн�
 
 ## 2. Диаграмма развёртывания
 
-Прод собирается двумя compose-файлами:
+Прод собирается набором compose-файлов площадки (105 — два, profk — три):
 `docker compose -f docker-compose.yml -f docker-compose.media.yml ...`
-(для profk — `docker compose -f docker-compose.yml -f docker-compose.profk.yml ...`:
+(для profk — `docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml ...`, набор площадок — только по таблице «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`:
 с 2026-07-31 / AUD6-P2-38 `docker-compose.profk.yml` — тонкий override с profk-дельтами
 и media внутри, standalone он больше не работает);
 все прод-команды — через `doppler run --` (ARCH-106, см. §1);

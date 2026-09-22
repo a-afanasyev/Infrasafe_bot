@@ -121,7 +121,11 @@ Overlay `docker-compose.payments.yml` добавляет `payment-postgres` (Pos
 - `PAYMENT_OWNER_PASSWORD`: владелец отдельной БД и миграции;
 - `PAYMENT_APP_PASSWORD`: runtime-роль с DML и без DDL.
 
-К штатным compose-файлам бренда добавить `-f docker-compose.payments.yml`.
+Набор compose-файлов площадки, где payments включён, — только по таблице
+«Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md` (на profk overlay
+уже в ней). Включая payments на новой площадке, сначала добавить
+`-f docker-compose.payments.yml` в её строку таблицы — иначе следующий
+рутинный деплой `api` молча снимет `PAYMENT_SERVICE_URL/TOKEN` (A9-P1-3).
 Все команды запуска выполняются через `doppler run` по регламенту uk-deploy.
 
 1. Собрать `api access-api app migrate frontend payment-api payment-migrate`.
