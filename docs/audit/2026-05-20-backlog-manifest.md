@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **502**
-- открыто маркером: **68**
+- закрыто маркером: **504**
+- открыто маркером: **66**
 
-  - `actionable` — **56**
+  - `actionable` — **54**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=30, P3=26.
+Из них actionable по приоритету: P2=29, P3=25.
 
 Значения `status`:
 
@@ -60,8 +60,6 @@
 | `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
 | `A9-P3-13` | P3 | actionable | audit9-2026-09-22 | AUD9-W2 | — | api | — | PATCH заявки: `{rating}` → 500, правки без аудита/терминального гарда, карточка без лифта |
 | `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
-| `A9-P2-4` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W3 | — | bot | — | `/admin` + общий `ADMIN_PASSWORD` делают любой аккаунт manager'ом |
-| `A9-P3-1` | P3 | actionable | audit9-2026-09-22 | AUD9-W3 | — | bot | — | Инвайт-токен целиком пишется в лог в `/start join_…` |
 | `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
 | `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
 | `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |

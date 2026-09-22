@@ -235,6 +235,26 @@ Fail-fast настроек: флаг без токена/ключа/Redis вал
 (два поллера на одном токене дерутся за getUpdates). Уведомления по созданным заявкам
 уходят от ОСНОВНОГО бота (send-only инстанс внутри процесса) — это штатно.
 
+### Первый менеджер на площадке — `/admin` (A9-P2-4, выключен в проде)
+
+Команда бота `/admin` + общий `ADMIN_PASSWORD` делает ЛЮБОЙ аккаунт manager'ом, поэтому
+она за флагом `ADMIN_COMMAND_ENABLED` (дефолт `false`; в Doppler и `.env` прода **не
+задаётся**). При выключенном флаге `/admin` ведёт себя как неизвестная команда. Штатный
+путь для менеджеров — инвайты и дашборд; `/admin` — только чтобы завести самого первого
+менеджера на новой площадке (или вернуть доступ, если менеджеров не осталось):
+
+```bash
+# 1) разово поднять app с флагом (переменная окружения процесса compose, не Doppler):
+ADMIN_COMMAND_ENABLED=true doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose <COMPOSE> up -d --no-deps --force-recreate app
+# 2) в боте: /admin → пароль (сообщение с паролем бот удаляет сам); выдача пишется
+#    в audit_logs (action=admin_command_role_grant), действующим менеджерам уходит уведомление
+# 3) сразу вернуть как было — без переменной флаг снова false:
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose <COMPOSE> up -d --no-deps --force-recreate app
+docker exec uk-management-bot env | grep ADMIN_COMMAND_ENABLED   # ожидается =false
+```
+
 ## Ротация партнёрских webhook-секретов (dual-secret, `*_NEXT`)
 
 Секреты `INFRASAFE_WEBHOOK_SECRET` (исходящий, мы подписываем) и `UK_WEBHOOK_SECRET` (входящий, мы проверяем) разделены с InfraSafe — односторонняя смена рвёт живую интеграцию. Поэтому в коде есть grace-window механизм (`settings.py` §4.4/R-18): верификатор принимает OLD || NEW, подписант переключается флагом. Переменные проброшены только сервису `api` (там живут и `process_outbox`, и inbound-роутер).

@@ -206,3 +206,26 @@ def test_instance_mutation_does_not_leak_between_instances(
         "мутация инстанса не имеет права протекать в следующий Settings()"
     assert "BOT_USERNAME" not in vars(Settings), \
         "BOT_USERNAME не должен существовать как атрибут КЛАССА"
+
+
+# ---------------------------------------------------------------------------
+# A9-P2-4: /admin за флагом ADMIN_COMMAND_ENABLED — безопасный дефолт False.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw,expected", [
+    (None, False), ("", False), ("false", False), ("1", False),
+    ("true", True), ("True", True),
+])
+def test_admin_command_enabled_flag(
+    monkeypatch: pytest.MonkeyPatch, raw: str | None, expected: bool,
+) -> None:
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    if raw is None:
+        monkeypatch.delenv("ADMIN_COMMAND_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("ADMIN_COMMAND_ENABLED", raw)
+    assert Settings().ADMIN_COMMAND_ENABLED is expected

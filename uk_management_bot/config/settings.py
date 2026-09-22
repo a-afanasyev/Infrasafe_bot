@@ -151,6 +151,11 @@ class Settings:
         elif self.ADMIN_PASSWORD == "12345":
             raise ValueError("Default ADMIN_PASSWORD '12345' is not allowed. Please set a strong password.")
 
+        # A9-P2-4: команда /admin (любой аккаунт + общий ADMIN_PASSWORD → manager)
+        # выключена по умолчанию; в прод-конфигах НЕ задаётся. Включать временно —
+        # только для первичной настройки (заведение первого менеджера) и локалки.
+        self.ADMIN_COMMAND_ENABLED = os.getenv("ADMIN_COMMAND_ENABLED", "false").lower() == "true"
+
         # ── Invites ────────────────────────────────────────────────────
         self.INVITE_SECRET = os.getenv("INVITE_SECRET")
         if not self.INVITE_SECRET and not self.DEBUG:

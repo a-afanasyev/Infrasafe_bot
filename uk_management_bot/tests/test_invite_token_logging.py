@@ -205,3 +205,49 @@ async def test_join_handler_no_full_token_in_any_log(caplog):
         "AC failed: full invite token leaked in handler log records. "
         f"Captured text: {all_text!r}"
     )
+
+
+@pytest.mark.asyncio
+async def test_start_join_deeplink_masks_token_in_log(caplog):
+    """A9-P3-1: `/start join_<token>` (handlers/base.py cmd_start) писал в лог
+    `message.text` целиком — мимо маскирования FIX-006. При неудачном
+    погашении токен остаётся действующим и читается из `docker logs`.
+
+    Контракт: ни одна строка лога `handlers.base` не содержит тело токена;
+    сам факт deep-link'а (`join_`) виден.
+    """
+    from uk_management_bot.handlers.base import cmd_start
+
+    msg = _make_message(f"/start join_{TOKEN_BODY}", user_id=42)
+    state = _make_state()
+    state.clear = AsyncMock()
+
+    # Лимитер отказывает — хендлер выходит сразу после входной строки лога,
+    # не трогая БД (входная строка — ровно та, что текла).
+    with caplog.at_level(logging.INFO, logger="uk_management_bot.handlers.base"), \
+        patch(
+            "uk_management_bot.handlers.base.InviteRateLimiter.is_allowed",
+            new=AsyncMock(return_value=False),
+        ), \
+        patch(
+            "uk_management_bot.handlers.base.InviteRateLimiter.get_remaining_time",
+            new=AsyncMock(return_value=600),
+        ), \
+        patch(
+            "uk_management_bot.handlers.base.get_text",
+            side_effect=lambda key, language="ru", **kw: f"<text:{key}>",
+        ):
+        await cmd_start(msg, state, language="ru")
+
+    base_text = "\n".join(
+        rec.getMessage() for rec in caplog.records
+        if rec.name == "uk_management_bot.handlers.base"
+    )
+    assert "/start" in base_text, "входная строка /start должна логироваться"
+    assert "join_" in base_text, "факт deep-link'а join_ должен остаться виден"
+    assert TOKEN_BODY not in base_text, (
+        f"A9-P3-1: тело инвайт-токена утекло в лог /start: {base_text!r}"
+    )
+    assert TOKEN_BODY[:8] not in base_text, (
+        f"A9-P3-1: фрагмент токена утёк в лог /start: {base_text!r}"
+    )

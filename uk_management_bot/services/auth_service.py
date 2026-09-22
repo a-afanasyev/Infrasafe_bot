@@ -623,13 +623,21 @@ class AuthService:
         сохраняет контракт для неконвертированных вызывающих.
         """
         from uk_management_bot.config.settings import settings
-        
+
+        # A9-P2-4: defence in depth — при выключенном флаге роль не выдаётся
+        # даже с верным паролем (напр. FSM-состояние осталось с момента,
+        # когда флаг был включён).
+        if not settings.ADMIN_COMMAND_ENABLED:
+            logger.warning(f"Попытка /admin при выключенном ADMIN_COMMAND_ENABLED от {telegram_id}")
+            return False
+
         if not secrets.compare_digest(password.encode('utf-8'), settings.ADMIN_PASSWORD.encode('utf-8')):
             logger.warning(f"Неверный пароль администратора от пользователя {telegram_id}")
             return False
-        
+
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
         if user:
+            old_roles = parse_roles_safe(user.roles)
             sync_legacy_role(user, "manager")
             user.status = "approved"
             # SEC-06 (least privilege): /admin выдаёт только manager,
@@ -637,6 +645,17 @@ class AuthService:
             user.roles = '["manager"]'
             user.active_role = "manager"
             _enforce_trusted_verification(user, ["manager"])
+            # A9-P2-4: след выдачи — в audit_logs той же транзакцией, не только в лог.
+            self.db.add(AuditLog(
+                action="admin_command_role_grant",
+                user_id=user.id,
+                telegram_user_id=telegram_id,
+                details={
+                    "via": "/admin",
+                    "old_roles": old_roles,
+                    "new_roles": ["manager"],
+                },
+            ))
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} назначен администратором по паролю")
             return True

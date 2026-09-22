@@ -66,6 +66,10 @@ docker compose run --rm migrate
 # 4. Приложения.
 docker compose up -d app api frontend
 docker logs uk-management-bot --tail 20
+
+# 5. Первый менеджер: /admin в боте выключен по умолчанию (A9-P2-4). Локально —
+#    ADMIN_COMMAND_ENABLED=true в .env, `docker compose up -d app`, в боте /admin →
+#    ADMIN_PASSWORD, затем вернуть false. На проде — .claude/skills/uk-deploy/SKILL.md.
 ```
 
 Шаги 2 и 3 обязательны и именно в этом порядке: `migrate` читает

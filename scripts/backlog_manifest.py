@@ -375,7 +375,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-1 закрыт 2026-09-23 (PR #600).
     "A9-P2-2": A(pkg="AUD9-W3", status="actionable", method="verified-2026-09-22", services="bot", note="Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах"),
     # A9-P2-3 закрыт 2026-09-23 (PR #600).
-    "A9-P2-4": A(pkg="AUD9-W3", status="actionable", method="owner-decision-2026-09-23", services="bot", note="`/admin` + общий `ADMIN_PASSWORD` делают любой аккаунт manager'ом"),
+    # A9-P2-4 закрыт 2026-09-23 (PR #601).
     "A9-P2-5": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="group-intake-bot, bot", note="Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного"),
     "A9-P2-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча"),
     "A9-P2-7": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="`POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции"),
@@ -403,7 +403,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-29": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: logout не чистит кэш `QueryClient`"),
     "A9-P2-30": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома"),
     "A9-P2-31": A(pkg="AUD9-W6", status="actionable", method="owner-decision-2026-09-23", services="frontend, TWA, bot", note="RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта"),
-    "A9-P3-1": A(pkg="AUD9-W3", status="actionable", method="audit9-2026-09-22", services="bot", note="Инвайт-токен целиком пишется в лог в `/start join_…`"),
+    # A9-P3-1 закрыт 2026-09-23 (PR #601).
     "A9-P3-2": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access-api `/metrics` без токена (требует подтверждения доступности через edge)"),
     "A9-P3-3": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="resource-api", note="resource: `commit_token` импорта бессрочный и не привязан к пользователю/тенанту/месяцу"),
     # A9-P3-4 закрыт 2026-09-23 (PR #600).
