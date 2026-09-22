@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -218,8 +218,17 @@ async def archive_tx(
 async def set_status_tx(
     db: AsyncSession, elevator_id: int, *, status: str, reason: str | None,
     request_number: str | None, actor_user_id: int,
+    schedule: Callable[..., Any],
 ) -> ElevatorStatusChangeOut:
-    """Смена статуса; уведомления жителям — после commit, best-effort."""
+    """Смена статуса; уведомления жителям — после commit, best-effort.
+
+    A9-P2-8(d): рассылка всем жителям подъезда уходит через ``schedule``
+    (``BackgroundTasks.add_task`` роутера) — после ответа, с троттлингом и
+    повтором 429 (``send_plain_messages``). Раньше она шла последовательно
+    внутри PUT, и на большом подъезде/медленном Telegram ответ упирался в 30 с
+    edge (504 при уже сохранённом статусе). ``notified_residents`` в ответе —
+    число сообщений, ПОСТАВЛЕННЫХ в рассылку (факт доставки — в логе).
+    """
     config = await domain.load_config_async(db)
     change = await domain.set_status_async(
         db, elevator_id, status, actor_user_id=actor_user_id,
@@ -227,10 +236,13 @@ async def set_status_tx(
         reason=reason, request_number=request_number, config=config,
     )
     await db.commit()
-    notified = await _notify_residents(change.resident_messages, elevator_id=elevator_id)
+    messages = list(change.resident_messages or ())
+    if messages:
+        schedule(_notify_residents, messages, elevator_id=elevator_id)
     return ElevatorStatusChangeOut(
         changed=change.changed, old_status=change.old_status, new_status=change.new_status,
-        status_since=presenters.aware_utc(change.status_since), notified_residents=notified,
+        status_since=presenters.aware_utc(change.status_since),
+        notified_residents=len(messages),
     )
 
 
@@ -244,7 +256,10 @@ async def _notify_residents(messages: Sequence[Any], *, elevator_id: int) -> int
     if not messages:
         return 0
     try:
-        return await send_plain_messages(messages)
+        delivered = await send_plain_messages(messages)
+        logger.info("Рассылка жителям о лифте %s: доставлено %s из %s",
+                    elevator_id, delivered, len(messages))
+        return delivered
     except Exception as exc:  # noqa: BLE001 — best-effort после commit
         logger.error(
             "Рассылка жителям о лифте %s не выполнена: %s", elevator_id, describe_http_error(exc)

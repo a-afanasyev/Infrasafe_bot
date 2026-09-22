@@ -249,6 +249,9 @@ class ElevatorStatusChangeOut(BaseModel):
     old_status: Optional[ElevatorStatus] = None
     new_status: Optional[ElevatorStatus] = None
     status_since: Optional[datetime] = None
+    # A9-P2-8: число сообщений, ПОСТАВЛЕННЫХ в очередь рассылки (BackgroundTasks),
+    # а не доставленных — факт доставки в логе API. Описание в OpenAPI не
+    # добавлено сознательно (снапшот контракта не меняется).
     notified_residents: int
 
 

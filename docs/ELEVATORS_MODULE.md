@@ -203,7 +203,7 @@ RBAC только по роли (`require_approved_roles`): `_staff` = executor|
 | PATCH | `/{id}` | manager | Правка паспорта; `expected_version` → 409 при гонке |
 | POST | `/{id}/commission` | manager | Ввод в эксплуатацию (`commissioned_at`) |
 | POST | `/{id}/archive` | manager | Архив (`reason` обязателен, ≤500) |
-| PUT | `/{id}/status` | staff | Смена статуса (`status`, `reason ≤500`, `request_number` → `source=request_hint`), **30/min**; жителям — после commit, в ответе `notified_residents` |
+| PUT | `/{id}/status` | staff | Смена статуса (`status`, `reason ≤500`, `request_number` → `source=request_hint`), **30/min**; жителям — после commit, в `BackgroundTasks` (после ответа; общий на процесс темп ~25 msg/s — при `--workers 2` до 2×; повтор 429 по `retry_after`; потолок одной рассылки 10 мин), в ответе `notified_residents` = число сообщений, **поставленных в очередь** рассылки (не доставленных; факт доставки — в логе API) |
 | GET | `/{id}/events` | staff | Журнал |
 | GET | `/{id}/requests` | staff | Заявки лифта (для чекбоксов и bulk-confirm) |
 | GET | `/occurrences` | staff | Календарь всех лифтов: `from`, `to` (включительно), `state` ∈ planned/done/cancelled/all, `kind` |

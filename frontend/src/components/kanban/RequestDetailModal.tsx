@@ -250,8 +250,9 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
       toast.success(t('toast.reminderSent'))
       setRemindStatus('sent')
       setTimeout(() => setRemindStatus('idle'), 3000)
-    } catch {
-      toast.error(t('toast.reminderFailed'))
+    } catch (error: unknown) {
+      // 409 «житель заблокировал бота» — причину показываем, а не общий отказ.
+      toast.error(t('toast.reminderFailed'), { description: safeErrorMessage(error, '') || undefined })
       setRemindStatus('error')
       setTimeout(() => setRemindStatus('idle'), 3000)
     }

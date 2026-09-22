@@ -74,6 +74,8 @@ class TelegramResult:
     http_status: Optional[int] = None
     description: str = ""
     result: Any = None
+    #: ``parameters.retry_after`` ответа 429 (секунды) — для троттлинга рассылок.
+    retry_after: Optional[float] = None
 
     @property
     def ok(self) -> bool:
@@ -139,7 +141,12 @@ def _parse(response: httpx.Response) -> TelegramResult:
     status = classify(response.status_code, description)
     if status == STATUS_OK and body.get("ok") is False:
         status = STATUS_ERROR
-    return TelegramResult(status, response.status_code, description, body.get("result"))
+    parameters = body.get("parameters")
+    retry_after = parameters.get("retry_after") if isinstance(parameters, dict) else None
+    if not isinstance(retry_after, (int, float)) or isinstance(retry_after, bool):
+        retry_after = None
+    return TelegramResult(status, response.status_code, description, body.get("result"),
+                          retry_after=retry_after)
 
 
 async def call(

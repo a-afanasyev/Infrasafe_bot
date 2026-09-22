@@ -274,14 +274,17 @@ async def set_status(
     request: Request,
     elevator_id: int,
     body: ElevatorStatusIn,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_staff),
 ):
     """Смена статуса; ``request_number`` → источник ``request_hint``. Жителям — после commit."""
+    # A9-P2-8(d): рассылка жителям — в BackgroundTasks, после ответа.
     try:
         return await api_service.set_status_tx(
             db, elevator_id, status=body.status, reason=body.reason,
             request_number=body.request_number, actor_user_id=user.id,
+            schedule=background.add_task,
         )
     except ElevatorServiceError as exc:
         raise http_error(exc)

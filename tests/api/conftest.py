@@ -223,3 +223,92 @@ async def telegram_api():
     finally:
         telegram_send._transport = previous
         await telegram_send.aclose()
+
+
+# ── Сеть вне транзакции и после ответа (A9-P2-7/P2-8) ────────────────
+# httpx.ASGITransport отдаёт ответ только после ВСЕГО ASGI-вызова, включая
+# BackgroundTasks, — «ответ не ждёт Telegram» им не проверить. Здесь — сырой
+# ASGI-вызов: в общий журнал `log` пишется "response" в момент отправки
+# последнего куска тела; шпионы сетевых вызовов пишут туда же — порядок
+# записей и есть проверка. `RecordingSessions` — фабрика сессий для override
+# `get_db`, помнящая выданные сессии: шпион сети спрашивает
+# `any_in_transaction()` — держит ли кто-то из них транзакцию в момент вызова.
+
+
+class RecordingSessions:
+    def __init__(self, factory):
+        self._factory = factory
+        self.sessions: list = []
+
+    def __call__(self):
+        session = self._factory()
+        self.sessions.append(session)
+        return session
+
+    def any_in_transaction(self) -> bool:
+        return any(s.in_transaction() for s in self.sessions)
+
+
+@pytest.fixture
+def recording_db(db_session_factory):
+    """Override `get_db` на запоминающую фабрику (пользователя задаёт тест)."""
+    rec = RecordingSessions(db_session_factory)
+
+    async def override_get_db():
+        async with rec() as session:
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield rec
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def asgi_call():
+    """``await asgi_call(method, path, log, json=None) -> (status, body)``."""
+    import asyncio
+    import json as _json
+
+    async def _call(method: str, path: str, log: list, json=None):
+        body = b"" if json is None else _json.dumps(json).encode()
+        headers = [(b"host", b"test"), (b"content-length", str(len(body)).encode())]
+        if json is not None:
+            headers.append((b"content-type", b"application/json"))
+        scope = {
+            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+            "method": method, "scheme": "http", "path": path,
+            "raw_path": path.encode(), "query_string": b"", "root_path": "",
+            "headers": headers, "client": ("127.0.0.1", 50000),
+            "server": ("test", 80),
+        }
+        done = asyncio.Event()
+        request_sent = False
+        status: dict = {}
+        chunks: list[bytes] = []
+
+        async def receive():
+            nonlocal request_sent
+            if not request_sent:
+                request_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            await done.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                status["code"] = message["status"]
+            elif message["type"] == "http.response.body":
+                chunks.append(message.get("body", b""))
+                if not message.get("more_body", False):
+                    log.append("response")
+                    done.set()
+
+        await app(scope, receive, send)
+        raw = b"".join(chunks)
+        return status["code"], (_json.loads(raw) if raw else None)
+
+    return _call
