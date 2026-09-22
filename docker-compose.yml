@@ -312,6 +312,10 @@ services:
       # видит событие чужого воркера. Значения не секретны — заданы прямо здесь.
       - ACCESS_NONCE_BACKEND=redis
       - ACCESS_EVENT_BROKER=redis
+      # Ревью A9-P3-12: повторная выдача команд с истёкшей лизой. По умолчанию
+      # ВЫКЛ (fail-safe: потерянная лиза не открывает шлагбаум повторно). Включать
+      # только после подтверждения персистентного дедупа по command_id на edge.
+      - ACCESS_COMMAND_RECLAIM_ENABLED=${ACCESS_COMMAND_RECLAIM_ENABLED:-false}
       # Обязательные секреты домена (код падает RuntimeError при их отсутствии) — ARCH-106
       # (Doppler cutover, Phase 1): значение приходит из Doppler через `doppler run --`,
       # :? делает отсутствие явной ошибкой при деплое, а не рантайм-RuntimeError позже:

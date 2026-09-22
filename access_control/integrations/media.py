@@ -9,7 +9,9 @@
   ``X-API-Key``, multipart ``file`` + ``kind`` (plate|overview) + ``ref`` +
   опц. ``uploaded_by`` → 201 ``{media_file:{id, telegram_file_id, ...},
   file_url}``; нет канала access → 503;
-* ``GET {MEDIA_SERVICE_URL}/api/v1/media/{media_id}/file`` (``X-API-Key``) — стрим.
+* ``GET {MEDIA_SERVICE_URL}/api/v1/media/{media_id}/file`` (``X-API-Key``) — стрим;
+* ``DELETE {MEDIA_SERVICE_URL}/api/v1/media/{media_id}`` (``X-API-Key``) — удаление
+  (откат осиротевшей загрузки, 30-дневный ретеншн §11); 404 — файла уже нет.
 
 Пакет ``media_service`` в access-образ НЕ импортируется (его там нет) — это
 самостоятельный httpx-клиент.
@@ -23,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Iterable
 
 import httpx
 
@@ -141,6 +143,41 @@ class AccessMediaClient:
             resp.raise_for_status()
             content_type = resp.headers.get("content-type", "application/octet-stream")
             return resp.content, content_type
+
+    async def delete_file(self, media_id: int | str) -> bool:
+        """Удалить файл в медиа-сервисе (``DELETE /media/{media_id}``).
+
+        ``True`` — удалён; ``False`` — медиа-сервис его уже не знает (404, цель
+        достигнута). Прочие ошибки (409 «под публикацией», 5xx, сеть)
+        пробрасываются — решение «best-effort или нет» за вызывающим.
+        """
+        async with self._client() as client:
+            resp = await client.delete(f"/media/{int(media_id)}")
+            if resp.status_code == httpx.codes.NOT_FOUND:
+                return False
+            resp.raise_for_status()
+            return True
+
+
+async def delete_media_best_effort(
+    client: AccessMediaClient, media_ids: Iterable[int | str]
+) -> int:
+    """Best-effort удаление файлов в медиа-сервисе; ошибка одного не мешает прочим.
+
+    Возвращает число id, по которым медиа-сервис подтвердил отсутствие файла
+    (удалён сейчас или уже не существовал). Сбои логируются без URL/ключа (§11):
+    наружу не пробрасываются — вызывающий уже решил судьбу своей операции.
+    """
+    gone = 0
+    for media_id in media_ids:
+        try:
+            await client.delete_file(media_id)
+            gone += 1
+        except Exception as exc:  # noqa: BLE001 — best-effort, не роняем вызывающего
+            logger.warning(
+                "media delete failed: media_id=%s (%s)", media_id, type(exc).__name__
+            )
+    return gone
 
 
 # Синглтон-клиент. Ленивый: конструируется без MEDIA_* (ошибка только при использовании).

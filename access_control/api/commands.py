@@ -18,20 +18,24 @@ HMAC тела + freshness timestamp + anti-replay nonce + IP allowlist + ста�
 """
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import hashlib
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from access_control.domain.equipment import EdgeController
 from access_control.services.device_auth import authenticate_edge
@@ -47,6 +51,18 @@ DEFAULT_LEASE_TTL_SECONDS = 30
 DEFAULT_LONG_POLL_SECONDS = 0.0
 LONG_POLL_INTERVAL_SECONDS = 0.25
 MAX_LONG_POLL_SECONDS = 25.0
+
+# Reclaim истёкших лиз (ревью A9-P3-12) — ВЫКЛЮЧЕН по умолчанию. Повторная выдача
+# безопасна, только если реальный edge-агент дедуплицирует по command_id
+# ПЕРСИСТЕНТНО (FileProcessedStore; command_consumer в репо — симулятор). Без
+# этого потеря лизы теряет команду — fail-safe: шлагбаум НЕ откроется повторно.
+# Включать ``true`` только после подтверждения дедупа на площадке.
+RECLAIM_ENV = "ACCESS_COMMAND_RECLAIM_ENABLED"
+
+
+def reclaim_enabled() -> bool:
+    """Флаг reclaim из env (читается на каждом lease — переключение без кода)."""
+    return os.getenv(RECLAIM_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -100,6 +116,15 @@ def _try_lease(
 
     Сырой ``lease_token`` генерируется здесь и возвращается edge; в БД сохраняется
     только его SHA256-хэш (§9.2, at-rest гигиена секрета, как у B).
+
+    Reclaim (только при ``ACCESS_COMMAND_RECLAIM_ENABLED``, по умолчанию выкл —
+    см. ``RECLAIM_ENV``): ``leased`` с истёкшей лизой выдаётся повторно (иначе обрыв клиента
+    между lease и ответом терял команду навсегда: воркера reclaim нет, AUD6).
+    Живую лизу не отдаём дважды — условие ``lease_expires_at < now()`` плюс
+    ``FOR UPDATE SKIP LOCKED``; новый токен перетирает старый, и опоздавший ACK
+    старого держателя проваливает CAS (409). Реле исполняется ≤1 раза за счёт
+    дедупа edge по ``command_id`` (§9.2). ``attempts < max_attempts`` не даёт
+    бесконечно переиздавать команду, которую edge стабильно не подтверждает.
     """
     lease_token = str(uuid.uuid4())
     lease_token_hash = hash_lease_token(lease_token)
@@ -116,7 +141,18 @@ def _try_lease(
             WHERE command_id = (
                 SELECT command_id FROM barrier_commands
                 WHERE controller_id = :cid
-                  AND status = 'pending'
+                  AND (
+                      status = 'pending'
+                      -- Reclaim (ревью A9-P3-12): лиза истекла без ACK (обрыв
+                      -- клиента после lease) — команда снова доступна, пока
+                      -- не исчерпаны попытки.
+                      OR (
+                          :reclaim
+                          AND status = 'leased'
+                          AND lease_expires_at < now()
+                          AND attempts < max_attempts
+                      )
+                  )
                   AND (
                       expires_at IS NULL
                       OR expires_at > now() + (:ttl * interval '1 second')
@@ -128,7 +164,12 @@ def _try_lease(
             RETURNING command_id, barrier_id, command_type, expires_at
             """
         ),
-        {"tokhash": lease_token_hash, "ttl": lease_ttl_seconds, "cid": controller_db_id},
+        {
+            "tokhash": lease_token_hash,
+            "ttl": lease_ttl_seconds,
+            "cid": controller_db_id,
+            "reclaim": reclaim_enabled(),
+        },
     ).first()
     if row is None:
         # Очередь пуста — фиксируем (закрываем) транзакцию и выходим.
@@ -150,20 +191,46 @@ def lease_next_command(
     controller_db_id: int,
     *,
     lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
-    long_poll_seconds: float = DEFAULT_LONG_POLL_SECONDS,
 ) -> LeasedCommand | None:
     """Лизить ОДНУ pending-команду контроллера атомарно (§9.2); None если пусто.
 
-    Команда скоупится по ``controller_db_id`` — чужие команды не выдаются (§9.1).
-    ``long_poll_seconds`` — короткий цикл ожидания (sync-endpoint в threadpool, не
-    блокирует event-loop); 0 — одна попытка.
+    Одна попытка, синхронно. Команда скоупится по ``controller_db_id`` — чужие
+    команды не выдаются (§9.1). Long-poll — ``lease_next_command_async``.
+    """
+    return _try_lease(db, controller_db_id, lease_ttl_seconds)
+
+
+async def lease_next_command_async(
+    db: Session,
+    controller_db_id: int,
+    *,
+    lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
+    long_poll_seconds: float = DEFAULT_LONG_POLL_SECONDS,
+    is_disconnected: Callable[[], Awaitable[bool]] | None = None,
+) -> LeasedCommand | None:
+    """Long-poll lease (§9.2): попытки до дедлайна, между ними ``asyncio.sleep``.
+
+    A9-P3-12: раньше цикл ``time.sleep`` жил в sync-эндпоинте и держал поток anyio
+    до 25 с на каждый висящий long-poll (при ``--workers 1`` пул потоков общий для
+    всего сервиса). Теперь ожидание не занимает ни поток, ни event loop; сам SQL
+    каждой попытки — в threadpool. ``long_poll_seconds=0`` — одна попытка.
+    Соединение пула берётся только на время попытки (``_try_lease`` коммитит).
+
+    ``is_disconnected`` (``Request.is_disconnected``) проверяется перед каждой
+    повторной попыткой: команду клиенту, который уже ушёл, не лизим.
     """
     deadline = time.monotonic() + min(max(long_poll_seconds, 0.0), MAX_LONG_POLL_SECONDS)
+    first = True
     while True:
-        leased = _try_lease(db, controller_db_id, lease_ttl_seconds)
+        if not first and is_disconnected is not None and await is_disconnected():
+            return None
+        first = False
+        leased = await run_in_threadpool(
+            _try_lease, db, controller_db_id, lease_ttl_seconds
+        )
         if leased is not None or time.monotonic() >= deadline:
             return leased
-        time.sleep(LONG_POLL_INTERVAL_SECONDS)
+        await asyncio.sleep(LONG_POLL_INTERVAL_SECONDS)
 
 
 def ack_command(
@@ -248,7 +315,8 @@ class AckRequest(BaseModel):
 
 
 @router.get("/{controller_id}/commands/next")
-def get_next_command(
+async def get_next_command(
+    request: Request,
     wait: float = Query(
         DEFAULT_LONG_POLL_SECONDS, ge=0.0, le=MAX_LONG_POLL_SECONDS,
         description="long-poll ожидание, c",
@@ -257,7 +325,9 @@ def get_next_command(
     controller: EdgeController = Depends(authenticate_edge),
 ) -> Response:
     """Лизить следующую pending-команду контроллера (§9.2). 204 если очередь пуста."""
-    leased = lease_next_command(db, controller.id, long_poll_seconds=wait)
+    leased = await lease_next_command_async(
+        db, controller.id, long_poll_seconds=wait, is_disconnected=request.is_disconnected
+    )
     if leased is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return JSONResponse(

@@ -32,6 +32,7 @@ PostgreSQL, Redis, каталог пользователей и адресов (
 | `ACCESS_NONCE_BACKEND` | `redis` (прод/много воркеров) или `memory`; дефолт зависит от `DEBUG` (прод→`redis`, dev→`memory`) | нет (compose: `redis`) |
 | `ACCESS_EVENT_BROKER` | `redis` (много воркеров) или `memory` | да (compose: `redis`) |
 | `ACCESS_ENABLE_DOCS` | Swagger `/docs`; дефолт зависит от `DEBUG` (прод→выкл, dev→вкл) | нет |
+| `ACCESS_COMMAND_RECLAIM_ENABLED` | повторная выдача `barrier_commands` с истёкшей лизой (обрыв edge после lease). По умолчанию `false`: потерянная лиза = команда потеряна (fail-safe, шлагбаум повторно не откроется). Включать **только после подтверждения**, что edge-агент на площадке дедуплицирует по `command_id` персистентно (`FileProcessedStore`; `command_consumer` в репо — симулятор) | нет (compose: `false`) |
 
 Общего дефолтного значения для seed-ов в коде НЕТ (§9.1/§11): без них сервис
 падает `RuntimeError`. Сгенерировать:

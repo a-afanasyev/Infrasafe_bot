@@ -29,6 +29,7 @@ from typing import Protocol
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from access_control.domain.enums import EdgeControllerStatus
 from access_control.domain.equipment import EdgeController
@@ -454,6 +455,27 @@ async def _read_body_capped(request: Request, limit: int = None) -> bytes:
     return body
 
 
+def _authenticate_and_release(db: Session, **kwargs) -> EdgeController:
+    """``authenticate`` + закрыть транзакцию сессии (ревью A9-P3-12).
+
+    SELECT контроллера открывал транзакцию, и соединение пула висело «idle in
+    transaction» до первого SQL эндпоинта. Для long-poll это до следующей
+    попытки: при >20 параллельных long-poll пул (10+10) кончался, потоки anyio
+    ждали pool_timeout=60 с — вставал весь сервис вместе с /health.
+
+    Контроллер отсоединяется от сессии ДО rollback: все колонки уже загружены,
+    а rollback истёк бы их и заставил ленивую перезагрузку открыть транзакцию
+    снова (к тому же из event loop). Эндпоинты только читают поля контроллера,
+    записи идут отдельным SQL по ``controller.id``.
+    """
+    try:
+        controller = authenticate(db, **kwargs)
+        db.expunge(controller)
+        return controller
+    finally:
+        db.rollback()
+
+
 async def authenticate_edge(
     request: Request, db: Session = Depends(get_db)
 ) -> EdgeController:
@@ -469,7 +491,11 @@ async def authenticate_edge(
     # видит только IP прокси). Без доверенных прокси — прямой client.host.
     client_ip = resolve_client_ip(request)
     try:
-        controller = authenticate(
+        # A9-P2-13: authenticate — синхронный SQL (контроллер, nonce-store). Зависимость
+        # async (тело читается потоково), поэтому проверку уводим в threadpool:
+        # иначе 7 edge-ручек блокировали event loop однопроцессного сервиса.
+        controller = await run_in_threadpool(
+            _authenticate_and_release,
             db,
             method=request.method,
             path=request.url.path,
