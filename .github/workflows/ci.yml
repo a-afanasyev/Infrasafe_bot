@@ -328,7 +328,7 @@ jobs:
           python3 ../../ci/mypy_ratchet.py ../../ci/mypy-baseline-resource.txt < mypy.log
 
       # AUD6-P1-7: тесты поднимают схему Base.metadata.create_all'ом, а прод
-      # стартует `alembic upgrade head` (entrypoint-api.sh) — расхождение
+      # делает `alembic upgrade head` (one-shot resource-migrate) — расхождение
       # «модели ≠ миграция» до этого шага не ловило ничто. postgres:16 — как
       # resource-postgres в docker-compose. Единственная нужная переменная:
       # у всех полей Settings есть дефолты, alembic/env.py читает только URL.
