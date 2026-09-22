@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../constants'
 
 export interface TransitionData {
   status: string
@@ -111,6 +112,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, category =
               placeholder={t('kanban.returnReasonPlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
+              maxLength={MAX_REQUEST_TEXT_LENGTH}
               autoFocus
             />
           </div>
@@ -128,6 +130,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, category =
               placeholder={t('kanban.purchasePlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
+              maxLength={MAX_REQUEST_TEXT_LENGTH}
               autoFocus
             />
           </div>
@@ -141,6 +144,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, category =
               placeholder={t('kanban.questionPlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
+              maxLength={MAX_REQUEST_TEXT_LENGTH}
               autoFocus
             />
           </div>
@@ -154,6 +158,7 @@ export default function TransitionModal({ targetStatus, sourceStatus, category =
               placeholder={t('kanban.workPlaceholder')}
               value={text}
               onChange={e => setText(e.target.value)}
+              maxLength={MAX_REQUEST_TEXT_LENGTH}
               autoFocus
             />
           </div>

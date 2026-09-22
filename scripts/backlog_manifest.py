@@ -382,14 +382,14 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P2-8": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02)"),
     "A9-P2-9": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="API: шесть самописных Telegram-клиентов на httpx мимо общего `api_bot`"),
     "A9-P2-10": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Доменный справочник категорий лежит в UI-слое `keyboards/requests.py`"),
-    "A9-P2-11": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="api", note="`media_files: List[str]` в create-схемах без валидации; строки уходят в `answer_photo`"),
+    # A9-P2-11 закрыт 2026-09-23 (PR #602).
     "A9-P2-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: синхронный `db.query` в трёх async-ручках (остаток AUD7-ARCH-01)"),
     "A9-P2-13": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, resource-api", note="access/resource: блокирующий I/O в async-эндпоинтах; `get_photo` отдаёт 500 при ошибке media"),
     "A9-P2-14": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа"),
     "A9-P2-15": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service", note="media: `Bot`/`AiohttpSession` и httpx-клиент создаются на каждый запрос и не закрываются"),
     "A9-P2-16": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, media-service", note="access: 30-дневный ретеншн фото ANPR не удаляет сами медиа"),
     "A9-P2-17": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="resource-api, CI", note="resource: PG-тест блокировки периода никогда не выполняется в CI"),
-    "A9-P2-18": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="api, CI", note="API: row-lock-семантика проверяется только на sqlite"),
+    # A9-P2-18 закрыт 2026-09-23 (PR #602).
     "A9-P2-19": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="образы bot/api/media, CI", note="Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями"),
     "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
     "A9-P2-21": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="media-service, CI", note="media: нет версионированных миграций и дрейф-гейта"),
@@ -415,7 +415,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-10": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="bot, access-api", note="Четыре опасных «немых» `except` из 27"),
     "A9-P3-11": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api, access-api", note="Инверсии слоёв и два резолвера ролей с разным фолбэком"),
     "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
-    "A9-P3-13": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="api", note="PATCH заявки: `{rating}` → 500, правки без аудита/терминального гарда, карточка без лифта"),
+    # A9-P3-13 закрыт 2026-09-23 (PR #602).
     "A9-P3-14": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="БД", note="Уникальность Group Intake обходится при `source_chat_id IS NULL`"),
     # A9-P3-15 закрыт 2026-09-23 (PR #598).
     "A9-P3-16": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz"),

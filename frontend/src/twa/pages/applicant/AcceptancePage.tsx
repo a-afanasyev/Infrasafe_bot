@@ -10,6 +10,7 @@ import StarRating from '../../components/StarRating'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { CardSkeleton } from '../../components/Skeleton'
 import PullToRefresh from '../../components/PullToRefresh'
+import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
 export default function AcceptancePage() {
   const { t } = useTranslation()
@@ -104,6 +105,7 @@ export default function AcceptancePage() {
               <textarea
                 value={returnReasons[req.request_number] || ''}
                 onChange={(e) => setReturnReasons(prev => ({ ...prev, [req.request_number]: e.target.value }))}
+                maxLength={MAX_REQUEST_TEXT_LENGTH}
                 placeholder={t('twa.acceptance.returnReasonPlaceholder')}
                 rows={2}
                 className="w-full mt-3 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-[13px] text-gray-900 dark:text-gray-100 placeholder:text-gray-400"

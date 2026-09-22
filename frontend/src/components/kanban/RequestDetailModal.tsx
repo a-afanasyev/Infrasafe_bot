@@ -9,7 +9,7 @@ import { safeErrorMessage } from '@/utils/errorMessage'
 import { tStatus, tUrgency, tCategory, tSpecialization } from '../../i18n/apiMaps'
 import { useHasRole, useHasAnyRole } from '../../hooks/useHasRole'
 import { useSeenRequests } from '../../hooks/useSeenRequests'
-import { CATEGORIES, URGENCIES, normalizeUrgency } from '../../constants'
+import { CATEGORIES, MAX_REQUEST_TEXT_LENGTH, URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
 import {
@@ -669,6 +669,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                         placeholder={t('kanban.commentPlaceholder')}
                         value={confirmNote}
                         onChange={e => setConfirmNote(e.target.value)}
+                        maxLength={MAX_REQUEST_TEXT_LENGTH}
                       />
                       <div className="flex gap-2">
                         <Button variant="outline" className="flex-1" onClick={() => setShowConfirmSection(false)}>
@@ -692,6 +693,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                         placeholder={t('kanban.returnPlaceholder')}
                         value={returnReason}
                         onChange={e => setReturnReason(e.target.value)}
+                        maxLength={MAX_REQUEST_TEXT_LENGTH}
                         autoFocus
                       />
                       <div className="flex gap-2">
@@ -758,6 +760,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                         placeholder={t('kanban.forceAcceptPlaceholder')}
                         value={forceAcceptNote}
                         onChange={e => setForceAcceptNote(e.target.value)}
+                        maxLength={MAX_REQUEST_TEXT_LENGTH}
                         autoFocus
                       />
                       {forceAcceptNote.length > 0 && forceAcceptNote.length < 10 && (
@@ -815,6 +818,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                     placeholder={t('kanban.addNote')}
                     value={comment}
                     onChange={e => setComment(e.target.value)}
+                    maxLength={MAX_REQUEST_TEXT_LENGTH}
                     onKeyDown={e => e.key === 'Enter' && comment.trim() && postComment.mutate(comment)}
                   />
                   <Button

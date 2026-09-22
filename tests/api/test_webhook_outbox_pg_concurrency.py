@@ -20,6 +20,7 @@ from collections import Counter
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -31,6 +32,7 @@ from uk_management_bot.database.session import Base
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.database.models.request import Request
@@ -46,6 +48,9 @@ SCHEMA = "pr5_outbox_test"
 # перетирает os.environ["DATABASE_URL"] на sqlite. Настоящий postgres-URL
 # сохранён в POSTGRES_TEST_URL conftest'ом tests/api (грузится первым при
 # каноническом `pytest tests/api tests/services`); можно задать и снаружи.
+
+
+_PG_UNREACHABLE = (OSError, sa_exc.OperationalError, sa_exc.InterfaceError)
 
 
 def _pg_url() -> str | None:
@@ -74,7 +79,10 @@ async def pg_factory(monkeypatch):
             await conn.run_sync(
                 lambda sc: WebhookOutbox.__table__.create(sc, checkfirst=True)
             )
-    except Exception as exc:  # pragma: no cover - host without reachable PG
+    # A9-P2-18: skip — только если PG недоступен (сеть/аутентификация). Ошибка
+    # СХЕМЫ (нет таблицы под FK — так сюита молча скипалась в CI после
+    # миграции 017 «Лифты») обязана ронять тест, а не прятаться в skip.
+    except _PG_UNREACHABLE as exc:  # pragma: no cover - host without reachable PG
         await engine.dispose()
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 
@@ -225,6 +233,8 @@ async def test_reclaim_after_lease_under_postgres(pg_factory, monkeypatch):
 
 _DOMAIN_TABLES = [
     User.__table__, Yard.__table__, Building.__table__, Apartment.__table__,
+    # requests.elevator_id → elevators.id (миграция 017).
+    Elevator.__table__,
     UserApartment.__table__, Request.__table__, RequestAssignment.__table__,
     AuditLog.__table__, ShiftTemplate.__table__, Shift.__table__,
     Rating.__table__, WebhookOutbox.__table__,
@@ -252,7 +262,10 @@ async def pg_domain_factory(monkeypatch):
                     sc, tables=_DOMAIN_TABLES, checkfirst=True
                 )
             )
-    except Exception as exc:  # pragma: no cover - host without reachable PG
+    # A9-P2-18: skip — только если PG недоступен (сеть/аутентификация). Ошибка
+    # СХЕМЫ (нет таблицы под FK — так сюита молча скипалась в CI после
+    # миграции 017 «Лифты») обязана ронять тест, а не прятаться в skip.
+    except _PG_UNREACHABLE as exc:  # pragma: no cover - host without reachable PG
         await engine.dispose()
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 

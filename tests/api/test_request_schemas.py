@@ -131,7 +131,8 @@ class TestCreateRequestBody:
         assert body.category == "electricity"
         assert body.address_type == "apartment"
         assert body.address_id == 1
-        assert body.media_files is None
+        # A9-P2-11: поля media_files в create-схеме больше нет.
+        assert "media_files" not in CreateRequestBody.model_fields
 
     def test_valid_full(self):
         body = CreateRequestBody(
@@ -140,11 +141,9 @@ class TestCreateRequestBody:
             description="Прорвало трубу",
             address_type="building",
             address_id=10,
-            media_files=["photo1.jpg", "photo2.jpg"],
         )
         assert body.address_type == "building"
         assert body.address_id == 10
-        assert body.media_files == ["photo1.jpg", "photo2.jpg"]
 
     @pytest.mark.parametrize("urgency", VALID_URGENCIES)
     def test_all_valid_urgencies(self, urgency: str):
@@ -252,15 +251,21 @@ class TestCommentModels:
         body = CommentBody(text="Готово")
         assert body.text == "Готово"
         assert body.is_internal is False
-        assert body.media_files is None
 
     def test_comment_body_internal(self):
         body = CommentBody(text="Заметка для менеджера", is_internal=True)
         assert body.is_internal is True
 
-    def test_comment_body_with_media(self):
-        body = CommentBody(text="Фото", media_files=["img1.jpg"])
-        assert body.media_files == ["img1.jpg"]
+    def test_comment_body_media_files_rejected(self):
+        # A9-P2-11: поле убрано, extra="forbid" — 422, а не тихий дроп.
+        with pytest.raises(ValidationError):
+            CommentBody(text="Фото", media_files=["img1.jpg"])
+
+    def test_comment_body_text_max_length(self):
+        from uk_management_bot.utils.constants import MAX_DESCRIPTION_LENGTH
+        assert CommentBody(text="я" * MAX_DESCRIPTION_LENGTH).text
+        with pytest.raises(ValidationError):
+            CommentBody(text="я" * (MAX_DESCRIPTION_LENGTH + 1))
 
     def test_comment_body_missing_text_raises(self):
         with pytest.raises(ValidationError):

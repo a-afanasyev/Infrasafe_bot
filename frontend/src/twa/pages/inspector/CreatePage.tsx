@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
-import { CATEGORIES, URGENCIES } from '../../../constants'
+import { CATEGORIES, MAX_REQUEST_TEXT_LENGTH, URGENCIES } from '../../../constants'
 import { notifyError } from '../../utils/errors'
 import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
@@ -213,6 +213,7 @@ export default function InspectorCreatePage() {
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
+        maxLength={MAX_REQUEST_TEXT_LENGTH}
         placeholder={t('twa.create.descriptionPlaceholder')}
         className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
       />
