@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import date, timedelta
 
@@ -13,6 +14,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ShiftManagementStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
+from uk_management_bot.utils.user_names import display_name
 
 from ._router import router
 from .shared import _db_scope, _format_end_label
@@ -86,14 +88,15 @@ async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=No
                     if shift.user_id:
                         user = service.get_user(shift.user_id)
                         if user:
-                            executor_name = f"{user.first_name} {user.last_name or ''}".strip()
+                            # A9-P2-2: имя из Telegram в HTML — канон + escape.
+                            executor_name = html.escape(display_name(user))
 
                     # Получаем название шаблона
                     template_name = get_text("shift_management.no_template", language=lang)
                     if shift.shift_template_id:
                         template = service.get_template(shift.shift_template_id)
                         if template:
-                            template_name = template.name
+                            template_name = html.escape(template.name)
 
                     start_time = fmt_time(shift.planned_start_time) if shift.planned_start_time else "??:??"
                     end_time = _format_end_label(shift.planned_start_time, shift.planned_end_time) if shift.planned_end_time else "??:??"
@@ -254,7 +257,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
                         # Получаем название смены
                         shift_name = ""
                         if shift.template:
-                            shift_name = shift.template.name
+                            shift_name = html.escape(shift.template.name)
                         elif shift.shift_type:
                             shift_type_key = f"shift_type_{shift.shift_type}"
                             shift_name = get_text(f"shift_management.{shift_type_key}", language=lang) if shift_type_key in ["shift_type_regular", "shift_type_emergency", "shift_type_overtime", "shift_type_maintenance"] else shift.shift_type
@@ -266,7 +269,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
                         if shift.user_id:
                             user = service.get_user(shift.user_id)
                             if user:
-                                executor_name = f"{user.first_name}"
+                                executor_name = html.escape(display_name(user))
 
                         response += f"  {status_emoji} <b>{start_time}-{end_time}</b> {shift_name} | {executor_name}\n"
                 else:

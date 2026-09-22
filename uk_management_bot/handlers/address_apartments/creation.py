@@ -1,3 +1,4 @@
+import html
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -150,7 +151,7 @@ async def process_apartment_building_selection(callback: CallbackQuery, state: F
     building_addr = address if address is not None else get_text("address_apartments.handlers.unknown_building", language=lang)
 
     await callback.message.edit_text(
-        get_text("address_apartments.handlers.create_step2_enter_number", language=lang).format(address=building_addr),
+        get_text("address_apartments.handlers.create_step2_enter_number", language=lang).format(address=html.escape(building_addr)),
         reply_markup=get_cancel_keyboard_inline()
     )
 
@@ -176,7 +177,7 @@ async def process_apartment_number(message: Message, state: FSMContext, language
     await state.set_state(ApartmentManagementStates.waiting_for_entrance_number)
 
     await message.answer(
-        get_text("address_apartments.handlers.create_step3_enter_entrance", language=lang).format(number=number),
+        get_text("address_apartments.handlers.create_step3_enter_entrance", language=lang).format(number=html.escape(number)),
         reply_markup=get_skip_or_cancel_keyboard()
     )
 
@@ -375,7 +376,7 @@ async def process_apartment_area(message: Message, state: FSMContext, language: 
             return
 
         text = get_text("address_apartments.handlers.creation_success", language=lang).format(
-            number=apartment.apartment_number
+            number=html.escape(str(apartment.apartment_number))
         )
 
         if apartment.entrance:

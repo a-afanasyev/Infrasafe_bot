@@ -27,6 +27,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.user_names import full_name
 from uk_management_bot.utils.business_time import fmt_datetime
 
 router = Router()
@@ -116,7 +117,7 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
         return ("no_permission", [])
 
     # Формируем имя заявителя
-    applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    applicant_name = full_name(user)
     if not applicant_name:
         applicant_label = get_text("clarification.applicant_label", language=lang)
         applicant_name = f"{applicant_label} {user.telegram_id}"
@@ -125,8 +126,8 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
     timestamp = fmt_datetime(utc_now())
     reply_label = get_text("clarification.reply_label", language=lang)
     new_note = f"\n\n--- {reply_label} {timestamp} ---\n"
-    new_note += f"👤 {applicant_name}:\n"
-    new_note += f"{reply_text}\n"
+    new_note += f"👤 {applicant_name}:\n"  # html-raw: пишется в notes
+    new_note += f"{reply_text}\n"  # html-raw: пишется в notes
 
     # Обновляем примечания
     if request.notes:
@@ -159,8 +160,8 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
                 # разметки менеджеру, а кривой тег молча гасит доставку.
                 notification_text = get_text("clarification.manager_notification", language=manager_lang).format(
                     request_number=request.request_number,
-                    category=request.category,
-                    address=request.address,
+                    category=html.escape(request.category or ""),
+                    address=html.escape(request.address or ""),
                     reply_text=html.escape(reply_text)
                 )
                 notices.append(_ManagerNotice(telegram_id=manager.telegram_id, text=notification_text))
@@ -209,9 +210,9 @@ async def handle_reply_command(message: Message, state: FSMContext, language: st
         # Запрашиваем текст ответа
         await message.answer(
             get_text("clarification.enter_reply_prompt", language=lang).format(
-                request_number=request_number,
-                category=prompt.category,
-                address=prompt.address
+                request_number=html.escape(request_number),
+                category=html.escape(prompt.category or ""),
+                address=html.escape(prompt.address or "")
             ),
             reply_markup=None
         )
@@ -304,7 +305,7 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
         )
 
         # Подтверждаем заявителю
-        reply_preview = reply_text[:100] + ('...' if len(reply_text) > 100 else '')
+        reply_preview = html.escape(reply_text[:100]) + ('...' if len(reply_text) > 100 else '')
         await message.answer(
             get_text("clarification.reply_sent_confirmation", language=lang).format(
                 request_number=request_number,

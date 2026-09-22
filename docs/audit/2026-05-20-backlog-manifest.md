@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **570**
-- закрыто маркером: **508**
-- открыто маркером: **62**
+- закрыто маркером: **511**
+- открыто маркером: **59**
 
-  - `actionable` — **50**
+  - `actionable` — **47**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=26, P3=24.
+Из них actionable по приоритету: P2=24, P3=23.
 
 Значения `status`:
 
@@ -56,7 +56,6 @@
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
 | `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
-| `A9-P2-2` | P2 | actionable | verified-2026-09-22 | AUD9-W3 | — | bot | — | Бот: пользовательский ввод без html.escape в карточках заявки, модерации квартир и сменах |
 | `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
 | `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
 | `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |
@@ -74,11 +73,9 @@
 | `A9-P2-14` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа |
 | `A9-P2-15` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | media-service | — | media: `Bot`/`AiohttpSession` и httpx-клиент создаются на каждый запрос и не закрываются |
 | `A9-P2-16` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api, media-service | — | access: 30-дневный ретеншн фото ANPR не удаляет сами медиа |
-| `A9-P2-17` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | resource-api, CI | — | resource: PG-тест блокировки периода никогда не выполняется в CI |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
 | `A9-P3-2` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access-api `/metrics` без токена (требует подтверждения доступности через edge) |
 | `A9-P3-23` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | media-service, access-api | — | Сателлиты: мелкие дефекты саги, гонок, Redis и дубли `_client_ip` |
-| `A9-P3-3` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | resource-api | — | resource: `commit_token` импорта бессрочный и не привязан к пользователю/тенанту/месяцу |
 | `A9-P2-29` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: logout не чистит кэш `QueryClient` |
 | `A9-P2-30` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома |
 | `A9-P2-31` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W6 | — | frontend, TWA, bot | — | RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта |

@@ -3,6 +3,7 @@
 AUD5-ARCH-3 (волна 11): перенос 1:1 из handlers/user_verification.py.
 """
 
+import html
 import logging
 
 from aiogram import F
@@ -82,7 +83,7 @@ async def view_user_documents(callback: CallbackQuery, roles: list = None, langu
         (first_name, username), documents = page
 
         unknown_name = get_text("user_verification.handlers.unknown", language=lang)
-        user_display_name = first_name or username or unknown_name
+        user_display_name = html.escape(first_name or username or unknown_name)
 
         if not documents:
             await callback.message.edit_text(
@@ -101,13 +102,13 @@ async def view_user_documents(callback: CallbackQuery, roles: list = None, langu
             doc_type_name = get_text(f'verification.document_types.{doc.type_value}', language=lang)
 
             documents_text += f"{i}. {status_emoji} <b>{doc_type_name}</b>\n"
-            documents_text += f"   📁 {get_text('user_verification.handlers.file_label', language=lang)}: {doc.file_name or get_text('user_verification.handlers.no_title', language=lang)}\n"
+            documents_text += f"   📁 {get_text('user_verification.handlers.file_label', language=lang)}: {html.escape(doc.file_name) if doc.file_name else get_text('user_verification.handlers.no_title', language=lang)}\n"
             if doc.file_size:
                 documents_text += f"   📏 {get_text('user_verification.handlers.size_label', language=lang)}: {doc.file_size // 1024} KB\n"
             documents_text += f"   📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {_fmt_created_at(doc.created_at)}\n"
 
             if doc.notes:
-                documents_text += f"   📝 {get_text('user_verification.handlers.comment_label', language=lang)}: {doc.notes}\n"
+                documents_text += f"   📝 {get_text('user_verification.handlers.comment_label', language=lang)}: {html.escape(doc.notes)}\n"
 
             documents_text += "\n"
 

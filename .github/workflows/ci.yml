@@ -393,9 +393,12 @@ jobs:
       # tests/conftest.py делает create_all/drop_all, а drift-gate и
       # least-privilege выше рассчитывают на схему alembic. URL — только в env
       # этого шага (ловушка setdefault, см. комментарий к «Run tests»).
+      # A9-P2-17: RESOURCE_REQUIRE_PG_TESTS=1 — skip модуля (не-PG движок)
+      # превращается в ошибку сбора: шаг не может стать зелёным, не исполнив тесты.
       - name: Concurrency tests (postgres 16, FOR UPDATE)
         env:
           RESOURCE_DATABASE_URL: "postgresql+psycopg2://resource:ci-only@localhost:55432/resource_accounting"
+          RESOURCE_REQUIRE_PG_TESTS: "1"
         run: pytest tests/test_period_concurrency_pg.py -v -rs -o addopts=""
 
   backend-tests:

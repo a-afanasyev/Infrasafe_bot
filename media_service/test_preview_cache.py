@@ -97,7 +97,6 @@ def client_with(monkeypatch, cache_dir):
     def make(telegram=None):
         svc = MediaStorageService.__new__(MediaStorageService)
         svc.telegram = telegram or ImageTelegram()
-        svc.channels_cache = {}
         app.dependency_overrides[get_storage_service] = lambda: svc
         c = TestClient(app)
         c.__enter__()

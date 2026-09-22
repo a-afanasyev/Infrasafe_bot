@@ -53,7 +53,7 @@ def display_name(user, *, max_len: Optional[int] = None) -> Optional[str]:
         username = getattr(user, "username", None)
         telegram_id = getattr(user, "telegram_id", None)
         if username:
-            name = f"@{username}"
+            name = f"@{username}"  # html-raw: канон возвращает сырое имя; экранирует точка вывода
         elif telegram_id:
             name = f"ID{telegram_id}"
         else:

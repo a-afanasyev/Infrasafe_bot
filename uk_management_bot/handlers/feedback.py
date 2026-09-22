@@ -15,6 +15,7 @@ AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза — цельны�
 триггеры (``fb_type:*``, ``fb_skip_photo``, ``fb_confirm``, ``fb_cancel``,
 FSM-состояния) рождаются внутрифайловыми клавиатурами этой же цепочки.
 """
+import html
 import logging
 from dataclasses import dataclass
 
@@ -73,7 +74,7 @@ def _confirm_keyboard(lang: str):
 def _author_name(user: User) -> str:
     parts = [user.first_name or "", user.last_name or ""]
     name = " ".join(p for p in parts if p).strip()
-    return name or (f"@{user.username}" if user.username else f"id{user.telegram_id}")
+    return name or (f"@{user.username}" if user.username else f"id{user.telegram_id}")  # html-raw: экранирует build_manager_notify_text
 
 
 # ==========================================================================
@@ -170,7 +171,7 @@ async def _show_confirm(message: Message, state: FSMContext, language: str):
     if len(preview) > 200:
         preview = preview[:200] + "…"
     photo_note = " 📎" if data.get("photo_file_id") else ""
-    body = f"{get_text('feedback.confirm', language=language)}\n\n{label}{photo_note}\n\n{preview}"
+    body = f"{get_text('feedback.confirm', language=language)}\n\n{label}{photo_note}\n\n{html.escape(preview)}"
     await message.answer(body, reply_markup=_confirm_keyboard(language))
     await state.set_state(FeedbackStates.waiting_for_confirm)
 

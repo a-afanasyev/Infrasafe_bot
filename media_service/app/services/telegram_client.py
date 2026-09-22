@@ -3,6 +3,8 @@ Telegram клиент для работы с каналами
 """
 
 import asyncio
+import enum
+from dataclasses import dataclass
 import logging
 import time
 from typing import Optional, Union, Tuple
@@ -10,7 +12,12 @@ import httpx
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import InputFile, BufferedInputFile, Message
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNotFound,
+)
 
 from app.core.config import settings
 from app.core.log_sanitize import TelegramDownloadError, describe_http_error
@@ -24,6 +31,44 @@ DOWNLOAD_BACKOFF_SECONDS: Tuple[float, ...] = (0.0, 0.5, 1.5)
 # Часы общего deadline — отдельным именем, чтобы тест худшего случая мог
 # «проматывать» время попыток без реальных 15- и 20-секундных ожиданий.
 _monotonic = time.monotonic
+
+# Текст Bot API для delete_message по уже удалённому сообщению.
+_MESSAGE_ALREADY_GONE = "message to delete not found"
+
+
+class DeleteOutcome(enum.Enum):
+    """A9-P3-23: итог delete_message — категория, а не bool.
+
+    Сага удаления по-разному реагирует на «удалить нельзя никогда» и «не
+    получилось сейчас»: первое повтор не лечит, второе — лечит.
+    """
+
+    DELETED = "deleted"            # сообщение удалено
+    ALREADY_GONE = "already_gone"  # сообщения уже нет — конечное состояние достигнуто
+    UNDELETABLE = "undeletable"    # permanent: нет прав, старше 48 ч, Forbidden, чат недоступен
+    TRANSIENT = "transient"        # сеть, таймаут, 5xx, 429 — повтор может помочь
+
+
+@dataclass(frozen=True)
+class DeleteResult:
+    """Итог delete_message: категория + причина отказа (текст Telegram)."""
+
+    outcome: DeleteOutcome
+    reason: Optional[str] = None
+
+
+def _classify_delete_error(exc: BaseException) -> DeleteOutcome:
+    """Отказ Telegram → категория. 400/403/404 — ответ по существу запроса
+    (повтор даст то же самое); всё прочее (TelegramNetworkError, ServerError,
+    RetryAfter, таймаут, неизвестное) — transient: осторожная сторона, строка
+    вернётся в active и вызывающий повторит."""
+    if isinstance(exc, TelegramBadRequest):
+        if _MESSAGE_ALREADY_GONE in str(exc).lower():
+            return DeleteOutcome.ALREADY_GONE
+        return DeleteOutcome.UNDELETABLE
+    if isinstance(exc, (TelegramForbiddenError, TelegramNotFound)):
+        return DeleteOutcome.UNDELETABLE
+    return DeleteOutcome.TRANSIENT
 
 
 def _download_timeout(read_cap: Optional[float] = None) -> httpx.Timeout:
@@ -58,6 +103,18 @@ class TelegramClientService:
             token=settings.telegram_bot_token,
             session=AiohttpSession(timeout=settings.telegram_api_timeout_seconds),
         )
+        # A9-P2-15: один httpx-клиент (пул соединений) на процесс — создаётся
+        # лениво при первом скачивании, закрывается в close().
+        self._http: Optional[httpx.AsyncClient] = None
+
+    def _http_client(self) -> httpx.AsyncClient:
+        """Общий httpx-клиент скачивания (ленивый: в тестах сервис строится
+        через __new__, а httpx.AsyncClient подменяется)."""
+        client = getattr(self, "_http", None)
+        if client is None:
+            client = httpx.AsyncClient(timeout=_download_timeout())
+            self._http = client
+        return client
 
     async def send_photo(
         self,
@@ -233,9 +290,10 @@ class TelegramClientService:
                     url = f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_info.file_path}"
 
                     timeout = _download_timeout(read_cap=deadline - _monotonic())
-                    async with httpx.AsyncClient(timeout=timeout) as client:
-                        resp = await client.get(url)
-                        resp.raise_for_status()
+                    # A9-P2-15: общий клиент процесса, таймаут — на запрос
+                    # (раньше новый AsyncClient на каждую попытку).
+                    resp = await self._http_client().get(url, timeout=timeout)
+                    resp.raise_for_status()
 
                     content_type = resp.headers.get("content-type", "application/octet-stream")
                     return resp.content, content_type
@@ -272,9 +330,10 @@ class TelegramClientService:
         self,
         chat_id: Union[int, str],
         message_id: int
-    ) -> bool:
+    ) -> DeleteResult:
         """
-        Удаление сообщения
+        Удаление сообщения. Не бросает: итог — DeleteResult с категорией
+        DeleteOutcome (A9-P3-23), вызывающий обязан её разобрать.
         """
         try:
             await self.bot.delete_message(
@@ -282,11 +341,18 @@ class TelegramClientService:
                 message_id=message_id
             )
             logger.info(f"Message {message_id} deleted from {chat_id}")
-            return True
+            return DeleteResult(DeleteOutcome.DELETED)
 
-        except TelegramAPIError as e:
-            logger.error(f"Failed to delete message {message_id} from {chat_id}: {e}")
-            return False
+        except (TelegramAPIError, TimeoutError) as e:
+            outcome = _classify_delete_error(e)
+            if outcome is DeleteOutcome.ALREADY_GONE:
+                logger.info("Message %s already absent in %s", message_id, chat_id)
+            else:
+                logger.error(
+                    "Failed to delete message %s from %s (%s): %s",
+                    message_id, chat_id, outcome.value, e,
+                )
+            return DeleteResult(outcome, reason=str(e) or type(e).__name__)
 
     async def get_chat(self, chat_id: Union[int, str]):
         """
@@ -309,3 +375,29 @@ class TelegramClientService:
         мог оставить aiohttp-сессию незакрытой (утечка соединения) без сигнала.
         """
         await self.bot.session.close()
+        http = getattr(self, "_http", None)
+        if http is not None:
+            self._http = None
+            await http.aclose()
+
+
+# A9-P2-15: процессный клиент. Раньше `get_storage_service()` строил новый
+# Bot + AiohttpSession на КАЖДЫЙ запрос и никогда их не закрывал. Создаётся в
+# lifespan (startup), закрывается на shutdown; ленивое создание — для путей без
+# lifespan (TestClient без контекста, скрипты).
+_shared_client: Optional[TelegramClientService] = None
+
+
+def get_telegram_client() -> TelegramClientService:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = TelegramClientService()
+    return _shared_client
+
+
+async def close_telegram_client() -> None:
+    """Закрыть процессный клиент (aiohttp-сессия Bot + httpx). Идемпотентно."""
+    global _shared_client
+    client, _shared_client = _shared_client, None
+    if client is not None:
+        await client.close()

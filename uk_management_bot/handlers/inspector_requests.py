@@ -280,8 +280,9 @@ async def inspector_building_selected(callback: CallbackQuery, state: FSMContext
         address_type="building", address_id=building_id, address=canonical_address,
     )
     await state.set_state(InspectorRequestStates.category)
+    import html as _html  # A9-P2-2: адрес дома из справочника в HTML
     await callback.message.edit_text(
-        get_text("requests.address_selected", language=lang, address=canonical_address)
+        get_text("requests.address_selected", language=lang, address=_html.escape(canonical_address))
     )
     await callback.message.answer(
         get_text("requests.select_category", language=lang), reply_markup=_category_keyboard(lang)
@@ -421,12 +422,13 @@ async def inspector_media_text(message: Message, state: FSMContext):
         await state.set_state(InspectorRequestStates.confirm)
         data = await state.get_data()
         media_count = len(data.get("media_files", []))
+        import html as _html  # A9-P2-2: ввод инспектора в HTML-сводке
         summary = get_text(
             "inspector.confirm_summary", language=lang,
-            address=data.get("address", ""),
+            address=_html.escape(data.get("address", "")),
             category=get_text(CATEGORY_KEYS.get(data.get("category"), ""), language=lang),
             urgency=get_text(URGENCY_KEYS.get(data.get("urgency"), ""), language=lang),
-            description=data.get("description", ""),
+            description=_html.escape(data.get("description", "")),
         )
         elevator_line = elevator_summary_line(data, lang)
         if elevator_line:

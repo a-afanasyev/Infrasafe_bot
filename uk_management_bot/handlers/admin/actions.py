@@ -15,6 +15,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_CANCELLED,
 )
 
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
@@ -22,6 +23,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.utils.business_time import fmt_datetime
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.user_names import full_name
 from datetime import datetime, timezone
 
 from ._router import router
@@ -72,7 +74,7 @@ async def handle_accept_request(callback: CallbackQuery, db: Session, roles: lis
             get_text("admin.handlers.request_accepted_choose_assignment", language=lang).format(
                 request_number=request_number,
                 category=get_category_display(resolve_category_key(request.category), language=lang),
-                address=request.address
+                address=html.escape(request.address or "")
             ),
             reply_markup=get_assignment_type_keyboard(request_number),
             parse_mode="HTML"
@@ -110,7 +112,7 @@ async def handle_deny_request(callback: CallbackQuery, state: FSMContext, db: Se
             get_text("admin.handlers.deny_request_prompt", language=lang).format(
                 request_number=request_number,
                 category=get_category_display(resolve_category_key(request.category), language=lang),
-                address=request.address
+                address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=get_text("admin.handlers.btn_cancel", language=lang), callback_data=f"view_{request_number}")]
@@ -163,7 +165,7 @@ async def handle_clarify_request(callback: CallbackQuery, state: FSMContext, db:
             get_text("admin.handlers.clarify_prompt", language=lang).format(
                 request_number=request_number,
                 category=get_category_display(resolve_category_key(request.category), language=lang),
-                address=request.address
+                address=html.escape(request.address or "")
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_clarification")]
@@ -255,9 +257,9 @@ async def handle_purchase_request(callback: CallbackQuery, state: FSMContext, db
             not_specified = get_text("admin.handlers.not_specified", language=lang)
             no_comments = get_text("admin.handlers.no_comments", language=lang)
             if last_requested and last_requested != "Не указано" and last_requested != not_specified:
-                prompt_text += get_text("admin.handlers.purchase_last_materials", language=lang).format(materials=last_requested) + "\n"
+                prompt_text += get_text("admin.handlers.purchase_last_materials", language=lang).format(materials=html.escape(last_requested)) + "\n"
             if last_comment and last_comment != "Без комментариев" and last_comment != no_comments:
-                prompt_text += get_text("admin.handlers.purchase_last_comment", language=lang).format(comment=last_comment) + "\n"
+                prompt_text += get_text("admin.handlers.purchase_last_comment", language=lang).format(comment=html.escape(last_comment)) + "\n"
 
             prompt_text += "\n"
 
@@ -443,15 +445,15 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
             return
         
         # Формируем имя менеджера
-        manager_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        manager_name = full_name(user)
         if not manager_name:
             manager_name = get_text("admin.handlers.manager_by_id", language=lang).format(telegram_id=user.telegram_id)
 
         # Формируем форматированное примечание уточнения
         timestamp = fmt_datetime(utc_now())
         new_note = get_text("admin.handlers.clarification_note_header", language=lang).format(timestamp=timestamp) + "\n"
-        new_note += f"👨‍💼 {manager_name}:\n"
-        new_note += f"{clarification_text}"
+        new_note += f"👨‍💼 {manager_name}:\n"  # html-raw: пишется в notes
+        new_note += f"{clarification_text}"  # html-raw: пишется в notes
 
         # Каноническая проводка (PR2a-7): из Новая/В работе уточнение —
         # переход CLARIFY_REQUEST через единый layer (status→Уточнение, notes
@@ -536,7 +538,7 @@ async def handle_clarification_text(message: Message, state: FSMContext, db: Ses
         await message.answer(
             get_text("admin.handlers.clarification_sent", language=lang).format(
                 request_number=request.request_number,
-                text_preview=clarification_text[:100] + ('...' if len(clarification_text) > 100 else '')
+                text_preview=html.escape(clarification_text[:100]) + ('...' if len(clarification_text) > 100 else '')
             )
         )
         
@@ -588,7 +590,7 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
             return
         
         # Формируем имя менеджера
-        manager_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        manager_name = full_name(user)
         if not manager_name:
             manager_name = get_text("admin.handlers.manager_by_id", language=lang).format(telegram_id=user.telegram_id)
 
@@ -596,9 +598,9 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         # audit (reason); форматированное примечание дописывается в notes
         # (Op.APPEND) внутри run_command.
         cancel_note = get_text("admin.handlers.cancel_note_text", language=lang).format(
-            manager_name=manager_name,
+            manager_name=manager_name,  # html-raw: пишется в notes
             cancel_date=fmt_datetime(utc_now()),
-            cancel_reason=cancel_reason
+            cancel_reason=cancel_reason  # html-raw: пишется в notes
         )
         from uk_management_bot.database.session import SessionLocal
         from uk_management_bot.services.workflow_runner import (
@@ -629,7 +631,7 @@ async def handle_cancel_reason_text(message: Message, state: FSMContext, db: Ses
         await message.answer(
             get_text("admin.handlers.request_denied", language=lang).format(
                 request_number=request_number,
-                cancel_reason=cancel_reason
+                cancel_reason=html.escape(cancel_reason)
             ),
             reply_markup=get_manager_main_keyboard(language=lang)
         )

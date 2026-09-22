@@ -14,6 +14,7 @@ from uk_management_bot.keyboards.user_management import (
 )
 from uk_management_bot.states.user_management import UserManagementStates
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
 
@@ -151,9 +152,7 @@ async def handle_resident_search_query(message: Message, state: FSMContext, db: 
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         rows = []
         for resident in residents:
-            name = f"{resident.first_name or ''} {resident.last_name or ''}".strip()
-            if not name:
-                name = f"@{resident.username}" if resident.username else f"ID: {resident.telegram_id}"
+            name = display_name(resident)  # подпись кнопки — не HTML
             rows.append([InlineKeyboardButton(text=name, callback_data=f"user_mgmt_user_{resident.id}")])
 
         await message.answer(

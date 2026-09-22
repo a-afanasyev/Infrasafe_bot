@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
+import html
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
+from uk_management_bot.utils.background_tasks import spawn
 # ARCH-116: показ времени смен — только через канон бизнес-зоны.
 from uk_management_bot.utils.business_time import fmt_datetime
 
@@ -51,7 +53,7 @@ class NotificationService:
         message = (
             f"{get_text('notifications.request_additional_info_title', language=lang)}\n\n"
             f"{get_text('notifications.admin_requests_info', language=lang).replace('{info_name}', info_name)}\n\n"
-            f"{get_text('notifications.comment', language=lang).replace('{comment}', comment)}\n\n"
+            f"{get_text('notifications.comment', language=lang).replace('{comment}', html.escape(comment or ''))}\n\n"
             f"{get_text('notifications.please_provide_info', language=lang)}"
         )
         return user.telegram_id, message
@@ -213,7 +215,7 @@ class NotificationService:
             )
 
             if reason:
-                message += f"\n\n{get_text('notifications.document_rejected_reason', language=lang).replace('{reason}', reason)}"
+                message += f"\n\n{get_text('notifications.document_rejected_reason', language=lang).replace('{reason}', html.escape(reason))}"
 
             message += f"\n\n{get_text('notifications.please_upload_correct', language=lang)}"
             
@@ -287,7 +289,7 @@ class NotificationService:
             )
 
             if reason:
-                message += f"\n\n{get_text('notifications.access_revoked_reason', language=lang).replace('{reason}', reason)}"
+                message += f"\n\n{get_text('notifications.access_revoked_reason', language=lang).replace('{reason}', html.escape(reason))}"
             
             # Отправляем уведомление пользователю
             bot = self._get_bot()
@@ -320,12 +322,12 @@ class NotificationService:
                 logger.warning(f"notify_user: пользователь user_id={user_id} не найден")
                 return
 
-            text = f"{title}\n{message}" if title else message
+            text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
             bot = self._get_bot()
 
             import asyncio
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
             except RuntimeError:
                 # COD-03: нет running loop — НЕ крутим asyncio.run на шаренном боте
                 # (aiohttp-сессия привязана к loop полла → «Event loop is closed»).
@@ -338,7 +340,9 @@ class NotificationService:
 
             # Fire-and-forget на живом loop, но с done-callback: конец тихого
             # проглатывания — ошибки/недоставка/отмена отправки логируются.
-            task = loop.create_task(send_to_user(bot, user.telegram_id, text))
+            # A9-P3-9: через spawn — loop держит задачи слабыми ссылками, и
+            # без сильной GC мог собрать отправку посреди работы.
+            task = spawn(send_to_user(bot, user.telegram_id, text))
 
             def _log_send_result(t: "asyncio.Task") -> None:
                 try:
@@ -372,7 +376,7 @@ class NotificationService:
             logger.warning(f"notify_user_async: пользователь user_id={user_id} не найден")
             return False
 
-        text = f"{title}\n{message}" if title else message
+        text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
         bot = self._get_bot()
         return await send_to_user(bot, user.telegram_id, text)
 
@@ -386,7 +390,7 @@ class NotificationService:
         """
         try:
             bot = self._get_bot()
-            system_message = f"{title}\n{message}"
+            system_message = f"{title}\n{message}"  # html-raw: title передаёт вызывающий готовым текстом
             await send_to_channel(bot, system_message)
             logger.info(f"Системное уведомление отправлено: {title}")
         except Exception as e:
@@ -404,24 +408,61 @@ class NotificationService:
         from uk_management_bot.services.feedback_service import manager_telegram_ids_sync
 
         bot = self._get_bot()
-        text = f"{title}\n{message}" if title else message
+        text = f"{title}\n{message}" if title else message  # html-raw: title передаёт вызывающий готовым текстом
         try:
             tg_ids = manager_telegram_ids_sync(self.db)
         except Exception as e:
             logger.error(f"send_manager_notification: ошибка выборки менеджеров: {e}")
             tg_ids = []
 
+        await self._deliver_to_managers(
+            bot, [(tg_id, text) for tg_id in tg_ids], text, "send_manager_notification"
+        )
+
+    async def send_manager_notification_i18n(
+        self, title_key: str, body_key: str, **params
+    ) -> None:
+        """То же, что `send_manager_notification`, но на языке КАЖДОГО менеджера.
+
+        Тексты — ключи локали (`get_text`); ops-канал получает русскую версию
+        (язык канала по умолчанию). A9-P3-8: раньше планировщик слал
+        захардкоженный русский текст и узбекоязычным менеджерам.
+        """
+        from uk_management_bot.services.feedback_service import manager_recipients_sync
+
+        def _render(lang: str) -> str:
+            title = get_text(title_key, language=lang, **params)
+            body = get_text(body_key, language=lang, **params)
+            return f"{title}\n{body}"
+
+        try:
+            recipients = manager_recipients_sync(self.db)
+        except Exception as e:
+            logger.error("send_manager_notification_i18n: ошибка выборки менеджеров: %s", e)
+            recipients = []
+
+        await self._deliver_to_managers(
+            self._get_bot(),
+            [(tg_id, _render(lang)) for tg_id, lang in recipients],
+            _render("ru"),
+            "send_manager_notification_i18n",
+        )
+
+    async def _deliver_to_managers(
+        self, bot, messages: list, channel_text: str, log_name: str
+    ) -> None:
+        """DM по списку (tg_id, текст) + ops-канал. Best-effort, не бросает."""
         sent = 0
-        for tg_id in tg_ids:
+        for tg_id, text in messages:
             if await send_to_user(bot, tg_id, text):
                 sent += 1
             else:
-                logger.warning(f"send_manager_notification: не доставлено tg={tg_id}")
+                logger.warning(f"{log_name}: не доставлено tg={tg_id}")
 
         # BUG-146: «канал=on/off» — по факту доставки, не по конфигу.
-        channel_delivered = await send_to_channel(bot, text)  # ops-канал
+        channel_delivered = await send_to_channel(bot, channel_text)  # ops-канал
         logger.info(
-            f"send_manager_notification: доставлено {sent}/{len(tg_ids)} менеджерам; "
+            f"{log_name}: доставлено {sent}/{len(messages)} менеджерам; "
             f"канал={'on' if channel_delivered else 'off'}"
         )
 

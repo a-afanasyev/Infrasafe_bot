@@ -11,6 +11,7 @@ ORM-строки (у ORM-объекта вне потока нет живой с
 продолжают работать с сессией на event loop — поэтому файл НЕ входит в ратчет
 ``tests/services/test_aud337_async_handlers_gate.py``.
 """
+import html
 import logging
 from typing import Optional
 
@@ -20,6 +21,7 @@ from aiogram.types import CallbackQuery
 from uk_management_bot.services.user_management_service import UserManagementService
 from uk_management_bot.keyboards.user_management import get_user_management_main_keyboard
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.user_names import full_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
@@ -118,13 +120,15 @@ def _load_user_profile_text(db, user_id: int, lang: str) -> Optional[str]:
     not_specified = get_text('user_mgmt.handlers.not_specified', language=lang)
     profile_text = get_text('user_mgmt.handlers.profile_title', language=lang) + "\n\n"
     profile_text += f"🆔 ID: {target_user.id}\n"
-    profile_text += get_text('user_mgmt.handlers.profile_name', language=lang).format(name=target_user.first_name or not_specified)
-    if target_user.last_name:
-        profile_text += f" {target_user.last_name}"
+    # A9-P2-2: имя/username из Telegram-профиля — в HTML-сообщении
+    # (parse_mode=HTML): канон full_name + html.escape.
+    name = full_name(target_user)
+    profile_text += get_text('user_mgmt.handlers.profile_name', language=lang).format(
+        name=html.escape(name) if name else not_specified)
     profile_text += "\n"
 
     if target_user.username:
-        profile_text += f"📱 Username: @{target_user.username}\n"
+        profile_text += f"📱 Username: @{html.escape(target_user.username)}\n"
     else:
         # BUG-BOT-024: показываем "Username не указан" без префикса `@`
         profile_text += f"📱 {get_text('user_mgmt.handlers.username_not_specified', language=lang)}\n"
@@ -137,7 +141,7 @@ def _load_user_profile_text(db, user_id: int, lang: str) -> Optional[str]:
     profile_text += get_text('user_mgmt.handlers.profile_status', language=lang).format(status=format_user_status(target_user.status, lang)) + "\n"
 
     if target_user.specialization:
-        profile_text += get_text('user_mgmt.handlers.profile_specialization', language=lang).format(spec=target_user.specialization) + "\n"
+        profile_text += get_text('user_mgmt.handlers.profile_specialization', language=lang).format(spec=html.escape(str(target_user.specialization))) + "\n"
 
     if target_user.created_at:
         profile_text += get_text('user_mgmt.handlers.profile_registered', language=lang).format(date=target_user.created_at.strftime('%d.%m.%Y %H:%M')) + "\n"
@@ -304,7 +308,7 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
 
             # Обновляем сообщение
             await callback.message.edit_text(
-                callback.message.text + get_text('user_mgmt.handlers.approved_by', language=lang).format(name=callback.from_user.first_name),
+                html.escape(callback.message.text or "") + get_text('user_mgmt.handlers.approved_by', language=lang).format(name=html.escape(callback.from_user.first_name or "")),
                 reply_markup=None
             )
 
@@ -351,7 +355,7 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, roles: l
 
             # Обновляем сообщение
             await callback.message.edit_text(
-                callback.message.text + get_text('user_mgmt.handlers.rejected_by', language=lang).format(name=callback.from_user.first_name),
+                html.escape(callback.message.text or "") + get_text('user_mgmt.handlers.rejected_by', language=lang).format(name=html.escape(callback.from_user.first_name or "")),
                 reply_markup=None
             )
 

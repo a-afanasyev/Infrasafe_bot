@@ -12,6 +12,7 @@ from uk_management_bot.keyboards.requests import (
     get_status_filter_inline_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard, get_user_contextual_keyboard
+import html
 import logging
 from uk_management_bot.services.request_service import RequestService
 
@@ -202,7 +203,7 @@ async def handle_reply_clarify_start(callback: CallbackQuery, state: FSMContext)
             if req and user and req.user_id == user.id:
                 notes_text = (req.notes or "").strip()
                 if notes_text:
-                    await callback.message.answer(get_text("requests.current_dialog", language=lang).format(notes=notes_text))
+                    await callback.message.answer(get_text("requests.current_dialog", language=lang).format(notes=html.escape(notes_text)))
                 else:
                     await callback.message.answer(get_text("requests.dialog_empty", language=lang))
         await callback.message.answer(
@@ -246,7 +247,7 @@ async def handle_reply_clarify_text(message: Message, state: FSMContext):
             # Добавляем с ролью пользователя
             user_prefix = get_text("requests.user_prefix", language=lang)
             clarification_label = get_text("requests.clarification_label", language=lang)
-            new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"
+            new_notes = (existing + "\n" if existing else "") + f"[{user_prefix}] {clarification_label}: {to_add}"  # html-raw: пишется в notes
             handler_service.append_clarify_reply(req, new_notes)
         await message.answer(get_text("requests.reply_saved", language=lang), reply_markup=get_main_keyboard(language=lang))
         await state.clear()
@@ -320,12 +321,14 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                 # TASK 17 Этап C: Локализованные метки
                 address_label = get_text("requests.address_label", language=lang) or "Адрес"
                 created_label = get_text("requests.created_label", language=lang) or "Создана"
-                message_text += f"   {address_label} {address}\n"
+                # A9-P2-2: пользовательский текст в HTML — экранируем после
+                # обрезки, чтобы не разрезать сущность «&amp;».
+                message_text += f"   {address_label} {html.escape(address)}\n"
                 message_text += f"   {created_label} {request.created_at.strftime('%d.%m.%Y')}\n"
                 if choice == "archive" and request.status == "Отменена" and request.notes:
                     # TASK 17 Этап C: Локализованная метка
                     reason_label = get_text("requests.cancellation_reason_label", language=lang) or "Причина отказа"
-                    message_text += f"   {reason_label} {request.notes}\n"
+                    message_text += f"   {reason_label} {html.escape(request.notes)}\n"
                 elif request.status == "Уточнение" and request.notes:
                     # TASK 17 Этап C: Локализованная метка
                     clarification_label = get_text("requests.clarification_label", language=lang) or "Уточнение"
@@ -336,7 +339,7 @@ async def handle_status_filter(callback: CallbackQuery, state: FSMContext):
                         preview = '\n'.join(last_messages)
                         if len(preview) > 100:
                             preview = preview[:97] + '...'
-                        message_text += f"   {clarification_label}: {preview}\n"
+                        message_text += f"   {clarification_label}: {html.escape(preview)}\n"
                 message_text += "\n"
 
         from uk_management_bot.keyboards.requests import get_pagination_keyboard

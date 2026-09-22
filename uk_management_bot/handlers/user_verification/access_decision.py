@@ -3,6 +3,7 @@
 AUD5-ARCH-3 (волна 11): перенос 1:1 из handlers/user_verification.py.
 """
 
+import html
 import logging
 
 from aiogram import F
@@ -55,8 +56,9 @@ async def manage_access_rights(callback: CallbackQuery, roles: list = None, lang
         name, current_rights = card
 
         # Формируем информацию о правах доступа
+        # A9-P2-2: имя из Telegram-профиля в HTML-сообщении — экранируем.
         rights_info = get_text("user_verification.handlers.access_rights_title", language=lang).format(
-            name=name,
+            name=html.escape(name),
             count=len(current_rights)
         )
 
@@ -64,11 +66,11 @@ async def manage_access_rights(callback: CallbackQuery, roles: list = None, lang
             for right in current_rights:
                 rights_info += f"• {right.level_value}"
                 if right.apartment_number:
-                    rights_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {right.apartment_number})"
+                    rights_info += f" ({get_text('user_verification.handlers.apt_short', language=lang)} {html.escape(str(right.apartment_number))})"
                 elif right.house_number:
-                    rights_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {right.house_number})"
+                    rights_info += f" ({get_text('user_verification.handlers.house_short', language=lang)} {html.escape(str(right.house_number))})"
                 elif right.yard_name:
-                    rights_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {right.yard_name})"
+                    rights_info += f" ({get_text('user_verification.handlers.yard_short', language=lang)} {html.escape(right.yard_name)})"
                 rights_info += "\n"
         else:
             rights_info += "• " + get_text("user_verification.handlers.no_access_rights", language=lang) + "\n"
