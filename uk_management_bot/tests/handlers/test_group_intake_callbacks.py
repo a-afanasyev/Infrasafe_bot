@@ -207,7 +207,10 @@ async def test_yes_creates_request_with_provenance(env, db):
     assert data["category"] == "electricity"
     assert data["address_type"] == "building"
     assert data["address_id"] == 5
-    assert data["media_files"] == ["photo123"]
+    # A9-P2-5: file_id группового бота в заявку не кладётся — основной бот
+    # его не отправит; фото уходит в media-service и пишется маркером media_id.
+    assert data["media_files"] == []
+    assert kwargs["foreign_media_file_ids"] == ["photo123"]
     assert data["source_chat_id"] == CHAT_ID
     assert data["source_message_id"] == 42
 

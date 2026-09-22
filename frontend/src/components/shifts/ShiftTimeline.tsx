@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import type { ShiftBrief } from '../../hooks/useShifts'
 import { useResizableColumn } from '../../hooks/useResizableColumn'
-import { formatTime } from '../../utils/timezone'
+import { formatTime, nowInDisplayTz } from '../../utils/timezone'
+import { isSameDay, shiftTypeColor } from '../../utils/shiftWeek'
 import { computeBlocks, type ShiftBlock } from './shiftTimelineBlocks'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
@@ -12,13 +13,6 @@ interface Props {
   shifts: ShiftBrief[]
   date: Date
   onShiftClick: (shift: ShiftBrief) => void
-}
-
-const SHIFT_TYPE_COLORS: Record<string, string> = {
-  regular: '#3b82f6',
-  emergency: '#ef4444',
-  overtime: '#f59e0b',
-  maintenance: '#8b5cf6',
 }
 
 function getInitials(name: string | null): string {
@@ -44,12 +38,15 @@ function getGradient(name: string | null): string {
 export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
-  const [currentHour, setCurrentHour] = useState(new Date().getHours())
+  // A9-P3-19 (класс ARCH-116): «сейчас» — стенка display-зоны, как и `date`
+  // (carrier), а не зона браузера. Храним carrier целиком: иначе переход через
+  // полночь не обновлял бы «сегодня».
+  const [wallNow, setWallNow] = useState(nowInDisplayTz)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentHour(new Date().getHours())
+      setWallNow(nowInDisplayTz())
     }, 60_000)
     return () => clearInterval(interval)
   }, [])
@@ -83,10 +80,8 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
   }
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
-  const isToday =
-    date.getFullYear() === new Date().getFullYear() &&
-    date.getMonth() === new Date().getMonth() &&
-    date.getDate() === new Date().getDate()
+  const isToday = isSameDay(date, wallNow)
+  const currentHour = wallNow.getHours()
 
   return (
     <div
@@ -167,8 +162,7 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                 style={{ gridColumn: '1 / -1' }}
               >
                 {blocks.map((block, idx) => {
-                  const color =
-                    SHIFT_TYPE_COLORS[block.shift.shift_type ?? 'regular'] ?? '#3b82f6'
+                  const color = shiftTypeColor(block.shift.shift_type)
                   const label =
                     block.shift.start_time && block.shift.end_time
                       ? `${formatTime(block.shift.start_time)} — ${formatTime(block.shift.end_time)}`

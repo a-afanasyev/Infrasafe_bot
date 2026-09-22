@@ -40,6 +40,7 @@ from access_control.api.registry import (
 )
 from access_control.services.action_rate_limit import enforce_resident_write_limit
 from access_control.services.code_rate_limit import get_failure_store
+from access_control.services.device_auth import resolve_client_ip
 from access_control.services.resident import (
     ApartmentNotOwned,
     DecisionNotFound,
@@ -81,11 +82,6 @@ _TEXT_MAX_LEN = 64
 
 # Типы пропусков, доступные жителю (§6.4). Совпадает с RESIDENT_PASS_TYPES сервиса.
 ResidentPassType = "taxi", "guest", "delivery"
-
-
-def _client_ip(request: Request) -> str | None:
-    """IP источника для audit (§6.4). Для пилота достаточно client.host."""
-    return request.client.host if request.client else None
 
 
 # ------------------------------ тела запросов ------------------------------
@@ -423,7 +419,7 @@ def post_toggle_spot_limit(
             actor_user_id=user.id,
             assignment_id=assignment_id,
             enabled=body.enabled,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except SpotAssignmentNotFound:
         raise HTTPException(
@@ -463,7 +459,7 @@ def post_request(
             apartment_id=body.apartment_id,
             plate_number_original=body.plate_number_original,
             relation_type=body.relation_type,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except ApartmentNotOwned as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -515,7 +511,7 @@ def post_pass(
             valid_from=body.valid_from,
             max_entries=body.max_entries,
             zone_id=body.zone_id,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except ApartmentNotOwned as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -557,7 +553,7 @@ def post_cancel_pass(
             db,
             actor_user_id=user.id,
             pass_id=pass_id,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except PassNotFound:
         raise HTTPException(
@@ -601,7 +597,7 @@ def post_confirm_entry(
             actor_user_id=user.id,
             decision_id=decision_id,
             response=body.response,
-            ip_address=_client_ip(request),
+            ip_address=resolve_client_ip(request),
         )
     except DecisionNotFound:
         raise HTTPException(

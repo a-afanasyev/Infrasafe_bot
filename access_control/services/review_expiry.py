@@ -18,7 +18,7 @@ from access_control.domain.enums import DecisionStatus, DecisionType
 from access_control.domain.events import AccessDecision
 from access_control.services.hashchain import next_hash
 from access_control.services.lifecycle import _write_audit
-from access_control.services.locks import advisory_xact_lock
+from access_control.services.locks import advisory_xact_lock, canonical_lock_key
 # AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
 # репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
 from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
@@ -74,8 +74,7 @@ def expire_due_reviews(db: Session, *, now: dt.datetime | None = None) -> int:
     # audit отдельно.
     due = db.execute(
         text(
-            "SELECT ad.id, b.id AS barrier_id, "
-            "       COALESCE(b.id, ce.gate_id, ce.controller_id) AS lock_key "
+            "SELECT ad.id, b.id AS barrier_id, ce.gate_id, ce.controller_id "
             "FROM access_decisions ad "
             "JOIN camera_events ce ON ce.id = ad.camera_event_id "
             "LEFT JOIN access_barriers b "
@@ -91,8 +90,8 @@ def expire_due_reviews(db: Session, *, now: dt.datetime | None = None) -> int:
     ).fetchall()
 
     expired_count = 0
-    for decision_id, barrier_id, lock_key in due:
-        advisory_xact_lock(db, lock_key)
+    for decision_id, barrier_id, gate_id, controller_id in due:
+        advisory_xact_lock(db, canonical_lock_key(barrier_id, gate_id, controller_id))
         # Повторная проверка под lock: решение всё ещё current и pending.
         current = _current_decision_if_pending(db, decision_id)
         if current is None:

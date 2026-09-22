@@ -7,7 +7,7 @@ import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { tCategory } from '../../../i18n/apiMaps'
 import { CATEGORIES, MAX_REQUEST_TEXT_LENGTH, URGENCIES } from '../../../constants'
-import { notifyError } from '../../utils/errors'
+import { getErrorMessage, notifyError } from '../../utils/errors'
 import { downscaleImage } from '../../utils/downscaleImage'
 import PhotoUploader from '../../components/PhotoUploader'
 import ElevatorStep from '../../components/ElevatorStep'
@@ -356,13 +356,7 @@ export default function CreatePage() {
       {createMutation.isError && underWorks && <ElevatorBlockedNotice info={underWorks} />}
       {createMutation.isError && !underWorks && (
         <div className="mt-3 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-[12px]">
-          {(() => {
-            const err = createMutation.error as { response?: { data?: { detail?: unknown } }; message?: string }
-            const detail = err?.response?.data?.detail
-            if (Array.isArray(detail)) return detail.map((d: { loc?: (string | number)[]; msg?: string }) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
-            if (typeof detail === 'string') return detail
-            return err?.message || t('common.error')
-          })()}
+          {getErrorMessage(createMutation.error, t('common.error'))}
         </div>
       )}
     </div>,

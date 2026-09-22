@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { getI18n } from 'react-i18next'
+import { apiErrorDetail } from '../../utils/errorMessage'
 
 // Текст по умолчанию — на текущем языке (инстанс, зарегистрированный initReactI18next).
 function genericErrorText(): string {
@@ -17,30 +18,12 @@ function genericErrorText(): string {
  *   4. fallback                            → caller-provided (по умолчанию — twa.errors.generic)
  */
 export function getErrorMessage(err: unknown, fallback = genericErrorText()): string {
-  const anyErr = err as {
-    response?: { data?: { detail?: unknown } }
-    message?: string
-  }
+  // A9-P3-20: разбор detail — единый канон utils/errorMessage.apiErrorDetail.
+  const detail = apiErrorDetail(err)
+  if (detail) return detail
 
-  const detail = anyErr?.response?.data?.detail
-
-  if (Array.isArray(detail)) {
-    return detail
-      .map((d: { loc?: (string | number)[]; msg?: string }) => {
-        const path = Array.isArray(d.loc) ? d.loc.filter((p) => p !== 'body').join('.') : ''
-        return path ? `${path}: ${d.msg ?? ''}` : (d.msg ?? '')
-      })
-      .filter(Boolean)
-      .join('; ')
-  }
-
-  if (typeof detail === 'string' && detail.trim()) {
-    return detail
-  }
-
-  if (anyErr?.message) {
-    return anyErr.message
-  }
+  const message = (err as { message?: unknown } | null)?.message
+  if (typeof message === 'string' && message) return message
 
   return fallback
 }

@@ -11,6 +11,8 @@
   gint:seen:{chat_id}:{message_id}        — dedup исходных сообщений (24h)
   gint:llm:{chat_id}                      — LLM-лимит на группу (окно 60s)
   gint:invite:{telegram_id}               — cooldown приглашений (1h)
+  gint:busy:{chat_id}                     — cooldown ответа при отказе лимитера на чат (60s)
+  gint:busy:{chat_id}:{telegram_id}       — то же на автора (5 min)
 """
 import json
 import logging
@@ -25,6 +27,7 @@ PAYLOAD_VERSION = 1
 CANDIDATE_TTL = 3600
 SEEN_TTL = 86400
 INVITE_COOLDOWN_TTL = 3600
+BUSY_AUTHOR_COOLDOWN_TTL = 300
 _LLM_WINDOW = 60
 _SOCKET_TIMEOUT = 3
 
@@ -164,6 +167,45 @@ async def mark_seen(chat_id: int, message_id: int) -> bool:
         )
     except Exception as e:
         logger.warning("group_intake: mark_seen failed: %s", type(e).__name__)
+        return False
+
+
+async def unmark_seen(chat_id: int, message_id: int) -> None:
+    """Снять dedup-метку: сообщение не обработано (отказ лимитера в тег-режиме),
+    его повтор/правка не должны считаться дублем. Best-effort."""
+    try:
+        await _get_client().delete(f"gint:seen:{chat_id}:{message_id}")
+    except Exception as e:
+        logger.warning("group_intake: unmark_seen failed: %s", type(e).__name__)
+
+
+# Оба ключа проверяются и ставятся одной операцией: параллельные авторы не
+# должны проскочить между проверкой чата и записью.
+_BUSY_NOTICE_LUA = """
+if redis.call('EXISTS', KEYS[1]) == 1 or redis.call('EXISTS', KEYS[2]) == 1 then
+  return 0
+end
+redis.call('SET', KEYS[1], '1', 'EX', ARGV[1])
+redis.call('SET', KEYS[2], '1', 'EX', ARGV[2])
+return 1
+"""
+
+
+async def busy_notice_allowed(chat_id: int, telegram_id: int) -> bool:
+    """Cooldown ответа «классификатор недоступен» при отказе лимитера.
+
+    Не больше одного ответа в чат за окно лимитера (исчерпанный лимит группы
+    = флуд; ответ каждому автору превратил бы бота в источник того же флуда)
+    и не чаще раза в BUSY_AUTHOR_COOLDOWN_TTL одному автору."""
+    try:
+        result = await _get_client().eval(
+            _BUSY_NOTICE_LUA, 2,
+            f"gint:busy:{chat_id}", f"gint:busy:{chat_id}:{telegram_id}",
+            _LLM_WINDOW, BUSY_AUTHOR_COOLDOWN_TTL,
+        )
+        return result == 1
+    except Exception as e:
+        logger.warning("group_intake: busy_notice_allowed failed: %s", type(e).__name__)
         return False
 
 

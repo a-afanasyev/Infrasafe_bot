@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
+import { act } from 'react'
 import { render, screen } from '../../test/test-utils'
 import { AddressCascade } from './AddressCascade'
 
@@ -59,6 +60,33 @@ describe('AddressCascade', () => {
     expect(screen.getByRole('button', { name: '10' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '100' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '101' })).toBeInTheDocument()
+  })
+
+  // A9-P2-30: `alive` проверялся только перед setError — поздний ответ по дому A
+  // перезаписывал квартиры уже выбранного дома B.
+  it('поздний ответ по прежнему дому не перезаписывает квартиры нового', async () => {
+    const a = api()
+    a.buildings.mockResolvedValue([{ id: 5, address: 'Дом A' }, { id: 6, address: 'Дом B' }])
+    const pending: Record<number, (v: { id: number; apartment_number: string }[]) => void> = {}
+    a.apartments.mockImplementation(
+      (_t: string, buildingId: number) => new Promise((resolve) => { pending[buildingId] = resolve }),
+    )
+    const user = userEvent.setup()
+    render(<AddressCascade ticket="t" api={a} onSelect={vi.fn()} />)
+
+    await user.click(await screen.findByRole('button', { name: /Olmazor/ }))
+    await user.click(await screen.findByRole('button', { name: /Дом A/ }))
+    await user.click(screen.getByRole('button', { name: 'Назад' }))
+    await user.click(await screen.findByRole('button', { name: /Дом B/ }))
+    expect(a.apartments).toHaveBeenCalledTimes(2)
+
+    // Ответы в обратном порядке: сначала B (актуальный), потом A (устаревший).
+    await act(async () => { pending[6]([{ id: 60, apartment_number: 'B-1' }]) })
+    expect(await screen.findByRole('button', { name: 'B-1' })).toBeInTheDocument()
+    await act(async () => { pending[5]([{ id: 50, apartment_number: 'A-1' }]) })
+
+    expect(screen.queryByRole('button', { name: 'A-1' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'B-1' })).toBeInTheDocument()
   })
 
   it('пустой список показывает сообщение', async () => {

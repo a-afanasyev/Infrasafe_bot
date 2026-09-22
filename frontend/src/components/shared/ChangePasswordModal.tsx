@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiClient } from '@/api/client'
+import { apiErrorDetail, safeErrorMessage } from '@/utils/errorMessage'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'sonner'
 
@@ -77,7 +78,8 @@ export default function ChangePasswordModal({ open, onClose }: Props) {
       toast.success(t('changePassword.success'))
       handleClose()
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      // A9-P3-20: detail может быть массивом 422 — в JSX только через канон.
+      const detail = apiErrorDetail(e)
       if (detail === 'current_password_required') {
         // Safety net: has_password flag was stale — reveal the field.
         setShowCurrent(true)
@@ -85,7 +87,7 @@ export default function ChangePasswordModal({ open, onClose }: Props) {
       } else if (detail === 'current_password_invalid') {
         setError(t('changePassword.currentInvalid'))
       } else {
-        setError(detail ?? t('changePassword.genericError'))
+        setError(safeErrorMessage(e, t('changePassword.genericError')))
       }
     } finally {
       setLoading(false)
