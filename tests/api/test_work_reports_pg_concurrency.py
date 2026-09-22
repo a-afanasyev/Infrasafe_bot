@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -39,6 +40,7 @@ from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.board_config import BoardConfig
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.work_report import WorkReport
@@ -58,6 +60,9 @@ _TABLES = [
     Yard.__table__,
     Building.__table__,
     Apartment.__table__,
+    # requests.elevator_id → elevators.id (миграция 017): без таблицы create_all
+    # падает UndefinedTable, и сюита годами бы скипалась как «PG недоступен».
+    Elevator.__table__,
     Request.__table__,
     WorkReport.__table__,
     AuditLog.__table__,
@@ -65,6 +70,9 @@ _TABLES = [
 ]
 
 REQUEST_NUMBER = "260725-800"
+
+
+_PG_UNREACHABLE = (OSError, sa_exc.OperationalError, sa_exc.InterfaceError)
 
 
 def _pg_url() -> str | None:
@@ -90,7 +98,10 @@ async def pg_factory():
             await conn.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
             await conn.execute(text(f'CREATE SCHEMA "{SCHEMA}"'))
             await conn.run_sync(lambda sc: Base.metadata.create_all(sc, tables=_TABLES))
-    except Exception as exc:  # pragma: no cover — хост без доступного PG
+    # A9-P2-18: skip — только если PG недоступен (сеть/аутентификация). Ошибка
+    # СХЕМЫ (нет таблицы под FK — так сюита молча скипалась в CI после
+    # миграции 017 «Лифты») обязана ронять тест, а не прятаться в skip.
+    except _PG_UNREACHABLE as exc:  # pragma: no cover — хост без доступного PG
         await engine.dispose()
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 
@@ -431,3 +442,83 @@ async def test_autopublish_stuck_in_network_does_not_block_publish(pg_factory):
         )).scalar_one()
     assert row.status == "published"
     assert row.locked_media_ids == [1, 10], "батч не должен трогать опубликованный состав"
+
+
+# ===========================================================================
+# (д) A9-P2-18: autofill против publish — тот же TOCTOU, второй гард
+# ===========================================================================
+
+
+class GatedAutofillMediaClient(FakeMediaClient):
+    """media_client ручки autofill: отдаёт ДРУГОЙ состав ([2]/[11]), чем лежит в
+    отчёте ([1]/[10]), и замирает в сетевой фазе до `release` (с таймаутом —
+    см. докстринг теста (в): с корректным локом publish ждёт autofill, и
+    безусловное ожидание дало бы взаимную блокировку)."""
+
+    def __init__(self, release: asyncio.Event):
+        super().__init__()
+        self._release = release
+
+    async def get_request_media(self, request_number, category=None, limit=50):
+        import contextlib
+
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._release.wait(), timeout=2.0)
+        return {
+            "request_photo": [_photo(2)],
+            "completion_photo": [_photo(11)],
+        }.get(category, [])
+
+
+@pytest.mark.asyncio
+async def test_concurrent_autofill_and_publish_keep_frozen_media_consistent(
+    pg_factory, monkeypatch
+):
+    """`POST /{id}/autofill` держит сеть (media-service) между проверкой статуса
+    и записью состава — то же окно, что у PATCH закрыто `with_for_update()`.
+    Вызываем НАСТОЯЩИЙ обработчик; publish стартует, когда autofill уже прочитал
+    строку. Без row-lock publish проходил бы целиком внутри окна, а autofill
+    затем переписывал состав ОПУБЛИКОВАННОГО отчёта: наружу — id без
+    publication-lock. Проверено: с `locked_report` без `with_for_update()` тест
+    красный.
+    """
+    from uk_management_bot.api.work_reports import router as wr_router
+
+    await _seed_request(pg_factory)
+    report_id = await _mk_report(pg_factory, before=[1], after=[10])
+
+    publish_done = asyncio.Event()
+    monkeypatch.setattr(
+        wr_router, "get_media_client", lambda: GatedAutofillMediaClient(publish_done)
+    )
+    user = type("U", (), {"id": None})()
+
+    async def _autofill():
+        async with pg_factory() as db:
+            return await wr_router.autofill_one(report_id, db, user)
+
+    async def _publish():
+        await asyncio.sleep(0.05)  # autofill первым читает строку
+        try:
+            async with pg_factory() as db:
+                return await publish_report(db, FakeMediaClient(), report_id, moderator_id=None)
+        finally:
+            publish_done.set()
+
+    results = await asyncio.gather(_autofill(), _publish(), return_exceptions=True)
+
+    async with pg_factory() as db:
+        row = (await db.execute(
+            select(WorkReport).where(WorkReport.id == report_id)
+        )).scalar_one()
+
+    served = set(row.before_media_ids) | set(row.after_media_ids)
+    assert row.status == "published", results
+    assert served == set(row.locked_media_ids), (
+        f"опубликован состав {served}, залочен {set(row.locked_media_ids)} — "
+        "autofill переписал состав опубликованного отчёта"
+    )
+    assert served == {m["id"] for m in row.media_meta}
+    # Лок сериализовал: autofill закоммитил первым, publish заморозил ЕГО состав.
+    assert served == {2, 11}
+    assert not [r for r in results if isinstance(r, Exception)], results

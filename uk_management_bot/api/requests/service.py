@@ -24,6 +24,7 @@ from uk_management_bot.api.dependencies import _parse_user_roles
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.config.settings import settings
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.request_comment import RequestComment
@@ -306,7 +307,6 @@ async def persist_request(
     category: str,
     urgency: str,
     description: str,
-    media_files: Optional[list],
     source: str,
     resolved: ResolvedAddress,
     webhook_tag: str,
@@ -362,7 +362,9 @@ async def persist_request(
             address_type=resolved.address_type,
             status="Новая",
             source=source,
-            media_files=media_files or [],
+            # A9-P2-11: вход API фото не принимает — фото идут через
+            # media_proxy маркером {"media_id", "type"}.
+            media_files=[],
             elevator_id=binding.elevator_id,
             elevator_operational=binding.elevator_operational,
         )
@@ -438,15 +440,48 @@ async def assignments_for(
     )
 
 
+# Потолок одного значения в details аудита: старое значение могло попасть в БД
+# в обход лимитов API (бот пишет напрямую), а audit_logs не должен разрастаться
+# на копиях длинных текстов.
+AUDIT_VALUE_MAX_LEN = 2000
+
+
+def _audit_value(value):
+    """Значение для details аудита; длинная строка усекается с маркером `…[+N]`."""
+    if isinstance(value, str) and len(value) > AUDIT_VALUE_MAX_LEN:
+        return f"{value[:AUDIT_VALUE_MAX_LEN]}…[+{len(value) - AUDIT_VALUE_MAX_LEN}]"
+    return value
+
+
 async def apply_request_edits(
-    db: AsyncSession, req: RequestModel, updates: dict
+    db: AsyncSession, req: RequestModel, updates: dict, *, actor: User
 ) -> list[str]:
-    """Прямые правки не-workflow полей: setattr + commit. → изменившиеся поля."""
+    """Прямые правки не-workflow полей: setattr + audit + commit. → изменившиеся поля.
+
+    A9-P3-13: правка пишет `audit_logs` (action `request_fields_edited`, старое и
+    новое значение каждого изменившегося поля) в той же транзакции — раньше
+    менеджер/исполнитель меняли заявку без следа. No-op правка аудит не пишет.
+    """
     old_values = {f: getattr(req, f) for f in updates}
     for field, value in updates.items():
         setattr(req, field, value)
     changed = [f for f in updates if old_values[f] != getattr(req, f)]
 
+    if changed:
+        db.add(AuditLog(
+            user_id=actor.id,
+            telegram_user_id=actor.telegram_id,
+            action="request_fields_edited",
+            details={
+                "request_number": req.request_number,
+                "status": req.status,
+                "fields": {
+                    f: {"old": _audit_value(old_values[f]),
+                        "new": _audit_value(getattr(req, f))}
+                    for f in changed
+                },
+            },
+        ))
     await db.commit()
     await db.refresh(req)
     return changed
@@ -472,7 +507,6 @@ async def create_comment(
     user_id: int,
     text: str,
     is_internal: bool,
-    media_files: Optional[list],
 ) -> RequestComment:
     comment = RequestComment(
         request_number=request_number,
@@ -480,7 +514,7 @@ async def create_comment(
         comment_type="clarification",
         comment_text=text,
         is_internal=is_internal,
-        media_files=media_files or [],
+        media_files=[],
     )
     db.add(comment)
     await db.commit()

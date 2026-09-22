@@ -17,6 +17,7 @@ import os
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -27,6 +28,9 @@ from uk_management_bot.database.session import Base
 
 SCHEMA = "a9_media_marker_test"
 RN = "260922-801"
+
+
+_PG_UNREACHABLE = (OSError, sa_exc.OperationalError, sa_exc.InterfaceError)
 
 
 def _pg_url() -> str | None:
@@ -52,7 +56,9 @@ async def pg_factory():
             await conn.execute(text(f'DROP SCHEMA IF EXISTS "{SCHEMA}" CASCADE'))
             await conn.execute(text(f'CREATE SCHEMA "{SCHEMA}"'))
             await conn.run_sync(lambda sc: Base.metadata.create_all(sc, checkfirst=True))
-    except Exception as exc:  # pragma: no cover - host without reachable PG
+    # A9-P2-18: skip — только если PG недоступен (сеть/аутентификация). Ошибка
+    # СХЕМЫ обязана ронять тест, а не прятаться в skip «PG недоступен».
+    except _PG_UNREACHABLE as exc:  # pragma: no cover - host without reachable PG
         await engine.dispose()
         pytest.skip(f"PostgreSQL unreachable: {exc}")
 
