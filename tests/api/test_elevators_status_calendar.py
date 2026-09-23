@@ -177,9 +177,32 @@ async def test_status_saved_even_if_notification_sender_crashes(client: AsyncCli
     with caplog.at_level("ERROR", logger=api_service.__name__):
         resp = await client.put(f"{BASE}/{eid}/status", json={"status": "under_repair"})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["changed"] is True and resp.json()["notified_residents"] == 0
+    # A9-P2-8(d): рассылка — в BackgroundTasks, в ответе число ПОСТАВЛЕННЫХ
+    # в очередь (1 житель подъезда); сбой рассылки ответ уже не меняет.
+    assert resp.json()["changed"] is True and resp.json()["notified_residents"] == 1
     assert (await client.get(f"{BASE}/{eid}")).json()["current_status"] == "under_repair"
     assert "RuntimeError" in caplog.text and "SECRET" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_status_resident_broadcast_runs_after_response(
+    client: AsyncClient, seeded, monkeypatch, asgi_call,
+):
+    """A9-P2-8(d): рассылка жителям подъезда не держит PUT — ответ уходит до
+    первой отправки (раньше сотня жителей последовательно → 504 edge)."""
+    eid = (await _commissioned(client))["id"]
+    log: list = []
+
+    async def slow_send(messages, **_kwargs):
+        log.append("notify")
+        return len(list(messages))
+
+    monkeypatch.setattr(api_service, "send_plain_messages", slow_send)
+    status, body = await asgi_call("PUT", f"{BASE}/{eid}/status", log,
+                                   json={"status": "under_repair"})
+    assert status == 200, body
+    assert body["changed"] is True and body["notified_residents"] == 1
+    assert log == ["response", "notify"], log
 
 
 @pytest.mark.asyncio

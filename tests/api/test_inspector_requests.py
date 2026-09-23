@@ -373,7 +373,7 @@ async def test_callcenter_create_auto_dispatches_group(make_client, manager_user
     import uk_management_bot.services.dispatch as dispatch_mod
     calls = []
 
-    async def fake_dispatch(request_number, category):
+    async def fake_dispatch(request_number, category, **_kwargs):
         calls.append((request_number, category))
 
     monkeypatch.setattr(dispatch_mod, "auto_dispatch_new_request_async", fake_dispatch)

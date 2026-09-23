@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from uk_management_bot.constants.categories import get_specialization_for_category
 from uk_management_bot.utils.request_workflow import (
@@ -220,8 +220,17 @@ def auto_dispatch_new_request_sync(request_number: str,
 async def auto_dispatch_new_request_async(request_number: str,
                                           category: Optional[str],
                                           *, _db=None,
-                                          session_factory=None) -> DispatchResult:
-    """API/TWA/обходчик: то же, что sync-путь, плюс realtime для канбана."""
+                                          session_factory=None,
+                                          schedule_notify: Optional[Callable[..., Any]] = None,
+                                          ) -> DispatchResult:
+    """API/TWA/обходчик: то же, что sync-путь, плюс realtime для канбана.
+
+    ``schedule_notify`` (A9-P2-7) — отложить уведомление о назначении: HTTP-
+    ручка передаёт ``BackgroundTasks.add_task``, и Telegram уходит ПОСЛЕ ответа
+    (медленный Telegram больше не превращает созданную заявку в 504 edge).
+    Без него уведомление отправляется здесь же (прежнее поведение
+    вызывающих, у которых нет BackgroundTasks).
+    """
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
@@ -257,11 +266,13 @@ async def auto_dispatch_new_request_async(request_number: str,
         return DispatchResult("failed", spec)
     if executor_id is not None:
         await _publish_status_changed(outcome, request_number)
-        from uk_management_bot.services.workflow_notifications import (
-            dispatch_notify_intents_detached,
-        )
+        from uk_management_bot.services import workflow_notifications
+        if schedule_notify is not None:
+            schedule_notify(workflow_notifications.dispatch_notify_intents_detached,
+                            request_number, outcome.post_commit_intents)
+            return DispatchResult("assigned", spec, executor_id)
         try:
-            await dispatch_notify_intents_detached(
+            await workflow_notifications.dispatch_notify_intents_detached(
                 request_number, outcome.post_commit_intents)
         except Exception as e:  # уведомление не вправе ронять назначение
             logger.warning("[DISPATCH] уведомление о назначении %s пропущено: %s",

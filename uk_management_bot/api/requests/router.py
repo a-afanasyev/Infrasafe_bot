@@ -8,6 +8,7 @@ AST-гейт `tests/api/test_requests_router_inventory.py` держит прям
 роутера на нуле.
 """
 
+import html
 import logging
 from typing import Optional
 from fastapi import (
@@ -276,6 +277,7 @@ async def get_request(
 async def create_request(
     request: Request,
     body: CreateRequestBody,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_approved_roles("applicant")),
 ):
@@ -305,6 +307,8 @@ async def create_request(
             elevator_operational=body.elevator_operational,
             # Р18: подпись лифта в теле 409 — на языке жителя, как и карточка.
             language=card_language(user),
+            # A9-P2-7: уведомление о назначении — после ответа, не в запросе.
+            schedule_notify=background.add_task,
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)
@@ -316,6 +320,7 @@ async def create_request(
 async def create_inspector_request(
     request: Request,
     body: CreateInspectorRequestBody,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_approved_roles("inspector")),
 ):
@@ -344,6 +349,7 @@ async def create_inspector_request(
             # «В ремонте»/«На ТО» на него не распространяется.
             allow_under_works=True,
             language=card_language(user),
+            schedule_notify=background.add_task,
         )
     except ElevatorValidationError as exc:
         raise elevator_http_error(exc)
@@ -767,6 +773,14 @@ async def remind_applicant(
     db: AsyncSession = Depends(get_db),
 ):
     """Send a Telegram reminder to the applicant to accept a completed request."""
+    # A9-P2-8(a): отправка — через общий `api/telegram_send` и ПОСЛЕ закрытия
+    # сессии запроса (раньше aiogram-вызов шёл при открытой транзакции, а 403
+    # «житель заблокировал бота» превращался в 500). Вердикт доставки → ответ
+    # менеджеру той же точкой, что у запроса номера (`raise_unless_delivered`):
+    # blocked/no_chat → 409 с объяснением, прочий отказ Telegram → 502.
+    from uk_management_bot.api import telegram_send
+    from uk_management_bot.api.users.phone_request import raise_unless_delivered
+
     req = await svc.request_by_number(db, request_number)
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -777,18 +791,18 @@ async def remind_applicant(
     if not applicant or not getattr(applicant, "telegram_id", None):
         raise HTTPException(status_code=404, detail="Applicant has no Telegram account")
 
-    try:
-        from uk_management_bot.services.notification_service import _get_shared_bot
-        bot = _get_shared_bot()
-        text = (
-            f"🔔 <b>Напоминание о приёмке</b>\n\n"
-            f"Заявка <code>{req.request_number}</code> — <b>{req.category}</b>\n"
-            f"выполнена и ожидает вашей приёмки.\n\n"
-            f"Пожалуйста, проверьте выполненную работу и подтвердите через приложение."
-        )
-        await bot.send_message(chat_id=applicant.telegram_id, text=text, parse_mode="HTML")
-        return {"ok": True}
-    except Exception as e:
-        # COD-07: не раскрывать детали исключения в теле ответа (info-leak).
-        logger.error(f"remind_applicant: не удалось отправить напоминание: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send reminder")
+    chat_id = applicant.telegram_id
+    text = (
+        f"🔔 <b>Напоминание о приёмке</b>\n\n"
+        f"Заявка <code>{html.escape(req.request_number)}</code> — "
+        f"<b>{html.escape(req.category or '')}</b>\n"
+        f"выполнена и ожидает вашей приёмки.\n\n"
+        f"Пожалуйста, проверьте выполненную работу и подтвердите через приложение."
+    )
+    # Только чтение — закрыть сессию (соединение в пул) до сетевого вызова.
+    await db.close()
+
+    # 403 → users.bot_blocked_at пишет модуль отправки своей короткой сессией.
+    result = await telegram_send.send_message(chat_id, text, parse_mode="HTML")
+    raise_unless_delivered(result.status)
+    return {"ok": True}
