@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **574**
-- закрыто маркером: **538**
-- открыто маркером: **36**
+- закрыто маркером: **545**
+- открыто маркером: **29**
 
-  - `actionable` — **23**
+  - `actionable` — **16**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=9, P3=14.
+Из них actionable по приоритету: P2=5, P3=11.
 
 Значения `status`:
 
@@ -55,8 +55,6 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
-| `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
 | `A9-P3-31` | P3 | actionable | found-2026-09-23 | AUD9-W4 | — | bot, api | — | `change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
 | `A9-P3-29` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, edge | — | Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента |
@@ -65,13 +63,8 @@
 | `A9-P2-31` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W6 | — | frontend, TWA, bot | — | RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта |
 | `A9-P3-21` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient` |
 | `A9-P3-22` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI |
-| `A9-P2-19` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | образы bot/api/media, CI | — | Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями |
 | `A9-P2-20` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | все сервисы, деплой | — | CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста |
 | `A9-P2-21` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | media-service, CI | — | media: нет версионированных миграций и дрейф-гейта |
-| `A9-P2-22` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W7 | — | CI, dev | — | black/isort объявлены в pre-commit, но не соблюдаются |
-| `A9-P3-24` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | CI | — | mypy только на боте; `[tool.mypy]` resource никогда не запускается |
-| `A9-P3-25` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | CI | — | payment-control CI: тест-инструменты без пинов, path-фильтр |
-| `A9-P3-26` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | compose, образы | — | postgres/redis без digest; лишнее в образах сателлитов |
 | `A9-P3-27` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | доки | — | README и ARCHITECTURE отстают от кода; устаревшие комментарии CI |
 | `A9-P2-10` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api | — | Доменный справочник категорий лежит в UI-слое `keyboards/requests.py` |
 | `A9-P2-24` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | media-service, bot | — | Чистка: ~40% media_service — SDK и эндпоинты без потребителей |

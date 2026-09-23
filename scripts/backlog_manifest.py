@@ -371,8 +371,8 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-31": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot, api", note="`change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление"),
     "A9-P3-30": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, мониторинг хостов", note="Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler"),
     "A9-P3-29": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, edge", note="Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента"),
-    "A9-P2-33": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа"),
-    "A9-P2-32": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается"),
+    # A9-P2-33 закрыт 2026-09-23 (PR #615).
+    # A9-P2-32 закрыт 2026-09-23 (PR #615).
     # A9-P1-1 закрыт 2026-09-23 (PR #598).
     # A9-P1-2 закрыт 2026-09-23 (PR #599).
     # A9-P1-3 закрыт 2026-09-23 (PR #596).
@@ -394,10 +394,10 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-16 закрыт 2026-09-23 (PR #611).
     # A9-P2-17 закрыт 2026-09-23 (PR #604).
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
-    "A9-P2-19": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="образы bot/api/media, CI", note="Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями"),
+    # A9-P2-19 закрыт 2026-09-23 (PR #613).
     "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
     "A9-P2-21": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="media-service, CI", note="media: нет версионированных миграций и дрейф-гейта"),
-    "A9-P2-22": A(pkg="AUD9-W7", status="actionable", method="owner-decision-2026-09-23", services="CI, dev", note="black/isort объявлены в pre-commit, но не соблюдаются"),
+    # A9-P2-22 закрыт 2026-09-23 (PR #613).
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
     # A9-P2-25 закрыт 2026-09-23 (PR #612).
@@ -430,9 +430,9 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-21": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient`"),
     "A9-P3-22": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI"),
     # A9-P3-23 закрыт 2026-09-23 (PR #611).
-    "A9-P3-24": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="CI", note="mypy только на боте; `[tool.mypy]` resource никогда не запускается"),
-    "A9-P3-25": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="CI", note="payment-control CI: тест-инструменты без пинов, path-фильтр"),
-    "A9-P3-26": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="compose, образы", note="postgres/redis без digest; лишнее в образах сателлитов"),
+    # A9-P3-24 закрыт 2026-09-23 (PR #613).
+    # A9-P3-25 закрыт 2026-09-23 (PR #613).
+    # A9-P3-26 закрыт 2026-09-23 (PR #613).
     "A9-P3-27": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="доки", note="README и ARCHITECTURE отстают от кода; устаревшие комментарии CI"),
     "A9-P3-28": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="репо, доки", note="Чистка: исторические отчёты в корне и ~23 тыс. строк россыпи в корне `docs/`"),
 }
