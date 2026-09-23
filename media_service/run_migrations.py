@@ -39,6 +39,10 @@ def apply_migrations(conn: Connection) -> int:
 
 
 def main() -> None:
+    if not any(MIGRATIONS_DIR.glob("*.sql")):
+        # Как до выноса apply_migrations: без файлов к БД не подключаемся.
+        logger.warning("No migration files found in %s", MIGRATIONS_DIR)
+        return
     with engine.begin() as conn:
         applied = apply_migrations(conn)
     logger.info("Applied %d migration file(s)", applied)

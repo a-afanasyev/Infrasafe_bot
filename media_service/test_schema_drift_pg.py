@@ -147,14 +147,20 @@ def _fresh_snapshot(metadata: MetaData, schema: str) -> Snapshot:
         engine.dispose()
 
 
-def _upgrade_snapshot(metadata: MetaData, schema: str) -> Snapshot:
-    """Порядок прода: media-migrate ДО старта сервиса (create_all в init_db)."""
+def _upgrade_snapshot(metadata: MetaData, schema: str, tamper_sql: str | None = None) -> Snapshot:
+    """Порядок прода: media-migrate ДО старта сервиса (create_all в init_db).
+
+    `tamper_sql` — только для самопроверки гейта: ручная правка БД перед снимком.
+    """
     engine = _reset_schema(schema)
     try:
         with engine.begin() as conn:
             conn.execute(text(BASELINE_SQL.read_text()))
             apply_migrations(conn)
         metadata.create_all(bind=engine)
+        if tamper_sql:
+            with engine.begin() as conn:
+                conn.execute(text(tamper_sql))
         return _snapshot(engine, schema)
     finally:
         engine.dispose()
@@ -208,3 +214,15 @@ def test_gate_catches_model_column_without_migration(pg_schema):
     actual = _upgrade_snapshot(mutated, pg_schema("probe_upgrade"))
     problems = _diff(expected, actual, allow_extra=ORPHAN_TABLES)
     assert any("media_files.drift_probe" in p for p in problems), problems
+
+
+def test_gate_catches_db_column_without_model(pg_schema):
+    """Самопроверка гейта в обратную сторону: колонка только в БД обязана дать дрейф."""
+    expected = _models_snapshot(Base.metadata, pg_schema("probe_db_ref"))
+    actual = _upgrade_snapshot(
+        Base.metadata,
+        pg_schema("probe_db_upgrade"),
+        tamper_sql="ALTER TABLE media_files ADD COLUMN extra_probe INTEGER",
+    )
+    problems = _diff(expected, actual, allow_extra=ORPHAN_TABLES)
+    assert any("media_files.extra_probe" in p for p in problems), problems
