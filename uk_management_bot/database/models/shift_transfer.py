@@ -84,18 +84,6 @@ class ShiftTransfer(Base):
         """Проверяет, активна ли передача (не завершена и не отменена)"""
         return self.status in ["pending", "assigned", "accepted"]
 
-    @property
-    def can_retry(self) -> bool:
-        """Проверяет, можно ли повторить попытку назначения"""
-        return self.retry_count < self.max_retries
-
-    @property
-    def time_since_created(self) -> int:
-        """Возвращает количество минут с момента создания"""
-        if not self.created_at:
-            return 0
-        return int((_utcnow() - self.created_at).total_seconds() / 60)
-
     def can_be_assigned_to(self, user_id: int) -> bool:
         """Проверяет, можно ли назначить передачу указанному пользователю"""
         # Нельзя назначить самому себе

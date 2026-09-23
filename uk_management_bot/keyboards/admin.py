@@ -36,17 +36,6 @@ def get_completed_requests_submenu(language: str = "ru") -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
-def get_manager_requests_inline(page: int, total_pages: int, language: str = "ru") -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    if page > 1:
-        builder.add(InlineKeyboardButton(text="◀️", callback_data=f"mreq_page_{page-1}"))
-    builder.add(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="mreq_page_curr"))
-    if page < total_pages:
-        builder.add(InlineKeyboardButton(text="▶️", callback_data=f"mreq_page_{page+1}"))
-    builder.adjust(3)
-    return builder.as_markup()
-
-
 def _status_icon(status: str) -> str:
     """Return status emoji from the centralised STATUS_EMOJI mapping."""
     return STATUS_EMOJI.get(status, "📋")

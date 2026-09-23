@@ -92,47 +92,6 @@ def get_onboarding_completion_keyboard(language: str = "ru") -> ReplyKeyboardMar
         one_time_keyboard=False
     )
 
-def get_document_type_inline_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    """
-    Создает inline клавиатуру для выбора типа документа
-
-    Args:
-        language: Язык интерфейса
-
-    Returns:
-        InlineKeyboardMarkup с кнопками типов документов
-    """
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.passport", language=language),
-                callback_data="doc_type_passport"
-            ),
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.property_deed", language=language),
-                callback_data="doc_type_property_deed"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.rental_agreement", language=language),
-                callback_data="doc_type_rental_agreement"
-            ),
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.other_documents", language=language),
-                callback_data="doc_type_other"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.skip_documents", language=language),
-                callback_data="doc_type_skip"
-            )
-        ]
-    ]
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 def get_document_management_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """
     Создает inline клавиатуру для управления документами

@@ -161,10 +161,6 @@ BASELINE: set[tuple[str, str, str]] = {
     # status-preserving переносом при reassign смены (набор-фильтр, не переход).
     ('uk_management_bot/api/shifts/service/web_transfers.py', 'cmp:req', 'status'),
     # одноразовый migration-скрипт (write-гейт уже фиксирует его update())
-    # FALSE-POSITIVE/вне scope (подтверждено PR2-pre/2): self.request.status in
-    # ["completed","cancelled"] (shift_assignment.py:212) — non-canon значения,
-    # подсистема смен (вне scope), фактически всегда False.
-    ('uk_management_bot/database/models/shift_assignment.py', 'cmp:request', 'status'),
     # FALSE-POSITIVE (подтверждено PR2-pre/2): r = resident (UserApartment),
     # status 'approved'/'pending'/'rejected' (show_apartment_residents).
     # AUD5-ARCH-3 волна 3: address_apartments.py разбит на пакет — сайт

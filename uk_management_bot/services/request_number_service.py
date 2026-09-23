@@ -230,28 +230,3 @@ class RequestNumberService:
         # Например: "№250917-001 (17.09.2025)"
         date_str = parsed["date"].strftime("%d.%m.%Y")
         return f"№{request_number} ({date_str})"
-    
-    def check_number_availability(self, request_number: str) -> bool:
-        """
-        Проверяет доступность номера заявки
-        
-        Args:
-            request_number: Номер для проверки
-            
-        Returns:
-            True если номер доступен
-        """
-        if not self.validate_request_number_format(request_number):
-            return False
-        
-        try:
-            result = self.db.execute(
-                text("SELECT 1 FROM requests WHERE request_number = :number LIMIT 1"),
-                {"number": request_number}
-            ).fetchone()
-            
-            return result is None  # Доступен если не найден
-            
-        except Exception as e:
-            logger.error(f"Error checking number availability: {e}")
-            return False

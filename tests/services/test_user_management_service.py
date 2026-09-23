@@ -6,15 +6,11 @@ Covers:
 - get_employee_stats
 - get_residents_by_status / get_users_by_status
 - get_staff_users
-- search_users
 - get_user_by_id
 - format_user_info (detailed, brief)
 - _format_user_roles / _format_user_specializations
 - format_stats_message
-- is_user_staff / is_user_employee
-- get_user_role_list
 - get_employees_list (various list_type values)
-- search_employees
 """
 import pytest
 from unittest.mock import MagicMock, patch
@@ -165,39 +161,6 @@ class TestGetStaffUsers:
     def test_exception_returns_empty(self):
         self.db.query.side_effect = Exception("fail")
         result = self.svc.get_staff_users()
-        assert result["users"] == []
-
-
-# ===== search_users =====
-
-class TestSearchUsers:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_search_with_query(self):
-        user = _FakeUser(first_name="Ахмед")
-        _mock_query_chain(self.db, count_val=1, all_val=[user])
-        result = self.svc.search_users(query="Ахмед")
-        assert result["total"] == 1
-        assert result["query"] == "Ахмед"
-
-    def test_search_with_filters(self):
-        _mock_query_chain(self.db, count_val=0)
-        result = self.svc.search_users(
-            filters={"status": "approved", "role": "executor"}
-        )
-        assert result["total"] == 0
-        assert result["filters"]["status"] == "approved"
-
-    def test_search_empty_query(self):
-        _mock_query_chain(self.db, count_val=0)
-        result = self.svc.search_users(query="   ")
-        assert result["total"] == 0
-
-    def test_search_exception(self):
-        self.db.query.side_effect = Exception("fail")
-        result = self.svc.search_users(query="test")
         assert result["users"] == []
 
 
@@ -362,82 +325,6 @@ class TestFormatStatsMessage:
         assert "42" in result
 
 
-# ===== is_user_staff / is_user_employee =====
-
-class TestIsUserStaff:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_executor_is_staff(self):
-        user = _FakeUser(roles='["executor"]')
-        assert self.svc.is_user_staff(user) is True
-
-    def test_manager_is_staff(self):
-        user = _FakeUser(roles='["manager"]')
-        assert self.svc.is_user_staff(user) is True
-
-    def test_applicant_is_not_staff(self):
-        user = _FakeUser(roles='["applicant"]')
-        assert self.svc.is_user_staff(user) is False
-
-    def test_no_roles_is_not_staff(self):
-        user = _FakeUser(roles=None)
-        assert self.svc.is_user_staff(user) is False
-
-    def test_invalid_json_is_not_staff(self):
-        user = _FakeUser(roles="not-json")
-        assert self.svc.is_user_staff(user) is False
-
-
-class TestIsUserEmployee:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_executor_is_employee(self):
-        user = _FakeUser(roles='["executor"]')
-        assert self.svc.is_user_employee(user) is True
-
-    def test_applicant_is_not_employee(self):
-        user = _FakeUser(roles='["applicant"]')
-        assert self.svc.is_user_employee(user) is False
-
-    def test_no_roles_is_not_employee(self):
-        user = _FakeUser(roles=None)
-        assert self.svc.is_user_employee(user) is False
-
-
-# ===== get_user_role_list =====
-
-class TestGetUserRoleList:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_returns_role_list(self):
-        user = _FakeUser(roles='["applicant", "executor"]')
-        assert self.svc.get_user_role_list(user) == ["applicant", "executor"]
-
-    def test_empty_roles(self):
-        user = _FakeUser(roles=None)
-        assert self.svc.get_user_role_list(user) == []
-
-    def test_non_json_parsed_as_csv(self):
-        # COD-01: canonical parser treats a non-JSON string as CSV.
-        user = _FakeUser(roles="bad-json")
-        assert self.svc.get_user_role_list(user) == ["bad-json"]
-
-    def test_csv_roles(self):
-        user = _FakeUser(roles="applicant,manager")
-        assert self.svc.get_user_role_list(user) == ["applicant", "manager"]
-
-    def test_non_list_json(self):
-        # Valid JSON that isn't a list (e.g. an object) → [] (not CSV-parsed).
-        user = _FakeUser(roles='{"key": "value"}')
-        assert self.svc.get_user_role_list(user) == []
-
-
 # ===== get_employees_list =====
 
 class TestGetEmployeesList:
@@ -468,30 +355,3 @@ class TestGetEmployeesList:
         result = self.svc.get_employees_list("active")
         assert result["employees"] == []
         assert result["total_employees"] == 0
-
-
-# ===== search_employees =====
-
-class TestSearchEmployees:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_returns_results(self):
-        q = MagicMock()
-        q.filter.return_value = q
-        q.order_by.return_value = q
-        q.offset.return_value = q
-        q.limit.return_value = q
-        q.count.return_value = 1
-        q.all.return_value = [_FakeUser()]
-        self.db.query.return_value = q
-
-        result = self.svc.search_employees("Иван")
-        assert result["total_employees"] == 1
-        assert result["search_query"] == "Иван"
-
-    def test_exception_returns_empty(self):
-        self.db.query.side_effect = Exception("fail")
-        result = self.svc.search_employees("test")
-        assert result["employees"] == []

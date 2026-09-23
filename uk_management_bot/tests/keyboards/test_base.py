@@ -293,58 +293,6 @@ class TestGetExecutorSuggestionInline:
 
 
 # ---------------------------------------------------------------------------
-# Tests: get_yes_no_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetYesNoKeyboard:
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-    def test_has_three_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        texts = _all_button_texts(result)
-        assert len(texts) == 3
-
-    def test_yes_button_present(self):
-        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        assert "Да" in _all_button_texts(result)
-
-    def test_no_button_present(self):
-        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        assert "Нет" in _all_button_texts(result)
-
-    def test_back_button_present(self):
-        mapping = {"buttons.yes": "Да", "buttons.no": "Нет", "buttons.back": "Назад"}
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text(mapping)):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        assert "Назад" in _all_button_texts(result)
-
-    def test_language_uz_accepted(self):
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard(language="uz")
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-    def test_resize_keyboard_is_true(self):
-        with patch(GET_TEXT_PATH, side_effect=_make_get_text()):
-            from uk_management_bot.keyboards.base import get_yes_no_keyboard
-            result = get_yes_no_keyboard()
-        assert result.resize_keyboard is True
-
-
-# ---------------------------------------------------------------------------
 # Tests: get_user_contextual_keyboard
 # ---------------------------------------------------------------------------
 

@@ -5,9 +5,7 @@ Covers:
 - generate_invite (happy path, invalid role, missing specialization)
 - generate_invite_link
 - validate_invite (happy path, expired, bad format, bad signature, used nonce)
-- validate_invite_token (valid, invalid)
 - is_nonce_used / mark_nonce_used
-- join_via_invite
 """
 import pytest
 import json
@@ -145,26 +143,6 @@ class TestValidateInvite:
             mock_consume.assert_called_once()
 
 
-# ===== validate_invite_token =====
-
-class TestValidateInviteToken:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.db.query.return_value.filter.return_value.first.return_value = None
-        self.svc = _build_service(self.db)
-
-    def test_valid_returns_valid_dict(self):
-        with patch.object(self.svc, "_is_nonce_used", return_value=False):
-            token = self.svc.generate_invite("applicant", created_by=100)
-            result = self.svc.validate_invite_token(token)
-            assert result["valid"] is True
-            assert result["invite_data"]["role"] == "applicant"
-
-    def test_invalid_returns_invalid_dict(self):
-        result = self.svc.validate_invite_token("bad_token")
-        assert result["valid"] is False
-
-
 # ===== _is_nonce_used =====
 # Note: `is_nonce_used` was renamed to `_is_nonce_used` as part of the
 # SEC-020 atomic-consume refactor — the lookup is now an internal helper
@@ -234,26 +212,3 @@ class TestInviteServiceInit:
             with pytest.raises(ValueError, match="INVITE_SECRET"):
                 from uk_management_bot.services.invite_service import InviteService
                 InviteService(MagicMock())
-
-
-# ===== join_via_invite =====
-
-class TestJoinViaInvite:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_existing_user_returns_failure(self):
-        existing_user = MagicMock()
-        with patch.object(self.svc, "validate_invite", return_value={"role": "applicant", "nonce": "n"}):
-            # self.db.query(User).filter(...).first() returns existing user
-            self.db.query.return_value.filter.return_value.first.return_value = existing_user
-            result = self.svc.join_via_invite("token", 100)
-            assert result["success"] is False
-            assert "уже зарегистрирован" in result["message"]
-
-    def test_invalid_token_returns_failure(self):
-        with patch.object(self.svc, "validate_invite", side_effect=ValueError("Token expired")):
-            result = self.svc.join_via_invite("bad_token", 100)
-            assert result["success"] is False
-            assert "expired" in result["message"]

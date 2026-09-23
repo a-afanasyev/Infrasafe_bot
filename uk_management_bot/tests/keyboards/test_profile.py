@@ -147,37 +147,6 @@ class TestGetLanguageChoiceKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_address_type_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetAddressTypeKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.profile import get_address_type_keyboard
-            result = get_address_type_keyboard()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_four_buttons(self):
-        """home, apartment, yard + cancel."""
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.profile import get_address_type_keyboard
-            result = get_address_type_keyboard()
-        assert len(_flat_texts(result)) == 4
-
-    def test_callback_data_present(self):
-        expected_cbs = {
-            "address_type_home",
-            "address_type_apartment",
-            "address_type_yard",
-            "cancel_address_type",
-        }
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.profile import get_address_type_keyboard
-            result = get_address_type_keyboard()
-        assert set(_flat_cbs(result)) == expected_cbs
-
-
-# ---------------------------------------------------------------------------
 # get_cancel_keyboard (profile module)
 # ---------------------------------------------------------------------------
 

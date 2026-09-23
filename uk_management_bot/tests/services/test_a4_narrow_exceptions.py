@@ -149,17 +149,6 @@ class TestScoringDbErrorsPropagate:
         assert len(result) == 1
 
 
-class TestGetBestExecutorDbError:
-    def test_db_error_propagates_not_none(self):
-        """service.get_best_executor_for_shift: раньше except Exception → None
-        («лучший исполнитель не найден» при любой ошибке)."""
-        service, db = _make_assignment_shift_service()
-        db.query.side_effect = _db_err()
-
-        with pytest.raises(SQLAlchemyError):
-            service.get_best_executor_for_shift(_make_shift())
-
-
 class TestPlanningBusyDbError:
     def test_is_executor_busy_db_error_propagates_not_busy(self):
         """planning._is_executor_busy: раньше except Exception → True

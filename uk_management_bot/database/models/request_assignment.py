@@ -69,16 +69,6 @@ class RequestAssignment(Base):
         }
     
     @property
-    def is_group_assignment(self):
-        """Проверка, является ли назначение групповым"""
-        return self.assignment_type == "group"
-    
-    @property
-    def is_individual_assignment(self):
-        """Проверка, является ли назначение индивидуальным"""
-        return self.assignment_type == "individual"
-    
-    @property
     def is_active(self):
         """Проверка, активно ли назначение"""
         return self.status == "active"

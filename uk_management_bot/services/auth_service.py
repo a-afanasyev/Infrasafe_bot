@@ -86,15 +86,6 @@ class AuthService:
             last_name=last_name,
         )
 
-    async def update_user_language(self, telegram_id: int, language: str) -> bool:
-        """Обновить язык пользователя"""
-        user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
-        if user and language in settings.SUPPORTED_LANGUAGES:
-            user.language = language
-            self.db.commit()
-            return True
-        return False
-    
     def auto_approve_user_sync(self, telegram_id: int, role: str = "applicant") -> bool:
         """Одобрить пользователя (sync-ядро).
 
@@ -126,16 +117,6 @@ class AuthService:
         """Одобрить пользователя (async-обёртка над sync-ядром)."""
         return self.auto_approve_user_sync(telegram_id=telegram_id, role=role)
 
-    async def block_user_by_telegram_id(self, telegram_id: int) -> bool:
-        """Заблокировать пользователя по telegram_id"""
-        user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
-        if user:
-            user.status = "blocked"
-            self.db.commit()
-            logger.info(f"Пользователь {telegram_id} заблокирован")
-            return True
-        return False
-    
     async def get_user_by_telegram_id(self, telegram_id: int) -> User:
         """Получить пользователя по Telegram ID"""
         return self.db.query(User).filter(User.telegram_id == telegram_id).first()
@@ -550,41 +531,8 @@ class AuthService:
             logger.error(f"Ошибка получения ролей пользователя {user_id}: {e}")
             return []
     
-    async def is_user_approved(self, telegram_id: int) -> bool:
-        """Проверить, одобрен ли пользователь"""
-        user = await self.get_user_by_telegram_id(telegram_id)
-        return user and user.status == "approved"
-    
-    async def is_user_manager(self, telegram_id: int) -> bool:
-        """Проверить, является ли пользователь менеджером или админом"""
-        user = await self.get_user_by_telegram_id(telegram_id)
-        if not user or user.status != "approved":
-            return False
-            
-        # Проверяем роли в новом формате (COD-01: канонический парсер, JSON+CSV)
-        # CODE-08: роль "admin" никто не выдаёт — проверяем только "manager".
-        # A9-P3-11: без фолбэка на active_role — роль только из roles.
-        return "manager" in parse_roles_safe(user.roles)
-    
-    async def is_user_executor(self, telegram_id: int) -> bool:
-        """Проверить, является ли пользователь исполнителем"""
-        user = await self.get_user_by_telegram_id(telegram_id)
-        if not user or user.status != "approved":
-            return False
-            
-        # A9-P3-11: только roles — active_role="executor" без роли в roles
-        # исполнителем не делает (COD-01: канонический парсер, JSON+CSV).
-        return "executor" in parse_roles_safe(user.roles)
-    
-    async def get_all_users(self) -> list[User]:
-        """Получить всех пользователей"""
-        return self.db.query(User).all()
-    
     def get_users_by_role_sync(self, role: str) -> list[User]:
-        """Получить пользователей по роли (sync-ядро; SQL-level filtering).
-
-        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
-        сохраняет контракт для неконвертированных вызывающих.
+        """Получить пользователей по роли (sync; SQL-level filtering).
 
         Uses LIKE with JSON-style quoting to match exact role strings
         in the JSON array stored in User.roles TEXT column.
@@ -603,16 +551,8 @@ class AuthService:
             )
         ).all()
 
-    async def get_users_by_role(self, role: str) -> list[User]:
-        """Получить пользователей по роли (async-обёртка над sync-ядром)."""
-        return self.get_users_by_role_sync(role)
-
     def make_admin_by_password_sync(self, telegram_id: int, password: str) -> bool:
-        """Назначить пользователя администратором по паролю (sync-ядро).
-
-        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
-        сохраняет контракт для неконвертированных вызывающих.
-        """
+        """Назначить пользователя администратором по паролю (sync)."""
         from uk_management_bot.config.settings import settings
 
         # A9-P2-4: defence in depth — при выключенном флаге роль не выдаётся
@@ -651,10 +591,6 @@ class AuthService:
             logger.info(f"Пользователь {telegram_id} назначен администратором по паролю")
             return True
         return False
-
-    async def make_admin_by_password(self, telegram_id: int, password: str) -> bool:
-        """Назначить администратором по паролю (async-обёртка над sync-ядром)."""
-        return self.make_admin_by_password_sync(telegram_id=telegram_id, password=password)
 
     async def set_active_role(self, telegram_id: int, role: str) -> bool:
         """Установить активную роль, если она присутствует у пользователя.

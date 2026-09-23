@@ -31,9 +31,6 @@ from uk_management_bot.utils.safe_localization import safe_get_text
 
 # Безопасное получение текста с fallback
 text = safe_get_text("key_name", language="ru", default="Текст по умолчанию")
-
-# С fallback-ключом
-text = safe_get_text_with_fallback("primary_key", "fallback_key", language="ru")
 ```
 
 ## Стандарты именования ключей

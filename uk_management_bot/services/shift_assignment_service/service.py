@@ -1,7 +1,6 @@
 from datetime import datetime, date, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 from sqlalchemy import and_
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.shift import Shift
@@ -15,7 +14,6 @@ from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.utils.constants import ROLE_EXECUTOR
 import logging
 
-from ._types import ExecutorScore, AssignmentConflict
 from .scoring import ScoringEngine
 from .balancer import WorkloadBalancer
 from .conflicts import ConflictDetector
@@ -288,89 +286,6 @@ class ShiftAssignmentService:
         return self.workload_balancer.balance_executor_workload(target_date)
 
 
-    # ========== МЕТОДЫ УПРАВЛЕНИЯ КОНФЛИКТАМИ ==========
-
-    def resolve_assignment_conflicts(
-        self,
-        shift_id: int,
-        conflict_resolution: str = "auto"
-    ) -> Dict[str, Any]:
-        """
-        Разрешает конфликты назначения для смены
-
-        Args:
-            shift_id: ID смены с конфликтами
-            conflict_resolution: Стратегия разрешения ("auto", "manual")
-
-        Returns:
-            Dict с результатами разрешения конфликтов
-        """
-        try:
-            shift = self.db.query(Shift).filter(Shift.id == shift_id).first()
-            if not shift:
-                return {'error': 'Смена не найдена'}
-
-            if not shift.user_id:
-                return {'error': 'У смены нет назначенного исполнителя'}
-
-            # Проверяем конфликты
-            conflicts = self.conflict_detector._check_assignment_conflicts(shift, shift.user_id)
-
-            if not conflicts:
-                return {'message': 'Конфликтов не найдено'}
-
-            resolved_conflicts = []
-            unresolved_conflicts = []
-
-            for conflict in conflicts:
-                if conflict.can_resolve and conflict_resolution == "auto":
-                    resolution_result = self._auto_resolve_conflict(conflict)
-                    if resolution_result['resolved']:
-                        resolved_conflicts.append(conflict)
-                    else:
-                        unresolved_conflicts.append(conflict)
-                else:
-                    unresolved_conflicts.append(conflict)
-
-            return {
-                'shift_id': shift_id,
-                'total_conflicts': len(conflicts),
-                'resolved_conflicts': len(resolved_conflicts),
-                'unresolved_conflicts': len(unresolved_conflicts),
-                'conflicts_details': [self.conflict_detector._conflict_to_dict(c) for c in unresolved_conflicts]
-            }
-
-        except Exception as e:
-            logger.error(f"Ошибка разрешения конфликтов для смены {shift_id}: {e}")
-            return {'error': str(e)}
-
-    def _auto_resolve_conflict(self, conflict: AssignmentConflict) -> Dict[str, Any]:
-        """Автоматически разрешает конфликт"""
-        try:
-            if conflict.type == "invalid_status":
-                # Здесь можно добавить автоматическое обновление статуса
-                # Пока просто логируем
-                logger.info(f"Необходимо обновить статус исполнителя {conflict.executor_id}")
-                return {'resolved': False, 'reason': 'Требует ручного вмешательства'}
-
-            elif conflict.type == "time_conflict":
-                # Пытаемся найти альтернативного исполнителя
-                shift = self.db.query(Shift).filter(Shift.id == conflict.shift_id).first()
-                if shift:
-                    available_executors = self._get_available_executors()
-                    alternative_result = self._assign_single_shift(shift, available_executors)
-
-                    if alternative_result['success']:
-                        return {'resolved': True, 'method': 'alternative_executor'}
-
-                return {'resolved': False, 'reason': 'Не найден альтернативный исполнитель'}
-
-            return {'resolved': False, 'reason': 'Неизвестный тип конфликта'}
-
-        except Exception as e:
-            logger.error(f"Ошибка автоматического разрешения конфликта: {e}")
-            return {'resolved': False, 'reason': str(e)}
-
     # ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
     def _get_available_executors(self) -> List[User]:
@@ -421,37 +336,6 @@ class ShiftAssignmentService:
             logger.error(f"Ошибка отправки уведомлений о назначениях: {e}")
 
     # ========== МЕТОДЫ ДЛЯ ИНТЕГРАЦИИ ==========
-
-    def get_best_executor_for_shift(self, shift: Shift) -> Optional[ExecutorScore]:
-        """
-        Возвращает лучшего исполнителя для назначения на смену
-
-        Args:
-            shift: Смена для назначения
-
-        Returns:
-            ExecutorScore лучшего исполнителя или None
-        """
-        try:
-            available_executors = self._get_available_executors()
-            if not available_executors:
-                return None
-
-            executor_scores = self.scoring_engine._evaluate_executors_for_shift(shift, available_executors)
-            if not executor_scores:
-                return None
-
-            # Возвращаем лучшего
-            return max(executor_scores, key=lambda x: x.total_score)
-
-        except SQLAlchemyError:
-            # AUD3-27: DB-ошибка не маскируется под «лучший исполнитель не
-            # найден» (None) — вызывающий должен отличать сбой от отсутствия
-            # кандидатов. Данные-ошибки кандидатов скоринг обрабатывает сам.
-            logger.exception(
-                f"Ошибка БД при получении лучшего исполнителя для смены {shift.id}"
-            )
-            raise
 
     def reassign_on_absence(self, executor_id: int, reason: str = "absence") -> Dict[str, Any]:
         """
@@ -571,23 +455,6 @@ class ShiftAssignmentService:
                                exc_info=True)
             logger.error(f"Ошибка переназначения смен для исполнителя {executor_id}: {e}")
             return {'error': str(e)}
-
-    def handle_executor_preferences(self, executor_id: int) -> Dict[str, Any]:
-        """
-        Обрабатывает предпочтения исполнителя при назначении смен
-
-        Args:
-            executor_id: ID исполнителя
-
-        Returns:
-            Dict с информацией о предпочтениях
-        """
-        # Базовая реализация - можно расширить в будущем
-        return {
-            'executor_id': executor_id,
-            'preferences_applied': False,
-            'message': 'Система предпочтений планируется к реализации'
-        }
 
     # Прокси «интеграции с системой заявок» ретайрены (BUG-148): их путь
     # (RequestAssignmentEngine → smart_assign_request → SmartDispatcher) был

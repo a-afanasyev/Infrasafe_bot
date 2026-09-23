@@ -119,37 +119,3 @@ class TestGetCommentsListKeyboard:
             result = get_comments_list_keyboard(rn)
         callbacks = _all_callbacks(result)
         assert any(rn in c for c in callbacks)
-
-
-# ---------------------------------------------------------------------------
-# get_comment_actions_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetCommentActionsKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.request_comments import get_comment_actions_keyboard
-            result = get_comment_actions_keyboard("250101-003", comment_id=42)
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_two_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.request_comments import get_comment_actions_keyboard
-            result = get_comment_actions_keyboard("250101-003", comment_id=42)
-        assert len(_all_buttons(result)) == 2
-
-    def test_reply_callback_contains_comment_id(self):
-        comment_id = 99
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.request_comments import get_comment_actions_keyboard
-            result = get_comment_actions_keyboard("250101-004", comment_id=comment_id)
-        callbacks = _all_callbacks(result)
-        assert any(str(comment_id) in c for c in callbacks)
-
-    def test_back_callback_contains_request_number(self):
-        rn = "250101-005"
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.request_comments import get_comment_actions_keyboard
-            result = get_comment_actions_keyboard(rn, comment_id=1)
-        callbacks = _all_callbacks(result)
-        assert any(rn in c for c in callbacks)

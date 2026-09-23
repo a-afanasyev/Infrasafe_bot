@@ -627,64 +627,6 @@ class UserVerificationService:
             logger.error(f"Ошибка получения документов пользователя {user_id}: {e}")
             return []
     
-    def get_user_documents_by_type(self, user_id: int, document_type: DocumentType) -> List[UserDocument]:
-        """
-        Получить документы пользователя определенного типа
-        
-        Args:
-            user_id: ID пользователя
-            document_type: Тип документа
-            
-        Returns:
-            Список документов указанного типа
-        """
-        try:
-            documents = self.db.query(UserDocument).filter(
-                and_(
-                    UserDocument.user_id == user_id,
-                    UserDocument.document_type == document_type
-                )
-            ).order_by(UserDocument.created_at.desc()).all()
-            
-            return documents
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения документов типа {document_type.value} для пользователя {user_id}: {e}")
-            return []
-    
-    def delete_user_document(self, document_id: int, user_id: int) -> bool:
-        """
-        Удалить документ пользователя
-        
-        Args:
-            document_id: ID документа
-            user_id: ID пользователя (для проверки прав)
-            
-        Returns:
-            True если успешно
-        """
-        try:
-            document = self.db.query(UserDocument).filter(
-                and_(
-                    UserDocument.id == document_id,
-                    UserDocument.user_id == user_id
-                )
-            ).first()
-            
-            if document:
-                self.db.delete(document)
-                self.db.commit()
-                logger.info(f"Удален документ {document_id} пользователя {user_id}")
-                return True
-            else:
-                logger.warning(f"Документ {document_id} не найден для пользователя {user_id}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Ошибка удаления документа {document_id}: {e}")
-            self.db.rollback()
-            return False
-    
     def get_user_documents_summary(self, user_id: int) -> Dict[str, Any]:
         """
         Получить сводку документов пользователя

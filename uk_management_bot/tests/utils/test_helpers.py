@@ -3,13 +3,10 @@ Unit tests for utils/helpers.py
 
 Covers:
 - get_text() — valid key, missing key fallback, nested key, kwargs substitution
-- format_file_size() — bytes, KB, MB ranges
-- truncate_text() — short text unchanged, long text truncated with "..."
 - get_user_language() — mock db: user found with language, user without language,
                         user not found
 - validate_phone() — valid and invalid Uzbek phone numbers
-- validate_address() / validate_description() — length guards
-- format_datetime() — basic formatting, None input
+- validate_description() — length guards
 """
 from unittest.mock import MagicMock
 
@@ -73,90 +70,6 @@ class TestGetText:
         from uk_management_bot.utils.helpers import get_text
         result = get_text("buttons.cancel", language="uz")
         assert isinstance(result, str)
-
-
-# ---------------------------------------------------------------------------
-# format_file_size
-# ---------------------------------------------------------------------------
-
-class TestFormatFileSize:
-    def test_bytes_range(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        assert format_file_size(0) == "0 B"
-        assert format_file_size(512) == "512 B"
-        assert format_file_size(1023) == "1023 B"
-
-    def test_kb_range(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(1024)
-        assert result == "1.0 KB"
-
-    def test_kb_range_larger(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(2048)
-        assert result == "2.0 KB"
-
-    def test_mb_range(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(1024 * 1024)
-        assert result == "1.0 MB"
-
-    def test_mb_range_larger(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(5 * 1024 * 1024)
-        assert result == "5.0 MB"
-
-    def test_boundary_exactly_1kb(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(1024)
-        assert "KB" in result
-
-    def test_boundary_exactly_1mb(self):
-        from uk_management_bot.utils.helpers import format_file_size
-        result = format_file_size(1024 * 1024)
-        assert "MB" in result
-
-
-# ---------------------------------------------------------------------------
-# truncate_text
-# ---------------------------------------------------------------------------
-
-class TestTruncateText:
-    def test_short_text_unchanged(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        text = "Hello"
-        assert truncate_text(text, max_length=100) == text
-
-    def test_exact_length_unchanged(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        text = "a" * 100
-        assert truncate_text(text, max_length=100) == text
-
-    def test_long_text_truncated_with_ellipsis(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        text = "a" * 200
-        result = truncate_text(text, max_length=100)
-        assert result.endswith("...")
-        assert len(result) == 100
-
-    def test_default_max_length_is_100(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        text = "b" * 101
-        result = truncate_text(text)
-        assert len(result) == 100
-        assert result.endswith("...")
-
-    def test_empty_string(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        assert truncate_text("", max_length=10) == ""
-
-    def test_truncation_content(self):
-        from uk_management_bot.utils.helpers import truncate_text
-        # max_length=16 → 13 chars + "..." — "Hello, World! T" truncated at 13 → "Hello, World!..."
-        text = "Hello, World! This is a long text that should be truncated."
-        result = truncate_text(text, max_length=16)
-        assert result == "Hello, World!..."
-        assert len(result) == 16
 
 
 # ---------------------------------------------------------------------------
@@ -245,24 +158,6 @@ class TestValidatePhone:
         assert validate_phone("+998 90 123 4567") is True
 
 
-# ---------------------------------------------------------------------------
-# validate_address / validate_description
-# ---------------------------------------------------------------------------
-
-class TestValidateAddress:
-    def test_valid_long_address(self):
-        from uk_management_bot.utils.helpers import validate_address
-        assert validate_address("ул. Пушкина, д. 10") is True
-
-    def test_invalid_short_address(self):
-        from uk_management_bot.utils.helpers import validate_address
-        assert validate_address("short") is False
-
-    def test_whitespace_only(self):
-        from uk_management_bot.utils.helpers import validate_address
-        assert validate_address("   ") is False
-
-
 class TestValidateDescription:
     def test_valid_description(self):
         from uk_management_bot.utils.helpers import validate_description
@@ -275,84 +170,6 @@ class TestValidateDescription:
     def test_exact_10_chars(self):
         from uk_management_bot.utils.helpers import validate_description
         assert validate_description("1234567890") is True
-
-
-# ---------------------------------------------------------------------------
-# format_datetime
-# ---------------------------------------------------------------------------
-
-class TestFormatDatetime:
-    def test_none_returns_dash(self):
-        from uk_management_bot.utils.helpers import format_datetime
-        assert format_datetime(None) == "-"
-
-    def test_formats_datetime_ru(self):
-        from datetime import datetime
-        from uk_management_bot.utils.helpers import format_datetime
-        dt = datetime(2025, 3, 15, 10, 30)
-        result = format_datetime(dt, language="ru")
-        assert "15.03.2025" in result
-        assert "10:30" in result
-
-    def test_formats_datetime_uz(self):
-        from datetime import datetime
-        from uk_management_bot.utils.helpers import format_datetime
-        dt = datetime(2025, 6, 1, 9, 5)
-        result = format_datetime(dt, language="uz")
-        assert "01.06.2025" in result
-
-    def test_invalid_object_returns_str(self):
-        from uk_management_bot.utils.helpers import format_datetime
-        # A non-datetime with no strftime should trigger except -> str(dt)
-        class BadDT:
-            def strftime(self, _):
-                raise ValueError("bad")
-            def __str__(self):
-                return "fallback"
-        result = format_datetime(BadDT(), language="ru")
-        assert result == "fallback"
-
-
-# ---------------------------------------------------------------------------
-# get_language_from_event
-# ---------------------------------------------------------------------------
-
-class TestGetLanguageFromEvent:
-    def test_returns_telegram_language_code(self):
-        from uk_management_bot.utils.helpers import get_language_from_event
-        event = MagicMock()
-        event.from_user.language_code = "uz"
-        result = get_language_from_event(event)
-        assert result == "uz"
-
-    def test_falls_back_to_db_when_no_language_code(self):
-        from uk_management_bot.utils.helpers import get_language_from_event
-
-        event = MagicMock()
-        event.from_user.language_code = None
-        event.from_user.id = 42
-
-        db = MagicMock()
-        user = MagicMock()
-        user.language = "uz"
-        db.query.return_value.filter.return_value.first.return_value = user
-
-        result = get_language_from_event(event, db=db)
-        assert result == "uz"
-
-    def test_returns_ru_when_no_from_user(self):
-        from uk_management_bot.utils.helpers import get_language_from_event
-        event = MagicMock()
-        event.from_user = None
-        result = get_language_from_event(event)
-        assert result == "ru"
-
-    def test_returns_ru_when_no_db_and_no_language_code(self):
-        from uk_management_bot.utils.helpers import get_language_from_event
-        event = MagicMock()
-        event.from_user.language_code = None
-        result = get_language_from_event(event, db=None)
-        assert result == "ru"
 
 
 # ---------------------------------------------------------------------------

@@ -106,55 +106,6 @@ class TestGetOrCreateUser:
 
 
 # ---------------------------------------------------------------------------
-# update_user_language  (async)
-# ---------------------------------------------------------------------------
-
-class TestUpdateUserLanguage:
-    @pytest.mark.asyncio
-    async def test_updates_language_for_supported_lang(self):
-        user = _make_user()
-        db = _make_db(user=user)
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.SUPPORTED_LANGUAGES = ["ru", "uz"]
-            service = AuthService(db)
-            result = await service.update_user_language(100, "uz")
-
-        assert result is True
-        assert user.language == "uz"
-        db.commit.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_returns_false_for_unsupported_lang(self):
-        user = _make_user()
-        db = _make_db(user=user)
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.SUPPORTED_LANGUAGES = ["ru", "uz"]
-            service = AuthService(db)
-            result = await service.update_user_language(100, "en")
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_returns_false_when_user_not_found(self):
-        db = _make_db(user=None)
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.SUPPORTED_LANGUAGES = ["ru", "uz"]
-            service = AuthService(db)
-            result = await service.update_user_language(999, "ru")
-
-        assert result is False
-
-
-# ---------------------------------------------------------------------------
 # auto_approve_user  (async)
 # ---------------------------------------------------------------------------
 
@@ -199,32 +150,6 @@ class TestAutoApproveUser:
             mock_settings.USER_ROLES = ["applicant", "executor", "manager"]
             service = AuthService(db)
             result = await service.auto_approve_user(999, "applicant")
-
-        assert result is False
-
-
-# ---------------------------------------------------------------------------
-# block_user_by_telegram_id  (async)
-# ---------------------------------------------------------------------------
-
-class TestBlockUserByTelegramId:
-    @pytest.mark.asyncio
-    async def test_blocks_user(self):
-        user = _make_user(status="approved")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        result = await service.block_user_by_telegram_id(100)
-
-        assert result is True
-        assert user.status == "blocked"
-
-    @pytest.mark.asyncio
-    async def test_returns_false_when_not_found(self):
-        db = _make_db(user=None)
-
-        service = AuthService(db)
-        result = await service.block_user_by_telegram_id(999)
 
         assert result is False
 
@@ -564,143 +489,6 @@ class TestGetUserRoles:
 
 
 # ---------------------------------------------------------------------------
-# is_user_approved / is_user_manager / is_user_executor  (async)
-# ---------------------------------------------------------------------------
-
-class TestStatusChecks:
-    @pytest.mark.asyncio
-    async def test_is_user_approved_true(self):
-        user = _make_user(status="approved")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_approved(100) is True
-
-    @pytest.mark.asyncio
-    async def test_is_user_approved_false_for_pending(self):
-        user = _make_user(status="pending")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_approved(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_approved_false_when_not_found(self):
-        db = _make_db(user=None)
-
-        service = AuthService(db)
-        # Returns None (falsy) when user not found — not strictly False
-        assert not await service.is_user_approved(999)
-
-    @pytest.mark.asyncio
-    async def test_is_user_manager_true(self):
-        user = _make_user(
-            status="approved",
-            role="manager",
-            roles='["manager"]',
-            active_role="manager",
-        )
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_manager(100) is True
-
-    @pytest.mark.asyncio
-    async def test_is_user_manager_false_for_applicant(self):
-        user = _make_user(status="approved", role="applicant", roles='["applicant"]')
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_manager(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_executor_active_role_alone_is_not_enough(self):
-        """A9-P3-11: active_role="executor" без роли в roles исполнителем не делает."""
-        user = _make_user(status="approved", active_role="executor")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_executor(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_executor_true_via_roles(self):
-        user = _make_user(status="approved", roles='["applicant", "executor"]', active_role="applicant")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_executor(100) is True
-
-    @pytest.mark.asyncio
-    async def test_is_user_executor_false_when_not_approved(self):
-        user = _make_user(status="pending", active_role="executor")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_executor(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_manager_unusable_roles_do_not_fall_back_to_active_role(self):
-        """A9-P3-11: неразбираемая строка ролей (CSV-мусор, "manager" там нет)
-        менеджером НЕ делает, даже при active_role="manager" — прежний фолбэк
-        через legacy_primary_role() на active_role был эскалацией.
-        """
-        user = _make_user(status="approved", roles="{broken json", active_role="manager")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_manager(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_executor_unusable_roles_falls_back(self):
-        """COD-01: та же семантика для is_user_executor. active_role="applicant"
-        (не executor), в распарсенных ролях executor'а нет → False, без warning.
-        """
-        user = _make_user(status="approved", roles="{broken json", active_role="applicant")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_executor(100) is False
-
-    @pytest.mark.asyncio
-    async def test_is_user_manager_csv_roles(self):
-        """COD-01: legacy CSV-роли теперь распознаются (раньше давали False)."""
-        user = _make_user(status="approved", roles="applicant,manager", active_role="manager")
-        db = _make_db(user=user)
-
-        service = AuthService(db)
-        assert await service.is_user_manager(100) is True
-
-
-# ---------------------------------------------------------------------------
-# get_all_users / get_users_by_role  (async)
-# ---------------------------------------------------------------------------
-
-class TestGetUsers:
-    @pytest.mark.asyncio
-    async def test_get_all_users_returns_list(self):
-        users = [_make_user(user_id=i, telegram_id=100 + i) for i in range(3)]
-        db = MagicMock()
-        db.query.return_value.all.return_value = users
-
-        service = AuthService(db)
-        result = await service.get_all_users()
-
-        assert result == users
-
-    @pytest.mark.asyncio
-    async def test_get_users_by_role_calls_filter(self):
-        db = MagicMock()
-        q = MagicMock()
-        q.filter.return_value.all.return_value = []
-        db.query.return_value = q
-
-        service = AuthService(db)
-        await service.get_users_by_role("executor")
-
-        db.query.assert_called()
-
-
-# ---------------------------------------------------------------------------
 # set_active_role  (async)
 # ---------------------------------------------------------------------------
 
@@ -804,8 +592,7 @@ class TestTrustVerificationInvariant:
         assert result is user
         assert user.verification_status == "pending"
 
-    @pytest.mark.asyncio
-    async def test_make_admin_by_password_marks_verified(self):
+    def test_make_admin_by_password_marks_verified(self):
         user = _make_user(roles='["applicant"]', active_role="applicant")
         user.verification_status = "pending"
         db = self._db_with_user(user)
@@ -813,13 +600,12 @@ class TestTrustVerificationInvariant:
 
         with patch("uk_management_bot.config.settings.settings") as mock_settings:
             mock_settings.ADMIN_PASSWORD = "secret"
-            result = await service.make_admin_by_password(100, "secret")
+            result = service.make_admin_by_password_sync(100, "secret")
 
         assert result is True
         assert user.verification_status == "verified"
 
-    @pytest.mark.asyncio
-    async def test_make_admin_by_password_grants_only_manager(self):
+    def test_make_admin_by_password_grants_only_manager(self):
         """SEC-06 (least privilege): /admin выдаёт только ["manager"],
         а не весь набор ролей скопом."""
         user = _make_user(roles='["applicant"]', active_role="applicant")
@@ -829,7 +615,7 @@ class TestTrustVerificationInvariant:
 
         with patch("uk_management_bot.config.settings.settings") as mock_settings:
             mock_settings.ADMIN_PASSWORD = "secret"
-            result = await service.make_admin_by_password(100, "secret")
+            result = service.make_admin_by_password_sync(100, "secret")
 
         assert result is True
         assert user.roles == '["manager"]'

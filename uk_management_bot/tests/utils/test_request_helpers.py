@@ -101,45 +101,6 @@ class TestCreateCallbackData:
 
 
 # ---------------------------------------------------------------------------
-# RequestCallbackHelper.is_request_number_callback
-# ---------------------------------------------------------------------------
-
-class TestIsRequestNumberCallback:
-    def test_valid_callback_returns_true(self):
-        from uk_management_bot.utils.request_helpers import RequestCallbackHelper
-        assert RequestCallbackHelper.is_request_number_callback("view_250101-001", "view_") is True
-
-    def test_invalid_callback_returns_false(self):
-        from uk_management_bot.utils.request_helpers import RequestCallbackHelper
-        assert RequestCallbackHelper.is_request_number_callback("view_not_a_number", "view_") is False
-
-    def test_wrong_prefix_returns_false(self):
-        from uk_management_bot.utils.request_helpers import RequestCallbackHelper
-        assert RequestCallbackHelper.is_request_number_callback("view_250101-001", "edit_") is False
-
-
-# ---------------------------------------------------------------------------
-# format_request_for_list
-# ---------------------------------------------------------------------------
-
-class TestFormatRequestForList:
-    def test_with_number_includes_display_number(self):
-        from uk_management_bot.utils.request_helpers import format_request_for_list
-        req = _make_request()
-        result = format_request_for_list(req, include_number=True)
-        assert "#250101-001" in result
-        assert "Дом: 5" in result
-
-    def test_without_number_excludes_display_number(self):
-        from uk_management_bot.utils.request_helpers import format_request_for_list
-        req = _make_request()
-        result = format_request_for_list(req, include_number=False)
-        assert "Дом: 5" in result
-        # format_number_for_display was not called
-        req.format_number_for_display.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
 # get_status_icon
 # ---------------------------------------------------------------------------
 
@@ -160,22 +121,6 @@ class TestGetStatusIcon:
         result = get_status_icon("UnknownStatus")
         assert isinstance(result, str)
         assert len(result) > 0
-
-
-# ---------------------------------------------------------------------------
-# validate_callback_request_number
-# ---------------------------------------------------------------------------
-
-class TestValidateCallbackRequestNumber:
-    def test_valid_callback_returns_number(self):
-        from uk_management_bot.utils.request_helpers import validate_callback_request_number
-        result = validate_callback_request_number("view_250101-001", "view_")
-        assert result == "250101-001"
-
-    def test_invalid_callback_returns_none(self):
-        from uk_management_bot.utils.request_helpers import validate_callback_request_number
-        result = validate_callback_request_number("view_bad-format", "view_")
-        assert result is None
 
 
 # ---------------------------------------------------------------------------

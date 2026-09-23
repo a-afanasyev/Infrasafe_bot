@@ -358,84 +358,6 @@ class UserManagementService:
     
     # ═══ ПОИСК И ФИЛЬТРАЦИЯ ═══
     
-    def search_users(self, query: str = None, filters: Dict = None, page: int = 1, limit: int = 10) -> Dict:
-        """
-        Поиск пользователей с фильтрами
-        
-        Args:
-            query: Поисковый запрос (имя, username)
-            filters: Фильтры (status, role, specialization)
-            page: Номер страницы
-            limit: Количество результатов на странице
-            
-        Returns:
-            Dict с результатами поиска и пагинацией
-        """
-        try:
-            offset = (page - 1) * limit
-            
-            # Базовый запрос
-            db_query = self.db.query(User)
-            
-            # Поиск по тексту (имя, фамилия, username)
-            if query and query.strip():
-                search_term = f"%{escape_like(query.strip())}%"
-                db_query = db_query.filter(
-                    ci_contains_any(
-                        (User.first_name, User.last_name, User.username),
-                        search_term,
-                        is_postgres=is_postgres(self.db),
-                    )
-                )
-            
-            # Применение фильтров
-            if filters:
-                if filters.get('status'):
-                    db_query = db_query.filter(User.status == filters['status'])
-                
-                if filters.get('role'):
-                    db_query = db_query.filter(User.roles.contains(filters['role']))
-                
-                if filters.get('specialization'):
-                    db_query = db_query.filter(User.specialization.contains(filters['specialization']))
-            
-            # Сортировка результатов
-            db_query = db_query.order_by(User.status.desc(), User.created_at.desc())
-            
-            total = db_query.count()
-            users = db_query.offset(offset).limit(limit).all()
-            
-            total_pages = (total + limit - 1) // limit if total > 0 else 1
-            has_next = page * limit < total
-            has_prev = page > 1
-            
-            result = {
-                'users': users,
-                'total': total,
-                'page': page,
-                'total_pages': total_pages,
-                'has_next': has_next,
-                'has_prev': has_prev,
-                'query': query,
-                'filters': filters or {}
-            }
-            
-            logger.info(f"Поиск пользователей: query='{query}', filters={filters}, найдено {len(users)}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска пользователей: {e}")
-            return {
-                'users': [],
-                'total': 0,
-                'page': page,
-                'total_pages': 1,
-                'has_next': False,
-                'has_prev': False,
-                'query': query,
-                'filters': filters or {}
-            }
-    
     def search_residents(self, query: str, limit: int = 20) -> List[User]:
         """MGR-02: поиск жителей (заявителей) по имени/фамилии/username/телефону.
 
@@ -625,25 +547,6 @@ class UserManagementService:
             logger.error(f"Ошибка форматирования статистики: {e}")
             return f"Статистика пользователей:\nВсего: {stats.get('total', 0)}"
     
-    # ═══ УТИЛИТАРНЫЕ МЕТОДЫ ═══
-    
-    def is_user_staff(self, user: User) -> bool:
-        """Проверить, является ли пользователь сотрудником"""
-        # COD-01: канонический парсер (JSON+CSV)
-        roles = parse_roles_safe(user.roles)
-        return 'executor' in roles or 'manager' in roles or 'inspector' in roles
-
-    def is_user_employee(self, user: User) -> bool:
-        """Проверить, является ли пользователь сотрудником (executor, manager или inspector)"""
-        # COD-01: канонический парсер (JSON+CSV) вместо substring-проверки по сырой
-        # строке — substring '"executor"' не матчил CSV-формат.
-        roles = parse_roles_safe(user.roles)
-        return any(r in roles for r in ('executor', 'manager', 'inspector'))
-    
-    def get_user_role_list(self, user: User) -> List[str]:
-        """Получить список ролей пользователя (COD-01: JSON+CSV)"""
-        return parse_roles_safe(user.roles)
-    
     # ═══ МЕТОДЫ ДЛЯ РАБОТЫ С СОТРУДНИКАМИ ═══
     
     def get_employees_list(self, list_type: str, page: int = 1, per_page: int = 20) -> Dict:
@@ -726,70 +629,4 @@ class UserManagementService:
                 'current_page': 1,
                 'total_pages': 1,
                 'total_employees': 0
-            }
-    
-    def search_employees(self, query: str, page: int = 1, per_page: int = 5) -> Dict:
-        """
-        Поиск сотрудников
-
-        Args:
-            query: Поисковый запрос
-            page: Номер страницы
-            per_page: Количество на странице
-
-        Returns:
-            Dict с результатами поиска
-        """
-        try:
-            # Базовый запрос для сотрудников
-            # Проверяем оба поля: role (старая система) и roles (новая система)
-            base_query = self.db.query(User).filter(
-                or_(
-                    User.roles.like('%"executor"%'),
-                    User.roles.like('%"manager"%'),
-                    User.roles.like('%"inspector"%'),
-                    legacy_role_filter('executor'),
-                    legacy_role_filter('manager'),
-                    legacy_role_filter('inspector')
-                )
-            )
-
-            # Поиск по имени, фамилии, username или телефону
-            search_query = base_query.filter(
-                ci_contains_any(
-                    (User.first_name, User.last_name, User.username, User.phone),
-                    f'%{escape_like(query)}%',
-                    is_postgres=is_postgres(self.db),
-                )
-            )
-            
-            # Общее количество
-            total_employees = search_query.count()
-            
-            # Вычисляем пагинацию
-            total_pages = (total_employees + per_page - 1) // per_page
-            offset = (page - 1) * per_page
-            
-            # Получаем результаты для текущей страницы
-            employees = search_query.order_by(User.created_at.desc()).offset(offset).limit(per_page).all()
-            
-            result = {
-                'employees': employees,
-                'current_page': page,
-                'total_pages': total_pages,
-                'total_employees': total_employees,
-                'search_query': query
-            }
-            
-            logger.info(f"Поиск сотрудников: '{query}', найдено {total_employees}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска сотрудников: {e}")
-            return {
-                'employees': [],
-                'current_page': 1,
-                'total_pages': 1,
-                'total_employees': 0,
-                'search_query': query
             }

@@ -9,7 +9,7 @@ Features:
     - Language-aware formatting utilities
 """
 
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Any
 from aiogram.types import Message, CallbackQuery, User as TelegramUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -322,23 +322,6 @@ def format_number_with_locale(
         return str(number)
 
 
-def get_language_emoji(language: str) -> str:
-    """
-    Get flag emoji for language.
-
-    Args:
-        language: Language code
-
-    Returns:
-        Flag emoji
-    """
-    emoji_map = {
-        'ru': '🇷🇺',
-        'uz': '🇺🇿',
-    }
-    return emoji_map.get(language, '🌐')
-
-
 def get_language_name(language: str, in_language: str = 'ru') -> str:
     """
     Get language name in specified language.
@@ -454,29 +437,3 @@ async def edit_localized_message(
     except Exception as e:
         print(f"Error editing message: {e}")
         return False
-
-
-def validate_language_code(language: str) -> bool:
-    """
-    Validate if language code is supported.
-
-    Args:
-        language: Language code
-
-    Returns:
-        True if supported
-    """
-    return language in SUPPORTED_LANGUAGES
-
-
-def get_available_languages() -> Dict[str, str]:
-    """
-    Get all available languages with names.
-
-    Returns:
-        Dict mapping language codes to names
-    """
-    return {
-        'ru': get_language_name('ru', 'ru'),
-        'uz': get_language_name('uz', 'uz')
-    }

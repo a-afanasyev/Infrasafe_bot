@@ -124,20 +124,6 @@ def get_categories_inline_keyboard_with_cancel(language: str = "ru") -> InlineKe
     )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-def get_urgency_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Клавиатура с уровнями срочности
-
-    Args:
-        language: Language code (ru/uz)
-
-    Returns:
-        ReplyKeyboardMarkup with urgency buttons
-    """
-    urgency_buttons = get_urgency_buttons_with_internal_keys(language)
-    keyboard = [[KeyboardButton(text=display_text)] for display_text, _ in urgency_buttons]
-    keyboard.append([KeyboardButton(text=get_text("buttons.cancel", language=language))])
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-
 def get_urgency_inline_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """Inline-клавиатура с уровнями срочности
 
@@ -221,66 +207,6 @@ def get_inline_confirmation_keyboard(language: str = "ru") -> InlineKeyboardMark
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def get_edit_request_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Клавиатура для редактирования заявки
-
-    Args:
-        language: Language code (ru/uz)
-
-    Returns:
-        ReplyKeyboardMarkup with localized edit options
-    """
-    keyboard = [
-        [get_text("requests.keyboards.edit_category", language=language)],
-        [get_text("requests.keyboards.edit_address", language=language)],
-        [get_text("requests.keyboards.edit_description", language=language)],
-        [get_text("requests.keyboards.edit_urgency", language=language)],
-        [get_text("requests.keyboards.edit_apartment", language=language)],
-        [get_text("requests.keyboards.edit_files", language=language)],
-        [get_text("buttons.cancel", language=language)]
-    ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-
-def get_request_status_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Клавиатура для изменения статуса заявки
-
-    Args:
-        language: Language code (ru/uz)
-
-    Returns:
-        ReplyKeyboardMarkup with localized status options
-    """
-    keyboard = [
-        [get_text("requests.keyboards.status_to_work", language=language)],
-        [get_text("requests.keyboards.status_in_progress", language=language)],
-        [get_text("requests.keyboards.status_purchase", language=language)],
-        [get_text("requests.keyboards.status_clarification", language=language)],
-        [get_text("requests.keyboards.status_completed", language=language)],
-        [get_text("requests.keyboards.status_cancel", language=language)],
-        [get_text("buttons.back", language=language)]
-    ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-
-def get_requests_filter_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Клавиатура для фильтрации заявок
-
-    Args:
-        language: Language code (ru/uz)
-
-    Returns:
-        ReplyKeyboardMarkup with localized filter options
-    """
-    keyboard = [
-        [get_text("requests.keyboards.filter_all", language=language)],
-        [get_text("requests.keyboards.filter_new", language=language)],
-        [get_text("requests.keyboards.filter_in_progress", language=language)],
-        [get_text("requests.keyboards.filter_purchase", language=language)],
-        [get_text("requests.keyboards.filter_completed", language=language)],
-        [get_text("requests.keyboards.filter_cancelled", language=language)],
-        [get_text("buttons.back", language=language)]
-    ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 def get_pagination_keyboard(current_page: int, total_pages: int, request_number: str = None, show_reply_clarify: bool = False, language: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура для пагинации заявок
@@ -497,4 +423,3 @@ def get_status_filter_inline_keyboard(active_status: Optional[str] = None, langu
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
-

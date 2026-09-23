@@ -54,31 +54,6 @@ class TestInit:
 
 
 # ---------------------------------------------------------------------------
-# get_available_specializations  (pure)
-# ---------------------------------------------------------------------------
-
-class TestGetAvailableSpecializations:
-    def test_returns_copy_of_list(self):
-        service = SpecializationService(MagicMock())
-        result = service.get_available_specializations()
-        assert isinstance(result, list)
-        assert result == service.AVAILABLE_SPECIALIZATIONS
-        # Ensure it's a copy
-        result.append("EXTRA")
-        assert "EXTRA" not in service.AVAILABLE_SPECIALIZATIONS
-
-    def test_contains_expected_specializations(self):
-        service = SpecializationService(MagicMock())
-        specs = service.get_available_specializations()
-        # Единый словарь: `general` (общие работы) слился с «Ремонт /
-        # разнорабочий», а `elevator`/`heating`/`ventilation` стали
-        # полноценными специализациями — раньше это были ключи КАТЕГОРИЙ.
-        for expected in ["plumber", "electrician", "repair", "cleaning", "elevator"]:
-            assert expected in specs
-        assert "general" not in specs and "maintenance" not in specs
-
-
-# ---------------------------------------------------------------------------
 # validate_specialization  (pure)
 # ---------------------------------------------------------------------------
 
@@ -270,109 +245,6 @@ class TestSetUserSpecializations:
 
 
 # ---------------------------------------------------------------------------
-# add_specialization  (partial integration)
-# ---------------------------------------------------------------------------
-
-class TestAddSpecialization:
-    def test_returns_false_for_invalid_specialization(self):
-        db = _make_db()
-        service = SpecializationService(db)
-        result = service.add_specialization(1, "ghost_spec", updated_by=2)
-        assert result is False
-
-    def test_returns_true_if_already_has_specialization(self):
-        user = _make_user(specialization="plumber")
-        db = _make_db(user=user)
-        service = SpecializationService(db)
-        # The user already has "plumber" — should return True without DB update
-        result = service.add_specialization(1, "plumber", updated_by=2)
-        assert result is True
-
-
-# ---------------------------------------------------------------------------
-# remove_specialization  (partial integration)
-# ---------------------------------------------------------------------------
-
-class TestRemoveSpecialization:
-    def test_returns_true_if_spec_not_in_user_list(self):
-        user = _make_user(specialization="plumber")
-        db = _make_db(user=user)
-        service = SpecializationService(db)
-        result = service.remove_specialization(1, "electrician", updated_by=2)
-        assert result is True
-
-
-# ---------------------------------------------------------------------------
-# get_specialization_stats  (DB-backed)
-# ---------------------------------------------------------------------------
-
-class TestGetSpecializationStats:
-    def test_returns_dict_with_all_specializations(self):
-        db = _make_db(executors=[])
-        service = SpecializationService(db)
-        stats = service.get_specialization_stats()
-        for spec in service.AVAILABLE_SPECIALIZATIONS:
-            assert spec in stats
-
-    def test_count_increases_for_matching_executor(self):
-        executor = _make_user(specialization="plumber")
-        db = _make_db(executors=[executor])
-        service = SpecializationService(db)
-        stats = service.get_specialization_stats()
-        assert stats["plumber"] >= 1
-
-    def test_returns_zero_counts_on_exception(self):
-        db = MagicMock()
-        db.query.side_effect = Exception("DB error")
-        service = SpecializationService(db)
-        stats = service.get_specialization_stats()
-        for spec in service.AVAILABLE_SPECIALIZATIONS:
-            assert stats[spec] == 0
-
-
-# ---------------------------------------------------------------------------
-# search_by_specialization  (DB-backed)
-# ---------------------------------------------------------------------------
-
-class TestSearchBySpecialization:
-    def test_returns_empty_result_for_invalid_spec(self):
-        db = _make_db()
-        service = SpecializationService(db)
-        result = service.search_by_specialization("invalid_spec")
-        assert result["users"] == []
-        assert result["total"] == 0
-
-    def test_pagination_calculated_correctly(self):
-        user = _make_user()
-        db = MagicMock()
-        q = MagicMock()
-        q.filter.return_value.order_by.return_value.count.return_value = 25
-        q.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [user] * 10
-        db.query.return_value = q
-        service = SpecializationService(db)
-        result = service.search_by_specialization("plumber", page=1, limit=10)
-        assert result["total_pages"] == 3
-
-    def test_has_next_true_when_more_results(self):
-        db = MagicMock()
-        q = MagicMock()
-        q.filter.return_value.order_by.return_value.count.return_value = 25
-        q.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
-        db.query.return_value = q
-        service = SpecializationService(db)
-        result = service.search_by_specialization("plumber", page=1, limit=10)
-        assert result["has_next"] is True
-
-    def test_returns_error_result_on_exception(self):
-        db = MagicMock()
-        db.query.side_effect = Exception("DB error")
-        service = SpecializationService(db)
-        result = service.search_by_specialization("plumber")
-        assert result["users"] == []
-        assert result["total"] == 0
-
-
-# ---------------------------------------------------------------------------
 # format_specializations_list  (mocked get_text)
 # ---------------------------------------------------------------------------
 
@@ -399,26 +271,3 @@ class TestFormatSpecializationsList:
             result = service.format_specializations_list(["invalid_spec"])
             # Invalid specs are skipped → falls back to no_specializations text
             assert "Нет специализаций" in result
-
-
-# ---------------------------------------------------------------------------
-# format_specialization_stats  (mocked get_text)
-# ---------------------------------------------------------------------------
-
-class TestFormatSpecializationStats:
-    def test_shows_specializations_with_nonzero_counts(self):
-        service = SpecializationService(MagicMock())
-        with patch("uk_management_bot.services.specialization_service.get_text") as mock_get_text:
-            mock_get_text.side_effect = lambda key, **kwargs: key
-            stats = {"plumber": 3, "electrician": 0}
-            result = service.format_specialization_stats(stats)
-            assert "3" in result
-
-    def test_all_zero_shows_no_executors_text(self):
-        service = SpecializationService(MagicMock())
-        with patch("uk_management_bot.services.specialization_service.get_text") as mock_get_text:
-            mock_get_text.side_effect = lambda key, **kwargs: key
-            stats = {"plumber": 0, "electrician": 0}
-            result = service.format_specialization_stats(stats)
-            # All zero → "no_executors" text shown
-            assert "no_executors" in result or "no_exec" in result.lower() or "specializations" in result

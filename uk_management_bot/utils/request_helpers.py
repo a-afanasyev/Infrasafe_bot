@@ -52,40 +52,7 @@ class RequestCallbackHelper:
             logger.warning(f"Invalid request number format: {request_number}")
         
         return f"{prefix}{request_number}"
-    
-    @staticmethod
-    def is_request_number_callback(callback_data: str, prefix: str) -> bool:
-        """
-        Проверяет, содержит ли callback data корректный номер заявки
-        
-        Args:
-            callback_data: Callback data для проверки
-            prefix: Ожидаемый префикс
-            
-        Returns:
-            True если callback data содержит корректный номер заявки
-        """
-        request_number = RequestCallbackHelper.extract_request_number_from_callback(
-            callback_data, prefix
-        )
-        return request_number is not None
 
-def format_request_for_list(request, include_number=True):
-    """
-    Форматирует заявку для отображения в списке
-    
-    Args:
-        request: Объект заявки
-        include_number: Включать ли номер заявки
-        
-    Returns:
-        Отформатированная строка
-    """
-    if include_number:
-        number_display = request.format_number_for_display()
-        return f"{number_display}\n📍 {html.escape(request.address or '')}\n🏷️ {html.escape(request.category or '')}\n📊 {request.status}"
-    else:
-        return f"📍 {html.escape(request.address or '')}\n🏷️ {html.escape(request.category or '')}\n📊 {request.status}"
 
 def format_request_details(request, language="ru", show_executor=True, active_role=None, db_session=None):
     """
@@ -323,23 +290,3 @@ def format_request_list_item(
         item_text += "\n"
 
     return item_text
-
-
-def validate_callback_request_number(callback_data: str, expected_prefix: str) -> Optional[str]:
-    """
-    Валидирует callback data и возвращает номер заявки
-
-    Args:
-        callback_data: Callback data для валидации
-        expected_prefix: Ожидаемый префикс
-
-    Returns:
-        Номер заявки или None если валидация не прошла
-    """
-    try:
-        return RequestCallbackHelper.extract_request_number_from_callback(
-            callback_data, expected_prefix
-        )
-    except Exception as e:
-        logger.error(f"Error validating callback data {callback_data}: {e}")
-        return None
