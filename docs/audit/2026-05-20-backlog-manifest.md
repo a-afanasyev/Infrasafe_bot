@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **578**
-- закрыто маркером: **554**
-- открыто маркером: **24**
+- закрыто маркером: **555**
+- открыто маркером: **23**
 
-  - `actionable` — **11**
+  - `actionable` — **10**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=2, P3=9.
+Из них actionable по приоритету: P2=2, P3=8.
 
 Значения `status`:
 
@@ -55,7 +55,6 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P3-31` | P3 | actionable | found-2026-09-23 | AUD9-W4 | — | bot, api | — | `change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление |
 | `A9-P3-36` | P3 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Статистика смен считает исполнителей по User.active_role, а не по roles |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
 | `A9-P3-29` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, edge | — | Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента |
