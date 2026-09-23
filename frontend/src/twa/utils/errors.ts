@@ -14,17 +14,16 @@ function genericErrorText(): string {
  * Order of preference:
  *   1. FastAPI 422 list of {loc, msg, type} → joined "field: reason; …"
  *   2. FastAPI {detail: string}            → that string
- *   3. axios err.message                   → e.g. "Network Error"
- *   4. fallback                            → caller-provided (по умолчанию — twa.errors.generic)
+ *   3. fallback                            → caller-provided (по умолчанию — twa.errors.generic)
+ *
+ * A9-P2-31: err.message НЕ показываем — у axios это английский технический текст
+ * («Request failed with status code 500», «Network Error»), и он перекрывал
+ * локализованный fallback вызывающего.
  */
 export function getErrorMessage(err: unknown, fallback = genericErrorText()): string {
   // A9-P3-20: разбор detail — единый канон utils/errorMessage.apiErrorDetail.
   const detail = apiErrorDetail(err)
   if (detail) return detail
-
-  const message = (err as { message?: unknown } | null)?.message
-  if (typeof message === 'string' && message) return message
-
   return fallback
 }
 

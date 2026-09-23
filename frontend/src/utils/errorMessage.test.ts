@@ -73,9 +73,14 @@ describe('apiErrorDetail / apiErrorCode — единый канон', () => {
     expect(apiErrorStatus(new Error('x'))).toBeNull()
   })
 
-  it('TWA getErrorMessage делегирует в канон, затем message, затем fallback', () => {
+  it('TWA getErrorMessage делегирует в канон, иначе — локализованный fallback', () => {
     expect(getErrorMessage(axiosError([{ loc: ['body', 'a'], msg: 'bad' }]))).toBe('a: bad')
-    expect(getErrorMessage({ message: 'Network Error' })).toBe('Network Error')
     expect(getErrorMessage(null, 'fb')).toBe('fb')
+  })
+
+  it('A9-P2-31: английский err.message axios не показывается пользователю', () => {
+    // 500 с пустым телом / сетевой сбой: axios кладёт в message английский текст.
+    expect(getErrorMessage({ message: 'Request failed with status code 500', response: { status: 500, data: '' } }, 'fb')).toBe('fb')
+    expect(getErrorMessage({ message: 'Network Error' }, 'fb')).toBe('fb')
   })
 })
