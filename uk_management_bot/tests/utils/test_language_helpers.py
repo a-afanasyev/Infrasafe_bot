@@ -3,10 +3,7 @@ Unit tests for utils/language_helpers.py
 
 Covers pure (synchronous) functions only — no DB, no network, no async calls:
 - get_language_from_message() — Message with ru/uz/other language_code, no from_user
-- get_language_emoji() — ru, uz, unknown
 - get_language_name() — various combinations
-- validate_language_code() — supported and unsupported codes
-- get_available_languages() — returns dict with expected keys
 - format_number_with_locale() — ru, uz, default formatting
 - _get_russian_plural_key() — singular, plural, many forms
 - _get_uzbek_plural_key() — singular, plural forms
@@ -66,27 +63,6 @@ class TestGetLanguageFromMessage:
 
 
 # ---------------------------------------------------------------------------
-# get_language_emoji
-# ---------------------------------------------------------------------------
-
-class TestGetLanguageEmoji:
-    def test_ru_returns_flag(self):
-        from uk_management_bot.utils.language_helpers import get_language_emoji
-        result = get_language_emoji("ru")
-        assert result == "🇷🇺"
-
-    def test_uz_returns_flag(self):
-        from uk_management_bot.utils.language_helpers import get_language_emoji
-        result = get_language_emoji("uz")
-        assert result == "🇺🇿"
-
-    def test_unknown_returns_globe(self):
-        from uk_management_bot.utils.language_helpers import get_language_emoji
-        result = get_language_emoji("xx")
-        assert result == "🌐"
-
-
-# ---------------------------------------------------------------------------
 # get_language_name
 # ---------------------------------------------------------------------------
 
@@ -106,45 +82,6 @@ class TestGetLanguageName:
         # unknown in_language → names dict has no matching key → returns language code
         result = get_language_name("ru", "xx")
         assert result == "ru"
-
-
-# ---------------------------------------------------------------------------
-# validate_language_code
-# ---------------------------------------------------------------------------
-
-class TestValidateLanguageCode:
-    @pytest.mark.parametrize("code", ["ru", "uz"])
-    def test_supported_codes_are_valid(self, code):
-        from uk_management_bot.utils.language_helpers import validate_language_code
-        assert validate_language_code(code) is True
-
-    @pytest.mark.parametrize("code", ["en", "de", "fr", "xx", "", "RU", "UZ"])
-    def test_unsupported_codes_are_invalid(self, code):
-        from uk_management_bot.utils.language_helpers import validate_language_code
-        assert validate_language_code(code) is False
-
-
-# ---------------------------------------------------------------------------
-# get_available_languages
-# ---------------------------------------------------------------------------
-
-class TestGetAvailableLanguages:
-    def test_returns_dict(self):
-        from uk_management_bot.utils.language_helpers import get_available_languages
-        result = get_available_languages()
-        assert isinstance(result, dict)
-
-    def test_contains_ru_and_uz(self):
-        from uk_management_bot.utils.language_helpers import get_available_languages
-        result = get_available_languages()
-        assert "ru" in result
-        assert "uz" in result
-
-    def test_values_are_non_empty_strings(self):
-        from uk_management_bot.utils.language_helpers import get_available_languages
-        result = get_available_languages()
-        for key, val in result.items():
-            assert isinstance(val, str) and len(val) > 0
 
 
 # ---------------------------------------------------------------------------

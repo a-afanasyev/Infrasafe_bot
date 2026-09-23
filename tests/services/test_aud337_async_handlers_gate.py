@@ -345,7 +345,7 @@ _UNCONVERTED_BASELINE: dict[str, int] = {
     "uk_management_bot/handlers/admin/shared.py": 1,
     "uk_management_bot/handlers/admin/views.py": 7,
     "uk_management_bot/handlers/auto_manager.py": 10,
-    "uk_management_bot/handlers/health.py": 5,
+    "uk_management_bot/handlers/health.py": 4,
     "uk_management_bot/handlers/requests/executor.py": 11,
     "uk_management_bot/handlers/requests/listing.py": 6,
     "uk_management_bot/handlers/requests/materials.py": 5,

@@ -275,18 +275,3 @@ class TestGlobalHelperFunctions:
         hs_mod._health_server = None
         from uk_management_bot.utils.health_server import stop_health_server
         stop_health_server()  # Should not raise
-
-    def test_get_health_server_returns_instance(self):
-        import uk_management_bot.utils.health_server as hs_mod
-        from uk_management_bot.utils.health_server import HealthServer
-        fake = MagicMock(spec=HealthServer)
-        hs_mod._health_server = fake
-        from uk_management_bot.utils.health_server import get_health_server
-        result = get_health_server()
-        assert result is fake
-
-    def test_get_health_server_returns_none_when_not_started(self):
-        import uk_management_bot.utils.health_server as hs_mod
-        hs_mod._health_server = None
-        from uk_management_bot.utils.health_server import get_health_server
-        assert get_health_server() is None

@@ -209,28 +209,9 @@ def validate_phone(phone: str) -> bool:
     pattern = r'^\+998[0-9]{9}$|^998[0-9]{9}$|^[0-9]{9}$'
     return bool(re.match(pattern, phone.replace(' ', '')))
 
-def validate_address(address: str) -> bool:
-    """Валидация адреса"""
-    return len(address.strip()) >= 10
-
 def validate_description(description: str) -> bool:
     """Валидация описания"""
     return len(description.strip()) >= 10
-
-def format_file_size(size_bytes: int) -> str:
-    """Форматирование размера файла"""
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    else:
-        return f"{size_bytes / (1024 * 1024):.1f} MB"
-
-def truncate_text(text: str, max_length: int = 100) -> str:
-    """Обрезка текста до максимальной длины"""
-    if len(text) <= max_length:
-        return text
-    return text[:max_length-3] + "..."
 
 def get_user_language(user_id: int, db) -> str:
     """
@@ -251,49 +232,3 @@ def get_user_language(user_id: int, db) -> str:
     except Exception:
         pass
     return "ru"  # fallback
-
-def get_language_from_event(event, db=None):
-    """
-    Получить язык из Message или CallbackQuery объекта
-    
-    Args:
-        event: Message или CallbackQuery объект
-        db: Сессия базы данных (опционально для fallback на БД)
-        
-    Returns:
-        str: Код языка
-    """
-    # Сначала пробуем language_code из Telegram
-    if hasattr(event, 'from_user') and event.from_user:
-        telegram_lang = getattr(event.from_user, 'language_code', None)
-        if telegram_lang:
-            return telegram_lang
-        
-        # Если нет language_code и есть БД, проверяем пользователя в БД
-        if db:
-            return get_user_language(event.from_user.id, db)
-    
-    return "ru"  # fallback
-
-
-def format_datetime(dt, language: str = "ru") -> str:
-    """
-    Форматирование datetime объекта в читаемую строку
-    
-    Args:
-        dt: datetime объект
-        language: Язык форматирования
-        
-    Returns:
-        str: Отформатированная дата и время
-    """
-    if not dt:
-        return "-"
-    
-    try:
-        if language == "uz":
-            return dt.strftime("%d.%m.%Y %H:%M")
-        else:  # default to ru
-            return dt.strftime("%d.%m.%Y %H:%M")
-    except Exception:
-        return str(dt)

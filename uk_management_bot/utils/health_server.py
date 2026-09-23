@@ -173,7 +173,3 @@ def stop_health_server():
     if _health_server is not None:
         _health_server.stop()
         _health_server = None
-
-def get_health_server() -> HealthServer:
-    """Получение экземпляра health сервера"""
-    return _health_server
