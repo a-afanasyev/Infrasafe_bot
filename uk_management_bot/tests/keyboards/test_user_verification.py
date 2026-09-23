@@ -228,55 +228,6 @@ class TestGetAccessRightsKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_verification_list_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetVerificationListKeyboard:
-    def _data(self, users=None, current_page=1, total_pages=1):
-        return {
-            "users": users or [],
-            "current_page": current_page,
-            "total_pages": total_pages,
-        }
-
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_verification_list_keyboard
-            result = get_verification_list_keyboard(self._data(), "pending")
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_empty_list_has_no_users_button(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_verification_list_keyboard
-            result = get_verification_list_keyboard(self._data(), "pending")
-        cbs = _flat_cbs(result)
-        assert "no_action" in cbs
-
-    def test_user_button_callback(self):
-        user = _make_user(uid=8)
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_verification_list_keyboard
-            result = get_verification_list_keyboard(self._data(users=[user]), "verified")
-        cbs = _flat_cbs(result)
-        assert "verification_user_8" in cbs
-
-    def test_next_page_button_when_more_pages(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_verification_list_keyboard
-            result = get_verification_list_keyboard(
-                self._data(current_page=1, total_pages=3), "pending"
-            )
-        cbs = _flat_cbs(result)
-        assert any("pending_2" in cb for cb in cbs)
-
-    def test_back_callback(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_verification_list_keyboard
-            result = get_verification_list_keyboard(self._data(), "pending")
-        assert "user_verification_panel" in _flat_cbs(result)
-
-
-# ---------------------------------------------------------------------------
 # get_cancel_keyboard (user_verification module)
 # ---------------------------------------------------------------------------
 

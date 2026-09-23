@@ -120,36 +120,6 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_address_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура для выбора типа адреса"""
-    builder = InlineKeyboardBuilder()
-    
-    # Кнопки типов адресов
-    builder.add(InlineKeyboardButton(
-        text=get_text("profile.keyboards.address_home", language=language),
-        callback_data="address_type_home"
-    ))
-    
-    builder.add(InlineKeyboardButton(
-        text=get_text("profile.keyboards.address_apartment", language=language),
-        callback_data="address_type_apartment"
-    ))
-    
-    builder.add(InlineKeyboardButton(
-        text=get_text("profile.keyboards.address_yard", language=language),
-        callback_data="address_type_yard"
-    ))
-    
-    # Кнопка отмены
-    builder.add(InlineKeyboardButton(
-        text=get_text('buttons.cancel', language=language),
-        callback_data="cancel_address_type"
-    ))
-    
-    builder.adjust(1, 1, 1)
-    return builder.as_markup()
-
-
 def get_cancel_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """Простая клавиатура с кнопкой отмены"""
     builder = InlineKeyboardBuilder()

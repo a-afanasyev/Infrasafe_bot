@@ -11,7 +11,6 @@ from uk_management_bot.keyboards.user_management import (
     get_user_list_keyboard,
     get_roles_management_keyboard,
     get_specializations_selection_keyboard,
-    get_search_filters_keyboard,
 )
 from uk_management_bot.keyboards.employee_management import (
     get_employee_management_main_keyboard,
@@ -69,13 +68,6 @@ class TestBugBot010NoDoubleIcons:
         for text in _collect_button_texts(kb):
             if "Сохранить" in text or "Saqlash" in text:
                 assert text.count("💾") == 1, f"Двойной 💾 в '{text}'"
-
-    @pytest.mark.parametrize("language", ["ru", "uz"])
-    def test_search_filters_back_button_single_icon(self, language):
-        kb = get_search_filters_keyboard(language=language)
-        for text in _collect_button_texts(kb):
-            if "Назад" in text or "Orqaga" in text:
-                assert "◀️" not in text, f"Двойная иконка в '{text}'"
 
     @pytest.mark.parametrize("language", ["ru", "uz"])
     def test_employee_management_main_back_single_icon(self, language):

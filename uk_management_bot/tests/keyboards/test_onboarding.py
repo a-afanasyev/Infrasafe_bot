@@ -87,33 +87,6 @@ class TestGetOnboardingCompletionKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_document_type_inline_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetDocumentTypeInlineKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_type_inline_keyboard
-            result = get_document_type_inline_keyboard()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_five_buttons(self):
-        """4 doc type buttons + 1 skip = 5"""
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_type_inline_keyboard
-            result = get_document_type_inline_keyboard()
-        assert len(_all_inline_buttons(result)) == 5
-
-    def test_doc_type_callbacks_present(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_type_inline_keyboard
-            result = get_document_type_inline_keyboard()
-        callbacks = set(btn.callback_data for btn in _all_inline_buttons(result) if btn.callback_data)
-        assert "doc_type_passport" in callbacks
-        assert "doc_type_skip" in callbacks
-
-
-# ---------------------------------------------------------------------------
 # get_document_management_keyboard
 # ---------------------------------------------------------------------------
 

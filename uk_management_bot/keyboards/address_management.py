@@ -44,23 +44,6 @@ def get_address_management_menu(language: str = "ru") -> InlineKeyboardMarkup:
 # ДВОРЫ
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_yards_menu(language: str = "ru") -> InlineKeyboardMarkup:
-    """Меню управления дворами"""
-    builder = InlineKeyboardBuilder()
-
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.add_yard", language=language), callback_data="addr_yard_create")
-    )
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.yards_list", language=language), callback_data="addr_yards_list")
-    )
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.back", language=language), callback_data="addr_menu")
-    )
-
-    return builder.as_markup()
-
-
 def get_yards_list_keyboard(yards: List[Yard], page: int = 0, page_size: int = 10, language: str = "ru") -> InlineKeyboardMarkup:
     """
     Клавиатура со списком дворов (с пагинацией)
@@ -160,23 +143,6 @@ def get_yard_edit_keyboard(yard_id: int, language: str = "ru") -> InlineKeyboard
 # ═══════════════════════════════════════════════════════════════════════════════
 # ЗДАНИЯ
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def get_buildings_menu(language: str = "ru") -> InlineKeyboardMarkup:
-    """Меню управления зданиями"""
-    builder = InlineKeyboardBuilder()
-
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.add_building", language=language), callback_data="addr_building_create")
-    )
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.buildings_list", language=language), callback_data="addr_buildings_list")
-    )
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.back", language=language), callback_data="addr_menu")
-    )
-
-    return builder.as_markup()
-
 
 def get_buildings_list_keyboard(
     buildings: List[Building],
@@ -461,20 +427,6 @@ def get_apartment_edit_keyboard(apartment_id: int, language: str = "ru") -> Inli
 # ═══════════════════════════════════════════════════════════════════════════════
 # МОДЕРАЦИЯ ЗАЯВОК
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def get_moderation_menu(language: str = "ru") -> InlineKeyboardMarkup:
-    """Меню модерации заявок на квартиры"""
-    builder = InlineKeyboardBuilder()
-
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.requests_pending", language=language), callback_data="addr_moderation_list")
-    )
-    builder.row(
-        InlineKeyboardButton(text=get_text("address.keyboards.back", language=language), callback_data="addr_menu")
-    )
-
-    return builder.as_markup()
-
 
 def get_moderation_requests_keyboard(
     requests: List[UserApartment],

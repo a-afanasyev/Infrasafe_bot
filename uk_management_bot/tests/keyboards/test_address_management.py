@@ -94,24 +94,6 @@ class TestGetAddressManagementMenu:
 
 
 # ---------------------------------------------------------------------------
-# get_yards_menu
-# ---------------------------------------------------------------------------
-
-class TestGetYardsMenu:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.address_management import get_yards_menu
-            result = get_yards_menu()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_three_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.address_management import get_yards_menu
-            result = get_yards_menu()
-        assert len(_all_inline_buttons(result)) == 3
-
-
-# ---------------------------------------------------------------------------
 # get_yards_list_keyboard
 # ---------------------------------------------------------------------------
 
@@ -354,24 +336,6 @@ class TestGetCancelKeyboardInline:
             from uk_management_bot.keyboards.address_management import get_cancel_keyboard_inline
             result = get_cancel_keyboard_inline()
         assert _all_callbacks(result) == ["cancel_action"]
-
-
-# ---------------------------------------------------------------------------
-# get_moderation_menu / get_moderation_request_details_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetModerationMenu:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.address_management import get_moderation_menu
-            result = get_moderation_menu()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_two_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.address_management import get_moderation_menu
-            result = get_moderation_menu()
-        assert len(_all_inline_buttons(result)) == 2
 
 
 class TestGetModerationRequestDetailsKeyboard:

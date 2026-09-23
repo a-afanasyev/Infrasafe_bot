@@ -129,32 +129,3 @@ def get_comments_list_keyboard(request_number: str, language: str = "ru") -> Inl
     ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def get_comment_actions_keyboard(request_number: str, comment_id: int, language: str = "ru") -> InlineKeyboardMarkup:
-    """
-    Клавиатура действий с комментарием
-    
-    Args:
-        request_number: Номер заявки
-        comment_id: ID комментария
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup: Клавиатура с действиями
-    """
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text=get_text("request_comments.keyboards.reply_to_comment", language=language),
-                callback_data=f"reply_to_comment_{comment_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=get_text("request_comments.keyboards.back_to_comments", language=language),
-                callback_data=f"back_to_comments_{request_number}"
-            )
-        ]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)

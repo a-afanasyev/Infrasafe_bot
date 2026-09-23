@@ -217,30 +217,6 @@ class TestGetRolesManagementKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_search_filters_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetSearchFiltersKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_management import get_search_filters_keyboard
-            result = get_search_filters_keyboard()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_six_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_management import get_search_filters_keyboard
-            result = get_search_filters_keyboard()
-        assert len(_flat_texts(result)) == 6
-
-    def test_back_callback(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_management import get_search_filters_keyboard
-            result = get_search_filters_keyboard()
-        assert "user_mgmt_main" in _flat_cbs(result)
-
-
-# ---------------------------------------------------------------------------
 # get_confirmation_keyboard
 # ---------------------------------------------------------------------------
 
@@ -287,21 +263,3 @@ class TestGetCancelKeyboardUserMgmt:
             from uk_management_bot.keyboards.user_management import get_cancel_keyboard
             result = get_cancel_keyboard()
         assert "user_mgmt_cancel" in _flat_cbs(result)
-
-
-# ---------------------------------------------------------------------------
-# get_specialization_stats_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetSpecializationStatsKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_management import get_specialization_stats_keyboard
-            result = get_specialization_stats_keyboard()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_three_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_management import get_specialization_stats_keyboard
-            result = get_specialization_stats_keyboard()
-        assert len(_flat_texts(result)) == 3

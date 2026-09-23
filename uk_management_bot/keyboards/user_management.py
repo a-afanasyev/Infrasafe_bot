@@ -362,51 +362,6 @@ def get_specializations_selection_keyboard(user_specializations: List[str], lang
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_search_filters_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура фильтров для поиска пользователей
-    
-    Args:
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup с фильтрами
-    """
-    buttons = [
-        # Фильтры по статусу
-        [InlineKeyboardButton(
-            text=f"📝 {get_text('filters.by_status', language)}",
-            callback_data="search_filter_status"
-        )],
-        [InlineKeyboardButton(
-            text=f"👥 {get_text('filters.by_role', language)}",
-            callback_data="search_filter_role"
-        )],
-        [InlineKeyboardButton(
-            text=f"🛠️ {get_text('filters.by_specialization', language)}",
-            callback_data="search_filter_specialization"
-        )],
-        
-        # Поиск по имени
-        [InlineKeyboardButton(
-            text=f"🔍 {get_text('search.by_name', language)}",
-            callback_data="search_by_name"
-        )],
-        
-        # Сброс фильтров и назад
-        [InlineKeyboardButton(
-            text=f"🔄 {get_text('buttons.reset_filters', language)}",
-            callback_data="search_reset_filters"
-        )],
-        [InlineKeyboardButton(
-            text=get_text('buttons.back', language),
-            callback_data="user_mgmt_main"
-        )]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
 def get_confirmation_keyboard(action: str, user_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура подтверждения действия
@@ -453,34 +408,6 @@ def get_cancel_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     ])
 
 
-def get_specialization_stats_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура для статистики специализаций
-    
-    Args:
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup для управления специализациями
-    """
-    buttons = [
-        [InlineKeyboardButton(
-            text=f"🔍 {get_text('specializations.search_by_spec', language)}",
-            callback_data="spec_search"
-        )],
-        [InlineKeyboardButton(
-            text=f"📊 {get_text('specializations.view_stats', language)}",
-            callback_data="spec_stats"
-        )],
-        [InlineKeyboardButton(
-            text=get_text('buttons.back', language),
-            callback_data="user_mgmt_main"
-        )]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
 # ═══ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ═══
 
 def _format_user_name(user) -> str:
@@ -496,26 +423,3 @@ def _get_status_emoji(status: str) -> str:
         "blocked": "🚫"
     }
     return status_emojis.get(status, "❓")
-
-
-def get_pagination_info(page: int, total_pages: int, total_items: int, language: str = 'ru') -> str:
-    """
-    Получить информацию о пагинации для отображения
-    
-    Args:
-        page: Текущая страница
-        total_pages: Общее количество страниц
-        total_items: Общее количество элементов
-        language: Язык интерфейса
-        
-    Returns:
-        Отформатированная строка с информацией о пагинации
-    """
-    if total_items == 0:
-        return get_text('pagination.no_items', language)
-    
-    return get_text('pagination.info', language).format(
-        page=page,
-        total_pages=total_pages,
-        total_items=total_items
-    )

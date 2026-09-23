@@ -108,15 +108,6 @@ def get_cancel_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     builder.add(KeyboardButton(text=get_text("buttons.cancel", language=language)))
     return builder.as_markup(resize_keyboard=True)
 
-def get_yes_no_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """Клавиатура Да/Нет"""
-    builder = ReplyKeyboardBuilder()
-    builder.add(KeyboardButton(text=get_text("buttons.yes", language=language)))
-    builder.add(KeyboardButton(text=get_text("buttons.no", language=language)))
-    builder.add(KeyboardButton(text=get_text("buttons.back", language=language)))
-    builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)
-
 def get_rating_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура для оценки (1-5 звезд)"""
     builder = InlineKeyboardBuilder()

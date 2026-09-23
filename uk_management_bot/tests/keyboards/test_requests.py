@@ -5,7 +5,6 @@ Tests return types, button counts, and callback-data conventions.
 get_text is mocked; DB/service calls that happen inside keyboard functions
 (yard/building/apartment selection) are also patched.
 """
-import pytest
 from unittest.mock import patch
 
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup
@@ -102,25 +101,6 @@ class TestGetCategoriesInlineKeyboardWithCancel:
             from uk_management_bot.keyboards.requests import get_categories_inline_keyboard_with_cancel
             result = get_categories_inline_keyboard_with_cancel()
         assert "cancel_create" in _flat_inline_cbs(result)
-
-
-# ---------------------------------------------------------------------------
-# get_urgency_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetUrgencyKeyboard:
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_urgency_keyboard
-            result = get_urgency_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-    def test_has_five_buttons(self):
-        """4 urgency levels + 1 cancel = 5."""
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_urgency_keyboard
-            result = get_urgency_keyboard()
-        assert len(_flat_reply_texts(result)) == 5
 
 
 # ---------------------------------------------------------------------------
@@ -226,58 +206,6 @@ class TestGetInlineConfirmationKeyboard:
         cbs = _flat_inline_cbs(result)
         assert "confirm_yes" in cbs
         assert "confirm_no" in cbs
-
-
-# ---------------------------------------------------------------------------
-# get_edit_request_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetEditRequestKeyboard:
-    @pytest.mark.xfail(
-        reason="BUG: get_edit_request_keyboard passes raw strings as row entries "
-               "instead of KeyboardButton objects — aiogram Pydantic raises ValidationError. "
-               "Source code needs wrapping each entry in KeyboardButton(text=...).",
-        strict=True,
-    )
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_edit_request_keyboard
-            result = get_edit_request_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-
-# ---------------------------------------------------------------------------
-# get_request_status_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetRequestStatusKeyboard:
-    @pytest.mark.xfail(
-        reason="BUG: get_request_status_keyboard passes raw strings as row entries "
-               "instead of KeyboardButton objects — same bug as get_edit_request_keyboard.",
-        strict=True,
-    )
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_request_status_keyboard
-            result = get_request_status_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-
-# ---------------------------------------------------------------------------
-# get_requests_filter_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetRequestsFilterKeyboard:
-    @pytest.mark.xfail(
-        reason="BUG: get_requests_filter_keyboard passes raw strings as row entries "
-               "instead of KeyboardButton objects — same bug as get_edit_request_keyboard.",
-        strict=True,
-    )
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_requests_filter_keyboard
-            result = get_requests_filter_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
 
 
 # ---------------------------------------------------------------------------

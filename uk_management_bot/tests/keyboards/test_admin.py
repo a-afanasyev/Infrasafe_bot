@@ -103,42 +103,6 @@ class TestGetCompletedRequestsSubmenu:
 
 
 # ---------------------------------------------------------------------------
-# get_manager_requests_inline
-# ---------------------------------------------------------------------------
-
-class TestGetManagerRequestsInline:
-    def test_returns_inline_keyboard_markup(self):
-        from uk_management_bot.keyboards.admin import get_manager_requests_inline
-        result = get_manager_requests_inline(page=1, total_pages=3)
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_first_page_has_no_prev_button(self):
-        from uk_management_bot.keyboards.admin import get_manager_requests_inline
-        result = get_manager_requests_inline(page=1, total_pages=3)
-        callbacks = _all_inline_callbacks(result)
-        assert not any(c.startswith("mreq_page_0") for c in callbacks)
-
-    def test_last_page_has_no_next_button(self):
-        from uk_management_bot.keyboards.admin import get_manager_requests_inline
-        result = get_manager_requests_inline(page=3, total_pages=3)
-        callbacks = _all_inline_callbacks(result)
-        assert not any(c == "mreq_page_4" for c in callbacks)
-
-    def test_middle_page_has_both_nav_buttons(self):
-        from uk_management_bot.keyboards.admin import get_manager_requests_inline
-        result = get_manager_requests_inline(page=2, total_pages=5)
-        callbacks = _all_inline_callbacks(result)
-        assert "mreq_page_1" in callbacks
-        assert "mreq_page_3" in callbacks
-
-    def test_shows_page_indicator(self):
-        from uk_management_bot.keyboards.admin import get_manager_requests_inline
-        result = get_manager_requests_inline(page=2, total_pages=5)
-        texts = _all_inline_texts(result)
-        assert any("2/5" in t for t in texts)
-
-
-# ---------------------------------------------------------------------------
 # get_invite_role_keyboard
 # ---------------------------------------------------------------------------
 
