@@ -105,7 +105,8 @@ docker compose build app && docker compose up -d app
 make test-ci
 ```
 
-Быстрая петля в живом контейнере (два блокирующих набора — оба в CI):
+Быстрая петля в живом контейнере (два блокирующих набора — оба в CI). Контейнер
+должен быть собран с dev-зависимостями — `make build-bot` (в прод-сборке pytest нет):
 
 ```bash
 docker exec uk-management-bot pytest -q                          # unit/handlers/services

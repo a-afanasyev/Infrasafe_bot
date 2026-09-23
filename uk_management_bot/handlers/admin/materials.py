@@ -159,8 +159,9 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
         # Загружаем обновленный список заявок в закупе
         requests = svc.list_purchase_requests(limit=10)
 
+        # A9-P2-33: edit_text — только inline-markup; без него кнопки карточки снимаются (меню уже на экране).
         if not requests:
-            await callback.message.edit_text(get_text("admin.handlers.no_procurement_requests", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
+            await callback.message.edit_text(get_text("admin.handlers.no_procurement_requests", language=lang))
             return
 
         # Показываем обновленный список заявок в закупе
@@ -171,7 +172,7 @@ async def handle_return_to_work(callback: CallbackQuery, db: Session, roles: lis
             text += f"{i}. #{r.request_number} - {html.escape(r.category or '')}\n"
             text += f"   📍 {addr}\n\n"
         
-        await callback.message.edit_text(text, reply_markup=get_manager_main_keyboard(language=lang))
+        await callback.message.edit_text(text)
         
         logger.info(f"Заявка {request_number} возвращена в работу менеджером {callback.from_user.id}")
         
