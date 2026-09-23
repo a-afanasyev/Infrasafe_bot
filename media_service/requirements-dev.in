@@ -1,0 +1,10 @@
+# A9-P2-19: dev-lock media-service для CI-джобы media-tests. Рантайм — тот же
+# requirements.in (версии прибиты к рантайм-локу через -c, чтобы тесты шли на
+# тех же пакетах, что уезжают в образ), сверху только тест-инструменты.
+# Перегенерация (из media_service/):
+#   uv pip compile requirements-dev.in -o requirements-dev.txt --generate-hashes --python-version 3.11 --universal
+-r requirements.in
+-c requirements.txt
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0

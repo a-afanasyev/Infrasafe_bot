@@ -221,6 +221,251 @@
       "month": "Месяц",
       "cancel": "Отмена",
       "create": "Создать"
+    },
+    "common": {
+      "close": "Закрыть",
+      "cancel": "Отмена",
+      "save": "Сохранить",
+      "saving": "Сохранение…",
+      "create": "Создать",
+      "all": "Все",
+      "error": "Ошибка",
+      "saveError": "Ошибка сохранения",
+      "operationError": "Ошибка операции",
+      "prev": "← Назад",
+      "next": "Вперёд →",
+      "pageOf": "Стр. {{page}} из {{total}} (всего {{count}})"
+    },
+    "errors": {
+      "requestFailed": "Ошибка запроса ({{status}})"
+    },
+    "months": {
+      "m01": "Январь",
+      "m02": "Февраль",
+      "m03": "Март",
+      "m04": "Апрель",
+      "m05": "Май",
+      "m06": "Июнь",
+      "m07": "Июль",
+      "m08": "Август",
+      "m09": "Сентябрь",
+      "m10": "Октябрь",
+      "m11": "Ноябрь",
+      "m12": "Декабрь"
+    },
+    "roles": {
+      "resource_admin": "Администратор",
+      "resource_operator": "Оператор",
+      "resource_reviewer": "Проверяющий",
+      "resource_viewer": "Просмотр",
+      "resource_meter_entry": "Контролёр"
+    },
+    "meterStatus": {
+      "active": "Активен",
+      "decommissioned": "Снят",
+      "archived": "Архив"
+    },
+    "sparkline": {
+      "title": "{{n}} мес: {{values}} {{unit}}"
+    },
+    "meterDetail": {
+      "backToList": "← К реестру",
+      "edit": "Редактировать",
+      "correctNumber": "Исправить номер",
+      "replace": "Заменить",
+      "toArchive": "В архив",
+      "tabDetails": "Реквизиты",
+      "tabChart": "График",
+      "description": "Описание",
+      "installLocation": "Место установки",
+      "primaryObject": "Основной объект",
+      "provider": "Поставщик",
+      "providerAccount": "Лицевой счёт",
+      "serialNumber": "Серийный номер",
+      "coefficient": "Коэффициент",
+      "maxDigits": "Разрядность",
+      "installedAt": "Установлен",
+      "removedAt": "Снят",
+      "note": "Примечание",
+      "tags": "Теги",
+      "consumers": "Потребители",
+      "noConsumers": "Потребители не указаны",
+      "colObject": "Объект",
+      "chartTitle": "Расход и показания",
+      "rangeAll": "Всё",
+      "rangeMonths": "{{n}} мес",
+      "noChartData": "Нет данных за выбранный диапазон",
+      "consumptionAxis": "Расход, {{unit}}",
+      "consumption": "Расход",
+      "reading": "Показание",
+      "avgMonths": "Среднее за {{n}} мес",
+      "changePrevMonth": "Изменение к пред. мес",
+      "yearOverYear": "Год к году",
+      "editTitle": "Редактировать счётчик",
+      "correctTitle": "Исправить номер счётчика",
+      "correctHint": "Исправление опечатки в номере. Текущий номер:",
+      "newNumber": "Новый номер *",
+      "reason": "Причина *",
+      "correct": "Исправить",
+      "replaceTitle": "Замена счётчика",
+      "removalDate": "Дата снятия *",
+      "replaceReason": "Причина замены *",
+      "newMeter": "Новый счётчик",
+      "replaceValidation": "Укажите дату снятия и причину замены (мин. 3 символа)",
+      "archiveTitle": "Архивировать счётчик",
+      "archiveConfirmBefore": "Счётчик",
+      "archiveConfirmAfter": "будет перенесён в архив и исчезнет из ведомости. Продолжить?"
+    },
+    "meters": {
+      "title": "Счётчики",
+      "newMeterButton": "+ Новый счётчик",
+      "newMeterTitle": "Новый счётчик",
+      "searchPlaceholder": "Поиск (номер, название)…",
+      "resource": "Ресурс",
+      "status": "Статус",
+      "provider": "Поставщик",
+      "filterActive": "Активные",
+      "filterDecommissioned": "Снятые",
+      "filterArchived": "Архив",
+      "notFound": "Счётчики не найдены",
+      "colNumber": "Номер",
+      "colName": "Название",
+      "colObject": "Объект",
+      "colInstallLocation": "Место установки",
+      "colConsumption6m": "Расход, 6 мес",
+      "colProviderAccount": "Поставщик / лиц. счёт"
+    },
+    "meterForm": {
+      "meterNumber": "Номер счётчика *",
+      "resource": "Ресурс *",
+      "electricityOption": "Электроэнергия (кВт·ч)",
+      "coldWaterOption": "Холодная вода (м³)",
+      "name": "Название *",
+      "description": "Описание *",
+      "installLocation": "Место установки *",
+      "primaryObject": "Основной объект *",
+      "choose": "— выберите —",
+      "provider": "Поставщик",
+      "providerAccount": "Лицевой счёт",
+      "serialNumber": "Серийный номер",
+      "coefficient": "Коэффициент",
+      "maxDigits": "Разрядность",
+      "note": "Примечание",
+      "consumers": "Потребители",
+      "chooseObject": "— объект —",
+      "consumerDescription": "Описание",
+      "removeConsumer": "Удалить потребителя",
+      "addConsumer": "+ Добавить потребителя"
+    },
+    "objects": {
+      "title": "Объекты",
+      "newObjectButton": "+ Новый объект",
+      "addChild": "+ Дочерний",
+      "edit": "Изменить",
+      "archive": "Архив",
+      "archiveConfirm": "Архивировать объект «{{name}}»?",
+      "tabTree": "Дерево объектов",
+      "tabTypes": "Типы объектов",
+      "tabTags": "Теги",
+      "showArchived": "Показывать архивные",
+      "empty": "Объекты ещё не созданы",
+      "editTitle": "Редактировать объект",
+      "newTitle": "Новый объект",
+      "nameRequired": "Название *",
+      "code": "Код",
+      "type": "Тип",
+      "parent": "Родитель",
+      "root": "— корневой —",
+      "sortOrder": "Порядок",
+      "description": "Описание",
+      "namePlaceholder": "Название…",
+      "add": "Добавить",
+      "colName": "Название",
+      "colStatus": "Статус",
+      "toArchive": "В архив",
+      "restore": "Вернуть"
+    },
+    "exports": {
+      "title": "Акты сверки",
+      "createTitle": "Создать акт",
+      "creating": "Создание…",
+      "createError": "Ошибка создания акта",
+      "period": "Период",
+      "choose": "— выберите —",
+      "format": "Формат",
+      "provider": "Поставщик",
+      "resource": "Ресурс",
+      "correction": "Корректировочный",
+      "correctionChip": "корр.",
+      "history": "История",
+      "empty": "Актов пока нет",
+      "rows": "Строк",
+      "colStatus": "Статус",
+      "colCreated": "Создан",
+      "colSent": "Отправлен",
+      "download": "Скачать",
+      "markSentButton": "Отправлен",
+      "cancelConfirm": "Отменить акт?",
+      "cancelExport": "Отменить",
+      "markSentTitle": "Отметить как отправленный",
+      "channel": "Канал отправки *",
+      "comment": "Комментарий",
+      "confirm": "Подтвердить",
+      "channels": {
+        "email": "Email",
+        "edi": "ЭДО",
+        "paper": "Бумажный",
+        "other": "Другое"
+      },
+      "status": {
+        "created": "Создан",
+        "generated": "Сформирован",
+        "sent": "Отправлен",
+        "cancelled": "Отменён"
+      }
+    },
+    "dashboard": {
+      "lastPeriod": "Последний период:",
+      "activeMeters": "Активных счётчиков",
+      "enteredInPeriod": "Введено за период",
+      "notEntered": "Не введено",
+      "warningsErrors": "Предупреждения / ошибки",
+      "noPeriods": "Периоды ещё не созданы. Создайте первый период на странице ввода показаний.",
+      "recentExports": "Последние акты сверки",
+      "allExports": "Все акты →"
+    },
+    "providers": {
+      "newButton": "+ Новый поставщик",
+      "empty": "Поставщики не добавлены",
+      "colName": "Название",
+      "contacts": "Контакты",
+      "colStatus": "Статус",
+      "edit": "Изменить",
+      "toArchive": "В архив",
+      "restore": "Вернуть",
+      "editTitle": "Редактировать поставщика",
+      "newTitle": "Новый поставщик",
+      "nameRequired": "Название *"
+    },
+    "audit": {
+      "title": "Журнал изменений",
+      "entity": "Сущность",
+      "action": "Действие",
+      "empty": "Записей не найдено",
+      "colDate": "Дата",
+      "colActor": "Кто",
+      "colBefore": "Было",
+      "colAfter": "Стало",
+      "entities": {
+        "all": "Все сущности",
+        "meter": "Счётчики",
+        "reading": "Показания",
+        "period": "Периоды",
+        "object": "Объекты",
+        "export": "Акты",
+        "provider": "Поставщики",
+        "session": "Сессии"
+      }
     }
   },
   "accessControl": {
@@ -801,7 +1046,13 @@
     "or": "или",
     "otpInvalid": "Неверный код",
     "otpResent": "Код отправлен повторно",
-    "otpResendFailed": "Не удалось отправить код"
+    "otpResendFailed": "Не удалось отправить код",
+    "panelTitle": "Сервисная панель",
+    "otpSent": "Код отправлен в Telegram",
+    "otpLabel": "Код подтверждения",
+    "otpConfirm": "Подтвердить",
+    "back": "Назад",
+    "otpResend": "Отправить повторно"
   },
   "register": {
     "title": "Регистрация жителя",
@@ -2009,7 +2260,9 @@
         "blockedPickAnother": "Выберите другой лифт или вернитесь к категории.",
         "hintUnderRepair": "Лифт уже в ремонте — заявка будет добавлена к текущему ремонту.",
         "hintMaintenance": "Лифт на техобслуживании — заявка будет передана обслуживающей организации."
-      }
+      },
+      "photoUploadFailed": "Заявка создана, но не загрузились фото №{{numbers}}",
+      "submittedWithPhotos": "Заявка создана (фото: {{count}})"
     },
     "inspector": {
       "selectYard": "Выберите двор",
@@ -2061,7 +2314,9 @@
         "active": "Смена активна",
         "inactive": "Смена не начата",
         "start": "Начать смену",
-        "end": "Завершить смену"
+        "end": "Завершить смену",
+        "startFailed": "Не удалось начать смену",
+        "endFailed": "Не удалось завершить смену"
       },
       "purchase": {
         "title": "Закуп материалов",
@@ -2087,7 +2342,9 @@
         "purchaseTitle": "Что нужно закупить?",
         "purchasePlaceholder": "Список материалов...",
         "clarifyTitle": "Что требует уточнения?",
-        "clarifyPlaceholder": "Опишите, что нужно уточнить..."
+        "clarifyPlaceholder": "Опишите, что нужно уточнить...",
+        "statusChangeFailed": "Не удалось изменить статус",
+        "clarifyFailed": "Не удалось отправить уточнение"
       },
       "myShifts": {
         "title": "Мои смены",
@@ -2147,7 +2404,9 @@
         "description": "Опишите что было сделано",
         "placeholder": "Что было сделано...",
         "photos": "Фото выполненных работ",
-        "submit": "Отметить выполненной"
+        "submit": "Отметить выполненной",
+        "photoUploadFailed": "Заявка завершена, но не загрузились фото №{{numbers}}",
+        "completeFailed": "Не удалось завершить заявку"
       }
     },
     "timeline": {
@@ -2174,7 +2433,8 @@
       "maxFiles": "Максимум {{count}} файлов",
       "camera": "Камера",
       "gallery": "Галерея",
-      "remove": "Удалить фото"
+      "remove": "Удалить фото",
+      "uploadProgress": "Загрузка фото {{done}}/{{total}}"
     },
     "feedback": {
       "title": "Обратная связь",
@@ -2189,7 +2449,10 @@
       "error": "Не удалось отправить обращение"
     },
     "authError": "Не удалось войти через Telegram. Проверьте соединение и попробуйте ещё раз.",
-    "retry": "Повторить"
+    "retry": "Повторить",
+    "errors": {
+      "generic": "Произошла ошибка"
+    }
   },
   "toast": {
     "requestUpdated": "Заявка обновлена",

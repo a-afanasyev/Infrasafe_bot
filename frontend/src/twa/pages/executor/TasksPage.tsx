@@ -3,6 +3,7 @@ import type { TwaRequest } from '../../types'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
+import { tStatus } from '../../../i18n/apiMaps'
 import RequestCard from '../../components/RequestCard'
 import { CardSkeleton } from '../../components/Skeleton'
 import PullToRefresh from '../../components/PullToRefresh'
@@ -45,7 +46,7 @@ export default function TasksPage() {
 
       {Object.entries(grouped).map(([status, items]) => (
         <div key={status} className="mb-4">
-          <h2 className="text-[12px] font-semibold text-gray-500 uppercase mb-2">{status} ({items.length})</h2>
+          <h2 className="text-[12px] font-semibold text-gray-500 uppercase mb-2">{tStatus(status, t)} ({items.length})</h2>
           {items.map((req: TwaRequest) => (
             <RequestCard
               key={req.request_number}

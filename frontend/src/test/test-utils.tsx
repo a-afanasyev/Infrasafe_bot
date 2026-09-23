@@ -5,12 +5,14 @@ import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import i18next from 'i18next'
 import ru from '../i18n/locales/ru.json'
+import uz from '../i18n/locales/uz.json'
 
 // Test i18n instance built straight from ru.json — deliberately NOT importing
 // src/i18n/index.ts (which wires LanguageDetector / localStorage).
 export const testI18n = i18next.createInstance()
 testI18n.use(initReactI18next).init({
-  resources: { ru: { translation: ru } },
+  // uz — для тестов, проверяющих перевод через getFixedT('uz'); язык по умолчанию ru.
+  resources: { ru: { translation: ru }, uz: { translation: uz } },
   lng: 'ru',
   fallbackLng: 'ru',
   interpolation: { escapeValue: false },

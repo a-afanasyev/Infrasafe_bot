@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { apiPaged } from '../api/client';
 import type { AuditEntry } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
-import { formatDateTime } from '../utils/format';
+import { useResourceFormat } from '../utils/useResourceFormat';
 
 const ENTITY_TYPES = [
-  { value: '', label: 'Все сущности' },
-  { value: 'meter', label: 'Счётчики' },
-  { value: 'reading', label: 'Показания' },
-  { value: 'period', label: 'Периоды' },
-  { value: 'object', label: 'Объекты' },
-  { value: 'export', label: 'Акты' },
-  { value: 'provider', label: 'Поставщики' },
-  { value: 'session', label: 'Сессии' },
+  { value: '', labelKey: 'resourceAccounting.audit.entities.all' },
+  { value: 'meter', labelKey: 'resourceAccounting.audit.entities.meter' },
+  { value: 'reading', labelKey: 'resourceAccounting.audit.entities.reading' },
+  { value: 'period', labelKey: 'resourceAccounting.audit.entities.period' },
+  { value: 'object', labelKey: 'resourceAccounting.audit.entities.object' },
+  { value: 'export', labelKey: 'resourceAccounting.audit.entities.export' },
+  { value: 'provider', labelKey: 'resourceAccounting.audit.entities.provider' },
+  { value: 'session', labelKey: 'resourceAccounting.audit.entities.session' },
 ];
 
 function summarize(value: unknown): string {
@@ -27,6 +28,8 @@ function summarize(value: unknown): string {
 }
 
 export function AuditPage() {
+  const { t } = useTranslation();
+  const { formatDateTime } = useResourceFormat();
   const [entityType, setEntityType] = useState('');
   const [action, setAction] = useState('');
   const [page, setPage] = useState(1);
@@ -48,12 +51,12 @@ export function AuditPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Журнал изменений</h1>
+        <h1>{t('resourceAccounting.audit.title')}</h1>
       </div>
 
       <div className="toolbar">
         <label className="field-inline">
-          <span>Сущность</span>
+          <span>{t('resourceAccounting.audit.entity')}</span>
           <select
             value={entityType}
             onChange={(e) => {
@@ -61,15 +64,15 @@ export function AuditPage() {
               setPage(1);
             }}
           >
-            {ENTITY_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {ENTITY_TYPES.map((et) => (
+              <option key={et.value} value={et.value}>
+                {t(et.labelKey)}
               </option>
             ))}
           </select>
         </label>
         <label className="field-inline">
-          <span>Действие</span>
+          <span>{t('resourceAccounting.audit.action')}</span>
           <input
             placeholder="create, update…"
             value={action}
@@ -86,19 +89,19 @@ export function AuditPage() {
       ) : auditQuery.isError ? (
         <ErrorState error={auditQuery.error} onRetry={() => auditQuery.refetch()} />
       ) : auditQuery.data!.data.length === 0 ? (
-        <Empty text="Записей не найдено" />
+        <Empty text={t('resourceAccounting.audit.empty')} />
       ) : (
         <>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Дата</th>
-                  <th>Сущность</th>
-                  <th>Действие</th>
-                  <th>Кто</th>
-                  <th>Было</th>
-                  <th>Стало</th>
+                  <th>{t('resourceAccounting.audit.colDate')}</th>
+                  <th>{t('resourceAccounting.audit.entity')}</th>
+                  <th>{t('resourceAccounting.audit.action')}</th>
+                  <th>{t('resourceAccounting.audit.colActor')}</th>
+                  <th>{t('resourceAccounting.audit.colBefore')}</th>
+                  <th>{t('resourceAccounting.audit.colAfter')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,17 +123,17 @@ export function AuditPage() {
           </div>
           <div className="pagination">
             <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              ← Назад
+              {t('resourceAccounting.common.prev')}
             </button>
             <span>
-              Стр. {page} из {totalPages} (всего {meta?.total ?? 0})
+              {t('resourceAccounting.common.pageOf', { page, total: totalPages, count: meta?.total ?? 0 })}
             </span>
             <button
               className="btn btn-sm"
               disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
             >
-              Вперёд →
+              {t('resourceAccounting.common.next')}
             </button>
           </div>
         </>

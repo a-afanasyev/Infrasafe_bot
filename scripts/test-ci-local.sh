@@ -129,7 +129,9 @@ finish() {
 trap finish EXIT
 
 echo "==> сборка образа из текущего дерева ($IMAGE)"
-docker build -q -t "$IMAGE" . >/dev/null
+# A9-P2-19: в Dockerfile INSTALL_DEV=false по умолчанию (прод-образ без
+# pytest) — тестовому образу dev-зависимости включаются явно.
+docker build -q --build-arg INSTALL_DEV=true -t "$IMAGE" . >/dev/null
 
 echo "==> одноразовые postgres + redis"
 cleanup

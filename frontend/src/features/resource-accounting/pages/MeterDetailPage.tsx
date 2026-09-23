@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
 import {
@@ -15,11 +16,12 @@ import {
 } from 'recharts';
 import { api, ApiError } from '../api/client';
 import type { Meter, MeterAnalytics, MeterCreatePayload, Provider } from '../api/types';
-import { METER_STATUS_LABELS, RESOURCE_TYPE_LABELS } from '../api/types';
+import { METER_STATUS_KEYS, RESOURCE_TYPE_KEYS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { Modal } from '../components/Modal';
 import { MeterForm } from '../components/MeterForm';
-import { formatDate, formatNumber } from '../utils/format';
+import { formatNumber } from '../utils/format';
+import { useResourceFormat } from '../utils/useResourceFormat';
 import { canEnterReadings } from '../auth/roles';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
 import { useResourceLink } from '../paths';
@@ -39,6 +41,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function MeterDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
+  const { formatDate } = useResourceFormat();
   const navigate = useNavigate();
   const link = useResourceLink();
   const { role } = useResourceAuth();
@@ -79,7 +83,7 @@ export function MeterDetailPage() {
   };
 
   const onMutationError = (e: unknown) =>
-    setModalError(e instanceof ApiError ? e.message : 'Ошибка операции');
+    setModalError(e instanceof ApiError ? e.message : t('resourceAccounting.common.operationError'));
 
   const refetchMeter = () => {
     void queryClient.invalidateQueries({ queryKey: ['meter', id] });
@@ -151,29 +155,29 @@ export function MeterDetailPage() {
       <div className="page-header">
         <div>
           <button className="btn btn-sm btn-ghost" onClick={() => navigate(link('/meters'))}>
-            ← К реестру
+            {t('resourceAccounting.meterDetail.backToList')}
           </button>
           <h1>
             <span className="mono">{meter.meter_number}</span> — {meter.name}
           </h1>
           <div className="muted">
-            {RESOURCE_TYPE_LABELS[meter.resource_type]}, {meter.unit} ·{' '}
-            {METER_STATUS_LABELS[meter.status] ?? meter.status}
+            {t(RESOURCE_TYPE_KEYS[meter.resource_type])}, {meter.unit} ·{' '}
+            {METER_STATUS_KEYS[meter.status] ? t(METER_STATUS_KEYS[meter.status]) : meter.status}
           </div>
         </div>
         {canEdit && meter.status === 'active' && (
           <div className="btn-group">
             <button className="btn" onClick={() => setModal('edit')}>
-              Редактировать
+              {t('resourceAccounting.meterDetail.edit')}
             </button>
             <button className="btn" onClick={() => setModal('correct')}>
-              Исправить номер
+              {t('resourceAccounting.meterDetail.correctNumber')}
             </button>
             <button className="btn" onClick={() => setModal('replace')}>
-              Заменить
+              {t('resourceAccounting.meterDetail.replace')}
             </button>
             <button className="btn btn-danger" onClick={() => setModal('archive')}>
-              В архив
+              {t('resourceAccounting.meterDetail.toArchive')}
             </button>
           </div>
         )}
@@ -181,58 +185,58 @@ export function MeterDetailPage() {
 
       <div className="tabs">
         <button className={`tab${tab === 'details' ? ' active' : ''}`} onClick={() => setTab('details')}>
-          Реквизиты
+          {t('resourceAccounting.meterDetail.tabDetails')}
         </button>
         <button className={`tab${tab === 'chart' ? ' active' : ''}`} onClick={() => setTab('chart')}>
-          График
+          {t('resourceAccounting.meterDetail.tabChart')}
         </button>
       </div>
 
       {tab === 'details' && (
         <div className="detail-grid">
           <section className="panel">
-            <h2>Реквизиты</h2>
+            <h2>{t('resourceAccounting.meterDetail.tabDetails')}</h2>
             <dl className="props">
-              <dt>Описание</dt>
+              <dt>{t('resourceAccounting.meterDetail.description')}</dt>
               <dd>{meter.description}</dd>
-              <dt>Место установки</dt>
+              <dt>{t('resourceAccounting.meterDetail.installLocation')}</dt>
               <dd>{meter.install_location}</dd>
-              <dt>Основной объект</dt>
+              <dt>{t('resourceAccounting.meterDetail.primaryObject')}</dt>
               <dd>{meter.primary_object_name ?? '—'}</dd>
-              <dt>Поставщик</dt>
+              <dt>{t('resourceAccounting.meterDetail.provider')}</dt>
               <dd>{provider?.name ?? '—'}</dd>
-              <dt>Лицевой счёт</dt>
+              <dt>{t('resourceAccounting.meterDetail.providerAccount')}</dt>
               <dd>{meter.provider_account ?? '—'}</dd>
-              <dt>Серийный номер</dt>
+              <dt>{t('resourceAccounting.meterDetail.serialNumber')}</dt>
               <dd>{meter.serial_number ?? '—'}</dd>
-              <dt>Коэффициент</dt>
+              <dt>{t('resourceAccounting.meterDetail.coefficient')}</dt>
               <dd>{formatNumber(meter.coefficient)}</dd>
-              <dt>Разрядность</dt>
+              <dt>{t('resourceAccounting.meterDetail.maxDigits')}</dt>
               <dd>{meter.max_digits ?? '—'}</dd>
-              <dt>Установлен</dt>
+              <dt>{t('resourceAccounting.meterDetail.installedAt')}</dt>
               <dd>{formatDate(meter.installed_at)}</dd>
               {meter.removed_at && (
                 <>
-                  <dt>Снят</dt>
+                  <dt>{t('resourceAccounting.meterDetail.removedAt')}</dt>
                   <dd>{formatDate(meter.removed_at)}</dd>
                 </>
               )}
-              <dt>Примечание</dt>
+              <dt>{t('resourceAccounting.meterDetail.note')}</dt>
               <dd>{meter.note ?? '—'}</dd>
-              <dt>Теги</dt>
-              <dd>{meter.tags.length ? meter.tags.map((t) => t.name).join(', ') : '—'}</dd>
+              <dt>{t('resourceAccounting.meterDetail.tags')}</dt>
+              <dd>{meter.tags.length ? meter.tags.map((tag) => tag.name).join(', ') : '—'}</dd>
             </dl>
           </section>
           <section className="panel">
-            <h2>Потребители</h2>
+            <h2>{t('resourceAccounting.meterDetail.consumers')}</h2>
             {meter.consumers.length === 0 ? (
-              <Empty text="Потребители не указаны" />
+              <Empty text={t('resourceAccounting.meterDetail.noConsumers')} />
             ) : (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Объект</th>
-                    <th>Описание</th>
+                    <th>{t('resourceAccounting.meterDetail.colObject')}</th>
+                    <th>{t('resourceAccounting.meterDetail.description')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -252,7 +256,7 @@ export function MeterDetailPage() {
       {tab === 'chart' && (
         <section className="panel">
           <div className="panel-header">
-            <h2>Расход и показания</h2>
+            <h2>{t('resourceAccounting.meterDetail.chartTitle')}</h2>
             <div className="btn-group">
               {(['6m', '12m', '24m', 'all'] as Range[]).map((r) => (
                 <button
@@ -260,7 +264,7 @@ export function MeterDetailPage() {
                   className={`btn btn-sm${range === r ? ' btn-primary' : ''}`}
                   onClick={() => setRange(r)}
                 >
-                  {r === 'all' ? 'Всё' : r.replace('m', ' мес')}
+                  {r === 'all' ? t('resourceAccounting.meterDetail.rangeAll') : t('resourceAccounting.meterDetail.rangeMonths', { n: parseInt(r, 10) })}
                 </button>
               ))}
             </div>
@@ -270,7 +274,7 @@ export function MeterDetailPage() {
           ) : analyticsQuery.isError ? (
             <ErrorState error={analyticsQuery.error} onRetry={() => analyticsQuery.refetch()} />
           ) : chartData.length === 0 ? (
-            <Empty text="Нет данных за выбранный диапазон" />
+            <Empty text={t('resourceAccounting.meterDetail.noChartData')} />
           ) : (
             <>
               <div className="chart-box">
@@ -281,22 +285,22 @@ export function MeterDetailPage() {
                     <YAxis
                       yAxisId="consumption"
                       tick={{ fontSize: 12 }}
-                      label={{ value: `Расход, ${meter.unit}`, angle: -90, position: 'insideLeft', fontSize: 12 }}
+                      label={{ value: t('resourceAccounting.meterDetail.consumptionAxis', { unit: meter.unit }), angle: -90, position: 'insideLeft', fontSize: 12 }}
                     />
                     <YAxis
                       yAxisId="reading"
                       orientation="right"
                       tick={{ fontSize: 12 }}
-                      label={{ value: 'Показание', angle: 90, position: 'insideRight', fontSize: 12 }}
+                      label={{ value: t('resourceAccounting.meterDetail.reading'), angle: 90, position: 'insideRight', fontSize: 12 }}
                     />
                     <Tooltip
                       formatter={(value, name) => [
                         value !== null && value !== undefined ? formatNumber(Number(value)) : '—',
-                        name === 'consumption' ? 'Расход' : 'Показание',
+                        name === 'consumption' ? t('resourceAccounting.meterDetail.consumption') : t('resourceAccounting.meterDetail.reading'),
                       ]}
                     />
                     <Legend
-                      formatter={(value) => (value === 'consumption' ? 'Расход' : 'Показание')}
+                      formatter={(value) => (value === 'consumption' ? t('resourceAccounting.meterDetail.consumption') : t('resourceAccounting.meterDetail.reading'))}
                     />
                     <Bar yAxisId="consumption" dataKey="consumption" name="consumption" fill={accentColor}>
                       {chartData.map((p, i) => (
@@ -318,11 +322,11 @@ export function MeterDetailPage() {
               </div>
               {analytics && (
                 <div className="stats-row">
-                  <Stat label="Среднее за 3 мес" value={analytics.stats.avg_3m} unit={meter.unit} />
-                  <Stat label="Среднее за 6 мес" value={analytics.stats.avg_6m} unit={meter.unit} />
-                  <Stat label="Среднее за 12 мес" value={analytics.stats.avg_12m} unit={meter.unit} />
+                  <Stat label={t('resourceAccounting.meterDetail.avgMonths', { n: 3 })} value={analytics.stats.avg_3m} unit={meter.unit} />
+                  <Stat label={t('resourceAccounting.meterDetail.avgMonths', { n: 6 })} value={analytics.stats.avg_6m} unit={meter.unit} />
+                  <Stat label={t('resourceAccounting.meterDetail.avgMonths', { n: 12 })} value={analytics.stats.avg_12m} unit={meter.unit} />
                   <Stat
-                    label="Изменение к пред. мес"
+                    label={t('resourceAccounting.meterDetail.changePrevMonth')}
                     value={analytics.stats.change_abs}
                     unit={meter.unit}
                     extra={
@@ -332,7 +336,7 @@ export function MeterDetailPage() {
                     }
                   />
                   <Stat
-                    label="Год к году"
+                    label={t('resourceAccounting.meterDetail.yearOverYear')}
                     value={analytics.stats.year_over_year?.change_pct ?? null}
                     unit="%"
                   />
@@ -344,7 +348,7 @@ export function MeterDetailPage() {
       )}
 
       {modal === 'edit' && (
-        <Modal title="Редактировать счётчик" width={680} onClose={closeModal}>
+        <Modal title={t('resourceAccounting.meterDetail.editTitle')} width={680} onClose={closeModal}>
           <MeterForm
             mode="edit"
             initial={meter}
@@ -363,56 +367,56 @@ export function MeterDetailPage() {
       )}
 
       {modal === 'correct' && (
-        <Modal title="Исправить номер счётчика" onClose={closeModal}>
+        <Modal title={t('resourceAccounting.meterDetail.correctTitle')} onClose={closeModal}>
           <p className="muted">
-            Исправление опечатки в номере. Текущий номер:{' '}
+            {t('resourceAccounting.meterDetail.correctHint')}{' '}
             <span className="mono">{meter.meter_number}</span>
           </p>
           <label className="field">
-            <span>Новый номер *</span>
+            <span>{t('resourceAccounting.meterDetail.newNumber')}</span>
             <input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} />
           </label>
           <label className="field">
-            <span>Причина *</span>
+            <span>{t('resourceAccounting.meterDetail.reason')}</span>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
           </label>
           {modalError && <div className="form-error">{modalError}</div>}
           <div className="modal-actions">
             <button className="btn" onClick={closeModal}>
-              Отмена
+              {t('resourceAccounting.common.cancel')}
             </button>
             <button
               className="btn btn-primary"
               disabled={!newNumber.trim() || reason.trim().length < 3 || correctNumber.isPending}
               onClick={() => correctNumber.mutate()}
             >
-              Исправить
+              {t('resourceAccounting.meterDetail.correct')}
             </button>
           </div>
         </Modal>
       )}
 
       {modal === 'replace' && (
-        <Modal title="Замена счётчика" width={680} onClose={closeModal}>
+        <Modal title={t('resourceAccounting.meterDetail.replaceTitle')} width={680} onClose={closeModal}>
           <div className="form-row">
             <label className="field">
-              <span>Дата снятия *</span>
+              <span>{t('resourceAccounting.meterDetail.removalDate')}</span>
               <input type="date" value={removedAt} onChange={(e) => setRemovedAt(e.target.value)} />
             </label>
             <label className="field">
-              <span>Причина замены *</span>
+              <span>{t('resourceAccounting.meterDetail.replaceReason')}</span>
               <input value={reason} onChange={(e) => setReason(e.target.value)} />
             </label>
           </div>
-          <h3 className="subheading">Новый счётчик</h3>
+          <h3 className="subheading">{t('resourceAccounting.meterDetail.newMeter')}</h3>
           <MeterForm
             mode="create"
             pending={replaceMeter.isPending}
             error={modalError}
-            submitLabel="Заменить"
+            submitLabel={t('resourceAccounting.meterDetail.replace')}
             onSubmit={(payload) => {
               if (!removedAt || reason.trim().length < 3) {
-                setModalError('Укажите дату снятия и причину замены (мин. 3 символа)');
+                setModalError(t('resourceAccounting.meterDetail.replaceValidation'));
                 return;
               }
               replaceMeter.mutate(payload);
@@ -423,22 +427,22 @@ export function MeterDetailPage() {
       )}
 
       {modal === 'archive' && (
-        <Modal title="Архивировать счётчик" onClose={closeModal}>
+        <Modal title={t('resourceAccounting.meterDetail.archiveTitle')} onClose={closeModal}>
           <p>
-            Счётчик <span className="mono">{meter.meter_number}</span> будет перенесён в архив и
-            исчезнет из ведомости. Продолжить?
+            {t('resourceAccounting.meterDetail.archiveConfirmBefore')} <span className="mono">{meter.meter_number}</span>{' '}
+            {t('resourceAccounting.meterDetail.archiveConfirmAfter')}
           </p>
           {modalError && <div className="form-error">{modalError}</div>}
           <div className="modal-actions">
             <button className="btn" onClick={closeModal}>
-              Отмена
+              {t('resourceAccounting.common.cancel')}
             </button>
             <button
               className="btn btn-danger"
               disabled={archiveMeter.isPending}
               onClick={() => archiveMeter.mutate()}
             >
-              В архив
+              {t('resourceAccounting.meterDetail.toArchive')}
             </button>
           </div>
         </Modal>

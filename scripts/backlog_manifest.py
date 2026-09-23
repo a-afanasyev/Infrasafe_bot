@@ -367,8 +367,12 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
-    "A9-P2-33": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа"),
-    "A9-P2-32": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается"),
+    "A9-P3-32": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service, access-api, api", note="media `DELETE /media/{id}` отвечает 404 и на «не найден», и на временный сбой Telegram"),
+    "A9-P3-31": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot, api", note="`change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление"),
+    "A9-P3-30": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, мониторинг хостов", note="Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler"),
+    "A9-P3-29": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, edge", note="Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента"),
+    # A9-P2-33 закрыт 2026-09-23 (PR #615).
+    # A9-P2-32 закрыт 2026-09-23 (PR #615).
     # A9-P1-1 закрыт 2026-09-23 (PR #598).
     # A9-P1-2 закрыт 2026-09-23 (PR #599).
     # A9-P1-3 закрыт 2026-09-23 (PR #596).
@@ -376,59 +380,59 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-2 закрыт 2026-09-23 (PR #605).
     # A9-P2-3 закрыт 2026-09-23 (PR #600).
     # A9-P2-4 закрыт 2026-09-23 (PR #601).
-    "A9-P2-5": A(pkg="AUD9-W2", status="actionable", method="audit9-2026-09-22", services="group-intake-bot, bot", note="Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного"),
-    "A9-P2-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча"),
-    "A9-P2-7": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="`POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции"),
-    "A9-P2-8": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="api", note="API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02)"),
+    # A9-P2-5 закрыт 2026-09-23 (PR #608).
+    # A9-P2-6 закрыт 2026-09-23 (PR #608).
+    # A9-P2-7 закрыт 2026-09-23 (PR #614).
+    # A9-P2-8 закрыт 2026-09-23 (PR #614).
     # A9-P2-9 закрыт 2026-09-23 (PR #603).
     "A9-P2-10": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Доменный справочник категорий лежит в UI-слое `keyboards/requests.py`"),
     # A9-P2-11 закрыт 2026-09-23 (PR #602).
     # A9-P2-12 закрыт 2026-09-23 (PR #607).
-    "A9-P2-13": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, resource-api", note="access/resource: блокирующий I/O в async-эндпоинтах; `get_photo` отдаёт 500 при ошибке media"),
-    "A9-P2-14": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа"),
+    # A9-P2-13 закрыт 2026-09-23 (PR #611).
+    # A9-P2-14 закрыт 2026-09-23 (PR #611).
     # A9-P2-15 закрыт 2026-09-23 (PR #607).
-    "A9-P2-16": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api, media-service", note="access: 30-дневный ретеншн фото ANPR не удаляет сами медиа"),
+    # A9-P2-16 закрыт 2026-09-23 (PR #611).
     # A9-P2-17 закрыт 2026-09-23 (PR #604).
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
-    "A9-P2-19": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="образы bot/api/media, CI", note="Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями"),
+    # A9-P2-19 закрыт 2026-09-23 (PR #613).
     "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
     "A9-P2-21": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="media-service, CI", note="media: нет версионированных миграций и дрейф-гейта"),
-    "A9-P2-22": A(pkg="AUD9-W7", status="actionable", method="owner-decision-2026-09-23", services="CI, dev", note="black/isort объявлены в pre-commit, но не соблюдаются"),
-    "A9-P2-23": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: backfill-модули пережили squash-baseline"),
+    # A9-P2-22 закрыт 2026-09-23 (PR #613).
+    # A9-P2-23 закрыт 2026-09-23 (PR #612).
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
-    "A9-P2-25": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="scripts", note="Чистка: исторические скрипты (один падает на импорте, другой делает `create_all` в обход alembic)"),
+    # A9-P2-25 закрыт 2026-09-23 (PR #612).
     "A9-P2-26": A(pkg="AUD9-W8", status="deferred", method="owner-decision-2026-09-23", services="bot, БД", note="Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает"),
     "A9-P2-27": A(pkg="AUD9-W8", status="decision", method="review-2026-09-23", services="bot", note="Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40)"),
-    "A9-P2-28": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, доки", note="Чистка: `utils/enums.py` дублирует канон статусов и не используется прод-кодом"),
-    "A9-P2-29": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: logout не чистит кэш `QueryClient`"),
-    "A9-P2-30": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома"),
+    # A9-P2-28 закрыт 2026-09-23 (PR #612).
+    # A9-P2-29 закрыт 2026-09-23 (PR #609).
+    # A9-P2-30 закрыт 2026-09-23 (PR #609).
     "A9-P2-31": A(pkg="AUD9-W6", status="actionable", method="owner-decision-2026-09-23", services="frontend, TWA, bot", note="RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта"),
     # A9-P3-1 закрыт 2026-09-23 (PR #601).
-    "A9-P3-2": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access-api `/metrics` без токена (требует подтверждения доступности через edge)"),
+    # A9-P3-2 закрыт 2026-09-23 (PR #611).
     # A9-P3-3 закрыт 2026-09-23 (PR #604).
     # A9-P3-4 закрыт 2026-09-23 (PR #600).
-    "A9-P3-5": A(pkg="AUD9-W4", status="actionable", method="owner-decision-2026-09-23", services="group-intake-bot", note="Group Intake: сырой текст групп жителей (ПДн) уходит внешнему LLM без маскирования"),
-    "A9-P3-6": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Group Intake: ответ постороннему в staff-группе, теги подстрокой, завышенная метрика"),
-    "A9-P3-7": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="group-intake-bot", note="Ретрай LLM (PR #594) без backoff и мимо лимитера; докстринги противоречат поведению"),
+    # A9-P3-5 закрыт 2026-09-23 (PR #608).
+    # A9-P3-6 закрыт 2026-09-23 (PR #608).
+    # A9-P3-7 закрыт 2026-09-23 (PR #608).
     # A9-P3-8 закрыт 2026-09-23 (PR #606).
     # A9-P3-9 закрыт 2026-09-23 (PR #606).
     # A9-P3-10 закрыт 2026-09-23 (PR #606).
     "A9-P3-11": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api, access-api", note="Инверсии слоёв и два резолвера ролей с разным фолбэком"),
     "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
     # A9-P3-13 закрыт 2026-09-23 (PR #602).
-    "A9-P3-14": A(pkg="AUD9-W4", status="actionable", method="audit9-2026-09-22", services="БД", note="Уникальность Group Intake обходится при `source_chat_id IS NULL`"),
+    # A9-P3-14 закрыт 2026-09-23 (PR #608).
     # A9-P3-15 закрыт 2026-09-23 (PR #598).
     "A9-P3-16": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz"),
-    "A9-P3-17": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: заглушки уведомлений и тесты, которые не могут упасть"),
-    "A9-P3-18": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Чистка: мелкие символы без единой ссылки; скрытая инициализация логирования"),
-    "A9-P3-19": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: мелкие гонки/утечки WS, кэша, TZ и `useMemo`"),
-    "A9-P3-20": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: сырой `detail` в JSX, ветвление по тексту ошибки, дубли цветов/разбора ошибок"),
+    # A9-P3-17 закрыт 2026-09-23 (PR #612).
+    # A9-P3-18 закрыт 2026-09-23 (PR #612).
+    # A9-P3-19 закрыт 2026-09-23 (PR #609).
+    # A9-P3-20 закрыт 2026-09-23 (PR #609).
     "A9-P3-21": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient`"),
     "A9-P3-22": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI"),
-    "A9-P3-23": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="media-service, access-api", note="Сателлиты: мелкие дефекты саги, гонок, Redis и дубли `_client_ip`"),
-    "A9-P3-24": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="CI", note="mypy только на боте; `[tool.mypy]` resource никогда не запускается"),
-    "A9-P3-25": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="CI", note="payment-control CI: тест-инструменты без пинов, path-фильтр"),
-    "A9-P3-26": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="compose, образы", note="postgres/redis без digest; лишнее в образах сателлитов"),
+    # A9-P3-23 закрыт 2026-09-23 (PR #611).
+    # A9-P3-24 закрыт 2026-09-23 (PR #613).
+    # A9-P3-25 закрыт 2026-09-23 (PR #613).
+    # A9-P3-26 закрыт 2026-09-23 (PR #613).
     "A9-P3-27": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="доки", note="README и ARCHITECTURE отстают от кода; устаревшие комментарии CI"),
     "A9-P3-28": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="репо, доки", note="Чистка: исторические отчёты в корне и ~23 тыс. строк россыпи в корне `docs/`"),
 }

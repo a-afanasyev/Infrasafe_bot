@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ModalProps {
   title: string;
@@ -8,6 +9,7 @@ interface ModalProps {
 }
 
 export function Modal({ title, onClose, children, width = 520 }: ModalProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -21,7 +23,7 @@ export function Modal({ title, onClose, children, width = 520 }: ModalProps) {
       <div className="modal" style={{ maxWidth: width }} role="dialog" aria-label={title}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Закрыть">
+          <button className="modal-close" onClick={onClose} aria-label={t('resourceAccounting.common.close')}>
             ×
           </button>
         </div>
