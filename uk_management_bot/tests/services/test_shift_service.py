@@ -1,5 +1,5 @@
 """Unit tests for ShiftService."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -196,11 +196,8 @@ class TestStartShift:
         user = _make_user(roles='["executor"]')
         db = self._db_with_user_no_shift(user)
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_started"
-        ):
-            service = ShiftService(db)
-            result = service.start_shift(100)
+        service = ShiftService(db)
+        result = service.start_shift(100)
 
         assert result["success"] is True
         assert result["message"] == "Смена начата"
@@ -212,11 +209,8 @@ class TestStartShift:
         user = _make_user(roles='["manager"]')
         db = self._db_with_user_no_shift(user)
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_started"
-        ):
-            service = ShiftService(db)
-            result = service.start_shift(100)
+        service = ShiftService(db)
+        result = service.start_shift(100)
 
         assert result["success"] is True
 
@@ -272,11 +266,8 @@ class TestStartShift:
 
         db.add.side_effect = capture_add
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_started"
-        ):
-            service = ShiftService(db)
-            service.start_shift(100, notes="Test note")
+        service = ShiftService(db)
+        service.start_shift(100, notes="Test note")
 
         # COD-04: ассерт на ЗАХВАЧЕННЫЙ объект, а не только факт db.add() —
         # проверяем, что заметки реально проставлены на созданную смену.
@@ -327,11 +318,8 @@ class TestEndShift:
         shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
         db = self._db_with_user_and_shift(user, shift)
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_ended"
-        ):
-            service = ShiftService(db)
-            result = service.end_shift(100)
+        service = ShiftService(db)
+        result = service.end_shift(100)
 
         assert result["success"] is True
         assert result["message"] == "Смена завершена"
@@ -379,11 +367,8 @@ class TestEndShift:
 
         db = self._db_with_user_and_shift(user, shift)
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_ended"
-        ):
-            service = ShiftService(db)
-            service.end_shift(100, notes="extra note")
+        service = ShiftService(db)
+        service.end_shift(100, notes="extra note")
 
         assert "extra note" in shift.notes
 
@@ -394,11 +379,8 @@ class TestEndShift:
 
         db = self._db_with_user_and_shift(user, shift)
 
-        with patch(
-            "uk_management_bot.services.shift_service.notify_shift_ended"
-        ):
-            service = ShiftService(db)
-            service.end_shift(100, notes="my note")
+        service = ShiftService(db)
+        service.end_shift(100, notes="my note")
 
         assert shift.notes == "my note"
 
@@ -451,9 +433,8 @@ class TestForceEndShift:
         shift = _make_shift(status=SHIFT_STATUS_ACTIVE)
         db = self._db_for_force_end(manager, target, shift)
 
-        with patch("uk_management_bot.services.shift_service.notify_shift_ended"):
-            service = ShiftService(db)
-            result = service.force_end_shift(200, 100)
+        service = ShiftService(db)
+        result = service.force_end_shift(200, 100)
 
         assert result["success"] is True
         assert "менеджером" in result["message"]
@@ -511,9 +492,8 @@ class TestForceEndShift:
         shift.notes = None
         db = self._db_for_force_end(manager, target, shift)
 
-        with patch("uk_management_bot.services.shift_service.notify_shift_ended"):
-            service = ShiftService(db)
-            service.force_end_shift(200, 100, notes="force ended by mgr")
+        service = ShiftService(db)
+        service.force_end_shift(200, 100, notes="force ended by mgr")
 
         assert shift.notes == "force ended by mgr"
 

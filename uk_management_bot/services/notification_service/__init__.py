@@ -24,8 +24,6 @@ from uk_management_bot.services.notification_service.shared_bot import (
     _get_shared_bot,
 )
 from uk_management_bot.services.notification_service.shifts import (
-    notify_shift_started,
-    notify_shift_ended,
     _format_duration_hm,
     build_shift_started_message,
     build_shift_ended_message,
@@ -64,8 +62,6 @@ __all__ = [
     "send_to_user",
     "set_shared_bot",
     "_get_shared_bot",
-    "notify_shift_started",
-    "notify_shift_ended",
     "_format_duration_hm",
     "build_shift_started_message",
     "build_shift_ended_message",

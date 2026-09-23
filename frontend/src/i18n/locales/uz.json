@@ -3084,7 +3084,7 @@
       "conflict": "Kartani boshqa kimdir o'zgartirdi — sahifani yangilang",
       "commissioned": "Lift ishga tushirildi",
       "archived": "Lift arxivlandi",
-      "statusChanged": "Holat o'zgartirildi, xabar berilgan aholi: {{count}}",
+      "statusChanged": "Holat o'zgartirildi, aholiga xabar yuborilmoqda: {{count}}",
       "statusUnchanged": "Holat o'zgarmadi",
       "occurrenceCreated": "Jadval bandi qo'shildi",
       "generated": "Jadval tuzildi",

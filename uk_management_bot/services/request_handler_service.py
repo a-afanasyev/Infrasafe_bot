@@ -32,7 +32,6 @@ from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.user_apartment import UserApartment
 
 logger = logging.getLogger(__name__)
 
@@ -173,18 +172,6 @@ class RequestHandlerService:
                 RequestAssignment.status == "active",
             )
             .first()
-        )
-
-    def is_apartment_resident(self, user_id: int, apartment_id: int) -> bool:
-        return (
-            self.db.query(UserApartment)
-            .filter(
-                UserApartment.user_id == user_id,
-                UserApartment.apartment_id == apartment_id,
-                UserApartment.status == "approved",
-            )
-            .first()
-            is not None
         )
 
     # ── Запросы списков заявок исполнителя / пула ────────────────────────────

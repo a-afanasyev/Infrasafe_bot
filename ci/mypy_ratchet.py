@@ -15,8 +15,10 @@
     рядом («поднимать по мере роста, не опускать»);
   * равно                     → exit 0.
 
-Запуск: mypy ... | python3 ci/mypy_ratchet.py
-Baseline: ci/mypy-baseline.txt (одно число).
+Запуск: mypy ... | python3 ci/mypy_ratchet.py [BASELINE_FILE]
+Baseline: по умолчанию ci/mypy-baseline.txt (бот); A9-P3-24 — свой файл на
+скоуп: ci/mypy-baseline-access.txt, ci/mypy-baseline-resource.txt. Первое число
+файла — baseline, остальное (комментарии) парсер игнорирует.
 """
 from __future__ import annotations
 
@@ -44,14 +46,15 @@ def parse_count(output: str) -> int:
     )
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    baseline_file = Path(argv[1]) if len(argv) > 1 else BASELINE_FILE
     output = sys.stdin.read()
     # Вывод mypy полезен в логах целиком: ratchet гейтит число, но конкретные
     # ошибки — та самая advisory-ценность, ради которой джоба существует.
     sys.stdout.write(output)
 
     current = parse_count(output)
-    baseline = int(BASELINE_FILE.read_text(encoding="utf-8").split()[0])
+    baseline = int(baseline_file.read_text(encoding="utf-8").split()[0])
 
     if current > baseline:
         print(
@@ -65,7 +68,7 @@ def main() -> int:
     if current < baseline:
         print(
             f"\n⚠ mypy-ratchet: ошибок {current}, baseline {baseline} ({baseline - current} исправлено).\n"
-            f"  Опусти baseline: echo {current} > ci/mypy-baseline.txt — пока он выше\n"
+            f"  Опусти baseline (первое число в {baseline_file}) до {current} — пока он выше\n"
             "  фактического, гейт разрешает откат к прежнему уровню.",
             file=sys.stderr,
         )
@@ -76,4 +79,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

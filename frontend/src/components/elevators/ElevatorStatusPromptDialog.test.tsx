@@ -58,7 +58,7 @@ describe('ElevatorStatusPromptDialog', () => {
       }),
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
-    expect(toast.success).toHaveBeenCalledWith('Статус изменён, уведомлено жителей: 3')
+    expect(toast.success).toHaveBeenCalledWith('Статус изменён, уведомление отправляется жителям: 3')
   })
 
   it('несколько заявок → reason со списком, request_number не передаётся', async () => {

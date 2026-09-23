@@ -11,9 +11,6 @@ from uk_management_bot.services.notification_service import (
     build_multiple_documents_request_message,
     _build_request_status_message_channel,
     build_action_denied_message,
-    notify_status_changed,
-    notify_shift_started,
-    notify_shift_ended,
     send_to_channel,
     send_to_user,
     async_notify_shift_started,
@@ -247,45 +244,6 @@ class TestBuildActionDeniedMessage:
         assert isinstance(msg, str)
         # The fallback dict returns "Действие отклонено" for unknown keys
         assert "отклонено" in msg.lower() or len(msg) > 0
-
-
-# ---------------------------------------------------------------------------
-# notify_status_changed (sync stub — just verifies no exception)
-# ---------------------------------------------------------------------------
-
-class TestNotifyStatusChanged:
-    def test_does_not_raise(self):
-        db = MagicMock()
-        req = _make_request()
-        notify_status_changed(db, req, "Новая", "В работе")
-
-    def test_purchase_status_no_exception(self):
-        db = MagicMock()
-        req = _make_request()
-        notify_status_changed(db, req, "В работе", "Закуп")
-
-    def test_clarification_status_no_exception(self):
-        db = MagicMock()
-        req = _make_request()
-        notify_status_changed(db, req, "В работе", "Уточнение")
-
-
-# ---------------------------------------------------------------------------
-# notify_shift_started / notify_shift_ended (sync stubs)
-# ---------------------------------------------------------------------------
-
-class TestNotifyShiftStubs:
-    def test_notify_shift_started_no_exception(self):
-        db = MagicMock()
-        user = _make_user()
-        shift = _make_shift()
-        notify_shift_started(db, user, shift)
-
-    def test_notify_shift_ended_no_exception(self):
-        db = MagicMock()
-        user = _make_user()
-        shift = _make_shift()
-        notify_shift_ended(db, user, shift)
 
 
 # ---------------------------------------------------------------------------

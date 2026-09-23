@@ -205,13 +205,10 @@ class NotificationService:
 
 ### Применение миграции
 
-```bash
-# Применение миграции
-python scripts/apply_verification_migration.py
-
-# Откат миграции
-python scripts/apply_verification_migration.py --rollback
-```
+Таблицы входят в baseline-миграцию alembic (`0001_prc05_initial_baseline`);
+отдельного скрипта больше нет (`scripts/apply_verification_migration.py`
+удалён, A9-P2-25). Применение — штатным `alembic upgrade head` (см.
+`.claude/skills/uk-deploy/SKILL.md`).
 
 ### Созданные таблицы
 

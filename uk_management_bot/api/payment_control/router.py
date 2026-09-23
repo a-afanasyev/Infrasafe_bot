@@ -41,6 +41,17 @@ async def service_request(method, path, user, **kwargs):
         raise HTTPException(502, "Некорректный ответ сервиса контроля платежей") from exc
 
 
+def _balance_fields(data) -> tuple[str, object]:
+    """Ответ сервиса по счёту → (status, current); неожиданный формат → 502.
+
+    A9-P2-8(c): раньше ``data["status"]`` на ответе без ключа (или не-dict)
+    падал KeyError → 500. 502 здесь — тот же класс, что «ответ не JSON».
+    """
+    if not isinstance(data, dict) or not isinstance(data.get("status"), str):
+        raise HTTPException(502, "Некорректный ответ сервиса контроля платежей")
+    return data["status"], data.get("current")
+
+
 @router.get("/apartments/{apartment_id}")
 async def apartment_balance(apartment_id: int, user: User = Depends(staff), db: AsyncSession = Depends(get_db)):
     apartment = await db.get(Apartment, apartment_id)
@@ -50,9 +61,14 @@ async def apartment_balance(apartment_id: int, user: User = Depends(staff), db: 
     result = {"account_number": number, "status": "no_account", "current": None}
     if not number:
         return result
+    # A9-P2-8(c): HTTP к сервису (до 30 с) — без удержания соединения БД: всё
+    # нужное прочитано, сессия закрывается (close не экспайрит объекты — `user`
+    # остаётся читаемым для заголовка X-Actor-Id).
+    await db.close()
     try:
         data = await service_request("GET", "/account", user, params={"account_number": number})
-        return {**result, "status": data["status"], "current": data["current"]}
+        status, current = _balance_fields(data)
+        return {**result, "status": status, "current": current}
     except HTTPException as exc:
         if exc.status_code not in (502, 503):
             raise

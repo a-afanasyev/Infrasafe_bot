@@ -367,6 +367,57 @@ def _load_users_sync(db: Session, wanted_ids: set[int]) -> list[User]:
     return [u for u in users if u.telegram_id]
 
 
+async def _collect_async(
+    db: AsyncSession, request_number: str, plan,
+) -> tuple[Optional[Request], list[tuple[Action, str, list[User]]]]:
+    """Чтение для рассылки: заявка + получатели по заданиям (только БД).
+
+    Отделено от отправки (A9-P2-8): detached-вариант закрывает свою сессию
+    между чтением и сетью. Все поля, нужные текстам, — колонки заявки и
+    пользователя, они загружены и остаются доступны у detached-объектов.
+    """
+    # AUD6-P2-02: заявка грузится один раз на весь набор интентов, не на каждый.
+    request = await _load_request(db, request_number)
+    if request is None:
+        return None, []
+    jobs: list[tuple[Action, str, list[User]]] = []
+    for action, text_key, wanted_ids in _resolve_targets(request, plan):
+        try:
+            recipients = await _load_users(db, wanted_ids)
+        except Exception as e:
+            logger.warning(
+                "Уведомление по действию %s для заявки %s не отправлено: %s",
+                action.value, request_number, e,
+            )
+            continue
+        if recipients:
+            jobs.append((action, text_key, recipients))
+    return request, jobs
+
+
+async def _send_jobs(
+    request: Request, jobs, clarification_text: Optional[str],
+) -> int:
+    """Отправка по собранным заданиям — без обращения к БД. Не бросает."""
+    from uk_management_bot.services.notification_service import _get_shared_bot
+
+    sent = 0
+    for action, text_key, recipients in jobs:
+        try:
+            sent += await _send_to_recipients(
+                _get_shared_bot(), request, recipients, action, text_key,
+                clarification_text,
+            )
+        except Exception as e:
+            # Переход уже закоммичен — сбой рассылки не имеет права его тронуть
+            # или уронить ответ API.
+            logger.warning(
+                "Уведомление по действию %s для заявки %s не отправлено: %s",
+                action.value, request.request_number, e,
+            )
+    return sent
+
+
 async def dispatch_notify_intents(
     db: AsyncSession,
     request_number: str,
@@ -377,34 +428,16 @@ async def dispatch_notify_intents(
     """Разослать адресные уведомления по `notify`-интентам (API-путь). Не бросает.
 
     Возвращает число фактически доставленных сообщений — для логов и тестов.
+    Сессию вызывающего не закрывает (она его); вариант для фоновых задач —
+    :func:`dispatch_notify_intents_detached`.
     """
-    from uk_management_bot.services.notification_service import _get_shared_bot
-
     plan = _plan(intents, reassigned=reassigned)
     if not plan:
         return 0
-    # AUD6-P2-02: заявка грузится один раз на весь набор интентов, не на каждый.
-    request = await _load_request(db, request_number)
+    request, jobs = await _collect_async(db, request_number, plan)
     if request is None:
         return 0
-    sent = 0
-    for action, text_key, wanted_ids in _resolve_targets(request, plan):
-        try:
-            recipients = await _load_users(db, wanted_ids)
-            if not recipients:
-                continue
-            sent += await _send_to_recipients(
-                _get_shared_bot(), request, recipients, action, text_key,
-                clarification_text,
-            )
-        except Exception as e:
-            # Переход уже закоммичен — сбой рассылки не имеет права его тронуть
-            # или уронить ответ API.
-            logger.warning(
-                "Уведомление по действию %s для заявки %s не отправлено: %s",
-                action.value, request_number, e,
-            )
-    return sent
+    return await _send_jobs(request, jobs, clarification_text)
 
 
 async def dispatch_notify_intents_detached(
@@ -418,7 +451,10 @@ async def dispatch_notify_intents_detached(
     Открывает СВОЮ короткую сессию: request-scoped к моменту исполнения фоновой
     задачи уже закрыта — а её удержание на время Telegram-отправок (таймауты в
     десятки секунд idle-in-transaction при 30/мин на ручку) и было дефектом.
-    Контракт «не бросает» наследуется от dispatch_notify_intents.
+    A9-P2-8(b): и своя сессия живёт только на время чтения — SELECT открывал
+    транзакцию, и она держалась на все отправки; теперь сессия закрыта (соединение
+    в пуле) до первого сообщения. Контракт «не бросает» — как у
+    dispatch_notify_intents.
     """
     from uk_management_bot.database.session import AsyncSessionLocal
 
@@ -431,11 +467,19 @@ async def dispatch_notify_intents_detached(
             request_number,
         )
         return 0
-    async with AsyncSessionLocal() as session:
-        return await dispatch_notify_intents(
-            session, request_number, intents,
-            clarification_text=clarification_text, reassigned=reassigned,
-        )
+    plan = _plan(intents, reassigned=reassigned)
+    if not plan:
+        return 0
+    try:
+        async with AsyncSessionLocal() as session:
+            request, jobs = await _collect_async(session, request_number, plan)
+    except Exception as e:
+        logger.warning("notify для %s пропущен: чтение не удалось: %s", request_number, e)
+        return 0
+    # Сессия закрыта (close = expunge, объекты не экспайрятся) — дальше только сеть.
+    if request is None:
+        return 0
+    return await _send_jobs(request, jobs, clarification_text)
 
 
 async def dispatch_notify_intents_sync(

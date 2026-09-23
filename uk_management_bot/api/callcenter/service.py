@@ -3,6 +3,8 @@
 Module-level async функции `(db, *, plain-параметры) -> ORM|примитивы`.
 HTTPException, парсинг и сериализация — в router.py.
 """
+from typing import Any, Callable
+
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,6 +81,7 @@ async def persist_call_center_request(
     elevator_id: int | None = None,
     elevator_operational: bool | None = None,
     acceptance_mode: str | None = None,
+    schedule_notify: Callable[..., Any] | None = None,
 ) -> PersistedRequest:
     """Создание заявки call-центра: атомарный номер, insert, авто-dispatch.
 
@@ -125,12 +128,17 @@ async def persist_call_center_request(
     db.add(req)
     await db.commit()
     await db.refresh(req)
+    # A9-P2-7: refresh открыл читающую транзакцию — закрыть до диспетча (как
+    # в persist_request); уведомление о назначении — через schedule_notify.
+    await db.commit()
 
     # FEAT-группы (followup #1): call-center — ещё один канал создания. Авто-dispatch
     # на группу-специализацию (Новая→В работе + group) через канонический
     # run_command, как в persist_request (twa/inspector) и боте. Best-effort —
     # ошибка не валит уже-созданную заявку. refresh — чтобы карточка отразила статус.
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
-    await auto_dispatch_new_request_async(req.request_number, category)
+    await auto_dispatch_new_request_async(
+        req.request_number, category, schedule_notify=schedule_notify)
     await db.refresh(req)
+    await db.commit()
     return PersistedRequest(request=req, elevator=binding.elevator)

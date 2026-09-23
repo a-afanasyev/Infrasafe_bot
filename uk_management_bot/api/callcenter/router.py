@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
@@ -40,6 +40,7 @@ async def search_resident(
 @router.post("/requests", response_model=RequestCard, status_code=201)
 async def create_call_center_request(
     body: CallCenterCreateRequest,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("manager")),
 ):
@@ -126,6 +127,8 @@ async def create_call_center_request(
             elevator_id=body.elevator_id,
             elevator_operational=body.elevator_operational,
             acceptance_mode=body.acceptance_mode,
+            # A9-P2-7: уведомление о назначении — после ответа.
+            schedule_notify=background.add_task,
         )
     except ElevatorValidationError as exc:
         # Лифт не найден / архивирован / не введён — некорректный ввод менеджера → 422.

@@ -133,7 +133,7 @@ stateDiagram-v2
 (`executor` или `manager`); если у сотрудника есть **запланированная** смена в
 уже наступившем окне — кнопка активирует ЕЁ (заметки дописываются), а не
 создаёт ad-hoc-дубль; иначе создаётся `Shift(status=active, start_time=now,
-end_time=NULL)`. Аудит `SHIFT_STARTED`, уведомление `notify_shift_started`.
+end_time=NULL)`. Аудит `SHIFT_STARTED`; уведомление исполнителю и в ops-канал шлёт хендлер `handlers/shifts.py` (`build_shift_started_message` → `send_to_user`/`send_to_channel`); TWA — `shift_lifecycle.send_shift_notify`.
 **Важно:** проверка «одна активная смена на пользователя» намеренно снята —
 один сотрудник может вести несколько смен разных специализаций одновременно.
 

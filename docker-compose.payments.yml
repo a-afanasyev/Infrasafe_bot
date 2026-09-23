@@ -6,7 +6,9 @@ services:
       PAYMENT_SERVICE_URL: http://payment-api.internal:8101/v1
       PAYMENT_SERVICE_TOKEN: ${PAYMENT_SERVICE_TOKEN:?Set PAYMENT_SERVICE_TOKEN in Doppler}
   payment-postgres:
-    image: postgres:16-alpine
+    # A9-P3-26: по digest тега (16.15 на 2026-09-23) — см. комментарий у postgres
+    # в docker-compose.yml.
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: uk-payment-postgres
     restart: unless-stopped
     environment:

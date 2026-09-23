@@ -13,7 +13,7 @@ AST-гейт `tests/api/test_requests_router_inventory.py` фиксирует о
 """
 
 import logging
-from typing import Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from sqlalchemy import false, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -314,6 +314,7 @@ async def persist_request(
     elevator_operational: Optional[bool] = None,
     allow_under_works: bool = False,
     language: str = "ru",
+    schedule_notify: Optional[Callable[..., Any]] = None,
 ) -> PersistedRequest:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
@@ -338,6 +339,8 @@ async def persist_request(
     (он на объекте и видит статус сам). Решение вызывающего роутера по роли
     эндпоинта, а не по телу запроса. ``language`` — язык подписи лифта в теле
     409 (тот же ``card_language(user)``, что у карточки ответа).
+    A9-P2-7: транзакция закрыта ДО Redis/диспетча; диспетч синхронный (только
+    БД, свои сессии), уведомление — ``schedule_notify`` (BackgroundTasks).
     """
     # Дом заявки — из разрешённого адреса (уровень building) или дом квартиры
     # (уровень apartment); двор → лифт привязать нельзя (security-ревью T6).
@@ -380,6 +383,7 @@ async def persist_request(
     except IntegrityError:
         await db.rollback()
         req = await _attempt(await RequestNumberService.next_number_async(db))
+    await db.commit()  # refresh открыл читающую tx; rollback экспайрил бы объекты
 
     # Redis pub/sub — best-effort, уже после durable-commit.
     await publish_request_event(
@@ -390,8 +394,10 @@ async def persist_request(
     # через канонический run_command + realtime status_changed. Best-effort.
     # refresh — чтобы карточка ответа отразила актуальный статус (В работе).
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
-    await auto_dispatch_new_request_async(req.request_number, category)
+    await auto_dispatch_new_request_async(
+        req.request_number, category, schedule_notify=schedule_notify)
     await db.refresh(req)
+    await db.commit()  # отдать соединение в пул до сериализации ответа
     return PersistedRequest(request=req, elevator=binding.elevator)
 
 
