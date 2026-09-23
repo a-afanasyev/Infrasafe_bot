@@ -598,6 +598,9 @@ def _tg_error(kind: str):
         return ae.TelegramRetryAfter(method=method, message="Too Many Requests", retry_after=5)
     if kind == "timeout":
         return TimeoutError()
+    if kind == "decode":
+        # 502 с HTML-телом: aiogram не может разобрать ответ — не TelegramAPIError.
+        return ae.ClientDecodeError("Failed to decode object", ValueError("html"), "<html>502</html>")
     raise AssertionError(kind)
 
 
@@ -612,6 +615,7 @@ def _tg_error(kind: str):
     ("server", "TRANSIENT"),
     ("flood", "TRANSIENT"),
     ("timeout", "TRANSIENT"),
+    ("decode", "TRANSIENT"),
 ])
 async def test_telegram_delete_message_classifies_outcome(kind, expected):
     from app.services.telegram_client import DeleteOutcome, TelegramClientService
