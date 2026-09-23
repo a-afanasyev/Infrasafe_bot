@@ -444,7 +444,7 @@ function EquipmentSection() {
     { key: 'parking_type', label: 'Тип парковки', render: (z) => <ParkingTypeBadge type={z.parking_type ?? 'assigned'} /> },
     { key: 'occupancy', label: 'Занятость', render: (z) => (z.parking_type === 'shared' ? <span className="font-mono">{occupancyMock[z.id] ?? '—'}</span> : <span className="text-text-muted">—</span>) },
     { key: 'offline', label: 'Offline-режим', render: (z) => offline(z.offline_mode) },
-    { key: 'max', label: 'Лимит постоянных', render: (z) => dash(z.max_permanent_per_apartment) },
+    { key: 'max', label: 'Лимит постоянных', render: (z) => dash(z.max_permanent_vehicles_per_apartment) },
     { key: 'status', label: 'Статус', render: (z) => <AccessStatusBadge status={z.is_active ? 'active' : 'archived'} /> },
   ]
 
