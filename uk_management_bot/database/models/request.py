@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, Fore
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
-from uk_management_bot.services.request_number_service import RequestNumberService
 
 class Request(Base):
     __tablename__ = "requests"
@@ -194,6 +193,9 @@ class Request(Base):
         Returns:
             Уникальный номер заявки в формате YYMMDD-NNN
         """
+        # A9-P3-11: модель не импортирует слой сервисов на уровне модуля.
+        from uk_management_bot.services.request_number_service import RequestNumberService
+
         return RequestNumberService.generate_next_number(creation_date, db_session)
     
     def format_number_for_display(self):
@@ -203,4 +205,6 @@ class Request(Base):
         Returns:
             Отформатированная строка номера
         """
+        from uk_management_bot.services.request_number_service import RequestNumberService
+
         return RequestNumberService.format_for_display(self.request_number)

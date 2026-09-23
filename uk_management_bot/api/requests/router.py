@@ -17,8 +17,9 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import (
-    get_db, get_current_user, require_roles, require_approved_roles, _parse_user_roles,
+    get_db, get_current_user, require_roles, require_approved_roles,
 )
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.dependencies_access import check_request_access, is_assigned_executor
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
@@ -526,7 +527,7 @@ async def update_request(
         # дежурного». Без этого гейта житель различал бы по коду ответа
         # (409/403/404) существование чужой заявки, её специализацию и
         # укомплектованность смен — оракул на чужие данные.
-        if "manager" not in _parse_user_roles(user):
+        if "manager" not in get_user_roles(user):
             raise HTTPException(
                 status_code=403, detail="Not permitted for this transition")
         from uk_management_bot.constants.categories import get_specialization_for_category
@@ -666,7 +667,7 @@ async def update_request(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    user_roles = set(_parse_user_roles(user))
+    user_roles = set(get_user_roles(user))
 
     # ── Executor path: контент-поля своей заявки ──
     if "executor" in user_roles and "manager" not in user_roles:
@@ -731,7 +732,7 @@ async def get_comments(
     # Access check (owner, executor, manager, apartment resident for acceptance)
     await check_request_access(request_number, db, user)
 
-    user_roles = _parse_user_roles(user)
+    user_roles = get_user_roles(user)
     is_manager = any(r in user_roles for r in ["manager", "admin"])
 
     return await svc.comments_for(
@@ -751,7 +752,7 @@ async def add_comment(
 
     # Only managers can create internal comments
     if body.is_internal:
-        user_roles = _parse_user_roles(user)
+        user_roles = get_user_roles(user)
         if not any(r in user_roles for r in ["manager", "admin"]):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can create internal comments")
 

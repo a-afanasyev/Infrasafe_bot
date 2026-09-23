@@ -22,7 +22,8 @@ from uk_management_bot.api.auth.service import (
     revoke_refresh_token, persist_password_hash,
     _REFRESH_INVALID, _REFRESH_NOT_APPROVED,
 )
-from uk_management_bot.api.dependencies import get_db, get_current_user, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.users.queries import (
     get_user_by_telegram_id, get_user_by_id, require_user_by_id,
 )
@@ -83,7 +84,7 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 def _build_token_response(user: User) -> dict:
-    roles = _parse_user_roles(user)
+    roles = get_user_roles(user)
     access_token = create_access_token(user.id, roles)
     refresh_value = create_refresh_token_value()
     return {"access_token": access_token, "refresh_value": refresh_value, "roles": roles}
@@ -270,7 +271,7 @@ async def refresh_token(
     if outcome == _REFRESH_NOT_APPROVED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
-    access_token = create_access_token(user.id, _parse_user_roles(user))
+    access_token = create_access_token(user.id, get_user_roles(user))
 
     if source == "cookie":
         # Refresh and access cookies are rotated together — server-driven.

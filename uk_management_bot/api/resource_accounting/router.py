@@ -17,7 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.auth.service import verify_twa_init_data
-from uk_management_bot.api.dependencies import _parse_user_roles, get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.users.queries import get_user_by_telegram_id
 from uk_management_bot.config.settings import settings
@@ -90,7 +91,7 @@ def _resource_role(user: User) -> str:
     system_admin/admin → resource_admin; иначе (гейт пропустил только
     manager-уровень) → resource_operator. reviewer/viewer пока не выдаём.
     """
-    roles = _parse_user_roles(user)
+    roles = get_user_roles(user)
     if "system_admin" in roles or "admin" in roles:
         return "resource_admin"
     return "resource_operator"
@@ -138,7 +139,7 @@ async def issue_twa_ticket(
     if not user or user.status != "approved":
         raise HTTPException(status_code=403, detail="User not approved")
 
-    if METER_ENTRY_ROLE not in _parse_user_roles(user):
+    if METER_ENTRY_ROLE not in get_user_roles(user):
         raise HTTPException(status_code=403, detail="Not a meter-entry controller")
 
     return await _mint_resource_ticket(str(user.id), _display_name(user), METER_ENTRY_ROLE)

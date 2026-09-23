@@ -96,8 +96,8 @@ def _load_applicant_gate(db, telegram_id: int) -> str:
     user = RequestHandlerService(db).get_user_by_telegram_id(telegram_id)
     if user is None:
         return "applicant_only"
-    from uk_management_bot.api.dependencies import _parse_user_roles
-    user_roles = _parse_user_roles(user)
+    from uk_management_bot.utils.auth_helpers import get_user_roles
+    user_roles = get_user_roles(user)
     if "applicant" not in user_roles or user.status != "approved":
         return "applicant_only"
     if not user.phone:
