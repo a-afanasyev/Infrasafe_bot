@@ -81,3 +81,24 @@ async def test_client_sends_api_key_header():
     client = MediaServiceClient(base_url="http://media:8000", api_key="secret123")
     assert client.client.headers.get("X-API-Key") == "secret123"
     await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code, expected", [
+    (200, True),
+    (404, True),   # A9-P3-32: 404 = файла нет, цель удаления достигнута
+    (409, False),
+    (503, False),  # транзиентный сбой — не удалён, повторить
+])
+async def test_delete_media_classifies_status(status_code, expected):
+    import httpx
+
+    client = MediaServiceClient(base_url="http://media:8000", api_key="testkey")
+    client.client = httpx.AsyncClient(
+        base_url="http://media:8000/api/v1",
+        transport=httpx.MockTransport(lambda request: httpx.Response(status_code, json={})),
+    )
+    try:
+        assert await client.delete_media(42) is expected
+    finally:
+        await client.client.aclose()

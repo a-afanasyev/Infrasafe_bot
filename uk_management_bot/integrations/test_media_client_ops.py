@@ -58,6 +58,38 @@ class TestArchiveAndDelete:
         assert result is False
 
 
+class TestDeleteStatusSemantics:
+    """A9-P3-32: 404 = файла нет (цель достигнута), 409/503/5xx — не удалён."""
+
+    @staticmethod
+    def _client_with(status_code):
+        import httpx
+
+        client = MediaServiceClient("http://localhost")
+        client.client = httpx.AsyncClient(
+            base_url="http://localhost/api/v1",
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(status_code, json={})
+            ),
+        )
+        return client
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_code, expected", [
+        (200, True),
+        (404, True),
+        (409, False),
+        (503, False),
+        (500, False),
+    ])
+    async def test_delete_classifies_status(self, status_code, expected):
+        client = self._client_with(status_code)
+        try:
+            assert await client.delete_media(10) is expected
+        finally:
+            await client.client.aclose()
+
+
 # ---------------------------------------------------------------------------
 # Publication locks (T5)
 # ---------------------------------------------------------------------------

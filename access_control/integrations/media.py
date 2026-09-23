@@ -195,16 +195,17 @@ async def retire_media_file(
 ) -> MediaRetireOutcome:
     """Удалить файл для ретеншна и классифицировать исход (никогда не бросает).
 
-    Контракт медиа-сервиса неоднозначен, поэтому спорные ответы уточняются
-    ``GET /media/{id}``:
+    Спорные ответы уточняются ``GET /media/{id}``:
 
-    * 2xx → удалён;
-    * 404 → «нет файла» ИЛИ Telegram-удаление упало и сага вернула ``active``:
-      GET 404/``deleted`` → GONE, иначе TRANSIENT;
+    * 2xx → удалён (в т.ч. повторно: ``already_deleted``, A9-P3-32);
+    * 404 → «нет файла». С A9-P3-32 однозначно, но GET-уточнение оставлено
+      для медиа-сервиса старше фикса (там 404 означал и транзиентный сбой
+      саги с откатом в ``active``): GET 404/``deleted`` → GONE, иначе TRANSIENT;
     * 409 → «не active или publication-lock»: ``deleted`` → GONE (удалён
-      раньше), ``active``/``archived`` → RETAINED, прочее (транзиентные
-      ``deleting``/``archiving``) → TRANSIENT;
-    * 5xx/429/сеть/нет конфигурации → TRANSIENT.
+      раньше, старый медиа-сервис), ``active``/``archived`` → RETAINED,
+      прочее (транзиентные ``deleting``/``archiving``) → TRANSIENT;
+    * 503 (транзиентный сбой Telegram, A9-P3-32)/прочие 5xx/429/сеть/нет
+      конфигурации → TRANSIENT.
     """
     try:
         if await client.delete_file(media_id):

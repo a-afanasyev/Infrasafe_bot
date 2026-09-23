@@ -442,10 +442,16 @@ class MediaServiceClient:
             media_id: ID медиа-файла
 
         Returns:
-            True если успешно
+            True — файла больше нет: удалён сейчас, удалён раньше или
+            медиа-сервис его не знает (404 — цель удаления достигнута,
+            A9-P3-32). False — не удалён: 409 (под публикацией / не active),
+            503 (транзиентный сбой, повторить), прочие ошибки и сеть.
         """
         try:
             response = await self.client.delete(f"/media/{media_id}")
+            if response.status_code == httpx.codes.NOT_FOUND:
+                logger.info(f"Media {media_id} not found on delete — already gone")
+                return True
             response.raise_for_status()
 
             return True

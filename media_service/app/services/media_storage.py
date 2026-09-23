@@ -5,6 +5,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
@@ -37,6 +38,29 @@ class ChannelNotConfiguredError(RuntimeError):
 class PublicationReservationError(RuntimeError):
     """Archive/delete не смогли зарезервировать файл: не active, или
     publication_locked=True (файл сейчас опубликован на публичном табло)."""
+
+
+class MediaRemovalOutcome(str, Enum):
+    """Итог archive_media/delete_media (A9-P3-32: раньше — bool, и False
+    смешивал «файла нет» с транзиентным сбоем Telegram).
+
+    Конфликт состояния (не active / publication-lock) — не итог, а
+    PublicationReservationError (endpoint → 409).
+    """
+
+    DONE = "done"
+    # Только delete_media: файл уже в статусе deleted — цель достигнута.
+    ALREADY_DELETED = "already_deleted"
+    NOT_FOUND = "not_found"
+    # Telegram I/O не удался, резервирование откачено в active — повторить.
+    TRANSIENT_FAILURE = "transient_failure"
+
+
+class _Reservation(Enum):
+    RESERVED = "reserved"
+    MISSING = "missing"
+    ALREADY_DELETED = "already_deleted"
+    BLOCKED = "blocked"
 
 
 
@@ -327,7 +351,7 @@ class MediaStorageService:
         self,
         media_file_id: int,
         archive_reason: Optional[str] = None
-    ) -> bool:
+    ) -> MediaRemovalOutcome:
         """
         Архивирует медиа-файл (перемещает в архивный канал).
 
@@ -343,7 +367,7 @@ class MediaStorageService:
             media_file_id, reserving_status="archiving", archive_reason=archive_reason
         )
 
-    async def delete_media(self, media_file_id: int) -> bool:
+    async def delete_media(self, media_file_id: int) -> MediaRemovalOutcome:
         """
         Удаляет медиа-файл. Та же двухфазная сага, что и archive_media,
         но с reserving_status="deleting" — умышленно ДРУГОЕ транзиентное
@@ -361,7 +385,7 @@ class MediaStorageService:
         media_file_id: int,
         reserving_status: str,
         archive_reason: Optional[str],
-    ) -> bool:
+    ) -> MediaRemovalOutcome:
         """Общая двухфазная сага для archive_media/delete_media.
 
         reserving_status: "archiving" (archive_media) или "deleting" (delete_media).
@@ -379,10 +403,13 @@ class MediaStorageService:
 
         # === Фаза 1: резервирование, своя короткая транзакция (в потоке) ===
         reserved = await run_sync(self._reserve_sync, media_file_id, reserving_status)
-        if reserved is None:
+        if reserved is _Reservation.MISSING:
             logger.warning(f"Media file {media_file_id} not found")
-            return False
-        if not reserved:
+            return MediaRemovalOutcome.NOT_FOUND
+        if reserved is _Reservation.ALREADY_DELETED:
+            logger.info(f"Media file {media_file_id} already deleted")
+            return MediaRemovalOutcome.ALREADY_DELETED
+        if reserved is not _Reservation.RESERVED:
             raise PublicationReservationError(
                 f"media file {media_file_id} not archivable: not active or publication-locked"
             )
@@ -432,7 +459,7 @@ class MediaStorageService:
                 await run_sync(self._set_status_sync, media_file_id, "deleted")
                 logger.info(f"Media file {media_file_id} deleted successfully")
 
-            return True
+            return MediaRemovalOutcome.DONE
 
         except Exception as e:
             action = "archive" if is_archive else "delete"
@@ -440,15 +467,18 @@ class MediaStorageService:
             # Компенсация: I/O не удался, байты никуда не делись —
             # возвращаем резервирование.
             await run_sync(self._set_status_sync, media_file_id, "active")
-            return False
+            return MediaRemovalOutcome.TRANSIENT_FAILURE
 
-    def _reserve_sync(self, media_file_id: int, reserving_status: str) -> Optional[bool]:
-        """None — файла нет; False — не active / заблокирован; True — зарезервирован."""
+    def _reserve_sync(self, media_file_id: int, reserving_status: str) -> _Reservation:
+        """MISSING — файла нет; ALREADY_DELETED — delete по уже удалённому;
+        BLOCKED — не active / заблокирован; RESERVED — зарезервирован."""
         with get_db_context() as db:
-            exists = db.query(MediaFile.id).filter(MediaFile.id == media_file_id).first()
-            if exists is None:
-                return None
-            return db.execute(
+            row = db.query(MediaFile.status).filter(MediaFile.id == media_file_id).first()
+            if row is None:
+                return _Reservation.MISSING
+            if reserving_status == "deleting" and row.status == "deleted":
+                return _Reservation.ALREADY_DELETED
+            reserved = db.execute(
                 update(MediaFile)
                 .where(
                     MediaFile.id == media_file_id,
@@ -458,6 +488,7 @@ class MediaStorageService:
                 .values(status=reserving_status)
                 .returning(MediaFile.id)
             ).first() is not None
+            return _Reservation.RESERVED if reserved else _Reservation.BLOCKED
 
     def _load_detached_sync(self, media_file_id: int) -> MediaFile:
         with get_db_context() as db:
