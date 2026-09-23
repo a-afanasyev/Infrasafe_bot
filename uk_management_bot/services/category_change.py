@@ -85,7 +85,7 @@ def _command(command_id: str, category: str) -> ActionCommand:
 
 
 def _resolve_old(raw: Optional[str]) -> Optional[str]:
-    from uk_management_bot.keyboards.requests import resolve_category_key
+    from uk_management_bot.utils.categories import resolve_category_key
     return resolve_category_key(raw) if raw else None
 
 

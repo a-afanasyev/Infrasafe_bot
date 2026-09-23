@@ -112,7 +112,7 @@ def _validate_canonical_category(v: str) -> str:
     # (нормализуем через resolve_category_key), но на запись возвращаем EN-ключ,
     # чтобы все каналы (бот + web/API) писали единообразно. Полный канон —
     # для внутренних/inbound путей, где допустимы служебные категории.
-    from uk_management_bot.keyboards.requests import (
+    from uk_management_bot.utils.categories import (
         resolve_category_key,
         CANONICAL_CATEGORY_KEYS,
     )
@@ -126,7 +126,7 @@ def _validate_request_category(v: str) -> str:
     # Пользовательские write-схемы (житель, обходчик, колл-центр, смена
     # категории): только то, что человек может выбрать. Служебная
     # `engineering` («Инженерный разбор», очередь InfraSafe) — 422.
-    from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
+    from uk_management_bot.utils.categories import SELECTABLE_CATEGORY_KEYS
     key = _validate_canonical_category(v)
     if key not in SELECTABLE_CATEGORY_KEYS:
         raise ValueError(f"category must be one of: {SELECTABLE_CATEGORY_KEYS}")

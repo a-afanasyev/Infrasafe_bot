@@ -13,6 +13,7 @@ from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import InputFile, BufferedInputFile, Message
 from aiogram.exceptions import (
+    AiogramError,
     TelegramAPIError,
     TelegramBadRequest,
     TelegramForbiddenError,
@@ -343,7 +344,9 @@ class TelegramClientService:
             logger.info(f"Message {message_id} deleted from {chat_id}")
             return DeleteResult(DeleteOutcome.DELETED)
 
-        except (TelegramAPIError, TimeoutError) as e:
+        # AiogramError: например, ClientDecodeError на 502 с HTML-телом — это не
+        # TelegramAPIError, и без него «не бросает» нарушалось (QA A9-P3-32).
+        except (TelegramAPIError, AiogramError, TimeoutError) as e:
             outcome = _classify_delete_error(e)
             if outcome is DeleteOutcome.ALREADY_GONE:
                 logger.info("Message %s already absent in %s", message_id, chat_id)

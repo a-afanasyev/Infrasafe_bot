@@ -5,7 +5,7 @@
 > **Статус:** актуальная тех-версия. Отражает код на момент написания (после ARC-03 декомпозиции движка и ARC-04 удаления кластера оптимизации).
 > **Истина — код.** Все утверждения проверяемы по `file:line`. Где поведение неочевидно из кода — помечено «проверить вручную».
 > **Связанные домены:** заявки — см. [docs/tech/REQUESTS.md](./REQUESTS.md) (движок назначения переносит и создаёт заявки-исполнитель-привязки через workflow-слой домена «Заявки»).
-> **Архивные обзоры (не истина):** `docs/shifts.md` (продуктовый обзор), `docs/SHIFT_SYSTEM_ANALYSIS.md` (архив).
+> **Архивные обзоры (не истина):** `docs/Archive/2026-09-23-root-reports/shifts.md` (продуктовый обзор), `docs/Archive/2026-07-26-stale-docs/SHIFT_SYSTEM_ANALYSIS.md`.
 
 ---
 
@@ -49,7 +49,7 @@
 - `max_requests` / `current_request_count` — ёмкость и текущая загрузка; свойства `is_full`, `load_percentage` (`shift.py:49-52`, `shift.py:90-100`).
 - Метрики: `completed_requests`, `average_completion_time`, `efficiency_score`, `quality_rating` (`shift.py:57-71`).
 
-> **Расхождение статусов (проверить вручную при доработке):** каноничный набор в коде — `active/completed/cancelled/planned/paused` (`utils/constants.py:133-137`). Продуктовый обзор `docs/shifts.md` упоминает `in_transition` и статусы заявок при передаче (`active_in_shift`, `pending_transfer` и т.п.) — в коде домена смен их **нет**; это нереализованная концепция, не источник истины.
+> **Расхождение статусов (проверить вручную при доработке):** каноничный набор в коде — `active/completed/cancelled/planned/paused` (`utils/constants.py:133-137`). Архивный продуктовый обзор `docs/Archive/2026-09-23-root-reports/shifts.md` упоминает `in_transition` и статусы заявок при передаче (`active_in_shift`, `pending_transfer` и т.п.) — в коде домена смен их **нет**; это нереализованная концепция, не источник истины.
 
 ### 2.2 `ShiftTemplate` — режимы повторения (`database/models/shift_template.py`)
 
@@ -446,7 +446,7 @@ Realtime: мутации публикуют события через `publish_s
 
 1. **Дублирование scoring-логики.** `ScoringEngine` (исполнитель→смена) и `SmartDispatcher` (заявка→смена) имеют близкие, но независимые наборы факторов и весов (оба с `specialization 0.35`). Стоит зафиксировать в глоссарии, что это разные движки, чтобы не путать при доработке.
 2. **Заглушки в скоринге.** `preference` и `geographic` факторы `ScoringEngine` захардкожены в 0.5 (суммарный вес 0.15). Требует решения владельца продукта: реализовывать или убрать из весов.
-3. **Расхождение статусной модели** между кодом (`utils/constants.py:133-137`) и продуктовым обзором `docs/shifts.md` (`in_transition` и статусы заявок-при-передаче отсутствуют в коде). Данная тех-версия — источник истины.
+3. **Расхождение статусной модели** между кодом (`utils/constants.py:133-137`) и архивным продуктовым обзором `docs/Archive/2026-09-23-root-reports/shifts.md` (`in_transition` и статусы заявок-при-передаче отсутствуют в коде). Данная тех-версия — источник истины.
 4. **Naive vs aware datetime (AUD3-11).** В `reassign_on_absence` отмечена хрупкость сравнения `planned_start_time` (tz-aware) с `datetime.now()` (`services/shift_assignment_service.py:1280-1282`) — проверить вручную при работе с TZ.
 
 ---

@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 # Канон категории заявки «лифт». Ключ совпадает с
-# ``keyboards/requests.py::CATEGORY_KEYS["elevator"]``; сам модуль клавиатур
-# сюда не импортируется (тянет aiogram и локали в чистое ядро) — паритет
+# ``utils/categories.py::CATEGORY_KEYS["elevator"]``; справочник сюда не
+# импортируется (тянет локали в чистое ядро) — паритет
 # закреплён тестом test_validation::test_elevator_category_is_canonical_request_category.
 ELEVATOR_CATEGORY = "elevator"
 

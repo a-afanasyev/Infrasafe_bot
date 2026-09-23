@@ -1,5 +1,6 @@
 import { useMemo, useState, type JSX } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api/client';
 import type { ObjectNode, ObjectType, Tag } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
@@ -31,6 +32,7 @@ const emptyForm: ObjectFormState = {
 };
 
 export function ObjectsPage() {
+  const { t } = useTranslation();
   const { role } = useResourceAuth();
   const canEdit = canEnterReadings(role);
   const queryClient = useQueryClient();
@@ -78,7 +80,7 @@ export function ObjectsPage() {
       setForm(null);
       setFormError(null);
     },
-    onError: (e) => setFormError(e instanceof ApiError ? e.message : 'Ошибка сохранения'),
+    onError: (e) => setFormError(e instanceof ApiError ? e.message : t('resourceAccounting.common.saveError')),
   });
 
   const archiveObject = useMutation({
@@ -113,7 +115,7 @@ export function ObjectsPage() {
   }, [objects]);
 
   const typeName = (typeId: string | null) =>
-    typesQuery.data?.find((t) => t.id === typeId)?.name ?? '—';
+    typesQuery.data?.find((ty) => ty.id === typeId)?.name ?? '—';
 
   const renderNode = (node: ObjectNode, depth: number, visited: Set<string>): JSX.Element | null => {
     if (visited.has(node.id)) return null; // COR-10: не зацикливаться на цикле parent_id
@@ -128,9 +130,9 @@ export function ObjectsPage() {
           {node.tags.length > 0 && (
             <span className="small">
               {' '}
-              {node.tags.map((t) => (
-                <span key={t.id} className="chip">
-                  {t.name}
+              {node.tags.map((tag) => (
+                <span key={tag.id} className="chip">
+                  {tag.name}
                 </span>
               ))}
             </span>
@@ -153,7 +155,7 @@ export function ObjectsPage() {
                 })
               }
             >
-              + Дочерний
+              {t('resourceAccounting.objects.addChild')}
             </button>
             <button
               className="btn btn-sm btn-ghost"
@@ -169,17 +171,17 @@ export function ObjectsPage() {
                 })
               }
             >
-              Изменить
+              {t('resourceAccounting.objects.edit')}
             </button>
             <button
               className="btn btn-sm btn-ghost text-error"
               onClick={() => {
-                if (window.confirm(`Архивировать объект «${node.name}»?`)) {
+                if (window.confirm(t('resourceAccounting.objects.archiveConfirm', { name: node.name }))) {
                   archiveObject.mutate(node.id);
                 }
               }}
             >
-              Архив
+              {t('resourceAccounting.objects.archive')}
             </button>
           </div>
         )}
@@ -192,23 +194,23 @@ export function ObjectsPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Объекты</h1>
+        <h1>{t('resourceAccounting.objects.title')}</h1>
         {canEdit && tab === 'objects' && (
           <button className="btn btn-primary" onClick={() => setForm({ ...emptyForm })}>
-            + Новый объект
+            {t('resourceAccounting.objects.newObjectButton')}
           </button>
         )}
       </div>
 
       <div className="tabs">
         <button className={`tab${tab === 'objects' ? ' active' : ''}`} onClick={() => setTab('objects')}>
-          Дерево объектов
+          {t('resourceAccounting.objects.tabTree')}
         </button>
         <button className={`tab${tab === 'types' ? ' active' : ''}`} onClick={() => setTab('types')}>
-          Типы объектов
+          {t('resourceAccounting.objects.tabTypes')}
         </button>
         <button className={`tab${tab === 'tags' ? ' active' : ''}`} onClick={() => setTab('tags')}>
-          Теги
+          {t('resourceAccounting.objects.tabTags')}
         </button>
       </div>
 
@@ -220,14 +222,14 @@ export function ObjectsPage() {
               checked={showArchived}
               onChange={(e) => setShowArchived(e.target.checked)}
             />
-            Показывать архивные
+            {t('resourceAccounting.objects.showArchived')}
           </label>
           {objectsQuery.isLoading ? (
             <Loading />
           ) : objectsQuery.isError ? (
             <ErrorState error={objectsQuery.error} onRetry={() => objectsQuery.refetch()} />
           ) : objects.length === 0 ? (
-            <Empty text="Объекты ещё не созданы" />
+            <Empty text={t('resourceAccounting.objects.empty')} />
           ) : (
             <div className="tree panel">
               {(() => {
@@ -241,7 +243,7 @@ export function ObjectsPage() {
 
       {tab === 'types' && (
         <CatalogTable
-          title="Типы объектов"
+          title={t('resourceAccounting.objects.tabTypes')}
           query={typesQuery}
           canEdit={canEdit}
           basePath="/v1/object-types"
@@ -251,7 +253,7 @@ export function ObjectsPage() {
 
       {tab === 'tags' && (
         <CatalogTable
-          title="Теги"
+          title={t('resourceAccounting.objects.tabTags')}
           query={tagsQuery}
           canEdit={canEdit}
           basePath="/v1/tags"
@@ -261,33 +263,33 @@ export function ObjectsPage() {
 
       {form && (
         <Modal
-          title={form.id ? 'Редактировать объект' : 'Новый объект'}
+          title={form.id ? t('resourceAccounting.objects.editTitle') : t('resourceAccounting.objects.newTitle')}
           onClose={() => {
             setForm(null);
             setFormError(null);
           }}
         >
           <label className="field">
-            <span>Название *</span>
+            <span>{t('resourceAccounting.objects.nameRequired')}</span>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <div className="form-row">
             <label className="field">
-              <span>Код</span>
+              <span>{t('resourceAccounting.objects.code')}</span>
               <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
             </label>
             <label className="field">
-              <span>Тип</span>
+              <span>{t('resourceAccounting.objects.type')}</span>
               <select
                 value={form.type_id}
                 onChange={(e) => setForm({ ...form, type_id: e.target.value })}
               >
                 <option value="">—</option>
                 {(typesQuery.data ?? [])
-                  .filter((t) => t.is_active)
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
+                  .filter((ty) => ty.is_active)
+                  .map((ty) => (
+                    <option key={ty.id} value={ty.id}>
+                      {ty.name}
                     </option>
                   ))}
               </select>
@@ -295,12 +297,12 @@ export function ObjectsPage() {
           </div>
           <div className="form-row">
             <label className="field">
-              <span>Родитель</span>
+              <span>{t('resourceAccounting.objects.parent')}</span>
               <select
                 value={form.parent_id}
                 onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
               >
-                <option value="">— корневой —</option>
+                <option value="">{t('resourceAccounting.objects.root')}</option>
                 {objects
                   .filter((o) => o.id !== form.id && o.is_active)
                   .map((o) => (
@@ -311,7 +313,7 @@ export function ObjectsPage() {
               </select>
             </label>
             <label className="field">
-              <span>Порядок</span>
+              <span>{t('resourceAccounting.objects.sortOrder')}</span>
               <input
                 inputMode="numeric"
                 value={form.sort_order}
@@ -320,7 +322,7 @@ export function ObjectsPage() {
             </label>
           </div>
           <label className="field">
-            <span>Описание</span>
+            <span>{t('resourceAccounting.objects.description')}</span>
             <textarea
               rows={2}
               value={form.description}
@@ -330,14 +332,14 @@ export function ObjectsPage() {
           {formError && <div className="form-error">{formError}</div>}
           <div className="modal-actions">
             <button className="btn" onClick={() => setForm(null)}>
-              Отмена
+              {t('resourceAccounting.common.cancel')}
             </button>
             <button
               className="btn btn-primary"
               disabled={!form.name.trim() || saveObject.isPending}
               onClick={() => saveObject.mutate(form)}
             >
-              Сохранить
+              {t('resourceAccounting.common.save')}
             </button>
           </div>
         </Modal>
@@ -367,6 +369,7 @@ function CatalogTable({
   basePath: string;
   queryKey: string[];
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -380,14 +383,14 @@ function CatalogTable({
       setError(null);
       invalidate();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Ошибка'),
+    onError: (e) => setError(e instanceof ApiError ? e.message : t('resourceAccounting.common.error')),
   });
 
   const patch = useMutation({
     mutationFn: (item: { id: string; is_active: boolean }) =>
       api(`${basePath}/${item.id}`, { method: 'PATCH', body: { is_active: item.is_active } }),
     onSuccess: invalidate,
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Ошибка'),
+    onError: (e) => setError(e instanceof ApiError ? e.message : t('resourceAccounting.common.error')),
   });
 
   if (query.isLoading) return <Loading />;
@@ -400,7 +403,7 @@ function CatalogTable({
       {canEdit && (
         <div className="toolbar">
           <input
-            placeholder="Название…"
+            placeholder={t('resourceAccounting.objects.namePlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
@@ -409,7 +412,7 @@ function CatalogTable({
             disabled={!newName.trim() || create.isPending}
             onClick={() => create.mutate(newName.trim())}
           >
-            Добавить
+            {t('resourceAccounting.objects.add')}
           </button>
         </div>
       )}
@@ -420,8 +423,8 @@ function CatalogTable({
         <table className="table">
           <thead>
             <tr>
-              <th>Название</th>
-              <th>Статус</th>
+              <th>{t('resourceAccounting.objects.colName')}</th>
+              <th>{t('resourceAccounting.objects.colStatus')}</th>
               {canEdit && <th />}
             </tr>
           </thead>
@@ -438,7 +441,7 @@ function CatalogTable({
                       className="btn btn-sm btn-ghost"
                       onClick={() => patch.mutate({ id: item.id, is_active: !item.is_active })}
                     >
-                      {item.is_active ? 'В архив' : 'Вернуть'}
+                      {item.is_active ? t('resourceAccounting.objects.toArchive') : t('resourceAccounting.objects.restore')}
                     </button>
                   </td>
                 )}

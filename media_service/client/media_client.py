@@ -499,10 +499,20 @@ class MediaServiceClient:
             media_id: ID медиа-файла
 
         Returns:
-            True если успешно
+            True — файла больше нет: удалён сейчас, удалён раньше
+            (``already_deleted``) или медиа-сервис его не знает.
+            False — не удалён: 409 (под публикацией / не active),
+            503 (транзиентный сбой, повторить), прочие ошибки и сеть.
+
+        404 на DELETE уточняется ``GET /media/{id}`` (A9-P3-32): медиа-сервис
+        до фикса отвечал 404 и на транзиентный сбой Telegram (файл откатан в
+        active) — без уточнения живой файл посчитался бы удалённым при любом
+        порядке деплоя.
         """
         try:
             response = await self.client.delete(f"/media/{media_id}")
+            if response.status_code == httpx.codes.NOT_FOUND:
+                return await self._confirm_gone_after_404(media_id)
             response.raise_for_status()
 
             return True
@@ -510,6 +520,22 @@ class MediaServiceClient:
         except Exception as e:
             logger.error(f"Failed to delete media {media_id}: {e}")
             return False
+
+    async def _confirm_gone_after_404(self, media_id: int) -> bool:
+        """True только если GET подтверждает: файла нет (404) или он deleted."""
+        try:
+            response = await self.client.get(f"/media/{media_id}")
+            if response.status_code == httpx.codes.NOT_FOUND:
+                return True
+            response.raise_for_status()
+            status = response.json().get("status")
+        except Exception as e:
+            logger.warning("Media %s: 404 on delete, status check failed: %s", media_id, e)
+            return False
+        if status == "deleted":
+            return True
+        logger.warning("Media %s: 404 on delete but status=%r — not deleted", media_id, status)
+        return False
 
     async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
         """

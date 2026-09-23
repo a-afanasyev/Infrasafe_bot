@@ -106,7 +106,7 @@ def format_request_details(request, language="ru", show_executor=True, active_ro
         Детальная информация о заявке с локализованными метками
     """
     from uk_management_bot.utils.helpers import get_text
-    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
+    from uk_management_bot.utils.categories import resolve_category_key, get_category_display, get_urgency_display
 
     # Get localized labels
     labels = {
@@ -276,7 +276,7 @@ def format_request_list_item(
         Formatted list item text
     """
     from uk_management_bot.utils.helpers import get_text
-    from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display
+    from uk_management_bot.utils.categories import resolve_category_key, get_category_display
 
     # TASK 17 Этап A: Разрешаем категорию из БД в внутренний ключ и получаем локализованное отображение
     category_key = resolve_category_key(request.category)

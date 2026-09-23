@@ -12,7 +12,7 @@ import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
 import { DisplayTzProvider } from './contexts/DisplayTzProvider'
 import PageErrorBoundary from './components/shared/PageErrorBoundary'
 import OfflineIndicator from './components/shared/OfflineIndicator'
-import { Toaster } from './components/ui/sonner'
+import RootToaster from './components/shared/RootToaster'
 
 const TWAApp = lazy(() => import('./twa/App'))
 // FE-042: the default dashboard route — lazy like the other pages so it leaves
@@ -120,7 +120,6 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       {/* FE-046: global offline banner (shared with TWA) */}
       <OfflineIndicator />
-      <Toaster position="bottom-right" richColors />
       <GlobalErrorBoundary>
         {/* ARCH-137 B6: зона показа резолвится ДО первого рендера страниц —
             см. contexts/DisplayTzProvider.tsx. Гейт короткий (таймаут 4с), на
@@ -129,6 +128,7 @@ export default function App() {
             в штатный fallback, а не в белый экран. */}
         <DisplayTzProvider fallback={<LoadingSpinner />}>
         <BrowserRouter basename={import.meta.env.BASE_URL}>
+          <RootToaster />
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />

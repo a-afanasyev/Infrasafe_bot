@@ -1,7 +1,8 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.callcenter import service
 from uk_management_bot.api.elevators.errors import http_error as elevator_http_error
@@ -70,7 +71,7 @@ async def create_call_center_request(
         target = await service.user_by_id(db, body.user_id)
         if target is None:
             raise HTTPException(status_code=404, detail="target user not found")
-        if "applicant" not in _parse_user_roles(target):
+        if "applicant" not in get_user_roles(target):
             raise HTTPException(status_code=422, detail="target user is not an applicant")
         owner_id = target.id
         if body.apartment_id is not None:

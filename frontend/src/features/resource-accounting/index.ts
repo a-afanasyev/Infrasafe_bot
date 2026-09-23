@@ -20,7 +20,7 @@ export { configureResourceApi, api, apiPaged, ApiError, downloadUrl } from './ap
 export { useResourceAuth } from './auth/ResourceAuthContext';
 export type { ResourceAuthValue } from './auth/ResourceAuthContext';
 export {
-  ROLE_LABELS,
+  ROLE_LABEL_KEYS,
   isAdmin,
   isMeterEntry,
   canEnterReadings,

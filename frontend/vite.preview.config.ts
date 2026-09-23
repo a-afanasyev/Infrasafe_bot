@@ -9,6 +9,9 @@ import path from 'path'
  * ассеты (base './') для статической отдачи из любой папки, отдельный outDir.
  * Плагины и alias '@' зеркалят основной конфиг, чтобы стили (Tailwind v4) и
  * импорты компонентов резолвились одинаково.
+ *
+ * Запуск: `npm run screens` (dev) / `npm run build:screens` (→ dist-preview/).
+ * Типы проверяет `tsc -b` через tsconfig.preview.json.
  */
 export default defineConfig({
   root: path.resolve(__dirname, 'preview'),

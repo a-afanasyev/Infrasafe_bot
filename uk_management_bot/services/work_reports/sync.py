@@ -108,9 +108,8 @@ async def sync_pending_drafts(db: AsyncSession) -> dict:
     )
     candidates = (await db.execute(stmt)).scalars().all()
 
-    # Ленивый импорт — как в остальном репо (api/requests/schemas.py,
-    # api/requests/stats_router.py): keyboards.requests тянет aiogram.types.
-    from uk_management_bot.keyboards.requests import resolve_category_key
+    # Канон категорий — utils/categories (A9-P2-10: не из UI-слоя keyboards).
+    from uk_management_bot.utils.categories import resolve_category_key
 
     dialect_name = db.get_bind().dialect.name
     # `cfg.work_reports.categories` здесь СОЗНАТЕЛЬНО не применяется: список

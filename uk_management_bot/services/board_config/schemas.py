@@ -107,10 +107,9 @@ class WorkReportsCfg(BaseModel):
     def _known_categories(cls, v: list[str]) -> list[str]:
         """Только канонические ключи категорий, без дублей, порядок сохраняем.
 
-        Импорт ленивый — `keyboards.requests` тянет aiogram.types (тот же приём,
-        что в api/work_reports/schemas.py и work_report_service).
+        Канон — `utils/categories.py` (A9-P2-10: не из UI-слоя keyboards).
         """
-        from uk_management_bot.keyboards.requests import CANONICAL_CATEGORY_KEYS
+        from uk_management_bot.utils.categories import CANONICAL_CATEGORY_KEYS
 
         unknown = [c for c in v if c not in CANONICAL_CATEGORY_KEYS]
         if unknown:

@@ -15,7 +15,7 @@ from uk_management_bot.keyboards.shift_management import (
 from uk_management_bot.states.shift_management import ExecutorAssignmentStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
-from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.user_names import display_name
 # BUG-166: единый предикат подбора по специализациям. Импорт МОДУЛЬНЫЙ — урок
@@ -340,8 +340,9 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
             available_executors = []
             for user in all_users:
-                # COD-01: канонический парсер ролей (JSON+CSV)
-                if 'executor' in parse_roles_safe(user.roles) or user.active_role == 'executor':
+                # A9-P3-11: только роль из roles (канонический резолвер) — одна
+                # active_role='executor' кандидатом не делает.
+                if 'executor' in get_user_roles(user):
                     available_executors.append(user)
 
             # Фильтруем по специализации если указана в specialization_focus.
@@ -429,7 +430,9 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
             shift = service.get_shift(shift_id)
             executor = service.get_user(executor_id)
 
-            if not shift or not executor:
+            # A9-P3-11: executor_id приходит из callback_data (шлёт клиент) —
+            # назначаем только держателя роли executor в roles.
+            if not shift or not executor or 'executor' not in get_user_roles(executor):
                 await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
                 return
 
@@ -600,7 +603,9 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
             shift = service.get_shift(shift_id)
             executor = service.get_user(executor_id)
 
-            if not shift or not executor:
+            # A9-P3-11: executor_id приходит из callback_data (шлёт клиент) —
+            # назначаем только держателя роли executor в roles.
+            if not shift or not executor or 'executor' not in get_user_roles(executor):
                 await callback.answer(get_text("shift_management.shift_or_executor_not_found", language=lang), show_alert=True)
                 return
 

@@ -73,12 +73,11 @@ class WorkReportPatchIn(BaseModel):
         """`category_key` уходит в публичную ленту, поэтому валидируем на границе,
         а не доверяем клиенту: неизвестный ключ фронт отрендерил бы как сырую
         строку (`i18n/apiMaps.ts:tCategory` при промахе логирует warn и печатает
-        ключ). Импорт ленивый — `keyboards.requests` тянет aiogram.types (тот же
-        приём в work_report_service.sync_pending_drafts и api/requests/schemas.py).
+        ключ). Канон — `utils/categories.py` (A9-P2-10: не из UI-слоя keyboards).
         """
         if v is None:
             return v
-        from uk_management_bot.keyboards.requests import CANONICAL_CATEGORY_KEYS
+        from uk_management_bot.utils.categories import CANONICAL_CATEGORY_KEYS
 
         if v not in CANONICAL_CATEGORY_KEYS:
             raise ValueError(f"category_key must be one of {sorted(CANONICAL_CATEGORY_KEYS)}")

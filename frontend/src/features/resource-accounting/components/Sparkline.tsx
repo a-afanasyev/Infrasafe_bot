@@ -3,6 +3,8 @@
  * recharts-контейнеру на строку было бы тяжело). Рисует ломаную расхода + точку
  * последнего значения. Цвет — бренд-акцент (var(--accent)).
  */
+import { useTranslation } from 'react-i18next';
+
 interface SparklineProps {
   values: number[];
   unit?: string;
@@ -11,6 +13,7 @@ interface SparklineProps {
 }
 
 export function Sparkline({ values, unit = '', width = 104, height = 30 }: SparklineProps) {
+  const { t } = useTranslation();
   const nums = values.filter((v) => Number.isFinite(v));
   if (nums.length < 2) {
     return <span className="small muted">—</span>;
@@ -26,7 +29,11 @@ export function Sparkline({ values, unit = '', width = 104, height = 30 }: Spark
   const points = nums.map((v, i) => `${(pad + i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
   const lastX = pad + (nums.length - 1) * stepX;
   const lastY = yFor(nums[nums.length - 1]);
-  const title = `${nums.length} мес: ${nums.map((v) => Math.round(v)).join(' → ')} ${unit}`.trim();
+  const title = t('resourceAccounting.sparkline.title', {
+    n: nums.length,
+    values: nums.map((v) => Math.round(v)).join(' → '),
+    unit,
+  }).trim();
 
   return (
     <svg

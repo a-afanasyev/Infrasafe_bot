@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from uk_management_bot.api.dependencies import _parse_user_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.api.requests.schemas import RequestCard
 from uk_management_bot.config.settings import settings
@@ -221,7 +221,7 @@ async def list_requests_rows(
         select(RequestModel, ExecutorUser)
         .outerjoin(ExecutorUser, RequestModel.executor_id == ExecutorUser.id)
     )
-    user_roles = _parse_user_roles(user)
+    user_roles = get_user_roles(user)
     # Режим без `view` — прежняя ветка по ролям; менеджер без `view` → mode=None → без фильтра.
     mode = view
     if mode is None and "manager" not in user_roles:

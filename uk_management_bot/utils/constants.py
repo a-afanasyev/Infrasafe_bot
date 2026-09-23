@@ -105,7 +105,7 @@ AUDIT_ACTION_REQUEST_CATEGORY_CHANGED = "request_category_changed"
 
 # ─── Срочность заявок: КАНОН — внутренние ключи (TASK 17 завершён) ───
 # Хранимые значения urgency во всём стеке: low/medium/high/critical.
-# Для локализованного отображения — get_urgency_display() (keyboards/requests.py).
+# Для локализованного отображения — get_urgency_display() (utils/categories.py).
 URGENCY_VALUES = ("low", "medium", "high", "critical")
 URGENCY_DEFAULT = "low"
 # Ранжирование для сортировки/приоритета (чем больше — критичнее).
@@ -138,7 +138,7 @@ def validate_canonical_urgency(value):
     return key
 
 # Категории заявок: используйте CATEGORY_INTERNAL_KEYS / get_category_display()
-# из uk_management_bot.keyboards.requests. Legacy-список REQUEST_CATEGORIES удалён
+# из uk_management_bot.utils.categories. Legacy-список REQUEST_CATEGORIES удалён
 # (AUD3-29): потребителей не осталось после закрытия AUD3-22.
 
 # Срочность заявок — канонический список ключей (выведен из URGENCY_VALUES).

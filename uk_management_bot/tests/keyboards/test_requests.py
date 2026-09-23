@@ -357,37 +357,5 @@ class TestGetRequestActionsKeyboard:
         assert all(cb for cb in cbs)
 
 
-# ---------------------------------------------------------------------------
-# Helper functions: get_category_display, resolve_category_key
-# ---------------------------------------------------------------------------
-
-class TestGetCategoryDisplay:
-    def test_known_key_returns_localized(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_category_display
-            result = get_category_display("electricity")
-        assert result == "categories.electricity"
-
-    def test_unknown_key_returns_as_is(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.requests import get_category_display
-            result = get_category_display("unknown_cat")
-        assert result == "unknown_cat"
-
-
-class TestResolveCategoryKey:
-    def test_internal_key_passthrough(self):
-        from uk_management_bot.keyboards.requests import resolve_category_key
-        assert resolve_category_key("electricity") == "electricity"
-
-    def test_legacy_text_resolved(self):
-        from uk_management_bot.keyboards.requests import resolve_category_key
-        assert resolve_category_key("Электрика") == "electricity"
-
-    def test_unknown_value_returned_as_is(self):
-        from uk_management_bot.keyboards.requests import resolve_category_key
-        assert resolve_category_key("НеизвестноеЗначение") == "НеизвестноеЗначение"
-
-    def test_internet_legacy_text(self):
-        from uk_management_bot.keyboards.requests import resolve_category_key
-        assert resolve_category_key("Интернет/ТВ") == "internet"
+# get_category_display / resolve_category_key / get_urgency_display — доменный
+# справочник, A9-P2-10: тесты в uk_management_bot/tests/utils/test_categories.py.

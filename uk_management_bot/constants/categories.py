@@ -20,6 +20,9 @@ Used by (только через хелпер — ратчет `tests/test_categ
 категорий в обе стороны (`constants/test_categories.py`).
 """
 
+# A9-P2-10: канон категорий — utils/categories (без aiogram, не UI-слой keyboards).
+from uk_management_bot.utils.categories import resolve_category_key
+
 CATEGORY_TO_SPECIALIZATION: dict[str, str] = {
     "electricity": "electrician",
     "plumbing": "plumber",
@@ -49,9 +52,5 @@ def get_specialization_for_category(category: str) -> str:
     «ничего»: незнакомая категория — это работа, которую всё равно кто-то
     должен взять, и разнорабочий тут ближе всех.
     """
-    # Ленивый импорт: keyboards.requests тянет aiogram, а константы должны
-    # импортироваться без него (тот же приём, что в api/requests/schemas.py).
-    from uk_management_bot.keyboards.requests import resolve_category_key
-
     key = resolve_category_key(category) if category else category
     return CATEGORY_TO_SPECIALIZATION.get(key, _DEFAULT_SPECIALIZATION)

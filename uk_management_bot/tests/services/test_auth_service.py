@@ -614,8 +614,17 @@ class TestStatusChecks:
         assert await service.is_user_manager(100) is False
 
     @pytest.mark.asyncio
-    async def test_is_user_executor_true_via_active_role(self):
+    async def test_is_user_executor_active_role_alone_is_not_enough(self):
+        """A9-P3-11: active_role="executor" без роли в roles исполнителем не делает."""
         user = _make_user(status="approved", active_role="executor")
+        db = _make_db(user=user)
+
+        service = AuthService(db)
+        assert await service.is_user_executor(100) is False
+
+    @pytest.mark.asyncio
+    async def test_is_user_executor_true_via_roles(self):
+        user = _make_user(status="approved", roles='["applicant", "executor"]', active_role="applicant")
         db = _make_db(user=user)
 
         service = AuthService(db)
@@ -630,18 +639,16 @@ class TestStatusChecks:
         assert await service.is_user_executor(100) is False
 
     @pytest.mark.asyncio
-    async def test_is_user_manager_unusable_roles_falls_back_to_active_role(self):
-        """COD-01: неразбираемая строка ролей → роль не найдена среди распарсенных
-        (canonical parse_roles_safe трактует её как CSV-мусор, "manager" там нет),
-        поэтому падаем в legacy_primary_role() → active_role="manager" → True.
-        Прежний ARCH-04 warning убран: под каноническим парсером «битого JSON»
-        как ошибки больше нет (строка — валидный CSV).
+    async def test_is_user_manager_unusable_roles_do_not_fall_back_to_active_role(self):
+        """A9-P3-11: неразбираемая строка ролей (CSV-мусор, "manager" там нет)
+        менеджером НЕ делает, даже при active_role="manager" — прежний фолбэк
+        через legacy_primary_role() на active_role был эскалацией.
         """
         user = _make_user(status="approved", roles="{broken json", active_role="manager")
         db = _make_db(user=user)
 
         service = AuthService(db)
-        assert await service.is_user_manager(100) is True
+        assert await service.is_user_manager(100) is False
 
     @pytest.mark.asyncio
     async def test_is_user_executor_unusable_roles_falls_back(self):

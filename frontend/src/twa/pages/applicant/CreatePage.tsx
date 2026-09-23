@@ -217,13 +217,11 @@ export default function CreatePage() {
       haptic('notification')
       queryClient.invalidateQueries({ queryKey: ['twa', 'my-requests'] })
       if (photoFailures.length > 0) {
-        toast.warning(
-          `Заявка создана, но не загрузились фото №${photoFailures.join(', ')}`
-        )
+        toast.warning(t('twa.create.photoUploadFailed', { numbers: photoFailures.join(', ') }))
       } else if (photos.length > 0) {
-        toast.success(`Заявка создана (фото: ${photos.length})`)
+        toast.success(t('twa.create.submittedWithPhotos', { count: photos.length }))
       } else {
-        toast.success('Заявка создана')
+        toast.success(t('twa.create.submitted'))
       }
       setUploadProgress(null)
       try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* sessionStorage недоступен — черновик уже неактуален */ }
@@ -234,7 +232,7 @@ export default function CreatePage() {
       // Р18: 409 «по лифту идут работы» (статус сменился после выбора) —
       // объясняем блоком под кнопкой, а не общим тостом «не удалось».
       if (parseUnderWorksError(err)) return
-      notifyError(err, 'Не удалось создать заявку')
+      notifyError(err, t('twa.create.submitFailed'))
     },
   })
 
@@ -352,7 +350,7 @@ export default function CreatePage() {
       >{createMutation.isPending ? t('common.loading') : t('twa.create.submit')}</button>
       {uploadProgress && uploadProgress.total > 0 && (
         <div className="mt-3 text-center text-[12px] text-gray-500 dark:text-gray-400">
-          Загрузка фото {uploadProgress.done}/{uploadProgress.total}
+          {t('twa.photo.uploadProgress', { done: uploadProgress.done, total: uploadProgress.total })}
         </div>
       )}
       {createMutation.isError && underWorks && <ElevatorBlockedNotice info={underWorks} />}
