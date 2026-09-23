@@ -5,6 +5,7 @@ Router-файл); здесь живут константа ``MY_SHIFTS_TEXTS``, 
 хендлеры — в соседних под-модулях. Код перенесён 1:1 из handlers/my_shifts.py.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -12,7 +13,12 @@ from typing import Optional
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.services.shift_lifecycle import (
+    end_shift_sync,
+    shift_notify_payload,
+    start_planned_shift_sync,
+)
+from uk_management_bot.utils.datetime_utils import as_utc
 # ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
 from uk_management_bot.utils.business_time import (
     business_days_window,
@@ -24,6 +30,8 @@ from uk_management_bot.utils.button_texts import get_my_shifts_texts
 
 # Константа для фильтрации сообщений "Мои смены"
 MY_SHIFTS_TEXTS = get_my_shifts_texts()
+
+logger = logging.getLogger(__name__)
 
 
 # ==========================================================================
@@ -176,65 +184,74 @@ def _load_shift_details(db, telegram_id: int, user_db_id: Optional[int], shift_i
     return True, (_shift_row(shift) if shift else None)
 
 
+def _resolve_user(db, telegram_id: int, user_db_id: Optional[int]) -> Optional[User]:
+    """Полный User этой сессии: юниту смен нужны id и telegram_id (audit, notify)."""
+    if user_db_id is not None:
+        return db.query(User).filter(User.id == user_db_id).first()
+    return db.query(User).filter(User.telegram_id == telegram_id).first()
+
+
+def _notify_payload(user: User, shift: Shift, *, started: bool):
+    """Сбой билдера не валит уже закоммиченный старт/стоп (AUD8-CODE-01)."""
+    try:
+        return shift_notify_payload(user, shift, started=started)
+    except Exception:
+        logger.warning("my_shifts: не удалось собрать уведомление (shift=%s)",
+                       getattr(shift, "id", None), exc_info=True)
+        return None
+
+
 def _start_shift(db, telegram_id: int, user_db_id: Optional[int], shift_id: int):
-    """planned → active. -> (user_found, _ShiftRow | None). Коммит внутри."""
-    user_id = _resolve_user_id(db, telegram_id, user_db_id)
-    if user_id is None:
-        return False, None
+    """planned → active. -> (user_found, _ShiftRow | None, notify | None). Коммит внутри.
 
-    # with_for_update: в потоках двойной тап по кнопке даёт ДВА конкурентных
-    # юнита (на event loop секция SELECT→commit была атомарна «случайно», без
-    # await внутри). Лок строки заставляет второй юнит дождаться commit первого
-    # и увидеть status != planned → честный «уже начата». На sqlite — no-op.
-    shift = db.query(Shift).filter(
-        and_(
-            Shift.id == shift_id,
-            Shift.user_id == user_id,
-            Shift.status == 'planned'
-        )
-    ).with_for_update().first()
-    if not shift:
-        return True, None
+    A9-P2-32: через общий юнит смен (services/shift_lifecycle) — audit в той же
+    транзакции, плановый start_time сохраняется, notify — как у кнопки «Смена»
+    и TWA (отправка — в async-слое после коммита).
+    """
+    user = _resolve_user(db, telegram_id, user_db_id)
+    if user is None:
+        return False, None, None
 
-    shift.status = 'active'
-    shift.start_time = utc_now()
+    shift = start_planned_shift_sync(db, user, shift_id)
+    if shift is None:
+        return True, None, None
     db.commit()
-    return True, _shift_row(shift)
+    return True, _shift_row(shift), _notify_payload(user, shift, started=True)
 
 
 def _end_shift(db, telegram_id: int, user_db_id: Optional[int], shift_id: int):
-    """active → completed. -> (user_found, dict | None). Коммит внутри."""
-    user_id = _resolve_user_id(db, telegram_id, user_db_id)
-    if user_id is None:
+    """active → completed. -> (user_found, dict | None). Коммит внутри.
+
+    A9-P2-32: завершение и audit — общий юнит смен; dict несёт ``notify``.
+    """
+    user = _resolve_user(db, telegram_id, user_db_id)
+    if user is None:
         return False, None
 
-    # with_for_update: та же защита от двойного тапа, что в _start_shift.
+    # with_for_update: защита от двойного тапа — второй юнит ждёт commit
+    # первого и видит status != active. На sqlite — no-op.
     shift = db.query(Shift).filter(
         and_(
             Shift.id == shift_id,
-            Shift.user_id == user_id,
+            Shift.user_id == user.id,
             Shift.status == 'active'
         )
     ).with_for_update().first()
     if not shift:
         return True, None
 
-    end_time = utc_now()
-    shift.status = 'completed'
-    shift.end_time = end_time
-
-    # Рассчитываем фактическую длительность. Shift.start_time — timestamptz,
-    # end_time тоже aware UTC — вычитание напрямую (AUD5-CODE-3).
-    if shift.start_time:
-        actual_duration = (end_time - shift.start_time).total_seconds() / 3600
-    else:
-        actual_duration = 0
+    end_shift_sync(db, user, shift)
+    end_time = shift.end_time
+    # as_utc: aware на Postgres, naive после sqlite-roundtrip (AUD5-CODE-3).
+    actual_duration = (as_utc(end_time) - as_utc(shift.start_time)).total_seconds() / 3600
+    request_count = shift.current_request_count or 0
 
     db.commit()
     return True, {
         "end_time": end_time,
         "actual_duration": actual_duration,
-        "request_count": shift.current_request_count or 0,
+        "request_count": request_count,
+        "notify": _notify_payload(user, shift, started=False),
     }
 
 

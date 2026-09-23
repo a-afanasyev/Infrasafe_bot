@@ -93,6 +93,17 @@ jobs:
                --exclude '(/tests/|/venv/)' uk_management_bot > mypy.log || true
           python3 ci/mypy_ratchet.py < mypy.log
 
+      # A9-P3-24: access_control — тот же режим, свой счётчик. Без if: always()
+      # шаг пропускался бы при регрессе бота выше; с ним видны оба вердикта.
+      # --follow-imports=silent: access_control импортирует uk_management_bot, и
+      # ошибки бота (их гейтит шаг выше) не должны двигать число access-скоупа.
+      - name: Mypy access_control (advisory content, ratchet on count)
+        if: always()
+        run: |
+          mypy --ignore-missing-imports --explicit-package-bases --follow-imports=silent \
+               --exclude '(/tests/|/venv/)' access_control > mypy-access.log || true
+          python3 ci/mypy_ratchet.py ci/mypy-baseline-access.txt < mypy-access.log
+
   bandit:
     name: bandit (SAST, bot + access + media + resource)
     runs-on: ubuntu-latest
@@ -244,10 +255,12 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: media_service/requirements.txt
+          cache-dependency-path: media_service/requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      # A9-P2-19: pytest вынесен из рантайм-лока (уезжал в прод-образ) в
+      # hash-locked requirements-dev.txt = рантайм-лок + тест-инструменты.
+      - name: Install dependencies (dev lock)
+        run: pip install --require-hashes -r requirements-dev.txt
 
       # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
       # окружение выставляет сам (os.environ.setdefault — см. его докстринг).
@@ -306,8 +319,16 @@ jobs:
       - name: Run tests (sqlite via conftest)
         run: pytest -q
 
+      # A9-P3-24: [tool.mypy] сервиса раньше не запускался никем. Advisory по
+      # содержанию, ratchet на количество (ci/mypy_ratchet.py, свой baseline);
+      # mypy — из dev-лока выше. `|| true` — вердикт принадлежит ratchet'у.
+      - name: Mypy (advisory content, ratchet on count)
+        run: |
+          mypy app > mypy.log || true
+          python3 ../../ci/mypy_ratchet.py ../../ci/mypy-baseline-resource.txt < mypy.log
+
       # AUD6-P1-7: тесты поднимают схему Base.metadata.create_all'ом, а прод
-      # стартует `alembic upgrade head` (entrypoint-api.sh) — расхождение
+      # делает `alembic upgrade head` (one-shot resource-migrate) — расхождение
       # «модели ≠ миграция» до этого шага не ловило ничто. postgres:16 — как
       # resource-postgres в docker-compose. Единственная нужная переменная:
       # у всех полей Settings есть дефолты, alembic/env.py читает только URL.

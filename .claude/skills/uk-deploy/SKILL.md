@@ -99,7 +99,7 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 
 ### resource-api / resource-worker — отдельный осознанный шаг (не в общей пачке)
 
-**AUD6-P1-2 (с 2026-07-30): у resource-БД своя пара «владелец/раннтайм»** — зеркало PR-7 основной БД. `resource` (POSTGRES_USER, суперпользователь инстанса) — только миграции+seed через one-shot `resource-migrate`; сервисы ходят под `resource_app` (DML без DDL, пароль `RESOURCE_APP_PASSWORD` из Doppler). Из `entrypoint-api.sh` миграции убраны — старый «alembic на каждом старте api» больше не существует.
+**AUD6-P1-2 (с 2026-07-30): у resource-БД своя пара «владелец/раннтайм»** — зеркало PR-7 основной БД. `resource` (POSTGRES_USER, суперпользователь инстанса) — только миграции+seed через one-shot `resource-migrate`; сервисы ходят под `resource_app` (DML без DDL, пароль `RESOURCE_APP_PASSWORD` из Doppler). Из `entrypoint-api.sh` миграции убраны — старый «alembic на каждом старте api» больше не существует (A9-P3-26: сам опустевший entrypoint resource-образа удалён, uvicorn стартует прямо из CMD).
 
 **Первая раскатка на хост (однократно, ДО up новых образов):**
 

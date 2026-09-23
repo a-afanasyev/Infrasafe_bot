@@ -16,10 +16,12 @@ LABEL version="1.0.0"
 WORKDIR /app
 
 # Устанавливаем системные зависимости
-# Эти пакеты необходимы для работы Python и некоторых библиотек
+# A9-P2-19: gcc/g++ убраны — все пакеты runtime-лока (и dev-набора) ставятся
+# готовыми колёсами на python:3.11-slim linux/amd64 и linux/arm64 (проверено
+# `pip download --only-binary=:all:` по requirements.txt для обеих платформ).
+# Появится пакет без колеса — сборка упадёт явно; тогда builder-стейдж, как в
+# Dockerfile.api, а не компилятор в прод-слое.
 RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,11 +30,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 COPY requirements-dev.txt .
 
-# OPS-117 — dev-deps по умолчанию включены: образ используется для тестов
-# (`docker exec uk-management-bot pytest` per CLAUDE.md), а tests/ всё равно
-# копируются в этот же image (см. COPY tests/ ниже). Чистый prod-build:
-# `docker compose build --build-arg INSTALL_DEV=false app`.
-ARG INSTALL_DEV=true
+# A9-P2-19: dev-deps по умолчанию ВЫКЛЮЧЕНЫ — прод-образ (compose `app`, CI
+# images-build → GHCR) не несёт pytest/mypy/ruff из нехэшированного
+# requirements-dev.txt. Тест-пути включают их ЯВНО `--build-arg INSTALL_DEV=true`:
+# scripts/test-ci-local.sh (`make test-ci`), `make build`/`make build-bot`
+# (петля `make test`). Dockerfile.dev (docker-compose.dev.yml) ставит dev всегда.
+ARG INSTALL_DEV=false
 
 # PIP_RETRIES / PIP_DEFAULT_TIMEOUT — устойчивость к транзиентным флапам PyPI CDN
 # (деплой 2026-06-25: ReadTimeout / "from versions: none" на здоровой сети

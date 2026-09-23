@@ -17,6 +17,7 @@ from uk_management_bot.keyboards.my_shifts import (
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.services.shift_lifecycle import send_shift_notify
 from uk_management_bot.utils.helpers import get_text
 # ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
 from uk_management_bot.utils.business_time import fmt_time
@@ -25,6 +26,16 @@ from ._router import router
 from ._units import _start_shift, _end_shift
 
 logger = logging.getLogger(__name__)
+
+
+async def _send_notify(callback: CallbackQuery, payload) -> None:
+    """A9-P2-32: уведомление исполнителю и в ops-канал — как у кнопки «Смена»
+    и TWA, после коммита, вне db-фазы. Сбой сети не превращает уже выполненный
+    старт/стоп в «ошибку» для пользователя."""
+    try:
+        await send_shift_notify(callback.bot, payload)
+    except Exception:
+        logger.error("my_shifts: ошибка отправки уведомлений о смене", exc_info=True)
 
 
 @router.callback_query(F.data == "start_shift")
@@ -42,7 +53,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
             return
 
         user_db_id = user.id if user is not None else None
-        user_found, shift = await run_db(
+        user_found, shift, notify = await run_db(
             lambda s: _start_shift(s, callback.from_user.id, user_db_id, shift_id), db=_db,
         )
         if not user_found:
@@ -61,6 +72,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
         )
 
         await callback.answer(get_text("my_shifts.handlers.shift_started_toast", language=lang))
+        await _send_notify(callback, notify)
 
     except Exception as e:
         logger.error(f"Ошибка начала смены: {e}")
@@ -107,6 +119,7 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
 
         await state.set_state(MyShiftsStates.main_menu)
         await callback.answer(get_text("my_shifts.handlers.shift_ended_toast", language=lang))
+        await _send_notify(callback, summary.get("notify"))
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")

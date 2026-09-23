@@ -15,14 +15,19 @@ dependencies = [
     "python-multipart>=0.0.9",
     "openpyxl>=3.1",
     "reportlab>=4.2",
-    "httpx>=0.27",
     "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",
+    # A9-P3-26: httpx нужен только TestClient'у (starlette.testclient), сервис
+    # его не импортирует — из runtime-зависимостей перенесён сюда.
+    "httpx>=0.27",
     "ruff>=0.5",
+    # A9-P3-24: mypy-шаг CI-джобы resource-tests (ratchet на число ошибок);
+    # пин как у бота (ci.yml, джоба mypy) — счёт зависит от версии mypy.
+    "mypy==1.7.1",
 ]
 
 [tool.setuptools.packages.find]
@@ -41,7 +46,8 @@ pythonpath = ["."]
 python_version = "3.11"
 ignore_missing_imports = true
 check_untyped_defs = true
-# Advisory only (run with `|| true` in CI); not a merge gate yet.
+# A9-P3-24: в CI (джоба resource-tests) — advisory по содержанию, ratchet на
+# количество: ci/mypy-baseline-resource.txt через ci/mypy_ratchet.py.
 
 [tool.ruff]
 line-length = 120
