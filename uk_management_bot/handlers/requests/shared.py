@@ -8,9 +8,6 @@ from uk_management_bot.services.request_handler_service import RequestHandlerSer
 import re
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 
-from uk_management_bot.keyboards.requests import (
-    get_cancel_keyboard,
-)
 import logging
 from typing import Optional
 
@@ -147,48 +144,6 @@ async def _deny_if_pending_callback(callback: CallbackQuery, user_status: Option
             await callback.answer(safe_get_text("shifts.awaiting_admin_approval", language=lang), show_alert=True)
         return True
     return False
-
-def get_contextual_help(address_type: str, language: str = "ru") -> str:
-    """
-    Получить контекстную помощь в зависимости от типа адреса
-
-    Args:
-        address_type: Тип адреса (home/apartment/yard)
-        language: Язык интерфейса (ru/uz)
-
-    Returns:
-        str: Контекстное сообщение с подсказками
-    """
-    # Map address types to locale keys (using existing keys from Phase 2 auto-generation)
-    help_key_map = {
-        "home": "requests.вы_выбрали_дом",
-        "apartment": "requests.вы_выбрали_квартиру",
-        "yard": "requests.вы_выбрали_двор"
-    }
-
-    key = help_key_map.get(address_type, "requests.help_default")
-    return get_text(key, language=language)
-
-async def graceful_fallback(message: Message, error_type: str, language: str = "ru"):
-    """
-    Graceful degradation при ошибках
-
-    Args:
-        message: Сообщение пользователя
-        error_type: Тип ошибки
-        language: Язык интерфейса (ru/uz)
-    """
-    # Get error message from locale
-    error_key = f"errors.{error_type}"
-    error_message = get_text(error_key, language=language)
-
-    # Fallback if key not found
-    if error_message == error_key:
-        error_message = get_text("errors.default", language=language)
-
-    await message.answer(error_message, reply_markup=get_cancel_keyboard(language=language))
-    
-    logger.warning(f"[GRACEFUL_FALLBACK] Ошибка типа '{error_type}' для пользователя {message.from_user.id}")
 
 # auto_assign_request_by_category lived here as a duplicate of the version in
 # handlers/admin.py. This copy never committed the session and never notified

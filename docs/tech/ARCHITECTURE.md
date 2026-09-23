@@ -280,8 +280,9 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 - **Бот**: `config/locales/{ru,uz}.json`, доступ через
   `get_text(key, language=lang)`; статусы — `utils/status_display.py`, адреса —
   `utils/address_helpers.localize_address()`. Статусы заявок хранятся в БД
-  русскими строками, а перечень канонизирован в `utils/enums.py`
-  (`RequestStatus`, `utils/enums.py:37`).
+  русскими строками, а перечень канонизирован в `utils/constants.py`
+  (`REQUEST_STATUS_*` / `REQUEST_STATUSES`; «Возвращена» —
+  `REQUEST_STATUS_RETURNED`).
 - **Фронтенд**: `frontend/src/i18n/locales/{ru,uz}.json`, библиотека i18next.
 
 ## 6. Домен → код → документация

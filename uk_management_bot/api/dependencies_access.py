@@ -6,7 +6,6 @@ from sqlalchemy import select
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.services.request_access import has_request_access_async
 
 logger = logging.getLogger(__name__)
@@ -39,26 +38,6 @@ async def check_request_access(
         return request
 
     raise HTTPException(status_code=403, detail="Access denied")
-
-
-async def require_active_shift(
-    db: AsyncSession,
-    user: User,
-) -> Shift:
-    """Require executor to have an active shift. Returns shift or raises 403."""
-    result = await db.execute(
-        select(Shift).where(
-            Shift.user_id == user.id,
-            Shift.status == "active",
-        )
-    )
-    shift = result.scalars().first()  # .first() not scalar_one: executor may have multiple active shifts
-    if not shift:
-        raise HTTPException(
-            status_code=403,
-            detail="Active shift required. Start a shift first.",
-        )
-    return shift
 
 
 def is_assigned_executor(request: Request, user: User, assignments: list) -> bool:

@@ -7,7 +7,6 @@ import re
 import sys
 import time
 from datetime import datetime
-from typing import Optional
 from uk_management_bot.config.settings import settings
 
 class StructuredFormatter(logging.Formatter):
@@ -153,12 +152,6 @@ class StructuredLogger:
         """Critical уровень логирования"""
         self._log(logging.CRITICAL, message, **kwargs)
     
-    def with_context(self, **context) -> 'StructuredLogger':
-        """Создание нового логгера с дополнительным контекстом"""
-        new_context = {**self.context, **context}
-        return StructuredLogger(self.logger.name, **new_context)
-
-
 def setup_structured_logging():
     """
     Настройка структурированного логирования для production
@@ -244,105 +237,3 @@ def get_logger(name: str, **context) -> StructuredLogger:
     """
     return StructuredLogger(name, **context)
 
-
-# Предопределенные логгеры для разных компонентов
-def get_auth_logger(**context) -> StructuredLogger:
-    """Логгер для компонентов авторизации"""
-    return get_logger("uk_bot.auth", component="auth", **context)
-
-
-def get_request_logger(**context) -> StructuredLogger:
-    """Логгер для системы заявок"""
-    return get_logger("uk_bot.requests", component="requests", **context)
-
-
-def get_shift_logger(**context) -> StructuredLogger:
-    """Логгер для системы смен"""
-    return get_logger("uk_bot.shifts", component="shifts", **context)
-
-
-def get_security_logger(**context) -> StructuredLogger:
-    """Логгер для событий безопасности"""
-    return get_logger("uk_bot.security", component="security", **context)
-
-
-def get_performance_logger(**context) -> StructuredLogger:
-    """Логгер для метрик производительности"""
-    return get_logger("uk_bot.performance", component="performance", **context)
-
-
-# Декоратор для автоматического логирования функций
-def log_function_call(logger: Optional[StructuredLogger] = None, level: str = "debug"):
-    """
-    Декоратор для автоматического логирования вызовов функций
-    
-    Args:
-        logger: Логгер для использования (по умолчанию создается автоматически)
-        level: Уровень логирования (debug, info, warning, error)
-    """
-    def decorator(func):
-        nonlocal logger
-        if logger is None:
-            logger = get_logger(func.__module__)
-        
-        def wrapper(*args, **kwargs):
-            func_name = func.__name__
-            log_method = getattr(logger, level.lower(), logger.debug)
-            
-            try:
-                log_method(f"Function {func_name} called", 
-                          function=func_name, 
-                          args_count=len(args),
-                          kwargs_keys=list(kwargs.keys()))
-                
-                result = func(*args, **kwargs)
-                
-                log_method(f"Function {func_name} completed successfully",
-                          function=func_name)
-                
-                return result
-                
-            except Exception as e:
-                logger.error(f"Function {func_name} failed",
-                           function=func_name,
-                           error=str(e),
-                           exception_type=type(e).__name__)
-                raise
-        
-        # Для async функций
-        async def async_wrapper(*args, **kwargs):
-            func_name = func.__name__
-            log_method = getattr(logger, level.lower(), logger.debug)
-            
-            try:
-                log_method(f"Async function {func_name} called",
-                          function=func_name,
-                          args_count=len(args), 
-                          kwargs_keys=list(kwargs.keys()))
-                
-                result = await func(*args, **kwargs)
-                
-                log_method(f"Async function {func_name} completed successfully",
-                          function=func_name)
-                
-                return result
-                
-            except Exception as e:
-                logger.error(f"Async function {func_name} failed",
-                           function=func_name,
-                           error=str(e),
-                           exception_type=type(e).__name__)
-                raise
-        
-        # Возвращаем соответствующую обертку
-        import asyncio
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return wrapper
-    
-    return decorator
-
-
-# Инициализация при импорте модуля
-setup_structured_logging()

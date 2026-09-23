@@ -1,18 +1,12 @@
-"""Tests for is_assigned_executor and require_active_shift
+"""Tests for is_assigned_executor
 (uk_management_bot/api/dependencies_access.py).
 
 The check_request_access tests live in test_dependencies_access.py (inline).
-This file covers is_assigned_executor (sync) and require_active_shift (async).
+This file covers is_assigned_executor (sync).
 """
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from unittest.mock import MagicMock
 
-from uk_management_bot.api.dependencies_access import (
-    is_assigned_executor,
-    require_active_shift,
-)
+from uk_management_bot.api.dependencies_access import is_assigned_executor
 
 
 # ═══════════════════════ is_assigned_executor ═══════════════════════
@@ -85,47 +79,3 @@ class TestIsAssignedExecutor:
         ]
         assert is_assigned_executor(req, user, assignments) is True
 
-
-# ═══════════════════════ require_active_shift ═══════════════════════
-
-
-@pytest.mark.asyncio
-class TestRequireActiveShift:
-
-    async def test_returns_shift_when_active(self):
-        shift = MagicMock()
-        shift.user_id = 42
-        shift.status = "active"
-
-        scalars_mock = MagicMock()
-        scalars_mock.first.return_value = shift
-
-        result_mock = MagicMock()
-        result_mock.scalars.return_value = scalars_mock
-
-        db = AsyncMock(spec=AsyncSession)
-        db.execute.return_value = result_mock
-
-        user = MagicMock()
-        user.id = 42
-
-        result = await require_active_shift(db, user)
-        assert result is shift
-
-    async def test_raises_403_when_no_active_shift(self):
-        scalars_mock = MagicMock()
-        scalars_mock.first.return_value = None
-
-        result_mock = MagicMock()
-        result_mock.scalars.return_value = scalars_mock
-
-        db = AsyncMock(spec=AsyncSession)
-        db.execute.return_value = result_mock
-
-        user = MagicMock()
-        user.id = 42
-
-        with pytest.raises(HTTPException) as exc_info:
-            await require_active_shift(db, user)
-        assert exc_info.value.status_code == 403
-        assert "Active shift required" in exc_info.value.detail
