@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import _parse_user_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.residents.notify import send_plain_messages
 from uk_management_bot.database.models.elevator import Elevator
 from uk_management_bot.database.models.user import User
@@ -126,7 +126,7 @@ async def summary(db: AsyncSession) -> ElevatorSummaryOut:
 
 async def can_view_building(db: AsyncSession, user: User, building_id: int) -> bool:
     """Персонал — любой дом; житель — только дом с одобренной квартирой."""
-    if STAFF_ROLES & set(_parse_user_roles(user)):
+    if STAFF_ROLES & set(get_user_roles(user)):
         return True
     return await queries.has_approved_apartment_in_building(db, user.id, building_id)
 

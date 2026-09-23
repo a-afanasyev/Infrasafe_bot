@@ -8,7 +8,8 @@ import logging
 from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import HandleTransferBody, TransferOut
 from uk_management_bot.database.models.user import User
@@ -68,7 +69,7 @@ async def handle_transfer(
         new_executor = await service.get_user(db, body.to_executor_id)
         if not new_executor:
             raise HTTPException(status_code=404, detail="Executor not found")
-        has_exec_role = "executor" in _parse_user_roles(new_executor)
+        has_exec_role = "executor" in get_user_roles(new_executor)
         if not has_exec_role:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

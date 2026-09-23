@@ -103,14 +103,14 @@ def _ws_identity_ok_sync(user_id: int) -> bool:
 
     Источник правды — БД, а не claim ``roles``: токен — слепок на момент выдачи,
     и до его истечения снятие роли/блокировка иначе не замечались (бывший
-    accepted-risk L3). Парсинг ролей — тем же ``_parse_user_roles``, что и у
+    accepted-risk L3). Роли — тем же каноническим ``get_user_roles``, что и у
     HTTP/WS дверей UK: одна дверь не должна быть мягче другой.
 
     Сессия короткая, по одной на проверку, sync ``SessionLocal`` — как у
     retention-воркеров этого пакета; вызывать через ``asyncio.to_thread``.
     Импорты внутри вызова: модуль должен оставаться импортируемым без БД.
     """
-    from uk_management_bot.api.dependencies import _parse_user_roles
+    from uk_management_bot.utils.auth_helpers import get_user_roles
     from uk_management_bot.database.models.user import User
     from uk_management_bot.database.session import SessionLocal
 
@@ -121,7 +121,7 @@ def _ws_identity_ok_sync(user_id: int) -> bool:
         # удалённый оператор проходил. Как у HTTP-дверей: только approved и живой.
         if user is None or user.status != "approved" or getattr(user, "deleted_at", None) is not None:
             return False
-        return any(role in WS_ROLES for role in _parse_user_roles(user))
+        return any(role in WS_ROLES for role in get_user_roles(user))
 
 
 async def _identity_ok_at_handshake(user_id: int | None) -> bool:

@@ -35,10 +35,8 @@ from access_control.services import photo_urls
 from access_control.services.device_auth import resolve_client_ip
 from access_control.services.management import write_audit
 from uk_management_bot.api.auth.service import verify_access_token
-from uk_management_bot.api.dependencies import (
-    _parse_user_roles,
-    require_approved_roles,
-)
+from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-registry"])
@@ -374,7 +372,7 @@ def can_view_photos(user) -> bool:
     Предикат для гейтинга полей ``*_photo_url`` в реестре (не зависимость — чтобы
     отдавать ``null`` вместо 403 на эндпоинте). TODO(§11): сузить до явного права.
     """
-    roles = _parse_user_roles(user)
+    roles = get_user_roles(user)
     return any(r in roles for r in PHOTO_VIEW_ROLES)
 
 

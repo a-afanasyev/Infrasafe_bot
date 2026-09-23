@@ -4,25 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.database.models.user import User
 from uk_management_bot.api.users.queries import get_user_by_id
-from uk_management_bot.utils.auth_helpers import legacy_primary_role, parse_roles_safe
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from typing import AsyncGenerator, Optional
 
 security = HTTPBearer(auto_error=False)
-
-
-def _parse_user_roles(user) -> list[str]:
-    """Parse user roles from ``user.roles`` (JSON or CSV), falling back to the
-    legacy single-role resolution when no roles are stored.
-
-    NICE-078: string parsing is delegated to the canonical
-    ``utils.auth_helpers.parse_roles_safe`` (single source of truth — no second
-    inline JSON/CSV parser). This wrapper adds only the API-side legacy fallback.
-    """
-    roles = parse_roles_safe(getattr(user, "roles", None))
-    if roles:
-        return roles
-    legacy = legacy_primary_role(user)
-    return [legacy] if legacy else []
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -88,7 +73,9 @@ async def get_current_user(
 def require_roles(*roles: str):
     """Dependency factory: require_roles('manager', 'executor')"""
     async def checker(user: User = Depends(get_current_user)) -> User:
-        user_roles = _parse_user_roles(user)
+        # A9-P3-11: канонический резолвер бота — пустые roles = applicant,
+        # active_role ролей не добавляет (прежний фолбэк на неё эскалировал).
+        user_roles = get_user_roles(user)
         if not any(r in user_roles for r in roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
@@ -105,7 +92,7 @@ def require_approved_roles(*roles: str):
     ~68 эндпоинтов, где pending-доступ легитимен (онбординг).
     """
     async def checker(user: User = Depends(get_current_user)) -> User:
-        user_roles = _parse_user_roles(user)
+        user_roles = get_user_roles(user)
         if not any(r in user_roles for r in roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         if user.status != "approved":
