@@ -50,13 +50,20 @@ def _make_db_returning(shift):
     return db
 
 
-class TestStartShiftWritesAwareStartTime:
+class TestStartShiftKeepsPlannedStartTime:
+    """A9-P2-32: старт planned-смены из «Моих смен» идёт через общий юнит
+    (services/shift_lifecycle) и НЕ переписывает плановый start_time —
+    раньше здесь проверялась запись aware utc_now() поверх расписания."""
+
     @pytest.mark.asyncio
-    async def test_start_shift_writes_aware_start_time(self):
+    async def test_start_shift_keeps_planned_aware_start_time(self):
         from uk_management_bot.handlers.my_shifts import handle_start_shift
 
+        planned_start = datetime.now(timezone.utc) + timedelta(hours=1)
         shift = MagicMock()
         shift.status = "planned"
+        shift.notes = None
+        shift.start_time = planned_start
         shift.current_request_count = 0
         db = _make_db_returning(shift)
 
@@ -73,8 +80,8 @@ class TestStartShiftWritesAwareStartTime:
                 roles=["executor"],
             )
 
-        assert shift.start_time.tzinfo is not None
-        assert shift.start_time.utcoffset() == timedelta(0)
+        assert shift.status == "active"
+        assert shift.start_time is planned_start
 
 
 class TestEndShiftWritesAwareEndTimeAndDuration:

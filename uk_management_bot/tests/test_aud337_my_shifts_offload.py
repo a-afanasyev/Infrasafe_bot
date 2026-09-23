@@ -122,7 +122,7 @@ def test_start_shift_unit_transitions_planned_to_active(db):
     db.add(shift)
     db.commit()
 
-    user_found, row = ms._start_shift(db, user.telegram_id, None, shift.id)
+    user_found, row, _notify = ms._start_shift(db, user.telegram_id, None, shift.id)
     assert user_found and row is not None
     assert row.status == "active"
     assert row.start_time is not None
@@ -141,8 +141,8 @@ def test_start_shift_unit_rejects_foreign_or_started_shift(db):
     db.add_all([foreign, already])
     db.commit()
 
-    assert ms._start_shift(db, user.telegram_id, None, foreign.id) == (True, None)
-    assert ms._start_shift(db, user.telegram_id, None, already.id) == (True, None)
+    assert ms._start_shift(db, user.telegram_id, None, foreign.id) == (True, None, None)
+    assert ms._start_shift(db, user.telegram_id, None, already.id) == (True, None, None)
 
 
 def test_end_shift_unit_returns_summary_dto(db, monkeypatch):
@@ -150,8 +150,9 @@ def test_end_shift_unit_returns_summary_dto(db, monkeypatch):
     # аварийно-честный aware-aware прода здесь моделируется naive-naive той же
     # арифметики: utc_now юнита пиннится naive-значением.
     naive_now = utc_now().replace(tzinfo=None)
-    # AUD5-ARCH-3 волна 7: utc_now резолвится в под-модуле _units.
-    monkeypatch.setattr(ms._units, "utc_now", lambda: naive_now)
+    # A9-P2-32: end_time ставит общий юнит смен — utc_now резолвится там.
+    from uk_management_bot.services import shift_lifecycle
+    monkeypatch.setattr(shift_lifecycle, "utc_now", lambda: naive_now)
 
     user = _executor(db)
     start = naive_now - timedelta(hours=3)
@@ -169,7 +170,7 @@ def test_end_shift_unit_returns_summary_dto(db, monkeypatch):
 
 def test_units_report_missing_user_distinctly(db):
     """user_found=False (сигнал error_occurred) ≠ «смена не найдена»."""
-    assert ms._start_shift(db, 424242, None, 1) == (False, None)
+    assert ms._start_shift(db, 424242, None, 1) == (False, None, None)
     assert ms._load_shift_details(db, 424242, None, 1) == (False, None)
     assert ms._load_transfer_menu_counts(db, 424242) is None
 

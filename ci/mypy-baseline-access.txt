@@ -1,0 +1,18 @@
+29
+# A9-P3-24. Первое число файла — baseline, остальное игнорируется парсером
+# (ci/mypy_ratchet.py читает .split()[0]).
+#
+# Замер 2026-09-23, mypy==1.7.1 (только mypy, без зависимостей — как в CI-джобе
+# `mypy`), команда ровно как в шаге «Mypy access_control»:
+#   mypy --ignore-missing-imports --explicit-package-bases --follow-imports=silent \
+#        --exclude '(/tests/|/venv/)' access_control
+# → Found 23 errors in 8 files (checked 72 source files)
+# Пересчёт после мержа #611 (A9-P2-14/P2-16, redis_timeouts.py + photo_retention.py):
+# → Found 29 errors in 10 files (checked 73 source files). +6 — это уже main,
+# baseline фиксирует фактическое состояние на момент введения гейта.
+#
+# --follow-imports=silent: access_control импортирует uk_management_bot, и без
+# него в счёт попадали бы ошибки бота (их считает свой baseline) — число
+# access-скоупа двигалось бы от чужих правок.
+# Правила те же, что у ci/mypy-baseline.txt: растить только осознанно и с
+# объяснением в коммите; опускать, как только счётчик упал.

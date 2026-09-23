@@ -15,11 +15,13 @@ COPY --chown=appuser:appuser . .
 # pyproject.toml, команда в шапке файла), сам пакет — --no-deps, чтобы
 # pyproject не мог подтянуть ничего мимо lock.
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
-    && pip install --no-cache-dir --no-deps . \
-    && chmod +x scripts/entrypoint-api.sh
+    && pip install --no-cache-dir --no-deps .
 
 USER appuser
 
 EXPOSE 8100
-ENTRYPOINT ["/srv/app/scripts/entrypoint-api.sh"]
+# A9-P3-26: ENTRYPOINT scripts/entrypoint-api.sh удалён — после AUD6-P1-2
+# (миграции ушли в one-shot resource-migrate) в нём оставался только
+# `exec "$@"`. CMD в exec-форме и так даёт uvicorn PID 1; resource-worker и
+# resource-migrate задают свои entrypoint/command в compose.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8100"]

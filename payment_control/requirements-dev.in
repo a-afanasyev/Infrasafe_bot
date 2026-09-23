@@ -1,0 +1,15 @@
+# A9-P3-25: dev-lock для CI (payment-control.yml, джоба test) — по образцу
+# resource-accounting/backend/requirements-dev.txt: рантайм + тест-инструменты
+# одним hash-locked файлом (раньше `pip install pytest pytest-cov httpx` без
+# версий резолвился заново на каждом прогоне). Рантайм прибит к requirements.txt
+# через -c — тесты идут на тех же пакетах, что уезжают в образ.
+# Перегенерация (из payment_control/):
+#   uv pip compile requirements-dev.in -o requirements-dev.txt --generate-hashes --python-version 3.11 --universal
+-r requirements.in
+-c requirements.txt
+pytest
+pytest-cov
+# TestClient FastAPI/Starlette.
+httpx
+# A9-P3-24: mypy-гейт джобы test; пин как у бота (ci.yml, джоба mypy).
+mypy==1.7.1
