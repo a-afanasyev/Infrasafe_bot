@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **580**
-- закрыто маркером: **557**
-- открыто маркером: **23**
+- закрыто маркером: **558**
+- открыто маркером: **22**
 
-  - `actionable` — **11**
+  - `actionable` — **10**
   - `decision` — **2**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=1, P3=10.
+Из них actionable по приоритету: P2=1, P3=9.
 
 Значения `status`:
 
@@ -58,7 +58,6 @@
 | `A9-P3-36` | P3 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Статистика смен считает исполнителей по User.active_role, а не по roles |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
 | `A9-P3-29` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, edge | — | Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента |
-| `A9-P3-30` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, мониторинг хостов | — | Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler |
 | `A9-P3-34` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | media-service | — | media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id) |
 | `A9-P3-21` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient` |
 | `A9-P3-33` | P3 | actionable | found-2026-09-23 | AUD9-W7 | — | media-service | — | media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД |

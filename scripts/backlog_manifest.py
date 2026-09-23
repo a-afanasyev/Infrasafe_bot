@@ -375,7 +375,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
-    "A9-P3-30": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, мониторинг хостов", note="Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler"),
+    # A9-P3-30 закрыт 2026-09-23 (PR #611).
     "A9-P3-29": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, edge", note="Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента"),
     # A9-P2-33 закрыт 2026-09-23 (PR #615).
     # A9-P2-32 закрыт 2026-09-23 (PR #615).
