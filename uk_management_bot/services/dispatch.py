@@ -151,14 +151,22 @@ def _auto_assign_enabled_sync(db=None) -> bool:
         return False
 
 
-async def _auto_assign_enabled_async(db=None) -> bool:
-    """Асинхронный аналог — то же fail-safe направление."""
+async def _auto_assign_enabled_async(db=None, session_factory=None) -> bool:
+    """Асинхронный аналог — то же fail-safe направление.
+
+    Без ``db`` флаг читается короткой сессией ``session_factory`` (по
+    умолчанию прод-``AsyncSessionLocal``), закрытой до возврата: держать
+    сессию чтения флага открытой на время диспетча и уведомления нельзя
+    (A9-P3-31 — сеть вне транзакции).
+    """
     from uk_management_bot.services.auto_manager.config import is_auto_assign_enabled
     try:
         if db is not None:
             return await is_auto_assign_enabled(db)
-        from uk_management_bot.database.session import AsyncSessionLocal
-        async with AsyncSessionLocal() as session:
+        if session_factory is None:
+            from uk_management_bot.database.session import AsyncSessionLocal
+            session_factory = AsyncSessionLocal
+        async with session_factory() as session:
             return await is_auto_assign_enabled(session)
     except Exception as e:
         logger.warning("[DISPATCH] конфиг автоназначения недоступен, считаю выключенным: %s", e)
@@ -186,7 +194,19 @@ def auto_dispatch_new_request_sync(request_number: str,
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
-    if not _auto_assign_enabled_sync(_db):
+    # A9-P3-31: без `_db`, но с фабрикой вызывающего — флаг и подбор дежурного
+    # на одной короткой сессии, закрытой ДО команды и уведомления (синхронный
+    # Telegram не должен идти при idle-in-transaction). Без фабрики — как
+    # раньше: каждый хелпер открывает и закрывает свою прод-сессию.
+    own_db = _db is None and session_factory is not None
+    db = session_factory() if own_db else _db
+    try:
+        enabled = _auto_assign_enabled_sync(db)
+        executor_id = pick_duty_executor_id(spec, db) if enabled else None
+    finally:
+        if own_db:
+            db.close()
+    if not enabled:
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)
@@ -196,7 +216,6 @@ def auto_dispatch_new_request_sync(request_number: str,
         from uk_management_bot.database.session import SessionLocal
         session_factory = SessionLocal
 
-    executor_id = pick_duty_executor_id(spec, _db)
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
         done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
@@ -234,7 +253,7 @@ async def auto_dispatch_new_request_async(request_number: str,
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
-    if not await _auto_assign_enabled_async(_db):
+    if not await _auto_assign_enabled_async(_db, session_factory=session_factory):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)

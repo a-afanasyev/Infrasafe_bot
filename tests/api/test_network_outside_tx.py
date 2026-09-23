@@ -70,7 +70,7 @@ def dispatch_spies(monkeypatch, recording_db):
     probe: dict = {"log": [], "tx_at_dispatch": None, "tx_at_notify": None,
                    "notified": []}
 
-    async def fake_enabled(_db=None):
+    async def fake_enabled(_db=None, **_kw):
         return True
 
     async def fake_run(session_factory, request_number, principal, command):
@@ -319,3 +319,78 @@ async def test_balance_payload_validator_raises_502():
         with pytest.raises(HTTPException) as exc:
             _balance_fields(bad)
         assert exc.value.status_code == 502
+
+
+# ─────────────────────────── A9-P3-31: смена категории ─────────────────────
+
+
+async def _new_electric_request(db) -> int:
+    """«Новая» электрика + сантехник + флаг автоназначения включён."""
+    from uk_management_bot.config.settings import settings
+    from uk_management_bot.database.models.auto_manager_config import AutoManagerConfig
+    from uk_management_bot.services.auto_manager.config import CONFIG_ROW_ID, DEFAULT_CONFIG
+
+    system = User(telegram_id=settings.INFRASAFE_SYSTEM_USER_TELEGRAM_ID,
+                  first_name="System", roles='["manager"]', active_role="manager",
+                  status="approved", language="ru")
+    applicant = User(telegram_id=737373, first_name="Ж", roles='["applicant"]',
+                     active_role="applicant", status="approved", language="ru")
+    plumber = User(telegram_id=747474, first_name="Pl", roles='["executor"]',
+                   active_role="executor", status="approved", language="ru",
+                   specialization="plumber")
+    db.add_all([system, applicant, plumber])
+    await db.flush()
+    db.add(AutoManagerConfig(id=CONFIG_ROW_ID, data={**DEFAULT_CONFIG, "enabled": True}))
+    db.add(RequestModel(
+        request_number="260923-031", user_id=applicant.id, category="electricity",
+        status="Новая", description="демо", urgency="low", address="ул. Сетевая 1",
+        created_at=datetime.now(timezone.utc),
+    ))
+    await db.commit()
+    return plumber.id
+
+
+async def test_change_category_redispatch_notifies_without_open_tx(
+    db_session, manager_user, recording_db, asgi_call, monkeypatch,
+):
+    """Передиспетч при смене категории уведомляет дежурного inline — к этому
+    моменту флаг автоназначения прочитан, запись завершена и ни одна сессия
+    не держит транзакцию (раньше сессия, открытая чтением флага, жила до
+    конца уведомления)."""
+    from uk_management_bot.api.requests import router as req_router
+    from uk_management_bot.services import dispatch as dispatch_mod
+    from uk_management_bot.services import workflow_notifications as wn
+
+    plumber_id = await _new_electric_request(db_session)
+    _as_user(manager_user)
+    log: list[str] = []
+    tx_at_notify: list[bool] = []
+
+    async def spy_notify(request_number, intents, *args, **kwargs):
+        tx_at_notify.append(recording_db.any_in_transaction())
+        log.append("notify")
+        return 1
+
+    async def bg_notify(*_a, **_kw):
+        log.append("bg_notify")
+
+    async def noop(*_a, **_kw):
+        return None
+
+    # Оркестратор получает фабрику сессий от роутера — запоминающую.
+    monkeypatch.setattr(req_router, "AsyncSessionLocal", recording_db)
+    monkeypatch.setattr(req_router, "publish_request_event", noop)
+    monkeypatch.setattr(req_router, "dispatch_notify_intents_detached", bg_notify)
+    monkeypatch.setattr(dispatch_mod, "pick_duty_executor_id",
+                        lambda *_a, **_k: plumber_id)
+    monkeypatch.setattr(dispatch_mod, "_publish_status_changed", noop)
+    monkeypatch.setattr(wn, "dispatch_notify_intents_detached", spy_notify)
+
+    status, body = await asgi_call(
+        "PATCH", "/api/v2/requests/260923-031/category", log,
+        json={"category": "plumbing"})
+
+    assert status == 200, body
+    assert body["dispatch_kind"] == "assigned" and body["executor_id"] == plumber_id
+    assert log[0] == "notify", log  # inline, до ответа — поведение прежнее
+    assert tx_at_notify == [False], "уведомление шло при открытой транзакции"

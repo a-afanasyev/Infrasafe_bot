@@ -175,6 +175,33 @@ class TestNewWithGroupRedispatch:
         assert res.dispatch.kind == "assigned" and res.executor_id == PLUMBER
 
 
+class TestSyncNotifyOutsideTransaction:
+    """A9-P3-31 (sync-сторона): уведомление дежурному (синхронный Telegram в
+    `_notify_assigned_sync`) идёт, когда флаг прочитан, дежурный подобран,
+    команда записана и ни одна сессия фабрики не держит транзакцию."""
+
+    def test_notify_runs_without_open_transaction(self, factory, monkeypatch):
+        SF = _seed(factory, assignment=("group", "electrician"), plumber_on_shift=True)
+        sessions: list = []
+
+        def recording_factory():
+            session = SF()
+            sessions.append(session)
+            return session
+
+        tx_at_notify: list[bool] = []
+
+        def spy_notify(request_number, outcome):
+            tx_at_notify.append(any(s.in_transaction() for s in sessions))
+
+        monkeypatch.setattr(dispatch, "_notify_assigned_sync", spy_notify)
+
+        res = change_category_sync(recording_factory, NUMBER, _mgr(), "plumbing")
+
+        assert res.dispatch.kind == "assigned" and res.executor_id == PLUMBER
+        assert tx_at_notify == [False], "уведомление шло при открытой транзакции"
+
+
 class TestNoOp:
     def test_legacy_label_equivalent_is_no_op(self, factory):
         SF = _seed(factory, category="Сантехника", assignment=("group", "plumber"))
