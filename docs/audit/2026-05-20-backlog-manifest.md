@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **570**
-- закрыто маркером: **516**
-- открыто маркером: **54**
+- пунктов всего (с Priority): **574**
+- закрыто маркером: **545**
+- открыто маркером: **29**
 
-  - `actionable` — **41**
+  - `actionable` — **16**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=21, P3=20.
+Из них actionable по приоритету: P2=5, P3=11.
 
 Значения `status`:
 
@@ -55,48 +55,23 @@
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |
-| `A9-P2-5` | P2 | actionable | audit9-2026-09-22 | AUD9-W2 | — | group-intake-bot, bot | — | Group Intake: фото сохраняется с `file_id` группового бота и не открывается из основного |
-| `A9-P2-32` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Бот «Мои смены → Начать/Завершить» мимо общего юнита смен: без audit, start_time переписывается |
-| `A9-P2-33` | P2 | actionable | found-2026-09-23 | AUD9-W4 | — | bot | — | Закуп: ReplyKeyboardMarkup в edit_text — менеджер видит «Произошла ошибка» при возврате заявки из закупа |
-| `A9-P2-6` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake тег-режим: при отказе лимитера сообщение с тегом пропадает молча |
-| `A9-P2-7` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | `POST /requests`: автодиспетч и Telegram-уведомления inline при открытой транзакции |
-| `A9-P2-8` | P2 | actionable | audit9-2026-09-22 | AUD9-W4 | — | api | — | API: сетевые вызовы при открытой сессии и синхронные рассылки в запросе (остатки AUD6-P2-02) |
-| `A9-P3-14` | P3 | actionable | audit9-2026-09-22 | AUD9-W4 | — | БД | — | Уникальность Group Intake обходится при `source_chat_id IS NULL` |
-| `A9-P3-5` | P3 | actionable | owner-decision-2026-09-23 | AUD9-W4 | — | group-intake-bot | — | Group Intake: сырой текст групп жителей (ПДн) уходит внешнему LLM без маскирования |
-| `A9-P3-6` | P3 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Group Intake: ответ постороннему в staff-группе, теги подстрокой, завышенная метрика |
-| `A9-P3-7` | P3 | actionable | audit9-2026-09-22 | AUD9-W4 | — | group-intake-bot | — | Ретрай LLM (PR #594) без backoff и мимо лимитера; докстринги противоречат поведению |
-| `A9-P2-13` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api, resource-api | — | access/resource: блокирующий I/O в async-эндпоинтах; `get_photo` отдаёт 500 при ошибке media |
-| `A9-P2-14` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: загрузка кадров камеры под открытой транзакцией и row-lock; осиротевшие медиа |
-| `A9-P2-16` | P2 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api, media-service | — | access: 30-дневный ретеншн фото ANPR не удаляет сами медиа |
+| `A9-P3-31` | P3 | actionable | found-2026-09-23 | AUD9-W4 | — | bot, api | — | `change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление |
 | `A9-P3-12` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток |
-| `A9-P3-2` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | access-api | — | access-api `/metrics` без токена (требует подтверждения доступности через edge) |
-| `A9-P3-23` | P3 | actionable | audit9-2026-09-22 | AUD9-W5 | — | media-service, access-api | — | Сателлиты: мелкие дефекты саги, гонок, Redis и дубли `_client_ip` |
-| `A9-P2-29` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: logout не чистит кэш `QueryClient` |
-| `A9-P2-30` | P2 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: гонка в каскаде адреса регистрации — квартиры чужого дома |
+| `A9-P3-29` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, edge | — | Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента |
+| `A9-P3-30` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, мониторинг хостов | — | Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler |
+| `A9-P3-32` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | media-service, access-api, api | — | media `DELETE /media/{id}` отвечает 404 и на «не найден», и на временный сбой Telegram |
 | `A9-P2-31` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W6 | — | frontend, TWA, bot | — | RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта |
-| `A9-P3-19` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: мелкие гонки/утечки WS, кэша, TZ и `useMemo` |
-| `A9-P3-20` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: сырой `detail` в JSX, ветвление по тексту ошибки, дубли цветов/разбора ошибок |
 | `A9-P3-21` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient` |
 | `A9-P3-22` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI |
-| `A9-P2-19` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | образы bot/api/media, CI | — | Прод-образ бота с dev-зависимостями без хэшей; pytest объявлен дважды с конфликтующими версиями |
 | `A9-P2-20` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | все сервисы, деплой | — | CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста |
 | `A9-P2-21` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | media-service, CI | — | media: нет версионированных миграций и дрейф-гейта |
-| `A9-P2-22` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W7 | — | CI, dev | — | black/isort объявлены в pre-commit, но не соблюдаются |
-| `A9-P3-24` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | CI | — | mypy только на боте; `[tool.mypy]` resource никогда не запускается |
-| `A9-P3-25` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | CI | — | payment-control CI: тест-инструменты без пинов, path-фильтр |
-| `A9-P3-26` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | compose, образы | — | postgres/redis без digest; лишнее в образах сателлитов |
 | `A9-P3-27` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | доки | — | README и ARCHITECTURE отстают от кода; устаревшие комментарии CI |
 | `A9-P2-10` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api | — | Доменный справочник категорий лежит в UI-слое `keyboards/requests.py` |
-| `A9-P2-23` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot | — | Чистка: backfill-модули пережили squash-baseline |
 | `A9-P2-24` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | media-service, bot | — | Чистка: ~40% media_service — SDK и эндпоинты без потребителей |
-| `A9-P2-25` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | scripts | — | Чистка: исторические скрипты (один падает на импорте, другой делает `create_all` в обход alembic) |
 | `A9-P2-26` | P2 | deferred | owner-decision-2026-09-23 | AUD9-W8 | — | bot, БД | — | Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает |
 | `A9-P2-27` | P2 | decision | review-2026-09-23 | AUD9-W8 | — | bot | — | Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40) |
-| `A9-P2-28` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, доки | — | Чистка: `utils/enums.py` дублирует канон статусов и не используется прод-кодом |
 | `A9-P3-11` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api, access-api | — | Инверсии слоёв и два резолвера ролей с разным фолбэком |
 | `A9-P3-16` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot | — | Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz |
-| `A9-P3-17` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot | — | Чистка: заглушки уведомлений и тесты, которые не могут упасть |
-| `A9-P3-18` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api | — | Чистка: мелкие символы без единой ссылки; скрытая инициализация логирования |
 | `A9-P3-28` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | репо, доки | — | Чистка: исторические отчёты в корне и ~23 тыс. строк россыпи в корне `docs/` |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
