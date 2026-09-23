@@ -128,6 +128,33 @@ def start_shift_sync(db: Session, user: User, notes: Optional[str] = None) -> Sh
     return shift
 
 
+def start_planned_shift_sync(db: Session, user: User, shift_id: int,
+                             notes: Optional[str] = None) -> Optional[Shift]:
+    """«Мои смены → Начать» (A9-P2-32): активировать КОНКРЕТНУЮ planned-смену.
+
+    Смена выбрана явно по id, окно не проверяется (как и раньше в «Моих
+    сменах»); владелец и статус — в SQL-фильтре. Плановый start_time
+    сохраняется, audit — как у `start_shift_sync`. None — смены нет, чужая
+    или уже не planned (без audit). Без commit.
+    """
+    # FOR UPDATE: двойной тап — второй ждёт commit первого и видит status != planned.
+    shift = (
+        db.query(Shift)
+        .filter(
+            (Shift.id == shift_id)
+            & (Shift.user_id == user.id)
+            & (Shift.status == SHIFT_STATUS_PLANNED)
+        )
+        .with_for_update()
+        .first()
+    )
+    if shift is None:
+        return None
+    _apply_start(shift, user_id=user.id, now=utc_now(), notes=notes)
+    db.add(_start_audit(user, shift, notes))
+    return shift
+
+
 async def start_shift_async(db: AsyncSession, user: User, notes: Optional[str] = None) -> Shift:
     now = utc_now()
     planned = (

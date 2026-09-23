@@ -9,11 +9,8 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
 
-  - repo: https://github.com/psf/black
-    rev: 23.11.0
-    hooks:
-      - id: black
-        language_version: python3.11
+  # A9-P2-22 (решение владельца 2026-09-23): black и isort удалены — хуки
+  # объявлялись, но кодовая база им не соответствовала. Стиль держит ruff.
 
   # PRAC-01: ruff supersedes flake8 (same E+F rules) and is the linter enforced
   # in CI. Config lives in pyproject.toml [tool.ruff]. --fix applies safe autofixes.
@@ -32,9 +29,3 @@ repos:
         # отсутствующие сторонние стабы, поэтому доп-зависимости не нужны.
         # Флаги согласованы с CI-джобой mypy (обход коллизии имён в tests).
         args: [--ignore-missing-imports, --explicit-package-bases, --exclude, '(/tests/|/venv/)']
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        args: [--profile=black]
