@@ -1,4 +1,4 @@
-# A9-P3-25: dev-lock для CI (payment-control.yml, джоба test) — по образцу
+# A9-P3-25: dev-lock для CI (ci.yml, джоба payment-tests) — по образцу
 # resource-accounting/backend/requirements-dev.txt: рантайм + тест-инструменты
 # одним hash-locked файлом (раньше `pip install pytest pytest-cov httpx` без
 # версий резолвился заново на каждом прогоне). Рантайм прибит к requirements.txt

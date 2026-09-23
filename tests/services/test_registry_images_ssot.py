@@ -83,7 +83,15 @@ def _build_path(build) -> Path:
 
 
 def _site_builds(site: str) -> dict[str, Path]:
-    """service → repo-relative Dockerfile для сервисов, которые набор площадки собирает."""
+    """service → repo-relative Dockerfile для сервисов, которые набор площадки собирает.
+
+    Мерж упрощённый и опирается на порядок `SITES[site]`: базовый файл первым,
+    overlay'и после (как в `-f` таблицы SKILL). `build:` без `context` в overlay'е
+    (profk frontend: только args) считается дополнением к уже известной сборке.
+    Если такой overlay встретился раньше базы, Dockerfile потерялся бы молча —
+    поэтому ниже assert.
+    """
+    assert SITES[site][0] == "docker-compose.yml", "базовый compose обязан идти первым"
     builds: dict[str, Path | None] = {}
     for name in SITES[site]:
         for svc, spec in _services(name).items():
@@ -94,8 +102,10 @@ def _site_builds(site: str) -> dict[str, Path]:
             build = spec["build"]
             if build is _RESET:
                 builds[svc] = None
-            elif isinstance(build, dict) and "context" not in build and builds.get(svc):
-                continue  # override только args (profk frontend) — Dockerfile из базы
+            elif isinstance(build, dict) and "context" not in build:
+                # override только args (profk frontend) — Dockerfile из базы
+                assert builds.get(svc), f"{name}: {svc}.build без context до базовой сборки"
+                continue
             else:
                 builds[svc] = _build_path(build)
     return {svc: path for svc, path in builds.items() if path is not None}
@@ -168,6 +178,12 @@ def test_promote_covers_exactly_published_images():
         for spec in _services(f"docker-compose.registry.{site}.yml").values()
     }
     assert used <= listed, f"overlay ссылается на непромоутимые образы: {sorted(used - listed)}"
+
+
+def test_every_image_is_built_for_host_platform():
+    """Оба прод-хоста x86_64 — платформа задана явно, а не дефолтом buildx раннера."""
+    wrong = [name for _, name, w in _published() if w.get("platforms") != "linux/amd64"]
+    assert not wrong, f"images-build без platforms: linux/amd64: {wrong}"
 
 
 def test_promote_waits_for_every_other_job():

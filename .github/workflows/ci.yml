@@ -434,6 +434,63 @@ jobs:
           RESOURCE_REQUIRE_PG_TESTS: "1"
         run: pytest tests/test_period_concurrency_pg.py -v -rs -o addopts=""
 
+  # A9-P2-20: тесты payment_control перенесены сюда из отдельного
+  # path-фильтрованного payment-control.yml (удалён). Между workflow'ами нет
+  # `needs`, поэтому там они не гейтили images-promote: образ uk-payment-control
+  # получал прод-тег sha-<sha> при красных тестах. Внутри ci.yml обе job'ы
+  # попадают в images-promote.needs (держит гейт test_registry_images_ssot).
+  # Без path-фильтра они гоняются на каждом PR (~1–2 мин); required checks в
+  # репо не настроены, так что удаление старого workflow ничего не подвешивает.
+  payment-tests:
+    name: payment-tests (pytest + coverage + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+      # A9-P3-25: dev-lock (рантайм + pytest/pytest-cov/httpx/mypy, hash-locked,
+      # по образцу resource-accounting) вместо `pip install pytest pytest-cov
+      # httpx` без версий — тот резолвился заново на каждом прогоне.
+      - run: pip install --require-hashes -r payment_control/requirements-dev.txt
+      - run: python -m pytest payment_control/tests --cov=payment_control --cov-report=term --cov-fail-under=80
+      # A9-P3-24: mypy — блокирующий: на момент включения 0 ошибок (единственная
+      # найденная исправлена в том же PR), baseline не нужен.
+      - name: Mypy (blocking, 0 errors)
+        run: |
+          python -m mypy --ignore-missing-imports --explicit-package-bases --follow-imports=silent \
+               --exclude '(/tests/|/venv/)' payment_control
+
+  payment-migration-drift:
+    name: payment-migration-drift (postgres 16)
+    # Дрейф проверяется на PostgreSQL, а не на sqlite: type affinity sqlite
+    # скрывает расхождения по типам, server_default и JSON/JSONB.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: payment_control
+          POSTGRES_USER: payment_owner
+          POSTGRES_PASSWORD: ci-owner-password
+        options: >-
+          --health-cmd "pg_isready -U payment_owner -d payment_control"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+      - run: pip install --require-hashes -r payment_control/requirements.txt
+      - name: Migration drift on PostgreSQL
+        env:
+          PAYMENT_DATABASE_URL: postgresql+psycopg2://payment_owner:ci-owner-password@localhost:5432/payment_control
+        run: |
+          alembic -c payment_control/alembic.ini upgrade head
+          alembic -c payment_control/alembic.ini check
+          alembic -c payment_control/alembic.ini downgrade base
+
   backend-tests:
     name: backend-tests (pytest)
     runs-on: ubuntu-latest
@@ -1208,6 +1265,10 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
+      # platforms: linux/amd64 у каждой сборки — явно: оба прод-хоста x86_64, и
+      # образ другой архитектуры (смена раннера/дефолта buildx) упал бы только
+      # на хосте, при старте контейнера.
+      #
       # Джоба до сих пор только ПРОВЕРЯЛА, что Dockerfile'ы собираются (push:
       # false, load: false). Сборка живых образов при этом происходила на
       # прод-хосте: деплой = git pull + docker compose build прямо на .105.
@@ -1242,6 +1303,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-bot:ci-${{ github.sha }}
@@ -1256,6 +1318,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.api
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-api:ci-${{ github.sha }}
@@ -1273,6 +1336,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.access
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-access-api:ci-${{ github.sha }}
@@ -1290,6 +1354,7 @@ jobs:
         with:
           context: media_service
           file: media_service/Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-media-service:ci-${{ github.sha }}
@@ -1311,6 +1376,7 @@ jobs:
         with:
           context: resource-accounting/backend
           file: resource-accounting/backend/Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-resource-api:ci-${{ github.sha }}
@@ -1350,6 +1416,7 @@ jobs:
         with:
           context: frontend
           file: frontend/Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           build-args: ${{ steps.fe-args.outputs.profk }}
@@ -1365,6 +1432,7 @@ jobs:
         with:
           context: frontend
           file: frontend/Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           build-args: ${{ steps.fe-args.outputs.infrasafe }}
@@ -1383,6 +1451,7 @@ jobs:
         with:
           context: .
           file: payment_control/Dockerfile
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           load: false
           tags: ${{ env.REGISTRY }}/uk-payment-control:ci-${{ github.sha }}
@@ -1410,6 +1479,8 @@ jobs:
       - pip-audit
       - media-tests
       - resource-tests
+      - payment-tests
+      - payment-migration-drift
       - backend-tests
       - access-control-tests
       - b0-least-privilege
@@ -1437,17 +1508,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Promote candidates
+      # sha-<sha> — неизменяемый по контракту: прод и теги раскатки ссылаются
+      # на него. Повторный прогон CI на том же коммите пересобирает кандидата
+      # (сборка не побайтно воспроизводима), поэтому существующий sha-тег НЕ
+      # перезаписывается: тот же digest — no-op, другой — ошибка, и :main для
+      # этого образа не трогается. Ошибка inspect, отличная от «тега нет», тоже
+      # роняет шаг — иначе сетевой сбой выглядел бы как «тега нет» и вёл к
+      # перезаписи.
+      - name: Promote candidates (sha-tag is write-once)
         env:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          failed=0
           for img in $IMAGES; do
             ref="$REGISTRY/$img"
-            docker buildx imagetools create \
-              --tag "$ref:sha-$SHA" --tag "$ref:main" "$ref:ci-$SHA"
-            echo "$ref:sha-$SHA ← $(docker buildx imagetools inspect "$ref:sha-$SHA" --format '{{json .Manifest.Digest}}')"
+            cand=$(docker buildx imagetools inspect "$ref:ci-$SHA" --format '{{.Manifest.Digest}}')
+            if cur=$(docker buildx imagetools inspect "$ref:sha-$SHA" --format '{{.Manifest.Digest}}' 2>&1); then
+              if [ "$cur" = "$cand" ]; then
+                echo "$ref:sha-$SHA уже = $cand — no-op"
+              else
+                echo "::error::$ref:sha-$SHA уже указывает на $cur, кандидат ci-$SHA = $cand. sha-тег не перезаписывается; :main не тронут. Раскатывать существующий $cur или разбираться, откуда второй digest."
+                failed=1
+              fi
+              continue
+            elif ! grep -qiE 'not found|manifest unknown' <<<"$cur"; then
+              echo "::error::inspect $ref:sha-$SHA упал не по «тега нет»: $cur"
+              failed=1
+              continue
+            fi
+            docker buildx imagetools create --tag "$ref:sha-$SHA" "$ref@$cand"
+            docker buildx imagetools create --tag "$ref:main" "$ref@$cand"
+            echo "$ref:sha-$SHA ← $cand"
           done
+          exit "$failed"
 
   quick-start:
     name: quick-start (README dev path with example env)
