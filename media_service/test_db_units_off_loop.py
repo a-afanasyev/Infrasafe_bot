@@ -218,7 +218,8 @@ async def test_archive_saga_holds_no_session_during_telegram(tracker):
     assert tg.open_at_call == [0], "фаза 2 саги держит сессию во время Telegram I/O"
 
     tg.gate.set()
-    assert await asyncio.wait_for(task, 5) is True
+    from app.services.media_storage import MediaRemovalOutcome
+    assert await asyncio.wait_for(task, 5) is MediaRemovalOutcome.DONE
     assert tracker.open == 0
     db = real()
     try:

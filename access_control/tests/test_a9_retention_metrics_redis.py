@@ -263,6 +263,35 @@ async def test_media_client_get_status(code, body, expected) -> None:
     assert await client.get_status(42) == expected
 
 
+# A9-P3-32: контракт медиа-сервиса по реальному HTTP (не фейк delete_file):
+# 503 = транзиентный сбой → ссылку НЕ трогать, без уточняющего GET; 404 = файла
+# нет; повторный DELETE по уже удалённому — 200 (already_deleted).
+@pytest.mark.parametrize(("delete_code", "get_status", "expected", "gets"), [
+    (200, None, media_mod.MediaRetireOutcome.GONE, 0),
+    (404, None, media_mod.MediaRetireOutcome.GONE, 1),
+    (503, None, media_mod.MediaRetireOutcome.TRANSIENT, 0),
+    (409, "active", media_mod.MediaRetireOutcome.RETAINED, 1),
+    (409, "deleting", media_mod.MediaRetireOutcome.TRANSIENT, 1),
+])
+async def test_retire_classifies_media_http_contract(
+    delete_code, get_status, expected, gets
+) -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.method)
+        if request.method == "DELETE":
+            return httpx.Response(delete_code, json={"already_deleted": False})
+        if get_status is None:
+            return httpx.Response(404, json={})
+        return httpx.Response(200, json={"status": get_status})
+
+    outcome = await media_mod.retire_media_file(_mock_client(handler), 42)
+
+    assert outcome is expected
+    assert seen.count("GET") == gets
+
+
 def test_retention_docstring_has_no_phantom_object_storage() -> None:
     assert "MinIO" not in (pr.__doc__ or "")
     assert "S3" not in (pr.__doc__ or "")

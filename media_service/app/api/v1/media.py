@@ -20,7 +20,11 @@ from app.schemas import (
     MediaTagResponse, MediaCategoryEnum, MediaStatusEnum, MediaTelegramLookupResponse, PreviewWarmRequest
 )
 from app.core.config import settings, TelegramChannels, FileCategories
-from app.services.media_storage import ChannelNotConfiguredError, PublicationReservationError
+from app.services.media_storage import (
+    ChannelNotConfiguredError,
+    MediaRemovalOutcome,
+    PublicationReservationError,
+)
 from app.services.telegram_client import get_telegram_client
 from aiogram.exceptions import TelegramAPIError
 
@@ -821,13 +825,17 @@ async def archive_media(
     Архивация медиа-файла
     """
     try:
-        success = await storage_service.archive_media(
+        outcome = await storage_service.archive_media(
             media_file_id=media_id,
             archive_reason=request.archive_reason
         )
 
-        if not success:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден или не может быть заархивирован")
+        if outcome is MediaRemovalOutcome.NOT_FOUND:
+            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+        if outcome is MediaRemovalOutcome.TRANSIENT_FAILURE:
+            raise HTTPException(
+                status_code=503, detail="Временный сбой архивации, повторите позже"
+            )
 
         return {"message": "Медиа-файл успешно заархивирован", "media_id": media_id}
 
@@ -846,15 +854,30 @@ async def delete_media(
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
-    Удаление медиа-файла
+    Удаление медиа-файла (A9-P3-32 — коды различимы для клиентов):
+
+    * 200 — удалён; повторный вызов по уже удалённому — тоже 200
+      (``already_deleted: true``, идемпотентно). 200 / статус ``deleted``
+      значат «скрыт из системы», а НЕ «сообщение удалено из Telegram»:
+      при UNDELETABLE-отказе (нет прав, старше 48 ч) строка становится
+      ``deleted``, а сообщение остаётся в канале (WARNING в логе);
+    * 404 — файла нет;
+    * 409 — файл есть, но не active или под publication-lock;
+    * 503 — транзиентный сбой Telegram, файл остался active — повторить.
     """
     try:
-        success = await storage_service.delete_media(media_file_id=media_id)
+        outcome = await storage_service.delete_media(media_file_id=media_id)
 
-        if not success:
-            raise HTTPException(status_code=404, detail="Медиа-файл не найден или не может быть удален")
+        if outcome is MediaRemovalOutcome.NOT_FOUND:
+            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
+        if outcome is MediaRemovalOutcome.TRANSIENT_FAILURE:
+            raise HTTPException(
+                status_code=503, detail="Временный сбой удаления, повторите позже"
+            )
 
-        return {"message": "Медиа-файл успешно удален", "media_id": media_id}
+        already_deleted = outcome is MediaRemovalOutcome.ALREADY_DELETED
+        message = "Медиа-файл уже удален" if already_deleted else "Медиа-файл успешно удален"
+        return {"message": message, "media_id": media_id, "already_deleted": already_deleted}
 
     except PublicationReservationError as e:
         raise HTTPException(status_code=409, detail=str(e))
