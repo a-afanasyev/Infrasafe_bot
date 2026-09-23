@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **574**
-- закрыто маркером: **545**
-- открыто маркером: **29**
+- пунктов всего (с Priority): **576**
+- закрыто маркером: **550**
+- открыто маркером: **26**
 
-  - `actionable` — **16**
+  - `actionable` — **13**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **9**
 
-Из них actionable по приоритету: P2=5, P3=11.
+Из них actionable по приоритету: P2=3, P3=10.
 
 Значения `status`:
 
@@ -60,19 +60,16 @@
 | `A9-P3-29` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, edge | — | Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента |
 | `A9-P3-30` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | access-api, мониторинг хостов | — | Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler |
 | `A9-P3-32` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | media-service, access-api, api | — | media `DELETE /media/{id}` отвечает 404 и на «не найден», и на временный сбой Telegram |
-| `A9-P2-31` | P2 | actionable | owner-decision-2026-09-23 | AUD9-W6 | — | frontend, TWA, bot | — | RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта |
+| `A9-P3-34` | P3 | actionable | found-2026-09-23 | AUD9-W5 | — | media-service | — | media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id) |
 | `A9-P3-21` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient` |
-| `A9-P3-22` | P3 | actionable | audit9-2026-09-22 | AUD9-W6 | — | frontend | — | Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI |
 | `A9-P2-20` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | все сервисы, деплой | — | CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста |
-| `A9-P2-21` | P2 | actionable | audit9-2026-09-22 | AUD9-W7 | — | media-service, CI | — | media: нет версионированных миграций и дрейф-гейта |
-| `A9-P3-27` | P3 | actionable | audit9-2026-09-22 | AUD9-W7 | — | доки | — | README и ARCHITECTURE отстают от кода; устаревшие комментарии CI |
+| `A9-P3-33` | P3 | actionable | found-2026-09-23 | AUD9-W7 | — | media-service | — | media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД |
 | `A9-P2-10` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api | — | Доменный справочник категорий лежит в UI-слое `keyboards/requests.py` |
 | `A9-P2-24` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | media-service, bot | — | Чистка: ~40% media_service — SDK и эндпоинты без потребителей |
 | `A9-P2-26` | P2 | deferred | owner-decision-2026-09-23 | AUD9-W8 | — | bot, БД | — | Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает |
 | `A9-P2-27` | P2 | decision | review-2026-09-23 | AUD9-W8 | — | bot | — | Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40) |
 | `A9-P3-11` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot, api, access-api | — | Инверсии слоёв и два резолвера ролей с разным фолбэком |
 | `A9-P3-16` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | bot | — | Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz |
-| `A9-P3-28` | P3 | actionable | audit9-2026-09-22 | AUD9-W8 | — | репо, доки | — | Чистка: исторические отчёты в корне и ~23 тыс. строк россыпи в корне `docs/` |
 | `AUD5-JUNK-5` | P3 | no-pr | verified-2026-09-11 | П7 | — | — | — | локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09) |
 | `ARCH-06` | P2 | deferred | verified-2026-09-11 | — | — | — | — | AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7) |
 | `DB-049` | P2 | deferred | verified-2026-07-27 | — | — | — | — | jsonb+GIN — когда появится запрос по ролям, которому нужен индекс |

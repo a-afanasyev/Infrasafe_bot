@@ -367,6 +367,8 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
+    "A9-P3-34": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service", note="media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id)"),
+    "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
     "A9-P3-32": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service, access-api, api", note="media `DELETE /media/{id}` отвечает 404 и на «не найден», и на временный сбой Telegram"),
     "A9-P3-31": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot, api", note="`change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление"),
     "A9-P3-30": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, мониторинг хостов", note="Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler"),
@@ -396,7 +398,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
     # A9-P2-19 закрыт 2026-09-23 (PR #613).
     "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
-    "A9-P2-21": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="media-service, CI", note="media: нет версионированных миграций и дрейф-гейта"),
+    # A9-P2-21 закрыт 2026-09-23 (PR #619).
     # A9-P2-22 закрыт 2026-09-23 (PR #613).
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
@@ -406,7 +408,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-28 закрыт 2026-09-23 (PR #612).
     # A9-P2-29 закрыт 2026-09-23 (PR #609).
     # A9-P2-30 закрыт 2026-09-23 (PR #609).
-    "A9-P2-31": A(pkg="AUD9-W6", status="actionable", method="owner-decision-2026-09-23", services="frontend, TWA, bot", note="RU-хардкод в TWA, на экране MFA и в модуле ресурсоучёта"),
+    # A9-P2-31 закрыт 2026-09-23 (PR #617).
     # A9-P3-1 закрыт 2026-09-23 (PR #601).
     # A9-P3-2 закрыт 2026-09-23 (PR #611).
     # A9-P3-3 закрыт 2026-09-23 (PR #604).
@@ -428,13 +430,13 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-19 закрыт 2026-09-23 (PR #609).
     # A9-P3-20 закрыт 2026-09-23 (PR #609).
     "A9-P3-21": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient`"),
-    "A9-P3-22": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: `useTWAAuth` без тестов; `frontend/preview/` (2168 строк) вне tsc и CI"),
+    # A9-P3-22 закрыт 2026-09-23 (PR #618).
     # A9-P3-23 закрыт 2026-09-23 (PR #611).
     # A9-P3-24 закрыт 2026-09-23 (PR #613).
     # A9-P3-25 закрыт 2026-09-23 (PR #613).
     # A9-P3-26 закрыт 2026-09-23 (PR #613).
-    "A9-P3-27": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="доки", note="README и ARCHITECTURE отстают от кода; устаревшие комментарии CI"),
-    "A9-P3-28": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="репо, доки", note="Чистка: исторические отчёты в корне и ~23 тыс. строк россыпи в корне `docs/`"),
+    # A9-P3-27 закрыт 2026-09-23 (PR #620).
+    # A9-P3-28 закрыт 2026-09-23 (PR #620).
 }
 
 
