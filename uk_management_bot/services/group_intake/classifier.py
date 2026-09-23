@@ -169,7 +169,7 @@ def _get_client():
 def _schema() -> dict:
     # SELECTABLE, не полный канон: служебную `engineering` (очередь InfraSafe)
     # модель выдавать не должна.
-    from uk_management_bot.keyboards.requests import SELECTABLE_CATEGORY_KEYS
+    from uk_management_bot.utils.categories import SELECTABLE_CATEGORY_KEYS
     from uk_management_bot.utils.constants import URGENCY_VALUES
 
     return {
@@ -225,7 +225,7 @@ _KEYWORD_HINT = "\n\n[подсказка по ключевым словам: п�
 
 def _category_glossary() -> str:
     """Глоссарий категорий из канона: ключ (ru / uz): описание. Примеры: …"""
-    from uk_management_bot.keyboards.requests import (
+    from uk_management_bot.utils.categories import (
         SELECTABLE_CATEGORY_KEYS,
         get_category_display,
     )
@@ -258,7 +258,7 @@ def _parse_response(
     переопределяет ТОЛЬКО вердикт `other` (у модели есть контекст: «нет
     горячей воды» → heating, а словарь сказал бы plumbing).
     """
-    from uk_management_bot.keyboards.requests import (
+    from uk_management_bot.utils.categories import (
         SELECTABLE_CATEGORY_KEYS,
         resolve_category_key,
     )

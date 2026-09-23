@@ -57,7 +57,7 @@ from uk_management_bot.constants.categories import get_specialization_for_catego
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import SessionLocal
-from uk_management_bot.keyboards.requests import get_category_display, resolve_category_key
+from uk_management_bot.utils.categories import get_category_display, resolve_category_key
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.services.auto_manager.config import is_window_active, load_config_sync
 from uk_management_bot.services.auto_manager.rule_engine import (

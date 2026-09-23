@@ -60,7 +60,7 @@ class RequestService:
         try:
             # Валидация входных данных
             # TASK 17 Этап B: Валидация через внутренние ключи
-            from uk_management_bot.keyboards.requests import (
+            from uk_management_bot.utils.categories import (
                 CATEGORY_INTERNAL_KEYS,
                 resolve_category_key
             )
@@ -475,7 +475,7 @@ class RequestService:
             
             # Статистика по категориям
             # TASK 17 Этап B: Используем внутренние ключи и учитываем legacy тексты
-            from uk_management_bot.keyboards.requests import (
+            from uk_management_bot.utils.categories import (
                 CATEGORY_INTERNAL_KEYS,
                 CATEGORY_DEFINITIONS
             )

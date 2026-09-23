@@ -158,7 +158,7 @@ class Validator:
             Tuple[bool, str]: (валидна ли категория, сообщение)
         """
         from uk_management_bot.utils.helpers import get_text
-        from uk_management_bot.keyboards.requests import (
+        from uk_management_bot.utils.categories import (
             CATEGORY_INTERNAL_KEYS,
             resolve_category_key,
             get_category_display
@@ -301,7 +301,7 @@ class Validator:
             Tuple[bool, str]: (валидна ли срочность, сообщение)
         """
         from uk_management_bot.utils.helpers import get_text
-        from uk_management_bot.keyboards.requests import URGENCY_INTERNAL_KEYS, get_urgency_display
+        from uk_management_bot.utils.categories import URGENCY_INTERNAL_KEYS, get_urgency_display
         
         if not urgency:
             error_msg = get_text("validation.urgency_empty", language=language)
