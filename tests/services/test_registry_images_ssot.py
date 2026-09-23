@@ -178,6 +178,11 @@ def test_promote_covers_exactly_published_images():
         for spec in _services(f"docker-compose.registry.{site}.yml").values()
     }
     assert used <= listed, f"overlay ссылается на непромоутимые образы: {sorted(used - listed)}"
+    tag_deploy = (ROOT / "scripts" / "tag-deploy.sh").read_text(encoding="utf-8")
+    m = re.search(r'^UK_IMAGES_DEFAULT="([^"]+)"', tag_deploy, re.M)
+    assert m and set(m.group(1).split()) == listed, (
+        "scripts/tag-deploy.sh UK_IMAGES_DEFAULT ≠ images-promote IMAGES — digest'ы в теге раскатки неполные"
+    )
 
 
 def test_every_image_is_built_for_host_platform():

@@ -11,6 +11,8 @@
 #   scripts/tag-deploy.sh profk            # тег на текущий HEAD
 #   scripts/tag-deploy.sh profk <commit>   # тег на конкретный коммит
 #   scripts/tag-deploy.sh profk --push     # сразу отправить в origin
+#   UK_IMAGE_SHA=<sha> scripts/tag-deploy.sh profk <sha> --push
+#                                          # registry-режим (A9-P2-20): + digest'ы образов
 #
 # Имя: <host>-YYYY-MM-DD, при второй раскатке за день добавляется .2, .3 …
 # Тело: список коммитов от предыдущего тега этого же хоста — то есть ровно то,
@@ -57,7 +59,31 @@ fi
 
 BODY=$(git log --no-merges --format='  %h %s' "$RANGE" 2>/dev/null || echo "  (история недоступна)")
 
-git tag -a "$NAME" "$SHA" -m "$HEADER" -m "$BODY"
+# A9-P2-20: в registry-режиме тег фиксирует и digest'ы образов из GHCR.
+# sha-тег там write-once, но именно digest однозначно отвечает на вопрос
+# «что было в проде». Работает только при заданном UK_IMAGE_SHA, без него
+# поведение прежнее. Список образов = IMAGES job'а images-promote в ci.yml
+# (сверяет гейт tests/services/test_registry_images_ssot.py).
+UK_IMAGES_DEFAULT="uk-bot uk-api uk-access-api uk-media-service uk-resource-api uk-frontend-profk uk-frontend-infrasafe uk-payment-control"
+DIGESTS=()
+if [[ -n "${UK_IMAGE_SHA:-}" ]]; then
+    if [[ "$UK_IMAGE_SHA" != "$SHA" ]]; then
+        echo "UK_IMAGE_SHA=$UK_IMAGE_SHA ≠ тегируемый коммит $SHA — образы не из этого коммита" >&2
+        exit 2
+    fi
+    LINES=""
+    for img in $UK_IMAGES_DEFAULT; do
+        ref="ghcr.io/a-afanasyev/${img}:sha-${SHA}"
+        if ! digest=$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}'); then
+            echo "не удалось получить digest $ref (нет образа или нет доступа к GHCR) — тег не создан" >&2
+            exit 1
+        fi
+        LINES+="  ${img}@${digest}"$'\n'
+    done
+    DIGESTS=(-m "Образы ghcr.io/a-afanasyev/*:sha-${SHA}:" -m "${LINES%$'\n'}")
+fi
+
+git tag -a "$NAME" "$SHA" -m "$HEADER" -m "$BODY" ${DIGESTS[@]+"${DIGESTS[@]}"}
 echo "тег создан: $NAME → ${SHA:0:8}"
 
 if $PUSH; then

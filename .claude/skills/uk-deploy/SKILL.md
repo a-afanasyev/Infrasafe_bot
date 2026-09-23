@@ -106,7 +106,7 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 
 **Статус: opt-in, по умолчанию ВЫКЛЮЧЕН.** Пока в `COMPOSE` площадки нет последнего `-f docker-compose.registry.<площадка>.yml` (правая колонка таблицы выше), деплой идёт по командам выше, со сборкой на хосте. Эта сборка остаётся штатным fallback'ом, пока владелец не переключит обе площадки.
 
-**Откуда берутся образы.** На каждый push в `main` job `images-build` (`.github/workflows/ci.yml`) публикует кандидатов `ghcr.io/a-afanasyev/<образ>:ci-<полный SHA>`. Job `images-promote` ставит на них тег `sha-<полный SHA>` (и плавающий `main`), когда на этом коммите зелёные ВСЕ остальные job'ы `ci.yml`. Пересборки нет, прод получает тот же манифест. Образов восемь: `uk-bot` (app, group-intake-bot), `uk-api` (api, migrate), `uk-access-api`, `uk-media-service` (media-service, media-migrate), `uk-resource-api` (resource-migrate/api/worker), `uk-payment-control` (payment-migrate/api) и `uk-frontend-profk` / `uk-frontend-infrasafe`. Платформа — только `linux/amd64`.
+**Откуда берутся образы.** На каждый push в `main` job `images-build` (`.github/workflows/ci.yml`) публикует кандидатов `ghcr.io/a-afanasyev/<образ>:ci-<полный SHA>`. Job `images-promote` ставит на них тег `sha-<полный SHA>` (и плавающий `main`), когда на этом коммите зелёные ВСЕ остальные job'ы `ci.yml`. Пересборки нет, прод получает тот же манифест. Тег `sha-<SHA>` пишется один раз. При повторном прогоне CI с тем же digest promote ничего не делает. Если digest другой, promote падает и не трогает ни `sha-`, ни `:main` этого образа. В `needs` входят и тесты payment_control (`payment-tests`, `payment-migration-drift`). Образов восемь: `uk-bot` (app, group-intake-bot), `uk-api` (api, migrate), `uk-access-api`, `uk-media-service` (media-service, media-migrate), `uk-resource-api` (resource-migrate/api/worker), `uk-payment-control` (payment-migrate/api) и `uk-frontend-profk` / `uk-frontend-infrasafe`. Платформа — только `linux/amd64`.
 
 **Связь тегов:** тег раскатки `<host>-YYYY-MM-DD` → коммит X → образы `sha-X`. `UK_IMAGE_SHA` на хосте = `git rev-parse HEAD` рабочей копии, то есть compose-файлы и образы всегда из одного коммита. `:main` — только для ручного dry-run, для деплоя его не использовать. Коммиты вне `main` в GHCR не попадают, поэтому их можно раскатать только host-сборкой.
 
@@ -114,10 +114,10 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 
 **Разово на хост, до первого registry-деплоя (выполняет владелец):**
 1. Доступ к GHCR. По умолчанию пакеты, опубликованные из workflow, приватные. Есть два варианта:
-   - **A (рекомендуется, без секретов на хосте):** GitHub → Packages → для каждого из 8 пакетов `uk-*` → Package settings → Change visibility → Public. Репозиторий публичный, секретов в образах нет: `.env` в CI-чекауте отсутствует, а `VITE_*` — публичные флаги бандла.
+   - **A (публичные пакеты, на хосте не нужны креды):** GitHub → Packages → для каждого из 8 пакетов `uk-*` → Package settings → Change visibility → Public. Секретов в образах нет: `.env` в CI-чекауте отсутствует, а `VITE_*` — публичные флаги бандла. Но любой сможет скачать собранные образы (python-код, бандл фронта, зависимости). Код и так лежит в публичном репо, но открыть готовые артефакты — отдельное решение владельца по IP. Если сомневаетесь — вариант B.
    - **B (оставить приватными):** classic PAT с `read:packages` в `~/.uk/ghcr-token` (chmod 600, вне репо), затем `docker login ghcr.io -u a-afanasyev --password-stdin < ~/.uk/ghcr-token`. Если deploy-аккаунт хоста уже залогинен в `ghcr.io` под `a-afanasyev` ради `infrasafe-app` (R2-15 Infrasafe), тот же PAT читает и `uk-*`. Проверка: `docker pull ghcr.io/a-afanasyev/uk-api:main`.
    - В обоих вариантах пакеты должны быть связаны с этим репо (Package settings → Manage Actions access → репозиторий с ролью Write). Пакеты, созданные push'ем из этого workflow, связываются автоматически. Без Write `images-promote` упадёт на 403.
-2. `uname -m` = `x86_64`: других платформ CI не собирает.
+2. `uname -m` = `x86_64`: других платформ CI не собирает. `docker compose version` ≥ 2.24, иначе compose не поймёт merge-теги `!reset`/`!override` в overlay'ях. На 2026-09-23 на обоих хостах 5.3.1 / x86_64.
 3. Сверить флаги фронта: `grep -E '^VITE_' .env` на хосте против `deploy/frontend-flags/<площадка>.args` в репо. Флаги несекретные, их можно печатать. Если есть расхождение, до переключения исправить `.args` PR'ом, иначе registry-фронт включит или выключит разделы.
 4. Dry-run после первого зелёного `images-promote` на `main`: `docker pull ghcr.io/a-afanasyev/uk-api:sha-$(git rev-parse HEAD)` из обновлённой рабочей копии.
 
@@ -146,6 +146,14 @@ doppler run --project uk-management --config <profk|infrasafe> -- \
 Остальные сервисы раскатываются так же: `pull <сервисы>`, затем тот же one-shot migrate и `up` своей секции ниже. Для фронта это `pull frontend` + `up -d --no-deps frontend`. Для resource это `pull resource-migrate resource-api resource-worker`, потом `run --rm --no-deps resource-migrate` и `up`. Для media — `pull media-service`, для payments на profk — `pull payment-migrate payment-api`. `group-intake-bot` — с `--profile group-intake`. Команды `build` в этом режиме не нужны. Overlay снимает `build:` (`build: !reset null`), поэтому `docker compose build` по этим сервисам ничего не соберёт и не повесит GHCR-имя на host-сборку. Правило «migrate без пересборки всех трёх runtime-образов = петля рестартов» здесь выполняется само: `api`/`migrate` — один образ `uk-api:sha-X`, а `app`/`access-api` берутся из того же X.
 
 `ps`/`logs`/`config` в этом режиме тоже требуют `UK_IMAGE_SHA` (`:?`). В новой ssh-сессии сначала `export UK_IMAGE_SHA=$(git rev-parse HEAD)`: HEAD рабочей копии = раскатанный коммит.
+
+**Фиксация digest'ов раскатки.** Последний шаг, как и раньше, — тег, но с `UK_IMAGE_SHA`:
+
+```bash
+UK_IMAGE_SHA=<полный SHA раскатанного коммита> scripts/tag-deploy.sh <profk|infrasafe> <тот же SHA> --push
+```
+
+В тело annotated-тега добавляются строки `<образ>@sha256:…` для всех 8 образов (`docker buildx imagetools inspect … --format '{{.Manifest.Digest}}'`, нужен доступ к GHCR с машины, где ставится тег). Если `UK_IMAGE_SHA` не совпадает с коммитом тега или хотя бы один digest недоступен, тег не создаётся. Без `UK_IMAGE_SHA` скрипт работает как раньше. Сверить с хостом: `docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/a-afanasyev/uk-api:sha-<SHA>`.
 
 **Откат.** Нужно вернуть и compose-файлы, и образы одного коммита: `git checkout <предыдущий тег площадки>`, затем `export UK_IMAGE_SHA=$(git rev-parse HEAD)`, затем `pull` + `up` тех же сервисов. Если между версиями была миграция, образ со старым `EXPECTED_ALEMBIC_HEAD` не пройдёт preflight. Сначала `alembic downgrade` по `docs/ROLLBACK.md`, потом `up`. Откат на коммит ДО мержа A9-P2-20 невозможен в registry-режиме: образов `sha-*` этой схемы для него нет. Такой откат делается host-сборкой (без registry-overlay). После отката вернуть рабочую копию на ветку: `git switch main`.
 
