@@ -371,7 +371,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-35": A(pkg="AUD9-W8", status="actionable", method="found-2026-09-23", services="bot", note="Двойной канон специализаций: константы plumbing/electric, локаль plumber/electrician — пользователь видит сырое «plumbing»"),
     "A9-P3-34": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service", note="media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id)"),
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
-    "A9-P3-32": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service, access-api, api", note="media `DELETE /media/{id}` отвечает 404 и на «не найден», и на временный сбой Telegram"),
+    # A9-P3-32 закрыт 2026-09-23 (PR #621).
     "A9-P3-31": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot, api", note="`change_category_async` держит сессию, открытую чтением флага автоназначения, пока идёт inline-уведомление"),
     "A9-P3-30": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, мониторинг хостов", note="Включить токен `/metrics` access-api: alloy с bearer_token_file, затем `ACCESS_METRICS_TOKEN` в Doppler"),
     "A9-P3-29": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, edge", note="Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента"),
@@ -389,7 +389,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-7 закрыт 2026-09-23 (PR #614).
     # A9-P2-8 закрыт 2026-09-23 (PR #614).
     # A9-P2-9 закрыт 2026-09-23 (PR #603).
-    "A9-P2-10": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api", note="Доменный справочник категорий лежит в UI-слое `keyboards/requests.py`"),
+    # A9-P2-10 закрыт 2026-09-23 (PR #623).
     # A9-P2-11 закрыт 2026-09-23 (PR #602).
     # A9-P2-12 закрыт 2026-09-23 (PR #607).
     # A9-P2-13 закрыт 2026-09-23 (PR #611).
@@ -421,12 +421,12 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-8 закрыт 2026-09-23 (PR #606).
     # A9-P3-9 закрыт 2026-09-23 (PR #606).
     # A9-P3-10 закрыт 2026-09-23 (PR #606).
-    "A9-P3-11": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot, api, access-api", note="Инверсии слоёв и два резолвера ролей с разным фолбэком"),
+    # A9-P3-11 закрыт 2026-09-23 (PR #623).
     "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
     # A9-P3-13 закрыт 2026-09-23 (PR #602).
     # A9-P3-14 закрыт 2026-09-23 (PR #608).
     # A9-P3-15 закрыт 2026-09-23 (PR #598).
-    "A9-P3-16": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="bot", note="Чистка: ~4750 из 8293 ключей бота похожи на мёртвый автоген; сломанные плейсхолдеры в uz"),
+    # A9-P3-16 закрыт 2026-09-23 (PR #622).
     # A9-P3-17 закрыт 2026-09-23 (PR #612).
     # A9-P3-18 закрыт 2026-09-23 (PR #612).
     # A9-P3-19 закрыт 2026-09-23 (PR #609).
