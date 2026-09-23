@@ -77,6 +77,11 @@ doppler run --project uk-management --config profk -- docker compose -f docker-c
 doppler run --project uk-management --config profk -- docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml up -d --no-deps --wait --wait-timeout 120 app
 ```
 
+⚠️ **Грабли раскатки 2026-09-23 (обе площадки):**
+- `resource-migrate` без `--no-deps` пересоздал `uk-resource-postgres` на 105 — после digest-пинов (A9-P3-26) конфиг stateful-сервисов отличается от запущенного, и любая команда БЕЗ `--no-deps` их пересоздаёт (данные в томе целы, но это незапланированный рестарт БД). `--no-deps` — на КАЖДОЙ `run`/`up`, включая one-shot миграции.
+- Раскатка скриптом через `ssh host 'bash -l -s' < script.sh`: `docker compose run` читает stdin и «съедает» остаток скрипта — после `migrate` ничего не выполнится (схема уже новая, контейнеры старые). В скриптах — `run -T … </dev/null`.
+- `doppler` на хостах лежит в `~/.local/bin` — в неинтерактивном `ssh host '…'` его нет в PATH (exit 127): `bash -l` или полный путь `~/.local/bin/doppler`.
+
 `migrate`-шаг ОБЯЗАТЕЛЕН перед каждым `up` — иначе preflight уронит контейнер `exit 1` при малейшем schema drift. `--no-deps` — обязателен на каждой команде: без него Compose вправе (пере)создать `postgres`/`redis`/`resource-postgres` (stateful, не в routine-деплое). `redis`/`resource-postgres` в этот routine НЕ входят никогда — их ротация отдельная координированная процедура. ⚠️ После очистки `.env` ЛЮБАЯ compose-команда на прод-хосте без `doppler run --` падает на `:?`-интерполяции — это желаемый fail-fast, не чинить возвратом секретов в `.env`.
 
 ⚠️ **`migrate` без пересборки ВСЕХ ТРЁХ runtime-образов (`api`, `access-api`, `app`) = отложенная петля рестартов.** В каждый образ на сборке зашит `EXPECTED_ALEMBIC_HEAD`; read-only preflight сравнивает его со схемой БД строго. Прогнали `migrate`, пересобрали не всех — не пересобранный сервис переживёт текущий `up` (контейнер не пересоздавался), но упадёт в вечный restart-loop при СЛЕДУЮЩЕМ up/ребуте хоста, когда его старый образ встретит новую схему. Ровно так access-api на 105 крутился в петле двое суток (24–26.07.2026: migrate до 006 прогнали, access-api остался с зашитой 005). Поэтому `build api access-api app migrate` — всегда все четыре, даже если «менялся только бот».
@@ -124,7 +129,7 @@ doppler run --project uk-management --config <profk|infrasafe> -- \
 doppler run --project uk-management --config <profk|infrasafe> -- \
   docker compose $COMPOSE build resource-api resource-worker resource-migrate
 doppler run --project uk-management --config <profk|infrasafe> -- \
-  docker compose $COMPOSE run --rm resource-migrate
+  docker compose $COMPOSE run --rm --no-deps resource-migrate
 doppler run --project uk-management --config <profk|infrasafe> -- \
   docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 resource-api resource-worker
 ```
