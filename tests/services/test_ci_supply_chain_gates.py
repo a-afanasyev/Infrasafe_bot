@@ -31,6 +31,10 @@ _IMAGE = re.compile(r"^\s*image:\s*[\"']?([^\s\"'#]+)")
 _DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 _USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)")
 _SHA_REF = re.compile(r"^[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}$")
+# A9-P2-20: собственные образы registry-режима пиннятся не digest'ом, а тегом
+# sha-<полный SHA коммита> — его ставит только images-promote с main после
+# зелёного CI; digest на момент коммита compose ещё не существует.
+_OWN_SHA_IMAGE = re.compile(r"^ghcr\.io/a-afanasyev/uk-[a-z-]+:sha-\$\{UK_IMAGE_SHA:\?")
 
 
 def test_workflow_actions_pinned_by_commit_sha():
@@ -79,6 +83,8 @@ def test_compose_third_party_images_pinned_by_digest():
             if not m:
                 continue
             ref = m.group(1)
+            if _OWN_SHA_IMAGE.match(ref):
+                continue
             name = ref.split("@", 1)[0].rsplit("/", 1)[-1]
             if ":" in name and not _DIGEST.search(ref):
                 bad.append(f"{cf.name}:{n} {ref}")

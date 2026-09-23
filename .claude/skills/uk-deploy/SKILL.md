@@ -49,10 +49,10 @@ doppler run --project uk-management --config <profk|infrasafe> -- true && echo "
 
 **Единственный источник истины по набору compose-файлов — эта таблица** (A9-P1-3). RUNBOOK, PAYMENT_CONTROL и прочие документы ссылаются сюда и свои списки `-f` не ведут. КАЖДАЯ compose-команда на хосте (build/run/up/logs/ps/config) — с полным набором своей площадки, в указанном порядке, через `doppler run --`.
 
-| Площадка | Doppler `--config` | `COMPOSE` (порядок важен) | Почему |
-|---|---|---|---|
-| profk.uz | `profk` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` | profk-override (в т.ч. media-service); **payments включён на profk с 2026-09-06** — без третьего `-f` пересоздание `api` молча снимает `PAYMENT_SERVICE_URL/TOKEN`, раздел «Контроль платежей» отвечает 404/503 |
-| infrasafe.uz (105) | `infrasafe` | `-f docker-compose.yml -f docker-compose.media.yml` | media overlay; payments на 105 не поднят (нет секретов и флага) |
+| Площадка | Doppler `--config` | `COMPOSE` (порядок важен) | Почему | Registry-режим (A9-P2-20, opt-in): к `COMPOSE` дописать последним |
+|---|---|---|---|---|
+| profk.uz | `profk` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` | profk-override (в т.ч. media-service); **payments включён на profk с 2026-09-06** — без третьего `-f` пересоздание `api` молча снимает `PAYMENT_SERVICE_URL/TOKEN`, раздел «Контроль платежей» отвечает 404/503 | `-f docker-compose.registry.profk.yml` |
+| infrasafe.uz (105) | `infrasafe` | `-f docker-compose.yml -f docker-compose.media.yml` | media overlay; payments на 105 не поднят (нет секретов и флага) | `-f docker-compose.registry.infrasafe.yml` |
 
 Если на площадке включают/выключают overlay — сначала правится эта таблица, потом деплой. Гейт `uk_management_bot/tests/test_deploy_runbook_compose_ssot.py` держит: каждый overlay `docker-compose.*.yml` репо упомянут в этой таблице, а в документах деплоя нет profk-команды без payments.
 

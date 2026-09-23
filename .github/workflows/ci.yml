@@ -9,8 +9,12 @@ on:
   push:
     branches: [main]
 
+# A9-P2-20: на PR новый пуш отменяет прогон старого (группа = ref). На main группа —
+# SHA коммита: иначе быстрый второй мерж отменял бы CI первого, его образы не
+# доходили бы до тега sha-<full> (job images-promote), и этот коммит нельзя было
+# бы раскатать registry-режимом.
 concurrency:
-  group: "ci-${{ github.ref }}"
+  group: "ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}"
   cancel-in-progress: true
 
 jobs:
@@ -1196,8 +1200,8 @@ jobs:
     env:
       REGISTRY: ghcr.io/a-afanasyev
       # Публикуем ТОЛЬКО с main и только на push. Pull request'ы по-прежнему
-      # собирают все шесть образов как гейт, но ничего не выкладывают: иначе
-      # любая ветка могла бы подменить тег, с которого раскатывается прод.
+      # собирают все образы как гейт, но ничего не выкладывают: иначе любая
+      # ветка могла бы подменить тег, с которого раскатывается прод.
       PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -1219,12 +1223,12 @@ jobs:
       # а не из проверенного коммита; «что сейчас в проде» существует только как
       # HEAD рабочей копии (см. scripts/tag-deploy.sh — тот же класс проблемы).
       #
-      # Здесь закрывается только ПЕРВАЯ половина: образы начинают публиковаться
-      # с тегами sha-<full> и main. Прод продолжает собирать локально и ничего
-      # не замечает — переключение compose на image: и раскатка pull'ом делаются
-      # отдельным шагом, ПОСЛЕ того как здесь появятся первые артефакты. Схема
-      # повторяет R2-15 в репозитории Infrasafe, где переход уже сделан и на
-      # .105 уже лежат ghcr.io/a-afanasyev/infrasafe-app:sha-*.
+      # A9-P2-20: здесь образы публикуются как КАНДИДАТЫ — тег ci-<full sha>.
+      # Прод-тег sha-<full> (и плавающий main) ставит job images-promote, и
+      # только когда на этом коммите зелёные ВСЕ остальные job'ы ci.yml: образ,
+      # который тянет прод (docker-compose.registry.<площадка>.yml), — это
+      # ровно этот артефакт, и он прошёл весь CI. Схема повторяет R2-15 в
+      # репозитории Infrasafe (там на .105 уже лежат infrasafe-app:sha-*).
       - name: Login to GHCR
         if: env.PUBLISH == 'true'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -1240,9 +1244,10 @@ jobs:
           file: Dockerfile
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-bot:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-bot:main
+          tags: ${{ env.REGISTRY }}/uk-bot:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: "type=gha,mode=max"
 
@@ -1253,9 +1258,10 @@ jobs:
           file: Dockerfile.api
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-api:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-api:main
+          tags: ${{ env.REGISTRY }}/uk-api:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: "type=gha,mode=max"
 
@@ -1269,9 +1275,10 @@ jobs:
           file: Dockerfile.access
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-access-api:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-access-api:main
+          tags: ${{ env.REGISTRY }}/uk-access-api:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=access
           cache-to: "type=gha,mode=max,scope=access"
 
@@ -1285,9 +1292,10 @@ jobs:
           file: media_service/Dockerfile
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-media-service:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-media-service:main
+          tags: ${{ env.REGISTRY }}/uk-media-service:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=media
           cache-to: "type=gha,mode=max,scope=media"
 
@@ -1295,9 +1303,9 @@ jobs:
       # (build: ./resource-accounting/backend в обоих compose).
       #
       # ОДИН образ на ТРИ сервиса: resource-api, resource-worker и
-      # resource-migrate собираются из одного каталога. Когда compose будет
-      # переключён на image:, все три обязаны получить ОДИН И ТОТ ЖЕ тег —
-      # иначе миграции поедут из другой сборки, чем воркер.
+      # resource-migrate собираются из одного каталога, и в registry-overlay'ях
+      # все три получают ОДИН И ТОТ ЖЕ тег — иначе миграции поехали бы из
+      # другой сборки, чем воркер.
       - name: Build resource image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
@@ -1305,27 +1313,67 @@ jobs:
           file: resource-accounting/backend/Dockerfile
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-resource-api:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-resource-api:main
+          tags: ${{ env.REGISTRY }}/uk-resource-api:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=resource
           cache-to: "type=gha,mode=max,scope=resource"
 
-      # AUD6-P2-20: `npm run build` в джобе frontend ≠ `docker build` — поломка
-      # frontend/Dockerfile или frontend/nginx.conf (его трогали по PENT-F08)
-      # доезжала бы до прода незамеченной.
-      - name: Build frontend image
+      # A9-P2-20: фронт — ДВА образа, по одному на площадку. Vite инлайнит
+      # VITE_* (бренд, username бота, DARK-флаги разделов) в бандл на сборке,
+      # поэтому образ фронта площадко-специфичен и не параметризуется в рантайме.
+      # Флаги — deploy/frontend-flags/<площадка>.args (SSOT registry-режима;
+      # набор ключей = ARG VITE_* frontend/Dockerfile, держит гейт
+      # tests/services/test_registry_images_ssot.py). Шаг ниже валидирует формат
+      # и отдаёт содержимое build-args'ами.
+      #
+      # AUD6-P2-20 (исходная причина сборки фронта здесь): `npm run build` в
+      # джобе frontend ≠ `docker build` — поломка frontend/Dockerfile или
+      # frontend/nginx.conf доезжала бы до прода незамеченной.
+      - name: Frontend build-args per site
+        id: fe-args
+        run: |
+          set -euo pipefail
+          for site in profk infrasafe; do
+            f="deploy/frontend-flags/$site.args"
+            args=$(grep -Ev '^[[:space:]]*(#|$)' "$f")
+            if bad=$(printf '%s\n' "$args" | grep -Ev '^VITE_[A-Z0-9_]+=[A-Za-z0-9_.-]*$'); then
+              echo "::error file=$f::строки не в формате VITE_X=value: $bad"
+              exit 1
+            fi
+            { echo "$site<<EOF_ARGS"; printf '%s\n' "$args"; echo "EOF_ARGS"; } >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Build frontend image (profk)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: frontend
           file: frontend/Dockerfile
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-frontend:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-frontend:main
-          cache-from: type=gha,scope=frontend
-          cache-to: "type=gha,mode=max,scope=frontend"
+          build-args: ${{ steps.fe-args.outputs.profk }}
+          tags: ${{ env.REGISTRY }}/uk-frontend-profk:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend-profk
+          cache-to: "type=gha,mode=max,scope=frontend-profk"
+
+      - name: Build frontend image (infrasafe)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: ${{ env.PUBLISH == 'true' }}
+          load: false
+          build-args: ${{ steps.fe-args.outputs.infrasafe }}
+          tags: ${{ env.REGISTRY }}/uk-frontend-infrasafe:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend-infrasafe
+          cache-to: "type=gha,mode=max,scope=frontend-infrasafe"
 
       # AUD7-ENG-04: payment-control — прод-сервис profk (overlay
       # docker-compose.payments.yml: payment-api + payment-migrate из ОДНОГО
@@ -1337,11 +1385,69 @@ jobs:
           file: payment_control/Dockerfile
           push: ${{ env.PUBLISH == 'true' }}
           load: false
-          tags: |
-            ${{ env.REGISTRY }}/uk-payment-control:sha-${{ github.sha }}
-            ${{ env.REGISTRY }}/uk-payment-control:main
+          tags: ${{ env.REGISTRY }}/uk-payment-control:ci-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=payment
           cache-to: "type=gha,mode=max,scope=payment"
+
+  # A9-P2-20: промоушен кандидатов ci-<sha> → sha-<sha> (+ плавающий main).
+  # needs = ВСЕ остальные job'ы этого workflow (держит гейт
+  # tests/services/test_registry_images_ssot.py): упал любой — тега sha-<sha> нет,
+  # и registry-деплой этого коммита упадёт на pull ДО миграций. Пересборки нет:
+  # `imagetools create` копирует манифест в registry — прод получает побайтно
+  # тот образ, что собрал images-build. Тег main — только для ручного dry-run
+  # (`docker pull …:main`), деплой всегда по sha-<full>.
+  images-promote:
+    name: images-promote (ci-<sha> → sha-<sha>)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - lint
+      - mypy
+      - bandit
+      - npm-audit
+      - pip-audit
+      - media-tests
+      - resource-tests
+      - backend-tests
+      - access-control-tests
+      - b0-least-privilege
+      - pg-role-separation
+      - images-build
+      - quick-start
+      - frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/a-afanasyev
+      # Ровно те образы, что публикует images-build (тег ci-<sha>); сверяет гейт.
+      IMAGES: >-
+        uk-bot uk-api uk-access-api uk-media-service uk-resource-api
+        uk-frontend-profk uk-frontend-infrasafe uk-payment-control
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote candidates
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for img in $IMAGES; do
+            ref="$REGISTRY/$img"
+            docker buildx imagetools create \
+              --tag "$ref:sha-$SHA" --tag "$ref:main" "$ref:ci-$SHA"
+            echo "$ref:sha-$SHA ← $(docker buildx imagetools inspect "$ref:sha-$SHA" --format '{{json .Manifest.Digest}}')"
+          done
 
   quick-start:
     name: quick-start (README dev path with example env)

@@ -1,0 +1,17 @@
+# A9-P2-20: build-args фронта площадки profk.uz для образа
+# ghcr.io/a-afanasyev/uk-frontend-profk:sha-<full> (job images-build в ci.yml).
+#
+# В registry-режиме это ЕДИНСТВЕННЫЙ источник флагов фронта profk: Vite инлайнит
+# VITE_* в бандл на сборке, и VITE_*-строки в /opt/uk/.env на хосте на такой
+# образ уже не влияют. Включили/выключили раздел (Лифты, Платежи…) — правка
+# здесь + мерж в main, а не правка .env на хосте.
+#
+# Формат: KEY=VALUE, значение без кавычек, пусто = флаг OFF. Набор ключей обязан
+# совпадать с ARG VITE_* в frontend/Dockerfile — держит гейт
+# tests/services/test_registry_images_ssot.py.
+VITE_BRAND=profk
+VITE_BOT_USERNAME=profkbot
+VITE_RESOURCES_ENABLED=true
+VITE_WORK_REPORTS_ENABLED=true
+VITE_ELEVATORS_ENABLED=true
+VITE_PAYMENTS_ENABLED=true
