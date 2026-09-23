@@ -105,14 +105,6 @@ class ShiftTemplate(Base):
         total_minutes = (self.start_hour * 60 + start_minute) + (duration_hours * 60)
         return (total_minutes // 60) % 24
     
-    @property
-    def end_minute(self) -> int:
-        """Возвращает минуту окончания смены"""
-        start_minute = self.start_minute or 0
-        duration_hours = self.duration_hours or 8
-        total_minutes = (self.start_hour * 60 + start_minute) + (duration_hours * 60)
-        return total_minutes % 60
-    
     def is_day_included(self, weekday: int) -> bool:
         """Проверяет, включен ли день недели в шаблон (1=понедельник, 7=воскресенье)"""
         if not self.days_of_week:

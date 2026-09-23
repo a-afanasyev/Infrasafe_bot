@@ -35,15 +35,6 @@ class SpecializationService:
     
     # ═══ БАЗОВЫЕ ОПЕРАЦИИ ═══
     
-    def get_available_specializations(self) -> List[str]:
-        """
-        Получить список всех доступных специализаций
-        
-        Returns:
-            Список названий специализаций
-        """
-        return self.AVAILABLE_SPECIALIZATIONS.copy()
-    
     def validate_specialization(self, specialization: str) -> bool:
         """
         Валидировать специализацию против списка доступных
@@ -160,85 +151,7 @@ class SpecializationService:
             self.db.rollback()
             return False
     
-    def add_specialization(self, user_id: int, specialization: str, 
-                          updated_by: int, comment: str = "") -> bool:
-        """
-        Добавить специализацию пользователю
-        
-        Args:
-            user_id: ID пользователя
-            specialization: Специализация для добавления
-            updated_by: ID пользователя, который внес изменения
-            comment: Комментарий к изменению
-            
-        Returns:
-            True если операция успешна
-        """
-        if not self.validate_specialization(specialization):
-            logger.warning(f"Недопустимая специализация: {specialization}")
-            return False
-        
-        current_specs = self.get_user_specializations(user_id)
-        
-        if specialization not in current_specs:
-            current_specs.append(specialization)
-            return self.set_user_specializations(user_id, current_specs, updated_by, comment)
-        
-        # Специализация уже есть
-        return True
-    
-    def remove_specialization(self, user_id: int, specialization: str, 
-                            updated_by: int, comment: str = "") -> bool:
-        """
-        Удалить специализацию у пользователя
-        
-        Args:
-            user_id: ID пользователя
-            specialization: Специализация для удаления
-            updated_by: ID пользователя, который внес изменения
-            comment: Комментарий к изменению
-            
-        Returns:
-            True если операция успешна
-        """
-        current_specs = self.get_user_specializations(user_id)
-        
-        if specialization in current_specs:
-            current_specs.remove(specialization)
-            return self.set_user_specializations(user_id, current_specs, updated_by, comment)
-        
-        # Специализации нет у пользователя
-        return True
-    
     # ═══ СТАТИСТИКА И ПОИСК ═══
-    
-    def get_specialization_stats(self) -> Dict[str, int]:
-        """
-        Получить статистику по специализациям
-        
-        Returns:
-            Dict со статистикой: {специализация: количество исполнителей}
-        """
-        try:
-            stats = {}
-            
-            # Получаем всех исполнителей
-            executors = self.db.query(User).filter(User.roles.contains('executor')).all()
-            
-            # Подсчитываем количество по каждой специализации
-            for spec in self.AVAILABLE_SPECIALIZATIONS:
-                count = 0
-                for executor in executors:
-                    if executor.specialization and spec in executor.specialization:
-                        count += 1
-                stats[spec] = count
-            
-            logger.info(f"Статистика специализаций получена: {stats}")
-            return stats
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения статистики специализаций: {e}")
-            return {spec: 0 for spec in self.AVAILABLE_SPECIALIZATIONS}
     
     def get_detailed_specialization_stats(self) -> Dict[str, Dict]:
         """
@@ -278,67 +191,6 @@ class SpecializationService:
             logger.error(f"Ошибка получения детальной статистики специализаций: {e}")
             return {spec: {'count': 0, 'employees': []} for spec in self.AVAILABLE_SPECIALIZATIONS}
     
-    def search_by_specialization(self, specialization: str, page: int = 1, limit: int = 10) -> Dict:
-        """
-        Поиск исполнителей по специализации
-        
-        Args:
-            specialization: Специализация для поиска
-            page: Номер страницы
-            limit: Количество результатов на странице
-            
-        Returns:
-            Dict с результатами поиска и пагинацией
-        """
-        try:
-            if not self.validate_specialization(specialization):
-                logger.warning(f"Недопустимая специализация для поиска: {specialization}")
-                return {
-                    'users': [],
-                    'total': 0,
-                    'page': page,
-                    'total_pages': 0,
-                    'specialization': specialization
-                }
-            
-            offset = (page - 1) * limit
-            
-            # Ищем исполнителей с данной специализацией
-            query = self.db.query(User).filter(
-                User.roles.contains('executor'),
-                User.specialization.contains(specialization)
-            ).order_by(User.status.desc(), User.created_at.desc())
-            
-            total = query.count()
-            users = query.offset(offset).limit(limit).all()
-            
-            total_pages = (total + limit - 1) // limit if total > 0 else 1
-            
-            result = {
-                'users': users,
-                'total': total,
-                'page': page,
-                'total_pages': total_pages,
-                'has_next': page * limit < total,
-                'has_prev': page > 1,
-                'specialization': specialization
-            }
-            
-            logger.info(f"Поиск по специализации {specialization}: найдено {len(users)} исполнителей")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Ошибка поиска по специализации {specialization}: {e}")
-            return {
-                'users': [],
-                'total': 0,
-                'page': page,
-                'total_pages': 1,
-                'has_next': False,
-                'has_prev': False,
-                'specialization': specialization
-            }
-    
     # ═══ ФОРМАТИРОВАНИЕ ═══
     
     def format_specializations_list(self, specializations: List[str], language: str = 'ru') -> str:
@@ -367,35 +219,6 @@ class SpecializationService:
         except Exception as e:
             logger.error(f"Ошибка форматирования списка специализаций: {e}")
             return get_text("specializations.no_specializations", language=language)
-    
-    def format_specialization_stats(self, stats: Dict[str, int], language: str = 'ru') -> str:
-        """
-        Форматировать статистику специализаций для отображения
-        
-        Args:
-            stats: Статистика специализаций
-            language: Язык интерфейса
-            
-        Returns:
-            Отформатированное сообщение
-        """
-        try:
-            lines = [get_text("specializations.stats_title", language=language)]
-            lines.append("")
-            
-            for spec, count in stats.items():
-                if count > 0:  # Показываем только специализации с исполнителями
-                    spec_text = get_text(f"specializations.{spec}", language=language)
-                    lines.append(f"{spec_text}: {count}")
-            
-            if len(lines) == 2:  # Только заголовок
-                lines.append(get_text("specializations.no_executors", language=language))
-            
-            return "\n".join(lines)
-            
-        except Exception as e:
-            logger.error(f"Ошибка форматирования статистики специализаций: {e}")
-            return get_text("specializations.stats_error", language=language)
     
     # ═══ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ═══
     
@@ -427,27 +250,3 @@ class SpecializationService:
             
         except Exception as e:
             logger.error(f"Ошибка создания аудит лога: {e}")
-    
-    def get_executors_by_specialization(self, specialization: str) -> List[User]:
-        """
-        Получить всех исполнителей с определенной специализацией
-        
-        Args:
-            specialization: Специализация
-            
-        Returns:
-            Список пользователей-исполнителей
-        """
-        try:
-            if not self.validate_specialization(specialization):
-                return []
-            
-            return self.db.query(User).filter(
-                User.roles.contains('executor'),
-                User.specialization.contains(specialization),
-                User.status == 'approved'  # Только одобренные
-            ).all()
-            
-        except Exception as e:
-            logger.error(f"Ошибка получения исполнителей по специализации {specialization}: {e}")
-            return []

@@ -42,7 +42,7 @@ BASELINE: dict[str, int] = {
     "uk_management_bot/services/shift_assignment_service/balancer.py": 1,
     "uk_management_bot/services/shift_assignment_service/conflicts.py": 0,
     "uk_management_bot/services/shift_assignment_service/scoring.py": 3,
-    "uk_management_bot/services/shift_assignment_service/service.py": 8,
+    "uk_management_bot/services/shift_assignment_service/service.py": 6,
     "uk_management_bot/services/shift_planning_service/__init__.py": 0,
     "uk_management_bot/services/shift_planning_service/analytics.py": 6,
     "uk_management_bot/services/shift_planning_service/planning.py": 11,

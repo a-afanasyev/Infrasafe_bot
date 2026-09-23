@@ -393,29 +393,6 @@ class TestBalanceExecutorWorkload:
 
 
 # ---------------------------------------------------------------------------
-# resolve_assignment_conflicts
-# ---------------------------------------------------------------------------
-
-class TestResolveAssignmentConflicts:
-    def test_shift_not_found(self):
-        service, db = _make_service()
-        q = MagicMock()
-        q.filter.return_value.first.return_value = None
-        db.query.return_value = q
-        result = service.resolve_assignment_conflicts(999)
-        assert "error" in result
-
-    def test_shift_no_executor(self):
-        service, db = _make_service()
-        shift = _make_shift(user_id=None)
-        q = MagicMock()
-        q.filter.return_value.first.return_value = shift
-        db.query.return_value = q
-        result = service.resolve_assignment_conflicts(shift.id)
-        assert "error" in result
-
-
-# ---------------------------------------------------------------------------
 # auto_assign_executors_to_shifts
 # ---------------------------------------------------------------------------
 

@@ -132,10 +132,3 @@ class Shift(Base):
             normalize_specialization(required_specialization, side="have"),
             self.specialization_focus,
         )
-    
-    def can_handle_area(self, area: str) -> bool:
-        """Проверяет, может ли смена обработать заявку в определенной зоне"""
-        if not self.coverage_areas:
-            return True  # Покрывает все зоны
-        
-        return area in self.coverage_areas or "all" in self.coverage_areas
