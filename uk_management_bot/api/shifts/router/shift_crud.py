@@ -9,7 +9,8 @@ from datetime import timezone
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import (
     CreateShiftBody, ReassignShiftBody, ShiftDetail, UpdateShiftBody,
@@ -49,7 +50,7 @@ async def create_shift(
     if not emp:
         raise HTTPException(status_code=404, detail="User not found")
 
-    has_executor_role = "executor" in _parse_user_roles(emp)
+    has_executor_role = "executor" in get_user_roles(emp)
     if not has_executor_role:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

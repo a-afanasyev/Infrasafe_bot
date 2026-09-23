@@ -330,7 +330,7 @@ def _plan_category_change(snap: WorkflowSnapshot, command: ActionCommand,
     решение менеджера (MANAGER_ASSIGN там, где канон пускает).
     """
     from uk_management_bot.constants.categories import get_specialization_for_category
-    from uk_management_bot.keyboards.requests import (
+    from uk_management_bot.utils.categories import (
         CANONICAL_CATEGORY_KEYS,
         get_category_display,
         resolve_category_key,

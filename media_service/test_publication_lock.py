@@ -284,17 +284,34 @@ async def test_archive_media_raises_on_already_archived_file():
 
 
 @pytest.mark.asyncio
-async def test_archive_media_on_nonexistent_id_returns_false_not_exception():
+async def test_archive_media_on_nonexistent_id_returns_not_found_not_exception():
+    from app.services.media_storage import MediaRemovalOutcome
     svc = _make_service()
     result = await svc.archive_media(999_999)
-    assert result is False
+    assert result is MediaRemovalOutcome.NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_delete_media_on_nonexistent_id_returns_false_not_exception():
+async def test_delete_media_on_nonexistent_id_returns_not_found_not_exception():
+    from app.services.media_storage import MediaRemovalOutcome
     svc = _make_service()
     result = await svc.delete_media(999_999)
-    assert result is False
+    assert result is MediaRemovalOutcome.NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_delete_media_on_already_deleted_is_idempotent_without_telegram_io():
+    """A9-P3-32: повторный DELETE уже удалённого файла — отдельный итог
+    (не конфликт и не «нет файла»), в Telegram повторно не ходим."""
+    from app.services.media_storage import MediaRemovalOutcome
+    svc = _make_service()
+    media_id = _create_media_file(status="deleted")
+
+    result = await svc.delete_media(media_id)
+
+    assert result is MediaRemovalOutcome.ALREADY_DELETED
+    assert svc.telegram.delete_message_calls == []
+    assert _get_status_and_lock(media_id)[0] == "deleted"
 
 
 # ---------- endpoint-level: 409 mapping ----------
@@ -333,6 +350,85 @@ def test_archive_endpoint_returns_404_on_nonexistent(client_and_service):
     assert resp.status_code == 404, resp.text
 
 
+# ---------- A9-P3-32: матрица кодов DELETE /media/{id} ----------
+
+@pytest.mark.parametrize("status_value, locked, expected_code", [
+    # Штатное удаление.
+    ("active", False, 200),
+    # Уже удалён — идемпотентный успех: цель вызывающего («файла нет»)
+    # достигнута, в Telegram повторно не ходим.
+    ("deleted", False, 200),
+    # Файл есть, но его состояние не даёт удалить (под публикацией, в архиве,
+    # идёт параллельная сага) — конфликт состояния, не «нет файла».
+    ("active", True, 409),
+    ("archived", False, 409),
+    ("archiving", False, 409),
+    ("deleting", False, 409),
+])
+def test_delete_endpoint_status_matrix(client_and_service, status_value, locked, expected_code):
+    client, svc = client_and_service
+    media_id = _create_media_file(status=status_value, publication_locked=locked)
+
+    resp = client.delete(f"/api/v1/media/{media_id}", headers={"X-API-Key": "testkey"})
+
+    assert resp.status_code == expected_code, resp.text
+    if status_value == "deleted":
+        assert resp.json()["already_deleted"] is True
+        assert svc.telegram.delete_message_calls == []
+    elif expected_code == 200:
+        assert resp.json()["already_deleted"] is False
+        assert _get_status_and_lock(media_id)[0] == "deleted"
+
+
+def test_delete_endpoint_returns_404_on_nonexistent(client_and_service):
+    client, _ = client_and_service
+    resp = client.delete("/api/v1/media/999999", headers={"X-API-Key": "testkey"})
+    assert resp.status_code == 404, resp.text
+
+
+def test_delete_endpoint_returns_503_on_transient_telegram_failure(monkeypatch):
+    from app.main import app
+    from app.api.v1.media import get_storage_service
+    from app.services.media_storage import MediaStorageService
+
+    svc = MediaStorageService.__new__(MediaStorageService)
+    svc.telegram = FakeTelegram(fail_on={"delete_message"})
+    app.dependency_overrides[get_storage_service] = lambda: svc
+    try:
+        media_id = _create_media_file(status="active")
+        resp = TestClient(app).delete(
+            f"/api/v1/media/{media_id}", headers={"X-API-Key": "testkey"}
+        )
+    finally:
+        app.dependency_overrides.pop(get_storage_service, None)
+
+    assert resp.status_code == 503, resp.text
+    assert _get_status_and_lock(media_id)[0] == "active"
+
+
+def test_archive_endpoint_returns_503_on_transient_telegram_failure(monkeypatch):
+    from app.main import app
+    from app.api.v1.media import get_storage_service
+    from app.services.media_storage import MediaStorageService
+
+    svc = MediaStorageService.__new__(MediaStorageService)
+    svc.telegram = FakeTelegram(fail_on={"get_file_url"})
+    app.dependency_overrides[get_storage_service] = lambda: svc
+    try:
+        _create_archive_channel()
+        media_id = _create_media_file(status="active")
+        resp = TestClient(app).post(
+            f"/api/v1/media/{media_id}/archive",
+            headers={"X-API-Key": "testkey"},
+            json={},
+        )
+    finally:
+        app.dependency_overrides.pop(get_storage_service, None)
+
+    assert resp.status_code == 503, resp.text
+    assert _get_status_and_lock(media_id)[0] == "active"
+
+
 # ---------- the actual saga fix, proven concretely ----------
 
 @pytest.mark.asyncio
@@ -344,7 +440,7 @@ async def test_archive_media_phase1_commits_before_phase2_io_resolves():
     вернёт управление. Если бы обе фазы жили в одной незакоммиченной
     транзакции (старый баг), свежая сессия видела бы старый статус "active".
     """
-    from app.services.media_storage import MediaStorageService
+    from app.services.media_storage import MediaRemovalOutcome, MediaStorageService
 
     svc = MediaStorageService.__new__(MediaStorageService)
     _create_archive_channel()
@@ -363,7 +459,7 @@ async def test_archive_media_phase1_commits_before_phase2_io_resolves():
 
     result = await svc.archive_media(media_id)
 
-    assert result is True
+    assert result is MediaRemovalOutcome.DONE
     assert observed["status_during_phase2_io"] == "archiving"
     final_status, _ = _get_status_and_lock(media_id)
     assert final_status == "archived"
@@ -373,13 +469,14 @@ async def test_archive_media_phase1_commits_before_phase2_io_resolves():
 async def test_archive_media_compensates_on_io_failure():
     """Если Telegram I/O в фазе 2 падает — статус должен вернуться в
     "active", а не застрять в "archiving"."""
+    from app.services.media_storage import MediaRemovalOutcome
     svc = _make_service(fail_on={"get_file_url"})
     _create_archive_channel()
     media_id = _create_media_file(status="active")
 
     result = await svc.archive_media(media_id)
 
-    assert result is False
+    assert result is MediaRemovalOutcome.TRANSIENT_FAILURE
     status, locked = _get_status_and_lock(media_id)
     assert status == "active"
     assert locked is False
@@ -387,12 +484,13 @@ async def test_archive_media_compensates_on_io_failure():
 
 @pytest.mark.asyncio
 async def test_delete_media_compensates_on_io_failure():
+    from app.services.media_storage import MediaRemovalOutcome
     svc = _make_service(fail_on={"delete_message"})
     media_id = _create_media_file(status="active")
 
     result = await svc.delete_media(media_id)
 
-    assert result is False
+    assert result is MediaRemovalOutcome.TRANSIENT_FAILURE
     status, _ = _get_status_and_lock(media_id)
     assert status == "active"
 
@@ -400,20 +498,21 @@ async def test_delete_media_compensates_on_io_failure():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("outcome_name, expected_result, expected_status", [
     # Сообщение удалено — штатный путь.
-    ("DELETED", True, "deleted"),
+    ("DELETED", "DONE", "deleted"),
     # Сообщения уже нет — конечное состояние достигнуто.
-    ("ALREADY_GONE", True, "deleted"),
+    ("ALREADY_GONE", "DONE", "deleted"),
     # Удалить нельзя НИКОГДА (нет can_delete_messages, старше 48 ч, Forbidden):
     # повтор не поможет; файл скрывается из системы, как до A9-P3-23 —
     # иначе GDPR-очистка и ретеншн проваливались бы систематически.
-    ("UNDELETABLE", True, "deleted"),
+    ("UNDELETABLE", "DONE", "deleted"),
     # Сеть/таймаут/5xx/429: повтор может помочь → компенсация в active и
     # ошибка вызывающему (раньше сетевой сбой молча давал deleted).
-    ("TRANSIENT", False, "active"),
+    ("TRANSIENT", "TRANSIENT_FAILURE", "active"),
 ])
 async def test_delete_saga_by_delete_outcome(outcome_name, expected_result, expected_status, caplog):
     """A9-P3-23: сага различает категории отказа Telegram, а не bool."""
     import logging
+    from app.services.media_storage import MediaRemovalOutcome
     from app.services.telegram_client import DeleteOutcome, DeleteResult
 
     svc = _make_service()
@@ -430,7 +529,7 @@ async def test_delete_saga_by_delete_outcome(outcome_name, expected_result, expe
     caplog.set_level(logging.WARNING, logger="app.services.media_storage")
     result = await svc.delete_media(media_id)
 
-    assert result is expected_result
+    assert result is MediaRemovalOutcome[expected_result]
     assert len(svc.telegram.delete_message_calls) == 1
     assert _get_status_and_lock(media_id)[0] == expected_status
     left_in_channel = [r for r in caplog.records
@@ -470,7 +569,9 @@ def test_delete_endpoint_undeletable_is_success_transient_is_error(monkeypatch):
         outcome["v"] = DeleteOutcome.TRANSIENT
         transient = _create_media_file(status="active")
         resp = client.delete(f"/api/v1/media/{transient}", headers={"X-API-Key": "testkey"})
-        assert resp.status_code == 404, resp.text  # прежний ответ-ошибка саги
+        # A9-P3-32: транзиентный сбой — 503 (повторить), НЕ 404 («файла нет»):
+        # клиент, читающий 404 как «уже удалён», обнулил бы ссылку и оставил сироту.
+        assert resp.status_code == 503, resp.text
         assert _get_status_and_lock(transient)[0] == "active"
     finally:
         app.dependency_overrides.pop(get_storage_service, None)
@@ -497,6 +598,9 @@ def _tg_error(kind: str):
         return ae.TelegramRetryAfter(method=method, message="Too Many Requests", retry_after=5)
     if kind == "timeout":
         return TimeoutError()
+    if kind == "decode":
+        # 502 с HTML-телом: aiogram не может разобрать ответ — не TelegramAPIError.
+        return ae.ClientDecodeError("Failed to decode object", ValueError("html"), "<html>502</html>")
     raise AssertionError(kind)
 
 
@@ -511,6 +615,7 @@ def _tg_error(kind: str):
     ("server", "TRANSIENT"),
     ("flood", "TRANSIENT"),
     ("timeout", "TRANSIENT"),
+    ("decode", "TRANSIENT"),
 ])
 async def test_telegram_delete_message_classifies_outcome(kind, expected):
     from app.services.telegram_client import DeleteOutcome, TelegramClientService
@@ -574,7 +679,8 @@ async def test_race_archive_reservation_wins_first_then_lock_fails():
 
     result = await svc.archive_media(media_id)
 
-    assert result is True
+    from app.services.media_storage import MediaRemovalOutcome
+    assert result is MediaRemovalOutcome.DONE
     assert observed["lock_result_during_archiving"] is False
 
 

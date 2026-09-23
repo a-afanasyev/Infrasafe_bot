@@ -96,7 +96,7 @@ async def get_request_stats(
     # FS-04: нормализуем legacy RU-лейблы к канон-EN-ключу в Python и схлопываем
     # дубли (напр. «Сантехника»+«plumbing» → один plumbing), иначе аналитика
     # двоит дольки. Defense-in-depth: корректно и до миграции данных.
-    from uk_management_bot.keyboards.requests import resolve_category_key
+    from uk_management_bot.utils.categories import resolve_category_key
     by_category: dict[str, int] = {}
     for raw, count in await stats_service.count_by_category(db, period_start=period_start):
         if not raw:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles, _parse_user_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
@@ -30,7 +31,7 @@ class ProfileOut(BaseModel):
 
     @classmethod
     def from_user(cls, user: User) -> "ProfileOut":
-        roles_list = _parse_user_roles(user)
+        roles_list = get_user_roles(user)
         return cls(
             id=user.id,
             telegram_id=user.telegram_id,
@@ -103,7 +104,7 @@ async def switch_role(
     db: AsyncSession = Depends(get_db),
 ):
     """Switch user's active role. Role must be in user's roles list."""
-    roles = _parse_user_roles(user)
+    roles = get_user_roles(user)
     if body.active_role not in roles:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

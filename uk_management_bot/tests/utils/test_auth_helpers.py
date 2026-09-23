@@ -224,10 +224,11 @@ class TestHasExecutorAccess:
         from uk_management_bot.utils.auth_helpers import has_executor_access
         assert has_executor_access() is False
 
-    def test_user_with_executor_active_role(self):
+    def test_active_role_alone_does_not_grant_executor(self):
+        # A9-P3-11: active_role без роли в roles доступа не даёт.
         from uk_management_bot.utils.auth_helpers import has_executor_access
         user = self._make_user(active_role="executor")
-        assert has_executor_access(user=user) is True
+        assert has_executor_access(user=user) is False
 
     def test_user_with_json_executor_role(self):
         from uk_management_bot.utils.auth_helpers import has_executor_access
@@ -262,8 +263,14 @@ class TestGetActiveRole:
 
     def test_returns_active_role_when_set(self):
         from uk_management_bot.utils.auth_helpers import get_active_role
-        user = self._make_user(active_role="executor")
+        user = self._make_user(active_role="executor", roles='["applicant", "executor"]')
         assert get_active_role(user) == "executor"
+
+    def test_active_role_outside_roles_is_ignored(self):
+        # A9-P3-11: active_role учитывается, только если входит в roles.
+        from uk_management_bot.utils.auth_helpers import get_active_role
+        user = self._make_user(active_role="executor")
+        assert get_active_role(user) == "applicant"
 
     def test_falls_back_to_first_role(self):
         from uk_management_bot.utils.auth_helpers import get_active_role

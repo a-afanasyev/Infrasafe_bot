@@ -238,7 +238,7 @@ def _render_text(
         # из БД как есть (security-review PR #305, borderline): у legacy-заявки
         # категория с '<'/'&' роняла бы отправку Telegram-400. escape нейтрален
         # для словарных подписей и закрывает fallback.
-        from uk_management_bot.keyboards.requests import (
+        from uk_management_bot.utils.categories import (
             get_category_display, resolve_category_key,
         )
         return get_text(
@@ -260,7 +260,7 @@ def _render_text(
         # Лимиты перенесены из ручного уведомления, которое этот ключ заменил
         # (handlers/admin/assignment.py): без них длинное описание давало
         # MESSAGE_TOO_LONG, и наряд не доезжал вовсе.
-        from uk_management_bot.keyboards.requests import (
+        from uk_management_bot.utils.categories import (
             get_category_display, resolve_category_key,
         )
         return get_text(
@@ -277,7 +277,7 @@ def _render_text(
         # Новая категория — уже записана в заявку к моменту post-commit сбора;
         # локализуем тем же хелпером и экранируем (fallback для неизвестного
         # ключа отдаёт сырую строку из БД).
-        from uk_management_bot.keyboards.requests import (
+        from uk_management_bot.utils.categories import (
             get_category_display, resolve_category_key,
         )
         return get_text(

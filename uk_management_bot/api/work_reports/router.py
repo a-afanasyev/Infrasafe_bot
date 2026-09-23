@@ -269,9 +269,8 @@ async def create_work_report(
 
     address = await _resolve_manual_address(db, request_row, body.building_id, body.yard_id)
 
-    # Ленивый импорт — keyboards.requests тянет aiogram.types (тот же приём,
-    # что и в work_report_service.sync_pending_drafts).
-    from uk_management_bot.keyboards.requests import resolve_category_key
+    # Канон категорий — utils/categories (A9-P2-10: не из UI-слоя keyboards).
+    from uk_management_bot.utils.categories import resolve_category_key
 
     performed_at = request_row.completed_at or request_row.updated_at or request_row.created_at
     report = WorkReport(

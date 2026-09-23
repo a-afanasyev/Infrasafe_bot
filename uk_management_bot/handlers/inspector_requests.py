@@ -105,12 +105,11 @@ async def _lang(event) -> str:
 
 
 def _approved_inspector(db, telegram_id: int) -> bool:
-    from uk_management_bot.api.dependencies import _parse_user_roles
-
+    from uk_management_bot.utils.auth_helpers import get_user_roles
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if not user or user.status != "approved":
         return False
-    return "inspector" in _parse_user_roles(user)
+    return "inspector" in get_user_roles(user)
 
 
 def _active_yards(db) -> list[tuple[int, str]]:

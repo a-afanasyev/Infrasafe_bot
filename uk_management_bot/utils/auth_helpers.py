@@ -7,6 +7,7 @@ import logging
 from typing import Optional, List
 from sqlalchemy import or_
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.constants import ROLE_APPLICANT
 
 logger = logging.getLogger(__name__)
 
@@ -106,62 +107,54 @@ def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] 
     if roles and any(role in ['executor', 'manager', 'admin'] for role in roles):
         return True
     
-    # Fallback проверка через user объект
+    # Fallback проверка через user объект: только roles (A9-P3-11 — одна
+    # active_role без роли в roles доступа не даёт).
     if user:
-        # Проверяем активную роль
-        if user.active_role == "executor":
-            return True
-
-        # Проверяем новое поле roles (COD-01: канонический парсер, JSON+CSV)
         if "executor" in parse_roles_safe(getattr(user, "roles", None)):
             return True
 
     return False
 
 def get_user_roles(user: User) -> List[str]:
-    """
-    Получает список ролей пользователя с fallback логикой
+    """ЕДИНСТВЕННЫЙ канонический резолвер ролей (A9-P3-11): бот, API-двери
+    (``api.dependencies.require_roles``) и access_control.
 
-    Args:
-        user: Объект пользователя
-
-    Returns:
-        List[str]: Список ролей пользователя
+    Роли берутся ТОЛЬКО из ``user.roles`` (JSON/CSV/list через
+    ``parse_roles_safe``). Пусто, нечитаемо или ошибка → ``["applicant"]`` —
+    минимальная непривилегированная роль. ``active_role`` ролей НЕ добавляет:
+    прежний API-фолбэк на ``active_role`` при пустых ``roles`` пускал в
+    менеджерские эндпоинты пользователя без единой роли.
     """
     try:
-        # Используем безопасную функцию парсинга ролей
         roles_list = parse_roles_safe(user.roles)
-
-        return roles_list or ["applicant"]
-
     except Exception as exc:
-        logger.warning(f"Ошибка получения ролей пользователя {user.telegram_id}: {exc}")
-        return ["applicant"]
+        logger.warning(f"Ошибка получения ролей пользователя {getattr(user, 'telegram_id', None)}: {exc}")
+        return [ROLE_APPLICANT]
+    if not roles_list:
+        # Инварианта «roles непусты» в БД нет (колонка nullable) — сигналим о
+        # такой строке, трактуем как applicant.
+        logger.warning(
+            "Пустые/нечитаемые roles у пользователя %s — трактуем как applicant",
+            getattr(user, "telegram_id", None),
+        )
+        return [ROLE_APPLICANT]
+    return roles_list
+
 
 def get_active_role(user: User) -> str:
-    """
-    Получает активную роль пользователя с fallback логикой
-    
-    Args:
-        user: Объект пользователя
-        
-    Returns:
-        str: Активная роль пользователя
-    """
+    """Активная роль: ``active_role``, только если она ЕСТЬ среди канонических
+    ролей (``get_user_roles``); иначе первая из них (A9-P3-11 — устаревший или
+    чужой ``active_role`` не повышает права)."""
     try:
-        # Проверяем активную роль
-        if user.active_role:
-            return user.active_role
-        
-        # Fallback к списку ролей
         roles_list = get_user_roles(user)
-        if roles_list:
-            return roles_list[0]
-            
+        active = user.active_role
+        if active and active in roles_list:
+            return active
+        return roles_list[0]
     except Exception as exc:
-        logger.warning(f"Ошибка получения активной роли пользователя {user.telegram_id}: {exc}")
-    
-    return "applicant"
+        logger.warning(f"Ошибка получения активной роли пользователя {getattr(user, 'telegram_id', None)}: {exc}")
+
+    return ROLE_APPLICANT
 
 def check_user_role_sync(user_id: int, required_role: str, db) -> bool:
     """Sync-ядро check_user_role (AUD3-07): тело 1:1, вызывается и из
@@ -228,11 +221,13 @@ def legacy_primary_role(user) -> Optional[str]:
     """Скалярная «основная роль» пользователя без дефолта «applicant» (PR-31).
 
     Заменяет чтение удалённой колонки ``User.role``: возвращает ``active_role``,
-    иначе первую роль из ``roles``, иначе ``None``. В отличие от
-    ``get_active_role``/``get_user_roles`` НЕ подставляет дефолт «applicant» —
-    нужна там, где при отсутствии роли важен пустой результат (fallback-ветки).
+    если она входит в ``roles`` (A9-P3-11), иначе первую роль из ``roles``,
+    иначе ``None``. В отличие от ``get_active_role``/``get_user_roles`` НЕ
+    подставляет дефолт «applicant» — нужна там, где при отсутствии роли важен
+    пустой результат (fallback-ветки).
     """
-    if getattr(user, "active_role", None):
-        return user.active_role
     roles_list = parse_roles_safe(getattr(user, "roles", None))
+    active = getattr(user, "active_role", None)
+    if active and active in roles_list:
+        return active
     return roles_list[0] if roles_list else None

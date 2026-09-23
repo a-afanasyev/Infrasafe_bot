@@ -382,7 +382,10 @@ async def test_whole_call_fits_total_budget_in_real_time(monkeypatch):
     import time
 
     monkeypatch.setattr(settings, "GROUP_INTAKE_LLM_TIMEOUT", 0.2)
-    monkeypatch.setattr(classifier, "_BACKOFF_BASE", 0.1)
+    # Пауза ≤ 0.03 с (база × jitter до 1.5): при базе 0.1 и jitter ≈1.5 остаток
+    # дедлайна после первой попытки падал ниже минимальной попытки (0.05 с), и
+    # повтор честно пропускался — тест мигал под нагрузкой CI.
+    monkeypatch.setattr(classifier, "_BACKOFF_BASE", 0.02)
     monkeypatch.setattr(classifier, "_sleep", asyncio.sleep)
 
     async def _hang(**_kwargs):

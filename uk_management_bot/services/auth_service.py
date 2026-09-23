@@ -563,11 +563,8 @@ class AuthService:
             
         # Проверяем роли в новом формате (COD-01: канонический парсер, JSON+CSV)
         # CODE-08: роль "admin" никто не выдаёт — проверяем только "manager".
-        if "manager" in parse_roles_safe(user.roles):
-            return True
-
-        # Fallback к legacy-роли (active_role) через резолвер
-        return legacy_primary_role(user) == "manager"
+        # A9-P3-11: без фолбэка на active_role — роль только из roles.
+        return "manager" in parse_roles_safe(user.roles)
     
     async def is_user_executor(self, telegram_id: int) -> bool:
         """Проверить, является ли пользователь исполнителем"""
@@ -575,16 +572,9 @@ class AuthService:
         if not user or user.status != "approved":
             return False
             
-        # Проверяем активную роль (новая система)
-        if user.active_role == "executor":
-            return True
-            
-        # Проверяем наличие роли в списке ролей (COD-01: канонический парсер, JSON+CSV)
-        if "executor" in parse_roles_safe(user.roles):
-            return True
-
-        # Fallback к legacy-роли через резолвер
-        return legacy_primary_role(user) == "executor"
+        # A9-P3-11: только roles — active_role="executor" без роли в roles
+        # исполнителем не делает (COD-01: канонический парсер, JSON+CSV).
+        return "executor" in parse_roles_safe(user.roles)
     
     async def get_all_users(self) -> list[User]:
         """Получить всех пользователей"""
@@ -603,10 +593,11 @@ class AuthService:
         # CODE-07: матчим точный элемент JSON-массива — "role" в кавычках
         # (ловит и ["role"], и [..., "role", ...], не ловит подстроки).
         exact_match = f'"{role}"'
+        # A9-P3-11: только roles — ветка `User.active_role == role` включала в
+        # получателей (админ-уведомления с ПД) держателя устаревшей active_role.
         return self.db.query(User).filter(
             User.status == "approved",
             or_(
-                User.active_role == role,
                 User.roles.contains(exact_match),
                 legacy_role_filter(role),
             )

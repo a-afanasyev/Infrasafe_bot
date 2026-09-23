@@ -15,10 +15,8 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_assignment import ShiftAssignment
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.utils.auth_helpers import get_user_roles, legacy_role_filter
 from uk_management_bot.utils.specializations import has_required_specs
-from uk_management_bot.api.dependencies import _parse_user_roles
-
 from .employees import get_user
 from .lifecycle import (
     find_overlapping_shift_for_update,
@@ -102,7 +100,7 @@ async def reassign_shift_web(
         return {"success": False, "error": "executor_not_found"}
     if new_executor.status != "approved":
         return {"success": False, "error": "not_approved"}
-    if "executor" not in _parse_user_roles(new_executor):
+    if "executor" not in get_user_roles(new_executor):
         return {"success": False, "error": "not_executor"}
     if shift.user_id == new_executor_id:
         return {"success": False, "error": "same_executor"}
@@ -255,7 +253,7 @@ async def accept_transfer_web(
 
     recipient = await get_user(db, executor_id)
     if not recipient or recipient.status != "approved" \
-            or "executor" not in _parse_user_roles(recipient):
+            or "executor" not in get_user_roles(recipient):
         return {"success": False, "error": "not_executor"}
     if not has_required_specs(recipient, shift):
         return {"success": False, "error": "spec_mismatch"}

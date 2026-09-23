@@ -59,9 +59,9 @@ def _callback(tg_id):
 
 
 class TestInspectorConfirmSeam:
-    # Гейт `_approved_inspector` патчится: он импортирует
-    # `api.dependencies._parse_user_roles` (fastapi), которого нет в лёгком
-    # локальном venv; сама роль-проверка запинена authz-BASELINE'ом отдельно.
+    # Гейт `_approved_inspector` патчится (исторически он импортировал
+    # fastapi-модуль api.dependencies; с A9-P3-11 — utils.auth_helpers);
+    # сама роль-проверка запинена authz-BASELINE'ом отдельно.
     # Здесь свойство — куда уходит сессия сохранения.
     @pytest.mark.asyncio
     async def test_save_request_receives_handler_seam(self, db):

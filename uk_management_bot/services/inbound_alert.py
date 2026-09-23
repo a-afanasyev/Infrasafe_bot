@@ -236,7 +236,7 @@ async def _resolve_alert_elevator(
     терять нельзя — лифт может уже стоять «В ремонте», а датчик сообщает о новом
     событии в кабине.
     """
-    from uk_management_bot.keyboards.requests import resolve_category_key
+    from uk_management_bot.utils.categories import resolve_category_key
 
     operational = False if uk_elevator_id is not None else None
     return await resolve_request_elevator_async(
@@ -328,7 +328,7 @@ def _apply_category_override(derived: str, override: str | None, event_id: str) 
             "falling back to derived category (event_id=%s)", event_id,
         )
         return derived
-    from uk_management_bot.keyboards.requests import (
+    from uk_management_bot.utils.categories import (
         CANONICAL_CATEGORY_KEYS,
         resolve_category_key,
     )
