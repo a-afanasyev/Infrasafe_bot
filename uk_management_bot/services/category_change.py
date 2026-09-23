@@ -175,12 +175,10 @@ def change_category_sync(session_factory, request_number: str,
 
     dispatch: Optional[DispatchResult] = None
     if _needs_redispatch(outcome, new_category):
-        db = session_factory()
-        try:
-            dispatch = auto_dispatch_new_request_sync(
-                request_number, new_category, _db=db, session_factory=session_factory)
-        finally:
-            db.close()
+        # A9-P3-31: без `_db` — флаг и подбор дежурного на короткой сессии
+        # фабрики, закрытой до команды и синхронного уведомления дежурному.
+        dispatch = auto_dispatch_new_request_sync(
+            request_number, new_category, session_factory=session_factory)
 
     db = session_factory()
     try:

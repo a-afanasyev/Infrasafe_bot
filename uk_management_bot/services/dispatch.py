@@ -194,7 +194,19 @@ def auto_dispatch_new_request_sync(request_number: str,
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
-    if not _auto_assign_enabled_sync(_db):
+    # A9-P3-31: без `_db`, но с фабрикой вызывающего — флаг и подбор дежурного
+    # на одной короткой сессии, закрытой ДО команды и уведомления (синхронный
+    # Telegram не должен идти при idle-in-transaction). Без фабрики — как
+    # раньше: каждый хелпер открывает и закрывает свою прод-сессию.
+    own_db = _db is None and session_factory is not None
+    db = session_factory() if own_db else _db
+    try:
+        enabled = _auto_assign_enabled_sync(db)
+        executor_id = pick_duty_executor_id(spec, db) if enabled else None
+    finally:
+        if own_db:
+            db.close()
+    if not enabled:
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)
@@ -204,7 +216,6 @@ def auto_dispatch_new_request_sync(request_number: str,
         from uk_management_bot.database.session import SessionLocal
         session_factory = SessionLocal
 
-    executor_id = pick_duty_executor_id(spec, _db)
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
         done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
