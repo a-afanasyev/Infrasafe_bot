@@ -409,7 +409,7 @@ class MediaStorageService:
             logger.warning(f"Media file {media_file_id} not found")
             return MediaRemovalOutcome.NOT_FOUND
         if reserved is _Reservation.ALREADY_DELETED:
-            logger.info(f"Media file {media_file_id} already deleted")
+            logger.info("Media file %s already deleted", media_file_id)
             return MediaRemovalOutcome.ALREADY_DELETED
         if reserved is not _Reservation.RESERVED:
             raise PublicationReservationError(

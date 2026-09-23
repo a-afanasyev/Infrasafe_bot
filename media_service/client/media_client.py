@@ -530,11 +530,11 @@ class MediaServiceClient:
             response.raise_for_status()
             status = response.json().get("status")
         except Exception as e:
-            logger.warning(f"Media {media_id}: 404 on delete, status check failed: {e}")
+            logger.warning("Media %s: 404 on delete, status check failed: %s", media_id, e)
             return False
         if status == "deleted":
             return True
-        logger.warning(f"Media {media_id}: 404 on delete but status={status!r} — not deleted")
+        logger.warning("Media %s: 404 on delete but status=%r — not deleted", media_id, status)
         return False
 
     async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
