@@ -237,6 +237,22 @@ jobs:
     defaults:
       run:
         working-directory: media_service
+    services:
+      # A9-P2-21: нужен ТОЛЬКО дрейф-гейту test_schema_drift_pg.py (юниты идут
+      # на sqlite из conftest). postgres:15 — как uk-postgres, где живёт uk_media.
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_media
+          POSTGRES_USER: media
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - "55433:5432"
+        options: >-
+          --health-cmd "pg_isready -U media -d uk_media"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -246,15 +262,29 @@ jobs:
           cache: pip
           cache-dependency-path: media_service/requirements.txt
 
+      # pytest-cov — отдельной командой: requirements.txt hash-locked, а в
+      # hash-режиме pip требует хэши у всех пакетов одной команды. Версия — как
+      # в корневом lock (requirements.txt).
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install pytest-cov==7.1.0
 
-      # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
-      # окружение выставляет сам (os.environ.setdefault — см. его докстринг).
-      # `test_upload.py` исключён в pytest.ini: он ходит в живой стек и
-      # «проходит» всегда (см. комментарий там же).
-      - name: Run tests
-        run: pytest -q
+      # Юниты: conftest.py поднимает файловый sqlite и мокает Telegram,
+      # окружение выставляет сам (os.environ.setdefault — см. его докстринг),
+      # поэтому DATABASE_URL здесь НЕ задаём. `test_upload.py` исключён в
+      # pytest.ini: он ходит в живой стек и «проходит» всегда.
+      # A9-P2-21: test_schema_drift_pg.py — дрейф-гейт на postgres из services:
+      # пустая БД (create_all + migrations/*.sql) и существующая прод-БД
+      # (schema_baseline/pre_0001.sql + migrations + create_all) обязаны
+      # совпасть с моделями — колонка в модели без миграции роняет шаг.
+      # MEDIA_REQUIRE_PG_TESTS=1: без URL модуль не skip'ается, а падает на сборе.
+      # --cov-fail-under=73 — измеренный пол (73.33% на 2026-09-23), только вверх.
+      - name: Run tests + drift-gate (postgres 15) + coverage floor
+        env:
+          MEDIA_PG_DRIFT_URL: "postgresql+psycopg2://media:ci-only@localhost:55433/uk_media"
+          MEDIA_REQUIRE_PG_TESTS: "1"
+        run: pytest -q --cov=app --cov=run_migrations --cov-report=term --cov-fail-under=73
 
   resource-tests:
     name: resource-tests (pytest + drift-gate)
