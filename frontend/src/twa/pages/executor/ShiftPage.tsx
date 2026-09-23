@@ -46,7 +46,7 @@ export default function ShiftPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось начать смену')
+      notifyError(err, t('twa.exec.shift.startFailed'))
     },
   })
 
@@ -59,7 +59,7 @@ export default function ShiftPage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось завершить смену')
+      notifyError(err, t('twa.exec.shift.endFailed'))
     },
   })
 

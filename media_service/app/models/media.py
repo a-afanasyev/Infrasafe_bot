@@ -1,9 +1,9 @@
 """
 Модели данных для MediaService
-Основано на спецификации photo.md
+Основано на спецификации docs/Archive/2026-09-23-root-reports/photo.md (архив)
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON, Index, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from typing import List
@@ -15,6 +15,15 @@ class MediaFile(Base):
     """Метаданные медиа-файлов в Telegram каналах"""
 
     __tablename__ = "media_files"
+    # Partial-индекс из migrations/0001_publication_lock.sql — объявлен и в модели,
+    # чтобы fresh-БД (create_all) и мигрированная совпадали (A9-P2-21, дрейф-гейт).
+    __table_args__ = (
+        Index(
+            "ix_media_files_publication_locked",
+            "publication_locked",
+            postgresql_where=text("publication_locked"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError, apiPaged } from './client';
+// Регистрирует testI18n (ru) как i18n-инстанс react-i18next — запасной текст ошибки берётся из локали.
+import '../../../test/test-utils';
 
 function mockFetchOnce(status: number, payload: unknown) {
   const response = {
@@ -57,6 +59,7 @@ describe('api client', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(500);
     expect(err.code).toBe('unknown_error');
+    expect(err.message).toBe('Ошибка запроса (500)');
   });
 
   it('apiPaged возвращает data и meta', async () => {

@@ -56,13 +56,13 @@ export default function CompletionReport() {
       queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
       queryClient.invalidateQueries({ queryKey: ['twa', 'media', number] })
       if (failures.length > 0) {
-        toast.warning(`Заявка завершена, но не загрузились фото №${failures.join(', ')}`)
+        toast.warning(t('twa.exec.report.photoUploadFailed', { numbers: failures.join(', ') }))
       }
       navigate('/twa/exec')
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось завершить заявку')
+      notifyError(err, t('twa.exec.report.completeFailed'))
     },
   })
 

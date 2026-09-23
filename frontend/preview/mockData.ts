@@ -429,7 +429,6 @@ export const zones: ZoneRow[] = [
     name: 'Главный двор',
     description: 'Центральный въезд комплекса',
     offline_mode: 'cached_permanent_only',
-    max_permanent_per_apartment: 2,
     parking_type: 'assigned',
     capacity: null,
     max_permanent_vehicles_per_apartment: 2,
@@ -442,7 +441,6 @@ export const zones: ZoneRow[] = [
     name: 'Подземный паркинг',
     description: 'Гостевой и резидентский паркинг',
     offline_mode: 'fail_closed',
-    max_permanent_per_apartment: 1,
     parking_type: 'shared',
     capacity: 80,
     max_permanent_vehicles_per_apartment: 1,
@@ -455,7 +453,6 @@ export const zones: ZoneRow[] = [
     name: 'Служебная зона',
     description: null,
     offline_mode: 'fail_closed',
-    max_permanent_per_apartment: null,
     parking_type: 'assigned',
     capacity: null,
     max_permanent_vehicles_per_apartment: null,
@@ -485,6 +482,9 @@ export const assignments: AssignmentRow[] = [
     status: 'active',
     approved_by_user_id: 7,
     approved_at: minAgo(60000),
+    enforce_limit: true,
+    occupied: 1,
+    spots: 1,
   },
   {
     id: 2,
@@ -496,6 +496,9 @@ export const assignments: AssignmentRow[] = [
     status: 'active',
     approved_by_user_id: 7,
     approved_at: minAgo(20000),
+    enforce_limit: true,
+    occupied: 1,
+    spots: 1,
   },
   {
     id: 3,
@@ -507,6 +510,9 @@ export const assignments: AssignmentRow[] = [
     status: 'expired',
     approved_by_user_id: 7,
     approved_at: minAgo(90000),
+    enforce_limit: true,
+    occupied: 1,
+    spots: 1,
   },
   {
     id: 4,
@@ -518,6 +524,9 @@ export const assignments: AssignmentRow[] = [
     status: 'revoked',
     approved_by_user_id: 7,
     approved_at: minAgo(120000),
+    enforce_limit: true,
+    occupied: 1,
+    spots: 1,
   },
 ]
 

@@ -154,6 +154,8 @@ logs/
 # IDE
 .vscode/
 .idea/
+# Личные VS Code workspace-файлы (A9-P3-28: UK.code-workspace убран из репо)
+*.code-workspace
 *.swp
 *.swo
 

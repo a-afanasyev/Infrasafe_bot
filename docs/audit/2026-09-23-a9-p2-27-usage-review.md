@@ -26,4 +26,4 @@
 | comment_service, request_number_service, user_verification_service (без access_rights) | ~55 | удалить |
 | Утилиты (helpers, language_helpers, request_helpers, safe_localization — `safe_get_text` жив, health) | ~268 | удалить; поправить `LOCALIZATION_GUIDE.md:36` |
 
-Итого безопасно удаляемо ≈ **1 830 строк** прод-кода (+ ~30 тест-файлов), с `reassign_on_absence` ≈ 1 950. Доки к правке: `docs/tech/SHIFTS_AND_ASSIGNMENT.md:286,450`, `docs/shifts.md:233-234`, `docs/guides/SHIFTS.md:243-245`, `docs/LOCALIZATION_GUIDE.md:36`.
+Итого безопасно удаляемо ≈ **1 830 строк** прод-кода (+ ~30 тест-файлов), с `reassign_on_absence` ≈ 1 950. Доки к правке: `docs/tech/SHIFTS_AND_ASSIGNMENT.md:286,450`, `docs/Archive/2026-09-23-root-reports/shifts.md:233-234` (архив), `docs/guides/SHIFTS.md:243-245`, `docs/LOCALIZATION_GUIDE.md:36`.

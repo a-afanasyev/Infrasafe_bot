@@ -13,6 +13,8 @@
     "audit:ci": "node scripts/audit-gate.mjs",
     "preview": "vite preview",
     "preview:profk": "vite preview",
+    "screens": "vite --config vite.preview.config.ts",
+    "build:screens": "tsc -b && vite build --config vite.preview.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage"

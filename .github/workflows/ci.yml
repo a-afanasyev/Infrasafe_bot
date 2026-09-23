@@ -31,8 +31,9 @@ jobs:
       # PRAC-01-FU5: WHOLE-SCOPE blocking gate (flipped from the line-scoped gate
       # once the bot/API scope reached 0 over FU-1..FU-4). `ruff check .` resolves
       # to exactly the in-scope set. `media_service` вернулся в scope в PR #261,
-      # `scripts` — в П7c (AUD5-PRAC-11); в extend-exclude остались только
-      # `docs` и `resource-accounting`. `.` также покрывает ci/ + root *.py
+      # `scripts` — в П7c (AUD5-PRAC-11), `resource-accounting` — 2026-07-30
+      # (AUD6-P1-1, свой nested [tool.ruff]); в extend-exclude остался только
+      # `docs`. `.` также покрывает ci/ + root *.py
       # (которые явный список путей пропустил бы).
       # ci/ruff_changed_lines.py is kept in-tree as the documented fallback if a
       # future `select` expansion (I/UP/B/SIM) re-introduces a baseline.
@@ -248,6 +249,22 @@ jobs:
     defaults:
       run:
         working-directory: media_service
+    services:
+      # A9-P2-21: нужен ТОЛЬКО дрейф-гейту test_schema_drift_pg.py (юниты идут
+      # на sqlite из conftest). postgres:15 — как uk-postgres, где живёт uk_media.
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: uk_media
+          POSTGRES_USER: media
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - "55433:5432"
+        options: >-
+          --health-cmd "pg_isready -U media -d uk_media"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -258,16 +275,26 @@ jobs:
           cache-dependency-path: media_service/requirements-dev.txt
 
       # A9-P2-19: pytest вынесен из рантайм-лока (уезжал в прод-образ) в
-      # hash-locked requirements-dev.txt = рантайм-лок + тест-инструменты.
+      # hash-locked requirements-dev.txt = рантайм-лок + тест-инструменты
+      # (A9-P2-21: включая pytest-cov для порога покрытия).
       - name: Install dependencies (dev lock)
         run: pip install --require-hashes -r requirements-dev.txt
 
-      # БД не нужна: conftest.py поднимает файловый sqlite и мокает Telegram,
-      # окружение выставляет сам (os.environ.setdefault — см. его докстринг).
-      # `test_upload.py` исключён в pytest.ini: он ходит в живой стек и
-      # «проходит» всегда (см. комментарий там же).
-      - name: Run tests
-        run: pytest -q
+      # Юниты: conftest.py поднимает файловый sqlite и мокает Telegram,
+      # окружение выставляет сам (os.environ.setdefault — см. его докстринг),
+      # поэтому DATABASE_URL здесь НЕ задаём. `test_upload.py` исключён в
+      # pytest.ini: он ходит в живой стек и «проходит» всегда.
+      # A9-P2-21: test_schema_drift_pg.py — дрейф-гейт на postgres из services:
+      # пустая БД (create_all + migrations/*.sql) и существующая прод-БД
+      # (schema_baseline/pre_0001.sql + migrations + create_all) обязаны
+      # совпасть с моделями — колонка в модели без миграции роняет шаг.
+      # MEDIA_REQUIRE_PG_TESTS=1: без URL модуль не skip'ается, а падает на сборе.
+      # --cov-fail-under=73 — измеренный пол (73.21% на 2026-09-23), только вверх.
+      - name: Run tests + drift-gate (postgres 15) + coverage floor
+        env:
+          MEDIA_PG_DRIFT_URL: "postgresql+psycopg2://media:ci-only@localhost:55433/uk_media"
+          MEDIA_REQUIRE_PG_TESTS: "1"
+        run: pytest -q --cov=app --cov=run_migrations --cov-report=term --cov-fail-under=73
 
   resource-tests:
     name: resource-tests (pytest + drift-gate)
@@ -304,11 +331,12 @@ jobs:
           cache: pip
           cache-dependency-path: resource-accounting/backend/pyproject.toml
 
-      # Зависимости в pyproject (requirements.txt у сервиса нет) — ставим
-      # проект с dev-экстрами, как это делает его Dockerfile (`pip install .`).
-      # AUD7-ENG-03: dev-lock (requirements-dev.txt = pyproject + extra dev,
-      # hash-locked) вместо `pip install .[dev]` — тот резолвил floor'ы заново
-      # на каждом прогоне, и CI тестировал не то, что уезжало в образ.
+      # Зависимости объявлены в pyproject и залочены с хэшами (AUD7-ENG-03):
+      # requirements.txt — runtime-lock, по нему ставит образ (Dockerfile:
+      # `--require-hashes -r requirements.txt` + `--no-deps .`); здесь —
+      # requirements-dev.txt (= pyproject + extra dev) вместо `pip install .[dev]`:
+      # тот резолвил floor'ы заново на каждом прогоне, и CI тестировал не то,
+      # что уезжало в образ.
       - name: Install dependencies from dev lock
         run: pip install --require-hashes -r requirements-dev.txt && pip install --no-deps .
 
@@ -379,9 +407,10 @@ jobs:
           conn.close()
           EOF
 
-      # CVE-гейт: requirements.txt нет — аудитим установленное окружение
-      # целиком. Без --strict: сам пакет resource-accounting-api не публикуется
-      # на PyPI, и «could not be audited» для него — ожидаемый warning, не отказ.
+      # CVE-гейт по установленному dev-окружению целиком (runtime-lock
+      # requirements.txt отдельно аудитит job pip-audit). Без --strict: сам
+      # пакет resource-accounting-api не публикуется на PyPI, и «could not be
+      # audited» для него — ожидаемый warning, не отказ.
       - name: Install pip-audit
         run: pip install pip-audit==2.9.0
 
