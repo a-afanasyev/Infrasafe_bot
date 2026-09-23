@@ -1,6 +1,14 @@
 # Статус документации проекта UK Management
 
-> _Последнее редактирование: 2026-08-25_
+> _Последнее редактирование: 2026-09-23_
+
+> **A9-P3-27 (2026-09-23) — README/ARCHITECTURE догнали код:** корневой
+> `README.md` (group-intake-бот, `payment_control`, overlay'и, `doppler run`,
+> ссылка на uk-deploy вместо дубля команд деплоя, линт из чекаута),
+> `tech/ARCHITECTURE.md` (+контроль платежей §3.6, +«Лифты» §3.7, хрупкие
+> ссылки `файл:строка` заменены на файл + символ/compose-сервис, битые ссылки
+> на архивные доки убраны), `DOCKER_SETUP.md` переписан (без SQLite-ветки и
+> `docker-compose` v1), устаревшие комментарии `ci.yml`.
 
 > **Волна 3 (2026-08-25) — продуктовое ТЗ, бизнес-процессы и актуализация
 > канона под состояние кода августа** (Group Intake, менеджерская приёмка,
@@ -89,7 +97,7 @@
 | Чек-лист деплоя | `docs/DEPLOYMENT_CHECKLIST.md` | 🔴 | ссылается на несуществующий `docker-compose.production.yml` — **исправлено** |
 | Откат | `docs/ROLLBACK.md` | 🟡 | те же команды через несуществующий compose — **исправлено** |
 | Troubleshooting | `docs/TROUBLESHOOTING.md` | 🔴 | контейнеры `*-dev`, таблица `assignments` — не существуют |
-| Docker Setup | `docs/DOCKER_SETUP.md` | 🟡 | верная прод-команда (:418), но список сервисов неполон, имя сети |
+| Docker Setup | `docs/DOCKER_SETUP.md` | 🟢 | переписан 2026-09-23 (A9-P3-27): все compose-файлы, без SQLite-ветки; прод-команды — ссылкой на uk-deploy |
 | Quick Start / Development | `docs/QUICK_START.md`, `docs/DEVELOPMENT.md` | 🔴/🟡 | pre-Docker `python main.py`, SQLite-легаси |
 | Entrypoints | `scripts/entrypoint-{api,bot}.sh` | 🟢 | api авто-гонит alembic, bot — нет |
 | Media-сервис | `media_service/README.md` | 🟡 | порты standalone vs overlay 8009 |
@@ -104,7 +112,7 @@
 | Access-control модель/деплой/README | `DATA_MODEL_PILOT.md`, `DEPLOYMENT_CHECKLIST.md`, `access_control/README.md` | 🟢 | актуальны (порт 8086/8087 уточнить) |
 | **ANPR-камеры DS-TCG205-B (топология Б)** | — | ❌ | решение владельца только в `~/.claude/plans`, в репо нет; TECHNICAL_SPEC §18 держит вопрос открытым |
 | Локализация (бот) | `docs/LOCALIZATION_GUIDE.md` | 🟡 | нет фронт-i18next, `status_display.py`, `address_helpers`; битая ссылка `check_localization.py` |
-| Безопасность (актуальный SoT) | `AUDIT_REPORT.md` (корень) | 🟢 | аудит #4, трекает SEC-фиксы |
+| Безопасность (актуальный SoT) | `AUDIT_REPORT.md` (корень) | 🟢 | аудит #9 (2026-09-22); пункты A9-* трекаются в `docs/audit/2026-05-20-backlog.md` |
 | Security-снимки | `docs/SECURITY_AUDIT_FINAL.md`, `docs/SECURITY_STATUS.md` | 🔴 | 15.10.2025 «0 critical / PRODUCTION READY» — противоречат MFA-bypass (SEC-01) |
 
 ## Приоритеты (что делать)

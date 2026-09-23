@@ -31,8 +31,9 @@ jobs:
       # PRAC-01-FU5: WHOLE-SCOPE blocking gate (flipped from the line-scoped gate
       # once the bot/API scope reached 0 over FU-1..FU-4). `ruff check .` resolves
       # to exactly the in-scope set. `media_service` вернулся в scope в PR #261,
-      # `scripts` — в П7c (AUD5-PRAC-11); в extend-exclude остались только
-      # `docs` и `resource-accounting`. `.` также покрывает ci/ + root *.py
+      # `scripts` — в П7c (AUD5-PRAC-11), `resource-accounting` — 2026-07-30
+      # (AUD6-P1-1, свой nested [tool.ruff]); в extend-exclude остался только
+      # `docs`. `.` также покрывает ci/ + root *.py
       # (которые явный список путей пропустил бы).
       # ci/ruff_changed_lines.py is kept in-tree as the documented fallback if a
       # future `select` expansion (I/UP/B/SIM) re-introduces a baseline.
@@ -291,11 +292,12 @@ jobs:
           cache: pip
           cache-dependency-path: resource-accounting/backend/pyproject.toml
 
-      # Зависимости в pyproject (requirements.txt у сервиса нет) — ставим
-      # проект с dev-экстрами, как это делает его Dockerfile (`pip install .`).
-      # AUD7-ENG-03: dev-lock (requirements-dev.txt = pyproject + extra dev,
-      # hash-locked) вместо `pip install .[dev]` — тот резолвил floor'ы заново
-      # на каждом прогоне, и CI тестировал не то, что уезжало в образ.
+      # Зависимости объявлены в pyproject и залочены с хэшами (AUD7-ENG-03):
+      # requirements.txt — runtime-lock, по нему ставит образ (Dockerfile:
+      # `--require-hashes -r requirements.txt` + `--no-deps .`); здесь —
+      # requirements-dev.txt (= pyproject + extra dev) вместо `pip install .[dev]`:
+      # тот резолвил floor'ы заново на каждом прогоне, и CI тестировал не то,
+      # что уезжало в образ.
       - name: Install dependencies from dev lock
         run: pip install --require-hashes -r requirements-dev.txt && pip install --no-deps .
 
@@ -358,9 +360,10 @@ jobs:
           conn.close()
           EOF
 
-      # CVE-гейт: requirements.txt нет — аудитим установленное окружение
-      # целиком. Без --strict: сам пакет resource-accounting-api не публикуется
-      # на PyPI, и «could not be audited» для него — ожидаемый warning, не отказ.
+      # CVE-гейт по установленному dev-окружению целиком (runtime-lock
+      # requirements.txt отдельно аудитит job pip-audit). Без --strict: сам
+      # пакет resource-accounting-api не публикуется на PyPI, и «could not be
+      # audited» для него — ожидаемый warning, не отказ.
       - name: Install pip-audit
         run: pip install pip-audit==2.9.0
 
