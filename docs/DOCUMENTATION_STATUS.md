@@ -2,6 +2,13 @@
 
 > _Последнее редактирование: 2026-09-23_
 
+> **A9-P3-28 (2026-09-23) — вторая волна чистки корня `docs/`:** 18 исторических
+> отчётов/устаревших справочников — в
+> [`Archive/2026-09-23-root-reports/`](Archive/2026-09-23-root-reports/README.md)
+> (таблица замен там же), аудиторские/security-отчёты — в `audit/` (туда же
+> пентест `codex_audit.md` из корня репо и бывший корневой каталог `audit/` →
+> `audit/2026-03-system-analysis/`). Пути в таблицах ниже — на момент аудита.
+
 > **A9-P3-27 (2026-09-23) — README/ARCHITECTURE догнали код:** корневой
 > `README.md` (group-intake-бот, `payment_control`, overlay'и, `doppler run`,
 > ссылка на uk-deploy вместо дубля команд деплоя, линт из чекаута),
@@ -57,8 +64,8 @@
 | Обзор системы назначения | `docs/REQUEST_ASSIGNMENT_SYSTEM.md` | 🔴 | удалённые сервисы/хендлеры, alembic-миграция «не существует», устаревший статусный контур |
 | Тех-руководство назначения | `docs/TECHNICAL_GUIDE_REQUEST_ASSIGNMENT.md` | 🔴 | `models/assignment.py`→реально `database/models/request_assignment.py`; классы `Assignment`→`RequestAssignment`; роли без inspector/system_admin |
 | Комплексный референс заявок | `docs/requests.md` | 🔴 | `AssignmentOptimizer`/`GeoOptimizer` удалены (ARC-04); жив только SmartDispatcher |
-| Пользовательское руководство | `docs/USER_GUIDE_REQUEST_ASSIGNMENT.md` | 🟡 | роли, нет приёмки/возврата |
-| Система смен (референс) | `docs/shifts.md` | 🟡 | «в разработке»; не отражена декомпозиция ShiftAssignmentService (ARC-03) |
+| Пользовательское руководство | `docs/USER_GUIDE_REQUEST_ASSIGNMENT.md` → архив (A9-P3-28) | ⚫ | 2025-09, роли, нет приёмки/возврата; актуальное — `guides/` |
+| Система смен (референс) | `docs/shifts.md` → архив (A9-P3-28) | ⚫ | «в разработке»; не отражена декомпозиция ShiftAssignmentService (ARC-03) |
 | README бота | `uk_management_bot/README.md` | 🔴 | роли, sqlite вместо PostgreSQL/alembic, «в разработке» |
 | Верификация (dev/admin guides) | `uk_management_bot/VERIFICATION_SYSTEM_*.md` | 🟡 | подсистема жива, сверить экраны вручную |
 | Анализ смен / приёмка | `SHIFT_SYSTEM_ANALYSIS.md`, `TASK_16_*`, `TASK_17_*` | ⚫ | исторические отчёты — пометить архивом |
