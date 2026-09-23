@@ -7,7 +7,7 @@ import json
 import base64
 import time
 import secrets
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uk_management_bot.utils.datetime_utils import utc_now
 from typing import Dict, Any
 from sqlalchemy.orm import Session
@@ -119,42 +119,6 @@ class InviteService:
         
         logger.info(f"Generated bot invite link for role {role} by user {created_by}")
         return invite_link
-    
-    def validate_invite_token(self, token: str) -> Dict[str, Any]:
-        """
-        Валидирует токен приглашения и возвращает результат в формате для API
-        
-        Args:
-            token: Токен для валидации
-            
-        Returns:
-            Словарь с результатом валидации
-        """
-        try:
-            payload = self.validate_invite(token)
-            
-            return {
-                "valid": True,
-                "invite_data": {
-                    "role": payload.get("role"),
-                    "specialization": payload.get("specialization"),
-                    "expires_at": datetime.fromtimestamp(payload.get("expires_at")).isoformat(),
-                    "created_by": payload.get("created_by")
-                },
-                "message": "Токен действителен"
-            }
-            
-        except ValueError as e:
-            return {
-                "valid": False,
-                "message": str(e)
-            }
-        except Exception as e:
-            logger.error(f"Unexpected error during token validation: {e}")
-            return {
-                "valid": False,
-                "message": "Ошибка валидации токена"
-            }
     
     def validate_invite(self, token: str, mark_used_by: int = None) -> Dict[str, Any]:
         """
@@ -352,77 +316,6 @@ class InviteService:
             logger.error(f"Error logging invite creation: {e}")
             # Не прерываем основной процесс из-за ошибки логирования
             self.db.rollback()
-    
-    def join_via_invite(self, token: str, telegram_id: int, first_name: str = "", last_name: str = "", specialization: str = None) -> Dict[str, Any]:
-        """
-        Присоединение пользователя по приглашению (для веб-регистрации)
-        
-        Args:
-            token: Токен приглашения
-            telegram_id: Telegram ID пользователя
-            first_name: Имя пользователя
-            last_name: Фамилия пользователя
-            specialization: Специализация (для исполнителей)
-            
-        Returns:
-            Словарь с результатом операции
-        """
-        try:
-            # Валидируем токен и атомарно потребляем nonce
-            invite_data = self.validate_invite(token, mark_used_by=telegram_id)
-
-            # Проверяем, что пользователь не зарегистрирован уже
-            from uk_management_bot.database.models.user import User
-            existing_user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
-            if existing_user:
-                return {
-                    "success": False,
-                    "message": "Пользователь уже зарегистрирован"
-                }
-
-            # Создаем нового пользователя
-            user = User(
-                telegram_id=telegram_id,
-                first_name=first_name,
-                last_name=last_name,
-                roles=json.dumps([invite_data["role"]]),
-                active_role=invite_data["role"],
-                specialization=specialization if invite_data["role"] == "executor" else None,
-                status="pending"
-            )
-
-            self.db.add(user)
-            self.db.flush()  # Получаем ID пользователя
-
-            self.db.commit()
-            
-            logger.info(f"User {telegram_id} joined via invite with role {invite_data['role']}")
-            
-            return {
-                "success": True,
-                "message": "Регистрация успешно завершена",
-                "user_id": user.id
-            }
-            
-        except TokenAlreadyUsedError as e:
-            # SEC-020: signal race-loser so the endpoint can return 409.
-            return {
-                "success": False,
-                "reason": "already_used",
-                "message": str(e),
-            }
-        except ValueError as e:
-            return {
-                "success": False,
-                "message": str(e),
-            }
-        except Exception as e:
-            logger.error(f"Error during join via invite: {e}")
-            self.db.rollback()
-            return {
-                "success": False,
-                "message": "Ошибка регистрации",
-            }
 
 
 class InviteRateLimiter:

@@ -1,4 +1,4 @@
-"""A9-P3-11 (ревью): AuthService.get_users_by_role(_sync) отбирает ТОЛЬКО по roles.
+"""A9-P3-11 (ревью): AuthService.get_users_by_role_sync отбирает ТОЛЬКО по roles.
 
 Был `or_(User.active_role == role, ...)`: получатели админ-уведомлений
 (handlers/auth.py — новая заявка по инвайту с ПД) включали пользователя, у
@@ -50,13 +50,6 @@ def test_exact_token_and_status(session):
     _mk(session, 2, '["admin"]', status="pending")      # не approved
     _mk(session, 3, '["admin"]')
     assert _ids(AuthService(session).get_users_by_role_sync("admin")) == [3]
-
-
-@pytest.mark.asyncio
-async def test_async_wrapper_same_semantics(session):
-    _mk(session, 1, '["applicant"]', active_role="executor")
-    _mk(session, 2, '["executor"]', active_role="applicant")
-    assert _ids(await AuthService(session).get_users_by_role("executor")) == [2]
 
 
 def test_sql_has_no_active_role_branch_on_postgres_dialect():

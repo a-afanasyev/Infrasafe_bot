@@ -10,7 +10,7 @@ CSV values, so this locks the fix against regression rather than a live bug.
 from unittest.mock import MagicMock
 
 from uk_management_bot.services.specialization_service import SpecializationService
-from uk_management_bot.services.user_management_service import UserManagementService
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 
 def _user(roles):
@@ -40,25 +40,17 @@ class TestSpecializationServiceCsv:
         assert self._svc()._is_executor(_user(None)) is False
 
 
-class TestUserManagementServiceCsv:
-    def _svc(self):
-        return UserManagementService(MagicMock())
+class TestParseRolesSafeCsv:
+    """Канонический парсер, к которому делегируют все COD-01 call sites."""
 
-    def test_is_user_staff_csv(self):
-        assert self._svc().is_user_staff(_user("applicant,manager")) is True
+    def test_csv(self):
+        assert parse_roles_safe("executor,manager") == ["executor", "manager"]
 
-    def test_is_user_employee_csv(self):
-        # Previously used substring '"executor"' which never matched CSV.
-        assert self._svc().is_user_employee(_user("executor,applicant")) is True
+    def test_csv_strips_whitespace(self):
+        assert parse_roles_safe("applicant, executor") == ["applicant", "executor"]
 
-    def test_is_user_employee_applicant_only(self):
-        assert self._svc().is_user_employee(_user("applicant")) is False
+    def test_json_still_works(self):
+        assert parse_roles_safe('["executor", "applicant"]') == ["executor", "applicant"]
 
-    def test_get_user_role_list_csv(self):
-        assert self._svc().get_user_role_list(_user("executor,manager")) == [
-            "executor",
-            "manager",
-        ]
-
-    def test_get_user_role_list_none(self):
-        assert self._svc().get_user_role_list(_user(None)) == []
+    def test_none(self):
+        assert parse_roles_safe(None) == []

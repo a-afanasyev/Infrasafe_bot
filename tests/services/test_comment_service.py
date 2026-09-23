@@ -9,8 +9,6 @@ Covers:
 - add_status_change_comment
 - add_purchase_comment
 - add_clarification_comment
-- add_completion_report_comment
-- get_latest_comment
 - _get_comment_type_emoji
 - _create_audit_log
 - _collect_notices (B3, BUG-174)
@@ -257,58 +255,6 @@ class TestAddClarificationComment:
              patch.object(self.svc, "_collect_notices", return_value=[]):
             self.svc.add_clarification_comment("260412-001", 10, "Уточните адрес")
             self.db.add.assert_called()
-
-
-# ===== add_completion_report_comment =====
-
-class TestAddCompletionReportComment:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_creates_report_comment(self):
-        req = _FakeRequest()
-        user = _FakeUser()
-        self.db.query.return_value.filter.return_value.first.side_effect = [req, user]
-        with patch.object(self.svc, "_create_audit_log"), \
-             patch.object(self.svc, "_collect_notices", return_value=[]):
-            self.svc.add_completion_report_comment("260412-001", 10, "Работа завершена")
-            self.db.add.assert_called()
-
-
-# ===== get_latest_comment =====
-
-class TestGetLatestComment:
-    def setup_method(self):
-        self.db = MagicMock()
-        self.svc = _build_service(self.db)
-
-    def test_returns_latest_without_type(self):
-        comment = _FakeComment()
-        (self.db.query.return_value
-         .filter.return_value
-         .order_by.return_value
-         .first.return_value) = comment
-        result = self.svc.get_latest_comment("260412-001")
-        assert result == comment
-
-    def test_returns_latest_with_type(self):
-        comment = _FakeComment(comment_type=COMMENT_TYPE_PURCHASE)
-        (self.db.query.return_value
-         .filter.return_value
-         .filter.return_value
-         .order_by.return_value
-         .first.return_value) = comment
-        result = self.svc.get_latest_comment("260412-001", COMMENT_TYPE_PURCHASE)
-        assert result == comment
-
-    def test_returns_none_when_no_comments(self):
-        (self.db.query.return_value
-         .filter.return_value
-         .order_by.return_value
-         .first.return_value) = None
-        result = self.svc.get_latest_comment("260412-001")
-        assert result is None
 
 
 # ===== _get_comment_type_emoji =====

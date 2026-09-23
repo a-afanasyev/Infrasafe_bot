@@ -7,7 +7,6 @@ UPSERT…RETURNING) — тесты генерации идут против ре
 """
 import pytest
 from datetime import date
-from unittest.mock import MagicMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -224,35 +223,3 @@ class TestFormatForDisplay:
         invalid = "not-a-number"
         result = RequestNumberService.format_for_display(invalid)
         assert result == invalid
-
-
-# ---------------------------------------------------------------------------
-# check_number_availability
-# ---------------------------------------------------------------------------
-
-class TestCheckNumberAvailability:
-    def test_available_when_not_in_db(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = None
-
-        svc = RequestNumberService(db)
-        assert svc.check_number_availability("260402-001") is True
-
-    def test_not_available_when_in_db(self):
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = (1,)
-
-        svc = RequestNumberService(db)
-        assert svc.check_number_availability("260402-001") is False
-
-    def test_invalid_format_returns_false(self):
-        db = MagicMock()
-        svc = RequestNumberService(db)
-        assert svc.check_number_availability("bad") is False
-
-    def test_db_exception_returns_false(self):
-        db = MagicMock()
-        db.execute.side_effect = Exception("DB error")
-
-        svc = RequestNumberService(db)
-        assert svc.check_number_availability("260402-001") is False

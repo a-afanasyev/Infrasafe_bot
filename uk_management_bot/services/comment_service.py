@@ -5,7 +5,7 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
-from typing import List, Optional
+from typing import List
 import logging
 
 from uk_management_bot.database.models.request import Request
@@ -263,43 +263,6 @@ class CommentService:
             comment_text=clarification,
             comment_type=COMMENT_TYPE_CLARIFICATION
         )
-    
-    def add_completion_report_comment(self, request_number: str, user_id: int, report: str) -> tuple[RequestComment, list[CommentNotice]]:
-        """
-        Добавление комментария с отчетом о выполнении
-        
-        Args:
-            request_number: Номер заявки
-            user_id: ID пользователя
-            report: Текст отчета
-            
-        Returns:
-            RequestComment: Созданный комментарий
-        """
-        return self.add_comment(
-            request_id=request_number,
-            user_id=user_id,
-            comment_text=report,
-            comment_type=COMMENT_TYPE_REPORT
-        )
-    
-    def get_latest_comment(self, request_number: str, comment_type: str = None) -> Optional[RequestComment]:
-        """
-        Получение последнего комментария заявки
-        
-        Args:
-            request_number: Номер заявки
-            comment_type: Тип комментария (опционально)
-            
-        Returns:
-            Optional[RequestComment]: Последний комментарий или None
-        """
-        query = self.db.query(RequestComment).filter(RequestComment.request_number == request_number)
-        
-        if comment_type:
-            query = query.filter(RequestComment.comment_type == comment_type)
-        
-        return query.order_by(desc(RequestComment.created_at)).first()
     
     def _get_comment_type_emoji(self, comment_type: str) -> str:
         """Получение эмодзи для типа комментария"""
