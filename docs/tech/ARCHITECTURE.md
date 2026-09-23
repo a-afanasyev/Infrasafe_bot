@@ -1,13 +1,15 @@
 # UK Management — техническая архитектура
 
-> _Последнее редактирование: 2026-08-25_
+> _Последнее редактирование: 2026-09-23_
 
 > Техническое описание системы: компоненты монорепо, развёртывание, потоки
 > данных, аутентификация и локализация. Продуктовый обзор — в
 > [../product/OVERVIEW.md](../product/OVERVIEW.md).
 >
-> Источник истины — код. Ключевые факты снабжены ссылками `файл:строка`.
-> Помеченное **проверить** требует сверки перед использованием как норматив.
+> Источник истины — код. Ключевые факты снабжены ссылками на файл и символ
+> (функцию, константу, compose-сервис), **без номеров строк**: номера строк
+> протухают с первой же правкой файла. Помеченное **проверить** требует сверки
+> перед использованием как норматив.
 
 ## 1. Компоненты монорепо
 
@@ -20,7 +22,8 @@
 | Контроль доступа | `access_control/` | FastAPI, отдельный образ `Dockerfile.access` | ANPR/пропуска/проезды; собственный API, общая БД/Redis |
 | Медиа-сервис | `media_service/` | FastAPI | Хранение и раздача фото/видео; своя логическая БД `uk_media`; дисковый preview-cache (§3.2) |
 | Учёт ресурсов | `resource-accounting/backend/` | FastAPI + worker | Отдельный сервис в монорепо: показания счётчиков; своя БД `resource-postgres`; s2s launch-tickets из основного API (§3.5) |
-| Миграции | `alembic/` | Alembic | Схема PostgreSQL; применяет one-shot сервис `migrate` под ролью-владельцем схемы (PR-7, `docker-compose.yml:362`); api/access-api на старте делают только read-only preflight |
+| Контроль платежей | `payment_control/` | FastAPI, отдельный образ `payment_control/Dockerfile` | Импорт CSV/XLSX снимков долга/предоплаты и реестров платежей; своя БД `payment-postgres`; поднимается overlay `docker-compose.payments.yml` (§3.6) |
+| Миграции | `alembic/` | Alembic | Схема PostgreSQL; применяет one-shot compose-сервис `migrate` (`scripts/entrypoint-migrate.sh`) под ролью-владельцем схемы (PR-7); api/access-api на старте делают только read-only preflight |
 | Документация | `docs/` | Markdown | Доки, аудит, планы |
 
 Единая БД PostgreSQL и Redis общие для бота, основного API и access-API
@@ -28,15 +31,19 @@
 см. `README.md` «Быстрый старт»). Медиа-сервис использует отдельную логическую
 БД `uk_media` в том же PostgreSQL (`docker-compose.media.yml`), под выделенной
 ролью `uk_media_owner`. Учёт ресурсов — отдельный PostgreSQL 16
-(`resource-postgres`, `docker-compose.yml:453`) с ролями `resource`
-(владелец/миграции) и `resource_app` (runtime DML).
+(compose-сервис `resource-postgres`) с ролями `resource`
+(владелец/миграции) и `resource_app` (runtime DML). Контроль платежей — ещё
+один отдельный PostgreSQL 16 (`payment-postgres` в `docker-compose.payments.yml`,
+БД `payment_control`) с ролями `payment_owner` (владелец/миграции) и
+`payment_app` (runtime DML).
 
-**Секреты (ARCH-106):** все секреты приложения (`app`/`api`/`access-api`/
-`migrate`/`media-service`/`resource-api`/`resource-worker`) приходят из Doppler
+**Секреты (ARCH-106):** все секреты приложения (`app`/`group-intake-bot`/`api`/
+`access-api`/`migrate`/`media-service`/`resource-api`/`resource-worker`/
+`payment-api`/`payment-migrate`) приходят из Doppler
 — прод-команды compose запускаются через
 `doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`,
 `.env` на проде очищен от секретов; compose падает с `:?`-гардом при их
-отсутствии (например, `docker-compose.yml:515`). Carve-out вне Doppler —
+отсутствии (например, `BOT_TOKEN`, `JWT_SECRET`, `PAYMENT_SERVICE_TOKEN`). Carve-out вне Doppler —
 PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`) и несекретная
 конфигурация. Детали — `.claude/skills/uk-deploy/SKILL.md`.
 
@@ -45,11 +52,15 @@ PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`) и несекретн�
 
 ## 2. Диаграмма развёртывания
 
-Прод собирается набором compose-файлов площадки (105 — два, profk — три):
-`docker compose -f docker-compose.yml -f docker-compose.media.yml ...`
-(для profk — `docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml ...`, набор площадок — только по таблице «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`:
-с 2026-07-31 / AUD6-P2-38 `docker-compose.profk.yml` — тонкий override с profk-дельтами
-и media внутри, standalone он больше не работает);
+Прод собирается набором compose-файлов площадки: базовый `docker-compose.yml`
+плюс overlay'и площадки (`docker-compose.media.yml`, `docker-compose.profk.yml`,
+`docker-compose.payments.yml`). Какой набор и в каком порядке — **только** по
+таблице «Площадка → COMPOSE» в
+[`.claude/skills/uk-deploy/SKILL.md`](../../.claude/skills/uk-deploy/SKILL.md);
+здесь он намеренно не повторяется (гейт
+`uk_management_bot/tests/test_deploy_runbook_compose_ssot.py`). С 2026-07-31
+(AUD6-P2-38) `docker-compose.profk.yml` — тонкий override с profk-дельтами и
+media внутри, standalone он больше не работает;
 все прод-команды — через `doppler run --` (ARCH-106, см. §1);
 **никогда** не использовать `--remove-orphans` (в стеке есть orphan-контейнеры
 edge/InfraSafe). Все host-порты биндятся на `127.0.0.1` — наружу система
@@ -59,9 +70,11 @@ edge/InfraSafe). Все host-порты биндятся на `127.0.0.1` — н
 Долгоживущие сервисы compose: `app`, `group-intake-bot` (профиль
 `group-intake`; включён на profk), `api`, `access-api`, `frontend`,
 `postgres`, `redis`, `media-service`, `resource-postgres`, `resource-api`,
-`resource-worker`. One-shot'ы (профиль `tools` / `run --rm`): `provision-roles`
+`resource-worker`, а в overlay `docker-compose.payments.yml` — `payment-postgres`
+и `payment-api`. One-shot'ы (профиль `tools` / `run --rm`): `provision-roles`
 → `migrate` (основная схема), `media-migrate` (схема `uk_media`),
-`resource-provision-roles` → `resource-migrate` (схема учёта ресурсов).
+`resource-provision-roles` → `resource-migrate` (схема учёта ресурсов),
+`payment-migrate` (схема контроля платежей).
 
 ```mermaid
 flowchart TB
@@ -84,6 +97,8 @@ flowchart TB
         rapi["uk-resource-api\nFastAPI учёт ресурсов\n127.0.0.1:8100→8100"]
         rworker["uk-resource-worker\nфоновый worker"]
         rpg[("uk-resource-postgres\nPostgreSQL 16\nБД resource_accounting")]
+        papi["uk-payment-api\nFastAPI контроль платежей\npayment-api.internal:8101\n(overlay payments)"]
+        ppg[("uk-payment-postgres\nPostgreSQL 16\nБД payment_control")]
     end
 
     user -->|HTTPS| edge
@@ -110,28 +125,36 @@ flowchart TB
     edge -->|/uk/api/resource/*| rapi
     rapi --> rpg
     rworker --> rpg
+    api -->|s2s X-Service-Token\npayment-api.internal:8101| papi
+    papi --> ppg
     front -.->|build-time base /uk/| edge
 ```
 
-Порты и контейнеры (источник — `docker-compose.yml`, `docker-compose.media.yml`):
+Порты и контейнеры (источник — `ports:` compose-сервисов; на profk
+`docker-compose.profk.yml` снимает host-порты у `postgres`/`redis`):
 
-| Контейнер | Host-порт → контейнер | Файл:строка |
+| Контейнер | Host-порт → контейнер | Compose-файл / сервис |
 |---|---|---|
-| `uk-management-bot` (`app`) | — (health на :8000 внутри) | `docker-compose.yml:8` |
-| `uk-management-api` (`api`) | `127.0.0.1:8085 → 8080` | `docker-compose.yml:166-167` |
-| `uk-access-api` | `127.0.0.1:8087 → 8080` (порт 8086 занят influxdb на shared-деплое) | `docker-compose.yml:253-254` |
-| `uk-postgres` | `127.0.0.1:5432` | `docker-compose.yml:315-316` |
-| `uk-redis` | `127.0.0.1:6379` | `docker-compose.yml:422-423` |
-| `uk-frontend` | `127.0.0.1:3002 → 80` | `docker-compose.yml:437-438` |
-| `uk-resource-api` | `127.0.0.1:8100 → 8100` | `docker-compose.yml:524-525` |
-| `uk-resource-postgres` | — (только uk-network) | `docker-compose.yml:453` |
-| `uk-media-service` | `127.0.0.1:8009 → 8000` | `docker-compose.media.yml:39-40` |
+| `uk-management-bot` | — (health на :8000 внутри) | `docker-compose.yml` / `app` |
+| `uk-group-intake-bot` | — (healthcheck отключён) | `docker-compose.yml` / `group-intake-bot` |
+| `uk-management-api` | `127.0.0.1:8085 → 8080` | `docker-compose.yml` / `api` |
+| `uk-access-api` | `127.0.0.1:${ACCESS_API_HOST_PORT:-8087} → 8080` (порт 8086 занят influxdb на shared-деплое) | `docker-compose.yml` / `access-api` |
+| `uk-postgres` | `127.0.0.1:5432` | `docker-compose.yml` / `postgres` |
+| `uk-redis` | `127.0.0.1:6379` | `docker-compose.yml` / `redis` |
+| `uk-frontend` | `127.0.0.1:3002 → 80` | `docker-compose.yml` / `frontend` |
+| `uk-resource-api` | `127.0.0.1:${RESOURCE_API_HOST_PORT:-8100} → 8100` | `docker-compose.yml` / `resource-api` |
+| `uk-resource-postgres` | — (только uk-network) | `docker-compose.yml` / `resource-postgres` |
+| `uk-media-service` | `127.0.0.1:8009 → 8000` | `docker-compose.media.yml` (105) или `docker-compose.profk.yml` (profk) / `media-service` |
+| `uk-payment-api` | — (только uk-network, алиас `payment-api.internal:8101`) | `docker-compose.payments.yml` / `payment-api` |
+| `uk-payment-postgres` | — (только uk-network) | `docker-compose.payments.yml` / `payment-postgres` |
 
 Сеть — фиксированное имя `uk-network` без префикса compose-проекта
-(`docker-compose.yml:596`, реконсиляция прод-дрейфа). Egress — только IPv4:
-IPv6 отключён на интерфейсах бота/API/access (в Узбекистане нет рабочего
-IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.telegram.org`,
-`docker-compose.yml:22-24,112-114,201-203`).
+(`networks.uk-network.name` в `docker-compose.yml`, реконсиляция прод-дрейфа;
+на profk она external, а БД/Redis живут в приватной `uk-internal`). Egress —
+только IPv4: IPv6 отключён (`sysctls: net.ipv6.conf.*.disable_ipv6=1`) на
+интерфейсах `app`, `group-intake-bot`, `api`, `access-api` (в Узбекистане нет
+рабочего IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к
+`api.telegram.org`).
 
 ## 3. Потоки данных
 
@@ -144,9 +167,9 @@ IPv6-egress; иначе aiogram/httpx виснут на TCP-connect к `api.tele
   роутеры под `/api/v2/*` (auth, requests, shifts, executor-shifts, addresses,
   residents, feedback, materials, profile, callcenter, public, board-config,
   auto-manager, webhooks, registration, work-reports, monitored-groups,
-  resource-accounting, announcements, media-proxy)
-  и WebSocket `/ws/v2/*` для live-обновлений
-  (`api/main.py:135-160`). Пишет ту же БД `uk_management`.
+  payment-control, elevators, resource-accounting, announcements, media-proxy)
+  и WebSocket `/ws/v2/*` для live-обновлений (блок `app.include_router(...)`
+  в `api/main.py`). Пишет ту же БД `uk_management`.
 - **Group-Intake-бот** (`uk_management_bot/group_intake_main.py`) — отдельный
   процесс с собственным Telegram-токеном: слушает только зарегистрированные
   группы (`monitored_groups`), классифицирует сообщения (Anthropic structured
@@ -171,7 +194,7 @@ signed-URL). Медиа-канал вынесен из «горячего» пу
 скачивает оригиналы из Telegram по требованию, и публичная витрина «до/после»
 (30 карточек × 2 фото) выедала пул за одну загрузку страницы (инцидент
 2026-07-25). Решение: витрина получает превью ≈480px JPEG; превью кэшируются на
-диске (том `media_preview_cache`, `docker-compose.media.yml:31,83`) — повторный
+диске (том `media_preview_cache` сервиса `media-service`) — повторный
 просмотр не трогает Telegram; параллельные скачивания ограничены семафором.
 Вытеснение из кэша — целыми каталогами-заявками (LRU по заявке, не по файлу).
 
@@ -181,10 +204,11 @@ signed-URL). Медиа-канал вынесен из «горячего» пу
 (`access_control/api/`: ingestion, decision, edge, operator, camera-events,
 equipment) и доменной логикой (`access_control/domain/`, `services/`,
 `repositories/`). Инфраструктура общая: та же БД `uk_management` (миграции
-применяет основной API) и тот же Redis. Multi-worker-безопасность обеспечена
+применяет one-shot `migrate`, access-api делает только read-only preflight) и
+тот же Redis. Multi-worker-безопасность обеспечена
 внешними бэкендами на Redis: nonce-store анти-replay
 (`ACCESS_NONCE_BACKEND=redis`) и брокер live-событий
-(`ACCESS_EVENT_BROKER=redis`, `docker-compose.yml:136-137`). Домен требует
+(`ACCESS_EVENT_BROKER=redis`, environment сервиса `access-api`). Домен требует
 секретов Ed25519/HMAC (offline-snapshot, device-auth, signed-URL фото, гостевые
 коды) — код падает `RuntimeError` при их отсутствии. Фронт-мост в основном API —
 `services/access_notify_subscriber.py`, `handlers/access_control.py`.
@@ -195,7 +219,7 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 `uk_management_bot/api/work_reports/` (менеджерский `router.py` +
 неаутентифицированный `public_router.py`) поверх функционального сервиса
 `uk_management_bot/services/work_report_service.py`. Весь модуль за
-фиче-флагом `WORK_REPORTS_ENABLED` (`config/settings.py:276`; менеджерский
+фиче-флагом `WORK_REPORTS_ENABLED` (`config/settings.py`; менеджерский
 роутер при выключенном флаге отдаёт единый 404).
 
 - **Синхронизация**: черновики отчётов автосоздаются из завершённых заявок
@@ -224,14 +248,47 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
   основной API минтит одноразовый opaque-ticket server-to-server
   (`uk_management_bot/api/resource_accounting/router.py`, POST к
   `RESOURCE_SERVICE_URL` c `X-Service-Token`; на проде это
-  `http://resource-api.internal:8100/v1` — алиас на `uk-network`,
-  `docker-compose.yml:531-533`). Сервисный токен живёт только на бэкенде.
+  `http://resource-api.internal:8100/v1` — сетевой алиас сервиса
+  `resource-api` на `uk-network`). Сервисный токен живёт только на бэкенде.
 - **Фронт-модуль**: нативный раздел дашборда за build-флагом
-  `VITE_RESOURCES_ENABLED` (`frontend/Dockerfile:23`,
+  `VITE_RESOURCES_ENABLED` (`ARG` в `frontend/Dockerfile`,
   `frontend/src/pages/ResourceAccountingSection.tsx`).
 - **Роль контролёра** `resource_meter_entry`: ввод показаний из Mini App по
   Telegram `initData` (`/api/v2/resource-accounting/twa-ticket`).
 - **Edge**: наружу — префикс `/uk/api/resource/` на edge → `resource-api:8100`.
+
+### 3.6 Контроль платежей (payment_control)
+
+Отдельный FastAPI-сервис `payment_control/` (своя БД `payment_control` в
+`payment-postgres`, миграции `payment_control/migrations/` применяет one-shot
+`payment-migrate`). Поднимается overlay `docker-compose.payments.yml` — только
+на площадках, где он есть в таблице «Площадка → COMPOSE» uk-deploy.
+
+- **Доступ только через UK API**: браузер ходит в
+  `/api/v2/payment-control/*` (`uk_management_bot/api/payment_control/router.py`,
+  роли `manager`/`admin`), тот ходит в `PAYMENT_SERVICE_URL`
+  (`http://payment-api.internal:8101/v1`) с `PAYMENT_SERVICE_TOKEN`. Сам `/v1`
+  сервиса наружу не публикуется; host-портов нет.
+- **Связь с квартирой** — `Apartment.account_number` (основная БД, ревизия
+  `0016_apartment_account_number`).
+- **Фронт-модуль**: раздел `frontend/src/pages/PaymentControlPage.tsx` за
+  build-флагом `VITE_PAYMENTS_ENABLED`.
+- Правила актуальности снимков, форматы и порядок подключения —
+  [PAYMENT_CONTROL.md](PAYMENT_CONTROL.md).
+
+### 3.7 Модуль «Лифты»
+
+Реестр лифтов, ручной техстатус с журналом, привязка заявок категории
+`elevator`, календарь ТО и напоминания. Код: `api/elevators/` (менеджерский
+`router.py` + `public_router.py`), `services/elevator_service/`,
+`handlers/elevators/`, `handlers/group_intake_elevator.py`, джоба
+`elevator_reminders` в `utils/shift_scheduler.py`, фронт —
+`frontend/src/pages/elevators/`. Схема — ревизии `0017_elevators`,
+`0018_elevator_overdue_reminders`. Модуль DARK за двумя флагами:
+`ELEVATORS_ENABLED` (бот + API, одинаково для обоих сервисов; при выключенном
+API отвечает единым 404) и build-флагом `VITE_ELEVATORS_ENABLED` (фронт).
+Префикс `/api/v2/elevators` на edge заявляется до включения. Подробности —
+[../ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md).
 
 ## 4. Модель аутентификации
 
@@ -240,7 +297,7 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 ### 4.1 Бот (Telegram)
 Пользователь идентифицируется по `telegram_id`; авторизация и режим ролей —
 через middleware (`middlewares/auth.py`: `auth_middleware`,
-`role_mode_middleware`, `uk_management_bot/main.py:60`). Роли берутся из
+`role_mode_middleware`; подключаются в `uk_management_bot/main.py`). Роли берутся из
 `user.roles`, активная — `user.active_role`. Доступ имеет только пользователь со
 статусом `approved`.
 
@@ -249,29 +306,33 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 
 - **Web SPA**: два httpOnly-cookie на общем домене `infrasafe.uz`:
   - `uk_access` — JWT доступа, `Path=/uk/` (шлётся на каждый UK-запрос, REST+WS),
-    `api/auth/router.py:45-47`.
+    `COOKIE_ACCESS_NAME`/`COOKIE_ACCESS_PATH` в `api/auth/router.py`.
   - `uk_refresh` — refresh-токен, `Path=/uk/api/` (только refresh/logout),
-    `api/auth/router.py:48`.
+    `COOKIE_REFRESH_NAME`/`COOKIE_REFRESH_PATH`.
   - Cookie: `httponly=True`, `samesite=strict`, `secure` вне DEBUG
-    (`api/auth/router.py:58-76`).
+    (`_set_auth_cookies`, `_cookie_secure`).
 - **Входы**: Telegram Widget (`/telegram-widget`), TWA initData (`/twa`),
   пароль + MFA. Парольный вход обязательно требует **MFA через Telegram-OTP**:
   `/login` отдаёт короткоживущий `mfa_token` и шлёт OTP в Telegram,
   `/login/verify-otp` меняет его на полноценные токены
-  (`api/auth/router.py:175-236`).
+  (`login_password`, `verify_login_otp`, `resend_otp`).
 - **Refresh-токены** хранятся хешами в таблице `refresh_tokens` с ротацией
-  (старый отзывается, выдаётся новый; `api/auth/router.py:256-311`). Web-SPA —
-  7 дней (`REFRESH_TOKEN_EXPIRE_DAYS`, NICE-082: сжато с 30 до 7, чтобы сузить
+  (старый отзывается, выдаётся новый; `refresh_token`/`logout` в
+  `api/auth/router.py`). Web-SPA — 7 дней (`REFRESH_TOKEN_EXPIRE_DAYS` в
+  `api/auth/service.py`, NICE-082: сжато с 30 до 7, чтобы сузить
   окно украденного refresh-токена); TWA — 24 часа (`TWA_REFRESH_TOKEN_EXPIRE_HOURS`), т.к. Telegram
   WebView ненадёжно хранит cookie и TWA работает по Bearer в теле ответа.
 - **Fail-closed**: весь auth-роутер закрывается при деградации rate-limit
-  backend (`auth_ratelimit_guard`, `api/auth/router.py:34`).
-- **Доступ**: только `user.status == "approved"`; иначе 403
-  (`api/auth/router.py:133,159,182`).
+  backend (`auth_ratelimit_guard` — зависимость всего `router`).
+- **Доступ**: только `user.status == "approved"`; иначе 403 (проверка в
+  каждом входе: `login_telegram_widget`, `login_twa`, `login_password`,
+  `verify_login_otp`).
 
-Прочие защиты API: security-заголовки на каждом ответе
-(`api/main.py:107-116`), CORS по явному списку origin (`api/main.py:84-99`),
-интерактивная OpenAPI-документация отключена в прод (`api/main.py:58-62`).
+Прочие защиты API (`api/main.py`): security-заголовки на каждом ответе
+(middleware `security_headers`), CORS по явному списку origin
+(`CORSMiddleware` с `allowed_origins` из `settings.CORS_ORIGINS`),
+интерактивная OpenAPI-документация отключена в прод (`_docs_kwargs`;
+снапшот схемы — `docs/tech/openapi.json`, сверяется CI).
 
 ## 5. Локализация
 
@@ -291,17 +352,19 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 |---|---|---|
 | Заявки | `handlers/requests/`, `utils/request_workflow/`, `services/workflow_runner.py`, `api/requests/` | [REQUESTS.md](REQUESTS.md), `../product/BUSINESS_PROCESSES.md` §3 |
 | Group Intake | `handlers/group_intake.py`, `services/group_intake/`, `group_intake_main.py`, `api/group_intake/`, `frontend/src/pages/GroupsPage.tsx` | `../product/PRD.md` M2, `../product/BUSINESS_PROCESSES.md` §5 |
-| Назначение / SmartDispatcher | `services/smart_dispatcher.py`, `services/assignment_service.py`, `handlers/request_assignment.py` | `docs/TECHNICAL_GUIDE_REQUEST_ASSIGNMENT.md` |
-| Смены | `services/shift_*`, `handlers/shift_management/`, `api/shifts/` | `docs/РАЗДЕЛ_3_СИСТЕМА_СМЕН_СВОДКА.md` |
+| Назначение / авто-dispatch | `services/dispatch.py`, `services/assignment_service.py`, `services/auto_manager/`, `handlers/admin/assignment.py`, `handlers/admin/reassignment.py` | [REQUESTS.md](REQUESTS.md), [SHIFTS_AND_ASSIGNMENT.md](SHIFTS_AND_ASSIGNMENT.md) |
+| Смены | `services/shift_*`, `handlers/shift_management/`, `handlers/my_shifts/`, `api/shifts/` | [SHIFTS_AND_ASSIGNMENT.md](SHIFTS_AND_ASSIGNMENT.md), [../guides/SHIFTS.md](../guides/SHIFTS.md) |
 | Контроль доступа | `access_control/` (api/domain/services/repositories), `handlers/access_control.py`, `frontend/src/pages/access/` | `access_control/` (in-code), **проверить** сводный док |
-| Склад материалов | `database/models/material.py`, `services/material_service.py`, `api/materials/`, `handlers/*/materials.py`, `frontend/src/pages/materials/` | [../MATERIALS_MODULE.md](../MATERIALS_MODULE.md) |
+| Склад материалов | `database/models/material.py`, `services/material_service/`, `api/materials/`, `handlers/*/materials.py`, `frontend/src/pages/materials/` | [../MATERIALS_MODULE.md](../MATERIALS_MODULE.md) |
 | Визуальные отчёты (work-reports) | `api/work_reports/`, `services/work_report_service.py`, `database/models/work_report.py` | §3.4 этого документа |
 | Учёт ресурсов | `resource-accounting/backend/`, `api/resource_accounting/`, `frontend/src/pages/ResourceAccountingSection.tsx` | §3.5 этого документа |
-| Верификация пользователей | `services/user_verification_service.py`, `handlers/user_verification.py` | `docs/РАЗДЕЛ_6_МНОГОРОЛЕВОЙ_РЕЖИМ.md` (**проверить**) |
+| Контроль платежей | `payment_control/`, `api/payment_control/`, `frontend/src/pages/PaymentControlPage.tsx` | §3.6, [PAYMENT_CONTROL.md](PAYMENT_CONTROL.md) |
+| Лифты | `api/elevators/`, `services/elevator_service/`, `handlers/elevators/`, `frontend/src/pages/elevators/` | §3.7, [../ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md) |
+| Верификация пользователей | `services/user_verification_service.py`, `handlers/user_verification/` | `../product/BUSINESS_PROCESSES.md` §1 |
 | Аналитика | `services/shift_analytics.py`, `services/metrics_manager.py`, `frontend/src/pages/AnalyticsPage.tsx` | — (**проверить**) |
 | Обратная связь | `services/feedback_service.py`, `api/feedback/`, `frontend/src/pages/FeedbackPage.tsx` | — |
-| Аутентификация (web) | `uk_management_bot/api/auth/` | §4 этого документа, `docs/AUTH_P{1,2,3}_COMPLETED.md` |
-| Адреса | `services/address_service.py`, `services/request_address.py`, `api/addresses/` | `docs/TASK_15_ADDRESS_DIRECTORY.md` |
+| Аутентификация (web) | `uk_management_bot/api/auth/` | §4 этого документа |
+| Адреса | `services/address_service/`, `services/request_address.py`, `handlers/address_*`, `api/addresses/` | [DATA_MODEL.md](DATA_MODEL.md) («Справочник адресов») |
 
 ## 7. Связанные документы
 
@@ -311,6 +374,10 @@ equipment) и доменной логикой (`access_control/domain/`, `servic
 - [../product/PRD.md](../product/PRD.md) — продуктовое ТЗ.
 - [../product/OVERVIEW.md](../product/OVERVIEW.md) — продуктовый обзор.
 - [../MATERIALS_MODULE.md](../MATERIALS_MODULE.md) — модуль «Склад материалов».
+- [PAYMENT_CONTROL.md](PAYMENT_CONTROL.md) — контроль платежей.
+- [../ELEVATORS_MODULE.md](../ELEVATORS_MODULE.md) — модуль «Лифты».
+- [`.claude/skills/uk-deploy/SKILL.md`](../../.claude/skills/uk-deploy/SKILL.md) —
+  деплой, миграции, Doppler, набор compose-файлов площадки.
 - [../../README.md](../../README.md) — быстрый старт, тесты, конвенции.
 - [../../CLAUDE.md](../../CLAUDE.md) — правила работы с репозиторием.
 - [../ops/RUNBOOK.md](../ops/RUNBOOK.md) —

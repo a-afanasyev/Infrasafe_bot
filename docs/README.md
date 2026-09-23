@@ -1,6 +1,6 @@
 # 📚 UK Management — документация
 
-> _Последнее редактирование: 2026-07-26_
+> _Последнее редактирование: 2026-09-23_
 
 Индекс. Актуальность каждого документа — в **[DOCUMENTATION_STATUS.md](DOCUMENTATION_STATUS.md)**
 (матрица 🟢/🟡/🔴/⚫).
@@ -10,6 +10,10 @@
 `docs/` в **[Archive/2026-07-26-stale-docs/](Archive/2026-07-26-stale-docs/README.md)** —
 там же таблица «что именно устарело и куда смотреть вместо этого». Пометки в
 матрице оказалось недостаточно: файл открывают по имени, а не через индекс.
+**A9-P3-28 (2026-09-23):** вторая волна — исторические отчёты из корня `docs/`
+уехали в **[Archive/2026-09-23-root-reports/](Archive/2026-09-23-root-reports/README.md)**,
+аудиторские и security-отчёты (включая пентест из корня репо и бывший корневой
+`audit/`) — в `audit/`.
 Ниже — только то, на что можно опираться.
 
 ---
@@ -28,7 +32,11 @@
 - [tech/REQUESTS.md](tech/REQUESTS.md) — домен «Заявки» (статусы, назначение, приёмка)
 - [tech/SHIFTS_AND_ASSIGNMENT.md](tech/SHIFTS_AND_ASSIGNMENT.md) — смены + движок назначения (5 классов)
 - [tech/ROLES_AND_ACCESS.md](tech/ROLES_AND_ACCESS.md) — роли (RBAC), матрица доступа, `admin` vs `system_admin`
+- [tech/ARCHITECTURE_DIAGRAMS.md](tech/ARCHITECTURE_DIAGRAMS.md) — диаграммы (контейнеры, модули, ER)
+- [tech/PAYMENT_CONTROL.md](tech/PAYMENT_CONTROL.md) — контроль платежей
 - [MATERIALS_MODULE.md](MATERIALS_MODULE.md) — модуль «Склад материалов» (FIFO)
+- [ELEVATORS_MODULE.md](ELEVATORS_MODULE.md) — модуль «Лифты»
+- [ASSETS_MODULE.md](ASSETS_MODULE.md) — ТЗ модуля «Учёт ассетов» (не реализовано)
 - [access-control/TECHNICAL_SPEC.md](access-control/TECHNICAL_SPEC.md) — контроль доступа (ANPR/пропуска)
 
 **Инструкции по ролям** (`guides/`)
@@ -37,14 +45,14 @@
 - [guides/USER_GUIDE_MANAGER.md](guides/USER_GUIDE_MANAGER.md) — менеджер
 - [guides/USER_GUIDE_INSPECTOR.md](guides/USER_GUIDE_INSPECTOR.md) — обходчик
 - [guides/ADMIN_GUIDE.md](guides/ADMIN_GUIDE.md) — system_admin
-- [USER_GUIDE_REQUEST_ASSIGNMENT.md](USER_GUIDE_REQUEST_ASSIGNMENT.md) — назначение заявок (для пользователя)
+- [guides/SHIFTS.md](guides/SHIFTS.md) — смены (для персонала)
 
 **Эксплуатация и разработка**
 - [../README.md](../README.md) — быстрый старт, миграции (`migrate`), тесты (`make test-ci`)
 - [ops/RUNBOOK.md](ops/RUNBOOK.md) — деплой, откат, порты, свежие грабли
-- [DOCKER_SETUP.md](DOCKER_SETUP.md) — docker-окружение (🟡: список сервисов неполон)
+- [DOCKER_SETUP.md](DOCKER_SETUP.md) — compose-файлы и docker-окружение
 - [LOCALIZATION_GUIDE.md](LOCALIZATION_GUIDE.md) — локализация (бот + фронт i18next)
-- [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) — ручное тестирование
+- [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md), [ROLLBACK.md](ROLLBACK.md) — чек-лист деплоя и откат
 - [development/branch-policy.md](development/branch-policy.md) — жизненный цикл веток
 - [development/known-constraints.md](development/known-constraints.md) — эксплуатационные ограничения
 
@@ -52,12 +60,10 @@
 - [audit/2026-05-20-backlog.md](audit/2026-05-20-backlog.md) — рабочий бэклог (источник истины по задачам)
 - [audit/2026-05-20-backlog-manifest.md](audit/2026-05-20-backlog-manifest.md) — манифест: агрегаты и распределение по пакетам (генерируется)
 - [audit/2026-06-12-closure-plan.md](audit/2026-06-12-closure-plan.md) — план закрытия по волнам
+- `audit/` — также аудиторские и security-отчёты (исторические снимки, не норматив)
+- `bugs-YYYY-MM-DD.md` — баг-репорты (конвенция из `CLAUDE.md`)
 
-**Домены (справочно)**
-- [shifts.md](shifts.md) — смены
-- [photo.md](photo.md) — работа с фотографиями
-- [FAQ.md](FAQ.md) — частые вопросы
-- [ARCHITECTURE_DIAGRAMS.md](ARCHITECTURE_DIAGRAMS.md) — диаграммы
+**FAQ и пользовательская справка** — [user-guide/](user-guide/README.md)
 
 ---
 
@@ -65,6 +71,8 @@
 
 - **[Archive/2026-07-26-stale-docs/](Archive/2026-07-26-stale-docs/README.md)** — 🔴/⚫ из корня `docs/`,
   перенесены 2026-07-26 (AUD5-PRAC-7). Есть таблица замен.
+- **[Archive/2026-09-23-root-reports/](Archive/2026-09-23-root-reports/README.md)** — исторические
+  отчёты и устаревшие справочники из корня `docs/` (A9-P3-28). Есть таблица замен.
 - **Archive/Migration/**, **Archive/Phase_Reports/**, **Archive/Database/**,
   **Archive/Issues/**, **Archive/Old_Docs/** — более ранние волны архивации.
 

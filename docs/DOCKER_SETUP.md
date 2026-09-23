@@ -1,437 +1,59 @@
-# 🐳 Docker Setup для UK Management Bot
+# Docker-окружение UK Management
 
-> _Последнее редактирование: 2026-06-13_
+> _Последнее редактирование: 2026-09-23_
 
-## 📋 Обзор
+Короткая справка по compose-файлам репозитория. Документ сознательно **не**
+повторяет процедуры, у которых есть единственный источник истины:
 
-Этот документ содержит подробные инструкции по настройке и запуску UK Management Bot в Docker контейнерах. Система включает:
+| Что | Где |
+|---|---|
+| Первый локальный запуск (роли PR-7 → `migrate` → сервисы), тесты, линт | корневой [README.md](../README.md) |
+| Сервисы, порты, потоки данных | [tech/ARCHITECTURE.md](tech/ARCHITECTURE.md) §2 |
+| Прод-деплой: набор `-f` площадки, `doppler run --`, `migrate` → `up`, ротация секретов | [`.claude/skills/uk-deploy/SKILL.md`](../.claude/skills/uk-deploy/SKILL.md) (таблица «Площадка → COMPOSE») |
+| Откат, эксплуатационные грабли | [ops/RUNBOOK.md](ops/RUNBOOK.md), [ROLLBACK.md](ROLLBACK.md) |
+| Бэкапы БД | [ops/BACKUPS.md](ops/BACKUPS.md) |
 
-- **Основное приложение** (Telegram бот)
-- **База данных** (PostgreSQL для production или SQLite для development)
-- **Redis** (кэширование и rate limiting)
+> История (AUD5-PRAC-1, 2026-07-26 и A9-P3-27, 2026-09-23): прежняя версия этого
+> файла описывала «dev-вариант на SQLite» и команды `docker-compose` v1. SQLite-ветки
+> нет: `settings.py` запрещает SQLite при `DEBUG=False`, а все стеки, включая
+> `docker-compose.dev.yml`, работают на PostgreSQL. Файлы `env.example` /
+> `env.dev.example` удалены — единственный пример окружения `.env.example`.
 
-## 🎯 Выбор конфигурации
+## Compose-файлы
 
-### 🚀 Production (PostgreSQL) - Рекомендуется
-```bash
-# Полная конфигурация с PostgreSQL
-docker-compose up -d
-```
+| Файл | Назначение |
+|---|---|
+| `docker-compose.yml` | Базовый стек: `app`, `group-intake-bot` (профиль `group-intake`), `api`, `access-api`, `frontend`, `postgres`, `redis`, `resource-postgres`/`resource-api`/`resource-worker`; one-shot'ы под профилем `tools`: `provision-roles`, `migrate`, `resource-provision-roles`, `resource-migrate` |
+| `docker-compose.media.yml` | Overlay: `media-service` + one-shot `media-migrate` (площадка 105) |
+| `docker-compose.profk.yml` | Тонкий override площадки profk (сети `uk-network` external + `uk-internal`, бренд фронта, media внутри). Standalone не работает — только поверх базового файла |
+| `docker-compose.payments.yml` | Overlay «Контроль платежей»: `payment-postgres`, `payment-api`, one-shot `payment-migrate`; добавляет `PAYMENT_SERVICE_URL/TOKEN` в `api` |
+| `docker-compose.dev.yml` | Самостоятельный dev-стек с hot-reload (`make dev-up`): `app` на `Dockerfile.dev` с примонтированными `uk_management_bot/` и `alembic/`, свои `postgres`/`redis` (контейнеры `*-dev`). Без ролей PR-7 — не эталон, проверка перед мержем — `make test-ci` |
 
-**Преимущества:**
-- ✅ Многопользовательская поддержка
-- ✅ ACID compliance
-- ✅ Лучшая производительность при нагрузке
-- ✅ Готовность к масштабированию
-- ✅ Production-ready
+Сервисы под профилем `tools` (`migrate`, `provision-roles`, `media-migrate`,
+`payment-migrate` и др.) обычный `docker compose up -d` не поднимает — их
+запускают явно `docker compose run --rm <сервис>`.
 
-### 🛠️ Development (SQLite) - Для разработки
-```bash
-# Упрощенная конфигурация с SQLite
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-```
-
-**Преимущества:**
-- ✅ Простая настройка
-- ✅ Меньше ресурсов
-- ✅ Быстрый старт
-- ✅ Подходит для разработки
-- ✅ Соответствует текущей конфигурации проекта
-
-## 🚀 Быстрый старт
-
-### 1. Подготовка окружения
+## Локальная работа
 
 ```bash
-# Клонируйте репозиторий (если еще не сделали)
-git clone <your-repo-url>
-cd UK
-
-# Убедитесь, что Docker и Docker Compose установлены
-docker --version
-docker-compose --version
+docker compose ps                               # статус
+docker logs uk-management-bot --tail 20         # логи бота (контейнер)
+docker compose build app && docker compose up -d app   # пересборка бота: сервис `app`, не имя контейнера
+docker compose exec redis redis-cli -a "$REDIS_PASSWORD" ping
+make dev-up                                     # dev-стек с hot-reload
 ```
 
-### 2. Настройка переменных окружения
-
-```bash
-# Единственный канонический пример окружения корневого стека
-cp .env.example .env
-nano .env
-```
-
-> AUD5-PRAC-1 (2026-07-26): раньше здесь предлагались `env.example` (production/
-> PostgreSQL) и `env.dev.example` (development/SQLite). Оба файла удалены:
-> первый требовал `SECRET_KEY`/`JWT_SECRET_KEY`, которых код не читает вообще, и
-> не содержал ни одного обязательного секрета; второй был пустым. SQLite-ветка
-> тоже неактуальна — `settings.py` запрещает SQLite при `DEBUG=False`, а dev-стек
-> работает на том же PostgreSQL. Порядок первого запуска (роли PR-7 → `migrate` →
-> сервисы) — в корневом [README](../README.md).
-
-**ВАЖНО**: Обязательно измените следующие параметры в `.env`:
-
-```bash
-# Telegram Bot Token (получить у @BotFather)
-BOT_TOKEN=ваш_реальный_токен_бота
-
-# Сгенерируйте безопасные пароли
-ADMIN_PASSWORD=$(openssl rand -base64 32)
-INVITE_SECRET=$(openssl rand -base64 64)
-
-# Telegram ID администраторов
-ADMIN_USER_IDS=ваш_telegram_id,id_другого_админа
-```
-
-### 3. Запуск системы
-
-#### Production (PostgreSQL):
-```bash
-# Собрать и запустить все сервисы
-docker-compose up -d
-
-# Проверить статус сервисов
-docker-compose ps
-
-# Посмотреть логи приложения
-docker-compose logs app
-```
-
-#### Development (SQLite):
-```bash
-# Собрать и запустить с SQLite
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-
-# Проверить статус сервисов
-docker-compose ps
-
-# Посмотреть логи приложения
-docker-compose logs app
-```
-
-### 4. Проверка работоспособности
-
-#### Production (PostgreSQL):
-```bash
-# Проверить health check приложения
-docker-compose exec app python -c "import requests; print(requests.get('http://localhost:8000/health').json())"
-
-# Проверить подключение к базе данных
-docker-compose exec postgres pg_isready -U uk_bot -d uk_management
-
-# Проверить подключение к Redis
-docker-compose exec redis redis-cli ping
-```
-
-#### Development (SQLite):
-```bash
-# Проверить health check приложения
-docker-compose exec app python -c "import requests; print(requests.get('http://localhost:8000/health').json())"
-
-# Проверить подключение к SQLite
-docker-compose exec app python -c "import sqlite3; sqlite3.connect('/app/uk_management.db')"
-
-# Проверить подключение к Redis
-docker-compose exec redis redis-cli ping
-```
-
-## 🔧 Детальная настройка
-
-### Структура файлов
-
-```
-UK/
-├── Dockerfile                 # Образ приложения
-├── docker-compose.yml         # Основная конфигурация сервисов
-├── docker-compose.dev.yml     # Development конфигурация (SQLite)
-├── docker-compose.media.yml   # Override: media-service (прод)
-├── .dockerignore             # Исключения для Docker
-├── .env.example              # Единственный пример переменных окружения
-├── .env                      # Ваши переменные окружения
-├── uk_management_bot/        # Код приложения
-└── DOCKER_SETUP.md          # Этот файл
-```
-
-### Сравнение конфигураций
-
-| Аспект | Production (PostgreSQL) | Development (SQLite) |
-|--------|------------------------|---------------------|
-| **База данных** | PostgreSQL | SQLite |
-| **Сложность** | Средняя | Простая |
-| **Ресурсы** | Больше | Меньше |
-| **Производительность** | Высокая | Средняя |
-| **Масштабируемость** | Отличная | Ограниченная |
-| **Настройка** | Требует PostgreSQL | Автоматическая |
-| **Подходит для** | Production, тестирование | Разработка, демо |
-
-### Переменные окружения
-
-Основные переменные в `.env` файле:
-
-| Переменная | Описание | Обязательная |
-|------------|----------|--------------|
-| `BOT_TOKEN` | Telegram Bot Token | ✅ |
-| `ADMIN_PASSWORD` | Пароль администратора | ✅ |
-| `INVITE_SECRET` | Секрет для инвайт-токенов | ✅ |
-| `ADMIN_USER_IDS` | ID администраторов | ✅ |
-| `DATABASE_URL` | URL базы данных | ✅ (авто) |
-| `REDIS_URL` | URL Redis | ✅ (авто) |
-| `LOG_LEVEL` | Уровень логирования | ❌ |
-| `DEBUG` | Режим отладки | ❌ |
-
-## 🛠️ Управление контейнерами
-
-### Основные команды
-
-#### Production (PostgreSQL):
-```bash
-# Запуск всех сервисов
-docker-compose up -d
-
-# Остановка всех сервисов
-docker-compose down
-
-# Перезапуск приложения
-docker-compose restart app
-
-# Просмотр логов
-docker-compose logs app
-docker-compose logs postgres
-docker-compose logs redis
-```
-
-#### Development (SQLite):
-```bash
-# Запуск с SQLite
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-
-# Остановка
-docker-compose down
-
-# Перезапуск приложения
-docker-compose restart app
-
-# Просмотр логов
-docker-compose logs app
-docker-compose logs redis
-```
-
-### Общие команды:
-```bash
-# Просмотр логов в реальном времени
-docker-compose logs -f app
-
-# Вход в контейнер приложения
-docker-compose exec app bash
-
-# Проверка статуса сервисов
-docker-compose ps
-```
-
-### Обновление приложения
-
-```bash
-# Остановить сервисы
-docker-compose down
-
-# Пересобрать образ
-docker-compose build --no-cache
-
-# Запустить снова
-docker-compose up -d
-```
-
-### Резервное копирование
-
-#### Production (PostgreSQL):
-```bash
-# Создать резервную копию базы данных
-docker-compose exec postgres pg_dump -U uk_bot uk_management > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Восстановить из резервной копии
-docker-compose exec -T postgres psql -U uk_bot uk_management < backup_file.sql
-```
-
-#### Development (SQLite):
-```bash
-# Создать резервную копию SQLite файла
-cp uk_management.db backup_$(date +%Y%m%d_%H%M%S).db
-
-# Восстановить из резервной копии
-cp backup_file.db uk_management.db
-```
-
-## 🔍 Мониторинг и диагностика
-
-### Health Checks
-
-Система автоматически проверяет состояние сервисов:
-
-```bash
-# Проверить health status
-docker-compose ps
-
-# Ручная проверка health endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/health_detailed
-curl http://localhost:8000/ping
-```
-
-### Логирование
-
-```bash
-# Просмотр логов приложения
-docker-compose logs app
-
-# Просмотр логов с фильтрацией
-docker-compose logs app | grep ERROR
-docker-compose logs app | grep "UK Management Bot"
-
-# Просмотр логов базы данных (только для PostgreSQL)
-docker-compose logs postgres
-
-# Просмотр логов Redis
-docker-compose logs redis
-```
-
-### Производительность
-
-```bash
-# Статистика использования ресурсов
-docker stats
-
-# Информация о контейнерах
-docker-compose exec app python -c "
-import psutil
-print(f'CPU: {psutil.cpu_percent()}%')
-print(f'Memory: {psutil.virtual_memory().percent}%')
-"
-```
-
-## 🚨 Устранение неполадок
-
-### Частые проблемы
-
-#### 1. Бот не запускается
-
-```bash
-# Проверить логи
-docker-compose logs app
-
-# Проверить переменные окружения
-docker-compose exec app env | grep BOT_TOKEN
-
-# Проверить подключение к базе данных
-docker-compose exec app python -c "
-from uk_management_bot.database.session import engine
-print('Database connection:', engine)
-"
-```
-
-#### 2. Проблемы с базой данных
-
-**PostgreSQL:**
-```bash
-# Проверить статус PostgreSQL
-docker-compose exec postgres pg_isready -U uk_bot
-
-# Проверить логи PostgreSQL
-docker-compose logs postgres
-
-# Пересоздать базу данных (ВНИМАНИЕ: данные будут потеряны!)
-docker-compose down -v
-docker-compose up -d
-```
-
-**SQLite:**
-```bash
-# Проверить SQLite файл
-docker-compose exec app python -c "import sqlite3; sqlite3.connect('/app/uk_management.db')"
-
-# Пересоздать SQLite файл (ВНИМАНИЕ: данные будут потеряны!)
-rm uk_management.db
-docker-compose restart app
-```
-
-#### 3. Проблемы с Redis
-
-```bash
-# Проверить подключение к Redis
-docker-compose exec redis redis-cli ping
-
-# Проверить логи Redis
-docker-compose logs redis
-
-# Очистить кэш Redis
-docker-compose exec redis redis-cli FLUSHALL
-```
-
-#### 4. Проблемы с сетью
-
-```bash
-# Проверить сеть Docker
-docker network ls
-docker network inspect uk_uk-network
-
-# Проверить DNS
-docker-compose exec app nslookup postgres
-docker-compose exec app nslookup redis
-```
-
-### Отладка
-
-```bash
-# Запуск в режиме отладки
-DEBUG=true docker-compose up
-
-# Вход в контейнер для отладки
-docker-compose exec app bash
-
-# Проверка процессов в контейнере
-docker-compose exec app ps aux
-
-# Проверка сетевых соединений
-docker-compose exec app netstat -tulpn
-```
-
-## 🔒 Безопасность
-
-### Рекомендации по безопасности
-
-1. **Измените все пароли по умолчанию**
-2. **Используйте HTTPS в production**
-3. **Ограничьте доступ к портам**
-4. **Регулярно обновляйте образы**
-5. **Мониторьте логи на предмет подозрительной активности**
-
-### Production настройки
-
-Для production окружения:
-
-```bash
-# Создайте отдельный .env.production
-cp .env.example .env.production
-
-# Используйте production конфигурацию
-docker compose -f docker-compose.yml -f docker-compose.media.yml up -d  # прод; БЕЗ --remove-orphans
-```
-
-## 📚 Дополнительные ресурсы
-
-- [Docker Documentation](https://docs.docker.com/)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [PostgreSQL Docker Image](https://hub.docker.com/_/postgres)
-- [Redis Docker Image](https://hub.docker.com/_/redis)
-- [SQLite Documentation](https://www.sqlite.org/docs.html)
-
-## 🆘 Поддержка
-
-При возникновении проблем:
-
-1. Проверьте логи: `docker-compose logs`
-2. Убедитесь, что все переменные окружения настроены
-3. Проверьте подключение к интернету
-4. Обратитесь к документации проекта
-
----
-
-**Удачного использования UK Management Bot! 🚀**
+Healthcheck бота — `http://localhost:8000/health` внутри контейнера `app`.
+У `group-intake-bot` healthcheck отключён намеренно: health-сервер поднимает
+только основной бот.
+
+## Сеть и порты
+
+- Все host-порты биндятся на `127.0.0.1`; наружу система доступна только через
+  edge InfraSafe по prefix-allowlist.
+- Сеть — фиксированное имя `uk-network` (без префикса compose-проекта):
+  `docker network inspect uk-network`.
+- Контейнеры бота/API/access работают только по IPv4 (`sysctls` с
+  `disable_ipv6`) — в Узбекистане нет рабочего IPv6-egress.
+- На проде **никогда** не использовать `--remove-orphans`: в стеке есть
+  orphan-контейнеры edge/InfraSafe.

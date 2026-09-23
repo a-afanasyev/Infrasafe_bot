@@ -283,6 +283,6 @@ changed_at      TIMESTAMPTZ NOT NULL
 ## 11. Связанные документы
 
 - `docs/MATERIALS_MODULE.md` — модуль-образец по структуре.
-- `docs/TASK_15_ADDRESS_DIRECTORY.md` — справочник адресов, дворы `yards`.
+- `docs/Archive/2026-09-23-root-reports/TASK_15_ADDRESS_DIRECTORY.md` (архив) — справочник адресов, дворы `yards`.
 - Репозиторий `asset-inventory-bot` — полевой бот, `README.md` и `docs/DESIGN.md`
   описывают формат номера и хранилище.

@@ -1,6 +1,6 @@
 """
 Модели данных для MediaService
-Основано на спецификации photo.md
+Основано на спецификации docs/Archive/2026-09-23-root-reports/photo.md (архив)
 """
 
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, BigInteger, JSON, Index, text
