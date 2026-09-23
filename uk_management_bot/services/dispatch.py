@@ -151,14 +151,22 @@ def _auto_assign_enabled_sync(db=None) -> bool:
         return False
 
 
-async def _auto_assign_enabled_async(db=None) -> bool:
-    """Асинхронный аналог — то же fail-safe направление."""
+async def _auto_assign_enabled_async(db=None, session_factory=None) -> bool:
+    """Асинхронный аналог — то же fail-safe направление.
+
+    Без ``db`` флаг читается короткой сессией ``session_factory`` (по
+    умолчанию прод-``AsyncSessionLocal``), закрытой до возврата: держать
+    сессию чтения флага открытой на время диспетча и уведомления нельзя
+    (A9-P3-31 — сеть вне транзакции).
+    """
     from uk_management_bot.services.auto_manager.config import is_auto_assign_enabled
     try:
         if db is not None:
             return await is_auto_assign_enabled(db)
-        from uk_management_bot.database.session import AsyncSessionLocal
-        async with AsyncSessionLocal() as session:
+        if session_factory is None:
+            from uk_management_bot.database.session import AsyncSessionLocal
+            session_factory = AsyncSessionLocal
+        async with session_factory() as session:
             return await is_auto_assign_enabled(session)
     except Exception as e:
         logger.warning("[DISPATCH] конфиг автоназначения недоступен, считаю выключенным: %s", e)
@@ -234,7 +242,7 @@ async def auto_dispatch_new_request_async(request_number: str,
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
-    if not await _auto_assign_enabled_async(_db):
+    if not await _auto_assign_enabled_async(_db, session_factory=session_factory):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)

@@ -205,9 +205,11 @@ async def change_category_async(session_factory, request_number: str,
 
     dispatch: Optional[DispatchResult] = None
     if _needs_redispatch(outcome, new_category):
-        async with session_factory() as db:
-            dispatch = await auto_dispatch_new_request_async(
-                request_number, new_category, _db=db, session_factory=session_factory)
+        # A9-P3-31: без `_db` — флаг автоназначения читается короткой сессией
+        # фабрики и закрывается до назначения и inline-уведомления дежурному;
+        # раньше сессия чтения флага висела в транзакции на время Telegram.
+        dispatch = await auto_dispatch_new_request_async(
+            request_number, new_category, session_factory=session_factory)
 
     async with session_factory() as db:
         fresh = await _fresh_async(db, request_number)
