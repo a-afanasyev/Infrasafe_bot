@@ -1,0 +1,17 @@
+# A9-P2-20: build-args фронта площадки infrasafe.uz (105) для образа
+# ghcr.io/a-afanasyev/uk-frontend-infrasafe:sha-<full> (job images-build в ci.yml).
+#
+# В registry-режиме это ЕДИНСТВЕННЫЙ источник флагов фронта 105: Vite инлайнит
+# VITE_* в бандл на сборке, и VITE_*-строки в ~/uk/.env на хосте на такой
+# образ уже не влияют. Включили/выключили раздел — правка здесь + мерж в main.
+#
+# Формат: KEY=VALUE, значение без кавычек, пусто = флаг OFF. Набор ключей обязан
+# совпадать с ARG VITE_* в frontend/Dockerfile — держит гейт
+# tests/services/test_registry_images_ssot.py.
+VITE_BRAND=infrasafe
+VITE_BOT_USERNAME=infrasafebot
+VITE_RESOURCES_ENABLED=true
+VITE_WORK_REPORTS_ENABLED=
+# Лифты на 105 DARK (включены только на profk, 2026-09-06); платежи на 105 не подняты.
+VITE_ELEVATORS_ENABLED=
+VITE_PAYMENTS_ENABLED=

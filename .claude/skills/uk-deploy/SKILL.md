@@ -49,10 +49,10 @@ doppler run --project uk-management --config <profk|infrasafe> -- true && echo "
 
 **Единственный источник истины по набору compose-файлов — эта таблица** (A9-P1-3). RUNBOOK, PAYMENT_CONTROL и прочие документы ссылаются сюда и свои списки `-f` не ведут. КАЖДАЯ compose-команда на хосте (build/run/up/logs/ps/config) — с полным набором своей площадки, в указанном порядке, через `doppler run --`.
 
-| Площадка | Doppler `--config` | `COMPOSE` (порядок важен) | Почему |
-|---|---|---|---|
-| profk.uz | `profk` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` | profk-override (в т.ч. media-service); **payments включён на profk с 2026-09-06** — без третьего `-f` пересоздание `api` молча снимает `PAYMENT_SERVICE_URL/TOKEN`, раздел «Контроль платежей» отвечает 404/503 |
-| infrasafe.uz (105) | `infrasafe` | `-f docker-compose.yml -f docker-compose.media.yml` | media overlay; payments на 105 не поднят (нет секретов и флага) |
+| Площадка | Doppler `--config` | `COMPOSE` (порядок важен) | Почему | Registry-режим (A9-P2-20, opt-in): к `COMPOSE` дописать последним |
+|---|---|---|---|---|
+| profk.uz | `profk` | `-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml` | profk-override (в т.ч. media-service); **payments включён на profk с 2026-09-06** — без третьего `-f` пересоздание `api` молча снимает `PAYMENT_SERVICE_URL/TOKEN`, раздел «Контроль платежей» отвечает 404/503 | `-f docker-compose.registry.profk.yml` |
+| infrasafe.uz (105) | `infrasafe` | `-f docker-compose.yml -f docker-compose.media.yml` | media overlay; payments на 105 не поднят (нет секретов и флага) | `-f docker-compose.registry.infrasafe.yml` |
 
 Если на площадке включают/выключают overlay — сначала правится эта таблица, потом деплой. Гейт `uk_management_bot/tests/test_deploy_runbook_compose_ssot.py` держит: каждый overlay `docker-compose.*.yml` репо упомянут в этой таблице, а в документах деплоя нет profk-команды без payments.
 
@@ -101,6 +101,65 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 откатываться» существуют только как HEAD рабочей копии на машине, и проверяются
 через ssh. Тег ставится **после** проверки, а не вместо неё: тег на неработающей
 раскатке хуже отсутствующего — он выглядит подтверждением.
+
+### Registry-режим (A9-P2-20): прод тянет образы CI, а не собирает их на хосте
+
+**Статус: opt-in, по умолчанию ВЫКЛЮЧЕН.** Пока в `COMPOSE` площадки нет последнего `-f docker-compose.registry.<площадка>.yml` (правая колонка таблицы выше), деплой идёт по командам выше, со сборкой на хосте. Эта сборка остаётся штатным fallback'ом, пока владелец не переключит обе площадки.
+
+**Откуда берутся образы.** На каждый push в `main` job `images-build` (`.github/workflows/ci.yml`) публикует кандидатов `ghcr.io/a-afanasyev/<образ>:ci-<полный SHA>`. Job `images-promote` ставит на них тег `sha-<полный SHA>` (и плавающий `main`), когда на этом коммите зелёные ВСЕ остальные job'ы `ci.yml`. Пересборки нет, прод получает тот же манифест. Тег `sha-<SHA>` пишется один раз. При повторном прогоне CI с тем же digest promote ничего не делает. Если digest другой, promote падает и не трогает ни `sha-`, ни `:main` этого образа. В `needs` входят и тесты payment_control (`payment-tests`, `payment-migration-drift`). Образов восемь: `uk-bot` (app, group-intake-bot), `uk-api` (api, migrate), `uk-access-api`, `uk-media-service` (media-service, media-migrate), `uk-resource-api` (resource-migrate/api/worker), `uk-payment-control` (payment-migrate/api) и `uk-frontend-profk` / `uk-frontend-infrasafe`. Платформа — только `linux/amd64`.
+
+**Связь тегов:** тег раскатки `<host>-YYYY-MM-DD` → коммит X → образы `sha-X`. `UK_IMAGE_SHA` на хосте = `git rev-parse HEAD` рабочей копии, то есть compose-файлы и образы всегда из одного коммита. `:main` — только для ручного dry-run, для деплоя его не использовать. Коммиты вне `main` в GHCR не попадают, поэтому их можно раскатать только host-сборкой.
+
+⚠️ **Флаги фронта в registry-режиме берутся из репо, а не из `.env` хоста.** Vite вшивает `VITE_*` в бандл при сборке, поэтому образ фронта у каждой площадки свой, а флаги лежат в `deploy/frontend-flags/<profk|infrasafe>.args`. Включить или выключить раздел — это PR с правкой этого файла, а не правка `.env` хоста. Строки `VITE_*` в `.env` хоста влияют только на host-сборку (fallback), поэтому держите их равными файлу, пока fallback жив.
+
+**Разово на хост, до первого registry-деплоя (выполняет владелец):**
+1. Доступ к GHCR. По умолчанию пакеты, опубликованные из workflow, приватные. Есть два варианта:
+   - **A (публичные пакеты, на хосте не нужны креды):** GitHub → Packages → для каждого из 8 пакетов `uk-*` → Package settings → Change visibility → Public. Секретов в образах нет: `.env` в CI-чекауте отсутствует, а `VITE_*` — публичные флаги бандла. Но любой сможет скачать собранные образы (python-код, бандл фронта, зависимости). Код и так лежит в публичном репо, но открыть готовые артефакты — отдельное решение владельца по IP. Если сомневаетесь — вариант B.
+   - **B (оставить приватными):** classic PAT с `read:packages` в `~/.uk/ghcr-token` (chmod 600, вне репо), затем `docker login ghcr.io -u a-afanasyev --password-stdin < ~/.uk/ghcr-token`. Если deploy-аккаунт хоста уже залогинен в `ghcr.io` под `a-afanasyev` ради `infrasafe-app` (R2-15 Infrasafe), тот же PAT читает и `uk-*`. Проверка: `docker pull ghcr.io/a-afanasyev/uk-api:main`.
+   - В обоих вариантах пакеты должны быть связаны с этим репо (Package settings → Manage Actions access → репозиторий с ролью Write). Пакеты, созданные push'ем из этого workflow, связываются автоматически. Без Write `images-promote` упадёт на 403.
+2. `uname -m` = `x86_64`: других платформ CI не собирает. `docker compose version` ≥ 2.24, иначе compose не поймёт merge-теги `!reset`/`!override` в overlay'ях. На 2026-09-23 на обоих хостах 5.3.1 / x86_64.
+3. Сверить флаги фронта: `grep -E '^VITE_' .env` на хосте против `deploy/frontend-flags/<площадка>.args` в репо. Флаги несекретные, их можно печатать. Если есть расхождение, до переключения исправить `.args` PR'ом, иначе registry-фронт включит или выключит разделы.
+4. Dry-run после первого зелёного `images-promote` на `main`: `docker pull ghcr.io/a-afanasyev/uk-api:sha-$(git rev-parse HEAD)` из обновлённой рабочей копии.
+
+**Рутинный деплой в registry-режиме.** Порядок тот же, что при host-сборке (migrate до up, `--no-deps` везде). Вместо `build` здесь `pull` как префлайт: если образа нет (CI не закончился или упал), стоп ДО миграций, БД и контейнеры не тронуты.
+
+```bash
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE = набор площадки + registry-overlay (обе колонки таблицы):
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml -f docker-compose.registry.profk.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml -f docker-compose.registry.infrasafe.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
+git pull --ff-only
+export UK_IMAGE_SHA=$(git rev-parse HEAD)          # ПОЛНЫЙ SHA; без него compose падает на :?
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE pull api access-api app migrate
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE run --rm --no-deps --name uk-migrate migrate
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 api
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 access-api
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 app
+```
+
+Остальные сервисы раскатываются так же: `pull <сервисы>`, затем тот же one-shot migrate и `up` своей секции ниже. Для фронта это `pull frontend` + `up -d --no-deps frontend`. Для resource это `pull resource-migrate resource-api resource-worker`, потом `run --rm --no-deps resource-migrate` и `up`. Для media — `pull media-service`, для payments на profk — `pull payment-migrate payment-api`. `group-intake-bot` — с `--profile group-intake`. Команды `build` в этом режиме не нужны. Overlay снимает `build:` (`build: !reset null`), поэтому `docker compose build` по этим сервисам ничего не соберёт и не повесит GHCR-имя на host-сборку. Правило «migrate без пересборки всех трёх runtime-образов = петля рестартов» здесь выполняется само: `api`/`migrate` — один образ `uk-api:sha-X`, а `app`/`access-api` берутся из того же X.
+
+`ps`/`logs`/`config` в этом режиме тоже требуют `UK_IMAGE_SHA` (`:?`). В новой ssh-сессии сначала `export UK_IMAGE_SHA=$(git rev-parse HEAD)`: HEAD рабочей копии = раскатанный коммит.
+
+**Фиксация digest'ов раскатки.** Последний шаг, как и раньше, — тег, но с `UK_IMAGE_SHA`:
+
+```bash
+UK_IMAGE_SHA=<полный SHA раскатанного коммита> scripts/tag-deploy.sh <profk|infrasafe> <тот же SHA> --push
+```
+
+В тело annotated-тега добавляются строки `<образ>@sha256:…` для всех 8 образов (`docker buildx imagetools inspect … --format '{{.Manifest.Digest}}'`, нужен доступ к GHCR с машины, где ставится тег). Если `UK_IMAGE_SHA` не совпадает с коммитом тега или хотя бы один digest недоступен, тег не создаётся. Без `UK_IMAGE_SHA` скрипт работает как раньше. Сверить с хостом: `docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/a-afanasyev/uk-api:sha-<SHA>`.
+
+**Откат.** Нужно вернуть и compose-файлы, и образы одного коммита: `git checkout <предыдущий тег площадки>`, затем `export UK_IMAGE_SHA=$(git rev-parse HEAD)`, затем `pull` + `up` тех же сервисов. Если между версиями была миграция, образ со старым `EXPECTED_ALEMBIC_HEAD` не пройдёт preflight. Сначала `alembic downgrade` по `docs/ROLLBACK.md`, потом `up`. Откат на коммит ДО мержа A9-P2-20 невозможен в registry-режиме: образов `sha-*` этой схемы для него нет. Такой откат делается host-сборкой (без registry-overlay). После отката вернуть рабочую копию на ветку: `git switch main`.
+
+**Диск.** Сборки на хосте больше нет, build cache не растёт: `docker builder prune` освобождает старый. Старые `ghcr.io/a-afanasyev/uk-*` образы можно удалять, откат их перекачает из GHCR. Нельзя удалять образы, которые использует запущенный контейнер.
+
+**Fallback (break-glass: GHCR/CI недоступны, нужен коммит вне main).** Убрать registry-overlay из `COMPOSE` и деплоить командами выше, со сборкой на хосте. Флаги фронта при этом снова берутся из `.env` хоста.
 
 ### resource-api / resource-worker — отдельный осознанный шаг (не в общей пачке)
 

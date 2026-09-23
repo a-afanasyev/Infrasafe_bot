@@ -1,0 +1,81 @@
+# docker-compose.registry.profk.yml — A9-P2-20: registry-режим деплоя profk.uz.
+#
+# OPT-IN overlay. Пока его нет в наборе -f, деплой идёт как раньше (сборка на
+# хосте из рабочей копии). С ним каждый сервис, который базовый набор площадки
+# СОБИРАЕТ, вместо этого берёт образ, собранный CI из того же коммита и
+# опубликованный в GHCR ТОЛЬКО после того, как на этом коммите прошла вся CI
+# (job images-promote в .github/workflows/ci.yml переносит тег sha-<full> с
+# кандидата ci-<full>).
+#
+# Набор файлов (порядок важен, этот файл — последним; канон — таблица
+# «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md):
+#   -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml -f docker-compose.registry.profk.yml
+#
+# UK_IMAGE_SHA — ПОЛНЫЙ 40-символьный SHA коммита, из которого CI собрал образы;
+# на хосте = коммит рабочей копии: `export UK_IMAGE_SHA=$(git rev-parse HEAD)`.
+# Без него compose падает на :? (fail-fast, как у секретов). Короткий SHA не
+# найдётся в GHCR — pull упадёт до миграций.
+#
+# `build: !reset null` снимает сборку, унаследованную из базового файла: иначе
+# `docker compose build` в этом режиме молча собрал бы образ на хосте и повесил
+# на него GHCR-имя — ровно та подмена, которую режим убирает. Сервисов, которых
+# нет в наборе площадки, здесь быть не должно (overlay создал бы их из одного
+# image:) — держит гейт tests/services/test_registry_images_ssot.py.
+
+services:
+  # Бот и Group Intake — один Dockerfile (корневой), один образ.
+  app:
+    image: ghcr.io/a-afanasyev/uk-bot:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  group-intake-bot:
+    image: ghcr.io/a-afanasyev/uk-bot:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  # api и migrate — один Dockerfile.api: EXPECTED_ALEMBIC_HEAD в обоих из одной сборки.
+  api:
+    image: ghcr.io/a-afanasyev/uk-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  migrate:
+    image: ghcr.io/a-afanasyev/uk-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  access-api:
+    image: ghcr.io/a-afanasyev/uk-access-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  # Флаги VITE_* этого образа — deploy/frontend-flags/profk.args, НЕ .env хоста.
+  frontend:
+    image: ghcr.io/a-afanasyev/uk-frontend-profk:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  # Один образ на три resource-сервиса — один тег, иначе миграции из другой сборки.
+  resource-migrate:
+    image: ghcr.io/a-afanasyev/uk-resource-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  resource-api:
+    image: ghcr.io/a-afanasyev/uk-resource-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  resource-worker:
+    image: ghcr.io/a-afanasyev/uk-resource-api:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  media-service:
+    image: ghcr.io/a-afanasyev/uk-media-service:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  media-migrate:
+    image: ghcr.io/a-afanasyev/uk-media-service:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  # payments-overlay включён только на profk.
+  payment-migrate:
+    image: ghcr.io/a-afanasyev/uk-payment-control:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
+  payment-api:
+    image: ghcr.io/a-afanasyev/uk-payment-control:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null

@@ -38,6 +38,8 @@
 
 Выполнять из корня репозитория на прод-хосте. Полный набор compose-файлов площадки (`$COMPOSE` из таблицы SKILL) указывается в каждой команде. **ARCH-106: `.env` и `media_service/.env` на прод-хостах очищены от секретов — ЛЮБАЯ compose-команда без обёртки `doppler run --` упадёт на `:?`-интерполяции** (это желаемый fail-fast). `<cfg>` = `profk` или `infrasafe` — по хосту. Mapping имён media (`MEDIA_*` в Doppler → `TELEGRAM_BOT_TOKEN`/`SECRET_KEY`/`DATABASE_URL` в контейнере) и ротация webhook-секретов → `.claude/skills/uk-deploy/SKILL.md`.
 
+Ниже описан путь со сборкой на хосте. **Registry-режим (A9-P2-20, opt-in)** вместо шага 2 (`build`) делает `pull` образов `ghcr.io/a-afanasyev/uk-*:sha-<полный SHA>`, которые собрал и проверил CI. Флаги фронта в этом режиме берутся из `deploy/frontend-flags/`. Включение, разовая настройка GHCR и откат описаны в SKILL uk-deploy, раздел «Registry-режим».
+
 ```bash
 # 0. Обязательное окружение (PR-7 provision-roles интерполируется на уровне файла)
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
