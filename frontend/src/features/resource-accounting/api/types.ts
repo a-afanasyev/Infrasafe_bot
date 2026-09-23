@@ -14,9 +14,10 @@ export interface AuthUser {
 export type ResourceType = 'electricity' | 'cold_water';
 export type Unit = 'kWh' | 'm3';
 
-export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
-  electricity: 'Электроэнергия',
-  cold_water: 'Холодная вода',
+/** i18n-ключи названий ресурсов (`resourceAccounting.resourceTypes.*`). */
+export const RESOURCE_TYPE_KEYS: Record<ResourceType, string> = {
+  electricity: 'resourceAccounting.resourceTypes.electricity',
+  cold_water: 'resourceAccounting.resourceTypes.cold_water',
 };
 
 export interface ObjectType {
@@ -62,10 +63,11 @@ export interface ConsumerLink {
 
 export type MeterStatus = 'active' | 'decommissioned' | 'archived';
 
-export const METER_STATUS_LABELS: Record<string, string> = {
-  active: 'Активен',
-  decommissioned: 'Снят',
-  archived: 'Архив',
+/** i18n-ключи статусов счётчика (`resourceAccounting.meterStatus.*`). */
+export const METER_STATUS_KEYS: Record<string, string> = {
+  active: 'resourceAccounting.meterStatus.active',
+  decommissioned: 'resourceAccounting.meterStatus.decommissioned',
+  archived: 'resourceAccounting.meterStatus.archived',
 };
 
 export interface Meter {
@@ -250,3 +252,11 @@ export interface MetersSparklines {
   months: number;
   series: Record<string, SparklinePoint[]>;
 }
+
+/** i18n-ключи статусов акта сверки (`resourceAccounting.exports.status.*`). */
+export const EXPORT_STATUS_KEYS: Record<string, string> = {
+  created: 'resourceAccounting.exports.status.created',
+  generated: 'resourceAccounting.exports.status.generated',
+  sent: 'resourceAccounting.exports.status.sent',
+  cancelled: 'resourceAccounting.exports.status.cancelled',
+};

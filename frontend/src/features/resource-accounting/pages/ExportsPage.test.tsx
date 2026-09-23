@@ -110,7 +110,7 @@ describe('ExportsPage — история и действия', () => {
     expect(within(r1).getByText('CSV')).toBeInTheDocument();
     expect(within(r1).getByText('Водоканал')).toBeInTheDocument();
     expect(within(r1).getByText('Отправлен')).toBeInTheDocument();
-    expect(within(r1).getByText(/\(email\)/)).toBeInTheDocument();
+    expect(within(r1).getByText(/\(Email\)/)).toBeInTheDocument();
     expect(within(r1).queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument(); // уже отправлен
     expect(within(r2).getByText('Отменён')).toBeInTheDocument();
     expect(within(r2).getByText('Все')).toBeInTheDocument();

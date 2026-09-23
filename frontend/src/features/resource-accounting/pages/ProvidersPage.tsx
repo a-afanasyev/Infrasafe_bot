@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api/client';
 import type { Provider } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
@@ -15,6 +16,7 @@ interface ProviderForm {
 }
 
 export function ProvidersPage() {
+  const { t } = useTranslation();
   const { role } = useResourceAuth();
   const canEdit = canEnterReadings(role);
   const queryClient = useQueryClient();
@@ -40,7 +42,7 @@ export function ProvidersPage() {
       setError(null);
       invalidate();
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Ошибка сохранения'),
+    onError: (e) => setError(e instanceof ApiError ? e.message : t('resourceAccounting.common.saveError')),
   });
 
   const toggleActive = useMutation({
@@ -52,13 +54,13 @@ export function ProvidersPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Поставщики</h1>
+        <h1>{t('resourceAccounting.nav.providers')}</h1>
         {canEdit && (
           <button
             className="btn btn-primary"
             onClick={() => setForm({ id: null, name: '', contact: '' })}
           >
-            + Новый поставщик
+            {t('resourceAccounting.providers.newButton')}
           </button>
         )}
       </div>
@@ -68,14 +70,14 @@ export function ProvidersPage() {
       ) : providersQuery.isError ? (
         <ErrorState error={providersQuery.error} onRetry={() => providersQuery.refetch()} />
       ) : (providersQuery.data ?? []).length === 0 ? (
-        <Empty text="Поставщики не добавлены" />
+        <Empty text={t('resourceAccounting.providers.empty')} />
       ) : (
         <table className="table">
           <thead>
             <tr>
-              <th>Название</th>
-              <th>Контакты</th>
-              <th>Статус</th>
+              <th>{t('resourceAccounting.providers.colName')}</th>
+              <th>{t('resourceAccounting.providers.contacts')}</th>
+              <th>{t('resourceAccounting.providers.colStatus')}</th>
               {canEdit && <th />}
             </tr>
           </thead>
@@ -93,10 +95,10 @@ export function ProvidersPage() {
                       className="btn btn-sm btn-ghost"
                       onClick={() => setForm({ id: p.id, name: p.name, contact: p.contact ?? '' })}
                     >
-                      Изменить
+                      {t('resourceAccounting.providers.edit')}
                     </button>
                     <button className="btn btn-sm btn-ghost" onClick={() => toggleActive.mutate(p)}>
-                      {p.is_active ? 'В архив' : 'Вернуть'}
+                      {p.is_active ? t('resourceAccounting.providers.toArchive') : t('resourceAccounting.providers.restore')}
                     </button>
                   </td>
                 )}
@@ -108,15 +110,15 @@ export function ProvidersPage() {
 
       {form && (
         <Modal
-          title={form.id ? 'Редактировать поставщика' : 'Новый поставщик'}
+          title={form.id ? t('resourceAccounting.providers.editTitle') : t('resourceAccounting.providers.newTitle')}
           onClose={() => setForm(null)}
         >
           <label className="field">
-            <span>Название *</span>
+            <span>{t('resourceAccounting.providers.nameRequired')}</span>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <label className="field">
-            <span>Контакты</span>
+            <span>{t('resourceAccounting.providers.contacts')}</span>
             <textarea
               rows={2}
               value={form.contact}
@@ -126,14 +128,14 @@ export function ProvidersPage() {
           {error && <div className="form-error">{error}</div>}
           <div className="modal-actions">
             <button className="btn" onClick={() => setForm(null)}>
-              Отмена
+              {t('resourceAccounting.common.cancel')}
             </button>
             <button
               className="btn btn-primary"
               disabled={!form.name.trim() || save.isPending}
               onClick={() => save.mutate(form)}
             >
-              Сохранить
+              {t('resourceAccounting.common.save')}
             </button>
           </div>
         </Modal>

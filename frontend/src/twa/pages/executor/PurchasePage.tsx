@@ -34,7 +34,7 @@ export default function PurchasePage() {
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, 'Не удалось изменить статус')
+      notifyError(err, t('twa.exec.detail.statusChangeFailed'))
     },
   })
 

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import type {
   Meter,
@@ -30,10 +31,11 @@ export function MeterForm({
   initial,
   pending,
   error,
-  submitLabel = 'Сохранить',
+  submitLabel,
   onSubmit,
   onCancel,
 }: MeterFormProps) {
+  const { t } = useTranslation();
   const [meterNumber, setMeterNumber] = useState(initial?.meter_number ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [resourceType, setResourceType] = useState<ResourceType>(
@@ -107,38 +109,38 @@ export function MeterForm({
       {mode === 'create' && (
         <div className="form-row">
           <label className="field">
-            <span>Номер счётчика *</span>
+            <span>{t('resourceAccounting.meterForm.meterNumber')}</span>
             <input value={meterNumber} onChange={(e) => setMeterNumber(e.target.value)} />
           </label>
           <label className="field">
-            <span>Ресурс *</span>
+            <span>{t('resourceAccounting.meterForm.resource')}</span>
             <select
               value={resourceType}
               onChange={(e) => changeResourceType(e.target.value as ResourceType)}
             >
-              <option value="electricity">Электроэнергия (кВт·ч)</option>
-              <option value="cold_water">Холодная вода (м³)</option>
+              <option value="electricity">{t('resourceAccounting.meterForm.electricityOption')}</option>
+              <option value="cold_water">{t('resourceAccounting.meterForm.coldWaterOption')}</option>
             </select>
           </label>
         </div>
       )}
       <label className="field">
-        <span>Название *</span>
+        <span>{t('resourceAccounting.meterForm.name')}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        <span>Описание *</span>
+        <span>{t('resourceAccounting.meterForm.description')}</span>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
       </label>
       <div className="form-row">
         <label className="field">
-          <span>Место установки *</span>
+          <span>{t('resourceAccounting.meterForm.installLocation')}</span>
           <input value={installLocation} onChange={(e) => setInstallLocation(e.target.value)} />
         </label>
         <label className="field">
-          <span>Основной объект *</span>
+          <span>{t('resourceAccounting.meterForm.primaryObject')}</span>
           <select value={primaryObjectId} onChange={(e) => setPrimaryObjectId(e.target.value)}>
-            <option value="">— выберите —</option>
+            <option value="">{t('resourceAccounting.meterForm.choose')}</option>
             {objects.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
@@ -149,7 +151,7 @@ export function MeterForm({
       </div>
       <div className="form-row">
         <label className="field">
-          <span>Поставщик</span>
+          <span>{t('resourceAccounting.meterForm.provider')}</span>
           <select value={providerId ?? ''} onChange={(e) => setProviderId(e.target.value)}>
             <option value="">—</option>
             {providers
@@ -162,17 +164,17 @@ export function MeterForm({
           </select>
         </label>
         <label className="field">
-          <span>Лицевой счёт</span>
+          <span>{t('resourceAccounting.meterForm.providerAccount')}</span>
           <input value={providerAccount ?? ''} onChange={(e) => setProviderAccount(e.target.value)} />
         </label>
       </div>
       <div className="form-row">
         <label className="field">
-          <span>Серийный номер</span>
+          <span>{t('resourceAccounting.meterForm.serialNumber')}</span>
           <input value={serialNumber ?? ''} onChange={(e) => setSerialNumber(e.target.value)} />
         </label>
         <label className="field">
-          <span>Коэффициент</span>
+          <span>{t('resourceAccounting.meterForm.coefficient')}</span>
           <input
             inputMode="decimal"
             value={coefficient}
@@ -180,7 +182,7 @@ export function MeterForm({
           />
         </label>
         <label className="field">
-          <span>Разрядность</span>
+          <span>{t('resourceAccounting.meterForm.maxDigits')}</span>
           <input
             inputMode="numeric"
             value={maxDigits}
@@ -189,12 +191,12 @@ export function MeterForm({
         </label>
       </div>
       <label className="field">
-        <span>Примечание</span>
+        <span>{t('resourceAccounting.meterForm.note')}</span>
         <input value={note ?? ''} onChange={(e) => setNote(e.target.value)} />
       </label>
 
       <fieldset className="consumers-fieldset">
-        <legend>Потребители</legend>
+        <legend>{t('resourceAccounting.meterForm.consumers')}</legend>
         {consumers.map((c, idx) => (
           <div className="form-row consumer-row" key={idx}>
             <select
@@ -205,7 +207,7 @@ export function MeterForm({
                 )
               }
             >
-              <option value="">— объект —</option>
+              <option value="">{t('resourceAccounting.meterForm.chooseObject')}</option>
               {objects.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -213,7 +215,7 @@ export function MeterForm({
               ))}
             </select>
             <input
-              placeholder="Описание"
+              placeholder={t('resourceAccounting.meterForm.consumerDescription')}
               value={c.description}
               onChange={(e) =>
                 setConsumers((prev) =>
@@ -227,7 +229,7 @@ export function MeterForm({
               type="button"
               className="btn btn-sm btn-ghost"
               onClick={() => setConsumers((prev) => prev.filter((_, i) => i !== idx))}
-              aria-label="Удалить потребителя"
+              aria-label={t('resourceAccounting.meterForm.removeConsumer')}
             >
               ×
             </button>
@@ -238,17 +240,17 @@ export function MeterForm({
           className="btn btn-sm"
           onClick={() => setConsumers((prev) => [...prev, { object_id: '', description: '' }])}
         >
-          + Добавить потребителя
+          {t('resourceAccounting.meterForm.addConsumer')}
         </button>
       </fieldset>
 
       {error && <div className="form-error">{error}</div>}
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onCancel}>
-          Отмена
+          {t('resourceAccounting.common.cancel')}
         </button>
         <button type="submit" className="btn btn-primary" disabled={!requiredFilled || pending}>
-          {pending ? 'Сохранение…' : submitLabel}
+          {pending ? t('resourceAccounting.common.saving') : (submitLabel ?? t('resourceAccounting.common.save'))}
         </button>
       </div>
     </form>

@@ -137,7 +137,7 @@ describe('InspectorCreatePage — мастер', () => {
     expect(screen.getByText('2')).toBeInTheDocument() // счётчик фото в подтверждении
     await user.click(screen.getByRole('button', { name: 'Отправить заявку' }))
 
-    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledWith('Заявка создана, не загрузились фото №2'))
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledWith('Заявка создана, но не загрузились фото №2'))
     const uploads = mockPost.mock.calls.filter(([url]) => url === '/api/v2/media/upload')
     expect(uploads).toHaveLength(2)
     const form = uploads[0][1] as FormData

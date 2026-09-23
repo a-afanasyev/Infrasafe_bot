@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatMonth, formatNumber } from './format';
+import { testI18n } from '../../../test/test-utils';
+import { formatDate, formatMonth, formatNumber, toIntlLocale } from './format';
 
 describe('formatNumber', () => {
   it('обрезает хвостовые нули дробной части', () => {
@@ -34,6 +35,28 @@ describe('formatNumber', () => {
 
 describe('formatMonth', () => {
   it('YYYY-MM → название месяца', () => {
-    expect(formatMonth('2026-07')).toBe('Июль 2026');
+    expect(formatMonth('2026-07', testI18n.t)).toBe('Июль 2026');
+  });
+
+  it('название месяца берётся из локали (uz)', () => {
+    const uzT = testI18n.getFixedT('uz');
+    expect(formatMonth('2026-07', uzT)).toBe('Iyul 2026');
+  });
+
+  it('невалидный месяц возвращается как есть', () => {
+    expect(formatMonth('2026-13', testI18n.t)).toBe('2026-13');
+    expect(formatMonth('garbage', testI18n.t)).toBe('garbage');
+  });
+});
+
+describe('toIntlLocale / formatDate', () => {
+  it('uz → узбекская латиница, остальное → ru-RU', () => {
+    expect(toIntlLocale('uz')).toBe('uz-Latn-UZ');
+    expect(toIntlLocale('ru')).toBe('ru-RU');
+    expect(toIntlLocale(undefined)).toBe('ru-RU');
+  });
+
+  it('пустая дата → тире', () => {
+    expect(formatDate(null, 'uz-Latn-UZ')).toBe('—');
   });
 });

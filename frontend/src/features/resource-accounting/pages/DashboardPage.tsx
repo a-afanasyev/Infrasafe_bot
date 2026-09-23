@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { api, apiPaged } from '../api/client';
 import type { ExportItem, Meter, Period, ValidationSummary } from '../api/types';
+import { EXPORT_STATUS_KEYS } from '../api/types';
 import { Empty, ErrorState, Loading } from '../components/DataState';
 import { PeriodStatusBadge } from '../components/StatusBadge';
-import { formatDateTime, formatMonth } from '../utils/format';
+import { useResourceFormat } from '../utils/useResourceFormat';
 import { useResourceAuth } from '../auth/ResourceAuthContext';
 import { useResourceLink } from '../paths';
 
@@ -14,6 +16,8 @@ function latestPeriod(periods: Period[]): Period | null {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
+  const { formatDateTime, formatMonth } = useResourceFormat();
   const { role } = useResourceAuth();
   const link = useResourceLink();
   const isViewer = role === 'resource_viewer';
@@ -57,10 +61,10 @@ export function DashboardPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Сводка</h1>
+        <h1>{t('resourceAccounting.nav.summary')}</h1>
         {period && (
           <div className="page-header-side">
-            Последний период: <strong>{formatMonth(period.month)}</strong>{' '}
+            {t('resourceAccounting.dashboard.lastPeriod')} <strong>{formatMonth(period.month)}</strong>{' '}
             <PeriodStatusBadge status={period.status} />
           </div>
         )}
@@ -68,25 +72,25 @@ export function DashboardPage() {
 
       <div className="cards">
         <div className="card">
-          <div className="card-label">Активных счётчиков</div>
+          <div className="card-label">{t('resourceAccounting.dashboard.activeMeters')}</div>
           <div className="card-value">
             {activeMetersQuery.isLoading ? '…' : (activeMetersQuery.data ?? '—')}
           </div>
         </div>
         <div className="card">
-          <div className="card-label">Введено за период</div>
+          <div className="card-label">{t('resourceAccounting.dashboard.enteredInPeriod')}</div>
           <div className="card-value">
             {isViewer ? '—' : validationQuery.isLoading ? '…' : (v?.entered ?? '—')}
           </div>
         </div>
         <div className="card">
-          <div className="card-label">Не введено</div>
+          <div className="card-label">{t('resourceAccounting.dashboard.notEntered')}</div>
           <div className="card-value card-value-warn">
             {isViewer ? '—' : validationQuery.isLoading ? '…' : (v?.not_entered ?? '—')}
           </div>
         </div>
         <div className="card">
-          <div className="card-label">Предупреждения / ошибки</div>
+          <div className="card-label">{t('resourceAccounting.dashboard.warningsErrors')}</div>
           <div className="card-value">
             {isViewer || !v ? (
               '—'
@@ -103,14 +107,14 @@ export function DashboardPage() {
       </div>
 
       {!period && (
-        <Empty text="Периоды ещё не созданы. Создайте первый период на странице ввода показаний." />
+        <Empty text={t('resourceAccounting.dashboard.noPeriods')} />
       )}
 
       <section className="panel">
         <div className="panel-header">
-          <h2>Последние акты сверки</h2>
+          <h2>{t('resourceAccounting.dashboard.recentExports')}</h2>
           <Link to={link('/exports')} className="link">
-            Все акты →
+            {t('resourceAccounting.dashboard.allExports')}
           </Link>
         </div>
         {exportsQuery.isLoading ? (
@@ -118,15 +122,15 @@ export function DashboardPage() {
         ) : exportsQuery.isError ? (
           <ErrorState error={exportsQuery.error} onRetry={() => exportsQuery.refetch()} />
         ) : recentExports.length === 0 ? (
-          <Empty text="Актов пока нет" />
+          <Empty text={t('resourceAccounting.exports.empty')} />
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>Период</th>
-                <th>Формат</th>
-                <th>Статус</th>
-                <th>Создан</th>
+                <th>{t('resourceAccounting.exports.period')}</th>
+                <th>{t('resourceAccounting.exports.format')}</th>
+                <th>{t('resourceAccounting.exports.colStatus')}</th>
+                <th>{t('resourceAccounting.exports.colCreated')}</th>
               </tr>
             </thead>
             <tbody>
@@ -134,7 +138,7 @@ export function DashboardPage() {
                 <tr key={exp.id}>
                   <td>{exp.period_month ? formatMonth(exp.period_month) : '—'}</td>
                   <td className="mono">{exp.format.toUpperCase()}</td>
-                  <td>{exp.status}</td>
+                  <td>{EXPORT_STATUS_KEYS[exp.status] ? t(EXPORT_STATUS_KEYS[exp.status]) : exp.status}</td>
                   <td>{formatDateTime(exp.created_at)}</td>
                 </tr>
               ))}

@@ -1,3 +1,4 @@
+import { getI18n } from 'react-i18next';
 import type { ListMeta } from './types';
 
 /**
@@ -19,6 +20,17 @@ const config: ResourceApiConfig = {
 
 export function configureResourceApi(partial: Partial<ResourceApiConfig>): void {
   Object.assign(config, partial);
+}
+
+/**
+ * Текст ошибки без тела от сервера — на языке хоста (i18n-инстанс, зарегистрированный
+ * через initReactI18next). Без инстанса (изолированный тест) — нейтральное «HTTP <код>».
+ */
+function requestFailedMessage(status: number): string {
+  const i18n = getI18n();
+  return i18n?.isInitialized
+    ? i18n.t('resourceAccounting.errors.requestFailed', { status })
+    : `HTTP ${status}`;
 }
 
 export class ApiError extends Error {
@@ -87,7 +99,7 @@ async function request(path: string, options: RequestOptions): Promise<unknown> 
     const err = (payload as { error?: { code?: string; message?: string; details?: unknown } } | null)
       ?.error;
     throw new ApiError(
-      err?.message || `Ошибка запроса (${response.status})`,
+      err?.message || requestFailedMessage(response.status),
       err?.code || 'unknown_error',
       response.status,
       err?.details,

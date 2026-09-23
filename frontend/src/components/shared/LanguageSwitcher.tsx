@@ -7,7 +7,9 @@ interface Props {
 
 export default function LanguageSwitcher({ className }: Props) {
   const { i18n, t } = useTranslation()
-  const isRu = i18n.language === 'ru'
+  // resolvedLanguage: при браузерном «ru-RU» i18n.language ≠ 'ru', и первый клик
+  // переключал бы на ru вместо uz.
+  const isRu = (i18n.resolvedLanguage ?? i18n.language)?.startsWith('ru')
 
   const toggle = () => {
     i18n.changeLanguage(isRu ? 'uz' : 'ru')
