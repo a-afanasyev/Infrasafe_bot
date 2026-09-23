@@ -102,6 +102,57 @@ scripts/tag-deploy.sh <profk|infrasafe> --push     # тег на HEAD, кото�
 через ssh. Тег ставится **после** проверки, а не вместо неё: тег на неработающей
 раскатке хуже отсутствующего — он выглядит подтверждением.
 
+### Registry-режим (A9-P2-20): прод тянет образы CI, а не собирает их на хосте
+
+**Статус: opt-in, по умолчанию ВЫКЛЮЧЕН.** Пока в `COMPOSE` площадки нет последнего `-f docker-compose.registry.<площадка>.yml` (правая колонка таблицы выше), деплой идёт по командам выше, со сборкой на хосте. Эта сборка остаётся штатным fallback'ом, пока владелец не переключит обе площадки.
+
+**Откуда берутся образы.** На каждый push в `main` job `images-build` (`.github/workflows/ci.yml`) публикует кандидатов `ghcr.io/a-afanasyev/<образ>:ci-<полный SHA>`. Job `images-promote` ставит на них тег `sha-<полный SHA>` (и плавающий `main`), когда на этом коммите зелёные ВСЕ остальные job'ы `ci.yml`. Пересборки нет, прод получает тот же манифест. Образов восемь: `uk-bot` (app, group-intake-bot), `uk-api` (api, migrate), `uk-access-api`, `uk-media-service` (media-service, media-migrate), `uk-resource-api` (resource-migrate/api/worker), `uk-payment-control` (payment-migrate/api) и `uk-frontend-profk` / `uk-frontend-infrasafe`. Платформа — только `linux/amd64`.
+
+**Связь тегов:** тег раскатки `<host>-YYYY-MM-DD` → коммит X → образы `sha-X`. `UK_IMAGE_SHA` на хосте = `git rev-parse HEAD` рабочей копии, то есть compose-файлы и образы всегда из одного коммита. `:main` — только для ручного dry-run, для деплоя его не использовать. Коммиты вне `main` в GHCR не попадают, поэтому их можно раскатать только host-сборкой.
+
+⚠️ **Флаги фронта в registry-режиме берутся из репо, а не из `.env` хоста.** Vite вшивает `VITE_*` в бандл при сборке, поэтому образ фронта у каждой площадки свой, а флаги лежат в `deploy/frontend-flags/<profk|infrasafe>.args`. Включить или выключить раздел — это PR с правкой этого файла, а не правка `.env` хоста. Строки `VITE_*` в `.env` хоста влияют только на host-сборку (fallback), поэтому держите их равными файлу, пока fallback жив.
+
+**Разово на хост, до первого registry-деплоя (выполняет владелец):**
+1. Доступ к GHCR. По умолчанию пакеты, опубликованные из workflow, приватные. Есть два варианта:
+   - **A (рекомендуется, без секретов на хосте):** GitHub → Packages → для каждого из 8 пакетов `uk-*` → Package settings → Change visibility → Public. Репозиторий публичный, секретов в образах нет: `.env` в CI-чекауте отсутствует, а `VITE_*` — публичные флаги бандла.
+   - **B (оставить приватными):** classic PAT с `read:packages` в `~/.uk/ghcr-token` (chmod 600, вне репо), затем `docker login ghcr.io -u a-afanasyev --password-stdin < ~/.uk/ghcr-token`. Если deploy-аккаунт хоста уже залогинен в `ghcr.io` под `a-afanasyev` ради `infrasafe-app` (R2-15 Infrasafe), тот же PAT читает и `uk-*`. Проверка: `docker pull ghcr.io/a-afanasyev/uk-api:main`.
+   - В обоих вариантах пакеты должны быть связаны с этим репо (Package settings → Manage Actions access → репозиторий с ролью Write). Пакеты, созданные push'ем из этого workflow, связываются автоматически. Без Write `images-promote` упадёт на 403.
+2. `uname -m` = `x86_64`: других платформ CI не собирает.
+3. Сверить флаги фронта: `grep -E '^VITE_' .env` на хосте против `deploy/frontend-flags/<площадка>.args` в репо. Флаги несекретные, их можно печатать. Если есть расхождение, до переключения исправить `.args` PR'ом, иначе registry-фронт включит или выключит разделы.
+4. Dry-run после первого зелёного `images-promote` на `main`: `docker pull ghcr.io/a-afanasyev/uk-api:sha-$(git rev-parse HEAD)` из обновлённой рабочей копии.
+
+**Рутинный деплой в registry-режиме.** Порядок тот же, что при host-сборке (migrate до up, `--no-deps` везде). Вместо `build` здесь `pull` как префлайт: если образа нет (CI не закончился или упал), стоп ДО миграций, БД и контейнеры не тронуты.
+
+```bash
+# bash (в zsh нужен ${=COMPOSE}); COMPOSE = набор площадки + registry-overlay (обе колонки таблицы):
+#   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml -f docker-compose.registry.profk.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml -f docker-compose.registry.infrasafe.yml"
+: "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
+git pull --ff-only
+export UK_IMAGE_SHA=$(git rev-parse HEAD)          # ПОЛНЫЙ SHA; без него compose падает на :?
+export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE pull api access-api app migrate
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE run --rm --no-deps --name uk-migrate migrate
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 api
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 access-api
+doppler run --project uk-management --config <profk|infrasafe> -- \
+  docker compose $COMPOSE up -d --no-deps --wait --wait-timeout 120 app
+```
+
+Остальные сервисы раскатываются так же: `pull <сервисы>`, затем тот же one-shot migrate и `up` своей секции ниже. Для фронта это `pull frontend` + `up -d --no-deps frontend`. Для resource это `pull resource-migrate resource-api resource-worker`, потом `run --rm --no-deps resource-migrate` и `up`. Для media — `pull media-service`, для payments на profk — `pull payment-migrate payment-api`. `group-intake-bot` — с `--profile group-intake`. Команды `build` в этом режиме не нужны. Overlay снимает `build:` (`build: !reset null`), поэтому `docker compose build` по этим сервисам ничего не соберёт и не повесит GHCR-имя на host-сборку. Правило «migrate без пересборки всех трёх runtime-образов = петля рестартов» здесь выполняется само: `api`/`migrate` — один образ `uk-api:sha-X`, а `app`/`access-api` берутся из того же X.
+
+`ps`/`logs`/`config` в этом режиме тоже требуют `UK_IMAGE_SHA` (`:?`). В новой ssh-сессии сначала `export UK_IMAGE_SHA=$(git rev-parse HEAD)`: HEAD рабочей копии = раскатанный коммит.
+
+**Откат.** Нужно вернуть и compose-файлы, и образы одного коммита: `git checkout <предыдущий тег площадки>`, затем `export UK_IMAGE_SHA=$(git rev-parse HEAD)`, затем `pull` + `up` тех же сервисов. Если между версиями была миграция, образ со старым `EXPECTED_ALEMBIC_HEAD` не пройдёт preflight. Сначала `alembic downgrade` по `docs/ROLLBACK.md`, потом `up`. Откат на коммит ДО мержа A9-P2-20 невозможен в registry-режиме: образов `sha-*` этой схемы для него нет. Такой откат делается host-сборкой (без registry-overlay). После отката вернуть рабочую копию на ветку: `git switch main`.
+
+**Диск.** Сборки на хосте больше нет, build cache не растёт: `docker builder prune` освобождает старый. Старые `ghcr.io/a-afanasyev/uk-*` образы можно удалять, откат их перекачает из GHCR. Нельзя удалять образы, которые использует запущенный контейнер.
+
+**Fallback (break-glass: GHCR/CI недоступны, нужен коммит вне main).** Убрать registry-overlay из `COMPOSE` и деплоить командами выше, со сборкой на хосте. Флаги фронта при этом снова берутся из `.env` хоста.
+
 ### resource-api / resource-worker — отдельный осознанный шаг (не в общей пачке)
 
 **AUD6-P1-2 (с 2026-07-30): у resource-БД своя пара «владелец/раннтайм»** — зеркало PR-7 основной БД. `resource` (POSTGRES_USER, суперпользователь инстанса) — только миграции+seed через one-shot `resource-migrate`; сервисы ходят под `resource_app` (DML без DDL, пароль `RESOURCE_APP_PASSWORD` из Doppler). Из `entrypoint-api.sh` миграции убраны — старый «alembic на каждом старте api» больше не существует (A9-P3-26: сам опустевший entrypoint resource-образа удалён, uvicorn стартует прямо из CMD).
