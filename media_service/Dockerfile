@@ -1,10 +1,9 @@
 # Dockerfile для Media Service
 FROM python:3.11-slim@sha256:cdbd05fb6f457ca275ff51ce00d93d865ca0b6a25f5ffb08262d94f6835771e5
 
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# A9-P3-26: gcc убран — весь hash-locked requirements.txt (psycopg2-binary,
+# pillow, uvloop и пр.) ставится готовыми колёсами на python:3.11-slim
+# linux/amd64 и arm64; других системных пакетов сервису не нужно.
 
 # Создание пользователя для запуска приложения
 RUN useradd --create-home --shell /bin/bash media_user

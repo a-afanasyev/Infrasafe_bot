@@ -209,7 +209,7 @@ def create_app(database_url=None, service_token=None, *, initialize=False):
         rows = db.execute(_balances_ordered(_active_entries_stmt(numbers))).all()
         # Порядок тот же, что у одиночного счёта, поэтому первая встреченная
         # строка счёта — это и есть его текущий снимок.
-        current = {}
+        current: dict[str, dict] = {}
         for row, batch in rows:
             current.setdefault(row.account_number, _row_out(row, batch))
         return {"balances": current}
