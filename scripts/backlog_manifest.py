@@ -367,6 +367,8 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
+    "A9-P3-38": A(pkg="AUD9-W8", status="actionable", method="found-2026-09-23", services="bot", note="Осиротели после A9-P2-27: TemplateManager.update_template/_validate_template_updates, InviteService.mark_nonce_used"),
+    "A9-P3-37": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="CI", note="images-promote классифицирует «тега нет» по тексту stderr imagetools inspect"),
     "A9-P3-36": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Статистика смен считает исполнителей по User.active_role, а не по roles"),
     "A9-P3-35": A(pkg="AUD9-W8", status="actionable", method="found-2026-09-23", services="bot", note="Двойной канон специализаций: константы plumbing/electric, локаль plumber/electrician — пользователь видит сырое «plumbing»"),
     "A9-P3-34": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service", note="media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id)"),
@@ -399,14 +401,14 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-17 закрыт 2026-09-23 (PR #604).
     # A9-P2-18 закрыт 2026-09-23 (PR #602).
     # A9-P2-19 закрыт 2026-09-23 (PR #613).
-    "A9-P2-20": A(pkg="AUD9-W7", status="actionable", method="audit9-2026-09-22", services="все сервисы, деплой", note="CD наполовину: GHCR-образы публикуются, но прод собирает образы из рабочей копии хоста"),
+    # A9-P2-20 закрыт 2026-09-23 (PR #629).
     # A9-P2-21 закрыт 2026-09-23 (PR #619).
     # A9-P2-22 закрыт 2026-09-23 (PR #613).
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
     # A9-P2-25 закрыт 2026-09-23 (PR #612).
     "A9-P2-26": A(pkg="AUD9-W8", status="deferred", method="owner-decision-2026-09-23", services="bot, БД", note="Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает"),
-    "A9-P2-27": A(pkg="AUD9-W8", status="decision", method="review-2026-09-23", services="bot", note="Чистка: ~2,5 тыс. строк символов, живых только в тестах, вне перечня «задела» (#6 P2-40)"),
+    # A9-P2-27 закрыт 2026-09-23 (PR #630).
     # A9-P2-28 закрыт 2026-09-23 (PR #612).
     # A9-P2-29 закрыт 2026-09-23 (PR #609).
     # A9-P2-30 закрыт 2026-09-23 (PR #609).
