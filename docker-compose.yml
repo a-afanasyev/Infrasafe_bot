@@ -375,8 +375,14 @@ services:
   # База данных PostgreSQL
   postgres:
     # Используем официальный образ PostgreSQL
-    image: postgres:15-alpine
-    
+    # A9-P3-26: postgres/redis — по digest ТЕГА (multi-arch index, `docker buildx
+    # imagetools inspect <tag>`), как базы Dockerfile'ов: минор stateful-образа не
+    # должен плавать между деплоями. Замер 2026-09-23: postgres:15-alpine = 15.19,
+    # postgres:16-alpine = 16.15, redis:7-alpine = 7.4.11. Бамп digest — осознанно,
+    # отдельным изменением: смена digest = смена бинарника при следующем `up`
+    # stateful-сервиса (минорный апгрейд PG совместим по data-каталогу, но это
+    # рестарт БД — окно обслуживания). Гейт: tests/services/test_ci_supply_chain_gates.py.
+    image: postgres:15-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
     # Имя контейнера
     container_name: uk-postgres
     
@@ -439,7 +445,7 @@ services:
   # container_name: сервиса, генерирует случайное имя):
   #   docker compose run --rm --name uk-provision-roles provision-roles
   provision-roles:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
     profiles: ["tools"]
     depends_on:
       postgres:
@@ -500,8 +506,7 @@ services:
   # Redis для кэширования и rate limiting
   redis:
     # Используем официальный образ Redis
-    image: redis:7-alpine
-    
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     # Имя контейнера
     container_name: uk-redis
     
@@ -565,7 +570,7 @@ services:
   # проксирует /uk/api/resource/ → resource-api:8100; s2s uk-management-api →
   # resource-api.internal:8100 (алиас под SSRF-гард).
   resource-postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: uk-resource-postgres
     restart: unless-stopped
     environment:
@@ -586,7 +591,7 @@ services:
   # аналог provision-roles основной БД (PR-7). Идемпотентен (повтор = ротация
   # пароля). Запуск: docker compose run --rm resource-provision-roles
   resource-provision-roles:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     profiles: ["tools"]
     depends_on:
       resource-postgres:
@@ -604,7 +609,8 @@ services:
       - uk-network
 
   # AUD6-P1-2: one-shot alembic+seed под ролью-ВЛАДЕЛЬЦЕМ — аналог migrate
-  # основной БД (PR-7). Из entrypoint-api.sh миграции убраны: runtime-роль
+  # основной БД (PR-7). Из entrypoint api миграции убраны (сам entrypoint удалён
+  # по A9-P3-26 — в нём оставался пустой exec): runtime-роль
   # resource_app DDL не имеет. Запуск: docker compose run --rm resource-migrate
   resource-migrate:
     build: ./resource-accounting/backend
