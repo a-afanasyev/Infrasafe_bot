@@ -1,10 +1,11 @@
-"""A9-P2-10: домен (services), HTTP-пакет (api) и утилиты (utils) не импортируют
+"""A9-P2-10: домен (services), HTTP-пакет (api), утилиты (utils) и константы не импортируют
 UI-слой бота `uk_management_bot.keyboards`.
 
 Справочник категорий/срочности жил в `keyboards/requests.py`, и 14 сервисов +
 6 модулей api тянули его оттуда — правка клавиатуры задевала домен и HTTP-схемы.
 Справочник переехал в `utils/categories.py` (keyboards ре-экспортирует те же
 объекты). Гейт статический (AST), ловит и ленивые импорты внутри функций.
+Ограничение: динамические импорты (importlib.import_module / __import__) не ловит.
 
 ALLOWED — осознанные рёбра, где нижний слой действительно шлёт Telegram-
 клавиатуру (а не пользуется доменными данными). Список только сокращается:
@@ -17,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PKG = ROOT / "uk_management_bot"
-LOWER_LAYERS = ("services", "api", "utils")
+LOWER_LAYERS = ("services", "api", "utils", "constants")
 KEYBOARDS_PREFIX = "uk_management_bot.keyboards"
 
 # (файл, модуль) — web-передача смены шлёт получателю inline-клавиатуру ответа
@@ -67,7 +68,7 @@ def _all_hits() -> list[tuple[str, str, int]]:
 def test_lower_layers_do_not_import_keyboards():
     offenders = [h for h in _all_hits() if (h[0], h[1]) not in ALLOWED]
     assert not offenders, (
-        "services/api/utils импортируют UI-слой keyboards (доменные данные брать "
+        "services/api/utils/constants импортируют UI-слой keyboards (доменные данные брать "
         "из utils/categories.py):\n"
         + "\n".join(f"{f}:{ln} {m}" for f, m, ln in offenders)
     )
