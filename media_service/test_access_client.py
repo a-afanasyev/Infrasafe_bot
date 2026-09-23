@@ -84,19 +84,31 @@ async def test_client_sends_api_key_header():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status_code, expected", [
-    (200, True),
-    (404, True),   # A9-P3-32: 404 = файла нет, цель удаления достигнута
-    (409, False),
-    (503, False),  # транзиентный сбой — не удалён, повторить
+@pytest.mark.parametrize("delete_code, get_code, get_status, expected", [
+    (200, None, None, True),
+    # A9-P3-32: 404 уточняется GET — старый сервис отвечал 404 и на
+    # транзиентный сбой (файл откатан в active).
+    (404, 404, None, True),
+    (404, 200, "deleted", True),
+    (404, 200, "active", False),
+    (404, 500, None, False),
+    (409, None, None, False),
+    (503, None, None, False),  # транзиентный сбой — не удалён, повторить
 ])
-async def test_delete_media_classifies_status(status_code, expected):
+async def test_delete_media_classifies_status(delete_code, get_code, get_status, expected):
     import httpx
+
+    def handler(request):
+        if request.method == "DELETE":
+            return httpx.Response(delete_code, json={})
+        assert get_code is not None, "лишний GET"
+        body = {"status": get_status} if get_status else {}
+        return httpx.Response(get_code, json=body)
 
     client = MediaServiceClient(base_url="http://media:8000", api_key="testkey")
     client.client = httpx.AsyncClient(
         base_url="http://media:8000/api/v1",
-        transport=httpx.MockTransport(lambda request: httpx.Response(status_code, json={})),
+        transport=httpx.MockTransport(handler),
     )
     try:
         assert await client.delete_media(42) is expected

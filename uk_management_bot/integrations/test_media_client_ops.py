@@ -59,35 +59,58 @@ class TestArchiveAndDelete:
 
 
 class TestDeleteStatusSemantics:
-    """A9-P3-32: 404 = файла нет (цель достигнута), 409/503/5xx — не удалён."""
+    """A9-P3-32: 404 на DELETE уточняется GET /media/{id} — старый
+    медиа-сервис (до фикса) отвечал 404 и на транзиентный сбой саги, когда
+    файл откатан в active. Клиент безопасен при любом порядке деплоя."""
 
     @staticmethod
-    def _client_with(status_code):
+    def _client_with(delete_code, get_code=404, get_status=None, get_raises=False):
         import httpx
+
+        seen = []
+
+        def handler(request):
+            seen.append(request.method)
+            if request.method == "DELETE":
+                return httpx.Response(delete_code, json={})
+            if get_raises:
+                raise httpx.ConnectError("down", request=request)
+            body = {"status": get_status} if get_status is not None else {}
+            return httpx.Response(get_code, json=body)
 
         client = MediaServiceClient("http://localhost")
         client.client = httpx.AsyncClient(
             base_url="http://localhost/api/v1",
-            transport=httpx.MockTransport(
-                lambda request: httpx.Response(status_code, json={})
-            ),
+            transport=httpx.MockTransport(handler),
         )
-        return client
+        return client, seen
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("status_code, expected", [
-        (200, True),
-        (404, True),
-        (409, False),
-        (503, False),
-        (500, False),
+    @pytest.mark.parametrize("kwargs, expected, methods", [
+        # Удалён сейчас / повторно (already_deleted) — без GET.
+        ({"delete_code": 200}, True, ["DELETE"]),
+        # 404 + GET 404 — файла нет, цель достигнута.
+        ({"delete_code": 404, "get_code": 404}, True, ["DELETE", "GET"]),
+        # 404 + GET deleted — удалён раньше.
+        ({"delete_code": 404, "get_code": 200, "get_status": "deleted"}, True, ["DELETE", "GET"]),
+        # Старый медиа-сервис: 404 на транзиентный сбой, файл жив (active).
+        ({"delete_code": 404, "get_code": 200, "get_status": "active"}, False, ["DELETE", "GET"]),
+        ({"delete_code": 404, "get_code": 200, "get_status": "archived"}, False, ["DELETE", "GET"]),
+        # Уточнение не удалось — не удалён, повторить.
+        ({"delete_code": 404, "get_code": 500}, False, ["DELETE", "GET"]),
+        ({"delete_code": 404, "get_raises": True}, False, ["DELETE", "GET"]),
+        # Не удалён: конфликт / транзиентный сбой / ошибка — без GET.
+        ({"delete_code": 409}, False, ["DELETE"]),
+        ({"delete_code": 503}, False, ["DELETE"]),
+        ({"delete_code": 500}, False, ["DELETE"]),
     ])
-    async def test_delete_classifies_status(self, status_code, expected):
-        client = self._client_with(status_code)
+    async def test_delete_classifies_status(self, kwargs, expected, methods):
+        client, seen = self._client_with(**kwargs)
         try:
             assert await client.delete_media(10) is expected
         finally:
             await client.client.aclose()
+        assert seen == methods
 
 
 # ---------------------------------------------------------------------------

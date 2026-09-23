@@ -50,6 +50,8 @@ class MediaRemovalOutcome(str, Enum):
 
     DONE = "done"
     # Только delete_media: файл уже в статусе deleted — цель достигнута.
+    # deleted ≠ «сообщение удалено из Telegram»: после UNDELETABLE оно
+    # остаётся в канале (см. WARNING саги).
     ALREADY_DELETED = "already_deleted"
     NOT_FOUND = "not_found"
     # Telegram I/O не удался, резервирование откачено в active — повторить.
