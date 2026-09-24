@@ -10,6 +10,13 @@ from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramMigrateToChat,
+    TelegramNotFound,
+    TelegramUnauthorizedError,
+)
 from aiogram.types import BufferedInputFile, Message
 
 from app.models.media import MediaFile, MediaChannel, MediaTag
@@ -38,6 +45,43 @@ class ChannelNotConfiguredError(RuntimeError):
 class PublicationReservationError(RuntimeError):
     """Archive/delete не смогли зарезервировать файл: не active, или
     publication_locked=True (файл сейчас опубликован на публичном табло)."""
+
+
+class ArchiveFailedError(RuntimeError):
+    """A9-P3-34: постоянный сбой архивации — повтор не поможет.
+
+    reason — стабильный код причины для клиента (сырой текст исключения
+    Telegram наружу не отдаётся). Резервирование к моменту подъёма уже
+    откачено: файл снова active.
+    """
+
+    CHANNEL_NOT_CONFIGURED = "archive_channel_not_configured"
+    REJECTED_BY_TELEGRAM = "archive_rejected_by_telegram"
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+# Отказ Telegram по существу запроса (400/401/403/404, чат мигрировал) —
+# повтор даст то же самое. Всё прочее (сеть, RetryAfter, 5xx, таймаут,
+# неизвестное) — транзиентно, как и в delete-саге.
+_PERMANENT_TELEGRAM_ERRORS = (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNotFound,
+    TelegramUnauthorizedError,
+    TelegramMigrateToChat,
+)
+
+
+def _classify_archive_error(exc: BaseException) -> Optional[str]:
+    """Код постоянной причины сбоя архивации или None (транзиентный)."""
+    if isinstance(exc, ChannelNotConfiguredError):
+        return ArchiveFailedError.CHANNEL_NOT_CONFIGURED
+    if isinstance(exc, _PERMANENT_TELEGRAM_ERRORS):
+        return ArchiveFailedError.REJECTED_BY_TELEGRAM
+    return None
 
 
 class MediaRemovalOutcome(str, Enum):
@@ -421,9 +465,12 @@ class MediaStorageService:
         media_file = await run_sync(self._load_detached_sync, media_file_id)
         try:
             if is_archive:
-                archive_channel = await run_sync(
-                    self._resolve_channel_sync, FileCategories.ARCHIVE
-                )
+                try:
+                    archive_channel = await run_sync(
+                        self._resolve_channel_sync, FileCategories.ARCHIVE
+                    )
+                except ValueError as e:
+                    raise ChannelNotConfiguredError("archive channel not found") from e
                 await self._copy_to_archive(media_file, archive_channel, archive_reason)
                 await run_sync(
                     self._set_status_sync, media_file_id, "archived",
@@ -469,6 +516,9 @@ class MediaStorageService:
             # Компенсация: I/O не удался, байты никуда не делись —
             # возвращаем резервирование.
             await run_sync(self._set_status_sync, media_file_id, "active")
+            permanent_reason = _classify_archive_error(e) if is_archive else None
+            if permanent_reason is not None:
+                raise ArchiveFailedError(permanent_reason) from e
             return MediaRemovalOutcome.TRANSIENT_FAILURE
 
     def _reserve_sync(self, media_file_id: int, reserving_status: str) -> _Reservation:
@@ -940,12 +990,17 @@ class MediaStorageService:
     async def _copy_to_archive(
         self,
         media_file: MediaFile,
-        archive_channel: MediaChannel,
+        archive_channel: ChannelRef,
         archive_reason: Optional[str]
     ):
         """
         Копирует файл в архивный канал
         """
+        # Как в _upload_to_channel: numeric id может быть ещё не известен —
+        # тогда username; нет ни того, ни другого — конфиг-ошибка (A9-P3-34).
+        chat_id = archive_channel.channel_id or archive_channel.channel_username
+        if not chat_id:
+            raise ChannelNotConfiguredError("archive channel has neither channel_id nor username")
         try:
             # Получаем URL оригинального файла
             file_url = await self.telegram.get_file_url(media_file.telegram_file_id)
@@ -957,13 +1012,13 @@ class MediaStorageService:
             # Отправляем в архивный канал
             if media_file.is_image:
                 await self.telegram.send_photo(
-                    chat_id=archive_channel.channel_id,
+                    chat_id=chat_id,
                     photo=media_file.telegram_file_id,
                     caption=archive_caption
                 )
             elif media_file.is_video:
                 await self.telegram.send_video(
-                    chat_id=archive_channel.channel_id,
+                    chat_id=chat_id,
                     video=media_file.telegram_file_id,
                     caption=archive_caption
                 )
