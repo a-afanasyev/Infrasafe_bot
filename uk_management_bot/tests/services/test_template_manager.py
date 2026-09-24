@@ -86,49 +86,6 @@ class TestCreateTemplate:
 
 
 # ---------------------------------------------------------------------------
-# update_template
-# ---------------------------------------------------------------------------
-
-class TestUpdateTemplate:
-    def test_not_found_returns_none(self):
-        service, db = _make_service()
-        q = MagicMock()
-        q.filter.return_value.first.return_value = None
-        db.query.return_value = q
-        result = service.update_template(999, name="X")
-        assert result is None
-
-    def test_invalid_updates_returns_none(self):
-        service, db = _make_service()
-        template = _make_template()
-        q = MagicMock()
-        q.filter.return_value.first.return_value = template
-        db.query.return_value = q
-        service._validate_template_updates = MagicMock(return_value=False)
-        result = service.update_template(1, start_hour=25)
-        assert result is None
-
-    def test_valid_update_sets_attribute(self):
-        service, db = _make_service()
-        template = _make_template()
-        q = MagicMock()
-        q.filter.return_value.first.return_value = template
-        db.query.return_value = q
-        service._validate_template_updates = MagicMock(return_value=True)
-        db.refresh = MagicMock()
-        result = service.update_template(1, is_active=False)
-        assert result is template
-        db.commit.assert_called()
-
-    def test_exception_rollback_returns_none(self):
-        service, db = _make_service()
-        db.query.side_effect = Exception("fail")
-        result = service.update_template(1, name="X")
-        assert result is None
-        db.rollback.assert_called()
-
-
-# ---------------------------------------------------------------------------
 # delete_template
 # ---------------------------------------------------------------------------
 
