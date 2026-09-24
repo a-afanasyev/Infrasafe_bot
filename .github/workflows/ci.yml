@@ -1528,6 +1528,7 @@ jobs:
           accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json'
           curl_opts=(-sS --retry 4 --retry-delay 3 --retry-connrefused --connect-timeout 10 --max-time 60)
           hdrs=$(mktemp)
+          trap 'rm -f "$hdrs"' EXIT
           failed=0
           for img in $IMAGES; do
             ref="$REGISTRY/$img"
@@ -1551,9 +1552,13 @@ jobs:
             fi
             case "$code" in
               200)
-                cur=$(awk 'tolower($1) == "docker-content-digest:" { d = $2 } END { print d }' "$hdrs" | tr -d '\r')
+                # Все значения заголовка (уникальные): >1 разных — не угадываем, какой верный.
+                cur=$(awk 'tolower($1) == "docker-content-digest:" { print $2 }' "$hdrs" | tr -d '\r' | sort -u)
                 if [ -z "$cur" ]; then
                   echo "::error::$ref:sha-$SHA: 200 без Docker-Content-Digest — сверить digest нельзя"
+                  failed=1
+                elif [ "$(printf '%s\n' "$cur" | wc -l)" -ne 1 ]; then
+                  echo "::error::$ref:sha-$SHA: несколько разных Docker-Content-Digest в ответе — сверить digest нельзя, не промоутим"
                   failed=1
                 elif [ "$cur" = "$cand" ]; then
                   echo "$ref:sha-$SHA уже = $cand — no-op"
