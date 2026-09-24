@@ -226,7 +226,7 @@ class InviteService:
 
         If the nonce already exists the INSERT raises IntegrityError,
         which we translate to ValueError("Token already used").
-        This eliminates the TOCTOU race between is_nonce_used / mark_nonce_used.
+        This eliminates the TOCTOU race between a separate check and mark of the nonce.
         """
         record = InviteNonce(
             nonce=nonce,
@@ -272,16 +272,6 @@ class InviteService:
         except Exception as e:
             logger.error(f"Error logging nonce usage: {e}")
 
-    # ---- public wrappers kept for external callers ----
-
-    def mark_nonce_used(self, nonce: str, user_id: int, invite_data: Dict[str, Any]) -> None:
-        """
-        Public wrapper: atomically mark nonce as used.
-
-        Kept for backward compatibility with callers outside this service.
-        """
-        self._use_nonce_atomically(nonce, user_id, invite_data)
-    
     def _generate_nonce(self) -> str:
         """Генерирует случайный nonce для токена"""
         return secrets.token_urlsafe(16)

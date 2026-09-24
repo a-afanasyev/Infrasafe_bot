@@ -5,7 +5,7 @@ Covers:
 - generate_invite (happy path, invalid role, missing specialization)
 - generate_invite_link
 - validate_invite (happy path, expired, bad format, bad signature, used nonce)
-- is_nonce_used / mark_nonce_used
+- _is_nonce_used / _use_nonce_atomically
 """
 import pytest
 import json
@@ -170,13 +170,14 @@ class TestIsNonceUsed:
         assert self.svc._is_nonce_used("error-nonce") is True
 
 
-# ===== mark_nonce_used =====
-# Public wrapper around the atomic path: adds an InviteNonce row (UNIQUE
-# constraint enforces single-use), then writes an audit_logs entry. Does
-# NOT commit — caller owns the transaction boundary (SEC-020 refactor).
+# ===== _use_nonce_atomically =====
+# The atomic consume path behind validate_invite(mark_used_by=...): adds an
+# InviteNonce row (UNIQUE constraint enforces single-use), then writes an
+# audit_logs entry. Does NOT commit — caller owns the transaction boundary
+# (SEC-020 refactor).
 
 
-class TestMarkNonceUsed:
+class TestUseNonceAtomically:
     def setup_method(self):
         self.db = MagicMock()
         self.svc = _build_service(self.db)
@@ -185,7 +186,7 @@ class TestMarkNonceUsed:
         """Atomic consume: SAVEPOINT, add InviteNonce, flush, add AuditLog.
         No commit — caller owns the transaction boundary."""
         self.db.query.return_value.filter.return_value.first.return_value = None  # user not found
-        self.svc.mark_nonce_used("test-nonce", 100, {"role": "applicant", "created_by": 50})
+        self.svc._use_nonce_atomically("test-nonce", 100, {"role": "applicant", "created_by": 50})
         # Two adds: the InviteNonce row + the AuditLog row.
         assert self.db.add.call_count == 2
         self.db.begin_nested.assert_called_once()
@@ -199,7 +200,7 @@ class TestMarkNonceUsed:
         used') so the caller can translate it to a 409/410."""
         self.db.flush.side_effect = IntegrityError("INSERT", {}, Exception())
         with pytest.raises(ValueError, match="already used"):
-            self.svc.mark_nonce_used("test-nonce", 100, {"role": "applicant", "created_by": 50})
+            self.svc._use_nonce_atomically("test-nonce", 100, {"role": "applicant", "created_by": 50})
         self.db.rollback.assert_called_once()
 
 

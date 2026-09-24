@@ -72,50 +72,6 @@ class TemplateManager:
             logger.error(f"Ошибка создания шаблона {name}: {e}")
             return None
     
-    def update_template(
-        self,
-        template_id: int,
-        **updates
-    ) -> Optional[ShiftTemplate]:
-        """
-        Обновляет существующий шаблон
-        
-        Args:
-            template_id: ID шаблона
-            **updates: Поля для обновления
-        
-        Returns:
-            Обновленный шаблон или None
-        """
-        try:
-            template = self.db.query(ShiftTemplate).filter(
-                ShiftTemplate.id == template_id
-            ).first()
-            
-            if not template:
-                logger.warning(f"Шаблон {template_id} не найден")
-                return None
-            
-            # Валидируем обновления
-            if not self._validate_template_updates(template, **updates):
-                return None
-            
-            # Применяем обновления
-            for key, value in updates.items():
-                if hasattr(template, key):
-                    setattr(template, key, value)
-            
-            self.db.commit()
-            self.db.refresh(template)
-            
-            logger.info(f"Шаблон {template.name} обновлен")
-            return template
-            
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Ошибка обновления шаблона {template_id}: {e}")
-            return None
-    
     def delete_template(self, template_id: int, force: bool = False) -> bool:
         """
         Удаляет шаблон смены
@@ -237,48 +193,4 @@ class TemplateManager:
             
         except Exception as e:
             logger.error(f"Ошибка валидации параметров шаблона: {e}")
-            return False
-    
-    def _validate_template_updates(self, template: ShiftTemplate, **updates) -> bool:
-        """Валидирует обновления шаблона"""
-        try:
-            # Валидируем каждое обновление
-            for key, value in updates.items():
-                if key == "name":
-                    if not value or len(str(value).strip()) < 3:
-                        logger.error("Название должно содержать минимум 3 символа")
-                        return False
-                        
-                elif key == "start_hour":
-                    if not isinstance(value, int) or not (0 <= value <= 23):
-                        logger.error(f"Некорректный час начала: {value}")
-                        return False
-                        
-                elif key == "duration_hours":
-                    if not isinstance(value, int) or not (1 <= value <= 24):
-                        logger.error(f"Некорректная продолжительность: {value}")
-                        return False
-                        
-                elif key == "min_executors":
-                    if not isinstance(value, int) or value < 1:
-                        logger.error(f"Некорректное минимальное количество исполнителей: {value}")
-                        return False
-                        
-                elif key == "max_executors":
-                    if not isinstance(value, int) or value < 1:
-                        logger.error(f"Некорректное максимальное количество исполнителей: {value}")
-                        return False
-            
-            # Проверяем логические связи между полями
-            min_executors = updates.get('min_executors', template.min_executors)
-            max_executors = updates.get('max_executors', template.max_executors)
-            
-            if min_executors > max_executors:
-                logger.error("Минимальное количество исполнителей больше максимального")
-                return False
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка валидации обновлений: {e}")
             return False
