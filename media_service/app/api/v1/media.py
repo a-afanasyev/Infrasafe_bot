@@ -21,6 +21,7 @@ from app.schemas import (
 )
 from app.core.config import settings, TelegramChannels, FileCategories
 from app.services.media_storage import (
+    ArchiveFailedError,
     ChannelNotConfiguredError,
     MediaRemovalOutcome,
     PublicationReservationError,
@@ -815,6 +816,12 @@ async def update_media_tags(
         raise HTTPException(status_code=500, detail="Ошибка обновления тегов")
 
 
+_ARCHIVE_FAILURE_MESSAGES = {
+    ArchiveFailedError.CHANNEL_NOT_CONFIGURED: "Архивный канал не сконфигурирован",
+    ArchiveFailedError.REJECTED_BY_TELEGRAM: "Telegram отклонил архивацию; повтор не поможет",
+}
+
+
 @router.post("/{media_id}/archive")
 async def archive_media(
     media_id: int,
@@ -822,7 +829,12 @@ async def archive_media(
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
-    Архивация медиа-файла
+    Архивация медиа-файла. 404 — нет файла; 409 — не active / под
+    publication-lock; 503 — транзиентный сбой, повторить; 500 — постоянный
+    сбой, повтор не поможет: ``message`` начинается со стабильного кода
+    причины (``archive_channel_not_configured`` / ``archive_rejected_by_telegram``,
+    A9-P3-34).
+    Во всех неуспешных случаях файл остаётся active.
     """
     try:
         outcome = await storage_service.archive_media(
@@ -841,6 +853,13 @@ async def archive_media(
 
     except PublicationReservationError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ArchiveFailedError as e:
+        # A9-P3-34: постоянный сбой (конфиг канала / отказ Telegram) — не 503,
+        # чтобы клиент не повторял вечно. Наружу — только код причины.
+        raise HTTPException(
+            status_code=500,
+            detail=f"{e.reason}: {_ARCHIVE_FAILURE_MESSAGES[e.reason]}",
+        )
     except HTTPException:
         raise
     except Exception as e:
