@@ -367,11 +367,11 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
     "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
-    "A9-P3-38": A(pkg="AUD9-W8", status="actionable", method="found-2026-09-23", services="bot", note="Осиротели после A9-P2-27: TemplateManager.update_template/_validate_template_updates, InviteService.mark_nonce_used"),
-    "A9-P3-37": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="CI", note="images-promote классифицирует «тега нет» по тексту stderr imagetools inspect"),
-    "A9-P3-36": A(pkg="AUD9-W4", status="actionable", method="found-2026-09-23", services="bot", note="Статистика смен считает исполнителей по User.active_role, а не по roles"),
-    "A9-P3-35": A(pkg="AUD9-W8", status="actionable", method="found-2026-09-23", services="bot", note="Двойной канон специализаций: константы plumbing/electric, локаль plumber/electrician — пользователь видит сырое «plumbing»"),
-    "A9-P3-34": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="media-service", note="media archive: любое исключение → 503 «повторите», в т.ч. постоянные (400 на sendPhoto, нет channel_id)"),
+    # A9-P3-38 закрыт 2026-09-24 (PR #634).
+    # A9-P3-37 закрыт 2026-09-24 (PR #637).
+    # A9-P3-36 закрыт 2026-09-24 (PR #633).
+    # A9-P3-35 закрыт 2026-09-24 (PR #635).
+    # A9-P3-34 закрыт 2026-09-24 (PR #636).
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
