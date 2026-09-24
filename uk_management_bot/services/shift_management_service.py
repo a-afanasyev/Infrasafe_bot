@@ -169,7 +169,7 @@ class ShiftManagementService:
     def count_available_executors(self) -> int:
         return (
             self.db.query(User)
-            .filter(User.active_role == "executor", User.status == "approved")
+            .filter(legacy_role_filter("executor"), User.status == "approved")
             .count()
         )
 
@@ -217,7 +217,7 @@ class ShiftManagementService:
             )
             .join(Shift, Shift.user_id == User.id)
             .filter(
-                User.active_role == "executor",
+                legacy_role_filter("executor"),
                 Shift.start_time.between(start, end),
             )
             .group_by(User.id, User.first_name, User.last_name)
