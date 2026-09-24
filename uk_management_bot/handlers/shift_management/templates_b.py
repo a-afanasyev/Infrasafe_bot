@@ -34,8 +34,13 @@ from uk_management_bot.services.template_manager import TemplateManager
 from uk_management_bot.states.shift_management import TemplateManagementStates
 from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
+from uk_management_bot.constants.specializations import (
+    CANONICAL_SPECIALIZATIONS,
+    to_canonical_token,
+)
 
 from ._router import router
+from .shared import translate_specializations
 from .templates_a import handle_edit_templates, handle_edit_template_details
 
 logger = logging.getLogger(__name__)
@@ -51,6 +56,32 @@ logger = logging.getLogger(__name__)
 def _lang(db, telegram_id: int) -> str:
     """Язык пользователя из БД (тот же helper, что и раньше)."""
     return get_user_language(telegram_id, db)
+
+
+def _toggle_canonical(specs, specialization: str) -> list:
+    """A9-P3-35: новый список с переключённой позицией — всё в каноне.
+
+    Legacy-токены (`plumbing`, `electric`) в сохранённом списке и в callback
+    старой клавиатуры приводятся к канону, дубли схлопываются; неизвестные
+    значения сохраняются как есть.
+    """
+    target = to_canonical_token(specialization)
+    current = list(dict.fromkeys(to_canonical_token(s) for s in (specs or [])))
+    if target in current:
+        return [s for s in current if s != target]
+    return [*current, target]
+
+
+def _spec_keyboard(selected, callback_prefix: str, lang: str) -> list:
+    """Ряды кнопок канон-специализаций с отметкой выбранных."""
+    chosen = {to_canonical_token(s) for s in (selected or [])}
+    return [
+        [InlineKeyboardButton(
+            text=f"{'✅' if spec in chosen else '⭕'} {get_text(f'specializations.{spec}', language=lang)}",
+            callback_data=f"{callback_prefix}{spec}",
+        )]
+        for spec in CANONICAL_SPECIALIZATIONS
+    ]
 
 
 def _apply_create_template(db, template_name, start_hour, start_minute, duration,
@@ -95,13 +126,7 @@ def _apply_toggle_specialization(db, template_id: int, specialization: str):
     if not template:
         return None
 
-    current_specs = template.required_specializations or []
-
-    # Переключаем специализацию
-    if specialization in current_specs:
-        current_specs.remove(specialization)
-    else:
-        current_specs.append(specialization)
+    current_specs = _toggle_canonical(template.required_specializations, specialization)
 
     # Принудительно устанавливаем новое значение и помечаем поле как измененное
     ShiftManagementService(db).set_template_specializations(template_id, current_specs)
@@ -165,31 +190,18 @@ async def handle_template_create_specialization_toggle(callback: CallbackQuery, 
         data = await state.get_data()
         selected_specs = data.get('selected_specializations', [])
 
-        # Переключаем специализацию
-        if specialization in selected_specs:
-            selected_specs.remove(specialization)
-        else:
-            selected_specs.append(specialization)
+        selected_specs = _toggle_canonical(selected_specs, specialization)
 
         # Сохраняем в состоянии
         await state.update_data(selected_specializations=selected_specs)
 
         # Обновляем клавиатуру
-        from uk_management_bot.utils.constants import SPECIALIZATIONS
-        keyboard = []
-
-        for spec_key, spec_name in SPECIALIZATIONS.items():
-            is_selected = spec_key in selected_specs
-            text = f"{'✅' if is_selected else '⭕'} {spec_name}"
-            keyboard.append([InlineKeyboardButton(
-                text=text,
-                callback_data=f"template_create_spec_{spec_key}"
-            )])
+        keyboard = _spec_keyboard(selected_specs, "template_create_spec_", lang)
 
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.create_finish_button", language=lang), callback_data="template_create_finish")])
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data="template_management")])
 
-        selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else get_text("shift_management.specs_not_selected", language=lang)
+        selected_text = translate_specializations(selected_specs, lang) if selected_specs else get_text("shift_management.specs_not_selected", language=lang)
 
         try:
             await callback.message.edit_text(
@@ -235,8 +247,7 @@ async def handle_template_create_finish(callback: CallbackQuery, state: FSMConte
 
         if template:
             created_name, created_hour, created_minute, created_duration = template
-            from uk_management_bot.utils.constants import SPECIALIZATIONS
-            selected_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in selected_specs]) if selected_specs else get_text("shift_management.specializations_not_specified", language=lang)
+            selected_text = translate_specializations(selected_specs, lang) if selected_specs else get_text("shift_management.specializations_not_specified", language=lang)
             status_text = get_text("shift_management.template_status_active", language=lang)
 
             await callback.message.edit_text(
@@ -290,21 +301,11 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
             return
 
         template_name, current_specializations = template
-        from uk_management_bot.utils.constants import SPECIALIZATIONS
         not_specified = get_text("shift_management.not_specified", language=lang)
-        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specializations]) if current_specializations else not_specified
+        specializations_text = translate_specializations(current_specializations, lang) if current_specializations else not_specified
 
         # Создаем клавиатуру с доступными специализациями
-        from uk_management_bot.utils.constants import SPECIALIZATIONS
-        keyboard = []
-
-        for spec_key, spec_name in SPECIALIZATIONS.items():
-            is_selected = spec_key in current_specializations
-            text = f"{'✅' if is_selected else '⭕'} {spec_name}"
-            keyboard.append([InlineKeyboardButton(
-                text=text,
-                callback_data=f"template_spec_toggle_{template_id}_{spec_key}"
-            )])
+        keyboard = _spec_keyboard(current_specializations, f"template_spec_toggle_{template_id}_", lang)
 
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.save_button", language=lang), callback_data=f"template_spec_save_{template_id}")])
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"template_edit_{template_id}")])
@@ -349,22 +350,13 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
         template_name, current_specs = toggled
 
         # Обновляем клавиатуру
-        from uk_management_bot.utils.constants import SPECIALIZATIONS
-        keyboard = []
-
-        for spec_key, spec_name in SPECIALIZATIONS.items():
-            is_selected = spec_key in current_specs
-            text = f"{'✅' if is_selected else '⭕'} {spec_name}"
-            keyboard.append([InlineKeyboardButton(
-                text=text,
-                callback_data=f"template_spec_toggle_{template_id}_{spec_key}"
-            )])
+        keyboard = _spec_keyboard(current_specs, f"template_spec_toggle_{template_id}_", lang)
 
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.save_button", language=lang), callback_data=f"template_spec_save_{template_id}")])
         keyboard.append([InlineKeyboardButton(text=get_text("shift_management.back_button", language=lang), callback_data=f"template_edit_{template_id}")])
 
         not_specified = get_text("shift_management.not_specified", language=lang)
-        specializations_text = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in current_specs]) if current_specs else not_specified
+        specializations_text = translate_specializations(current_specs, lang) if current_specs else not_specified
 
         try:
             await callback.message.edit_text(

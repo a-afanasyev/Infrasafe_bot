@@ -16,7 +16,7 @@ from uk_management_bot.middlewares.auth import require_role
 from uk_management_bot.utils.helpers import get_user_language, get_text
 
 from ._router import router
-from .shared import _db_scope
+from .shared import _db_scope, translate_specializations
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +102,7 @@ async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, 
             
                 specialization_info = ""
                 if template.required_specializations:
-                    from uk_management_bot.utils.constants import SPECIALIZATIONS
-                    spec_names = [SPECIALIZATIONS.get(spec, spec) for spec in template.required_specializations[:2]]
-                    specialization_info = f" • {', '.join(spec_names)}"
+                    specialization_info = f" • {translate_specializations(template.required_specializations[:2], lang)}"
                     if len(template.required_specializations) > 2:
                         specialization_info += f" (+{len(template.required_specializations)-2})"
             
@@ -383,8 +381,7 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
 
             specialization_info = get_text("shift_management.specializations_not_specified", language=lang)
             if template.required_specializations:
-                from uk_management_bot.utils.constants import SPECIALIZATIONS
-                specialization_info = ", ".join([SPECIALIZATIONS.get(spec, spec) for spec in template.required_specializations])
+                specialization_info = translate_specializations(template.required_specializations, lang)
 
             description = html.escape(template.description) if template.description else get_text("shift_management.description_not_specified", language=lang)
 

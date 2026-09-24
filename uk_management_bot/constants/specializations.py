@@ -35,7 +35,7 @@ UNIVERSAL_SPECIALIZATION = "universal"
 # Legacy → канон. Значения — множества: один устаревший токен может покрывать
 # два современных (см. `hvac`).
 SPECIALIZATION_ALIASES: dict[str, frozenset[str]] = {
-    # Старые ключи из utils/constants.py и сид-шаблонов.
+    # Старые ключи (бывший legacy-набор utils/constants.py, A9-P3-35) и сид-шаблонов.
     "electric": frozenset({"electrician"}),
     "plumbing": frozenset({"plumber"}),
     "patrol": frozenset({"security"}),
@@ -106,3 +106,17 @@ def normalize_specialization(value: object, *, side: str = "have") -> set[str]:
 
 def is_canonical(value: str) -> bool:
     return value in CANONICAL_SET
+
+
+def to_canonical_token(value: str) -> str:
+    """Один канон-токен для скалярного показа/записи (A9-P3-35).
+
+    Legacy-алиас → его канон-позиция (сторона «требуется»: `hvac` → `heating`),
+    канон и `universal` — как есть (в нижнем регистре, без пробелов);
+    неизвестное значение возвращается НЕИЗМЕННЫМ — не теряем чужие данные.
+    """
+    resolved = normalize_specialization(value, side="need")
+    if resolved:
+        return next(iter(resolved))
+    token = value.strip().lower() if isinstance(value, str) else value
+    return token if token == UNIVERSAL_SPECIALIZATION else value

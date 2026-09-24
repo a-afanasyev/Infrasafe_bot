@@ -30,6 +30,7 @@ from uk_management_bot.keyboards.shifts import (
     get_pagination_inline,
 )
 from uk_management_bot.keyboards.base import get_executor_suggestion_inline
+from uk_management_bot.constants.specializations import to_canonical_token
 from uk_management_bot.database.session import run_db
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.datetime_utils import utc_now
@@ -106,9 +107,12 @@ def _loc_spec(s: str, lang: str) -> str:
 
     Неизвестный ключ get_text возвращает как есть → fallback на сырое значение.
     Общая для списка смен (end_shift_confirm) и деталей (show_shift_end_details)
-    — BUG-149 п.4: список рендерил сырые ключи, детали локализовали."""
-    t = get_text(f"specializations.{s}", language=lang)
-    return s if t == f"specializations.{s}" else t
+    — BUG-149 п.4: список рендерил сырые ключи, детали локализовали.
+    A9-P3-35: legacy-токены (`plumbing`, `electric`), которые писала клавиатура
+    шаблонов, приводятся к канону ДО поиска в локали."""
+    key = to_canonical_token(s)
+    t = get_text(f"specializations.{key}", language=lang)
+    return s if t == f"specializations.{key}" else t
 
 
 def _start_shift_unit(db, telegram_id: int) -> dict:
