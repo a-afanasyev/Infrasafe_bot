@@ -260,36 +260,3 @@ EMOJIS = {
     "edit": "✏️",
     "delete": "🗑"
 }
-
-# Специализации сотрудников
-SPECIALIZATION_ELECTRIC = "electric"
-SPECIALIZATION_PLUMBING = "plumbing"
-SPECIALIZATION_SECURITY = "security"
-SPECIALIZATION_CLEANING = "cleaning"
-SPECIALIZATION_OTHER = "other"
-
-SPECIALIZATION_HVAC = "hvac"
-SPECIALIZATION_MAINTENANCE = "maintenance"
-SPECIALIZATION_UNIVERSAL = "universal"
-
-SPECIALIZATIONS = {
-    SPECIALIZATION_ELECTRIC: "Электрика",
-    SPECIALIZATION_PLUMBING: "Сантехника", 
-    SPECIALIZATION_SECURITY: "Охрана",
-    SPECIALIZATION_CLEANING: "Уборка",
-    SPECIALIZATION_HVAC: "Отопление/Кондиционирование",
-    SPECIALIZATION_MAINTENANCE: "Техническое обслуживание",
-    SPECIALIZATION_UNIVERSAL: "Универсальный специалист",
-    SPECIALIZATION_OTHER: "Разное",
-}
-
-SPECIALIZATION_DISPLAY = {
-    SPECIALIZATION_ELECTRIC: "Электрика",
-    SPECIALIZATION_PLUMBING: "Сантехника",
-    SPECIALIZATION_SECURITY: "Охрана", 
-    SPECIALIZATION_CLEANING: "Уборка",
-    SPECIALIZATION_HVAC: "Отопление/Кондиционирование",
-    SPECIALIZATION_MAINTENANCE: "Техническое обслуживание",
-    SPECIALIZATION_UNIVERSAL: "Универсальный специалист",
-    SPECIALIZATION_OTHER: "Разное",
-}
