@@ -215,3 +215,22 @@ def test_frontend_flags_match_dockerfile_args(site: str):
     assert flags["VITE_BRAND"] == site
     step = next(w for _, name, w in _published() if name == f"uk-frontend-{site}")
     assert step["build-args"] == f"${{{{ steps.fe-args.outputs.{site} }}}}"
+
+
+def test_promote_detects_missing_tag_by_http_status_not_stderr_text():
+    """A9-P3-37: «тега sha-<sha> нет» — только по HTTP 404 registry API.
+
+    Классификация по тексту stderr `imagetools inspect` («not found|manifest
+    unknown») могла совпасть с иной формулировкой транзиентной ошибки в новой
+    версии buildx и привести к записи write-once тега.
+    """
+    step = next(
+        s for s in _ci()["jobs"]["images-promote"]["steps"] if s.get("name", "").startswith("Promote candidates")
+    )
+    script = step["run"]
+    assert not re.search(r"not found|manifest unknown", script, re.I), "классификация по тексту ошибки вернулась"
+    assert "imagetools inspect \"$ref:sha-" not in script, "существование sha-тега — через registry API, не inspect"
+    assert "%{http_code}" in script and "/manifests/sha-$SHA" in script
+    assert re.search(r"^\s*404\)", script, re.M) and re.search(r"^\s*200\)", script, re.M)
+    assert re.search(r"^\s*\*\)", script, re.M), "любой иной статус обязан ронять шаг"
+    assert "set -x" not in script and "::add-mask::$token" in script

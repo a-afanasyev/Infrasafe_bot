@@ -1512,31 +1512,64 @@ jobs:
       # на него. Повторный прогон CI на том же коммите пересобирает кандидата
       # (сборка не побайтно воспроизводима), поэтому существующий sha-тег НЕ
       # перезаписывается: тот же digest — no-op, другой — ошибка, и :main для
-      # этого образа не трогается. Ошибка inspect, отличная от «тега нет», тоже
-      # роняет шаг — иначе сетевой сбой выглядел бы как «тега нет» и вёл к
-      # перезаписи.
+      # этого образа не трогается.
+      # A9-P3-37: существование sha-тега — по HTTP-статусу registry API
+      # (GET /v2/<repo>/manifests/<tag>), а не по тексту stderr imagetools:
+      # 200 → есть (digest из Docker-Content-Digest), 404 → нет (создаём),
+      # ЛЮБОЙ другой статус или сбой curl → шаг падает. Транзиентные 5xx/429/
+      # таймауты curl повторяет сам (--retry); 404 не ретраится и не может
+      # «совпасть» с иной формулировкой ошибки в новой версии buildx.
       - name: Promote candidates (sha-tag is write-once)
         env:
           SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json'
+          curl_opts=(-sS --retry 4 --retry-delay 3 --retry-connrefused --connect-timeout 10 --max-time 60)
+          hdrs=$(mktemp)
           failed=0
           for img in $IMAGES; do
             ref="$REGISTRY/$img"
+            repo="${REGISTRY#ghcr.io/}/$img"
             cand=$(docker buildx imagetools inspect "$ref:ci-$SHA" --format '{{.Manifest.Digest}}')
-            if cur=$(docker buildx imagetools inspect "$ref:sha-$SHA" --format '{{.Manifest.Digest}}' 2>&1); then
-              if [ "$cur" = "$cand" ]; then
-                echo "$ref:sha-$SHA уже = $cand — no-op"
-              else
-                echo "::error::$ref:sha-$SHA уже указывает на $cur, кандидат ci-$SHA = $cand. sha-тег не перезаписывается; :main не тронут. Раскатывать существующий $cur или разбираться, откуда второй digest."
-                failed=1
-              fi
-              continue
-            elif ! grep -qiE 'not found|manifest unknown' <<<"$cur"; then
-              echo "::error::inspect $ref:sha-$SHA упал не по «тега нет»: $cur"
+            # Креды — через -K/-H @<(printf …) (printf — builtin): ни GITHUB_TOKEN,
+            # ни bearer не попадают в argv curl; bearer ещё и маскируется.
+            if ! token=$(curl "${curl_opts[@]}" -f -K <(printf 'user = "%s:%s"\n' "$GITHUB_ACTOR" "$GH_TOKEN") \
+                "https://ghcr.io/token?scope=repository:$repo:pull" | jq -er '.token'); then
+              echo "::error::не получен pull-токен GHCR для $repo — состояние sha-тега не проверить, не промоутим"
               failed=1
               continue
             fi
+            echo "::add-mask::$token"
+            if ! code=$(curl "${curl_opts[@]}" -o /dev/null -D "$hdrs" -w '%{http_code}' \
+                -H @<(printf 'Authorization: Bearer %s\n' "$token") -H "Accept: $accept" \
+                "https://ghcr.io/v2/$repo/manifests/sha-$SHA"); then
+              echo "::error::GET манифеста $ref:sha-$SHA: сбой curl (сеть/таймаут после ретраев) — состояние тега неизвестно, не промоутим"
+              failed=1
+              continue
+            fi
+            case "$code" in
+              200)
+                cur=$(awk 'tolower($1) == "docker-content-digest:" { d = $2 } END { print d }' "$hdrs" | tr -d '\r')
+                if [ -z "$cur" ]; then
+                  echo "::error::$ref:sha-$SHA: 200 без Docker-Content-Digest — сверить digest нельзя"
+                  failed=1
+                elif [ "$cur" = "$cand" ]; then
+                  echo "$ref:sha-$SHA уже = $cand — no-op"
+                else
+                  echo "::error::$ref:sha-$SHA уже указывает на $cur, кандидат ci-$SHA = $cand. sha-тег не перезаписывается; :main не тронут. Раскатывать существующий $cur или разбираться, откуда второй digest."
+                  failed=1
+                fi
+                continue
+                ;;
+              404) ;;
+              *)
+                echo "::error::GET манифеста $ref:sha-$SHA → HTTP $code (не 200/404) — состояние тега неизвестно, не промоутим"
+                failed=1
+                continue
+                ;;
+            esac
             docker buildx imagetools create --tag "$ref:sha-$SHA" "$ref@$cand"
             docker buildx imagetools create --tag "$ref:main" "$ref@$cand"
             echo "$ref:sha-$SHA ← $cand"
