@@ -996,11 +996,11 @@ class MediaStorageService:
         """
         Копирует файл в архивный канал
         """
-        # Как в _upload_to_channel: numeric id может быть ещё не известен —
-        # тогда username; нет ни того, ни другого — конфиг-ошибка (A9-P3-34).
-        chat_id = archive_channel.channel_id or archive_channel.channel_username
+        # A9-P3-34: без numeric channel_id архивный канал не сконфигурирован —
+        # постоянная ошибка (по username не шлём).
+        chat_id = archive_channel.channel_id
         if not chat_id:
-            raise ChannelNotConfiguredError("archive channel has neither channel_id nor username")
+            raise ChannelNotConfiguredError("archive channel has no channel_id")
         try:
             # Получаем URL оригинального файла
             file_url = await self.telegram.get_file_url(media_file.telegram_file_id)

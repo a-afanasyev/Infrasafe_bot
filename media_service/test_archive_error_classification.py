@@ -188,18 +188,21 @@ async def test_archive_channel_without_id_and_username_is_permanent():
 
 
 @pytest.mark.asyncio
-async def test_archive_channel_without_id_falls_back_to_username():
-    """Как и загрузка (_upload_to_channel): numeric id ещё не известен —
-    шлём по username, а не chat_id=None."""
-    from app.services.media_storage import MediaRemovalOutcome
+async def test_archive_channel_without_id_but_with_username_is_permanent():
+    """channel_id=NULL — конфиг-ошибка, даже если username задан: по username
+    не шлём (решение по A9-P3-34)."""
+    from app.services.media_storage import ArchiveFailedError
 
     _create_archive_channel(channel_id=None, channel_username="@archive_test")
     svc = _service(FakeTelegram())
     media_id = _create_media_file()
 
-    assert await svc.archive_media(media_id) is MediaRemovalOutcome.DONE
-    assert svc.telegram.send_photo_calls[0]["chat_id"] == "@archive_test"
-    assert _status(media_id) == "archived"
+    with pytest.raises(ArchiveFailedError) as ei:
+        await svc.archive_media(media_id)
+
+    assert ei.value.reason == "archive_channel_not_configured"
+    assert svc.telegram.send_photo_calls == []
+    assert _status(media_id) == "active"
 
 
 @pytest.mark.asyncio
@@ -256,6 +259,19 @@ def test_archive_endpoint_channel_not_configured_returns_500_with_code():
 
     assert resp.status_code == 500, resp.text
     assert resp.json()["message"].startswith("archive_channel_not_configured:")
+    assert _status(media_id) == "active"
+
+
+def test_archive_endpoint_channel_without_id_returns_500_with_code():
+    _create_archive_channel(channel_id=None, channel_username="@archive_test")
+    media_id = _create_media_file()
+    svc = _service(FakeTelegram())
+
+    resp = _post_archive(svc, media_id)
+
+    assert resp.status_code == 500, resp.text
+    assert resp.json()["message"].startswith("archive_channel_not_configured:")
+    assert svc.telegram.send_photo_calls == []
     assert _status(media_id) == "active"
 
 
