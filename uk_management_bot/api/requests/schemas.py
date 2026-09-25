@@ -309,6 +309,14 @@ class CommentBody(BaseModel):
     is_internal: bool = False
 
 
+class ProblemBody(BaseModel):
+    """«Проблема» исполнителя: шаблон обязателен, текст — по желанию."""
+    model_config = ConfigDict(extra="forbid")
+
+    template: Literal["no_material", "not_let_in", "resident_absent", "need_master"]
+    text: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+
+
 class CommentOut(BaseModel):
     id: int
     user_id: int

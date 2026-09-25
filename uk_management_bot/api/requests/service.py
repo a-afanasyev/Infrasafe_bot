@@ -513,11 +513,12 @@ async def create_comment(
     user_id: int,
     text: str,
     is_internal: bool,
+    comment_type: str = "clarification",
 ) -> RequestComment:
     comment = RequestComment(
         request_number=request_number,
         user_id=user_id,
-        comment_type="clarification",
+        comment_type=comment_type,
         comment_text=text,
         is_internal=is_internal,
         media_files=[],

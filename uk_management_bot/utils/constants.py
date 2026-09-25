@@ -99,6 +99,10 @@ COMMENT_TYPE_REPORT = "report"
 COMMENT_TYPE_GENERAL = "general"
 # Смена категории менеджером: запись в историю заявки «Категория: A → B»
 COMMENT_TYPE_CATEGORY_CHANGE = "category_change"
+# «Проблема» исполнителя (простой режим, API): шаблон + необязательный текст.
+# Не входит в COMMENT_TYPES — это список типов, которые житель/исполнитель
+# выбирает кнопкой в боте; «Проблему» пишет только API-эндпоинт.
+COMMENT_TYPE_PROBLEM = "problem"
 COMMENT_TYPES = [COMMENT_TYPE_STATUS_CHANGE, COMMENT_TYPE_CLARIFICATION, COMMENT_TYPE_PURCHASE, COMMENT_TYPE_REPORT, COMMENT_TYPE_GENERAL, COMMENT_TYPE_CATEGORY_CHANGE]
 # AuditLog.action для смены категории (остальные переходы — request_status_changed)
 AUDIT_ACTION_REQUEST_CATEGORY_CHANGED = "request_category_changed"
