@@ -242,12 +242,34 @@ async def can_upload_completion_async(db: AsyncSession, user, request) -> bool:
     исполнителя, и назначенный исполнитель, сам создавший заявку, иначе
     получил бы причину «owner» и отказ.
     """
-    probe = SimpleNamespace(
+    reason = await request_access_reason_async(db, user, _staff_probe(request))
+    return reason in COMPLETION_UPLOAD_REASONS
+
+
+def _staff_probe(request) -> SimpleNamespace:
+    """Заявка без фактов владельца и квартиры: канон проверяет владельца РАНЬШЕ
+    исполнителя, и назначенный исполнитель, сам создавший заявку, иначе
+    получил бы причину «owner»."""
+    return SimpleNamespace(
         request_number=request.request_number,
         user_id=None,
         executor_id=getattr(request, "executor_id", None),
         status=getattr(request, "status", "") or "",
         apartment_id=None,
     )
-    reason = await request_access_reason_async(db, user, probe)
-    return reason in COMPLETION_UPLOAD_REASONS
+
+
+# Внутренние записи истории (is_internal: смена категории, «Проблема»
+# исполнителя) — только сотрудникам ЭТОЙ заявки: менеджеру и её исполнителю
+# (решение владельца 2026-09-25). Житель-владелец и сосед их не видят.
+INTERNAL_COMMENT_REASONS = COMPLETION_UPLOAD_REASONS
+
+
+async def can_see_internal_comments_async(db: AsyncSession, user, request) -> bool:
+    reason = await request_access_reason_async(db, user, _staff_probe(request))
+    return reason in INTERNAL_COMMENT_REASONS
+
+
+def can_see_internal_comments_sync(db: Session, user, request) -> bool:
+    """Синхронный близнец для бот-истории комментариев."""
+    return request_access_reason_sync(db, user, _staff_probe(request)) in INTERNAL_COMMENT_REASONS

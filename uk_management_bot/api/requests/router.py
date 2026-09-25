@@ -40,6 +40,7 @@ from uk_management_bot.api.requests.schemas import (
     CommentBody, CommentOut,
 )
 from uk_management_bot.services.category_change import change_category_async
+from uk_management_bot.services.request_access import can_see_internal_comments_async
 from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
@@ -805,13 +806,18 @@ async def get_comments(
     user: User = Depends(get_current_user),
 ):
     # Access check (owner, executor, manager, apartment resident for acceptance)
-    await check_request_access(request_number, db, user)
+    req = await check_request_access(request_number, db, user)
 
+    # Внутренние записи (смена категории, «Проблема») — сотрудникам заявки:
+    # менеджеру/админу и исполнителю ЭТОЙ заявки; житель их не видит.
     user_roles = get_user_roles(user)
-    is_manager = any(r in user_roles for r in ["manager", "admin"])
+    include_internal = (
+        any(r in user_roles for r in ["manager", "admin"])
+        or await can_see_internal_comments_async(db, user, req)
+    )
 
     return await svc.comments_for(
-        db, request_number=request_number, include_internal=is_manager
+        db, request_number=request_number, include_internal=include_internal
     )
 
 

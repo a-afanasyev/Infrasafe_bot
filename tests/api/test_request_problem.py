@@ -75,7 +75,7 @@ async def test_problem_adds_executor_comment_and_notifies(act_as, world, db_sess
     body = r.json()
     assert body["comment_type"] == "problem"
     assert body["user_id"] == 51
-    assert body["is_internal"] is False
+    assert body["is_internal"] is True  # решение владельца: жителю не видна
     assert body["comment_text"] == "Не пустили\nзвонил дважды"
 
     rows = await _comments(db_session_factory)
@@ -207,3 +207,36 @@ def test_schema_templates_match_service_canon():
 
     assert set(get_args(ProblemBody.model_fields["template"].annotation)) == set(
         problem.PROBLEM_TEMPLATES)
+
+
+# ── видимость: «Проблему» видят только сотрудники заявки ───────────────
+
+
+@pytest_asyncio.fixture
+async def resident_request(db_session_factory, resident_user):
+    """Та же заявка, но её заявитель — житель (не менеджер)."""
+    async with db_session_factory() as s:
+        (await s.get(Request, NUMBER)).user_id = resident_user.id
+        await s.commit()
+    return resident_user
+
+
+@pytest.mark.asyncio
+async def test_problem_visible_to_staff_not_to_resident(act_as, world, manager_user,
+                                                        resident_request):
+    client = await act_as(51)
+    assert (await client.post(URL, json={"template": "need_master"})).status_code == 201
+    comments_url = f"/api/v2/requests/{NUMBER}/comments"
+
+    def types(r):
+        assert r.status_code == 200, r.text
+        return [c["comment_type"] for c in r.json()]
+
+    client = await act_as(resident_request.id)
+    assert types(await client.get(comments_url)) == []
+
+    client = await act_as(manager_user.id)
+    assert types(await client.get(comments_url)) == ["problem"]
+
+    client = await act_as(51)  # назначенный исполнитель видит свою запись
+    assert types(await client.get(comments_url)) == ["problem"]

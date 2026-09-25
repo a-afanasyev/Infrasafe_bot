@@ -132,7 +132,9 @@ async def report_problem(
         request_number=request_number,
         user_id=user.id,
         text=problem_comment_text(body.template, body.text),
-        is_internal=False,
+        # Решение владельца: «Проблему» видят только сотрудники заявки
+        # (менеджер, её исполнитель), житель — нет.
+        is_internal=True,
         comment_type=COMMENT_TYPE_PROBLEM,
     )
     background.add_task(
