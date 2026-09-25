@@ -94,6 +94,29 @@ async def test_problem_text_is_optional(act_as, world, db_session_factory):
 
 
 @pytest.mark.asyncio
+async def test_problem_other_with_text(act_as, world, db_session_factory):
+    """«Другое» — проблема своими словами: метка + текст исполнителя."""
+    client = await act_as(51)
+    r = await client.post(URL, json={"template": "other", "text": "  Протекает крыша  "})
+    assert r.status_code == 201, r.text
+    assert r.json()["comment_text"] == "Другое\nПротекает крыша"
+    world.assert_awaited_once_with(NUMBER, 51, "other", "  Протекает крыша  ")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [
+    {"template": "other"},
+    {"template": "other", "text": None},
+    {"template": "other", "text": "   \n "},
+])
+async def test_problem_other_without_text_is_422(act_as, world, db_session_factory, payload):
+    client = await act_as(51)
+    assert (await client.post(URL, json=payload)).status_code == 422
+    assert await _comments(db_session_factory) == []
+    world.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_problem_on_foreign_request_is_403(act_as, world, db_session_factory):
     client = await act_as(52)
     r = await client.post(URL, json={"template": "need_master"})
@@ -176,6 +199,15 @@ async def test_notify_managers_in_their_language_escaped(db_session, db_session_
     assert "&lt;b&gt;дверь&lt;/b&gt;" in ru and "<b>дверь</b>" not in ru
     assert "&lt;Тест&gt;" in ru
     assert all(kw.get("parse_mode") == "HTML" for _, _, kw in sent)
+
+
+def test_manager_text_for_other_has_label_and_escaped_text():
+    for lang, label in (("ru", "Другое"), ("uz", "Boshqa")):
+        text = problem.render_manager_text(
+            lang, request_number=NUMBER, executor="Иван", address="ул. 1",
+            template="other", text="<i>крыша</i> течёт")
+        assert label in text
+        assert "&lt;i&gt;крыша&lt;/i&gt; течёт" in text and "<i>" not in text
 
 
 @pytest.mark.asyncio

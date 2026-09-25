@@ -2477,7 +2477,8 @@
       "no_material": "Нет материала",
       "not_let_in": "Не пустили",
       "resident_absent": "Жителя нет дома",
-      "need_master": "Нужен мастер"
+      "need_master": "Нужен мастер",
+      "other": "Другое"
     }
   },
   "document_types": {

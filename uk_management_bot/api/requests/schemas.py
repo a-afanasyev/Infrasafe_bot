@@ -339,11 +339,19 @@ class CommentBody(BaseModel):
 
 
 class ProblemBody(BaseModel):
-    """«Проблема» исполнителя: шаблон обязателен, текст — по желанию."""
+    """«Проблема» исполнителя: шаблон обязателен, текст — по желанию; для `other` текст обязателен."""
     model_config = ConfigDict(extra="forbid")
 
-    template: Literal["no_material", "not_let_in", "resident_absent", "need_master"]
+    template: Literal["no_material", "not_let_in", "resident_absent", "need_master", "other"]
     text: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+
+    @model_validator(mode="after")
+    def _other_needs_text(self) -> "ProblemBody":
+        # «Другое» (решение владельца: проблема = комментарий текстом) без
+        # текста ничего не сообщает менеджеру.
+        if self.template == "other" and not (self.text or "").strip():
+            raise ValueError("text is required for template 'other'")
+        return self
 
 
 class CommentOut(BaseModel):

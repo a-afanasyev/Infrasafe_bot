@@ -2,7 +2,8 @@
 
 Решение владельца (план «Простой режим исполнителя»): статус заявки не
 меняется, менеджер получает уведомление. Шаблоны — `PROBLEM_TEMPLATES`,
-подписи — в локалях бота (`notifications.executor_problem.*`).
+подписи — в локалях бота (`notifications.executor_problem.*`). `other` —
+«Другое»: проблема своими словами, текст обязателен (проверяет схема API).
 
 Хранение без миграции: `RequestComment` с `comment_type="problem"`, текст —
 подпись шаблона (RU, язык хранения системных записей истории) и через перевод
@@ -20,7 +21,7 @@ from typing import Optional
 
 from uk_management_bot.utils.helpers import get_text
 
-PROBLEM_TEMPLATES = ("no_material", "not_let_in", "resident_absent", "need_master")
+PROBLEM_TEMPLATES = ("no_material", "not_let_in", "resident_absent", "need_master", "other")
 
 _KEY_PREFIX = "notifications.executor_problem"
 # Хранимый текст комментария — на языке системных записей истории.

@@ -80,4 +80,23 @@ describe('downscaleImage', () => {
     const original = makeFile(13_388_711)
     expect(await downscaleImage(original)).toBe(original)
   })
+
+  it('createImageBitmap, где есть: без data: URL, до maxDimension, bitmap освобождается', async () => {
+    const close = vi.fn()
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 4000, height: 3000, close }))
+    const readSpy = vi.spyOn(FileReader.prototype, 'readAsDataURL')
+    const draw = vi.fn()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: draw } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) => cb(new Blob([new Uint8Array(1)], { type: 'image/jpeg' })))
+    vi.spyOn(Blob.prototype, 'size', 'get').mockReturnValue(300_000)
+    try {
+      const out = await downscaleImage(makeFile(13_388_711), { maxDimension: 1280 })
+      expect(out.size).toBe(300_000)
+      expect(draw).toHaveBeenCalledWith(expect.anything(), 0, 0, 1280, 960)
+      expect(close).toHaveBeenCalled()
+      expect(readSpy).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

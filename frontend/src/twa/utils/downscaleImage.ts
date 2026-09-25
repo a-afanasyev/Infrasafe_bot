@@ -43,18 +43,52 @@ function readAsDataUrl(file: File): Promise<string> {
   })
 }
 
+export interface DownscaleOptions {
+  /** Максимальная сторона результата (по умолчанию MAX_DIMENSION). */
+  maxDimension?: number
+  /** Файлы не больше этого размера отдаются как есть (по умолчанию COMPRESS_THRESHOLD_BYTES). */
+  thresholdBytes?: number
+}
+
+interface Decoded {
+  source: CanvasImageSource
+  width: number
+  height: number
+  release: () => void
+}
+
+/**
+ * Декодирование: createImageBitmap, где он есть (без data: URL-копии всего
+ * файла в памяти — на дешёвом Android это разница между «сжалось» и
+ * «вкладку убило»), иначе прежний путь FileReader → Image.
+ */
+async function decode(file: File): Promise<Decoded> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file)
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close?.() }
+    } catch {
+      /* формат не поддержан createImageBitmap — пробуем через <img> */
+    }
+  }
+  // FileReader + data: URL, а не URL.createObjectURL: тот же CSP-запрет на
+  // blob: в /uk/*, из-за которого превью в PhotoUploader читаются через
+  // FileReader (см. комментарий там).
+  const img = await loadImage(await readAsDataUrl(file))
+  return { source: img, width: img.width, height: img.height, release: () => undefined }
+}
+
 /** Вернуть уменьшенную копию изображения либо исходный файл, если сжатие не
  *  требуется или не удалось. Никогда не бросает. */
-export async function downscaleImage(file: File): Promise<File> {
+export async function downscaleImage(file: File, options: DownscaleOptions = {}): Promise<File> {
+  const maxDimension = options.maxDimension ?? MAX_DIMENSION
+  const thresholdBytes = options.thresholdBytes ?? COMPRESS_THRESHOLD_BYTES
   if (!file.type.startsWith('image/')) return file
-  if (file.size <= COMPRESS_THRESHOLD_BYTES) return file
+  if (file.size <= thresholdBytes) return file
 
   try {
-    // FileReader + data: URL, а не URL.createObjectURL: тот же CSP-запрет на
-    // blob: в /uk/*, из-за которого превью в PhotoUploader читаются через
-    // FileReader (см. комментарий там).
-    const img = await loadImage(await readAsDataUrl(file))
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height))
+    const img = await decode(file)
+    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height))
     const width = Math.max(1, Math.round(img.width * scale))
     const height = Math.max(1, Math.round(img.height * scale))
 
@@ -62,8 +96,12 @@ export async function downscaleImage(file: File): Promise<File> {
     canvas.width = width
     canvas.height = height
     const ctx = canvas.getContext('2d')
-    if (!ctx) return file
-    ctx.drawImage(img, 0, 0, width, height)
+    if (!ctx) {
+      img.release()
+      return file
+    }
+    ctx.drawImage(img.source, 0, 0, width, height)
+    img.release()
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
