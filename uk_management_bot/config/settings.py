@@ -93,7 +93,7 @@ class Settings:
     ]
 
     # Languages
-    SUPPORTED_LANGUAGES = ["ru", "uz"]
+    SUPPORTED_LANGUAGES = ["ru", "uz", "uz_cyrl"]
 
     def __init__(self) -> None:
         # Секции инициализации вызываются строго по порядку: внутри них живут

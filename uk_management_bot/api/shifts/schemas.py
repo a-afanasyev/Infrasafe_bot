@@ -3,6 +3,7 @@ from typing import Optional, Literal
 from datetime import datetime, date as date_type, timezone
 import json
 
+from uk_management_bot.api.profile.router import ALLOWED_LANGUAGES
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.constants.specializations import (
     CANONICAL_SPECIALIZATIONS,
@@ -78,6 +79,10 @@ class EmployeeBrief(BaseModel):
     roles: list[str] = []  # parsed from User.roles (JSON) — нужен для бейджа роли в очереди
     # Сотрудник заблокировал бота — бейдж в карточке, доставка ему невозможна.
     bot_blocked: bool = False
+    # Простой режим исполнителя в TWA (включает менеджер).
+    simple_mode: bool = False
+    # Язык профиля (ru / uz / uz_cyrl) — меняет сам пользователь или менеджер.
+    language: str = "ru"
 
     model_config = {"from_attributes": True}
 
@@ -97,6 +102,8 @@ class EmployeeBrief(BaseModel):
                 "specialization": getattr(values, "specialization", None),
                 "roles": getattr(values, "roles", None),
                 "bot_blocked": getattr(values, "bot_blocked_at", None) is not None,
+                "simple_mode": getattr(values, "simple_mode", False) is True,
+                "language": getattr(values, "language", None) or "ru",
             }
         if isinstance(values, dict):
             # Спецификации: JSON-массив / CSV / скаляр → список (порядок сохранён).
@@ -344,6 +351,28 @@ class CreateInviteResponse(BaseModel):
 class MeterEntryToggleRequest(BaseModel):
     """Выдать/снять роль-капабилити контролёра показаний (resource_meter_entry)."""
     enabled: bool
+
+
+class SimpleModeToggleRequest(BaseModel):
+    """Включить/выключить сотруднику простой режим исполнителя в TWA."""
+    enabled: bool
+
+    model_config = {"extra": "forbid"}
+
+
+class EmployeeLanguageRequest(BaseModel):
+    """Сменить сотруднику язык профиля (бот и Mini App)."""
+    language: str
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("language")
+    @classmethod
+    def _supported(cls, v: str) -> str:
+        # Тот же набор, что у PATCH /profile — один источник.
+        if v not in ALLOWED_LANGUAGES:
+            raise ValueError(f"language must be one of: {sorted(ALLOWED_LANGUAGES)}")
+        return v
 
 
 class UpdateTemplateBody(BaseModel):

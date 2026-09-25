@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, Boolean, String, DateTime, Text, ForeignKey, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -32,6 +32,10 @@ class User(Base):
     # my_chat_member kicked/member (handlers/bot_membership.py) и вердикт
     # доставки запроса номера (api/users/phone_request.py). NULL = не заблокирован.
     bot_blocked_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Простой режим исполнителя (TWA): включает менеджер конкретному человеку,
+    # старая панель живёт параллельно. Сам исполнитель флаг не меняет.
+    simple_mode = Column(Boolean, nullable=False, server_default=text("false"), default=False)
     
     # Специализация сотрудника (для исполнителей/менеджеров):
     # JSON строка с массивом специализаций: ["electrician", "plumber", "security"]

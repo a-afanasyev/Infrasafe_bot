@@ -82,8 +82,8 @@ def get_language_choice_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     """Клавиатура для выбора языка"""
     builder = InlineKeyboardBuilder()
     
-    # Кнопки языков с учетом текущего языка
-    if language == "uz":
+    # Кнопки языков с учетом текущего языка (uz_cyrl — тот же узбекский)
+    if language in ("uz", "uz_cyrl"):
         builder.add(InlineKeyboardButton(
             text=get_text("profile.keyboards.lang_russian", language=language),
             callback_data="set_language_ru"

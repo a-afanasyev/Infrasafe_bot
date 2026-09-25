@@ -21,7 +21,9 @@ class TestProfileConstants:
     def test_allowed_languages(self):
         assert "ru" in ALLOWED_LANGUAGES
         assert "uz" in ALLOWED_LANGUAGES
-        assert len(ALLOWED_LANGUAGES) == 2
+        # Простой режим исполнителя: узбекская кириллица — отдельный язык профиля.
+        assert "uz_cyrl" in ALLOWED_LANGUAGES
+        assert len(ALLOWED_LANGUAGES) == 3
 
 
 # ═══════════════════════ ProfileOut ═══════════════════════

@@ -5,6 +5,10 @@ import { twaClient } from '../twaClient'
 
 const SUPPORTED = ['ru', 'uz'] as const
 
+// Язык профиля без своей фронтовой локали → ближайшая существующая.
+// uz_cyrl (узбекская кириллица) показываем латиницей, пока нет перевода.
+const FALLBACKS: Record<string, string> = { uz_cyrl: 'uz' }
+
 interface ProfileResponse {
   language?: string | null
 }
@@ -23,7 +27,8 @@ export function useProfileLanguage() {
     queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
     staleTime: 60_000,
   })
-  const lang = query.data?.language
+  const profileLang = query.data?.language
+  const lang = profileLang ? (FALLBACKS[profileLang] ?? profileLang) : profileLang
 
   useEffect(() => {
     if (lang && (SUPPORTED as readonly string[]).includes(lang) && i18n.language !== lang) {

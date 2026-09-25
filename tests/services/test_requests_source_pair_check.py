@@ -86,11 +86,10 @@ def test_model_declares_named_check():
     assert CONSTRAINT in names
 
 
-def test_migration_020_is_head_and_adds_the_check():
+def test_migration_020_adds_the_check():
     cfg = Config(str(REPO_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_current_head() == "020"
     revision = script.get_revision("020")
     assert revision.down_revision == "019"
     source = Path(revision.path).read_text(encoding="utf-8")

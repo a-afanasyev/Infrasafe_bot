@@ -53,7 +53,8 @@ def get_button_texts_for_all_languages(locale_key: str, fallback_text: str = Non
         for lang in SUPPORTED_LANGUAGES:
             text = get_text(locale_key, language=lang)
             # Проверяем, что это валидный перевод, а не сам ключ локализации
-            if text and text != locale_key:
+            # Без дублей: язык без своего перевода (uz_cyrl) отдаёт текст родителя.
+            if text and text != locale_key and text not in texts:
                 texts.append(text)
         
         # Если ничего не загрузилось, используем fallback

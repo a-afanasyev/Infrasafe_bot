@@ -4277,6 +4277,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "language": {
+            "default": "ru",
+            "title": "Language",
+            "type": "string"
+          },
           "last_name": {
             "anyOf": [
               {
@@ -4306,6 +4311,11 @@
             },
             "title": "Roles",
             "type": "array"
+          },
+          "simple_mode": {
+            "default": false,
+            "title": "Simple Mode",
+            "type": "boolean"
           },
           "specialization": {
             "items": {
@@ -4379,6 +4389,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "language": {
+            "default": "ru",
+            "title": "Language",
+            "type": "string"
+          },
           "last_name": {
             "anyOf": [
               {
@@ -4420,6 +4435,11 @@
             "title": "Roles",
             "type": "array"
           },
+          "simple_mode": {
+            "default": false,
+            "title": "Simple Mode",
+            "type": "boolean"
+          },
           "specialization": {
             "items": {
               "type": "string"
@@ -4459,6 +4479,21 @@
           "total_completed"
         ],
         "title": "EmployeeDetail",
+        "type": "object"
+      },
+      "EmployeeLanguageRequest": {
+        "additionalProperties": false,
+        "description": "Сменить сотруднику язык профиля (бот и Mini App).",
+        "properties": {
+          "language": {
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "language"
+        ],
+        "title": "EmployeeLanguageRequest",
         "type": "object"
       },
       "ExecutorStat": {
@@ -6077,6 +6112,11 @@
               }
             ],
             "title": "Roles"
+          },
+          "simple_mode": {
+            "default": false,
+            "title": "Simple Mode",
+            "type": "boolean"
           },
           "status": {
             "default": "pending",
@@ -8854,6 +8894,21 @@
           "pending_transfers"
         ],
         "title": "ShiftStatsOut",
+        "type": "object"
+      },
+      "SimpleModeToggleRequest": {
+        "additionalProperties": false,
+        "description": "Включить/выключить сотруднику простой режим исполнителя в TWA.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "SimpleModeToggleRequest",
         "type": "object"
       },
       "StartIn": {
@@ -19947,6 +20002,62 @@
         ]
       }
     },
+    "/api/v2/shifts/employees/{user_id}/language": {
+      "patch": {
+        "description": "Сменить сотруднику язык профиля (бот и Mini App).",
+        "operationId": "set_employee_language_api_v2_shifts_employees__user_id__language_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeLanguageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Employee Language",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
     "/api/v2/shifts/employees/{user_id}/meter-entry": {
       "patch": {
         "description": "Выдать/снять роль контролёра показаний (resource_meter_entry) сотруднику.\n\nКапабилити для Mini App «Ввод показаний» — даёт доступ к вводу показаний в\n«Учёт ресурсов». Идемпотентна; НЕ трогает active_role.",
@@ -20148,6 +20259,62 @@
           }
         ],
         "summary": "Request Employee Phone",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/simple-mode": {
+      "patch": {
+        "description": "Включить/выключить сотруднику простой режим исполнителя в Mini App.",
+        "operationId": "toggle_simple_mode_api_v2_shifts_employees__user_id__simple_mode_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleModeToggleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Toggle Simple Mode",
         "tags": [
           "shifts"
         ]
