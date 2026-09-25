@@ -2324,16 +2324,14 @@
         "takeWork": "Ishga olish",
         "complete": "Bajarildi",
         "purchase": "Xarid",
-        "clarify": "Aniqlashtirish",
         "backToWork": "Ishga qaytarish",
         "reopen": "Ishga qaytarish",
         "materials": "So'ralgan materiallar",
         "purchaseTitle": "Nima xarid qilish kerak?",
         "purchasePlaceholder": "Materiallar ro'yxati...",
-        "clarifyTitle": "Nimani aniqlashtirish kerak?",
-        "clarifyPlaceholder": "Nimani aniqlashtirish kerakligini yozing...",
         "statusChangeFailed": "Holatni o'zgartirib bo'lmadi",
-        "clarifyFailed": "Aniqlashtirishni yuborib bo'lmadi"
+        "alreadyClaimed": "Arizani boshqa ijrochi allaqachon olgan",
+        "claimNotEligible": "Arizani olib bo'lmaydi: siz smenada emassiz yoki u sizning mutaxassisligingiz uchun emas"
       },
       "myShifts": {
         "title": "Mening smenalarim",

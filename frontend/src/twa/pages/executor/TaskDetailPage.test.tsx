@@ -5,9 +5,9 @@ import { render, screen, waitFor, fireEvent } from '../../../test/test-utils'
 import TaskDetailPage from './TaskDetailPage'
 
 // TEST-068: карточка задачи исполнителя в TWA. Кнопки действий зависят от
-// статуса; «Выполнена» уводит на страницу отчёта, «Закуп»/«Уточнение» сначала
-// открывают шторку с текстом. Галерея (MediaGallery) грузит байты как blob →
-// data: URL и открывает лайтбокс.
+// статуса; «Новая» берётся через POST /claim (EXECUTOR_CLAIM), «Выполнена»
+// уводит на страницу отчёта, «Закуп» сначала открывает шторку с текстом.
+// Галерея (MediaGallery) грузит байты как blob → data: URL и открывает лайтбокс.
 
 const { mockGet, mockPost, mockPatch, toastMock } = vi.hoisted(() => ({
   mockGet: vi.fn(),
@@ -62,7 +62,13 @@ function mockApi(media: unknown[] = MEDIA) {
     requestState = { ...requestState, status: body.status }
     return Promise.resolve({ data: requestState })
   })
-  mockPost.mockResolvedValue({ data: { id: 1 } })
+  mockPost.mockImplementation((url: string) => {
+    if (url === `/api/v2/requests/${NUMBER}/claim`) {
+      requestState = { ...requestState, status: 'В работе' }
+      return Promise.resolve({ data: requestState })
+    }
+    return Promise.resolve({ data: { id: 1 } })
+  })
 }
 
 function renderPage() {
@@ -106,15 +112,49 @@ describe('TaskDetailPage — карточка и действия', () => {
     expect(screen.queryByRole('button', { name: 'Выполнена' })).toBeNull()
   })
 
-  it('«Новая» → «В работу» шлёт PATCH status=«В работе» и перерисовывает действия', async () => {
+  it('«Новая» → «В работу» берёт заявку через POST /claim (не PATCH статуса) и перерисовывает действия', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'В работу' }))
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}/claim`))
+    expect(mockPatch).not.toHaveBeenCalled()
+    // После инвалидации заявка перечитана — появились действия «В работе».
+    expect(await screen.findByRole('button', { name: 'Закуп' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выполнена' })).toBeInTheDocument()
+  })
+
+  it('взятие: 409 already_claimed → локализованный тост «уже взял другой»', async () => {
+    mockPost.mockRejectedValue({ response: { status: 409, data: { detail: 'already_claimed' } } })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'В работу' }))
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Заявку уже взял другой исполнитель'))
+  })
+
+  it('взятие: 403 not_eligible → локализованный тост про смену/специализацию', async () => {
+    mockPost.mockRejectedValue({ response: { status: 403, data: { detail: 'not_eligible' } } })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'В работу' }))
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith('Нельзя взять заявку: вы не на смене или она не для вашей специализации'),
+    )
+  })
+
+  it('«В работе»: у исполнителя нет «Уточнения» (переход только у менеджера)', async () => {
+    requestState = request({ status: 'В работе' })
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Закуп' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Уточнение' })).toBeNull()
+  })
+
+  it('«Уточнение» (поставил менеджер) → «В работу» шлёт PATCH status=«В работе»', async () => {
+    requestState = request({ status: 'Уточнение' })
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'В работу' }))
     await waitFor(() => expect(mockPatch).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}`, { status: 'В работе' }))
-    // После инвалидации заявка перечитана — появились три действия «В работе».
-    expect(await screen.findByRole('button', { name: 'Закуп' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Уточнение' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Выполнена' })).toBeInTheDocument()
+    expect(mockPost).not.toHaveBeenCalled()
   })
 
   it('«Выполнена» уводит на страницу отчёта, а не меняет статус', async () => {
@@ -145,30 +185,14 @@ describe('TaskDetailPage — карточка и действия', () => {
     expect(await screen.findByRole('button', { name: 'В работу' })).toBeInTheDocument()
   })
 
-  it('«Уточнение»: сначала POST комментария, затем PATCH status=«Уточнение»; «Отмена» закрывает шторку', async () => {
-    requestState = request({ status: 'В работе' })
-    const user = userEvent.setup()
-    renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Уточнение' }))
-    expect(screen.getByText('Что требует уточнения?')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Отмена' }))
-    expect(screen.queryByText('Что требует уточнения?')).toBeNull()
-
-    await user.click(screen.getByRole('button', { name: 'Уточнение' }))
-    await user.type(screen.getByPlaceholderText('Опишите, что нужно уточнить...'), 'Какой этаж?')
-    await user.click(screen.getByRole('button', { name: 'Подтвердить' }))
-
-    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}`, { status: 'Уточнение' }))
-    expect(mockPost).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}/comments`, { text: 'Какой этаж?' })
-    expect(mockPost.mock.invocationCallOrder[0]).toBeLessThan(mockPatch.mock.invocationCallOrder[0])
-  })
-
-  it('ошибка смены статуса → toast.error, статус не меняется', async () => {
+  it('ошибка смены статуса → toast.error с нашим текстом (не сырой detail бэкенда), статус не меняется', async () => {
+    requestState = request({ status: 'Закуп' })
     mockPatch.mockRejectedValue({ response: { status: 422, data: { detail: 'Переход запрещён' } } })
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'В работу' }))
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalled())
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Не удалось изменить статус'))
+    expect(toastMock.error).not.toHaveBeenCalledWith('Переход запрещён')
     expect(screen.getByRole('button', { name: 'В работу' })).toBeInTheDocument()
   })
 

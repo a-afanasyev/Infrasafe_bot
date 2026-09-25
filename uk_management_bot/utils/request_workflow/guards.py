@@ -57,15 +57,26 @@ def _executor_can_work(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
 def _executor_can_claim(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     """Исполнитель может взять заявку из группового пула.
 
-    Условия: роль executor + on-shift-now + активное group-назначение без
-    исполнителя (unclaimed) + его group_specialization входит в специализации
-    актора. После взятия unclaimed=False → действие исчезает из allowed.
+    Условия: актор в пуле этой заявки (`executor_in_claim_pool`) + активное
+    group-назначение без исполнителя (unclaimed). После взятия unclaimed=False
+    → действие исчезает из allowed.
+    """
+    return (snap.active_assignment_unclaimed
+            and executor_in_claim_pool(snap, actor))
+
+
+def executor_in_claim_pool(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
+    """Актор входит в пул заявки — без учёта того, взята ли она уже.
+
+    Роль executor + on-shift-now + group_specialization активного назначения
+    (после взятия она сохраняется как история) входит в специализации актора.
+    Нужна отдельно, чтобы API-взятие различало «уже взял другой» (409) только
+    для тех, кто мог бы взять сам: остальным — единый отказ, без оракула
+    «занята ли чужая заявка».
     """
     if actor.kind != "user" or ROLE_EXECUTOR not in actor.roles:
         return False
     if not snap.actor_has_active_shift:
-        return False
-    if not snap.active_assignment_unclaimed:
         return False
     # BUG-166 (тот же класс, найден при работе над инвариантом): сравнение шло
     # сырым membership, поэтому универсал («умеет всё») не мог взять заявку ни

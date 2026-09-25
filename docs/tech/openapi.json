@@ -17751,6 +17751,54 @@
         ]
       }
     },
+    "/api/v2/requests/{request_number}/claim": {
+      "post": {
+        "description": "Исполнитель берёт заявку из группового пула (канон EXECUTOR_CLAIM).\n\nПаритет с ботом (`claim_request_`): status-based PATCH «В работе» во взятие\nНЕ резолвится (planner `_STATUS_RESOLVE_EXCLUDE`), поэтому TWA нужна явная\nкоманда. Все правила (роль, смена, специализация группы, unclaimed) — в\nпредикате `_executor_can_claim`; здесь только маппинг исходов в HTTP:\n200 — карточка; 409 `already_claimed` — заявку уже взял другой;\n403 `not_eligible` — не на смене / не та группа; 409 — статус не позволяет.",
+        "operationId": "claim_request_api_v2_requests__request_number__claim_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
     "/api/v2/requests/{request_number}/comments": {
       "get": {
         "operationId": "get_comments_api_v2_requests__request_number__comments_get",

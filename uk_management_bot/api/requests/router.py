@@ -44,11 +44,15 @@ from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
+from uk_management_bot.services.group_pool_notify import (
+    notify_group_pool_claimed_detached,
+)
 from uk_management_bot.services.workflow_notifications import (
     dispatch_notify_intents_detached,
     notify_reassigned_away_detached,
 )
 from uk_management_bot.services.workflow_runner import (
+    executor_in_claim_pool_async,
     run_command_async,
     RequestNotFound,
 )
@@ -716,6 +720,77 @@ async def update_request(
 
     # Карточка — как у GET (A9-P3-13): с исполнителем и лифтом; канон-статус
     # (PR7) — edit-путь может вернуть возвращённую заявку, менеджер видит «Возвращена».
+    row = await svc.request_with_executor(db, request_number)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req, exec_user = row
+    return await _card(db, req, exec_user, user)
+
+
+@router.post("/{request_number}/claim", response_model=RequestCard)
+@limiter.limit("30/minute")
+async def claim_request(
+    request: Request,
+    request_number: str,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("executor")),
+):
+    """Исполнитель берёт заявку из группового пула (канон EXECUTOR_CLAIM).
+
+    Паритет с ботом (`claim_request_`): status-based PATCH «В работе» во взятие
+    НЕ резолвится (planner `_STATUS_RESOLVE_EXCLUDE`), поэтому TWA нужна явная
+    команда. Все правила (роль, смена, специализация группы, unclaimed) — в
+    предикате `_executor_can_claim`; здесь только маппинг исходов в HTTP:
+    200 — карточка; 409 `already_claimed` — заявку уже взял другой;
+    403 `not_eligible` — не на смене / не та группа; 409 — статус не позволяет.
+    """
+    principal = PrincipalRef(kind="user", user_id=user.id, source="api")
+    command = ActionCommand(
+        command_id=f"api:{request_number}:claim",
+        action=Action.EXECUTOR_CLAIM,
+        payload={},
+    )
+    try:
+        outcome = await run_command_async(
+            AsyncSessionLocal, request_number, principal, command)
+    except RequestNotFound:
+        raise HTTPException(status_code=404, detail="Request not found")
+    except NotAuthorized:
+        # Предикат не различает «уже взята» и «нельзя брать». Различаем только
+        # для тех, кто сам в пуле этой заявки (смена + специализация группы):
+        # остальным — единый 403 без чтения executor_id, иначе любой
+        # исполнитель узнавал бы по номеру, занята ли чужая заявка.
+        if not await executor_in_claim_pool_async(
+                AsyncSessionLocal, request_number, principal):
+            raise HTTPException(status_code=403, detail="not_eligible")
+        # Двойной тап взявшего — не ошибка, отдаём карточку.
+        taken_by = await svc.executor_id_of(db, request_number)
+        if taken_by is None:
+            raise HTTPException(status_code=403, detail="not_eligible")
+        if taken_by != user.id:
+            raise HTTPException(status_code=409, detail="already_claimed")
+        outcome = None
+    except (InvalidTransition, RepeatRejected, RepeatConflict) as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except WorkflowError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if outcome is not None:
+        for ev in outcome.post_commit_intents:
+            if ev.kind == "realtime":
+                await publish_request_event("request.status_changed", {
+                    "number": request_number,
+                    "old_status": normalize_status(outcome.old_state),
+                    "new_status": ev.data.get("status"),
+                })
+        background.add_task(
+            dispatch_notify_intents_detached,
+            request_number, outcome.post_commit_intents)
+        # Паритет с ботом: остальным дежурным группы — «заявку взял X».
+        background.add_task(
+            notify_group_pool_claimed_detached, request_number, user.id)
+
     row = await svc.request_with_executor(db, request_number)
     if row is None:
         raise HTTPException(status_code=404, detail="Request not found")

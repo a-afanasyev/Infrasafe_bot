@@ -2337,16 +2337,14 @@
         "takeWork": "В работу",
         "complete": "Выполнена",
         "purchase": "Закуп",
-        "clarify": "Уточнение",
         "backToWork": "В работу",
         "reopen": "Вернуть в работу",
         "materials": "Запрошенные материалы",
         "purchaseTitle": "Что нужно закупить?",
         "purchasePlaceholder": "Список материалов...",
-        "clarifyTitle": "Что требует уточнения?",
-        "clarifyPlaceholder": "Опишите, что нужно уточнить...",
         "statusChangeFailed": "Не удалось изменить статус",
-        "clarifyFailed": "Не удалось отправить уточнение"
+        "alreadyClaimed": "Заявку уже взял другой исполнитель",
+        "claimNotEligible": "Нельзя взять заявку: вы не на смене или она не для вашей специализации"
       },
       "myShifts": {
         "title": "Мои смены",

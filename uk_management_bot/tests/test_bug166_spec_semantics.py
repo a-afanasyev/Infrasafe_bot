@@ -401,9 +401,11 @@ SPEC_CONSUMERS = [
     "database/models/shift_template.py",
     "handlers/admin/assignment.py",
     "handlers/admin/shared.py",
-    "handlers/requests/executor.py",
     "handlers/shift_management/assignment_b.py",
     "services/auto_manager/rule_engine.py",
+    # «заявку взял X»: вынесено из handlers/requests/executor.py — общий
+    # хелпер бота и API-взятия.
+    "services/group_pool_notify.py",
     "services/shift_assignment_service/scoring.py",
     "services/shift_planning_service/planning.py",
     "services/shift_transfer_service.py",
