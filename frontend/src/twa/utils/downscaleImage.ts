@@ -43,18 +43,27 @@ function readAsDataUrl(file: File): Promise<string> {
   })
 }
 
+export interface DownscaleOptions {
+  /** Максимальная сторона результата (по умолчанию MAX_DIMENSION). */
+  maxDimension?: number
+  /** Файлы не больше этого размера отдаются как есть (по умолчанию COMPRESS_THRESHOLD_BYTES). */
+  thresholdBytes?: number
+}
+
 /** Вернуть уменьшенную копию изображения либо исходный файл, если сжатие не
  *  требуется или не удалось. Никогда не бросает. */
-export async function downscaleImage(file: File): Promise<File> {
+export async function downscaleImage(file: File, options: DownscaleOptions = {}): Promise<File> {
+  const maxDimension = options.maxDimension ?? MAX_DIMENSION
+  const thresholdBytes = options.thresholdBytes ?? COMPRESS_THRESHOLD_BYTES
   if (!file.type.startsWith('image/')) return file
-  if (file.size <= COMPRESS_THRESHOLD_BYTES) return file
+  if (file.size <= thresholdBytes) return file
 
   try {
     // FileReader + data: URL, а не URL.createObjectURL: тот же CSP-запрет на
     // blob: в /uk/*, из-за которого превью в PhotoUploader читаются через
     // FileReader (см. комментарий там).
     const img = await loadImage(await readAsDataUrl(file))
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height))
+    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height))
     const width = Math.max(1, Math.round(img.width * scale))
     const height = Math.max(1, Math.round(img.height * scale))
 

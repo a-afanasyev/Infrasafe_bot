@@ -39,9 +39,22 @@ import ShiftPage from './pages/executor/ShiftPage'
 import PurchasePage from './pages/executor/PurchasePage'
 import ArchivePage from './pages/executor/ArchivePage'
 import ExecutorProfilePage from './pages/executor/ProfilePage'
-import TaskDetailPage from './pages/executor/TaskDetailPage'
 import MyShiftsPage from './pages/executor/MyShiftsPage'
 import CompletionReport from './pages/executor/CompletionReport'
+
+// Простой режим исполнителя (/twa/s/*)
+import { ExecHomeGate, ExecTaskEntry } from './simple/ExecGates'
+import SimpleShell from './simple/SimpleShell'
+import SimpleLangPage from './simple/pages/LangPage'
+import SimpleMinePage from './simple/pages/MinePage'
+import SimplePoolPage from './simple/pages/PoolPage'
+import SimpleTaskPage from './simple/pages/TaskPage'
+import SimpleDonePage from './simple/pages/DonePage'
+import SimpleProblemPage from './simple/pages/ProblemPage'
+import SimpleShiftPage from './simple/pages/ShiftPage'
+
+// У простого режима своя полоса «нет связи» (со счётчиком неотправленных фото).
+const SIMPLE_PATH = /^\/twa\/s(\/|$)/
 
 const queryClient = createTwaQueryClient()
 
@@ -90,7 +103,7 @@ function TWAContent() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <ProfileLanguageSync />
-      <OfflineIndicator />
+      {!SIMPLE_PATH.test(location.pathname) && <OfflineIndicator />}
       <Toaster position="top-center" richColors closeButton />
       <Routes>
         <Route path="/" element={<RoleLanding />} />
@@ -117,14 +130,26 @@ function TWAContent() {
         {/* Executor routes — wrapped in RoleGuard (TWA-12) so an applicant
             opening /twa/exec/* gets sent back to /twa/app rather than seeing
             an empty executor UI with 403s in the network panel. */}
-        <Route path="/exec" element={<RoleGuard required="executor"><TasksPage /><ExecutorTabs /></RoleGuard>} />
+        <Route path="/exec" element={<RoleGuard required="executor"><ExecHomeGate><TasksPage /><ExecutorTabs /></ExecHomeGate></RoleGuard>} />
         <Route path="/exec/shift" element={<RoleGuard required="executor"><ShiftPage /><ExecutorTabs /></RoleGuard>} />
         <Route path="/exec/purchase" element={<RoleGuard required="executor"><PurchasePage /><ExecutorTabs /></RoleGuard>} />
         <Route path="/exec/archive" element={<RoleGuard required="executor"><ArchivePage /><ExecutorTabs /></RoleGuard>} />
         <Route path="/exec/profile" element={<RoleGuard required="executor"><ExecutorProfilePage /><ExecutorTabs /></RoleGuard>} />
-        <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><TaskDetailPage /></RoleGuard>} />
+        {/* Ссылка бота на заявку: simple → /twa/s/task/:n, ?action=done → «Готово»/отчёт. */}
+        <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><ExecTaskEntry /></RoleGuard>} />
         <Route path="/exec/shifts" element={<RoleGuard required="executor"><MyShiftsPage /></RoleGuard>} />
         <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
+
+        {/* Простой режим исполнителя: крупные кнопки, фото вместо текста, очередь «Готово». */}
+        <Route path="/s/lang" element={<RoleGuard required="executor"><SimpleLangPage /></RoleGuard>} />
+        <Route path="/s" element={<RoleGuard required="executor"><SimpleShell /></RoleGuard>}>
+          <Route index element={<SimpleMinePage />} />
+          <Route path="pool" element={<SimplePoolPage />} />
+          <Route path="task/:number" element={<SimpleTaskPage />} />
+          <Route path="task/:number/done" element={<SimpleDonePage />} />
+          <Route path="task/:number/problem" element={<SimpleProblemPage />} />
+          <Route path="shift" element={<SimpleShiftPage />} />
+        </Route>
 
         {/* Обратная связь — общий маршрут для обеих ролей, без таб-бара */}
         <Route path="/feedback" element={<FeedbackPage />} />

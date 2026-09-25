@@ -87,6 +87,14 @@ export function useTelegramSDK() {
     } catch { /* HapticFeedback отсутствует в старых клиентах — игнорируем */ }
   }, [tg])
 
+  // Вибрация по ИСХОДУ действия: success — только при успехе, error — при
+  // ошибке (простой режим: смысл не только текстом, но и телом телефона).
+  const notify = useCallback((type: 'success' | 'error' | 'warning') => {
+    try {
+      tg?.HapticFeedback?.notificationOccurred(type)
+    } catch { /* HapticFeedback отсутствует в старых клиентах — игнорируем */ }
+  }, [tg])
+
   const showBackButton = useCallback((onClick: () => void) => {
     tg?.BackButton?.show()
     tg?.BackButton?.onClick(onClick)
@@ -99,6 +107,7 @@ export function useTelegramSDK() {
   return {
     tg,
     haptic,
+    notify,
     showBackButton,
     themeParams: tg?.themeParams ?? {},
     colorScheme: tg?.colorScheme ?? 'light',

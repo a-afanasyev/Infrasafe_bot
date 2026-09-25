@@ -6,6 +6,7 @@ import { twaClient } from '../twaClient'
 interface ProfileResponse {
   roles?: string[] | null
   active_role?: string | null
+  simple_mode?: boolean | null
 }
 
 /** Roles that own a TWA section, mapped to their landing route. */
@@ -53,17 +54,20 @@ export default function RoleLanding() {
 
   const roles = data?.roles ?? (data?.active_role ? [data.active_role] : [])
   const activeRole = data?.active_role ?? ''
+  // Исполнитель в простом режиме — сразу в свою панель, без захода в /twa/exec.
+  const routeFor = (role: string) =>
+    role === 'executor' && data?.simple_mode ? '/twa/s' : ROLE_ROUTE[role]
 
   // 1) Active role owns a section → go straight there.
   if (ROLE_ROUTE[activeRole]) {
-    return <Navigate to={ROLE_ROUTE[activeRole]} replace />
+    return <Navigate to={routeFor(activeRole)} replace />
   }
 
   // 2) Manager (or any section-less active role): fall back to a held
   //    TWA-capable role by priority.
   const fallbackRole = MANAGER_FALLBACK_PRIORITY.find((r) => roles.includes(r))
   if (fallbackRole) {
-    return <Navigate to={ROLE_ROUTE[fallbackRole]} replace />
+    return <Navigate to={routeFor(fallbackRole)} replace />
   }
 
   // 3) Manager-only (no TWA section): static screen, NO redirect (avoids loop).
