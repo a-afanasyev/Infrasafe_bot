@@ -91,6 +91,25 @@ describe('ShiftDetailModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('адаптив: окно без горизонтального скролла, кнопки футера и select переносятся/сжимаются', async () => {
+    setRole('manager')
+    render(<ShiftDetailModal shiftId={5} onClose={() => {}} onEdit={() => {}} />)
+    await screen.findByText('Иван Тестов')
+    const dialog = screen.getByRole('dialog')
+    // Ширина от вьюпорта (телефон), не фиксированные 480px; X-скролл запрещён.
+    expect(dialog.className).toMatch(/w-\[calc\(100vw-1\.5rem\)\]/)
+    expect(dialog.className).toContain('overflow-x-hidden')
+    expect(dialog.className).not.toContain('max-w-[480px]')
+    // У менеджера в футере до 4 кнопок — ряд обязан переноситься.
+    const footer = screen.getByRole('button', { name: 'Переназначить' }).parentElement!
+    expect(footer.className).toContain('flex-wrap')
+    // Нативный select растягивается по самой длинной опции — ограничен шириной окна.
+    fireEvent.click(screen.getByRole('button', { name: 'Переназначить' }))
+    expect(screen.getByRole('combobox').className).toMatch(/\bw-full\b.*\bmin-w-0\b/)
+    // Специализации в списке — переведённые, не сырые ключи API.
+    expect(await screen.findByRole('option', { name: /Пётр Второй \(Сантехника\)/ })).toBeInTheDocument()
+  })
+
   it('пустые метрики → прочерки; смена без конца → «в процессе»; исполнитель без имени → fallback', async () => {
     server.use(http.get('*/api/v2/shifts/5', () =>
       HttpResponse.json(detail({ efficiency_score: null, quality_rating: null, end_time: null, executor_name: null, notes: null, status: 'completed' })),
@@ -133,7 +152,7 @@ describe('ShiftDetailModal', () => {
 
     const select = screen.getByRole('combobox') as HTMLSelectElement
     await waitFor(() => expect(select.options.length).toBe(2)) // плейсхолдер + Пётр
-    expect(select.options[1]).toHaveTextContent('Пётр Второй (plumber)')
+    expect(select.options[1]).toHaveTextContent('Пётр Второй (Сантехника)')
     expect(screen.queryByText(/Иван Тестов \(/)).toBeNull()
     expect(screen.queryByText(/Ожидающий/)).toBeNull()
 
