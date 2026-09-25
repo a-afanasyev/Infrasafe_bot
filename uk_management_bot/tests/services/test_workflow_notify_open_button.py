@@ -187,7 +187,7 @@ class TestReturnedForRework:
 
     @pytest.mark.parametrize("language,head,reason_label", [
         ("ru", f"↩️ Заявку #{NUMBER} вернули на доработку", "📝 Причина: "),
-        ("uz", f"↩️ #{NUMBER} arizani qayta ishlashga qaytarishdi", "📝 Sabab: "),
+        ("uz", f"↩️ #{NUMBER} ariza tuzatishga qaytarildi", "📝 Sabab: "),
     ])
     def test_text_is_truthful_with_reason_and_button(self, db, frontend, language,
                                                      head, reason_label):

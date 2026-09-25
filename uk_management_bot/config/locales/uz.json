@@ -2469,7 +2469,7 @@
       "reassigned_away": "ℹ️ #{request_number} arizasi boshqa ijrochiga o‘tkazildi",
       "reassigned": "🔁 #{request_number} arizasi: ishlarni boshqa ijrochi davom ettiradi\n\n📍 {address}",
       "category_changed": "🏷 #{request_number} arizasi: kategoriya «{category}» ga o‘zgartirildi\n\n📍 {address}\n\nAgar bu sizning yo‘nalishingiz bo‘lmasa — menejerga xabar bering.",
-      "returned_for_rework": "↩️ #{request_number} arizani qayta ishlashga qaytarishdi\n\n📍 {address}",
+      "returned_for_rework": "↩️ #{request_number} ariza tuzatishga qaytarildi\n\n📍 {address}",
       "return_reason_line": "\n\n📝 Sabab: {reason}"
     },
     "executor_problem": {
