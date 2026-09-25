@@ -2462,14 +2462,15 @@
       "ready_for_acceptance": "📋 #{request_number} arizasi qabul qilishga tayyor\n\n📍 {address}\n\n«Qabul qilish» bo‘limida ish sifatini baholang.",
       "executed_staff": "✅ #{request_number} arizasi bo‘yicha ishlar bajarildi\n\n📍 {address}\n\nMenejer tasdig‘i kutilmoqda.",
       "accepted_by_manager": "✅ #{request_number} arizasi yakunlandi\n\n📍 {address}\n\nMenejer natijani tasdiqladi.",
-      "returned_to_work": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}",
       "cancelled": "🚫 #{request_number} arizasi bekor qilindi\n\n📍 {address}",
       "returned_to_work_manager": "↩️ #{request_number} arizasi ishga qaytarildi\n\n📍 {address}\n\n📝 Sabab: {reason}",
       "btn_open_request": "📂 Ochish",
       "assigned_executor": "📋 <b>Sizga #{request_number} arizasi berildi</b>\n\n📂 Kategoriya: {category}\n📍 Manzil: {address}\n📝 Tavsif: {description}\n\nIltimos, ishni boshlang.",
       "reassigned_away": "ℹ️ #{request_number} arizasi boshqa ijrochiga o‘tkazildi",
       "reassigned": "🔁 #{request_number} arizasi: ishlarni boshqa ijrochi davom ettiradi\n\n📍 {address}",
-      "category_changed": "🏷 #{request_number} arizasi: kategoriya «{category}»ga o‘zgartirildi\n\n📍 {address}\n\nAgar bu sizning ishingiz bo‘lmasa, menejerga ayting."
+      "category_changed": "🏷 #{request_number} arizasi: kategoriya «{category}»ga o‘zgartirildi\n\n📍 {address}\n\nAgar bu sizning ishingiz bo‘lmasa, menejerga ayting.",
+      "returned_for_rework": "↩️ #{request_number} ariza tuzatishga qaytarildi\n\n📍 {address}",
+      "return_reason_line": "\n\n📝 Sabab: {reason}"
     },
     "executor_problem": {
       "message": "⚠️ <b>#{request_number} arizasi bo‘yicha muammo</b>\n\n👷 Ijrochi: {executor}\n📍 {address}\n\n❗ {problem}{details}",
@@ -2864,5 +2865,23 @@
     "transfers_expired_body": "Avtomatik qayta ishlangan topshirishlar: {total}",
     "weekly_planning_title": "📅 Haftalik rejalashtirish",
     "weekly_planning_body": "Keyingi haftaga rejalashtirilgan smenalar: {total}"
+  },
+  "executor_done": {
+    "which_closed": "✅ Qaysi arizani yopdingiz?\nArizani bosing va rasm oling.",
+    "no_open_tasks": "Sizda ishdagi ariza yo'q.",
+    "btn_all": "📋 Hamma arizalarim",
+    "apt_short": "xon.",
+    "close_with_photo": "📷 Shu rasm bilan yopilsinmi?\nArizani bosing.",
+    "closing": "⏳ Yopilmoqda…",
+    "closed": "✅ #{request_number} ariza yopildi",
+    "reminder": "🔔 Yopilmagan arizalar: {n}\nArizani bosing va rasm oling.",
+    "err_not_yours": "Bu sizning arizangiz emas.",
+    "err_not_found": "Ariza topilmadi.",
+    "err_no_shift": "Avval smenani boshlang.",
+    "err_status": "#{request_number} arizani hozir yopib bo'lmaydi.",
+    "err_in_progress": "Yopilmoqda, kuting.",
+    "err_photo": "Rasm to'g'ri kelmadi. Yangisini oling.",
+    "err_media": "Rasm yuborilmadi. Yana urinib ko'ring.",
+    "err_generic": "Bo'lmadi. Keyinroq urinib ko'ring."
   }
 }

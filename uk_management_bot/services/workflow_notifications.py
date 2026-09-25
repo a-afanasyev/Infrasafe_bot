@@ -100,7 +100,9 @@ _NOTIFY_MATRIX: dict[Action, object] = {
     # AUD6-P1-6: возврат ЖИТЕЛЕМ из приёмки — симметрия с возвратом менеджера:
     # исполнитель обязан узнать, что работу переделывать. До этой строки на
     # API/TWA-пути возврат жителя не уведомлял никого (бот слал через легаси).
-    Action.APPLICANT_RETURN: ((EXECUTOR,), "notifications.workflow.returned_to_work"),
+    # Фаза 4: статус после возврата — «Возвращена», а не «В работе»; текст
+    # «вернули на доработку» + причина жителя + кнопка «Открыть».
+    Action.APPLICANT_RETURN: ((EXECUTOR,), "notifications.workflow.returned_for_rework"),
     Action.CANCEL: ((APPLICANT,), "notifications.workflow.cancelled"),
     # Смена категории: только исполнителю (решение владельца 2026-09-03) —
     # житель ярлыка не видит. Интент планировщик выпускает лишь для
@@ -109,6 +111,14 @@ _NOTIFY_MATRIX: dict[Action, object] = {
 }
 
 _CATEGORY_CHANGED_KEY = "notifications.workflow.category_changed"
+# Возврат жителем (статус «Возвращена»): причина — отдельной строкой, только
+# если она есть; исполнителю — кнопка «Открыть» его карточки.
+_RETURNED_FOR_REWORK_KEY = "notifications.workflow.returned_for_rework"
+_RETURN_REASON_KEY = "notifications.workflow.return_reason_line"
+# Ключи, к которым исполнитель получает web_app «Открыть».
+_OPEN_BUTTON_KEYS = frozenset({
+    "notifications.workflow.assigned_executor", _RETURNED_FOR_REWORK_KEY,
+})
 
 # Менеджерская приёмка (Group Intake фаза 2): владелец staff-репорта принять
 # или вернуть работу НЕ может (гарды канона), поэтому тексты с призывом
@@ -289,6 +299,18 @@ def _render_text(
             )),
             address=html.escape(_clip(request.address, _MAX_ADDRESS)),
         )
+    if text_key == _RETURNED_FOR_REWORK_KEY:
+        text = get_text(
+            text_key,
+            language=language,
+            request_number=request.request_number,
+            address=html.escape(_clip(request.address, _MAX_ADDRESS)),
+        )
+        reason = getattr(request, "return_reason", None)
+        if reason:
+            text += get_text(_RETURN_REASON_KEY, language=language,
+                             reason=html.escape(_clip(reason, _MAX_DESCRIPTION)))
+        return text
     if action is Action.MANAGER_RETURN_TO_WORK:
         # Причина обязательна на уровне ядра, но уведомление — post-commit
         # best-effort: пустая строка вместо KeyError, если запись всё же пуста
@@ -311,12 +333,13 @@ def _render_text(
 
 
 def _reply_markup(text_key: str, language: str, request: Request):
-    """Наряду исполнителю — web_app «Открыть» на его карточку в TWA; прочим — None.
+    """Наряду и возврату на доработку (исполнителю) — web_app «Открыть» на его
+    карточку в TWA; прочим — None.
 
     Все получатели матрицы — адресные (личка по telegram_id), web_app там
     допустим. Житель кнопку не получает: маршрут исполнителя не его.
     """
-    if text_key != _ASSIGNED_EXECUTOR_KEY:
+    if text_key not in _OPEN_BUTTON_KEYS:
         return None
     from uk_management_bot.utils.twa_links import executor_task_open_markup
 

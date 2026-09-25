@@ -17,6 +17,7 @@ from uk_management_bot.keyboards.my_shifts import (
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
 from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.services.executor_done_prompt import remind_after_shift_end
 from uk_management_bot.services.shift_lifecycle import send_shift_notify
 from uk_management_bot.utils.helpers import get_text
 # ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
@@ -120,6 +121,8 @@ async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language:
         await state.set_state(MyShiftsStates.main_menu)
         await callback.answer(get_text("my_shifts.handlers.shift_ended_toast", language=lang))
         await _send_notify(callback, summary.get("notify"))
+        # Фаза 4: незакрытые заявки — напоминание в личку (best-effort, не бросает).
+        await remind_after_shift_end(callback.bot, summary.get("user_id"), _db=_db)
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
