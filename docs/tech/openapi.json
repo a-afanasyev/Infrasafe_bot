@@ -760,6 +760,27 @@
         "title": "BoardConfigUpdateIn",
         "type": "object"
       },
+      "Body_complete_request_api_v2_requests__request_number__complete_post": {
+        "properties": {
+          "idempotency_key": {
+            "description": "UUID попытки; повтор с ним же безопасен",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Фото «после»: JPEG/PNG, до 8 МиБ",
+            "title": "Photo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo",
+          "idempotency_key"
+        ],
+        "title": "Body_complete_request_api_v2_requests__request_number__complete_post",
+        "type": "object"
+      },
       "Body_create_feedback_api_v2_feedback_post": {
         "properties": {
           "file": {
@@ -6118,6 +6139,39 @@
           }
         },
         "title": "Prefill",
+        "type": "object"
+      },
+      "ProblemBody": {
+        "additionalProperties": false,
+        "description": "«Проблема» исполнителя: шаблон обязателен, текст — по желанию.",
+        "properties": {
+          "template": {
+            "enum": [
+              "no_material",
+              "not_let_in",
+              "resident_absent",
+              "need_master"
+            ],
+            "title": "Template",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "title": "ProblemBody",
         "type": "object"
       },
       "ProcurementOut": {
@@ -18179,6 +18233,122 @@
           }
         ],
         "summary": "Add Comment",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/complete": {
+      "post": {
+        "description": "«Готово»: одно фото «после» → заявка «Выполнена» (EXECUTOR_COMPLETE).\n\nФото уходит в media-service ДО перехода; сбой загрузки статус не меняет.\nПовтор с тем же `idempotency_key` (и повтор по уже закрытой этим же\nисполнителем заявке) — 200 с карточкой без второй загрузки.\n\nОтветы: 200 — карточка; 403 `not_assigned` / `no_active_shift`;\n404; 409 `invalid_status` / `in_progress`; 413 `photo_too_large`;\n415 `unsupported_photo_type`; 422 `photo_empty` / `invalid_idempotency_key`;\n502 `media_rejected`; 503 `media_unavailable`.",
+        "operationId": "complete_request_api_v2_requests__request_number__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_complete_request_api_v2_requests__request_number__complete_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/problem": {
+      "post": {
+        "description": "«Проблема»: комментарий исполнителя по шаблону, статус не меняется.\n\nОтдельный эндпоинт, а не поле в `POST /comments`: тот открыт всем, у кого\nесть доступ к заявке, и никого не уведомляет; «Проблема» — только\nназначенному исполнителю и всегда с уведомлением менеджерам.\n\nОтветы: 201 — комментарий (`comment_type=\"problem\"`); 403 — не твоя\nзаявка; 404; 409 — заявка финализирована; 422 — шаблон/текст.",
+        "operationId": "report_problem_api_v2_requests__request_number__problem_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Problem",
         "tags": [
           "requests"
         ]

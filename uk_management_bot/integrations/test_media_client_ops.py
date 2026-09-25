@@ -299,6 +299,39 @@ class TestUploadReportMedia:
         assert result["media_file"]["id"] == 20
 
     @pytest.mark.asyncio
+    async def test_report_upload_passes_content_type_and_timeout(self):
+        """Атомарное «Готово» (API): тип — server-derived (сниффер), таймаут —
+        короче бюджета edge; без них клиент молчит как раньше."""
+        client = MediaServiceClient("http://localhost")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"media_file": {"id": 21}}
+        client.client.post = AsyncMock(return_value=mock_response)
+
+        await client.upload_report_media(
+            "260401-003", io.BytesIO(b"\xff\xd8\xffjpeg"), filename="after.jpg",
+            content_type="image/jpeg", timeout=25.0,
+        )
+
+        kwargs = client.client.post.call_args.kwargs
+        assert kwargs["files"] == [("file", ("after.jpg", b"\xff\xd8\xffjpeg", "image/jpeg"))]
+        assert kwargs["timeout"] == 25.0
+
+    @pytest.mark.asyncio
+    async def test_report_upload_without_overrides_keeps_wire(self):
+        client = MediaServiceClient("http://localhost")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"media_file": {"id": 22}}
+        client.client.post = AsyncMock(return_value=mock_response)
+
+        await client.upload_report_media("260401-004", io.BytesIO(b"x"), filename="a.jpg")
+
+        kwargs = client.client.post.call_args.kwargs
+        assert kwargs["files"] == [("file", ("a.jpg", b"x"))]
+        assert "timeout" not in kwargs
+
+    @pytest.mark.asyncio
     async def test_bytesio_without_name_attr_uses_report_default(self):
         """BytesIO objects without a name attribute default to 'report'."""
         client = MediaServiceClient("http://localhost")

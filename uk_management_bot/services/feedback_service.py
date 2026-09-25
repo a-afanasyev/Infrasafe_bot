@@ -75,6 +75,12 @@ async def manager_telegram_ids_async(db) -> list[int]:  # db: AsyncSession
     return [u.telegram_id for u in res.scalars().all() if u.telegram_id]
 
 
+async def manager_recipients_async(db) -> list[tuple[int, str]]:  # db: AsyncSession
+    """Async-зеркало `manager_recipients_sync`: (telegram_id, язык) менеджеров."""
+    res = await db.execute(select(User).where(_MANAGER_FILTER, _ACTIVE_FILTER))
+    return [(u.telegram_id, u.language or "ru") for u in res.scalars().all() if u.telegram_id]
+
+
 def _type_label(type_: str, lang: str = "ru") -> str:
     key = "feedback.type_complaint" if type_ == "complaint" else "feedback.type_wish"
     return get_text(key, language=lang)

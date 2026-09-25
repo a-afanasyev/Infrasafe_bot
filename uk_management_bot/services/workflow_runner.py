@@ -536,6 +536,42 @@ async def executor_in_claim_pool_async(session_factory, request_number: str,
         return executor_in_claim_pool(snap, actor)
 
 
+@dataclass(frozen=True)
+class Preflight:
+    """Итог сухого прогона команды: снимок, актор и ошибка канона (или None)."""
+    snapshot: WorkflowSnapshot
+    actor: ActorContext
+    error: Optional[WorkflowError]
+
+
+async def preflight_command_async(session_factory, request_number: str,
+                                  principal: PrincipalRef, command: ActionCommand,
+                                  now: Optional[datetime] = None) -> Preflight:
+    """Сухой прогон `run_command_async`: то же решение `_decide`, без лока и записи.
+
+    Для команд с дорогим внешним шагом ДО перехода (загрузка фото «после» в
+    media-service): отказать раньше, чем что-то уйдёт наружу. Правил не
+    добавляет — тот же актор/снимок/планировщик; окончательное решение всё
+    равно принимает `run_command_async` под FOR UPDATE. RequestNotFound
+    бросает, остальные ошибки канона возвращает в `error` вместе со снимком —
+    вызывающему он нужен, чтобы выбрать код отказа.
+    """
+    now = now or datetime.now(timezone.utc)
+    async with session_factory() as db:
+        req = (await db.execute(
+            select(Request).where(Request.request_number == request_number)
+        )).scalar_one_or_none()
+        if req is None:
+            raise RequestNotFound(request_number)
+        actor = await _load_actor_context_async(db, principal)
+        snap = await _build_snapshot_async(db, req, actor)
+    try:
+        _decide(snap, command, actor, principal, now)
+    except WorkflowError as exc:
+        return Preflight(snap, actor, exc)
+    return Preflight(snap, actor, None)
+
+
 async def claimable_by_actor_async(db: AsyncSession, requests: list[Request],
                                    principal: PrincipalRef) -> list[Request]:
     """Заявки из `requests`, которые актор может взять ПРЯМО СЕЙЧАС (порядок

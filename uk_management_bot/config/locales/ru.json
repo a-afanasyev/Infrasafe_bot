@@ -370,6 +370,7 @@
     "type_purchase": "закупка материалов",
     "type_report": "отчет о выполнении",
     "type_status_change": "изменение статуса",
+    "type_problem": "проблема исполнителя",
     "user_not_found": "❌ Пользователь не найден"
   },
   "employee_management": {
@@ -2468,6 +2469,14 @@
       "reassigned_away": "ℹ️ Заявка #{request_number} передана другому исполнителю",
       "reassigned": "🔁 Заявка #{request_number}: работы продолжит другой исполнитель\n\n📍 {address}",
       "category_changed": "🏷 Заявка #{request_number}: категория изменена на «{category}»\n\n📍 {address}\n\nЕсли это не ваш профиль — сообщите менеджеру."
+    },
+    "executor_problem": {
+      "message": "⚠️ <b>Проблема по заявке #{request_number}</b>\n\n👷 Исполнитель: {executor}\n📍 {address}\n\n❗ {problem}{details}",
+      "details": "\n💬 {text}",
+      "no_material": "Нет материала",
+      "not_let_in": "Не пустили",
+      "resident_absent": "Жителя нет дома",
+      "need_master": "Нужен мастер"
     }
   },
   "document_types": {

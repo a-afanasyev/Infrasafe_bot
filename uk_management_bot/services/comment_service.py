@@ -115,22 +115,28 @@ class CommentService:
             logger.error(f"Ошибка добавления комментария: {e}")
             raise
     
-    def get_request_comments(self, request_number: str, limit: int = 50) -> List[RequestComment]:
+    def get_request_comments(self, request_number: str, limit: int = 50,
+                             include_internal: bool = True) -> List[RequestComment]:
         """
         Получение всех комментариев заявки
         
         Args:
             request_number: Номер заявки
             limit: Максимальное количество комментариев
+            include_internal: False — без внутренних записей (для жителя)
             
         Returns:
             List[RequestComment]: Список комментариев
         """
-        return self.db.query(RequestComment).filter(
+        query = self.db.query(RequestComment).filter(
             RequestComment.request_number == request_number
-        ).order_by(desc(RequestComment.created_at)).limit(limit).all()
+        )
+        if not include_internal:
+            query = query.filter(RequestComment.is_internal.is_(False))
+        return query.order_by(desc(RequestComment.created_at)).limit(limit).all()
     
-    def get_comments_by_type(self, request_number: str, comment_type: str) -> List[RequestComment]:
+    def get_comments_by_type(self, request_number: str, comment_type: str,
+                             include_internal: bool = True) -> List[RequestComment]:
         """
         Получение комментариев заявки по типу
         
@@ -141,12 +147,15 @@ class CommentService:
         Returns:
             List[RequestComment]: Список комментариев
         """
-        return self.db.query(RequestComment).filter(
+        query = self.db.query(RequestComment).filter(
             and_(
                 RequestComment.request_number == request_number,
                 RequestComment.comment_type == comment_type
             )
-        ).order_by(desc(RequestComment.created_at)).all()
+        )
+        if not include_internal:
+            query = query.filter(RequestComment.is_internal.is_(False))
+        return query.order_by(desc(RequestComment.created_at)).all()
     
     def format_comments_for_display(self, comments: List[RequestComment], language: str = "ru") -> str:
         """

@@ -25,7 +25,10 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.states.request_comments import RequestCommentStates
 from uk_management_bot.services.comment_service import CommentService
-from uk_management_bot.services.request_access import has_request_access_sync
+from uk_management_bot.services.request_access import (
+    can_see_internal_comments_sync,
+    has_request_access_sync,
+)
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
 from uk_management_bot.keyboards.request_comments import (
     get_comment_type_keyboard,
@@ -185,7 +188,10 @@ def _load_comments_view(db, request_number: str, telegram_id: int, lang: str) ->
 
     # Получаем комментарии
     comment_service = CommentService(db)
-    comments = comment_service.get_request_comments(request.request_number, limit=20)
+    # Внутренние записи (смена категории, «Проблема») — только сотрудникам заявки
+    comments = comment_service.get_request_comments(
+        request.request_number, limit=20,
+        include_internal=can_see_internal_comments_sync(db, user, request))
 
     if not comments:
         return ("no_comments", None)
@@ -224,7 +230,9 @@ def _load_comments_by_type_view(db, request_number: str, comment_type: str, tele
 
     # Получаем комментарии определенного типа
     comment_service = CommentService(db)
-    comments = comment_service.get_comments_by_type(request.request_number, comment_type)
+    comments = comment_service.get_comments_by_type(
+        request.request_number, comment_type,
+        include_internal=can_see_internal_comments_sync(db, user, request))
 
     if not comments:
         return ("no_comments", None)
@@ -263,7 +271,10 @@ def _load_all_comments_view(db, request_number: str, telegram_id: int, lang: str
 
     # Получаем все комментарии
     comment_service = CommentService(db)
-    comments = comment_service.get_request_comments(request.request_number, limit=20)
+    # Внутренние записи (смена категории, «Проблема») — только сотрудникам заявки
+    comments = comment_service.get_request_comments(
+        request.request_number, limit=20,
+        include_internal=can_see_internal_comments_sync(db, user, request))
 
     if not comments:
         return ("no_comments", None)
