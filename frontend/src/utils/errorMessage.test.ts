@@ -73,8 +73,10 @@ describe('apiErrorDetail / apiErrorCode — единый канон', () => {
     expect(apiErrorStatus(new Error('x'))).toBeNull()
   })
 
-  it('TWA getErrorMessage делегирует в канон, иначе — локализованный fallback', () => {
-    expect(getErrorMessage(axiosError([{ loc: ['body', 'a'], msg: 'bad' }]))).toBe('a: bad')
+  it('TWA getErrorMessage: сырой detail НЕ показывает (в отличие от канона дашборда) — локализованный fallback', () => {
+    const err = axiosError([{ loc: ['body', 'a'], msg: 'bad' }])
+    expect(apiErrorDetail(err)).toBe('a: bad')
+    expect(getErrorMessage(err, 'fb')).toBe('fb')
     expect(getErrorMessage(null, 'fb')).toBe('fb')
   })
 
