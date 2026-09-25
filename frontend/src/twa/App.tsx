@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import MeterEntryScreen from './pages/meter-entry/MeterEntryScreen'
 import { useTWAAuth } from './hooks/useTWAAuth'
@@ -7,6 +7,7 @@ import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
+import { createTwaQueryClient } from './queryRetry'
 import OfflineIndicator from '../components/shared/OfflineIndicator'
 import RoleGuard from './components/RoleGuard'
 import RoleLanding from './components/RoleLanding'
@@ -40,9 +41,7 @@ import TaskDetailPage from './pages/executor/TaskDetailPage'
 import MyShiftsPage from './pages/executor/MyShiftsPage'
 import CompletionReport from './pages/executor/CompletionReport'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
-})
+const queryClient = createTwaQueryClient()
 
 function TWAContent() {
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
