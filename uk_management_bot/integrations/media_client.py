@@ -129,7 +129,9 @@ class MediaServiceClient:
         report_type: str = "completion_photo",
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        uploaded_by: Optional[int] = None
+        uploaded_by: Optional[int] = None,
+        content_type: Optional[str] = None,
+        timeout: Optional[Union[float, httpx.Timeout]] = None,
     ) -> Dict[str, Any]:
         """
         Загрузка медиа-файла для отчета
@@ -142,6 +144,10 @@ class MediaServiceClient:
             description: Описание
             tags: Теги
             uploaded_by: ID пользователя
+            content_type: Тип файла, выведенный сервером (сниффер по байтам).
+                Без него httpx угадывает тип по расширению имени.
+            timeout: Таймаут этого запроса вместо клиентского (API за edge
+                обязан уложиться в 30 с — BUG-189).
 
         Returns:
             Информация о загруженном файле отчета
@@ -163,6 +169,8 @@ class MediaServiceClient:
                 else:
                     filename = filename or "report"
                 file_obj = ("file", (filename, file_content))
+            if content_type:
+                file_obj = ("file", (filename, file_content, content_type))
 
             data = {
                 "request_number": request_number,
@@ -181,11 +189,10 @@ class MediaServiceClient:
                     raise ValueError("uploaded_by must be a positive integer (server-derived user ID)")
                 data["uploaded_by"] = str(uploaded_by)
 
-            response = await self.client.post(
-                "/media/upload-report",
-                files=[file_obj],
-                data=data
-            )
+            post_kwargs: Dict[str, Any] = {"files": [file_obj], "data": data}
+            if timeout is not None:
+                post_kwargs["timeout"] = timeout
+            response = await self.client.post("/media/upload-report", **post_kwargs)
 
             response.raise_for_status()
             result = response.json()
