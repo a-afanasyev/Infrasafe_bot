@@ -1,8 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import type { TwaRequest } from '../../types'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { twaClient } from '../../twaClient'
+import { EXECUTOR_ACTIVE_STATUSES, useExecutorTasks } from '../../hooks/useExecutorTasks'
 import { tStatus } from '../../../i18n/apiMaps'
 import RequestCard from '../../components/RequestCard'
 import { CardSkeleton } from '../../components/Skeleton'
@@ -17,15 +16,11 @@ export default function TasksPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const { data: requests = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ['twa', 'executor-tasks'],
-    queryFn: () => twaClient.get('/api/v2/requests', {
-      params: { view: 'assigned', limit: 50 }
-    }).then(r => r.data),
-    staleTime: 30_000,
-  })
+  const { data: requests = [], isLoading, isError, refetch } = useExecutorTasks('active')
 
-  const activeStatuses = [RETURNED, 'В работе', 'Закуп', 'Уточнение', 'Новая']
+  // Сервер уже отдал только активные; клиентский фильтр — страховка на случай
+  // статуса, для которого на странице нет группы.
+  const activeStatuses = EXECUTOR_ACTIVE_STATUSES
   const active = requests.filter((r: TwaRequest) => activeStatuses.includes(r.status))
 
   // Group by status
