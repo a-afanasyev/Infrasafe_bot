@@ -10,6 +10,7 @@ from uk_management_bot.constants.categories import get_specialization_for_catego
 import logging
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import resolve_category_key, get_category_display, get_urgency_display
+from uk_management_bot.utils.twa_links import executor_task_open_markup
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.request_number_service import REQUEST_NUMBER_CORE
@@ -189,8 +190,13 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
         for executor in matching_executors:
             active_shift = svc.get_active_shift_for(executor.id, now)
             lang = executor.language or "ru"
+            reply_markup = None
             try:
                 if active_shift:
+                    # Дежурному групповая заявка доступна (канон request_access) —
+                    # web_app «Открыть» на карточку в TWA (шлём в личку). Без смены
+                    # карточка ответит 403 — кнопки нет.
+                    reply_markup = executor_task_open_markup(request.request_number, lang)
                     notification_text = get_text("admin.handlers.new_request_for_duty", language=lang).format(
                         specialization=translate_specializations([specialization], lang),
                         request_number=request.request_number,
@@ -209,7 +215,8 @@ async def auto_assign_request_by_category(request: Request, db: Session, manager
                 await bot.send_message(
                     chat_id=executor.telegram_id,
                     text=notification_text,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
                 )
                 logger.info(f"Уведомление о групповом назначении отправлено исполнителю {executor.id} (смена {active_shift.id if active_shift else '—'})")
             except Exception as e:

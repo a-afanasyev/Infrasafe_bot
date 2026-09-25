@@ -310,6 +310,43 @@ def _render_text(
     )
 
 
+def _reply_markup(text_key: str, language: str, request: Request):
+    """Наряду исполнителю — web_app «Открыть» на его карточку в TWA; прочим — None.
+
+    Все получатели матрицы — адресные (личка по telegram_id), web_app там
+    допустим. Житель кнопку не получает: маршрут исполнителя не его.
+    """
+    if text_key != _ASSIGNED_EXECUTOR_KEY:
+        return None
+    from uk_management_bot.utils.twa_links import executor_task_open_markup
+
+    return executor_task_open_markup(request.request_number, language)
+
+
+class NotifyMessage(tuple):
+    """Пара ``(telegram_id, text)`` + необязательная ``reply_markup``.
+
+    Остаётся 2-кортежем (распаковка/``dict()`` у вызывающих не меняются);
+    ``send_notify_messages`` читает разметку атрибутом, голые пары других
+    продюсеров шлются без неё.
+    """
+
+    reply_markup = None
+
+    def __new__(cls, chat_id: int, text: str, reply_markup=None):
+        obj = super().__new__(cls, (chat_id, text))
+        obj.reply_markup = reply_markup
+        return obj
+
+
+async def _send(send_to_user, bot, chat_id: int, text: str, reply_markup) -> bool:
+    """``send_to_user`` с разметкой только когда она есть — вызов без кнопки
+    остаётся прежним ``(bot, chat_id, text)``."""
+    if reply_markup is None:
+        return await send_to_user(bot, chat_id, text)
+    return await send_to_user(bot, chat_id, text, reply_markup=reply_markup)
+
+
 def _wanted_user_ids(request: Request, roles: Iterable[str]) -> set[int]:
     wanted = set()
     for role in roles:
@@ -333,10 +370,10 @@ async def _send_to_recipients(
     sent = 0
     for user in recipients:
         # Язык получателя, а не актора: сообщение читает он.
-        text = _render_text(
-            action, text_key, user.language or "ru", request, clarification_text
-        )
-        if await send_to_user(bot, user.telegram_id, text):
+        language = user.language or "ru"
+        text = _render_text(action, text_key, language, request, clarification_text)
+        if await _send(send_to_user, bot, user.telegram_id, text,
+                       _reply_markup(text_key, language, request)):
             sent += 1
     return sent
 
@@ -550,10 +587,12 @@ def collect_notify_messages_sync(
     for action, text_key, wanted_ids in _resolve_targets(request, plan):
         try:
             for user in _load_users_sync(db, wanted_ids):
-                messages.append((
+                language = user.language or "ru"
+                messages.append(NotifyMessage(
                     user.telegram_id,
-                    _render_text(action, text_key, user.language or "ru",
+                    _render_text(action, text_key, language,
                                  request, clarification_text),
+                    _reply_markup(text_key, language, request),
                 ))
         except Exception as e:
             logger.warning(
@@ -570,9 +609,11 @@ async def send_notify_messages(bot, messages: list[tuple[int, str]]) -> int:
     )
 
     sent = 0
-    for chat_id, text in messages:
+    for message in messages:
+        chat_id, text = message
         try:
-            if await send_to_user(bot or _get_shared_bot(), chat_id, text):
+            if await _send(send_to_user, bot or _get_shared_bot(), chat_id, text,
+                           getattr(message, "reply_markup", None)):
                 sent += 1
         except Exception as e:
             logger.warning("Notify-сообщение получателю %s не отправлено: %s", chat_id, e)
