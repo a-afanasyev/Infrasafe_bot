@@ -1271,6 +1271,8 @@
     "reassign_success": "✅ Смена переназначена. Заявок перенесено: {moved}."
   },
   "shifts": {
+    "user_started": "✅ Ваша смена начата в {started}",
+    "user_ended": "✅ Смена завершена в {ended}. Длительность: {hours} ч {minutes} мин",
     "accept_shift": "🔄 Принять смену",
     "duration": "Продолжительность: {duration}",
     "end_shift": "🔚 Сдать смену",

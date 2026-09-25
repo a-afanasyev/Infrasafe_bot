@@ -32,16 +32,18 @@ def build_shift_started_message(user: User, shift: Shift, for_channel: bool = Fa
     started = fmt_datetime(shift.start_time) if shift.start_time else ''
     if for_channel:
         return f"🔔 Смена начата: user_id={user.telegram_id} в {started}"
-    return f"✅ Ваша смена начата в {started}"
+    # Личное сообщение — на языке получателя (служебный канал остаётся на ru).
+    return get_text("shifts.user_started", language=user.language or "ru", started=started)
 
 
 def build_shift_ended_message(user: User, shift: Shift, for_channel: bool = False) -> str:
     hours, minutes = _format_duration_hm(shift.start_time, shift.end_time)
-    duration = f"{hours} ч {minutes} мин"
     ended = fmt_datetime(shift.end_time) if shift.end_time else ''
     if for_channel:
+        duration = f"{hours} ч {minutes} мин"
         return f"📤 Смена завершена: user_id={user.telegram_id} в {ended} (длительность {duration})"
-    return f"✅ Смена завершена в {ended}. Длительность: {duration}"
+    return get_text("shifts.user_ended", language=user.language or "ru",
+                    ended=ended, hours=hours, minutes=minutes)
 
 
 def build_shift_assignment_message(
