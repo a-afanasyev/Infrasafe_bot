@@ -324,6 +324,18 @@ async def toggle_meter_entry(
     return {"id": user.id, "meter_entry": body.enabled}
 
 
+def _ensure_staff_target(user: User, *, action: str) -> None:
+    """Цель — рядовой сотрудник: не manager/admin (403), и staff (иначе 422).
+
+    403 — как approve/block/rename (`_ensure_not_privileged`, проверяется
+    первым, чтобы admin без staff-роли тоже получил 403); 422 для не-staff —
+    как activate/decline: житель меняет свой язык сам в профиле.
+    """
+    _ensure_not_privileged(user, action=action)
+    if not service._is_staff(user):
+        raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
+
+
 @router.patch("/employees/{user_id}/simple-mode", dependencies=[Depends(require_roles("manager"))])
 async def toggle_simple_mode(
     user_id: int,
@@ -333,11 +345,13 @@ async def toggle_simple_mode(
     """Включить/выключить сотруднику простой режим исполнителя в Mini App."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
     #
-    # Включить — только исполнителю; выключить — всегда, чтобы флаг не застрял
-    # у человека, у которого роль исполнителя уже сняли. Идемпотентна.
+    # Только над сотрудником (см. _ensure_staff_target). Включить — только
+    # исполнителю; выключить — любому сотруднику, чтобы флаг не застрял у
+    # человека, у которого роль исполнителя уже сняли. Идемпотентна.
     user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_staff_target(user, action="Cannot change simple mode of a manager or admin user")
     if body.enabled and "executor" not in get_user_roles(user):
         raise HTTPException(status_code=422, detail="Simple mode is available only for executors")
     await service.set_simple_mode(db, user, body.enabled)
@@ -359,6 +373,7 @@ async def set_employee_language(
     user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_staff_target(user, action="Cannot change language of a manager or admin user")
     await service.set_user_language(db, user, body.language)
     return {"id": user.id, "language": body.language}
 

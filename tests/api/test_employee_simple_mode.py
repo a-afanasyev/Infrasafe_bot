@@ -1,9 +1,12 @@
 """Простой режим исполнителя: менеджер включает/выключает флаг сотруднику.
 
-`PATCH /api/v2/shifts/employees/{id}/simple-mode {enabled}` — только manager;
-включить можно только исполнителю, выключить — всегда (снятие флага не должно
-застревать, если роль исполнителя у человека уже забрали). Флаг виден в
-карточке и списке сотрудников.
+`PATCH /api/v2/shifts/employees/{id}/simple-mode {enabled}` и
+`PATCH .../{id}/language {language}` — только manager и только над
+сотрудником: житель (не staff) → 422 как в activate/decline, manager/admin
+(в т.ч. мульти-роль) → 403 как в approve/block/rename (`_ensure_not_privileged`).
+Включить simple_mode можно только исполнителю, выключить — любому сотруднику
+(флаг не застревает, если роль исполнителя уже сняли). Флаг виден в карточке и
+списке сотрудников.
 """
 import pytest
 
@@ -49,8 +52,8 @@ async def test_manager_disables_simple_mode(client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_enable_for_non_executor_rejected_422(client, db_session):
-    u = await _user(db_session, 3003, roles='["applicant"]')
+async def test_enable_for_non_executor_staff_rejected_422(client, db_session):
+    u = await _user(db_session, 3003, roles='["inspector"]')
 
     resp = await client.patch(f"{EP}/{u.id}/simple-mode", json={"enabled": True})
 
@@ -60,8 +63,8 @@ async def test_enable_for_non_executor_rejected_422(client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_disable_for_non_executor_allowed(client, db_session):
-    u = await _user(db_session, 3004, roles='["applicant"]', simple_mode=True)
+async def test_disable_for_non_executor_staff_allowed(client, db_session):
+    u = await _user(db_session, 3004, roles='["inspector"]', simple_mode=True)
 
     resp = await client.patch(f"{EP}/{u.id}/simple-mode", json={"enabled": False})
 
@@ -182,3 +185,59 @@ async def test_language_exposed_in_employee_card_and_list(client, db_session):
     assert card.json()["language"] == "uz_cyrl"
     listing = await client.get(EP)
     assert {row["id"]: row for row in listing.json()}[u.id]["language"] == "uz_cyrl"
+
+
+# ═══════════════════ Guard цели: только сотрудник, не manager/admin ═══════════════════
+
+_PRIVILEGED = ['["manager"]', '["admin"]', '["manager", "executor"]', '["applicant", "admin", "executor"]']
+_CALLS = [
+    ("simple-mode", {"enabled": True}),
+    ("simple-mode", {"enabled": False}),
+    ("language", {"language": "uz"}),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("roles", _PRIVILEGED)
+@pytest.mark.parametrize("path,body", _CALLS)
+async def test_privileged_target_forbidden_403(client, db_session, roles, path, body):
+    u = await _user(db_session, 3200 + _PRIVILEGED.index(roles), roles=roles, simple_mode=True)
+
+    resp = await client.patch(f"{EP}/{u.id}/{path}", json=body)
+
+    assert resp.status_code == 403
+    await db_session.refresh(u)
+    assert u.simple_mode is True
+    assert u.language == "ru"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path,body", _CALLS)
+async def test_resident_target_rejected_422(client, db_session, path, body):
+    u = await _user(db_session, 3210, roles='["applicant"]', simple_mode=True)
+
+    resp = await client.patch(f"{EP}/{u.id}/{path}", json=body)
+
+    assert resp.status_code == 422
+    await db_session.refresh(u)
+    assert u.simple_mode is True
+    assert u.language == "ru"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("roles", ['["executor"]', '["applicant", "executor"]', '["inspector"]'])
+async def test_staff_target_language_ok(client, db_session, roles):
+    u = await _user(db_session, 3220 + len(roles), roles=roles)
+
+    resp = await client.patch(f"{EP}/{u.id}/language", json={"language": "uz_cyrl"})
+
+    assert resp.status_code == 200
+    await db_session.refresh(u)
+    assert u.language == "uz_cyrl"
+
+
+@pytest.mark.asyncio
+async def test_applicant_executor_enable_ok(client, db_session):
+    u = await _user(db_session, 3230, roles='["applicant", "executor"]')
+    resp = await client.patch(f"{EP}/{u.id}/simple-mode", json={"enabled": True})
+    assert resp.status_code == 200
