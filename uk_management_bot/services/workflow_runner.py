@@ -397,10 +397,7 @@ async def _load_actor_context_async(db: AsyncSession,
 
 
 async def _build_snapshot_async(db: AsyncSession, req: Request,
-                                actor: ActorContext, *,
-                                has_shift: Optional[bool] = None) -> WorkflowSnapshot:
-    """`has_shift` — уже вычисленное «актор на смене» (батч по многим заявкам
-    одного актора); None — вычислить здесь."""
+                                actor: ActorContext) -> WorkflowSnapshot:
     has_rating = (await db.execute(
         select(Rating.id).where(
             Rating.request_number == req.request_number))).first() is not None
@@ -410,10 +407,19 @@ async def _build_snapshot_async(db: AsyncSession, req: Request,
                RequestAssignment.group_specialization).where(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active"))).first()
-    if has_shift is None:
-        has_shift = False
-        if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-            has_shift = await is_on_shift_now_async(db, actor.user_id)
+    has_shift = False
+    if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
+        has_shift = await is_on_shift_now_async(db, actor.user_id)
+    return _snapshot_from_facts(req, has_rating=has_rating, active=active,
+                                has_shift=has_shift)
+
+
+def _snapshot_from_facts(req: Request, *, has_rating: bool, active: Optional[tuple],
+                         has_shift: bool) -> WorkflowSnapshot:
+    """Snapshot из уже прочитанных фактов. `active` — строка активного
+    назначения `(executor_id, assignment_type, group_specialization)` или None.
+    Общая сборка для одиночного `_build_snapshot_async` и батча
+    `claimable_by_actor_async` — чтобы снимки не разъехались."""
     a_exec = active[0] if active else None
     a_type = active[1] if active else None
     a_group = active[2] if active else None
@@ -552,12 +558,32 @@ async def claimable_by_actor_async(db: AsyncSession, requests: list[Request],
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
         has_shift = await is_on_shift_now_async(db, actor.user_id)
-    claimable = []
-    for req in requests:
-        snap = await _build_snapshot_async(db, req, actor, has_shift=has_shift)
-        if Action.EXECUTOR_CLAIM in allowed_actions(snap, actor):
-            claimable.append(req)
-    return claimable
+    # Факты snapshot'а — батчем по всем номерам (фиксированное число запросов
+    # независимо от N), сборка — тем же `_snapshot_from_facts`, что у run_command.
+    numbers = [r.request_number for r in requests]
+    rated = set((await db.execute(
+        select(Rating.request_number).where(
+            Rating.request_number.in_(numbers)))).scalars().all())
+    active_by_number = {}
+    for row in (await db.execute(
+            select(RequestAssignment.request_number,
+                   RequestAssignment.executor_id,
+                   RequestAssignment.assignment_type,
+                   RequestAssignment.group_specialization).where(
+                RequestAssignment.request_number.in_(numbers),
+                RequestAssignment.status == "active"))).all():
+        # Зеркало `.first()` одиночной сборки: при (аномальных) нескольких
+        # активных назначениях берётся первое встреченное.
+        active_by_number.setdefault(row[0], tuple(row[1:]))
+    return [
+        req for req in requests
+        if Action.EXECUTOR_CLAIM in allowed_actions(
+            _snapshot_from_facts(
+                req, has_rating=req.request_number in rated,
+                active=active_by_number.get(req.request_number),
+                has_shift=has_shift),
+            actor)
+    ]
 
 
 async def run_command_async(session_factory, request_number: str,

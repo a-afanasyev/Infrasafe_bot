@@ -234,6 +234,10 @@ async def claim_pool_rows(
         )
         .order_by(_URGENCY_RANK.desc(), RequestModel.created_at.asc(),
                   RequestModel.request_number.asc())
+        # ⚠️ offset/limit режут КАНДИДАТОВ до финального фильтра каноном: если
+        # предфильтр и канон разойдутся (напр. группа `universal`), страница
+        # может прийти короче limit. Пул мал, клиенту это не мешает; при росте —
+        # добирать страницу до limit после финального фильтра.
         .offset(offset)
         .limit(limit)
     )

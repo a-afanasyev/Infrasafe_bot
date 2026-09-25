@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import event
 
 from uk_management_bot.api.dependencies import get_current_user
 from uk_management_bot.api.main import app
@@ -202,3 +203,39 @@ async def test_every_pool_item_is_claimable_and_leaves_pool(act_as):
         r = await client.post(f"/api/v2/requests/{n}/claim")
         assert r.status_code == 200, (n, r.text)
     assert _numbers((await client.get(POOL_URL)).json()) == []
+
+
+async def _add_pool_requests(factory, owner: int, start: int, count: int) -> None:
+    async with factory() as s:
+        for i in range(start, start + count):
+            n = f"260922-{i:03d}"
+            s.add_all([_request(n, owner, minutes=i), _group(n, owner)])
+        await s.commit()
+
+
+async def _pool_query_count(client, db_engine) -> tuple[int, int]:
+    statements: list[str] = []
+
+    def _count(_conn, _cursor, statement, *_a):
+        statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _count)
+    try:
+        body = (await client.get(POOL_URL, params={"limit": 100})).json()
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _count)
+    return len(statements), len(body["items"])
+
+
+@pytest.mark.asyncio
+async def test_pool_query_count_does_not_grow_with_candidates(
+        act_as, db_session_factory, db_engine, manager_user):
+    """Финальная проверка каноном — батчем: число SQL на GET /pool не зависит
+    от числа кандидатов (раньше по 2 SELECT на заявку при сборке snapshot)."""
+    client = await act_as(41)
+    await _add_pool_requests(db_session_factory, manager_user.id, 1, 2)
+    small, small_items = await _pool_query_count(client, db_engine)
+    await _add_pool_requests(db_session_factory, manager_user.id, 3, 18)
+    large, large_items = await _pool_query_count(client, db_engine)
+    assert (small_items, large_items) == (5, 23)
+    assert large == small, (small, large)
