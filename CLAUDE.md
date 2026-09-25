@@ -23,7 +23,7 @@
   - `make test` / `docker exec uk-management-bot pytest` — быстрая петля, НЕ эталон: образ печётся (код = момент сборки), в живой контейнер во время отладки попадают файлы через `docker cp`, и в образе нет `docker-compose*.yml` — SSOT-гейт `test_compose_secret_env_ssot.py` там падает тремя FileNotFoundError при зелёном CI. Прод-образ бота собирается БЕЗ pytest (`INSTALL_DEV=false` по умолчанию, A9-P2-19) — для этой петли собирать `make build-bot` (передаёт `--build-arg INSTALL_DEV=true`).
 - **Тесты фронта**: `cd frontend && npm test` (или `npx vitest`).
 - **Rebuild бота**: `docker compose build app && docker compose up -d app` (сервис называется `app`; `uk-management-bot` — имя контейнера, build/up по нему не работают).
-- **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.
+- **Локализация бота**: файлы `config/locales/ru.json`, `config/locales/uz.json`; `uz_cyrl` (кириллица) — НЕ файл, строится транслитерацией uz.json (`utils/uz_translit.py`), ручные правки только в `uz_cyrl.overrides.json`. Функция `get_text(key, language=lang)`. Статусы через `utils/status_display.py`. Адреса через `utils/address_helpers.py:localize_address()`.
 - **Локализация фронта**: `frontend/src/i18n/locales/{ru,uz}.json`, библиотека i18next.
 - **Роли в БД**: `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль. Не использовать устаревшее поле `user.role`.
 - **Номера заявок**: формат `YYMMDD-NNN` (строка, не int). Сервис: `RequestNumberService`.

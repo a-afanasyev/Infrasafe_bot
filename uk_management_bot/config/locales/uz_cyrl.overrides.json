@@ -1,0 +1,9 @@
+{
+  "employee_management": {
+    "employee_blocked": "🚫 Ходим блокланган"
+  },
+  "requests": {
+    "applicant_only": "⚠️ Ариза яратиш фақат яшовчилар учун. Менежерлар аризаларни дашборд/колл-марказ орқали яратади.",
+    "files_uploaded_to_media_service": "📎 Медиа-сервисга юкланган файллар: {count}"
+  }
+}
