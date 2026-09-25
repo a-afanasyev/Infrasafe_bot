@@ -27,6 +27,7 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_media
+from uk_management_bot.utils.button_texts import get_button_texts_for_all_languages
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.keyboards.requests import (
     CATEGORY_KEYS,
@@ -59,11 +60,8 @@ router = Router()
 
 PAGE_SIZE = 8
 
-# Тексты-триггеры входа (RU/UZ), совпадают с main_menu.inspector_create.
-INSPECTOR_CREATE_TEXTS = {
-    get_text("main_menu.inspector_create", language="ru"),
-    get_text("main_menu.inspector_create", language="uz"),
-}
+# Тексты-триггеры входа на всех языках (ru/uz/uz_cyrl), совпадают с main_menu.inspector_create.
+INSPECTOR_CREATE_TEXTS = set(get_button_texts_for_all_languages("main_menu.inspector_create"))
 
 
 class InspectorRequestStates(StatesGroup):

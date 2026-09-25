@@ -9,9 +9,13 @@ logger = logging.getLogger(__name__)
 _locale_cache: Dict[str, Dict[str, Any]] = {}
 
 # Язык → язык-родитель для фолбэка перевода (нет файла или ключа); последний
-# рубеж для всех — ru. uz_cyrl (узбекская кириллица) без своего перевода
-# показывает латиницу, а не русский.
+# рубеж для всех — ru. Ключ, которого нет в uz_cyrl, ищется в uz, затем в ru.
 LANGUAGE_FALLBACKS: Dict[str, str] = {"uz_cyrl": "uz"}
+
+# Производные локали: язык → родитель, из которого локаль строится
+# транслитерацией (utils/uz_translit), если своего <lang>.json нет. Поверх —
+# необязательные ручные правки <lang>.overrides.json.
+TRANSLITERATED_LOCALES: Dict[str, str] = {"uz_cyrl": "uz"}
 
 
 def _fallback_chain(language: str) -> List[str]:
@@ -46,9 +50,13 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
     locale_file = os.path.join(locales_dir, f"{language}.json")
 
     if not os.path.exists(locale_file):
+        if language in TRANSLITERATED_LOCALES:
+            data = _build_transliterated_locale(language, locales_dir)
+            _locale_cache[language] = data
+            return data
         parent = LANGUAGE_FALLBACKS.get(language)
         if parent:
-            # Нет своего файла — локаль родителя (uz_cyrl → uz), не русская.
+            # Нет своего файла — локаль родителя, не русская.
             data = load_locale(parent)
             _locale_cache[language] = data
             return data
@@ -63,6 +71,25 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Ошибка загрузки локализации: {e}")
         return {}
+
+def _build_transliterated_locale(language: str, locales_dir: str) -> Dict[str, Any]:
+    """uz_cyrl = транслитерация uz.json + ручные правки из overrides-файла.
+
+    Ключи, которых нет в родителе, в производной локали не появляются —
+    get_text уходит по цепочке фолбэка в ru, русский текст не транслитерируется.
+    """
+    from uk_management_bot.utils.uz_translit import deep_merge, transliterate_tree
+
+    data = transliterate_tree(load_locale(TRANSLITERATED_LOCALES[language]))
+    overrides_file = os.path.join(locales_dir, f"{language}.overrides.json")
+    if os.path.exists(overrides_file):
+        try:
+            with open(overrides_file, "r", encoding="utf-8") as f:
+                data = deep_merge(data, json.load(f))
+        except Exception as e:
+            logger.error(f"Ошибка загрузки правок локали {language}: {e}")
+    return data
+
 
 def get_text(key: str, language: str = "ru", **kwargs) -> str:
     """
