@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
 import { apiClient } from '../api/client'
-import { safeErrorMessage } from '@/utils/errorMessage'
+import { apiErrorStatus, safeErrorMessage } from '@/utils/errorMessage'
 import type {
   VerificationStatus,
   EmployeeBrief,
@@ -123,6 +123,64 @@ export function useToggleMeterEntry(employeeId: number | null) {
     onError: (error: unknown) => {
       console.error('Toggle meter-entry failed:', error)
       toast.error(i18n.t('toast.meterEntryFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
+/** Язык профиля сотрудника: ru / uz (латиница) / uz_cyrl (кириллица). */
+export type EmployeeLanguage = 'ru' | 'uz' | 'uz_cyrl'
+
+/**
+ * Отказ бэка на настройку сотрудника → понятный текст. Detail бэка — английский
+ * и технический («Not a staff account …»), поддержке он ничего не скажет:
+ * 403 — цель менеджер/админ, 422 — цель не подходит (ключ зависит от настройки).
+ * Прочие ошибки — без описания, заголовка тоста достаточно.
+ */
+function staffSettingDescription(error: unknown, notAllowedKey: string): string | undefined {
+  const status = apiErrorStatus(error)
+  if (status === 403) return i18n.t('toast.staffSettingForbidden')
+  if (status === 422) return i18n.t(notAllowedKey)
+  return undefined
+}
+
+/** Включить/выключить простой режим исполнителя в Mini App. */
+export function useToggleSimpleMode(employeeId: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiClient
+        .patch(`/api/v2/shifts/employees/${employeeId}/simple-mode`, { enabled })
+        .then(r => r.data),
+    onSuccess: (_data, enabled) => {
+      toast.success(i18n.t(enabled ? 'toast.simpleModeEnabled' : 'toast.simpleModeDisabled'))
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Toggle simple mode failed:', error)
+      const description = staffSettingDescription(error, 'toast.simpleModeExecutorOnly')
+      toast.error(i18n.t('toast.simpleModeFailed'), description ? { description } : undefined)
+    },
+  })
+}
+
+/** Сменить сотруднику язык бота и Mini App. */
+export function useSetEmployeeLanguage(employeeId: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (language: EmployeeLanguage) =>
+      apiClient
+        .patch(`/api/v2/shifts/employees/${employeeId}/language`, { language })
+        .then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.employeeLanguageUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Set employee language failed:', error)
+      const description = staffSettingDescription(error, 'toast.employeeLanguageStaffOnly')
+      toast.error(i18n.t('toast.employeeLanguageFailed'), description ? { description } : undefined)
     },
   })
 }

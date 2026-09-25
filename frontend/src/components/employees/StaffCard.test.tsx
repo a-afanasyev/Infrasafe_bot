@@ -23,6 +23,8 @@ function makeEmployee(overrides: Partial<EmployeeBrief> = {}): EmployeeBrief {
     status: 'approved',
     roles: ['executor'],
     bot_blocked: false,
+    simple_mode: false,
+    language: 'ru',
     ...overrides,
   }
 }
@@ -36,6 +38,18 @@ describe('StaffCard — бейдж «Бот заблокирован»', () => {
   it('нет бейджа без блокировки', () => {
     render(<StaffCard employee={makeEmployee()} />)
     expect(screen.queryByText(/Бот заблокирован/)).not.toBeInTheDocument()
+  })
+})
+
+describe('StaffCard — бейдж «Простой режим»', () => {
+  it('показывается при simple_mode', () => {
+    render(<StaffCard employee={makeEmployee({ simple_mode: true })} />)
+    expect(screen.getByTestId('simple-mode-badge')).toHaveTextContent('Простой режим')
+  })
+
+  it('нет бейджа без простого режима', () => {
+    render(<StaffCard employee={makeEmployee()} />)
+    expect(screen.queryByTestId('simple-mode-badge')).not.toBeInTheDocument()
   })
 })
 

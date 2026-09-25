@@ -8,6 +8,8 @@ import LoadingSpinner from '../components/shared/LoadingSpinner'
 import EditFullNameModal from '../components/shared/EditFullNameModal'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
+import SimpleModeBadge from '../components/employees/SimpleModeBadge'
+import SimpleModeSection from '../components/employees/SimpleModeSection'
 
 export default function EmployeeDetailPage() {
   const { t } = useTranslation()
@@ -34,6 +36,12 @@ export default function EmployeeDetailPage() {
   const isOnShift = emp.active_shift_id !== null
   const isVerified = emp.verification_status === 'verified'
   const isBlocked = emp.status === 'blocked'
+  // Простой режим — только рядовому исполнителю: менеджер/админ получат 403.
+  // Уже включённый флаг показываем и без роли исполнителя, чтобы его можно
+  // было снять (бэк разрешает выключать любому сотруднику).
+  const isPrivileged = emp.roles?.some(r => r === 'manager' || r === 'admin') ?? false
+  const canConfigureSimpleMode =
+    !isPrivileged && ((emp.roles?.includes('executor') ?? false) || emp.simple_mode)
 
   return (
     <div className="p-5 px-6 flex flex-col gap-5 max-w-[720px]">
@@ -130,6 +138,9 @@ export default function EmployeeDetailPage() {
             >
               {'\u25CF'} {isOnShift ? t('employees.activeShift') : t('employees.offShift')}
             </span>
+            {emp.simple_mode && (
+              <SimpleModeBadge className="text-[11px] px-2.5 py-0.5 rounded-full" />
+            )}
           </div>
         </div>
       </div>
@@ -160,6 +171,14 @@ export default function EmployeeDetailPage() {
           </div>
         )
       })()}
+
+      {canConfigureSimpleMode && (
+        <SimpleModeSection
+          employeeId={emp.id}
+          simpleMode={emp.simple_mode}
+          language={emp.language}
+        />
+      )}
 
       {renameOpen && (
         <EditFullNameModal

@@ -7,6 +7,7 @@ import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials, getSpecDisplay } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
 import { cn } from '@/lib/utils'
+import SimpleModeBadge from './SimpleModeBadge'
 import { SortIndicator } from '../shared/SortIndicator'
 import type { UseTableSortResult } from '../../hooks/useTableSort'
 import { EMPLOYEE_COLUMNS } from './employeeSortColumns'
@@ -119,6 +120,9 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
                           <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-[10px] bg-violet/15 text-violet">
                             {t(`role.${staffRole}`)}
                           </span>
+                        )}
+                        {emp.simple_mode && (
+                          <SimpleModeBadge className="shrink-0 text-[9px] px-1.5 py-0.5" />
                         )}
                       </div>
                       {emp.phone && (
