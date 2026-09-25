@@ -15,10 +15,10 @@ AST-гейт `tests/api/test_requests_router_inventory.py` фиксирует о
 import logging
 from typing import Any, Callable, Literal, Optional
 
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import case, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
@@ -30,7 +30,8 @@ from uk_management_bot.database.models.request_assignment import RequestAssignme
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
-from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
+from uk_management_bot.database.models.apartment import Apartment
+from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT, URGENCY_ORDER
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
 from uk_management_bot.services.elevator_service import resolve_request_elevator_async
 from uk_management_bot.services.redis_pubsub import publish_request_event
@@ -42,6 +43,8 @@ from uk_management_bot.utils.shifts import is_on_shift_now_async
 from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.workflow_predicates import (
     active_status_clause,
+    pending_or_in_progress_clause,
+    status_in_clause,
     terminal_status_clause,
 )
 
@@ -179,13 +182,62 @@ async def assigned_to_executor_clause(db: AsyncSession, user: User):
     ]
     specs = parse_specializations(user)
     if specs and await is_on_shift_now_async(db, user.id):
-        group_sub = select(RequestAssignment.request_number).where(
-            RequestAssignment.assignment_type == "group",
-            RequestAssignment.group_specialization.in_(specs),
-            RequestAssignment.status == "active",
-        )
-        conditions.append(RequestModel.request_number.in_(group_sub))
+        conditions.append(RequestModel.request_number.in_(_group_assignment_sub(specs)))
     return or_(*conditions)
+
+
+def _group_assignment_sub(specs):
+    """Номера заявок с активным групповым назначением на одну из `specs`.
+
+    Общий SQL-кусок списка (`assigned_to_executor_clause`) и пула
+    (`claim_pool_rows`): сравнение сырым `IN`, джокер не расширяется (см.
+    докстринг `assigned_to_executor_clause`).
+    """
+    return select(RequestAssignment.request_number).where(
+        RequestAssignment.assignment_type == "group",
+        RequestAssignment.group_specialization.in_(specs),
+        RequestAssignment.status == "active",
+    )
+
+
+# Срочные — первыми; неизвестная/пустая срочность — в конец (ниже low).
+_URGENCY_RANK = case(URGENCY_ORDER, value=RequestModel.urgency, else_=0)
+
+
+async def claim_pool_rows(
+    db: AsyncSession, *, user: User, limit: int, offset: int,
+) -> tuple[bool, list[RequestModel]]:
+    """Кандидаты во вкладку «Взять»: `(on_shift, заявки)`.
+
+    Это только SQL-ПРЕДФИЛЬТР (как пул бота `get_group_pool_query`): группа по
+    специализации, назначение ещё не взято, статус ждёт исполнителя. Финальный
+    ответ «может взять прямо сейчас» даёт канон взятия
+    (`workflow_runner.claimable_by_actor_async`) — роутер обязан его применить.
+
+    Порядок: срочность ↓, затем очередь (created_at ↑, tiebreak по номеру).
+    Не на смене → `(False, [])` без запросов к заявкам.
+    """
+    if not await is_on_shift_now_async(db, user.id):
+        return False, []
+    specs = parse_specializations(user)
+    if not specs:
+        return True, []
+    unclaimed = _group_assignment_sub(specs).where(
+        RequestAssignment.executor_id.is_(None))
+    result = await db.execute(
+        select(RequestModel)
+        .where(RequestModel.request_number.in_(unclaimed),
+               pending_or_in_progress_clause())
+        .options(
+            selectinload(RequestModel.apartment_obj).selectinload(Apartment.building),
+            selectinload(RequestModel.building_obj),
+        )
+        .order_by(_URGENCY_RANK.desc(), RequestModel.created_at.asc(),
+                  RequestModel.request_number.asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return True, list(result.scalars().all())
 
 
 async def list_requests_rows(
@@ -193,7 +245,7 @@ async def list_requests_rows(
     *,
     user: User,
     view: Optional[RequestListView] = None,
-    status: Optional[str],
+    statuses: Optional[list[str]],
     category: Optional[str],
     executor_id: Optional[int],
     source: Optional[str],
@@ -234,8 +286,8 @@ async def list_requests_rows(
             if "executor" in user_roles
             else false()
         )
-    if status:
-        query = query.filter(RequestModel.status == status)
+    if statuses:
+        query = query.filter(status_in_clause(statuses))
     if category:
         query = query.filter(RequestModel.category == category)
     if executor_id:

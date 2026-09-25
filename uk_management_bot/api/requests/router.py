@@ -70,6 +70,7 @@ from uk_management_bot.utils.request_workflow import (
     SameExecutor,
     WorkflowError,
     TERMINAL_STATUSES,
+    CANON_STATUSES,
     normalize_status,
 )
 from uk_management_bot.utils import constants as C
@@ -208,9 +209,29 @@ async def get_kanban(
     return KanbanResponse(columns=columns)
 
 
+def _validated_statuses(values: Optional[list[str]]) -> Optional[list[str]]:
+    """Канон-статусы фильтра списка; неизвестное значение — 422, а не пустой
+    ответ (опечатка клиента иначе выглядела бы как «заявок нет»)."""
+    if not values:
+        return None
+    unknown = sorted(set(values) - set(CANON_STATUSES))
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown status: {', '.join(unknown)}. Allowed: {', '.join(CANON_STATUSES)}",
+        )
+    return list(dict.fromkeys(values))
+
+
 @router.get("", response_model=list[RequestCard])
 async def list_requests(
-    status: Optional[str] = Query(None),
+    status: Optional[list[str]] = Query(
+        None,
+        description=(
+            "Фильтр по канон-статусу; повторяемый (`status=a&status=b`) — "
+            "любой из перечисленных. Одиночный `status=a` — прежний контракт."
+        ),
+    ),
     category: Optional[str] = Query(None),
     executor_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
@@ -234,7 +255,7 @@ async def list_requests(
         db,
         user=user,
         view=view,
-        status=status,
+        statuses=_validated_statuses(status),
         category=category,
         executor_id=executor_id,
         source=source,

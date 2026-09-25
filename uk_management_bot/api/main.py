@@ -38,6 +38,7 @@ from uk_management_bot.api.ws.router import router as ws_router
 from uk_management_bot.api.shifts.router import router as shifts_router
 from uk_management_bot.api.shifts.executor_router import router as executor_shifts_router
 from uk_management_bot.api.requests.stats_router import router as requests_stats_router
+from uk_management_bot.api.requests.pool_router import router as requests_pool_router
 from uk_management_bot.api.addresses.router import router as addresses_router
 from uk_management_bot.api.residents.router import router as residents_router
 from uk_management_bot.api.public.router import router as public_router
@@ -142,6 +143,8 @@ async def security_headers(request: Request, call_next):
 # Routers
 app.include_router(auth_router, prefix="/api/v2/auth", tags=["auth"])
 app.include_router(requests_stats_router, prefix="/api/v2/requests", tags=["requests"])
+# До requests_router: иначе `GET /{request_number}` перехватит `/pool`.
+app.include_router(requests_pool_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(requests_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(callcenter_router, prefix="/api/v2/callcenter", tags=["callcenter"])
 app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])

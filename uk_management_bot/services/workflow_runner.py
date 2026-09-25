@@ -397,7 +397,10 @@ async def _load_actor_context_async(db: AsyncSession,
 
 
 async def _build_snapshot_async(db: AsyncSession, req: Request,
-                                actor: ActorContext) -> WorkflowSnapshot:
+                                actor: ActorContext, *,
+                                has_shift: Optional[bool] = None) -> WorkflowSnapshot:
+    """`has_shift` — уже вычисленное «актор на смене» (батч по многим заявкам
+    одного актора); None — вычислить здесь."""
     has_rating = (await db.execute(
         select(Rating.id).where(
             Rating.request_number == req.request_number))).first() is not None
@@ -407,9 +410,10 @@ async def _build_snapshot_async(db: AsyncSession, req: Request,
                RequestAssignment.group_specialization).where(
             RequestAssignment.request_number == req.request_number,
             RequestAssignment.status == "active"))).first()
-    has_shift = False
-    if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-        has_shift = await is_on_shift_now_async(db, actor.user_id)
+    if has_shift is None:
+        has_shift = False
+        if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
+            has_shift = await is_on_shift_now_async(db, actor.user_id)
     a_exec = active[0] if active else None
     a_type = active[1] if active else None
     a_group = active[2] if active else None
@@ -524,6 +528,36 @@ async def executor_in_claim_pool_async(session_factory, request_number: str,
             return False
         snap = await _build_snapshot_async(db, req, actor)
         return executor_in_claim_pool(snap, actor)
+
+
+async def claimable_by_actor_async(db: AsyncSession, requests: list[Request],
+                                   principal: PrincipalRef) -> list[Request]:
+    """Заявки из `requests`, которые актор может взять ПРЯМО СЕЙЧАС (порядок
+    сохраняется) — read-only, без лока.
+
+    Решение то же, что у `run_command` для EXECUTOR_CLAIM: `allowed_actions`
+    (from-статус из ACTION_TABLE + предикат `_executor_can_claim`) на том же
+    snapshot. Вызывающий может сузить набор SQL-предфильтром, но финальный
+    ответ — только здесь, чтобы пул не стал третьей копией правил взятия.
+    """
+    from uk_management_bot.utils.request_workflow import (
+        Action, NotAuthorized, allowed_actions,
+    )
+    if not requests:
+        return []
+    try:
+        actor = await _load_actor_context_async(db, principal)
+    except NotAuthorized:
+        return []
+    has_shift = False
+    if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
+        has_shift = await is_on_shift_now_async(db, actor.user_id)
+    claimable = []
+    for req in requests:
+        snap = await _build_snapshot_async(db, req, actor, has_shift=has_shift)
+        if Action.EXECUTOR_CLAIM in allowed_actions(snap, actor):
+            claimable.append(req)
+    return claimable
 
 
 async def run_command_async(session_factory, request_number: str,
