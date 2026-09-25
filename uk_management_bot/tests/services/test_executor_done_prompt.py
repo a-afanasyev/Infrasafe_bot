@@ -87,6 +87,61 @@ def test_all_recipients_only_approved_executors_open_statuses(db):
     assert recipient.total == 1 and recipient.executor.lang == "uz"
 
 
+def _seed_many(db, executors: int, per_executor: int) -> None:
+    from uk_management_bot.database.models import Apartment, Building, Yard
+
+    yard = Yard(name=f"Двор {executors}", is_active=True)
+    building = Building(address=f"Дом {executors}", yard=yard, is_active=True)
+    db.add_all([yard, building])
+    db.flush()
+    for e in range(executors):
+        user = User(telegram_id=10_000 + executors * 100 + e, roles='["executor"]', status="approved")
+        db.add(user)
+        db.flush()
+        for r in range(per_executor):
+            apartment = Apartment(building_id=building.id,
+                                  apartment_number=f"{executors}-{e}-{r}",
+                                  is_active=True)
+            db.add(apartment)
+            db.flush()
+            db.add(Request(request_number=f"26{executors:02d}{e:02d}-{r:03d}", user_id=1,
+                           executor_id=user.id, category="other", description="d",
+                           status="В работе", apartment_id=apartment.id,
+                           building_id=building.id if r % 2 else None))
+    db.commit()
+
+
+def _count_queries(db, fn) -> int:
+    from sqlalchemy import event
+
+    engine = db.get_bind()
+    counter = {"n": 0}
+
+    def _before(*_args, **_kwargs):
+        counter["n"] += 1
+
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        db.expunge_all()  # холодная identity map: считаем честные SELECT'ы
+        fn()
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    return counter["n"]
+
+
+def test_all_recipients_query_count_is_constant(db):
+    """N+1-гейт: подпись «дом · кв» грузится eager — число запросов не растёт
+    с числом заявок и исполнителей."""
+    _seed_many(db, executors=2, per_executor=2)
+    small = _count_queries(db, lambda: done.all_recipients_sync(db))
+    _seed_many(db, executors=6, per_executor=5)
+    recipients = []
+    large = _count_queries(db, lambda: recipients.extend(done.all_recipients_sync(db)))
+    assert len(recipients) == 1 + 2 + 6
+    assert all(t.label for r in recipients for t in r.tasks)
+    assert large == small
+
+
 async def test_reminder_once_per_day_per_request(db, redis):
     (recipient,) = done.all_recipients_sync(db)
     bot = _bot()

@@ -2881,6 +2881,7 @@
     "err_status": "#{request_number} arizani hozir yopib bo'lmaydi.",
     "err_in_progress": "Yopilmoqda, kuting.",
     "err_photo": "Rasm to'g'ri kelmadi. Yangisini oling.",
+    "err_media": "Rasm yuborilmadi. Yana urinib ko'ring.",
     "err_generic": "Bo'lmadi. Keyinroq urinib ko'ring."
   }
 }

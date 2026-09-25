@@ -58,6 +58,9 @@ _REFUSAL_KEYS = {
     "photo_empty": "executor_done.err_photo",
     "photo_too_large": "executor_done.err_photo",
     "unsupported_photo_type": "executor_done.err_photo",
+    "media_unavailable": "executor_done.err_media",
+    "media_rejected": "executor_done.err_media",
+    "invalid_idempotency_key": "executor_done.err_generic",
 }
 _DEFAULT_ERROR_KEY = "executor_done.err_generic"
 

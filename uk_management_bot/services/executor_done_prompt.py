@@ -34,7 +34,9 @@ from typing import Iterable, Optional, Sequence
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
+from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import get_user_roles
@@ -129,8 +131,14 @@ def _task(request: Request, lang: str) -> OpenTask:
 
 
 def _open_requests_query(statuses: Iterable[str]):
+    # Адрес подписи (дом · кв) — eager: без него short_label давал N+1 на
+    # каждую заявку в ежедневной рассылке по всем исполнителям.
     return (
         select(Request)
+        .options(
+            selectinload(Request.building_obj),
+            selectinload(Request.apartment_obj).selectinload(Apartment.building),
+        )
         .where(status_in_clause(statuses), Request.executor_id.isnot(None))
         .order_by(Request.created_at.desc(), Request.request_number.desc())
     )

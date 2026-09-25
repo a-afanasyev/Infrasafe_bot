@@ -165,7 +165,10 @@ async def test_message_without_photo_is_refused(db, complete):
     ("no_active_shift", "Avval smenani boshlang."),
     ("invalid_status", f"#{NUMBER} arizani hozir yopib bo'lmaydi."),
     ("in_progress", "Yopilmoqda, kuting."),
-    ("media_unavailable", "Bo'lmadi. Keyinroq urinib ko'ring."),
+    ("media_unavailable", "Rasm yuborilmadi. Yana urinib ko'ring."),
+    ("media_rejected", "Rasm yuborilmadi. Yana urinib ko'ring."),
+    ("invalid_idempotency_key", "Bo'lmadi. Keyinroq urinib ko'ring."),
+    ("workflow_error", "Bo'lmadi. Keyinroq urinib ko'ring."),
 ])
 async def test_refusal_mapped_to_short_phrase_in_user_language(db, complete, code, expected):
     complete.side_effect = CompletionRefused(code, 409)

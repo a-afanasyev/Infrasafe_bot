@@ -193,6 +193,16 @@ async def test_executor_done_question_is_not_report(env, db):
     env.classify.assert_awaited_once()
 
 
+async def test_executor_done_in_residents_group_goes_normal_path(env, db):
+    """Детектор «готово» — только в рабочих (staff) группах: в группе жителей
+    исполнитель проходит обычный приём, лички нет."""
+    seed(db, kind="residents")
+    await run(make_message("#ariza готово"), db)
+    env.sender.send_message.assert_not_awaited()
+    env.sender.send_photo.assert_not_awaited()
+    env.classify.assert_awaited_once()
+
+
 async def test_resident_done_question_goes_normal_path(env, db):
     seed(db, kind="residents", roles='["applicant"]')
     await run(make_message("#ариза готово? когда почините"), db)

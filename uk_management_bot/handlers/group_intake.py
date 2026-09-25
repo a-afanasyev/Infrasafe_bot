@@ -29,7 +29,7 @@ Staff-группы (фаза 2, решение владельца 2026-08-22 —
 (``gint:bld:<n>`` / ``gint:elv:{id}`` / ``gint:op:1|0``, только автор); заявка
 создаётся после ответа, без ответа за таймаут — не создаётся.
 
-«Готово»-отчёт исполнителя (Фаза 4, ``handlers/group_intake_done.py``): тег
+«Готово»-отчёт исполнителя в staff-группе (Фаза 4, ``handlers/group_intake_done.py``): тег
 + «готово/сделал/tayyor…» от approved-executor — не заявка: LLM не зовётся, в
 группе тишина, автору в личку основным ботом — список его заявок в работе.
 
@@ -722,10 +722,11 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     if kind not in (GROUP_KIND_RESIDENTS, GROUP_KIND_STAFF):
         return
 
-    # Фаза 4: «сделал #ариза» от исполнителя — отчёт о работе, не заявка.
-    # До LLM и до гейтов kind: исполнителю — личка основным ботом, в группе
-    # тишина; прочим авторам — обычный путь ниже.
-    if is_done_report(tagged_text, has_tag=tagged_text is not None):
+    # Фаза 4: «сделал #ариза» от исполнителя в РАБОЧЕЙ (staff) группе — отчёт
+    # о работе, не заявка: до LLM исполнителю — личка основным ботом, в группе
+    # тишина. Группы жителей и прочие авторы — обычный путь ниже.
+    if kind == GROUP_KIND_STAFF and is_done_report(
+            tagged_text, has_tag=tagged_text is not None):
         if await gi_done.handle_done_report(message, bot, _db=_db):
             return
 
