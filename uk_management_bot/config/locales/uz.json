@@ -2477,7 +2477,8 @@
       "no_material": "Material yo‘q",
       "not_let_in": "Ichkariga kiritishmadi",
       "resident_absent": "Yashovchi uyda yo‘q",
-      "need_master": "Usta kerak"
+      "need_master": "Usta kerak",
+      "other": "Boshqa"
     }
   },
   "document_types": {

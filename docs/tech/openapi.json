@@ -6143,14 +6143,15 @@
       },
       "ProblemBody": {
         "additionalProperties": false,
-        "description": "«Проблема» исполнителя: шаблон обязателен, текст — по желанию.",
+        "description": "«Проблема» исполнителя: шаблон обязателен, текст — по желанию; для `other` текст обязателен.",
         "properties": {
           "template": {
             "enum": [
               "no_material",
               "not_let_in",
               "resident_absent",
-              "need_master"
+              "need_master",
+              "other"
             ],
             "title": "Template",
             "type": "string"
