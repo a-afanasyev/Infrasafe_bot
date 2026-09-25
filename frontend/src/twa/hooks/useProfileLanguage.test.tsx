@@ -47,6 +47,12 @@ describe('useProfileLanguage', () => {
     await waitFor(() => expect(i18n.language).toBe('ru'))
   })
 
+  it('applies uz (Latin) for uz_cyrl until the Cyrillic locale exists', async () => {
+    mockProfile('uz_cyrl')
+    renderHook(() => useProfileLanguage(), { wrapper })
+    await waitFor(() => expect(i18n.language).toBe('uz'))
+  })
+
   it('ignores unknown profile language', async () => {
     mockProfile('en')
     const { result } = renderHook(() => useProfileLanguage(), { wrapper })
