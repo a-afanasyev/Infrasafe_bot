@@ -9,6 +9,7 @@ export interface TwaRequest {
   description?: string
   requested_materials?: string
   executor_name?: string | null
+  return_reason?: string | null
   created_at: string
 }
 
