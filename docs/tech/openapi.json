@@ -5924,6 +5924,163 @@
         "title": "PaymentAccountsIn",
         "type": "object"
       },
+      "PoolItem": {
+        "description": "Плитка вкладки «Взять» (простой режим исполнителя, TWA).",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "address_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Type"
+          },
+          "apartment_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apartment Number"
+          },
+          "building_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Address"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description_first_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description First Line"
+          },
+          "entrance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entrance"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "photo_media_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Media Id"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "urgency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urgency"
+          }
+        },
+        "required": [
+          "request_number",
+          "status",
+          "category"
+        ],
+        "title": "PoolItem",
+        "type": "object"
+      },
+      "PoolResponse": {
+        "description": "`on_shift=false` → исполнитель не на смене, пул пуст по определению:\nклиент показывает «Начать смену», а не «свободных заявок нет».",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PoolItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "on_shift": {
+            "title": "On Shift",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on_shift",
+          "items"
+        ],
+        "title": "PoolResponse",
+        "type": "object"
+      },
       "Prefill": {
         "properties": {
           "first_name": {
@@ -17258,18 +17415,23 @@
         "operationId": "list_requests_api_v2_requests_get",
         "parameters": [
           {
+            "description": "Фильтр по канон-статусу; повторяемый (`status=a&status=b`) — любой из перечисленных. Одиночный `status=a` — прежний контракт.",
             "in": "query",
             "name": "status",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "Фильтр по канон-статусу; повторяемый (`status=a&status=b`) — любой из перечисленных. Одиночный `status=a` — прежний контракт.",
               "title": "Status"
             }
           },
@@ -17593,6 +17755,68 @@
           }
         ],
         "summary": "Get Kanban",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/pool": {
+      "get": {
+        "description": "Заявки, которые исполнитель может взять сейчас: срочные первыми, затем\nпо очереди (старые раньше). Не на смене → `on_shift=false`, пустой список.",
+        "operationId": "get_claim_pool_api_v2_requests_pool_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Claim Pool",
         "tags": [
           "requests"
         ]

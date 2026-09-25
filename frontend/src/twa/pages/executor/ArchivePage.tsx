@@ -1,7 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
 import type { TwaRequest } from '../../types'
 import { useTranslation } from 'react-i18next'
-import { twaClient } from '../../twaClient'
+import { EXECUTOR_ARCHIVE_STATUSES, useExecutorTasks } from '../../hooks/useExecutorTasks'
 import RequestCard from '../../components/RequestCard'
 import { Star } from 'lucide-react'
 import { CardSkeleton } from '../../components/Skeleton'
@@ -10,15 +9,9 @@ import QueryErrorState from '../../components/QueryErrorState'
 export default function ArchivePage() {
   const { t } = useTranslation()
 
-  const { data: requests = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ['twa', 'executor-tasks'],
-    queryFn: () => twaClient.get('/api/v2/requests', {
-      params: { view: 'assigned', limit: 50 }
-    }).then(r => r.data),
-    staleTime: 30_000,
-  })
+  const { data: requests = [], isLoading, isError, refetch } = useExecutorTasks('archive')
 
-  const archiveStatuses = ['Выполнена', 'Исполнено', 'Принято', 'Отменена']
+  const archiveStatuses = EXECUTOR_ARCHIVE_STATUSES
   const archive = requests.filter((r: TwaRequest) => archiveStatuses.includes(r.status))
 
   const completedCount = archive.filter((r: TwaRequest) => ['Выполнена', 'Исполнено', 'Принято'].includes(r.status)).length

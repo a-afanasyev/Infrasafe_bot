@@ -80,6 +80,16 @@ def terminal_status_clause() -> ColumnElement:
     return Request.status.in_(TERMINAL_STATUSES)
 
 
+def status_in_clause(statuses: Iterable[str]) -> ColumnElement:
+    """SQL-фильтр «канон-статус заявки ∈ statuses» (фильтр списка API).
+
+    После cutover (PR3+4, backfill миграцией 019) хранилище = канон, в том
+    числе «Возвращена» пишется как есть, поэтому сравнение по колонке точное.
+    Значения валидирует вызывающий (канон `CANON_STATUSES`).
+    """
+    return Request.status.in_(list(statuses))
+
+
 def active_status_clause() -> ColumnElement:
     """Дополнение `terminal_status_clause`: работа ещё в процессе."""
     from uk_management_bot.utils.request_workflow import TERMINAL_STATUSES

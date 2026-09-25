@@ -410,6 +410,16 @@ async def _build_snapshot_async(db: AsyncSession, req: Request,
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
         has_shift = await is_on_shift_now_async(db, actor.user_id)
+    return _snapshot_from_facts(req, has_rating=has_rating, active=active,
+                                has_shift=has_shift)
+
+
+def _snapshot_from_facts(req: Request, *, has_rating: bool, active: Optional[tuple],
+                         has_shift: bool) -> WorkflowSnapshot:
+    """Snapshot из уже прочитанных фактов. `active` — строка активного
+    назначения `(executor_id, assignment_type, group_specialization)` или None.
+    Общая сборка для одиночного `_build_snapshot_async` и батча
+    `claimable_by_actor_async` — чтобы снимки не разъехались."""
     a_exec = active[0] if active else None
     a_type = active[1] if active else None
     a_group = active[2] if active else None
@@ -524,6 +534,56 @@ async def executor_in_claim_pool_async(session_factory, request_number: str,
             return False
         snap = await _build_snapshot_async(db, req, actor)
         return executor_in_claim_pool(snap, actor)
+
+
+async def claimable_by_actor_async(db: AsyncSession, requests: list[Request],
+                                   principal: PrincipalRef) -> list[Request]:
+    """Заявки из `requests`, которые актор может взять ПРЯМО СЕЙЧАС (порядок
+    сохраняется) — read-only, без лока.
+
+    Решение то же, что у `run_command` для EXECUTOR_CLAIM: `allowed_actions`
+    (from-статус из ACTION_TABLE + предикат `_executor_can_claim`) на том же
+    snapshot. Вызывающий может сузить набор SQL-предфильтром, но финальный
+    ответ — только здесь, чтобы пул не стал третьей копией правил взятия.
+    """
+    from uk_management_bot.utils.request_workflow import (
+        Action, NotAuthorized, allowed_actions,
+    )
+    if not requests:
+        return []
+    try:
+        actor = await _load_actor_context_async(db, principal)
+    except NotAuthorized:
+        return []
+    has_shift = False
+    if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
+        has_shift = await is_on_shift_now_async(db, actor.user_id)
+    # Факты snapshot'а — батчем по всем номерам (фиксированное число запросов
+    # независимо от N), сборка — тем же `_snapshot_from_facts`, что у run_command.
+    numbers = [r.request_number for r in requests]
+    rated = set((await db.execute(
+        select(Rating.request_number).where(
+            Rating.request_number.in_(numbers)))).scalars().all())
+    active_by_number = {}
+    for row in (await db.execute(
+            select(RequestAssignment.request_number,
+                   RequestAssignment.executor_id,
+                   RequestAssignment.assignment_type,
+                   RequestAssignment.group_specialization).where(
+                RequestAssignment.request_number.in_(numbers),
+                RequestAssignment.status == "active"))).all():
+        # Зеркало `.first()` одиночной сборки: при (аномальных) нескольких
+        # активных назначениях берётся первое встреченное.
+        active_by_number.setdefault(row[0], tuple(row[1:]))
+    return [
+        req for req in requests
+        if Action.EXECUTOR_CLAIM in allowed_actions(
+            _snapshot_from_facts(
+                req, has_rating=req.request_number in rated,
+                active=active_by_number.get(req.request_number),
+                has_shift=has_shift),
+            actor)
+    ]
 
 
 async def run_command_async(session_factory, request_number: str,

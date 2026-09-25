@@ -97,6 +97,35 @@ class RequestCard(BaseModel):
         return self
 
 
+class PoolItem(BaseModel):
+    """Плитка вкладки «Взять» (простой режим исполнителя, TWA)."""
+    request_number: str
+    status: str
+    category: str
+    urgency: Optional[str] = None
+    # Первая непустая строка описания (полное — в карточке заявки).
+    description_first_line: Optional[str] = None
+    # Адрес строкой на языке пользователя (как в карточке бота).
+    address: Optional[str] = None
+    address_type: Optional[str] = None
+    # Структурированные части — только если заявка привязана к квартире/дому.
+    building_address: Optional[str] = None
+    entrance: Optional[int] = None
+    floor: Optional[int] = None
+    apartment_number: Optional[str] = None
+    # Первый файл жителя в медиа-сервисе: байты — GET /api/v2/media/{id}/file.
+    # Фото, прикреплённые в боте (telegram file_id), сюда не попадают — null.
+    photo_media_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+
+class PoolResponse(BaseModel):
+    """`on_shift=false` → исполнитель не на смене, пул пуст по определению:
+    клиент показывает «Начать смену», а не «свободных заявок нет»."""
+    on_shift: bool
+    items: List[PoolItem]
+
+
 class KanbanColumn(BaseModel):
     status: str
     count: int
