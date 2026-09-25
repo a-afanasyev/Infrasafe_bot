@@ -2450,13 +2450,14 @@
     "pullToRefresh": "↓ Yangilash uchun torting",
     "simple": {
       "tabs": {
-        "mine": "Meniki",
+        "mine": "Arizalarim",
         "pool": "Olish"
       },
       "status": {
         "inWork": "Ishda",
         "returned": "Qaytarildi",
-        "pending": "Yuborilishini kutmoqda"
+        "pending": "Yuborilishini kutmoqda",
+        "retake": "Qayta suratga oling"
       },
       "mine": {
         "empty": "Hammasi bajarildi"
@@ -2467,6 +2468,7 @@
         "claimed": "Ariza sizniki",
         "alreadyClaimed": "Allaqachon olingan",
         "notEligible": "Bu arizani olib bo‘lmaydi",
+        "claimFailed": "Olib bo‘lmadi",
         "offShift": "Siz smenada emassiz",
         "startShift": "Smenani boshlash"
       },
@@ -2475,22 +2477,26 @@
         "problem": "Muammo",
         "number": "№ {{number}}",
         "returned": "Qaytarildi: {{reason}}",
-        "photoAlt": "Aholi surati",
-        "close": "Yopish"
+        "photoAlt": "Yashovchining surati",
+        "close": "Yopish",
+        "closed": "Ariza yopilgan"
       },
+      "urgent": "Shoshilinch",
+      "ok": "Tushunarli",
       "done": {
         "shoot": "Ishni suratga oling",
         "camera": "Kamera",
-        "retake": "Qayta",
+        "retake": "Qayta olish",
         "send": "Yuborish",
         "sending": "Yuborilmoqda…",
         "sent": "Yuborildi",
         "failed": "Yuborilmadi",
-        "savedLater": "Surat saqlandi. O‘zimiz yuboramiz",
+        "savedLater": "Surat saqlandi. Keyin o‘zi yuboriladi",
         "noShift": "Smenani boshlang",
         "retry": "Yana bir bor",
         "toMine": "Arizalarimga",
-        "sentLater": "{{number}} ariza surati yuborildi"
+        "sentLater": "№ {{number}} ariza surati yuborildi",
+        "tooBig": "Surat juda katta. Yana bir bor oling"
       },
       "final": {
         "closed": "Ariza allaqachon yopilgan",
@@ -2501,11 +2507,12 @@
         "templates": {
           "no_material": "Material yo‘q",
           "not_let_in": "Kiritishmadi",
-          "resident_absent": "Aholi uyda yo‘q",
+          "resident_absent": "Uy egasi uyda yo‘q",
           "need_master": "Usta kerak"
         },
         "write": "Yozish",
         "placeholder": "Nima bo‘ldi?",
+        "pickTemplate": "Nima bo‘lganini tanlang",
         "confirm": "Menejerga yuborilsinmi?",
         "sent": "Menejer xabar oldi",
         "failed": "Yuborilmadi"
@@ -2513,17 +2520,24 @@
       "yes": "Ha",
       "no": "Yo‘q",
       "shift": {
+        "title": "Smena",
         "start": "Boshlash",
         "end": "Tugatish",
         "on": "Smenada",
         "off": "Smena boshlanmagan",
+        "started": "Smena boshlandi",
+        "ended": "Smena tugadi",
         "confirmEnd": "Smenani tugatasizmi?",
         "openTasks": "Yopilmagan: {{count}}",
+        "photosWarning": "Avval surat yuborilishini kuting",
         "failed": "Bo‘lmadi"
+      },
+      "lang": {
+        "failed": "Til saqlanmadi"
       },
       "waitManager": "Menejerni kutmoqda",
       "offline": "Aloqa yo‘q",
-      "pendingPhotos": "Surat kutmoqda: {{count}}",
+      "pendingPhotos": "Yuborilmagan surat: {{count}}",
       "error": {
         "load": "Yuklanmadi",
         "retry": "Yana bir bor"
