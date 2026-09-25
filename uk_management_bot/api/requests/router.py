@@ -44,6 +44,9 @@ from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.redis_pubsub import publish_request_event
+from uk_management_bot.services.group_pool_notify import (
+    notify_group_pool_claimed_detached,
+)
 from uk_management_bot.services.workflow_notifications import (
     dispatch_notify_intents_detached,
     notify_reassigned_away_detached,
@@ -784,6 +787,9 @@ async def claim_request(
         background.add_task(
             dispatch_notify_intents_detached,
             request_number, outcome.post_commit_intents)
+        # Паритет с ботом: остальным дежурным группы — «заявку взял X».
+        background.add_task(
+            notify_group_pool_claimed_detached, request_number, user.id)
 
     row = await svc.request_with_executor(db, request_number)
     if row is None:

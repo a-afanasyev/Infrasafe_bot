@@ -10,6 +10,7 @@ status-based вход намеренно не резолвится в EXECUTOR_C
 реальной, а не сравнением вызова мока.
 """
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -60,6 +61,9 @@ async def pool(db_session, manager_user, monkeypatch):
 
     monkeypatch.setattr(req_router, "publish_request_event", noop)
     monkeypatch.setattr(req_router, "dispatch_notify_intents_detached", noop)
+    pool_notify = AsyncMock(return_value=0)
+    monkeypatch.setattr(req_router, "notify_group_pool_claimed_detached", pool_notify)
+    return pool_notify
 
 
 @pytest.fixture
@@ -105,6 +109,20 @@ async def test_claim_takes_request_into_work(act_as, db_session_factory):
     assert req.status == C.REQUEST_STATUS_IN_PROGRESS
     assert req.executor_id == 41
     assert req.assignment_type == "individual"
+
+
+@pytest.mark.asyncio
+async def test_claim_notifies_group_peers_via_shared_helper(act_as, pool):
+    """Паритет с ботом: после взятия — «заявку взял X» остальным дежурным
+    группы (общий хелпер services/group_pool_notify)."""
+    client = await act_as(41)
+    assert (await client.post(CLAIM_URL)).status_code == 200
+    pool.assert_awaited_once_with(NUMBER, 41)
+
+    pool.reset_mock()
+    client = await act_as(42)
+    assert (await client.post(CLAIM_URL)).status_code == 409
+    pool.assert_not_awaited()
 
 
 @pytest.mark.asyncio
