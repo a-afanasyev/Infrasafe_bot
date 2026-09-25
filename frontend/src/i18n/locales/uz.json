@@ -1354,6 +1354,7 @@
     "submit": "Ariza yaratish"
   },
   "employees": {
+    "simpleModeBadge": "Oddiy rejim",
     "requestPhone": "Raqamni so'rash",
     "phoneRequestSent": "✓ So'rov yuborildi",
     "title": "Xodimlar",
@@ -1427,6 +1428,16 @@
       "hint": "Hisoblagich ko'rsatkichlarini kiritish huquqi (Mini App «Ko'rsatkich kiritish»)",
       "grant": "Huquq berish",
       "revoke": "Huquqni olib tashlash"
+    },
+    "simpleMode": {
+      "title": "Oddiy rejim",
+      "hint": "Mini App’da ijrochi uchun soddalashtirilgan panel: katta tugmalar, kam matn",
+      "language": "Bot va Mini App tili",
+      "languages": {
+        "ru": "Русский",
+        "uz": "O‘zbekcha (lotin)",
+        "uz_cyrl": "Ўзбекча (kirill)"
+      }
     }
   },
   "employeeModal": {
@@ -2534,7 +2545,15 @@
     "shiftReassigned": "Smena qayta tayinlandi",
     "shiftReassignFailed": "Smenani qayta tayinlab bo'lmadi",
     "nameUpdated": "F.I.Sh. yangilandi",
-    "nameUpdateFailed": "F.I.Sh. ni yangilab bo‘lmadi"
+    "nameUpdateFailed": "F.I.Sh. ni yangilab bo‘lmadi",
+    "simpleModeEnabled": "Oddiy rejim yoqildi",
+    "simpleModeDisabled": "Oddiy rejim o‘chirildi",
+    "simpleModeFailed": "Oddiy rejimni o‘zgartirib bo‘lmadi",
+    "simpleModeExecutorOnly": "Oddiy rejim faqat ijrochilar uchun mavjud",
+    "employeeLanguageUpdated": "Xodim tili o‘zgartirildi",
+    "employeeLanguageFailed": "Tilni o‘zgartirib bo‘lmadi",
+    "employeeLanguageStaffOnly": "Tilni faqat xodimga o‘zgartirish mumkin",
+    "staffSettingForbidden": "Bu sozlama menejer va administratorlar uchun mavjud emas"
   },
   "feedback": {
     "title": "Qayta aloqa",

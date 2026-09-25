@@ -8,6 +8,7 @@ import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employee
 import { tSpecialization } from '../../i18n/apiMaps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import SimpleModeBadge from './SimpleModeBadge'
 
 interface Props {
   employee: EmployeeBrief
@@ -113,6 +114,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
                 {t(`role.${staffRole}`)}
               </span>
             )}
+            {employee.simple_mode && <SimpleModeBadge className="text-[10px] px-1.5 py-0.5" />}
             {employee.specialization.map(spec => (
               <span
                 key={spec}
