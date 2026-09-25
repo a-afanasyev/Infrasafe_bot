@@ -37,7 +37,7 @@ def problem_comment_text(template: str, text: Optional[str]) -> str:
     """Текст комментария в истории: подпись шаблона [+ перевод строки + текст]."""
     label = problem_label(template, _STORAGE_LANGUAGE)
     details = (text or "").strip()
-    return f"{label}\n{details}" if details else label
+    return f"{label}\n{details}" if details else label  # html-raw: текст комментария в БД, экранируется в точке вывода
 
 
 def _clip(value: Optional[str], limit: int) -> str:
