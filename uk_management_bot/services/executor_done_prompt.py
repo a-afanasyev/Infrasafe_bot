@@ -40,7 +40,6 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_IN_PROGRESS,
-    REQUEST_STATUS_RETURNED,
     ROLE_EXECUTOR,
 )
 from uk_management_bot.utils.helpers import get_text
@@ -49,11 +48,11 @@ from uk_management_bot.utils.workflow_predicates import status_in_clause
 
 logger = logging.getLogger(__name__)
 
-# «Незакрытые» для списка и напоминания: в работе и возвращённые жителем.
-OPEN_STATUSES = (REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_RETURNED)
-# Закрыть фото из лички можно только «В работе»: EXECUTOR_COMPLETE из
-# «Возвращена» канон не пускает (её разбирает менеджер).
-CLOSABLE_STATUSES = (REQUEST_STATUS_IN_PROGRESS,)
+# «Незакрытые» для списка, фото-пути и напоминаний — ТОЛЬКО «В работе»
+# (решение владельца): EXECUTOR_COMPLETE канон пускает лишь отсюда, а
+# «Возвращена» разбирает менеджер (MANAGER_RETURN_TO_WORK) — исполнителю с
+# ней делать нечего, напоминать о ней — шум.
+OPEN_STATUSES = (REQUEST_STATUS_IN_PROGRESS,)
 
 MAX_BUTTONS = 5
 # Callback фото-пути; обработчик — handlers/executor_done (основной бот).

@@ -8,7 +8,8 @@
 матчер, что у тег-режима) и слово «готово» целым словом. Слова сверяются
 после транслита (``translit.py``): кириллица и латиница одним списком —
 «тайёр» → «tayyor», «бажарилди» → «bajarildi». Отрицание рядом («не готово»,
-«tayyor emas») — не отчёт. Чистая функция без I/O; роль автора проверяет
+«tayyor emas») и вопрос сразу после слова («готово?», «tayyor ?») — не
+отчёт; однокоренные «готовлю»/«tayyormi» — тоже (только формы из списка). Чистая функция без I/O; роль автора проверяет
 вызывающий.
 """
 from __future__ import annotations
@@ -18,20 +19,26 @@ from typing import Optional
 
 from uk_management_bot.services.group_intake.translit import translit
 
-# Основы слов после транслита; совпадение — с начала слова.
-# готово/готов → gotov; сделал(а/и)/сделано → sdelal/sdelan;
+# Формы слова ЦЕЛИКОМ (после транслита): «готовлю»/«tayyormi» — не отчёт.
+# готово/готов(а, ы) → gotov…; сделал(а, и)/сделан(о) → sdela…;
 # tayyor/тайёр; bajarildi/бажарилди, bajardim/бажардим.
+_DONE_FORMS = (
+    "gotovo", "gotov", "gotova", "gotovy",
+    "sdelal", "sdelala", "sdelali", "sdelano", "sdelan",
+    "tayyor", "bajarildi", "bajardim",
+)
 _DONE_RE = re.compile(
-    r"(?<![\w'])(?P<neg>ne\s+)?(?:gotov|sdela[ln]|tayyor|bajarildi|bajardim)[\w']*"
-    r"(?P<emas>\s+emas)?(?![\w'])",
+    r"(?<![\w'])(?P<neg>ne\s+)?(?:" + "|".join(_DONE_FORMS) + r")(?![\w'])"
+    r"(?P<question>\s*\?)?(?P<emas>\s+emas)?",
     flags=re.UNICODE,
 )
 
 
 def has_done_word(text: Optional[str]) -> bool:
-    """Есть ли в тексте «готово» без отрицания (регистр и алфавит не важны)."""
+    """Есть ли в тексте «готово» без отрицания и без вопроса сразу после
+    слова («готово?» — вопрос, не отчёт); регистр и алфавит не важны."""
     for match in _DONE_RE.finditer(translit(text or "")):
-        if not match.group("neg") and not match.group("emas"):
+        if not (match.group("neg") or match.group("question") or match.group("emas")):
             return True
     return False
 

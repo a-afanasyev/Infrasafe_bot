@@ -33,6 +33,11 @@ def test_done_words_positive(text):
     "ещё не сделал",
     "tayyor emas",
     "приготовить раствор",  # «готов» не с начала слова
+    "готовлю раствор",  # однокоренное — не форма из списка
+    "tayyormi?",
+    "готово?",
+    "Готово ? подъезд 3",
+    "сделали?",
 ])
 def test_done_words_negative(text):
     assert not has_done_word(text)

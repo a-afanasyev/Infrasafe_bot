@@ -6,7 +6,7 @@
 
 * в группе — тишина (ни ответа, ни LLM);
 * без фото — основной бот пишет автору «Какую заявку закрыли?» + web_app-
-  кнопки по заявкам «В работе»/«Возвращена» и «Все»;
+  кнопки по заявкам «В работе» и «Все»;
 * с фото — фото скачивается ГРУППОВЫМ ботом (его file_id основной бот не
   откроет) и основным ботом уходит автору байтами с подписью «Закрыть этим
   фото?» и callback-кнопками ``exdone:{n}`` по заявкам «В работе». Нажатие
@@ -83,21 +83,14 @@ async def handle_done_report(message: Message, bot: Bot, *, _db=None) -> bool:
         return True
 
     sender = _main_bot()
-    if message.photo:
-        tasks, _total = await run_db(
-            lambda s: done.open_tasks_sync(s, executor.user_id, executor.lang,
-                                           done.CLOSABLE_STATUSES),
-            db=_db,
-        )
-        if tasks:
-            photo = await download_group_photo(bot, message.photo[-1].file_id)
-            if photo is not None:
-                await _send_photo_prompt(sender, executor, photo, tasks)
-                return True
-        # Нет заявок «В работе» или фото не скачалось — обычный список.
-
     tasks, _total = await run_db(
         lambda s: done.open_tasks_sync(s, executor.user_id, executor.lang), db=_db
     )
+    if message.photo and tasks:
+        photo = await download_group_photo(bot, message.photo[-1].file_id)
+        if photo is not None:
+            await _send_photo_prompt(sender, executor, photo, tasks)
+            return True
+        # Фото не скачалось — обычный список web_app-кнопками.
     await done.send_open_tasks_prompt(sender, executor, tasks)
     return True

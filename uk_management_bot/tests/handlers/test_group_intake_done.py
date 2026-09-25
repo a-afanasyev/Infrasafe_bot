@@ -5,6 +5,7 @@ sqlite); LLM, Redis-хелперы и send-only основной бот — мо
 исполнитель + тег + «готово» — тишина в группе, LLM не зовётся, в личку
 список заявок (web_app «Готово» + «Все»); фото — байтами с callback-кнопками;
 житель / не-исполнитель / нет тега / нет слова — обычный путь.
+Только «В работе»: «Возвращена» разбирает менеджер (решение владельца).
 """
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -135,12 +136,12 @@ async def test_executor_done_text_goes_to_dm_silently(env, db):
     assert "&lt;Olmazor&gt;" in text and "<Olmazor>" not in text
     buttons = _buttons(kwargs["reply_markup"])
     urls = [b.web_app.url for b in buttons]
-    # «В работе» + «Возвращена», «Выполнена» не предлагается; последняя — «Все».
-    assert sorted(urls[:-1]) == [
+    # Только «В работе»: ни «Возвращена», ни «Выполнена»; последняя — «Все».
+    assert urls == [
         f"{FRONTEND}/uk/twa/exec/tasks/260925-001?action=done",
-        f"{FRONTEND}/uk/twa/exec/tasks/260925-002?action=done",
+        f"{FRONTEND}/uk/twa/exec",
     ]
-    assert urls[-1] == f"{FRONTEND}/uk/twa/exec"
+    assert "260925-002" not in text
     assert "кв. 12" in buttons[0].text
 
 
@@ -151,8 +152,9 @@ async def test_latin_done_word_and_other_tag(env, db):
     env.sender.send_message.assert_awaited_once()
 
 
-async def test_no_open_tasks_short_answer(env, db):
-    seed(db, tasks=(("260925-003", "Выполнена"),))
+@pytest.mark.parametrize("status", ["Выполнена", "Возвращена"])
+async def test_no_open_tasks_short_answer(env, db, status):
+    seed(db, tasks=(("260925-003", status),))
     await run(make_message("#ариза готово"), db)
     args, kwargs = env.sender.send_message.call_args
     assert args[1] == "У вас нет заявок в работе."
@@ -179,6 +181,14 @@ async def test_not_done_report_goes_normal_path(env, db, text):
 async def test_non_executor_staff_goes_normal_path(env, db):
     seed(db, roles='["inspector"]')
     await run(make_message("#ариза готово? когда почините"), db)
+    env.sender.send_message.assert_not_awaited()
+    env.classify.assert_awaited_once()
+
+
+async def test_executor_done_question_is_not_report(env, db):
+    """«готово?» с вопросом от исполнителя — не отчёт, обычный путь."""
+    seed(db)
+    await run(make_message("#ариза готово? когда почините лифт"), db)
     env.sender.send_message.assert_not_awaited()
     env.classify.assert_awaited_once()
 
@@ -223,9 +233,9 @@ async def test_photo_done_sends_bytes_with_callback_buttons(env, db):
     assert [b.callback_data for b in _buttons(kwargs["reply_markup"])] == ["exdone:260925-001"]
 
 
-async def test_photo_without_in_progress_falls_back_to_list(env, db):
+async def test_photo_without_in_progress_says_no_tasks(env, db):
     seed(db, tasks=(("260925-002", "Возвращена"),))
     photo = [SimpleNamespace(file_id="group-big")]
     await run(make_message("#ариза сделал", photo=photo), db, bot=_group_bot())
     env.sender.send_photo.assert_not_awaited()
-    env.sender.send_message.assert_awaited_once()
+    assert env.sender.send_message.call_args.args[1] == "У вас нет заявок в работе."

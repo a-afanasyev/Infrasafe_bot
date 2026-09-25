@@ -1,6 +1,7 @@
 """Напоминание о незакрытых заявках (Фаза 4) + ссылки TWA «Готово».
 
-* сбор получателей: только approved-исполнители, статусы «В работе»/«Возвращена»;
+* сбор получателей: только approved-исполнители и только «В работе»
+  («Возвращена» разбирает менеджер — решение владельца);
 * не чаще раза в день на заявку (Redis SET NX; fail-open);
 * конец смены — то же напоминание, одно сообщение со списком;
 * тик крона 18:00 (время триггера — test_shift_scheduler_business_tz).
@@ -82,8 +83,8 @@ def test_all_recipients_only_approved_executors_open_statuses(db):
     recipients = done.all_recipients_sync(db)
     assert [r.executor.telegram_id for r in recipients] == [200]
     (recipient,) = recipients
-    assert sorted(recipient.numbers) == ["260925-001", "260925-002"]
-    assert recipient.total == 2 and recipient.executor.lang == "uz"
+    assert recipient.numbers == ("260925-001",)
+    assert recipient.total == 1 and recipient.executor.lang == "uz"
 
 
 async def test_reminder_once_per_day_per_request(db, redis):
@@ -94,7 +95,7 @@ async def test_reminder_once_per_day_per_request(db, redis):
     bot.send_message.assert_awaited_once()
     args, kwargs = bot.send_message.call_args
     assert args[0] == 200
-    assert "Yopilmagan arizalar: 2" in args[1]
+    assert "Yopilmagan arizalar: 1" in args[1]
     # Адрес экранирован в HTML-тексте.
     assert "Дом &lt;1&gt; &amp; Co" in args[1]
     urls = [b.web_app.url for row in kwargs["reply_markup"].inline_keyboard for b in row]
