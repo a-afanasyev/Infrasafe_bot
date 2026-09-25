@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import MeterEntryScreen from './pages/meter-entry/MeterEntryScreen'
 import { useTWAAuth } from './hooks/useTWAAuth'
+import { useProfileLanguage } from './hooks/useProfileLanguage'
 import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
@@ -44,6 +45,12 @@ import CompletionReport from './pages/executor/CompletionReport'
 
 const queryClient = createTwaQueryClient()
 
+/** Язык профиля перекрывает Telegram language_code (монтируется только после авторизации). */
+function ProfileLanguageSync() {
+  useProfileLanguage()
+  return null
+}
+
 function TWAContent() {
   const { t } = useTranslation()
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
@@ -82,6 +89,7 @@ function TWAContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+      <ProfileLanguageSync />
       <OfflineIndicator />
       <Toaster position="top-center" richColors closeButton />
       <Routes>

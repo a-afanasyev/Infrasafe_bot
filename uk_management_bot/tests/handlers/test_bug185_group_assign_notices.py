@@ -29,9 +29,11 @@ ON_SHIFT_TG, OFF_SHIFT_TG, OTHER_SPEC_TG = 200, 300, 400
 class _FakeBot:
     def __init__(self):
         self.sent: list[tuple[int, str]] = []
+        self.markups: dict[int, object] = {}
 
     async def send_message(self, chat_id, text, **kwargs):
         self.sent.append((chat_id, text))
+        self.markups[chat_id] = kwargs.get("reply_markup")
 
     def by_chat(self, chat_id):
         return [text for cid, text in self.sent if cid == chat_id]
@@ -142,6 +144,34 @@ class TestGroupAssignNotices:
         texts = bot.by_chat(ON_SHIFT_TG)
         assert len(texts) == 1, "дежурному — ровно одно (богатый наряд, без дубля)"
         assert "Не горит лампа" in texts[0], "наряд дежурного несёт описание"
+
+    @pytest.mark.asyncio
+    async def test_duty_order_has_open_button_group_notice_has_not(
+            self, db, bot, monkeypatch):
+        """Дежурному (личка) — web_app «Открыть» на карточку исполнителя в
+        TWA: при активной смене групповая заявка ему доступна. Исполнителю без
+        смены карточка ответит 403 — кнопки нет."""
+        # Объект, который читает twa_links (test_settings перезагружает модуль
+        # config.settings — у свежего `settings` другой адрес).
+        from uk_management_bot.utils import twa_links
+
+        monkeypatch.setattr(twa_links.settings, "FRONTEND_URL", "https://example.test")
+        request = _seed(db)
+        await _run(db, request)
+        (row,) = bot.markups[ON_SHIFT_TG].inline_keyboard
+        assert row[0].web_app.url == (
+            f"https://example.test/uk/twa/exec/tasks/{NUMBER}")
+        assert bot.markups[OFF_SHIFT_TG] is None
+
+    @pytest.mark.asyncio
+    async def test_no_open_button_without_frontend_url(self, db, bot, monkeypatch):
+        from uk_management_bot.utils import twa_links
+
+        monkeypatch.setattr(twa_links.settings, "FRONTEND_URL", "")
+        request = _seed(db)
+        await _run(db, request)
+        assert bot.markups[ON_SHIFT_TG] is None
+        assert bot.markups[OFF_SHIFT_TG] is None
 
     @pytest.mark.asyncio
     async def test_non_matching_executor_is_silent(self, db, bot):
