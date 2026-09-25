@@ -73,3 +73,46 @@ describe('WeekResourceGrid render-branch switching (FE-01)', () => {
     }
   })
 })
+
+describe('WeekResourceGrid — читаемые плашки', () => {
+  it('короткая смена — полный диапазон, а не обрезок по длительности; ночная — «начало →» и «→ конец»', () => {
+    const onShiftClick = vi.fn()
+    render(
+      <WeekResourceGrid
+        shifts={[
+          makeShift({ id: 1, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
+          makeShift({ id: 2, start_time: '2026-06-10T20:00:00+05:00', end_time: '2026-06-11T08:00:00+05:00' }),
+        ]}
+        weekAnchor={weekAnchor}
+        onShiftClick={onShiftClick}
+      />,
+    )
+    expect(screen.getByText('09:00 – 13:00')).toBeInTheDocument()
+    expect(screen.getByText('20:00 →')).toBeInTheDocument()
+    expect(screen.getByText('→ 08:00')).toBeInTheDocument()
+    // Полный диапазон ночной смены — в подсказке обеих её плашек.
+    expect(screen.getAllByTitle(/20:00 – 08:00 \+1д/)).toHaveLength(2)
+    // Плашка во всю ширину ячейки; позиция в сутках — полоса-подсказка.
+    const shortChip = screen.getByText('09:00 – 13:00').closest('button')!
+    expect(shortChip.className).toContain('w-full')
+    expect(shortChip.style.width).toBe('')
+    const hint = shortChip.querySelector('[data-testid="shift-hour-hint"]') as HTMLElement
+    expect(hint.style.left).toBe('37.5%')
+    expect(hint.style.width).toBe(`${(4 / 24) * 100}%`)
+  })
+
+  it('плашки в ячейке идут по времени начала', () => {
+    render(
+      <WeekResourceGrid
+        shifts={[
+          makeShift({ id: 1, start_time: '2026-06-10T14:00:00+05:00', end_time: '2026-06-10T18:00:00+05:00' }),
+          makeShift({ id: 2, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
+        ]}
+        weekAnchor={weekAnchor}
+        onShiftClick={vi.fn()}
+      />,
+    )
+    const labels = screen.getAllByRole('button').map(b => b.textContent)
+    expect(labels).toEqual(['09:00 – 13:00', '14:00 – 18:00'])
+  })
+})

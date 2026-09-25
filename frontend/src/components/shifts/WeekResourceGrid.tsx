@@ -288,48 +288,53 @@ function DayCell({
         isToday && 'bg-accent-dim/40',
       )}
     >
-      {segments.map((seg, idx) => {
+      {[...segments].sort((a, b) => a.startHour - b.startHour).map((seg, idx) => {
         const color = shiftTypeColor(seg.shift.shift_type)
-        const isPartial = seg.part !== 'full'
-        // Visual width within cell — proportional to hours covered (clipped 0..24).
-        const span = Math.max(0.5, Math.min(seg.endHour, 24) - seg.startHour)
-        const widthPct = Math.max(15, Math.min(100, (span / 24) * 100))
-        const leftPct = Math.max(0, Math.min(100, (seg.startHour / 24) * 100))
+        // Плашка всегда во всю ширину ячейки, время — целиком. Раньше ширина
+        // была пропорциональна длительности (4 ч = 1/6 ячейки ≈ 25 px) и
+        // подпись обрезалась до «0…». Положение в сутках теперь — тонкая
+        // полоса-подсказка внизу плашки по 24-часовой оси.
+        const hintFrom = Math.max(0, Math.min(24, seg.startHour))
+        const hintTo = Math.max(hintFrom + 0.5, Math.min(24, seg.endHour))
         const segOffset = seg.shift.start_time && seg.shift.end_time ? dayOffset(seg.shift.start_time, seg.shift.end_time) : 0
-        const label =
+        const fullLabel =
           seg.shift.start_time && seg.shift.end_time
             ? `${formatTime(seg.shift.start_time)} – ${formatTime(seg.shift.end_time)}${segOffset > 0 ? ` ${t('shifts.dayOffset', { n: segOffset })}` : ''}`
             : formatTime(seg.shift.start_time)
+        // Ночная/суточная смена в ячейке своего дня: начало — «20:00 →»,
+        // хвост на следующий день — «→ 08:00». Полный диапазон — в title.
+        const label =
+          seg.part === 'start'
+            ? `${formatTime(seg.shift.start_time)} →`
+            : seg.part === 'end' && seg.shift.end_time
+              ? `→ ${formatTime(seg.shift.end_time)}`
+              : fullLabel
         return (
           <button
             key={`${seg.shift.id}-${idx}-${seg.part}`}
             type="button"
             onClick={() => onShiftClick(seg.shift)}
-            title={`${label} · ${t(`shiftStatus.${seg.shift.status}`, seg.shift.status)}`}
-            className="relative h-[18px] rounded-[5px] flex items-center justify-center text-[10px] font-semibold px-1 cursor-pointer transition-colors duration-150"
+            title={`${fullLabel} · ${t(`shiftStatus.${seg.shift.status}`, seg.shift.status)}`}
+            className="relative w-full min-w-0 h-[22px] rounded-[5px] flex items-center justify-center text-[11px] font-semibold px-1 pb-[3px] cursor-pointer overflow-hidden transition-colors duration-150 hover:brightness-125"
             style={{
               background: `${color}22`,
               border: `1px solid ${color}66`,
               color,
-              // Offset within the cell so the bar sits where the shift starts
-              // on the day's 24h axis — gives a rough hour-position hint while
-              // staying within the day cell.
-              marginLeft: `${leftPct * 0.85}%`,
-              width: `${widthPct}%`,
             }}
           >
-            {isPartial && (
-              <span
-                aria-hidden
-                className="absolute -left-1 top-1/2 -translate-y-1/2 font-[var(--font-mono)] text-[10px]"
-                style={{ color }}
-              >
-                {seg.part === 'end' ? '↪' : '↩'}
-              </span>
-            )}
             <span className="truncate font-[var(--font-mono)] tracking-tight">
               {label}
             </span>
+            <span
+              aria-hidden
+              data-testid="shift-hour-hint"
+              className="absolute bottom-0 h-[2px] rounded-full"
+              style={{
+                left: `${(hintFrom / 24) * 100}%`,
+                width: `${((hintTo - hintFrom) / 24) * 100}%`,
+                background: color,
+              }}
+            />
           </button>
         )
       })}
