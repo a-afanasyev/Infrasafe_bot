@@ -51,11 +51,20 @@ def db():
     Base.metadata.drop_all(bind=engine)
 
 
+def _set_frontend_url(monkeypatch, value: str) -> None:
+    """Патчим объект settings, который РЕАЛЬНО читает twa_links.
+
+    test_settings.py перезагружает модуль config.settings — после этого
+    `config.settings.settings` уже другой объект, а twa_links (импортирован
+    при коллекции) держит прежний. Значение не должно зависеть от .env."""
+    from uk_management_bot.utils import twa_links
+
+    monkeypatch.setattr(twa_links.settings, "FRONTEND_URL", value)
+
+
 @pytest.fixture()
 def frontend(monkeypatch):
-    from uk_management_bot.config.settings import settings
-
-    monkeypatch.setattr(settings, "FRONTEND_URL", FRONTEND)
+    _set_frontend_url(monkeypatch, FRONTEND)
     return FRONTEND
 
 
@@ -118,12 +127,11 @@ class TestSyncDispatch:
 
     @pytest.mark.asyncio
     async def test_no_button_without_frontend_url(self, db, monkeypatch):
-        from uk_management_bot.config.settings import settings
         from uk_management_bot.services.workflow_notifications import (
             dispatch_notify_intents_sync,
         )
 
-        monkeypatch.setattr(settings, "FRONTEND_URL", "")
+        _set_frontend_url(monkeypatch, "")
         bot = _FakeBot()
         await dispatch_notify_intents_sync(db, NUMBER, _intents(), bot=bot)
         assert bot.markup_for(EXECUTOR_TG) is None

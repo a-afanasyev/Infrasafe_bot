@@ -151,14 +151,26 @@ class TestGroupAssignNotices:
         """Дежурному (личка) — web_app «Открыть» на карточку исполнителя в
         TWA: при активной смене групповая заявка ему доступна. Исполнителю без
         смены карточка ответит 403 — кнопки нет."""
-        from uk_management_bot.config.settings import settings
+        # Объект, который читает twa_links (test_settings перезагружает модуль
+        # config.settings — у свежего `settings` другой адрес).
+        from uk_management_bot.utils import twa_links
 
-        monkeypatch.setattr(settings, "FRONTEND_URL", "https://example.test")
+        monkeypatch.setattr(twa_links.settings, "FRONTEND_URL", "https://example.test")
         request = _seed(db)
         await _run(db, request)
         (row,) = bot.markups[ON_SHIFT_TG].inline_keyboard
         assert row[0].web_app.url == (
             f"https://example.test/uk/twa/exec/tasks/{NUMBER}")
+        assert bot.markups[OFF_SHIFT_TG] is None
+
+    @pytest.mark.asyncio
+    async def test_no_open_button_without_frontend_url(self, db, bot, monkeypatch):
+        from uk_management_bot.utils import twa_links
+
+        monkeypatch.setattr(twa_links.settings, "FRONTEND_URL", "")
+        request = _seed(db)
+        await _run(db, request)
+        assert bot.markups[ON_SHIFT_TG] is None
         assert bot.markups[OFF_SHIFT_TG] is None
 
     @pytest.mark.asyncio
