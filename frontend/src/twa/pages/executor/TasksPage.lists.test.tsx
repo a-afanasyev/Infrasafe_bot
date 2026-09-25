@@ -61,3 +61,30 @@ describe('TWA исполнитель — ошибка загрузки ≠ пу�
     })
   }
 })
+
+describe('TWA исполнитель — сервер фильтрует статусы (лимит 50 не съедает активные)', () => {
+  function captureQuery() {
+    const seen: URLSearchParams[] = []
+    server.use(http.get('*/api/v2/requests', ({ request }) => {
+      seen.push(new URL(request.url).searchParams)
+      return HttpResponse.json([])
+    }))
+    return seen
+  }
+
+  it('«Задания» запрашивают только активные статусы, повторяемым status', async () => {
+    const seen = captureQuery()
+    render(<TasksPage />)
+    await screen.findByText('Нет активных заданий')
+    const q = seen[0]
+    expect(q.get('view')).toBe('assigned')
+    expect(q.getAll('status')).toEqual(['Возвращена', 'В работе', 'Закуп', 'Уточнение', 'Новая'])
+  })
+
+  it('«Архив» запрашивает только архивные статусы', async () => {
+    const seen = captureQuery()
+    render(<ArchivePage />)
+    await screen.findByText('Архив пуст')
+    expect(seen[0].getAll('status')).toEqual(['Выполнена', 'Исполнено', 'Принято', 'Отменена'])
+  })
+})

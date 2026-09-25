@@ -1,9 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TwaRequest } from '../../types'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import { twaClient } from '../../twaClient'
+import { useExecutorTasks } from '../../hooks/useExecutorTasks'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import RequestCard from '../../components/RequestCard'
@@ -16,13 +17,7 @@ export default function PurchasePage() {
   const queryClient = useQueryClient()
   const { haptic } = useTelegramSDK()
 
-  const { data: requests = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ['twa', 'executor-tasks'],
-    queryFn: () => twaClient.get('/api/v2/requests', {
-      params: { view: 'assigned', limit: 50 }
-    }).then(r => r.data),
-    staleTime: 30_000,
-  })
+  const { data: requests = [], isLoading, isError, refetch } = useExecutorTasks('active')
 
   // TWA-29: inline "back to work" so the executor doesn't have to drill into
   // detail just to flip a purchase item back. Same transition the detail page
