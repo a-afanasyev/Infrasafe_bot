@@ -43,11 +43,33 @@ describe('ProblemPage', () => {
     expect(haptic.notificationOccurred).toHaveBeenCalledWith('success')
   })
 
+  it('текст без шаблона — «Отправить» → подтверждение с текстом → template=other', async () => {
+    renderProblem()
+    expect(screen.queryByRole('button', { name: /Отправить/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Написать/ }))
+    fireEvent.change(screen.getByPlaceholderText('Что случилось?'), { target: { value: '  Протекает крыша  ' } })
+    fireEvent.click(screen.getByRole('button', { name: /Отправить/ }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Протекает крыша')
+    fireEvent.click(screen.getByRole('button', { name: /Да/ }))
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}/problem`, {
+        template: 'other',
+        text: 'Протекает крыша',
+      }),
+    )
+  })
+
+  it('пробелы — не текст: «Отправить» не появляется', () => {
+    renderProblem()
+    fireEvent.click(screen.getByRole('button', { name: /Написать/ }))
+    fireEvent.change(screen.getByPlaceholderText('Что случилось?'), { target: { value: '   ' } })
+    expect(screen.queryByRole('button', { name: /Отправить/ })).toBeNull()
+  })
+
   it('«Написать» добавляет текст к шаблону', async () => {
     renderProblem()
     fireEvent.click(screen.getByRole('button', { name: /Написать/ }))
     fireEvent.change(screen.getByPlaceholderText('Что случилось?'), { target: { value: '  Нужна краска  ' } })
-    expect(screen.getByText('Выберите, что случилось')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Нет материала/ }))
     // Текст виден в подтверждении.
     expect(screen.getByRole('dialog')).toHaveTextContent('Нужна краска')

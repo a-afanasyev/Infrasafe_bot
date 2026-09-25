@@ -30,8 +30,11 @@ export interface CurrentShift {
   start_time: string
 }
 
-/** Шаблоны «Проблемы» — ровно Literal из ProblemBody (api/requests/schemas.py). */
-export const PROBLEM_TEMPLATES = ['no_material', 'not_let_in', 'resident_absent', 'need_master'] as const
+/**
+ * Шаблоны «Проблемы» — ровно Literal из ProblemBody (api/requests/schemas.py).
+ * `other` — проблема своими словами, текст обязателен (иначе 422).
+ */
+export const PROBLEM_TEMPLATES = ['no_material', 'not_let_in', 'resident_absent', 'need_master', 'other'] as const
 export type ProblemTemplate = (typeof PROBLEM_TEMPLATES)[number]
 
 // Фото уходит по мобильной сети — даём запас больше edge-бюджета, но не

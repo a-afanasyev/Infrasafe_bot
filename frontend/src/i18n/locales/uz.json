@@ -2508,11 +2508,11 @@
           "no_material": "Material yo‘q",
           "not_let_in": "Kiritishmadi",
           "resident_absent": "Uy egasi uyda yo‘q",
-          "need_master": "Usta kerak"
+          "need_master": "Usta kerak",
+          "other": "Boshqa"
         },
         "write": "Yozish",
         "placeholder": "Nima bo‘ldi?",
-        "pickTemplate": "Nima bo‘lganini tanlang",
         "confirm": "Menejerga yuborilsinmi?",
         "sent": "Menejer xabar oldi",
         "failed": "Yuborilmadi"

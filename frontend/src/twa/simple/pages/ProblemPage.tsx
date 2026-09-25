@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { DoorClosed, Home, PackageX, Pencil, RotateCcw, UserX, Wrench, type LucideIcon } from 'lucide-react'
+import { DoorClosed, Home, PackageX, Pencil, RotateCcw, Send, UserX, Wrench, type LucideIcon } from 'lucide-react'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { apiErrorStatus } from '../../../utils/errorMessage'
 import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
@@ -10,7 +10,8 @@ import { reportProblem, type ProblemTemplate } from '../api'
 import { useBackTo } from '../hooks/useSimpleNav'
 import { ConfirmSheet, PRIMARY_BTN, ResultScreen, SECONDARY_BTN } from '../components/Ui'
 
-const TEMPLATES: readonly { template: ProblemTemplate; icon: LucideIcon }[] = [
+// Кнопки-шаблоны; `other` — не кнопка, а «Отправить» под своим текстом.
+const TEMPLATES: readonly { template: Exclude<ProblemTemplate, 'other'>; icon: LucideIcon }[] = [
   { template: 'no_material', icon: PackageX },
   { template: 'not_let_in', icon: DoorClosed },
   { template: 'resident_absent', icon: UserX },
@@ -74,10 +75,6 @@ export default function ProblemPage() {
 
   return (
     <main className="p-3 pb-[calc(12px+env(safe-area-inset-bottom))] flex flex-col gap-3">
-      {/* Шаблон обязателен (ProblemBody.template): с текстом — подсказка выбрать его. */}
-      {text.trim() && (
-        <p className="text-[20px] font-bold text-center">{t('twa.simple.problem.pickTemplate')}</p>
-      )}
       {TEMPLATES.map(({ template, icon: Icon }) => (
         <button
           key={template}
@@ -109,6 +106,14 @@ export default function ProblemPage() {
         </button>
       )}
 
+      {/* Проблема своими словами (решение владельца: «проблема = комментарий
+          текстом») — шаблон `other`, без выбора кнопки-шаблона. */}
+      {text.trim() && (
+        <button type="button" onClick={() => setChosen('other')} className={`${PRIMARY_BTN} bg-emerald-600 text-white`}>
+          <Send size={30} aria-hidden /> {t('twa.simple.done.send')}
+        </button>
+      )}
+
       {chosen && (
         <ConfirmSheet
           title={t('twa.simple.problem.confirm')}
@@ -116,7 +121,9 @@ export default function ProblemPage() {
           onNo={() => setChosen(null)}
           onYes={() => send.mutate(chosen)}
         >
-          <p className="text-[20px] text-center font-semibold">{t(`twa.simple.problem.templates.${chosen}`)}</p>
+          {chosen !== 'other' && (
+            <p className="text-[20px] text-center font-semibold">{t(`twa.simple.problem.templates.${chosen}`)}</p>
+          )}
           {text.trim() && (
             <p className="text-[18px] text-center break-words whitespace-pre-line text-gray-700 dark:text-gray-300">{text.trim()}</p>
           )}
