@@ -7,12 +7,17 @@ import { tStatus } from '../../../i18n/apiMaps'
 import RequestCard from '../../components/RequestCard'
 import { CardSkeleton } from '../../components/Skeleton'
 import PullToRefresh from '../../components/PullToRefresh'
+import QueryErrorState from '../../components/QueryErrorState'
+
+// «Возвращена» — житель вернул работу; решает менеджер (вернуть в работу /
+// принять / отменить), у исполнителя действий нет. Первой — чтобы заметили.
+const RETURNED = 'Возвращена'
 
 export default function TasksPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const { data: requests = [], isLoading } = useQuery({
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { view: 'assigned', limit: 50 }
@@ -20,7 +25,7 @@ export default function TasksPage() {
     staleTime: 30_000,
   })
 
-  const activeStatuses = ['В работе', 'Закуп', 'Уточнение', 'Новая']
+  const activeStatuses = [RETURNED, 'В работе', 'Закуп', 'Уточнение', 'Новая']
   const active = requests.filter((r: TwaRequest) => activeStatuses.includes(r.status))
 
   // Group by status
@@ -37,7 +42,9 @@ export default function TasksPage() {
 
       {isLoading && <CardSkeleton />}
 
-      {!isLoading && active.length === 0 && (
+      {isError && <QueryErrorState onRetry={() => refetch()} />}
+
+      {!isLoading && !isError && active.length === 0 && (
         <div className="text-center py-12">
           <p className="text-[40px] mb-2">📋</p>
           <p className="text-gray-400 text-[14px]">{t('twa.exec.tasks.empty')}</p>
@@ -46,17 +53,26 @@ export default function TasksPage() {
 
       {Object.entries(grouped).map(([status, items]) => (
         <div key={status} className="mb-4">
-          <h2 className="text-[12px] font-semibold text-gray-500 uppercase mb-2">{tStatus(status, t)} ({items.length})</h2>
+          <h2 className={`text-[12px] font-semibold uppercase mb-2 ${status === RETURNED ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>{tStatus(status, t)} ({items.length})</h2>
+          {status === RETURNED && (
+            <p className="text-[12px] text-orange-700 dark:text-orange-300 mb-2">{t('twa.exec.tasks.returnedHint')}</p>
+          )}
           {items.map((req: TwaRequest) => (
-            <RequestCard
-              key={req.request_number}
-              requestNumber={req.request_number}
-              status={req.status}
-              category={req.category}
-              description={req.description}
-              createdAt={req.created_at}
-              onClick={() => navigate(`/twa/exec/tasks/${req.request_number}`)}
-            />
+            <div key={req.request_number}>
+              <RequestCard
+                requestNumber={req.request_number}
+                status={req.status}
+                category={req.category}
+                description={req.description}
+                createdAt={req.created_at}
+                onClick={() => navigate(`/twa/exec/tasks/${req.request_number}`)}
+              />
+              {status === RETURNED && req.return_reason && (
+                <p className="-mt-1 mb-2 px-3.5 text-[12px] text-orange-700 dark:text-orange-300">
+                  {t('twa.exec.tasks.returnReason')}: {req.return_reason}
+                </p>
+              )}
+            </div>
           ))}
         </div>
       ))}
