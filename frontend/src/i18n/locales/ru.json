@@ -2460,7 +2460,92 @@
       "server": "Сервер временно недоступен. Повторите позже"
     },
     "openViaBot": "Откройте приложение через Telegram-бота",
-    "pullToRefresh": "↓ Потяните, чтобы обновить"
+    "pullToRefresh": "↓ Потяните, чтобы обновить",
+    "simple": {
+      "tabs": {
+        "mine": "Мои",
+        "pool": "Взять"
+      },
+      "status": {
+        "inWork": "В работе",
+        "returned": "Вернули",
+        "pending": "Ждёт отправки"
+      },
+      "mine": {
+        "empty": "Всё сделано"
+      },
+      "pool": {
+        "empty": "Свободных заявок нет",
+        "claim": "Взять",
+        "claimed": "Заявка ваша",
+        "alreadyClaimed": "Уже взяли",
+        "notEligible": "Эту заявку взять нельзя",
+        "offShift": "Вы не на смене",
+        "startShift": "Начать смену"
+      },
+      "task": {
+        "done": "Готово",
+        "problem": "Проблема",
+        "number": "№ {{number}}",
+        "returned": "Вернули: {{reason}}",
+        "photoAlt": "Фото жителя",
+        "close": "Закрыть"
+      },
+      "done": {
+        "shoot": "Сфотографируйте работу",
+        "camera": "Камера",
+        "retake": "Заново",
+        "send": "Отправить",
+        "sending": "Отправляем…",
+        "sent": "Отправлено",
+        "failed": "Не отправилось",
+        "savedLater": "Фото сохранено. Отправим сами",
+        "noShift": "Начните смену",
+        "retry": "Ещё раз",
+        "toMine": "К моим заявкам",
+        "sentLater": "Фото по заявке {{number}} отправлено"
+      },
+      "final": {
+        "closed": "Заявка уже закрыта",
+        "notYours": "Это не ваша заявка",
+        "badPhoto": "Фото не подошло. Снимите заново"
+      },
+      "problem": {
+        "templates": {
+          "no_material": "Нет материала",
+          "not_let_in": "Не пустили",
+          "resident_absent": "Жителя нет дома",
+          "need_master": "Нужен мастер"
+        },
+        "write": "Написать",
+        "placeholder": "Что случилось?",
+        "confirm": "Отправить менеджеру?",
+        "sent": "Менеджер получил",
+        "failed": "Не отправилось"
+      },
+      "yes": "Да",
+      "no": "Нет",
+      "shift": {
+        "start": "Начать",
+        "end": "Закончить",
+        "on": "На смене",
+        "off": "Смена не начата",
+        "confirmEnd": "Закончить смену?",
+        "openTasks": "Незакрыто: {{count}}",
+        "failed": "Не получилось"
+      },
+      "waitManager": "Ждёт менеджера",
+      "offline": "Нет связи",
+      "pendingPhotos": "Фото ждёт: {{count}}",
+      "error": {
+        "load": "Не загрузилось",
+        "retry": "Ещё раз"
+      },
+      "address": {
+        "entrance": "Подъезд {{value}}",
+        "apartment": "кв {{value}}"
+      }
+    }
   },
   "toast": {
     "requestUpdated": "Заявка обновлена",

@@ -2447,7 +2447,92 @@
       "server": "Server vaqtincha ishlamayapti. Keyinroq qaytadan urinib ko'ring"
     },
     "openViaBot": "Ilovani Telegram-bot orqali oching",
-    "pullToRefresh": "↓ Yangilash uchun torting"
+    "pullToRefresh": "↓ Yangilash uchun torting",
+    "simple": {
+      "tabs": {
+        "mine": "Meniki",
+        "pool": "Olish"
+      },
+      "status": {
+        "inWork": "Ishda",
+        "returned": "Qaytarildi",
+        "pending": "Yuborilishini kutmoqda"
+      },
+      "mine": {
+        "empty": "Hammasi bajarildi"
+      },
+      "pool": {
+        "empty": "Bo‘sh arizalar yo‘q",
+        "claim": "Olish",
+        "claimed": "Ariza sizniki",
+        "alreadyClaimed": "Allaqachon olingan",
+        "notEligible": "Bu arizani olib bo‘lmaydi",
+        "offShift": "Siz smenada emassiz",
+        "startShift": "Smenani boshlash"
+      },
+      "task": {
+        "done": "Tayyor",
+        "problem": "Muammo",
+        "number": "№ {{number}}",
+        "returned": "Qaytarildi: {{reason}}",
+        "photoAlt": "Aholi surati",
+        "close": "Yopish"
+      },
+      "done": {
+        "shoot": "Ishni suratga oling",
+        "camera": "Kamera",
+        "retake": "Qayta",
+        "send": "Yuborish",
+        "sending": "Yuborilmoqda…",
+        "sent": "Yuborildi",
+        "failed": "Yuborilmadi",
+        "savedLater": "Surat saqlandi. O‘zimiz yuboramiz",
+        "noShift": "Smenani boshlang",
+        "retry": "Yana bir bor",
+        "toMine": "Arizalarimga",
+        "sentLater": "{{number}} ariza surati yuborildi"
+      },
+      "final": {
+        "closed": "Ariza allaqachon yopilgan",
+        "notYours": "Bu sizning arizangiz emas",
+        "badPhoto": "Surat mos kelmadi. Qayta oling"
+      },
+      "problem": {
+        "templates": {
+          "no_material": "Material yo‘q",
+          "not_let_in": "Kiritishmadi",
+          "resident_absent": "Aholi uyda yo‘q",
+          "need_master": "Usta kerak"
+        },
+        "write": "Yozish",
+        "placeholder": "Nima bo‘ldi?",
+        "confirm": "Menejerga yuborilsinmi?",
+        "sent": "Menejer xabar oldi",
+        "failed": "Yuborilmadi"
+      },
+      "yes": "Ha",
+      "no": "Yo‘q",
+      "shift": {
+        "start": "Boshlash",
+        "end": "Tugatish",
+        "on": "Smenada",
+        "off": "Smena boshlanmagan",
+        "confirmEnd": "Smenani tugatasizmi?",
+        "openTasks": "Yopilmagan: {{count}}",
+        "failed": "Bo‘lmadi"
+      },
+      "waitManager": "Menejerni kutmoqda",
+      "offline": "Aloqa yo‘q",
+      "pendingPhotos": "Surat kutmoqda: {{count}}",
+      "error": {
+        "load": "Yuklanmadi",
+        "retry": "Yana bir bor"
+      },
+      "address": {
+        "entrance": "{{value}}-podyezd",
+        "apartment": "{{value}}-xonadon"
+      }
+    }
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",

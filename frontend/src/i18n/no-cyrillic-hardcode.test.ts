@@ -27,7 +27,7 @@ const WIRE_VALUES = new Set([
   'Отменена',
 ])
 // Самоназвание языка в переключателе показывается на самом языке — не переводится.
-const LANGUAGE_SELF_NAMES = new Set(['Русский'])
+const LANGUAGE_SELF_NAMES = new Set(['Русский', 'Ўзбекча'])
 
 const CYRILLIC = /[А-Яа-яЁё]/
 

@@ -47,10 +47,12 @@ describe('useProfileLanguage', () => {
     await waitFor(() => expect(i18n.language).toBe('ru'))
   })
 
-  it('applies uz (Latin) for uz_cyrl until the Cyrillic locale exists', async () => {
+  it('applies uz_cyrl as its own locale (Cyrillic simple mode, rest falls back to uz)', async () => {
     mockProfile('uz_cyrl')
     renderHook(() => useProfileLanguage(), { wrapper })
-    await waitFor(() => expect(i18n.language).toBe('uz'))
+    await waitFor(() => expect(i18n.language).toBe('uz_cyrl'))
+    expect(i18n.t('twa.simple.tabs.mine')).toBe('Меники')
+    expect(i18n.t('twa.exec.shift.title')).toBe('Smena')
   })
 
   it('ignores unknown profile language', async () => {
