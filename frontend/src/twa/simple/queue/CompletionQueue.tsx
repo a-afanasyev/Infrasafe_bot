@@ -83,7 +83,18 @@ export function CompletionQueueProvider({ children, openStore = openQueueStore, 
   const run = useCallback(
     (item: QueueItem, foreground: boolean): Promise<SendOutcome> => {
       const running = inFlight.current.get(item.id)
-      if (running) return running
+      if (running) {
+        if (!foreground) return running
+        // «Ещё раз» совпал с фоновой попыткой: её итог решался как фоновый,
+        // но экран «Готово» показывает его сам — окончательный отказ убираем.
+        return running.then(async (outcome) => {
+          if (outcome.kind === 'final') {
+            await (await stores.get()).remove(item.id)
+            void refresh()
+          }
+          return outcome
+        })
+      }
       const promise = stores
         .get()
         .then(async (store) => {

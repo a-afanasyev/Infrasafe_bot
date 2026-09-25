@@ -86,6 +86,31 @@ describe('CompletionQueueProvider', () => {
     expect(screen.getByTestId('count')).toHaveTextContent('0')
   })
 
+  it('«Ещё раз» во время фоновой попытки: окончательный отказ убирает запись', async () => {
+    const saved = queued('260926-006', now())
+    const store = await memoryQueueWith([saved])
+    let reject: (e: unknown) => void = () => {}
+    const send = vi.fn(() => new Promise((_, rj) => { reject = rj }))
+    let retryOutcome: Promise<unknown> | undefined
+    function RetryProbe() {
+      const { retry } = useCompletionQueue()
+      return <button onClick={() => { retryOutcome = retry(saved.id) }}>retry</button>
+    }
+    render(
+      <CompletionQueueProvider openStore={() => Promise.resolve(store)} send={send} userId={TEST_USER_ID}>
+        <RetryProbe />
+      </CompletionQueueProvider>,
+    )
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByText('retry'))
+    await act(async () => {
+      reject({ response: { status: 409, data: { detail: 'invalid_status' } } })
+      await retryOutcome
+    })
+    expect(send).toHaveBeenCalledTimes(1)
+    await waitFor(async () => expect(await store.list()).toHaveLength(0))
+  })
+
   it('ждущее смены не шлётся при открытии и по таймеру — только после старта смены (flushNow)', async () => {
     const store = await memoryQueueWith([queued('260926-005', { ...now(), noShift: true })])
     const send = vi.fn().mockResolvedValue({})
