@@ -101,6 +101,22 @@ describe('WeekResourceGrid — читаемые плашки', () => {
     expect(hint.style.width).toBe(`${(4 / 24) * 100}%`)
   })
 
+  it('открытая смена — время начала; суточная 13:00→13:00 — «13:00 →» и «→ 13:00»', () => {
+    render(
+      <WeekResourceGrid
+        shifts={[
+          makeShift({ id: 1, start_time: '2026-06-09T09:00:00+05:00', end_time: null }),
+          makeShift({ id: 2, start_time: '2026-06-10T13:00:00+05:00', end_time: '2026-06-11T13:00:00+05:00' }),
+        ]}
+        weekAnchor={weekAnchor}
+        onShiftClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('09:00')).toBeInTheDocument()
+    expect(screen.getByText('13:00 →')).toBeInTheDocument()
+    expect(screen.getByText('→ 13:00')).toBeInTheDocument()
+  })
+
   it('плашки в ячейке идут по времени начала', () => {
     render(
       <WeekResourceGrid

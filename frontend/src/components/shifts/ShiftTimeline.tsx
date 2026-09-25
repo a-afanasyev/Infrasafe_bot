@@ -174,13 +174,15 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                       key={`${block.shift.id}-${idx}`}
                       onClick={() => onShiftClick(block.shift)}
                       title={`${displayName} \u00B7 ${label} \u00B7 ${t(`shiftStatus.${block.shift.status}`, block.shift.status)}`}
-                      className="absolute cursor-pointer rounded-[6px] px-1.5 py-1 overflow-hidden flex flex-col justify-center gap-px transition-colors duration-150"
+                      className="absolute cursor-pointer rounded-[6px] px-1.5 py-0.5 overflow-hidden flex flex-col justify-center gap-px transition-colors duration-150"
                       style={{
                         top: '-52px',
                         left: `calc(${nameColW}px + (100% - ${nameColW}px) * ${block.colStart - 2} / 24)`,
                         width: `calc((100% - ${nameColW}px) * ${block.colSpan} / 24)`,
-                        height: '36px',
-                        marginTop: '8px',
+                        // min, не фиксированная высота: при крупном шрифте (масштаб,
+                        // «минимальный размер шрифта» браузера) блок растёт, а не режет текст.
+                        minHeight: '38px',
+                        marginTop: '7px',
                         background: `${color}22`,
                         border: `1px solid ${color}66`,
                       }}
@@ -193,13 +195,15 @@ export default function ShiftTimeline({ shifts, date, onShiftClick }: Props) {
                           `${color}22`
                       }}
                     >
+                      {/* truncate даёт overflow:hidden → у flex-элемента min-height 0, и
+                          колонка сжимала строку по вертикали, срезая буквы. shrink-0 + относительный leading. */}
                       <span
-                        className="text-[10px] font-semibold truncate"
+                        className="shrink-0 text-[10px] leading-[1.35] font-semibold truncate"
                         style={{ color }}
                       >
                         {label} · {t(`shiftStatus.${block.shift.status}`, block.shift.status)}
                       </span>
-                      <span className="text-[10px] text-text-muted font-[var(--font-mono)] whitespace-nowrap">
+                      <span className="shrink-0 text-[10px] leading-[1.35] text-text-muted font-[var(--font-mono)] whitespace-nowrap">
                         {block.shift.current_request_count}/{block.shift.max_requests}
                       </span>
                     </div>

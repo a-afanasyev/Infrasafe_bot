@@ -120,6 +120,17 @@ describe('ShiftTimeline', () => {
     expect(onShiftClick).toHaveBeenCalledWith(second)
   })
 
+  it('блок дня не режет текст по вертикали: строки не сжимаются, высота — минимум, не фикс', () => {
+    render(<ShiftTimeline shifts={[makeShift({ id: 1 })]} date={day} onShiftClick={vi.fn()} />)
+    const label = screen.getByText('10:00 — 12:00 · Активна')
+    // truncate = overflow:hidden → min-height 0: без shrink-0 flex-колонка сжимала строку.
+    expect(label.className).toMatch(/\bshrink-0\b/)
+    expect(screen.getByText('0/5').className).toMatch(/\bshrink-0\b/)
+    const block = label.parentElement as HTMLElement
+    expect(block.style.height).toBe('')
+    expect(block.style.minHeight).toBe('38px')
+  })
+
   it('открытая смена без конца — одна ячейка со временем начала; смена другого дня блока не даёт', () => {
     const open = makeShift({ id: 1, end_time: null })
     const otherDay = makeShift({ id: 2, user_id: 20, executor_name: 'Пётр Второй', start_time: '2026-06-09T10:00:00+05:00', end_time: '2026-06-09T12:00:00+05:00' })
