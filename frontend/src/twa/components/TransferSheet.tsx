@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 
 import { useInitiateTransfer } from '../hooks/useTransfers'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
-import { getErrorMessage } from '../utils/errors'
+import { apiErrorDetail } from '../../utils/errorMessage'
 
 const REASONS = ['illness', 'emergency', 'workload', 'vacation', 'other'] as const
 const URGENCIES = ['low', 'normal', 'high', 'critical'] as const
@@ -41,7 +41,8 @@ export default function TransferSheet({ shiftId, onClose }: Props) {
       onClose()
     } catch (err) {
       haptic('notification')
-      const key = getErrorMessage(err, '')
+      // detail передачи смен — машинный код (not_your_shift, …), не текст
+      const key = apiErrorDetail(err) ?? ''
       const localized = t(`twa.exec.transfer.errors.${key}`, '')
       toast.error(localized || t('twa.exec.transfer.toastCreateFailed'))
     }

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import MeterEntryScreen from './pages/meter-entry/MeterEntryScreen'
 import { useTWAAuth } from './hooks/useTWAAuth'
 import { useTelegramSDK } from './hooks/useTelegramSDK'
@@ -44,6 +45,7 @@ import CompletionReport from './pages/executor/CompletionReport'
 const queryClient = createTwaQueryClient()
 
 function TWAContent() {
+  const { t } = useTranslation()
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
   const location = useLocation()
 
@@ -64,7 +66,7 @@ function TWAContent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
-        <p className="text-gray-400 text-[14px]">Loading...</p>
+        <p className="text-gray-400 text-[14px]">{t('common.loading')}</p>
       </div>
     )
   }
@@ -73,7 +75,7 @@ function TWAContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950 p-6 text-center">
         <p className="text-[40px] mb-3">🔒</p>
-        <p className="text-gray-500 text-[14px]">Open via Telegram bot to authenticate</p>
+        <p className="text-gray-500 text-[14px]">{t('twa.openViaBot')}</p>
       </div>
     )
   }

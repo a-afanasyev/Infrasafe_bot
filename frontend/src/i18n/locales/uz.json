@@ -2441,8 +2441,15 @@
     "retry": "Qaytadan urinish",
     "errors": {
       "generic": "Xatolik yuz berdi",
-      "loadFailed": "Ro'yxatni yuklab bo'lmadi"
-    }
+      "loadFailed": "Ro'yxatni yuklab bo'lmadi",
+      "network": "Server bilan aloqa yo'q. Internetni tekshirib, qaytadan urinib ko'ring",
+      "forbidden": "Bu amal uchun huquqingiz yetarli emas",
+      "tooLarge": "Fayl juda katta",
+      "tooMany": "So'rovlar juda ko'p. Biroz kutib, qaytadan urinib ko'ring",
+      "server": "Server vaqtincha ishlamayapti. Keyinroq qaytadan urinib ko'ring"
+    },
+    "openViaBot": "Ilovani Telegram-bot orqali oching",
+    "pullToRefresh": "↓ Yangilash uchun torting"
   },
   "toast": {
     "requestUpdated": "Ariza yangilandi",

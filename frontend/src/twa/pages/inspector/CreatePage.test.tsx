@@ -147,7 +147,7 @@ describe('InspectorCreatePage — мастер', () => {
     expect(toastMock.success).not.toHaveBeenCalled()
   })
 
-  it('ошибка сервера: detail-массив (422) рендерится в блоке ошибки, форма не сбрасывается', async () => {
+  it('ошибка сервера: 422 → локализованный текст в блоке ошибки (сырой detail — нет), форма не сбрасывается', async () => {
     mockPost.mockRejectedValue({
       message: 'Request failed',
       response: { status: 422, data: { detail: [{ loc: ['body', 'description'], msg: 'too short' }] } },
@@ -158,8 +158,10 @@ describe('InspectorCreatePage — мастер', () => {
     await user.click(screen.getByRole('button', { name: 'Далее' }))
     await user.click(screen.getByRole('button', { name: 'Отправить заявку' }))
 
-    // A9-P3-20: единый канон разбора (utils/errorMessage) срезает служебный 'body'.
-    expect(await screen.findByText('description: too short')).toBeInTheDocument()
+    // Сырой detail бэкенда (английский, «description: too short») пользователю
+    // TWA не показываем — только локализованный текст.
+    expect(await screen.findByText('Ошибка')).toBeInTheDocument()
+    expect(screen.queryByText(/too short/)).toBeNull()
     expect(toastMock.error).toHaveBeenCalled()
     expect(screen.getByText('Подтверждение')).toBeInTheDocument()
   })
