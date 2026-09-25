@@ -501,6 +501,31 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
         ))
 
 
+async def executor_in_claim_pool_async(session_factory, request_number: str,
+                                       principal: PrincipalRef) -> bool:
+    """Входит ли актор в пул заявки (без учёта «уже взята») — read-only.
+
+    Тот же snapshot/actor, что у run_command, и тот же гард
+    (`executor_in_claim_pool`); без лока — это только выбор кода отказа.
+    """
+    from uk_management_bot.utils.request_workflow.guards import (
+        executor_in_claim_pool,
+    )
+    from uk_management_bot.utils.request_workflow import NotAuthorized
+    async with session_factory() as db:
+        req = (await db.execute(
+            select(Request).where(Request.request_number == request_number)
+        )).scalar_one_or_none()
+        if req is None:
+            return False
+        try:
+            actor = await _load_actor_context_async(db, principal)
+        except NotAuthorized:
+            return False
+        snap = await _build_snapshot_async(db, req, actor)
+        return executor_in_claim_pool(snap, actor)
+
+
 async def run_command_async(session_factory, request_number: str,
                             principal: PrincipalRef, command: Command,
                             now: Optional[datetime] = None) -> CommandOutcome:

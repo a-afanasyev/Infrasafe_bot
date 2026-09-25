@@ -141,6 +141,33 @@ async def test_claim_without_shift_is_403(act_as, db_session_factory):
 
 
 @pytest.mark.asyncio
+async def test_taken_request_is_403_for_executor_without_shift(act_as):
+    """Сек-ревью: «занята ли заявка» видит только тот, кто сам мог бы её
+    взять. Исполнителю без смены — единый 403, не оракул 409."""
+    client = await act_as(41)
+    assert (await client.post(CLAIM_URL)).status_code == 200
+
+    client = await act_as(43)
+    r = await client.post(CLAIM_URL)
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"] == "not_eligible"
+
+
+@pytest.mark.asyncio
+async def test_taken_request_is_403_for_foreign_specialization(act_as, db_session_factory):
+    async with db_session_factory() as s:
+        s.add_all([_executor(44, spec="electric"), _on_shift(44)])
+        await s.commit()
+    client = await act_as(41)
+    assert (await client.post(CLAIM_URL)).status_code == 200
+
+    client = await act_as(44)
+    r = await client.post(CLAIM_URL)
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"] == "not_eligible"
+
+
+@pytest.mark.asyncio
 async def test_claim_requires_executor_role(act_as, manager_user):
     client = await act_as(manager_user.id)
     r = await client.post(CLAIM_URL)

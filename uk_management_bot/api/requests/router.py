@@ -49,6 +49,7 @@ from uk_management_bot.services.workflow_notifications import (
     notify_reassigned_away_detached,
 )
 from uk_management_bot.services.workflow_runner import (
+    executor_in_claim_pool_async,
     run_command_async,
     RequestNotFound,
 )
@@ -753,9 +754,14 @@ async def claim_request(
     except RequestNotFound:
         raise HTTPException(status_code=404, detail="Request not found")
     except NotAuthorized:
-        # Предикат не различает «уже взята» и «нельзя брать» — различаем по
-        # факту: у заявки есть исполнитель → её взяли (двойной тап взявшего —
-        # не ошибка, отдаём карточку).
+        # Предикат не различает «уже взята» и «нельзя брать». Различаем только
+        # для тех, кто сам в пуле этой заявки (смена + специализация группы):
+        # остальным — единый 403 без чтения executor_id, иначе любой
+        # исполнитель узнавал бы по номеру, занята ли чужая заявка.
+        if not await executor_in_claim_pool_async(
+                AsyncSessionLocal, request_number, principal):
+            raise HTTPException(status_code=403, detail="not_eligible")
+        # Двойной тап взявшего — не ошибка, отдаём карточку.
         taken_by = await svc.executor_id_of(db, request_number)
         if taken_by is None:
             raise HTTPException(status_code=403, detail="not_eligible")
