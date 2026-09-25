@@ -50,12 +50,21 @@ class FakeRedis:
     async def delete(self, key):
         return 1 if self.data.pop(key, None) is not None else 0
 
+    async def eval(self, script, numkeys, *args):
+        """Эмуляция compare-and-delete-скрипта лока (единственный EVAL хранилища)."""
+        assert numkeys == 1 and "redis.call('get'" in script and "redis.call('del'" in script
+        key, token = args
+        if self.data.get(key) == token:
+            del self.data[key]
+            return 1
+        return 0
+
 
 class BrokenRedis:
     async def _boom(self, *a, **k):
         raise ConnectionError("redis down")
 
-    get = set = delete = _boom
+    get = set = delete = eval = _boom
 
 
 def _executor(uid: int) -> User:

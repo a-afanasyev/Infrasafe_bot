@@ -38,12 +38,21 @@ class FakeRedis:
     async def delete(self, key):
         return 1 if self.data.pop(key, None) is not None else 0
 
+    async def eval(self, script, numkeys, *args):
+        """Эмуляция compare-and-delete-скрипта лока (единственный EVAL хранилища)."""
+        assert numkeys == 1 and "redis.call('get'" in script and "redis.call('del'" in script
+        key, token = args
+        if self.data.get(key) == token:
+            del self.data[key]
+            return 1
+        return 0
+
 
 class BrokenRedis:
     async def _boom(self, *a, **k):
         raise ConnectionError("redis down")
 
-    get = set = delete = _boom
+    get = set = delete = eval = _boom
 
 
 def _use(monkeypatch, redis):
@@ -175,3 +184,25 @@ async def test_garbage_record_is_ignored(monkeypatch):
     _use(monkeypatch, redis)
     redis.data[idem.record_key(41, "260925-001", "k")] = "{not json"
     assert await idem.load(41, "260925-001", "k") is None
+
+
+@pytest.mark.asyncio
+async def test_release_is_single_atomic_compare_and_delete(monkeypatch):
+    """Снятие лока — один EVAL (if get == token then del), а не GET+DEL двумя
+    командами: между ними лок мог истечь и достаться другому запросу."""
+    from unittest.mock import AsyncMock
+
+    redis = FakeRedis()
+    _use(monkeypatch, redis)
+    lock = await idem.acquire_lock("260925-001")
+
+    spy = AsyncMock(wraps=redis.eval)
+    redis.eval = spy
+    redis.get = AsyncMock(side_effect=AssertionError("GET при снятии лока"))
+    redis.delete = AsyncMock(side_effect=AssertionError("DEL при снятии лока"))
+    await idem.release_lock(lock)
+
+    spy.assert_awaited_once()
+    _script, numkeys, key, token = spy.await_args.args
+    assert (numkeys, key, token) == (1, "exec_complete:lock:260925-001", lock.token)
+    assert "exec_complete:lock:260925-001" not in redis.data

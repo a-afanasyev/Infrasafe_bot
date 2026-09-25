@@ -44,6 +44,12 @@ LOCK_TTL_SECONDS = 90
 
 _PREFIX = "exec_complete"
 
+# compare-and-delete: удалить лок, только если он всё ещё наш.
+_RELEASE_SCRIPT = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+    "return redis.call('del', KEYS[1]) else return 0 end"
+)
+
 
 async def get_redis():
     """Общий короткотаймаутный клиент API (2 с на connect/операцию)."""
@@ -120,14 +126,13 @@ async def acquire_lock(request_number: str) -> Lock:
 async def release_lock(lock: Lock) -> None:
     """Снять СВОЙ лок. Чужой (наш истёк по TTL, его взял другой) не трогаем.
 
-    GET+DEL не атомарны, но окно — между двумя командами одного соединения
-    при TTL 90 с; худший исход — тот же лишний кадр, что и при fail-open.
+    Сравнение и удаление — один EVAL: GET и DEL отдельными командами оставляли
+    окно, в котором наш лок истекал, доставался другому запросу и удалялся нами.
     """
     if not lock.acquired or lock.token is None:
         return
     try:
-        redis = await get_redis()
-        if await redis.get(_lock_key(lock.request_number)) == lock.token:
-            await redis.delete(_lock_key(lock.request_number))
+        await (await get_redis()).eval(
+            _RELEASE_SCRIPT, 1, _lock_key(lock.request_number), lock.token)
     except Exception as exc:  # noqa: BLE001 — лок истечёт по TTL
         _warn("unlock", exc)
