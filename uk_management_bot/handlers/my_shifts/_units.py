@@ -252,6 +252,7 @@ def _end_shift(db, telegram_id: int, user_db_id: Optional[int], shift_id: int):
         "actual_duration": actual_duration,
         "request_count": request_count,
         "notify": _notify_payload(user, shift, started=False),
+        "user_id": user.id,
     }
 
 

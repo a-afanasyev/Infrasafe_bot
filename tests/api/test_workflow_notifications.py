@@ -239,7 +239,9 @@ async def test_applicant_return_notifies_executor(db_session, sent):
     assert delivered == 1
     telegram_id, text = sent[0]
     assert telegram_id == 900002              # исполнитель, не житель
-    assert "возвращена" in text.lower()
+    # Фаза 4: статус после возврата — «Возвращена», текст не врёт про «В работе».
+    assert "вернули на доработку" in text.lower()
+    assert "в работе" not in text.lower()
 
 
 @pytest.mark.asyncio

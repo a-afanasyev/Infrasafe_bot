@@ -29,6 +29,10 @@ Staff-группы (фаза 2, решение владельца 2026-08-22 —
 (``gint:bld:<n>`` / ``gint:elv:{id}`` / ``gint:op:1|0``, только автор); заявка
 создаётся после ответа, без ответа за таймаут — не создаётся.
 
+«Готово»-отчёт исполнителя в staff-группе (Фаза 4, ``handlers/group_intake_done.py``): тег
++ «готово/сделал/tayyor…» от approved-executor — не заявка: LLM не зовётся, в
+группе тишина, автору в личку основным ботом — список его заявок в работе.
+
 AUD3-37: хендлеры не объявляют db — БД только через run_db-юниты;
 ``_db`` — keyword-only тестовый seam.
 """
@@ -66,6 +70,7 @@ from uk_management_bot.database.models.monitored_group import (
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
+from uk_management_bot.handlers import group_intake_done as gi_done
 from uk_management_bot.handlers import group_intake_elevator as gi_elevator
 from uk_management_bot.keyboards.group_intake import build_options_keyboard
 from uk_management_bot.services.group_intake import pending
@@ -76,6 +81,7 @@ from uk_management_bot.services.group_intake.classifier import (
     classify_message,
 )
 from uk_management_bot.services.group_intake.category_keywords import guess_category
+from uk_management_bot.services.group_intake.done_detector import is_done_report
 from uk_management_bot.services.group_intake.prefilter import prefilter
 from uk_management_bot.services.group_intake.translit import CYR_TO_LAT
 from uk_management_bot.services.request_address import (
@@ -715,6 +721,14 @@ async def group_message_entry(message: Message, bot: Bot, *, _db=None) -> None:
     kind = group["kind"]
     if kind not in (GROUP_KIND_RESIDENTS, GROUP_KIND_STAFF):
         return
+
+    # Фаза 4: «сделал #ариза» от исполнителя в РАБОЧЕЙ (staff) группе — отчёт
+    # о работе, не заявка: до LLM исполнителю — личка основным ботом, в группе
+    # тишина. Группы жителей и прочие авторы — обычный путь ниже.
+    if kind == GROUP_KIND_STAFF and is_done_report(
+            tagged_text, has_tag=tagged_text is not None):
+        if await gi_done.handle_done_report(message, bot, _db=_db):
+            return
 
     if group.get("require_tag"):
         # Тег-режим: без #заявка/#ariza сообщение не обрабатывается ВООБЩЕ —

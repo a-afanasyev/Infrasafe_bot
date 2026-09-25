@@ -68,6 +68,7 @@ class ShiftScheduler:
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
+            'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
         }
 
     @property
@@ -246,6 +247,20 @@ class ShiftScheduler:
             self._cron(day_of_week=0, hour=8, minute=0),
             id='weekly_planning',
             name='Еженедельное планирование',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 13. Незакрытые заявки исполнителей (Фаза 4 простого режима):
+        #     каждый день в 18:00 по Ташкенту — личка «N не закрыты» со
+        #     списком. Не чаще раза в день на заявку — дедуп в Redis внутри
+        #     сервиса (services/executor_done_prompt), тот же, что у
+        #     напоминания при конце смены.
+        self.scheduler.add_job(
+            self._executor_open_tasks_tick,
+            self._cron(hour=18, minute=0),
+            id='executor_open_tasks',
+            name='Напоминание исполнителям о незакрытых заявках',
             max_instances=1,
             coalesce=True
         )
@@ -875,6 +890,40 @@ class ShiftScheduler:
             # Сюда долетают только ошибки DB-фазы: send_notify_messages не
             # бросает, так что текста httpx (URL с токеном) в трейсе нет.
             logger.exception("Ошибка напоминаний по лифтам")
+
+
+    def _executor_open_tasks_sync(self) -> list:
+        """DB-фаза напоминания: плоские DTO получателей (не ORM)."""
+        from uk_management_bot.services.executor_done_prompt import all_recipients_sync
+
+        db = SessionLocal()
+        try:
+            return all_recipients_sync(db)
+        finally:
+            db.close()
+
+    async def _executor_open_tasks_tick(self):
+        """Ежедневное «N не закрыты»: DB-фаза в потоке, затем рассылка."""
+        from uk_management_bot.services.executor_done_prompt import send_reminder
+
+        task_name = 'executor_open_tasks'
+        try:
+            recipients = await asyncio.to_thread(self._executor_open_tasks_sync)
+            sent = 0
+            if recipients and self._bot is not None:
+                today = business_today()
+                for recipient in recipients:
+                    # send_reminder не бросает и не пишет текст исключения Bot API.
+                    if await send_reminder(self._bot, recipient, day=today):
+                        sent += 1
+            logger.info("Незакрытые заявки: исполнителей %s, напоминаний %s",
+                        len(recipients), sent)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            logger.exception("Ошибка напоминания о незакрытых заявках")
 
 
 # Глобальный экземпляр планировщика

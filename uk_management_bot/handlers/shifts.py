@@ -15,6 +15,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.services.shift_service import ShiftService
+from uk_management_bot.services.executor_done_prompt import remind_after_shift_end
 from uk_management_bot.services.shift_lifecycle import end_shift_sync
 from uk_management_bot.services.notification_service.channel import (
     send_to_channel,
@@ -311,6 +312,7 @@ def _end_shift_by_id_unit(db, telegram_id: int, shift_id: int):
         "minutes": f"{((shift.end_time - shift.start_time).total_seconds() % 3600 // 60):.0f}",
         "end_time": shift.end_time,
         "notify": notify,
+        "user_id": user.id,
     }
     return lang, "ok", payload
 
@@ -601,6 +603,8 @@ async def end_shift_yes_with_id(callback: CallbackQuery, user_status: str | None
             logger.error(f"Ошибка отправки уведомлений: {e}")
 
         await callback.answer(get_text("shifts.handlers.shift_ended_toast", language=lang))
+        # Фаза 4: незакрытые заявки — напоминание в личку (best-effort, не бросает).
+        await remind_after_shift_end(callback.message.bot, payload.get("user_id"), _db=_db)
 
     except Exception as e:
         logger.error(f"Ошибка завершения смены: {e}")
