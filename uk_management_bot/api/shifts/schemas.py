@@ -78,6 +78,8 @@ class EmployeeBrief(BaseModel):
     roles: list[str] = []  # parsed from User.roles (JSON) — нужен для бейджа роли в очереди
     # Сотрудник заблокировал бота — бейдж в карточке, доставка ему невозможна.
     bot_blocked: bool = False
+    # Простой режим исполнителя в TWA (включает менеджер).
+    simple_mode: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -97,6 +99,7 @@ class EmployeeBrief(BaseModel):
                 "specialization": getattr(values, "specialization", None),
                 "roles": getattr(values, "roles", None),
                 "bot_blocked": getattr(values, "bot_blocked_at", None) is not None,
+                "simple_mode": getattr(values, "simple_mode", False) is True,
             }
         if isinstance(values, dict):
             # Спецификации: JSON-массив / CSV / скаляр → список (порядок сохранён).
@@ -344,6 +347,13 @@ class CreateInviteResponse(BaseModel):
 class MeterEntryToggleRequest(BaseModel):
     """Выдать/снять роль-капабилити контролёра показаний (resource_meter_entry)."""
     enabled: bool
+
+
+class SimpleModeToggleRequest(BaseModel):
+    """Включить/выключить сотруднику простой режим исполнителя в TWA."""
+    enabled: bool
+
+    model_config = {"extra": "forbid"}
 
 
 class UpdateTemplateBody(BaseModel):

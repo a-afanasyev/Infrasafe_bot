@@ -24,9 +24,11 @@ from uk_management_bot.api.shifts.schemas import (
     CreateInviteRequest, CreateInviteResponse,
     EmployeeSortField,
     MeterEntryToggleRequest,
+    SimpleModeToggleRequest,
     SortOrder,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import get_user_roles
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
 from ._router import router
@@ -319,6 +321,26 @@ async def toggle_meter_entry(
         raise HTTPException(status_code=404, detail="User not found")
     await service.set_meter_entry_role(db, user, body.enabled)
     return {"id": user.id, "meter_entry": body.enabled}
+
+
+@router.patch("/employees/{user_id}/simple-mode", dependencies=[Depends(require_roles("manager"))])
+async def toggle_simple_mode(
+    user_id: int,
+    body: SimpleModeToggleRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Включить/выключить сотруднику простой режим исполнителя в Mini App."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    #
+    # Включить — только исполнителю; выключить — всегда, чтобы флаг не застрял
+    # у человека, у которого роль исполнителя уже сняли. Идемпотентна.
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.enabled and "executor" not in get_user_roles(user):
+        raise HTTPException(status_code=422, detail="Simple mode is available only for executors")
+    await service.set_simple_mode(db, user, body.enabled)
+    return {"id": user.id, "simple_mode": body.enabled}
 
 
 @router.post("/employees/{user_id}/request-phone", dependencies=[Depends(require_roles("manager"))])

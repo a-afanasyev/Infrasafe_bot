@@ -246,6 +246,16 @@ async def set_meter_entry_role(db: AsyncSession, user: User, enabled: bool) -> U
     return user
 
 
+async def set_simple_mode(db: AsyncSession, user: User, enabled: bool) -> User:
+    """Включить/выключить простой режим исполнителя (users.simple_mode). Идемпотентна."""
+    if user.simple_mode == enabled:
+        return user
+    user.simple_mode = enabled
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def list_pending_staff(db: AsyncSession) -> list[User]:
     """Сотрудники (manager/executor/inspector) со `status='pending'` — очередь
     активации аккаунта в дашборде.

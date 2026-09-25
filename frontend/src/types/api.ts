@@ -20,6 +20,8 @@ export interface EmployeeBrief {
   roles: string[]
   /** Сотрудник заблокировал бота. */
   bot_blocked: boolean
+  /** Простой режим исполнителя в Mini App (включает менеджер). */
+  simple_mode: boolean
 }
 
 export interface ShiftBrief {
