@@ -185,13 +185,14 @@ describe('TaskDetailPage — карточка и действия', () => {
     expect(await screen.findByRole('button', { name: 'В работу' })).toBeInTheDocument()
   })
 
-  it('ошибка смены статуса → toast.error, статус не меняется', async () => {
+  it('ошибка смены статуса → toast.error с нашим текстом (не сырой detail бэкенда), статус не меняется', async () => {
     requestState = request({ status: 'Закуп' })
     mockPatch.mockRejectedValue({ response: { status: 422, data: { detail: 'Переход запрещён' } } })
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'В работу' }))
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Переход запрещён'))
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Не удалось изменить статус'))
+    expect(toastMock.error).not.toHaveBeenCalledWith('Переход запрещён')
     expect(screen.getByRole('button', { name: 'В работу' })).toBeInTheDocument()
   })
 
