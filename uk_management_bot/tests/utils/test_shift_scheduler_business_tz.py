@@ -67,10 +67,10 @@ def test_scheduler_itself_runs_in_business_tz():
 
 def test_every_cron_trigger_carries_business_tz():
     jobs = _cron_jobs(_real_scheduler())
-    # Все четыре cron-джобы на месте — иначе проверка ниже ничего не значит.
+    # Все cron-джобы на месте — иначе проверка ниже ничего не значит.
     assert set(jobs) == {
         "auto_create_shifts", "rebalance_assignments",
-        "cleanup_expired", "weekly_planning",
+        "cleanup_expired", "weekly_planning", "executor_open_tasks",
     }
     for job_id, trigger in jobs.items():
         assert _tz_key(trigger.timezone) == _tz_key(BUSINESS_TZ), job_id
@@ -95,6 +95,10 @@ def test_every_cron_trigger_carries_business_tz():
         ("cleanup_expired",
          datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc),
          datetime(2026, 9, 26, 21, 0, tzinfo=timezone.utc)),
+        # Фаза 4: «18:00» по Ташкенту = 13:00 UTC.
+        ("executor_open_tasks",
+         datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc),
+         datetime(2026, 9, 23, 13, 0, tzinfo=timezone.utc)),
     ],
 )
 def test_next_fire_time_is_tashkent_wall_clock(job_id, now_utc, expected_utc):

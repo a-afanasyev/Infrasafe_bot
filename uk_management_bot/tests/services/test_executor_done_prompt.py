@@ -3,7 +3,7 @@
 * сбор получателей: только approved-исполнители, статусы «В работе»/«Возвращена»;
 * не чаще раза в день на заявку (Redis SET NX; fail-open);
 * конец смены — то же напоминание, одно сообщение со списком;
-* cron 18:00 в бизнес-зоне.
+* тик крона 18:00 (время триггера — test_shift_scheduler_business_tz).
 """
 from datetime import date
 from types import SimpleNamespace
@@ -143,19 +143,6 @@ async def test_shift_end_reminder_nothing_open_or_not_executor(db, redis):
 async def test_shift_end_reminder_never_raises(db, redis):
     bot = SimpleNamespace(send_message=AsyncMock(side_effect=RuntimeError("net")))
     await done.remind_after_shift_end(bot, 2, _db=db)  # не бросает
-
-
-def test_scheduler_registers_daily_job_at_18_business_tz():
-    from uk_management_bot.utils.business_time import BUSINESS_TZ
-    from uk_management_bot.utils.shift_scheduler import ShiftScheduler
-
-    scheduler = ShiftScheduler()
-    scheduler.setup_jobs()
-    job = scheduler.scheduler.get_job("executor_open_tasks")
-    trigger = job.trigger
-    fields = {f.name: str(f) for f in trigger.fields}
-    assert fields["hour"] == "18" and fields["minute"] == "0"
-    assert str(trigger.timezone) == str(BUSINESS_TZ)
 
 
 async def test_scheduler_tick_sends_to_each_recipient(monkeypatch):
