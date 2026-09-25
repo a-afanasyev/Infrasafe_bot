@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { twaClient } from '../../twaClient'
 import { tCategory, tStatus } from '../../../i18n/apiMaps'
+import { toast } from 'sonner'
 import { notifyError } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import MediaGallery from '../../components/MediaGallery'
@@ -12,12 +13,15 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
 import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
+// «Новая» — взятие из группового пула: отдельный POST /claim (EXECUTOR_CLAIM),
+// status-based PATCH «В работе» канон во взятие не резолвит (→ 422).
+// «Уточнение» исполнителю недоступно — CLARIFY_REQUEST только у менеджера;
+// из «Уточнения», поставленного менеджером, исполнитель возвращается в работу.
 const EXECUTOR_ACTIONS: Record<string, { label: string; target: string; color: string }[]> = {
   'Новая': [{ label: 'twa.exec.detail.takeWork', target: 'В работе', color: 'bg-emerald-500' }],
   'В работе': [
     { label: 'twa.exec.detail.complete', target: 'Выполнена', color: 'bg-emerald-500' },
     { label: 'twa.exec.detail.purchase', target: 'Закуп', color: 'bg-cyan-500' },
-    { label: 'twa.exec.detail.clarify', target: 'Уточнение', color: 'bg-amber-500' },
   ],
   'Закуп': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
   'Уточнение': [{ label: 'twa.exec.detail.backToWork', target: 'В работе', color: 'bg-emerald-500' }],
@@ -39,8 +43,8 @@ export default function TaskDetailPage() {
     lightboxCloseRef.current = close
   }, [])
 
-  // Закуп / Уточнение need a text payload before the status flip.
-  const [sheet, setSheet] = useState<'Закуп' | 'Уточнение' | null>(null)
+  // Закуп needs a materials list before the status flip.
+  const [sheet, setSheet] = useState<'Закуп' | null>(null)
   const [sheetText, setSheetText] = useState('')
 
   useEffect(() => {
@@ -79,35 +83,33 @@ export default function TaskDetailPage() {
     },
   })
 
-  // Уточнение posts the question into the dialog thread (so the applicant can
-  // answer back) and then moves the request to "Уточнение".
-  const clarifyMutation = useMutation({
-    mutationFn: async (body: string) => {
-      await twaClient.post(`/api/v2/requests/${number}/comments`, { text: body })
-      await twaClient.patch(`/api/v2/requests/${number}`, { status: 'Уточнение' })
-    },
+  // Взятие из пула. 409 already_claimed / 403 not_eligible — ожидаемые исходы
+  // гонки и правил пула: показываем понятный текст вместо кода из API.
+  const claimMutation = useMutation({
+    mutationFn: () => twaClient.post(`/api/v2/requests/${number}/claim`),
     onSuccess: () => {
       haptic('notification')
-      setSheet(null)
-      setSheetText('')
       queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
       queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['twa', 'comments', number] })
     },
     onError: (err: unknown) => {
       haptic('notification')
-      notifyError(err, t('twa.exec.detail.clarifyFailed'))
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      if (detail === 'already_claimed') {
+        toast.error(t('twa.exec.detail.alreadyClaimed'))
+        queryClient.invalidateQueries({ queryKey: ['twa', 'request', number] })
+      } else if (detail === 'not_eligible') {
+        toast.error(t('twa.exec.detail.claimNotEligible'))
+      } else {
+        notifyError(err, t('twa.exec.detail.statusChangeFailed'))
+      }
     },
   })
 
   const submitSheet = () => {
     const text = sheetText.trim()
     if (!text) return
-    if (sheet === 'Закуп') {
-      statusMutation.mutate({ status: 'Закуп', requested_materials: text })
-    } else if (sheet === 'Уточнение') {
-      clarifyMutation.mutate(text)
-    }
+    statusMutation.mutate({ status: 'Закуп', requested_materials: text })
   }
 
   if (isLoading) return <div className="p-8 text-center text-gray-400">{t('common.loading')}</div>
@@ -198,16 +200,19 @@ export default function TaskDetailPage() {
                   navigate(`/twa/exec/report/${number}`)
                   return
                 }
-                // Закуп / Уточнение open a text sheet first (materials list /
-                // clarification); the rest flip status directly.
-                if (action.target === 'Закуп' || action.target === 'Уточнение') {
+                // Закуп opens the materials sheet first.
+                if (action.target === 'Закуп') {
                   setSheetText('')
-                  setSheet(action.target)
+                  setSheet('Закуп')
+                  return
+                }
+                if (request.status === 'Новая') {
+                  claimMutation.mutate()
                   return
                 }
                 statusMutation.mutate({ status: action.target })
               }}
-              disabled={statusMutation.isPending}
+              disabled={statusMutation.isPending || claimMutation.isPending}
               className={`flex-1 text-white py-3 rounded-xl text-[13px] font-semibold disabled:opacity-50 ${action.color}`}
             >
               {t(action.label)}
@@ -226,14 +231,14 @@ export default function TaskDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-semibold text-[15px] text-gray-900 dark:text-gray-100 mb-3">
-              {t(sheet === 'Закуп' ? 'twa.exec.detail.purchaseTitle' : 'twa.exec.detail.clarifyTitle')}
+              {t('twa.exec.detail.purchaseTitle')}
             </h3>
             <textarea
               autoFocus
               value={sheetText}
               onChange={(e) => setSheetText(e.target.value)}
               maxLength={MAX_REQUEST_TEXT_LENGTH}
-              placeholder={t(sheet === 'Закуп' ? 'twa.exec.detail.purchasePlaceholder' : 'twa.exec.detail.clarifyPlaceholder')}
+              placeholder={t('twa.exec.detail.purchasePlaceholder')}
               className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-[13px] min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3"
             />
             <div className="flex gap-2">
@@ -245,7 +250,7 @@ export default function TaskDetailPage() {
               </button>
               <button
                 onClick={submitSheet}
-                disabled={!sheetText.trim() || statusMutation.isPending || clarifyMutation.isPending}
+                disabled={!sheetText.trim() || statusMutation.isPending}
                 className="flex-1 py-3 rounded-xl text-[13px] font-semibold bg-emerald-500 text-white disabled:opacity-50"
               >
                 {t('common.confirm')}

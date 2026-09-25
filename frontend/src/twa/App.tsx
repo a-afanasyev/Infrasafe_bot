@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import MeterEntryScreen from './pages/meter-entry/MeterEntryScreen'
 import { useTWAAuth } from './hooks/useTWAAuth'
 import { useProfileLanguage } from './hooks/useProfileLanguage'
@@ -8,6 +9,7 @@ import { useTelegramSDK } from './hooks/useTelegramSDK'
 import { ApplicantTabs } from './components/BottomTabBar'
 import { ExecutorTabs } from './components/ExecutorTabs'
 import { twaClient } from './twaClient'
+import { createTwaQueryClient } from './queryRetry'
 import OfflineIndicator from '../components/shared/OfflineIndicator'
 import RoleGuard from './components/RoleGuard'
 import RoleLanding from './components/RoleLanding'
@@ -41,9 +43,7 @@ import TaskDetailPage from './pages/executor/TaskDetailPage'
 import MyShiftsPage from './pages/executor/MyShiftsPage'
 import CompletionReport from './pages/executor/CompletionReport'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
-})
+const queryClient = createTwaQueryClient()
 
 /** Язык профиля перекрывает Telegram language_code (монтируется только после авторизации). */
 function ProfileLanguageSync() {
@@ -52,6 +52,7 @@ function ProfileLanguageSync() {
 }
 
 function TWAContent() {
+  const { t } = useTranslation()
   const { accessToken, isLoading, isAuthenticated } = useTWAAuth()
   const location = useLocation()
 
@@ -72,7 +73,7 @@ function TWAContent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
-        <p className="text-gray-400 text-[14px]">Loading...</p>
+        <p className="text-gray-400 text-[14px]">{t('common.loading')}</p>
       </div>
     )
   }
@@ -81,7 +82,7 @@ function TWAContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950 p-6 text-center">
         <p className="text-[40px] mb-3">🔒</p>
-        <p className="text-gray-500 text-[14px]">Open via Telegram bot to authenticate</p>
+        <p className="text-gray-500 text-[14px]">{t('twa.openViaBot')}</p>
       </div>
     )
   }

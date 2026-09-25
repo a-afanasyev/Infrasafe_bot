@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.request_access import has_request_access_sync
 from uk_management_bot.services.request_handler_service import RequestHandlerService
+from uk_management_bot.services.group_pool_notify import notify_group_pool_claimed_sync
 from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.request_media_entries import parse_media_entries, send_media_entries
 
@@ -205,55 +206,6 @@ async def show_group_pool_message(message: Message, state: FSMContext):
         await message.answer(get_text("common.error", language="ru"))
 
 
-async def _notify_group_pool_claimed(db_session: Session, request_number: str,
-                                     claimer: User) -> None:
-    """FEAT-группы (best-effort, вне tx): уведомить остальных дежурных группы,
-    что заявку #N взял {claimer}. Таргет — on-shift исполнители той же
-    специализации (group_specialization сохранён в назначении как история)."""
-    try:
-        from uk_management_bot.services.notification_service import _get_shared_bot
-        from uk_management_bot.utils.auth_helpers import get_user_roles
-        from uk_management_bot.utils.constants import ROLE_EXECUTOR
-        from uk_management_bot.utils.specializations import (
-            matches_required_specs, parse_specialization_values,
-            parse_specializations,
-        )
-
-        service = RequestHandlerService(db_session)
-        assignment = service.get_active_assignment(request_number)
-        spec = assignment.group_specialization if assignment else None
-        required = parse_specialization_values(spec, side="need", allow_universal=True)
-        if not required:
-            return
-        bot = _get_shared_bot()
-        if bot is None:
-            return
-        claimer_name = claimer.first_name or str(claimer.id)
-        # WR-05: «approved + на смене + есть telegram_id» считает БД одним
-        # запросом. Роль и специализация — строковые поля, их разбирают
-        # канон-парсеры, поэтому остаются здесь (см. docstring метода).
-        for ex in service.list_on_shift_notify_candidates():
-            if ex.id == claimer.id or not ex.telegram_id:
-                continue
-            if ROLE_EXECUTOR not in get_user_roles(ex):
-                continue
-            # BUG-166: общий предикат — иначе универсал не получал бы
-            # уведомления о заявках, которые он мог бы взять. Требование
-            # разобрано выше явно: пустое означало бы «уведомить всех».
-            if not matches_required_specs(parse_specializations(ex), required):
-                continue
-            import html as _html  # A9-P2-2: имя из Telegram в HTML-уведомлении
-            text = get_text("requests.claimed_by_other_notify",
-                            language=(ex.language or "ru")).format(
-                request_number=request_number, executor=_html.escape(claimer_name))
-            try:
-                await bot.send_message(chat_id=ex.telegram_id, text=text)
-            except Exception as e:
-                logger.debug(f"claim-notify исполнителю {ex.id} пропущено: {e}")
-    except Exception as e:
-        logger.warning(f"claim-notify для {request_number} не выполнен: {e}")
-
-
 @router.callback_query(F.data == "group_pool")
 async def show_group_pool(callback: CallbackQuery, state: FSMContext):
     """FEAT-группы: открыть пул «свободных» group-заявок (только дежурным)."""
@@ -306,7 +258,7 @@ async def claim_group_request(callback: CallbackQuery, state: FSMContext):
             await callback.answer(
                 get_text("requests.request_claimed_success", language=lang)
                 or "Вы взяли заявку в работу", show_alert=True)
-            await _notify_group_pool_claimed(db_session, request_number, user)
+            await notify_group_pool_claimed_sync(db_session, request_number, user)
             await _render_group_pool(callback.message, db_session, user, lang)
     except Exception as e:
         logger.error(f"Ошибка взятия заявки из пула: {e}")

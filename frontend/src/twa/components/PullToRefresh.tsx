@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function PullToRefresh({ queryKeys, children }: Props) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { haptic } = useTelegramSDK()
   const [pulling, setPulling] = useState(false)
@@ -55,7 +57,7 @@ export default function PullToRefresh({ queryKeys, children }: Props) {
     >
       {(pulling || refreshing) && (
         <div className="flex justify-center py-2 text-emerald-500 text-[12px]">
-          {refreshing ? '↻ ...' : '↓ pull'}
+          {refreshing ? '↻ ...' : t('twa.pullToRefresh')}
         </div>
       )}
       {children}
