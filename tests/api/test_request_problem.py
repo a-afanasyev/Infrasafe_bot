@@ -11,6 +11,7 @@ import pytest_asyncio
 from sqlalchemy import select
 
 import uk_management_bot.api.requests.executor_actions as actions
+import uk_management_bot.api.requests.problem_notify as notifier
 import uk_management_bot.services.executor_problem as problem
 import uk_management_bot.utils.constants as C
 from uk_management_bot.api import telegram_send
@@ -153,7 +154,7 @@ async def test_notify_managers_in_their_language_escaped(db_session, db_session_
                 urgency="low", executor_id=51, address="ул. <Тест>, 1"),
     ])
     await db_session.commit()
-    monkeypatch.setattr(problem, "AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr(notifier, "AsyncSessionLocal", db_session_factory)
     sent = []
 
     async def fake_send(chat_id, text, **kw):
@@ -162,7 +163,7 @@ async def test_notify_managers_in_their_language_escaped(db_session, db_session_
 
     monkeypatch.setattr(telegram_send, "send_message", fake_send)
 
-    delivered = await problem.notify_managers_problem_detached(
+    delivered = await notifier.notify_managers_problem_detached(
         NUMBER, 51, "not_let_in", "<b>дверь</b>")
 
     by_chat = {chat: text for chat, text, _ in sent}
@@ -187,13 +188,13 @@ async def test_notify_never_raises_and_hides_raw_exception(db_session, db_sessio
                 urgency="low", executor_id=51),
     ])
     await db_session.commit()
-    monkeypatch.setattr(problem, "AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr(notifier, "AsyncSessionLocal", db_session_factory)
 
     async def boom(*_a, **_k):
         raise RuntimeError("https://api.telegram.org/bot123:SECRET/sendMessage")
 
     monkeypatch.setattr(telegram_send, "send_message", boom)
-    assert await problem.notify_managers_problem_detached(NUMBER, 51, "need_master", None) == 0
+    assert await notifier.notify_managers_problem_detached(NUMBER, 51, "need_master", None) == 0
     assert "SECRET" not in caplog.text
     assert "RuntimeError" in caplog.text
 

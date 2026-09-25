@@ -18,6 +18,7 @@ from uk_management_bot.api.dependencies import get_db, require_roles
 from uk_management_bot.api.dependencies_access import is_assigned_executor
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.requests import service as svc
+from uk_management_bot.api.requests.problem_notify import notify_managers_problem_detached
 from uk_management_bot.api.requests.router import _card
 from uk_management_bot.api.requests.schemas import CommentOut, ProblemBody, RequestCard
 from uk_management_bot.database.models.user import User
@@ -27,10 +28,7 @@ from uk_management_bot.services.executor_completion import (
     CompletionRefused,
     complete_with_photo,
 )
-from uk_management_bot.services.executor_problem import (
-    notify_managers_problem_detached,
-    problem_comment_text,
-)
+from uk_management_bot.services.executor_problem import problem_comment_text
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.workflow_notifications import (
     dispatch_notify_intents_detached,
