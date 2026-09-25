@@ -101,8 +101,13 @@ describe('i18n: нет кириллицы в литералах UI (A9-P2-31)', 
 })
 
 // uz — латиница: кириллица в uz.json = непереведённая (скопированная из ru) строка.
-// Исключение — подпись «переключить на русский», намеренно на русском.
-const UZ_CYRILLIC_ALLOWED = new Set(['language.switchToRu'])
+// Исключения — самоназвания языков, намеренно в своей письменности: подпись
+// «переключить на русский» и пункты выбора языка сотрудника (простой режим).
+const UZ_CYRILLIC_ALLOWED = new Set([
+  'language.switchToRu',
+  'employeeDetail.simpleMode.languages.ru',
+  'employeeDetail.simpleMode.languages.uz_cyrl',
+])
 
 function leaves(obj: unknown, prefix = ''): [string, string][] {
   if (typeof obj === 'string') return [[prefix, obj]]

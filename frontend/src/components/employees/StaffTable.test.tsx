@@ -12,13 +12,23 @@ function emp(overrides: Partial<EmployeeBrief> = {}): EmployeeBrief {
   return {
     id: 1, first_name: 'Андрей', last_name: 'Афанасьев', phone: '+998901112233',
     specialization: ['electrician'], active_shift_id: 44, verification_status: 'verified',
-    status: 'approved', roles: ['executor'], bot_blocked: false, ...overrides,
+    status: 'approved', roles: ['executor'], bot_blocked: false, simple_mode: false, language: 'ru',
+    ...overrides,
   }
 }
 
 const noop = () => {}
 
 describe('StaffTable', () => {
+  it('бейдж «Простой режим» — только у сотрудника с simple_mode', () => {
+    render(<StaffTable employees={[emp({ id: 1, simple_mode: true }), emp({ id: 2, first_name: 'Иван', simple_mode: false })]}
+                       onAssign={noop} onBlock={noop} onDelete={noop} isBlockPending={false} />)
+    const simpleRow = screen.getByRole('row', { name: /Андрей Афанасьев/ })
+    expect(within(simpleRow).getByText('Простой режим')).toBeInTheDocument()
+    const plainRow = screen.getByRole('row', { name: /Иван Афанасьев/ })
+    expect(within(plainRow).queryByText('Простой режим')).not.toBeInTheDocument()
+  })
+
   it('пустой список — EmptyState без таблицы', () => {
     render(<StaffTable employees={[]} onAssign={noop} onBlock={noop} onDelete={noop} isBlockPending={false} />)
     expect(screen.getByText('Сотрудники не найдены')).toBeInTheDocument()

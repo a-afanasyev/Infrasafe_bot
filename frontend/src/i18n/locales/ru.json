@@ -1354,6 +1354,7 @@
     "submit": "Создать заявку"
   },
   "employees": {
+    "simpleModeBadge": "Простой режим",
     "title": "Сотрудники",
     "requestPhone": "Запросить номер",
     "phoneRequestSent": "✓ Запрос отправлен",
@@ -1427,6 +1428,16 @@
       "hint": "Доступ к вводу показаний счётчиков (Mini App «Ввод показаний»)",
       "grant": "Выдать доступ",
       "revoke": "Снять доступ"
+    },
+    "simpleMode": {
+      "title": "Простой режим",
+      "hint": "Упрощённая панель исполнителя в Mini App: крупные кнопки, минимум текста",
+      "language": "Язык бота и Mini App",
+      "languages": {
+        "ru": "Русский",
+        "uz": "O‘zbekcha (латиница)",
+        "uz_cyrl": "Ўзбекча (кириллица)"
+      }
     }
   },
   "employeeModal": {
@@ -2646,7 +2657,15 @@
     "shiftReassigned": "Смена переназначена",
     "shiftReassignFailed": "Не удалось переназначить смену",
     "nameUpdated": "ФИО обновлено",
-    "nameUpdateFailed": "Не удалось обновить ФИО"
+    "nameUpdateFailed": "Не удалось обновить ФИО",
+    "simpleModeEnabled": "Простой режим включён",
+    "simpleModeDisabled": "Простой режим выключен",
+    "simpleModeFailed": "Не удалось изменить простой режим",
+    "simpleModeExecutorOnly": "Простой режим доступен только исполнителям",
+    "employeeLanguageUpdated": "Язык сотрудника изменён",
+    "employeeLanguageFailed": "Не удалось изменить язык",
+    "employeeLanguageStaffOnly": "Язык можно изменить только сотруднику",
+    "staffSettingForbidden": "Менеджерам и администраторам эта настройка недоступна"
   },
   "feedback": {
     "title": "Обратная связь",

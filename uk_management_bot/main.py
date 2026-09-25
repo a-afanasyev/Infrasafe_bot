@@ -16,6 +16,7 @@ if settings.SENTRY_DSN:
 from uk_management_bot.database.session import engine, LazySession
 from uk_management_bot.handlers.base import router as base_router, start_router
 from uk_management_bot.handlers.group_silence import router as group_silence_router
+from uk_management_bot.handlers.executor_done import router as executor_done_router
 from uk_management_bot.handlers.start_role_choice import router as start_role_choice_router
 from uk_management_bot.handlers.requests import router as requests_router
 from uk_management_bot.handlers.inspector_requests import router as inspector_requests_router
@@ -299,6 +300,9 @@ def setup_routers(dp: Dispatcher) -> None:
     # auth_router: шаг ввода токена обязан выигрывать у Command("join"), иначе
     # один и тот же ввод пойдёт двумя разными путями.
     dp.include_router(start_role_choice_router)
+    # «Закрыть этим фото?» (exdone:*, Фаза 4) — до роутеров с FSM-стейтами:
+    # кнопка под фото «готово» обязана работать из любого состояния диалога.
+    dp.include_router(executor_done_router)
     dp.include_router(health_router)  # Health check должен быть первым для быстрого доступа
     dp.include_router(auth_router)
 
