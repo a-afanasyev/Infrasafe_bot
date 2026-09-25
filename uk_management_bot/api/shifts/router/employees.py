@@ -24,9 +24,12 @@ from uk_management_bot.api.shifts.schemas import (
     CreateInviteRequest, CreateInviteResponse,
     EmployeeSortField,
     MeterEntryToggleRequest,
+    SimpleModeToggleRequest,
+    EmployeeLanguageRequest,
     SortOrder,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.auth_helpers import get_user_roles
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
 from ._router import router
@@ -319,6 +322,60 @@ async def toggle_meter_entry(
         raise HTTPException(status_code=404, detail="User not found")
     await service.set_meter_entry_role(db, user, body.enabled)
     return {"id": user.id, "meter_entry": body.enabled}
+
+
+def _ensure_staff_target(user: User, *, action: str) -> None:
+    """Цель — рядовой сотрудник: не manager/admin (403), и staff (иначе 422).
+
+    403 — как approve/block/rename (`_ensure_not_privileged`, проверяется
+    первым, чтобы admin без staff-роли тоже получил 403); 422 для не-staff —
+    как activate/decline: житель меняет свой язык сам в профиле.
+    """
+    _ensure_not_privileged(user, action=action)
+    if not service._is_staff(user):
+        raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
+
+
+@router.patch("/employees/{user_id}/simple-mode", dependencies=[Depends(require_roles("manager"))])
+async def toggle_simple_mode(
+    user_id: int,
+    body: SimpleModeToggleRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Включить/выключить сотруднику простой режим исполнителя в Mini App."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    #
+    # Только над сотрудником (см. _ensure_staff_target). Включить — только
+    # исполнителю; выключить — любому сотруднику, чтобы флаг не застрял у
+    # человека, у которого роль исполнителя уже сняли. Идемпотентна.
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_staff_target(user, action="Cannot change simple mode of a manager or admin user")
+    if body.enabled and "executor" not in get_user_roles(user):
+        raise HTTPException(status_code=422, detail="Simple mode is available only for executors")
+    await service.set_simple_mode(db, user, body.enabled)
+    return {"id": user.id, "simple_mode": body.enabled}
+
+
+@router.patch("/employees/{user_id}/language", dependencies=[Depends(require_roles("manager"))])
+async def set_employee_language(
+    user_id: int,
+    body: EmployeeLanguageRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Сменить сотруднику язык профиля (бот и Mini App)."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    #
+    # Бот читает users.language из БД на каждом апдейте (auth-middleware →
+    # localization), кэша языка нет — новый язык действует со следующего
+    # сообщения без рестарта.
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    _ensure_staff_target(user, action="Cannot change language of a manager or admin user")
+    await service.set_user_language(db, user, body.language)
+    return {"id": user.id, "language": body.language}
 
 
 @router.post("/employees/{user_id}/request-phone", dependencies=[Depends(require_roles("manager"))])
