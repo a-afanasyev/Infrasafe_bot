@@ -14,6 +14,7 @@ from typing import Optional
 # Localization imports - TASK 17 Phase 2
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.language_helpers import (
+    SUPPORTED_LANGUAGES,
     get_language_from_message
 )
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
@@ -98,7 +99,7 @@ async def _get_user_language(message: Message = None, callback: CallbackQuery = 
             try:
                 from uk_management_bot.database.session import run_db
                 lang = await run_db(_lang_unit)
-                if lang and lang in ['ru', 'uz']:
+                if lang and lang in SUPPORTED_LANGUAGES:
                     return lang
             except Exception as e:
                 logger.warning(f"Failed to get user language from DB for {target_user_id}: {e}")

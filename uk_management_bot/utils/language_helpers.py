@@ -14,11 +14,12 @@ from aiogram.types import Message, CallbackQuery, User as TelegramUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.helpers import load_locale, get_text
+from uk_management_bot.utils.helpers import LANGUAGE_FALLBACKS, load_locale, get_text
 
 
-# Supported languages
-SUPPORTED_LANGUAGES = ['ru', 'uz']
+# Supported languages. uz — латиница, uz_cyrl — узбекская кириллица (перевод
+# при отсутствии ключа берётся из uz, затем ru — см. helpers.LANGUAGE_FALLBACKS).
+SUPPORTED_LANGUAGES = ['ru', 'uz', 'uz_cyrl']
 DEFAULT_LANGUAGE = 'ru'
 
 
@@ -217,10 +218,11 @@ def get_text_with_plural(
     try:
         load_locale(language)
 
-        # Determine plural form
-        if language == 'ru':
+        # Determine plural form (uz_cyrl → правила uz)
+        plural_language = LANGUAGE_FALLBACKS.get(language, language)
+        if plural_language == 'ru':
             plural_key = _get_russian_plural_key(key, count)
-        elif language == 'uz':
+        elif plural_language == 'uz':
             plural_key = _get_uzbek_plural_key(key, count)
         else:
             plural_key = key

@@ -1,12 +1,26 @@
 import json
 import logging
 import os
-from typing import Dict, Any
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
 # In-memory cache for locale data: {language_code: parsed_dict}
 _locale_cache: Dict[str, Dict[str, Any]] = {}
+
+# Язык → язык-родитель для фолбэка перевода (нет файла или ключа); последний
+# рубеж для всех — ru. uz_cyrl (узбекская кириллица) без своего перевода
+# показывает латиницу, а не русский.
+LANGUAGE_FALLBACKS: Dict[str, str] = {"uz_cyrl": "uz"}
+
+
+def _fallback_chain(language: str) -> List[str]:
+    """Цепочка языков для поиска ключа: сам язык, затем его родители."""
+    chain: List[str] = []
+    while language and language not in chain:
+        chain.append(language)
+        language = LANGUAGE_FALLBACKS.get(language)
+    return chain
 
 
 def _resolve_locales_dir() -> str:
@@ -32,6 +46,12 @@ def load_locale(language: str = "ru") -> Dict[str, Any]:
     locale_file = os.path.join(locales_dir, f"{language}.json")
 
     if not os.path.exists(locale_file):
+        parent = LANGUAGE_FALLBACKS.get(language)
+        if parent:
+            # Нет своего файла — локаль родителя (uz_cyrl → uz), не русская.
+            data = load_locale(parent)
+            _locale_cache[language] = data
+            return data
         # Фолбэк на русский язык
         locale_file = os.path.join(locales_dir, "ru.json")
 
@@ -76,49 +96,28 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
         # Fallback to: requests.count if plural key not found
     """
     try:
-        locale = load_locale(language)
-
         # Handle plural logic if 'count' parameter provided
         plural_key = key
         if 'count' in kwargs:
             count = kwargs['count']
             plural_key = _get_plural_key(key, count, language)
 
-        # Try to get value for plural_key first
-        keys = plural_key.split(".")
-        value = locale
-        found = True
-
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
-            else:
-                found = False
+        # Цепочка языков (uz_cyrl → uz): в каждом — plural-ключ, затем базовый.
+        found = False
+        value: Any = None
+        for lang in _fallback_chain(language):
+            locale = load_locale(lang)
+            found, value = _lookup(locale, plural_key)
+            if not found and plural_key != key:
+                found, value = _lookup(locale, key)
+            if found:
                 break
-
-        # If plural key not found, try base key
-        if not found and plural_key != key:
-            keys = key.split(".")
-            value = locale
-            found = True
-
-            for k in keys:
-                if isinstance(value, dict) and k in value:
-                    value = value[k]
-                else:
-                    found = False
-                    break
 
         # If still not found, fallback to Russian
         if not found:
-            ru_locale = load_locale("ru")
-            value = ru_locale
-
-            for ru_k in key.split("."):
-                if isinstance(value, dict) and ru_k in value:
-                    value = value[ru_k]
-                else:
-                    return key  # Return key if translation not found
+            found, value = _lookup(load_locale("ru"), key)
+            if not found:
+                return key  # Return key if translation not found
 
         # Замена параметров в тексте
         # BUG-BOT-032 fix: prefer str.format(**kwargs) so format specs like {x:.1f} work.
@@ -138,6 +137,17 @@ def get_text(key: str, language: str = "ru", **kwargs) -> str:
         return key
 
 
+def _lookup(locale: Dict[str, Any], key: str) -> Tuple[bool, Any]:
+    """Найти вложенный ключ вида ``a.b.c`` в словаре локали."""
+    value: Any = locale
+    for k in key.split("."):
+        if isinstance(value, dict) and k in value:
+            value = value[k]
+        else:
+            return False, None
+    return True, value
+
+
 def _get_plural_key(base_key: str, count: int, language: str) -> str:
     """
     Get plural key based on count and language rules.
@@ -152,6 +162,7 @@ def _get_plural_key(base_key: str, count: int, language: str) -> str:
     Returns:
         Plural key variant
     """
+    language = LANGUAGE_FALLBACKS.get(language, language)  # uz_cyrl → правила uz
     if language == 'ru':
         return _get_russian_plural_key(base_key, count)
     elif language == 'uz':
