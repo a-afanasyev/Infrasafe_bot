@@ -137,4 +137,13 @@ describe('EmployeeDetailPage — простой режим исполнител�
     expect(screen.queryByRole('switch', { name: 'Простой режим' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Язык бота и Mini App')).not.toBeInTheDocument()
   })
+
+  it('обходчик с уже включённым режимом видит переключатель, чтобы выключить', async () => {
+    const user = userEvent.setup()
+    detailQuery.data = makeEmployee({ roles: ['inspector'], simple_mode: true })
+    render(<EmployeeDetailPage />)
+    const toggle = screen.getByRole('switch', { name: 'Простой режим' })
+    await user.click(toggle)
+    expect(simpleModeSpy).toHaveBeenCalledWith(false)
+  })
 })
