@@ -29,6 +29,7 @@ def _make_user(
     last_name: str = "Petrov",
     phone: str | None = None,
     verification_status: str = "pending",
+    simple_mode: bool = False,
 ):
     user = MagicMock()
     user.id = id
@@ -43,6 +44,7 @@ def _make_user(
     user.last_name = last_name
     user.phone = phone
     user.verification_status = verification_status
+    user.simple_mode = simple_mode
     return user
 
 
@@ -267,6 +269,18 @@ class TestGetProfile:
         assert profile.active_role == "executor"
 
 
+    @pytest.mark.asyncio
+    async def test_profile_exposes_simple_mode_flag(self):
+        """TWA решает, какой интерфейс показать исполнителю, по флагу профиля."""
+        from uk_management_bot.api.profile.router import get_profile
+
+        enabled = await get_profile(user=_make_user(simple_mode=True))
+        disabled = await get_profile(user=_make_user(simple_mode=False))
+
+        assert enabled.simple_mode is True
+        assert disabled.simple_mode is False
+
+
 # ── update_profile ───────────────────────────────────────────────────
 
 
@@ -318,6 +332,30 @@ class TestUpdateProfile:
 
         assert result == {"ok": True}
         assert db_user.language == "uz"
+
+    @pytest.mark.asyncio
+    async def test_uz_cyrl_language_accepted(self):
+        from uk_management_bot.api.profile.router import update_profile, UpdateProfileBody
+
+        user = _make_user()
+        mock_db = AsyncMock()
+        db_user = MagicMock()
+        db_user.language = "ru"
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = db_user
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.commit = AsyncMock()
+
+        result = await update_profile(body=UpdateProfileBody(language="uz_cyrl"), db=mock_db, user=user)
+
+        assert result == {"ok": True}
+        assert db_user.language == "uz_cyrl"
+
+    def test_simple_mode_not_writable_by_user(self):
+        """Флаг включает только менеджер — PATCH профиля его не принимает."""
+        from uk_management_bot.api.profile.router import UpdateProfileBody
+
+        assert "simple_mode" not in UpdateProfileBody.model_fields
 
     @pytest.mark.asyncio
     async def test_valid_email_updates_db_user(self):

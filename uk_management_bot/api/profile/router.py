@@ -9,7 +9,8 @@ from typing import Optional
 
 router = APIRouter()
 
-ALLOWED_LANGUAGES = {"ru", "uz"}
+# uz — латиница, uz_cyrl — узбекская кириллица (простой режим исполнителя).
+ALLOWED_LANGUAGES = {"ru", "uz", "uz_cyrl"}
 
 
 class ProfileOut(BaseModel):
@@ -27,6 +28,9 @@ class ProfileOut(BaseModel):
     # AUD3-16: lets the SPA decide whether the "current password" field is
     # required when changing the password (true) vs first-time set (false).
     has_password: bool = False
+    # Простой режим исполнителя: TWA показывает упрощённый интерфейс. Включает
+    # менеджер (PATCH /shifts/employees/{id}/simple-mode), сам пользователь — нет.
+    simple_mode: bool = False
     model_config = {"from_attributes": True}
 
     @classmethod
@@ -45,6 +49,7 @@ class ProfileOut(BaseModel):
             roles=roles_list,
             active_role=getattr(user, "active_role", None),
             has_password=bool(getattr(user, "password_hash", None)),
+            simple_mode=getattr(user, "simple_mode", False) is True,
         )
 
 
