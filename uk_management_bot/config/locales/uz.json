@@ -1271,6 +1271,8 @@
     "reassign_success": "✅ Smena qayta tayinlandi. Ko'chirilgan arizalar: {moved}."
   },
   "shifts": {
+    "user_started": "✅ Smena boshlandi: {started}",
+    "user_ended": "✅ Smena tugadi: {ended}. Davomiyligi: {hours} soat {minutes} daq.",
     "accept_shift": "🔄 Smenani qabul qilish",
     "duration": "Davomiyligi: {duration}",
     "end_shift": "🔚 Smenani topshirish",

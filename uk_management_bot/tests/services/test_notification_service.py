@@ -924,3 +924,34 @@ class TestSharedBotRegistry:
             MockBot.assert_called_once()
         finally:
             ns.set_shared_bot(None)
+
+
+# ---------------------------------------------------------------------------
+# Язык получателя: личные сообщения о смене — на users.language, канал — ru
+# ---------------------------------------------------------------------------
+
+class TestShiftMessagesRecipientLanguage:
+    START = datetime(2026, 4, 2, 9, 0, 0, tzinfo=timezone.utc)
+    END = datetime(2026, 4, 2, 10, 30, 0, tzinfo=timezone.utc)
+
+    def test_started_uz(self):
+        msg = build_shift_started_message(_make_user(language="uz"), _make_shift(start_time=self.START))
+        assert msg == "✅ Smena boshlandi: 02.04.2026 14:00"
+
+    def test_started_uz_cyrl_is_cyrillic(self):
+        msg = build_shift_started_message(_make_user(language="uz_cyrl"), _make_shift(start_time=self.START))
+        assert msg == "✅ Смена бошланди: 02.04.2026 14:00"
+
+    def test_ended_uz(self):
+        msg = build_shift_ended_message(
+            _make_user(language="uz"), _make_shift(start_time=self.START, end_time=self.END))
+        assert msg == "✅ Smena tugadi: 02.04.2026 15:30. Davomiyligi: 1 soat 30 daq."
+
+    def test_unknown_language_falls_back_to_ru(self):
+        msg = build_shift_started_message(_make_user(language=None), _make_shift(start_time=self.START))
+        assert msg == "✅ Ваша смена начата в 02.04.2026 14:00"
+
+    def test_channel_stays_russian(self):
+        msg = build_shift_started_message(
+            _make_user(language="uz", telegram_id=7), _make_shift(start_time=self.START), for_channel=True)
+        assert msg.startswith("🔔 Смена начата: user_id=7")
