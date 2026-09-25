@@ -723,6 +723,69 @@ async def update_request(
     return await _card(db, req, exec_user, user)
 
 
+@router.post("/{request_number}/claim", response_model=RequestCard)
+@limiter.limit("30/minute")
+async def claim_request(
+    request: Request,
+    request_number: str,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("executor")),
+):
+    """Исполнитель берёт заявку из группового пула (канон EXECUTOR_CLAIM).
+
+    Паритет с ботом (`claim_request_`): status-based PATCH «В работе» во взятие
+    НЕ резолвится (planner `_STATUS_RESOLVE_EXCLUDE`), поэтому TWA нужна явная
+    команда. Все правила (роль, смена, специализация группы, unclaimed) — в
+    предикате `_executor_can_claim`; здесь только маппинг исходов в HTTP:
+    200 — карточка; 409 `already_claimed` — заявку уже взял другой;
+    403 `not_eligible` — не на смене / не та группа; 409 — статус не позволяет.
+    """
+    principal = PrincipalRef(kind="user", user_id=user.id, source="api")
+    command = ActionCommand(
+        command_id=f"api:{request_number}:claim",
+        action=Action.EXECUTOR_CLAIM,
+        payload={},
+    )
+    try:
+        outcome = await run_command_async(
+            AsyncSessionLocal, request_number, principal, command)
+    except RequestNotFound:
+        raise HTTPException(status_code=404, detail="Request not found")
+    except NotAuthorized:
+        # Предикат не различает «уже взята» и «нельзя брать» — различаем по
+        # факту: у заявки есть исполнитель → её взяли (двойной тап взявшего —
+        # не ошибка, отдаём карточку).
+        taken_by = await svc.executor_id_of(db, request_number)
+        if taken_by is None:
+            raise HTTPException(status_code=403, detail="not_eligible")
+        if taken_by != user.id:
+            raise HTTPException(status_code=409, detail="already_claimed")
+        outcome = None
+    except (InvalidTransition, RepeatRejected, RepeatConflict) as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except WorkflowError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if outcome is not None:
+        for ev in outcome.post_commit_intents:
+            if ev.kind == "realtime":
+                await publish_request_event("request.status_changed", {
+                    "number": request_number,
+                    "old_status": normalize_status(outcome.old_state),
+                    "new_status": ev.data.get("status"),
+                })
+        background.add_task(
+            dispatch_notify_intents_detached,
+            request_number, outcome.post_commit_intents)
+
+    row = await svc.request_with_executor(db, request_number)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    req, exec_user = row
+    return await _card(db, req, exec_user, user)
+
+
 @router.get("/{request_number}/comments", response_model=list[CommentOut])
 async def get_comments(
     request_number: str,
