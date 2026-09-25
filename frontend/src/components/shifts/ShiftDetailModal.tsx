@@ -7,6 +7,7 @@ import EmployeePickerSearch from '../employees/EmployeePickerSearch'
 import { useHasRole } from '../../hooks/useHasRole'
 import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
 import { shiftTypeColor } from '../../utils/shiftWeek'
+import { tSpecialization } from '../../i18n/apiMaps'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import {
@@ -87,19 +88,22 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   return (
     <>
       <Dialog open={shiftId !== null} onOpenChange={(open) => { if (!open) onClose() }}>
-        <DialogContent className="max-w-[480px] max-h-[90vh] overflow-y-auto">
+        {/* Адаптив: на телефоне — почти во всю ширину экрана, дальше растёт до 2xl.
+            overflow-x-hidden — страховка: горизонтальной прокрутки в окне быть не должно,
+            всё содержимое переносится (кнопки, имена, заметки, select). */}
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-xl lg:max-w-2xl max-h-[90dvh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{t('shifts.shiftDetail', { id: shiftId })}</DialogTitle>
+            <DialogTitle className="pr-6">{t('shifts.shiftDetail', { id: shiftId })}</DialogTitle>
           </DialogHeader>
 
           {isLoading ? (
             <LoadingSpinner />
           ) : shift ? (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-5 min-w-0">
               {/* Executor + badges */}
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="font-[var(--font-display)] text-base font-semibold text-text-primary">
+                  <span className="font-[var(--font-display)] text-base font-semibold text-text-primary break-words min-w-0">
                     {personName(shift.executor_name, t('shifts.executorFallback', { id: shift.user_id }))}
                   </span>
                   <span
@@ -137,7 +141,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
               </div>
 
               {/* Metrics grid */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
                   {
                     label: t('shifts.loadPercent'),
@@ -178,7 +182,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                 ].map(metric => (
                   <div
                     key={metric.label}
-                    className="bg-bg-surface border border-border-default rounded-sm p-3"
+                    className="bg-bg-surface border border-border-default rounded-sm p-3 min-w-0"
                   >
                     <div
                       className="font-[var(--font-mono)] text-lg font-bold mb-1"
@@ -186,7 +190,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                     >
                       {metric.value}
                     </div>
-                    <div className="text-[11px] text-text-muted">
+                    <div className="text-[11px] text-text-muted break-words">
                       {metric.label}
                     </div>
                   </div>
@@ -199,7 +203,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                   <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-1.5">
                     {t('shifts.notes')}
                   </div>
-                  <p className="m-0 text-[13px] text-text-secondary">
+                  <p className="m-0 text-[13px] text-text-secondary whitespace-pre-wrap break-words">
                     {shift.notes}
                   </p>
                 </div>
@@ -225,7 +229,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                     total={picker.total}
                   />
                   <select
-                    className="bg-bg-base border border-border-default rounded-sm px-2 py-1.5 text-sm text-text-primary"
+                    className="w-full min-w-0 max-w-full bg-bg-base border border-border-default rounded-sm px-2 py-1.5 text-sm text-text-primary"
                     value={pickedExecutor}
                     onChange={e => setPickedExecutor(e.target.value)}
                   >
@@ -233,11 +237,11 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
                     {eligibleExecutors.map(e => (
                       <option key={e.id} value={e.id}>
                         {fullName(e, `#${e.id}`)}
-                        {e.specialization?.length ? ` (${e.specialization.join(', ')})` : ''}
+                        {e.specialization?.length ? ` (${e.specialization.map(sp => tSpecialization(sp, t)).join(', ')})` : ''}
                       </option>
                     ))}
                   </select>
-                  <div className="flex gap-2 justify-end">
+                  <div className="flex flex-wrap gap-2 justify-end">
                     <Button variant="outline" onClick={() => { setReassignOpen(false); setPickedExecutor('') }}>
                       {t('common.cancel')}
                     </Button>
@@ -252,11 +256,11 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
               )}
 
               {/* Actions */}
-              <DialogFooter>
+              <DialogFooter className="flex-wrap gap-2 sm:space-x-0">
                 {onEdit && (shift.status === 'planned' || shift.status === 'active') && (
                   <Button
                     variant="outline"
-                    className="mr-auto"
+                    className="sm:mr-auto"
                     onClick={() => onEdit(shift)}
                   >
                     {t('shifts.editShift')}
