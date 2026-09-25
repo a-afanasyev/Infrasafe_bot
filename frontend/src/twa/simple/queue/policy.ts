@@ -25,9 +25,10 @@ function detailOf(err: unknown): string | null {
  *
  * Повторять: нет сети, 408/429, 5xx (в т.ч. 503 media_unavailable и 502 от
  * edge без нашего кода), 401 (токен обновится), 403 `no_active_shift` —
- * исполнитель начнёт смену, и та же запись уйдёт без пересъёмки.
- * Окончательно: 404, 409, 403 `not_assigned`, 413/415/422, 502 `media_rejected`,
- * прочие 4xx — повтор с теми же байтами ответ не изменит.
+ * исполнитель начнёт смену, и та же запись уйдёт без пересъёмки; 409
+ * `in_progress` — тот же ключ ещё обрабатывается сервером (параллельный повтор).
+ * Окончательно: 404, 409 `invalid_status`, 403 `not_assigned`, 413/415/422,
+ * 502 `media_rejected`, прочие 4xx — повтор с теми же байтами ответ не изменит.
  */
 export function classifyCompletionError(err: unknown): ErrorClass {
   const status = apiErrorStatus(err)
@@ -43,26 +44,51 @@ export function classifyCompletionError(err: unknown): ErrorClass {
   if (status === 502 && detail === 'media_rejected') return { kind: 'final', reason: 'bad_photo' }
   if (status >= 500) return { kind: 'retry', noShift: false }
   if (status === 404) return { kind: 'final', reason: 'not_yours' }
-  if (status === 409) return { kind: 'final', reason: 'closed' }
+  if (status === 409) {
+    return detail === 'in_progress' ? { kind: 'retry', noShift: false } : { kind: 'final', reason: 'closed' }
+  }
   if (status === 413 || status === 415 || status === 422) return { kind: 'final', reason: 'bad_photo' }
   return { kind: 'final', reason: 'closed' }
 }
 
+/** Записи чужих пользователей старше этого срока удаляются. */
+export const FOREIGN_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Запись ждёт автоматической отправки (не провалена окончательно). */
+export function isSendable(item: QueueItem): boolean {
+  return !item.failed
+}
+
+/** По таймеру повторяем только то, что не ждёт смены и не провалено. */
+export function isTimerDriven(item: QueueItem): boolean {
+  return isSendable(item) && !item.noShift
+}
+
 /** Через сколько мс будить очередь (null — будить нечего). */
 export function nextWakeDelay(items: readonly QueueItem[], now: number): number | null {
-  if (items.length === 0) return null
-  const earliest = Math.min(...items.map((i) => i.nextAttemptAt))
+  const timed = items.filter(isTimerDriven)
+  if (timed.length === 0) return null
+  const earliest = Math.min(...timed.map((i) => i.nextAttemptAt))
   return Math.max(0, earliest - now)
 }
 
-/** Записи, которым пора в отправку. */
+/** Записи, которым пора в отправку по таймеру. */
 export function dueItems(items: readonly QueueItem[], now: number): QueueItem[] {
-  return items.filter((i) => i.nextAttemptAt <= now)
+  return items.filter((i) => isTimerDriven(i) && i.nextAttemptAt <= now)
 }
 
-/** Номера заявок, чьё «Готово» ещё не доставлено. */
+/** Номера заявок, чьё «Готово» ещё не доставлено (без проваленных). */
 export function pendingNumbers(items: readonly QueueItem[]): Set<string> {
-  return new Set(items.map((i) => i.requestNumber))
+  return new Set(items.filter(isSendable).map((i) => i.requestNumber))
+}
+
+/** Записи пользователя; чужие — отдельно (на удаление, если старые). */
+export function ownItems(items: readonly QueueItem[], userId: number | null): QueueItem[] {
+  return userId == null ? [] : items.filter((i) => i.userId === userId)
+}
+
+export function staleForeign(items: readonly QueueItem[], userId: number, now: number): QueueItem[] {
+  return items.filter((i) => i.userId !== userId && now - i.createdAt > FOREIGN_TTL_MS)
 }
 
 /** UUID v4 — ключ идемпотентности. crypto.randomUUID нет в старых WebView. */

@@ -1,14 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { Hand, Inbox, Play, Moon } from 'lucide-react'
 import { tCategory } from '../../../i18n/apiMaps'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
-import { notifyError } from '../../utils/errors'
 import { claimRequest, usePool, type PoolResponse } from '../api'
 import TaskTile from '../components/TaskTile'
 import { SimpleTabs } from '../components/Chrome'
+import { FlashScreen, useFlash } from '../components/Flash'
 import { ErrorBlock, Loading, PRIMARY_BTN, SECONDARY_BTN } from '../components/Ui'
 import { poolAddress } from '../model'
 
@@ -25,6 +24,7 @@ export default function PoolPage() {
   const queryClient = useQueryClient()
   const { notify } = useTelegramSDK()
   const { data, isLoading, refetch } = usePool()
+  const [flash, setFlash] = useFlash()
 
   const dropFromPool = (number: string) =>
     queryClient.setQueryData<PoolResponse>(POOL_KEY, (old) =>
@@ -33,9 +33,10 @@ export default function PoolPage() {
 
   const claim = useMutation({
     mutationFn: (number: string) => claimRequest(number),
+    // Исход — на весь экран (галка / крест), не тостом: текст мелкий и исчезает.
     onSuccess: (_, number) => {
       notify('success')
-      toast.success(t('twa.simple.pool.claimed'))
+      setFlash({ ok: true, title: t('twa.simple.pool.claimed') })
       dropFromPool(number)
       queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
     },
@@ -44,13 +45,13 @@ export default function PoolPage() {
       const detail = detailOf(err)
       if (detail === 'already_claimed') {
         // Гонка: другой исполнитель успел раньше — убираем плитку сразу.
-        toast.error(t('twa.simple.pool.alreadyClaimed'))
+        setFlash({ ok: false, title: t('twa.simple.pool.alreadyClaimed') })
         dropFromPool(number)
       } else if (detail === 'not_eligible') {
-        toast.error(t('twa.simple.pool.notEligible'))
+        setFlash({ ok: false, title: t('twa.simple.pool.notEligible') })
         void refetch()
       } else {
-        notifyError(err, t('twa.simple.done.failed'))
+        setFlash({ ok: false, title: t('twa.simple.pool.claimFailed'), retry: () => claim.mutate(number) })
       }
     },
   })
@@ -107,6 +108,7 @@ export default function PoolPage() {
     <>
       <main className="p-3 pb-[160px]">{content}</main>
       <SimpleTabs />
+      <FlashScreen flash={flash} onClose={() => setFlash(null)} />
     </>
   )
 }

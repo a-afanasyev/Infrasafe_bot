@@ -3,24 +3,28 @@ import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Camera, Home, Play, RotateCcw, Send } from 'lucide-react'
 import { useTaskCard } from '../api'
-import { canComplete } from '../model'
+import { canComplete, isClosed } from '../model'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { downscaleImage } from '../../utils/downscaleImage'
 import { notifyError } from '../../utils/errors'
 import { useBackTo } from '../hooks/useSimpleNav'
 import { blobToDataUrl } from '../hooks/useResidentPhoto'
-import { PRIMARY_BTN, ResultScreen, SECONDARY_BTN, WaitManagerPlate } from '../components/Ui'
+import { ClosedPlate, Loading, PRIMARY_BTN, ResultScreen, SECONDARY_BTN, WaitManagerPlate } from '../components/Ui'
 import { FINAL_REASON_KEY, useCompletionQueue } from '../queue/CompletionQueue'
 import type { FinalReason, SendOutcome } from '../queue/types'
 
 // Фото «после» — до 1280 px по большей стороне: хватает, чтобы увидеть
 // работу, и уходит по плохой сети за разумное время.
 const DOWNSCALE = { maxDimension: 1280, thresholdBytes: 400_000 }
+/** = COMPLETION_PHOTO_MAX_BYTES бэкенда: больше — 413, слать бессмысленно. */
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024
 const SUCCESS_HOLD_MS = 1500
 
 type Stage =
   | { kind: 'camera' }
-  | { kind: 'preview'; file: File; url: string }
+  | { kind: 'processing' }
+  | { kind: 'tooBig' }
+  | { kind: 'preview'; photo: File; url: string }
   | { kind: 'sending'; url?: string }
   | { kind: 'sent' }
   | { kind: 'queued'; id: string; noShift: boolean }
@@ -39,12 +43,15 @@ export default function DonePage() {
   useBackTo(taskPath)
 
   const openCamera = () => inputRef.current?.click()
+  const toMine = () => navigate('/twa/s', { replace: true })
 
-  // «Готово» — только из «В работе» (канон EXECUTOR_COMPLETE). Статус берём
-  // из карточки; без сети и без кэша камеру не блокируем — для того и очередь.
-  const { data: task, isError, fetchStatus } = useTaskCard(number)
-  const blocked = !!task && !canComplete(task.status)
-  const settled = !!task || isError || fetchStatus === 'paused'
+  // «Готово» — только из «В работе» (канон EXECUTOR_COMPLETE). Решаем по
+  // СВЕЖЕЙ карточке (кэш мог устареть: заявку отменили); без сети — камеру
+  // не блокируем, для того и очередь.
+  const { data: task, isError, isFetchedAfterMount, fetchStatus } = useTaskCard(number)
+  const settled = isFetchedAfterMount || isError || fetchStatus === 'paused'
+  const closed = settled && !!task && isClosed(task.status)
+  const blocked = settled && !!task && !canComplete(task.status)
 
   // Камера — сразу: переход сюда был по тапу «Готово», жест ещё действует.
   // Если WebView не дал открыть без жеста — на экране большая кнопка «Камера».
@@ -61,10 +68,19 @@ export default function DonePage() {
     return () => window.clearTimeout(id)
   }, [stage.kind, navigate])
 
+  // Сжимаем сразу после съёмки: превью строится из уменьшенной копии (одна
+  // копия в памяти), и отправляется ровно то, что исполнитель видел.
   const onPicked = async (file: File | undefined) => {
     if (!file) return
+    setStage({ kind: 'processing' })
     try {
-      setStage({ kind: 'preview', file, url: await blobToDataUrl(file) })
+      const photo = await downscaleImage(file, DOWNSCALE)
+      if (photo.size > MAX_PHOTO_BYTES) {
+        notify('error')
+        setStage({ kind: 'tooBig' })
+        return
+      }
+      setStage({ kind: 'preview', photo, url: await blobToDataUrl(photo) })
     } catch {
       setStage({ kind: 'camera' })
     }
@@ -83,17 +99,21 @@ export default function DonePage() {
     }
   }
 
-  const send = async (file: File, url: string) => {
+  const send = async (photo: File, url: string) => {
     setStage({ kind: 'sending', url })
     try {
-      const photo = await downscaleImage(file, DOWNSCALE)
-      const { id, outcome } = await queue.submit(number, photo, photo.name || `${number}.jpg`)
+      const { id, outcome } = await queue.submit({
+        requestNumber: number,
+        photo,
+        fileName: photo.name || `${number}.jpg`,
+        label: task?.address ?? undefined,
+      })
       show(id, outcome)
     } catch (err) {
       // Сбой самого хранилища (не сети): фото на экране, можно нажать ещё раз.
       notify('error')
       notifyError(err)
-      setStage({ kind: 'preview', file, url })
+      setStage({ kind: 'preview', photo, url })
     }
   }
 
@@ -117,6 +137,12 @@ export default function DonePage() {
     />
   )
 
+  const toMineButton = (
+    <button type="button" onClick={toMine} className={`${SECONDARY_BTN} border-2 border-white text-white`}>
+      <Home size={26} aria-hidden /> {t('twa.simple.done.toMine')}
+    </button>
+  )
+
   if (stage.kind === 'sent') return <ResultScreen ok title={t('twa.simple.done.sent')} />
 
   if (stage.kind === 'queued') {
@@ -135,21 +161,23 @@ export default function DonePage() {
             <RotateCcw size={30} aria-hidden /> {t('twa.simple.done.retry')}
           </button>
         )}
+        {toMineButton}
       </ResultScreen>
     )
   }
 
-  if (stage.kind === 'final') {
-    const retake = stage.reason === 'bad_photo'
+  if (stage.kind === 'final' || stage.kind === 'tooBig') {
+    const retake = stage.kind === 'tooBig' || stage.reason === 'bad_photo'
+    const subtitle = stage.kind === 'tooBig' ? t('twa.simple.done.tooBig') : t(FINAL_REASON_KEY[stage.reason])
     return (
-      <ResultScreen ok={false} title={t('twa.simple.done.failed')} subtitle={t(FINAL_REASON_KEY[stage.reason])}>
+      <ResultScreen ok={false} title={t('twa.simple.done.failed')} subtitle={subtitle}>
         {input}
         {retake ? (
           <button type="button" onClick={openCamera} className={`${PRIMARY_BTN} bg-white text-red-700`}>
             <Camera size={30} aria-hidden /> {t('twa.simple.done.retake')}
           </button>
         ) : (
-          <button type="button" onClick={() => navigate('/twa/s', { replace: true })} className={`${PRIMARY_BTN} bg-white text-red-700`}>
+          <button type="button" onClick={toMine} className={`${PRIMARY_BTN} bg-white text-red-700`}>
             <Home size={30} aria-hidden /> {t('twa.simple.done.toMine')}
           </button>
         )}
@@ -157,14 +185,15 @@ export default function DonePage() {
     )
   }
 
-  // Заявка не «В работе» (например, «Возвращена» — решает менеджер): не камера, а плашка.
+  // Закрытую заявку не закрыть; не «В работе» (например, «Возвращена») —
+  // решает менеджер. Не камера, а плашка.
   if (stage.kind === 'camera' && blocked) {
     return (
       <main className="min-h-[80vh] p-3 flex flex-col justify-center gap-4">
-        <WaitManagerPlate />
+        {closed ? <ClosedPlate /> : <WaitManagerPlate />}
         <button
           type="button"
-          onClick={() => navigate('/twa/s', { replace: true })}
+          onClick={toMine}
           className={`${SECONDARY_BTN} border-2 border-gray-400 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100`}
         >
           <Home size={26} aria-hidden /> {t('twa.simple.done.toMine')}
@@ -173,14 +202,21 @@ export default function DonePage() {
     )
   }
 
+  if (stage.kind === 'camera' && !settled) return <main className="p-3"><Loading /></main>
+
   return (
     <main className="min-h-screen p-3 pb-[calc(12px+env(safe-area-inset-bottom))] flex flex-col gap-4">
       {input}
-      {stage.kind === 'camera' && (
+      {(stage.kind === 'camera' || stage.kind === 'processing') && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 py-10 text-center">
           <Camera size={96} className="text-gray-500" aria-hidden />
           <p className="text-[24px] font-bold">{t('twa.simple.done.shoot')}</p>
-          <button type="button" onClick={openCamera} className={`${PRIMARY_BTN} bg-emerald-600 text-white`}>
+          <button
+            type="button"
+            disabled={stage.kind === 'processing'}
+            onClick={openCamera}
+            className={`${PRIMARY_BTN} bg-emerald-600 text-white`}
+          >
             <Camera size={32} aria-hidden /> {t('twa.simple.done.camera')}
           </button>
         </div>
@@ -194,7 +230,7 @@ export default function DonePage() {
             <button
               type="button"
               disabled={stage.kind === 'sending'}
-              onClick={() => stage.kind === 'preview' && void send(stage.file, stage.url)}
+              onClick={() => stage.kind === 'preview' && void send(stage.photo, stage.url)}
               className={`${PRIMARY_BTN} bg-emerald-600 text-white`}
             >
               <Send size={30} aria-hidden />

@@ -2,9 +2,37 @@ import type { TFunction } from 'i18next'
 import { URGENCY_MAP, type ApiUrgency } from '../../i18n/apiMaps'
 import type { TwaRequest } from '../types'
 import type { PoolItem } from './api'
+import type { QueueItem } from './queue/types'
 
-/** Состояние плитки глазами исполнителя — три значения вместо девяти статусов. */
-export type TileState = 'inWork' | 'returned' | 'pending'
+/**
+ * Состояние плитки глазами исполнителя — пять значений вместо девяти статусов:
+ * inWork — можно «Готово»; returned — вернули (решает менеджер); waiting —
+ * прочие статусы (Закуп/Уточнение/Новая), ждёт менеджера; pending — «Готово»
+ * в очереди; retake — фото отвергнуто, снять заново.
+ */
+export type TileState = 'inWork' | 'returned' | 'waiting' | 'pending' | 'retake'
+
+/** Финальные статусы: действий исполнителя нет (wire-значения API). */
+const CLOSED = new Set(['Выполнена', 'Исполнено', 'Принято', 'Отменена'])
+
+export function isClosed(status: string | null | undefined): boolean {
+  return !!status && CLOSED.has(status)
+}
+
+/** Что очередь говорит о заявках: ждут отправки / фото надо переснять. */
+export interface QueueMarks {
+  pending: ReadonlySet<string>
+  retake: ReadonlySet<string>
+}
+
+export function queueMarks(items: readonly QueueItem[]): QueueMarks {
+  return {
+    pending: new Set(items.filter((i) => !i.failed).map((i) => i.requestNumber)),
+    retake: new Set(items.filter((i) => i.failed === 'bad_photo').map((i) => i.requestNumber)),
+  }
+}
+
+export const NO_MARKS: QueueMarks = { pending: new Set(), retake: new Set() }
 
 // Срочность — через URGENCY_MAP: он принимает и канон-ключ, и legacy-рус.
 function urgencyKey(urgency: string | null | undefined): string | null {
@@ -37,9 +65,11 @@ export function canComplete(status: string | null | undefined): boolean {
   return status === 'В работе'
 }
 
-export function tileState(task: TwaRequest, pending: ReadonlySet<string>): TileState {
-  if (pending.has(task.request_number)) return 'pending'
-  return task.status === 'Возвращена' ? 'returned' : 'inWork'
+export function tileState(task: TwaRequest, marks: QueueMarks): TileState {
+  if (marks.pending.has(task.request_number)) return 'pending'
+  if (marks.retake.has(task.request_number) && canComplete(task.status)) return 'retake'
+  if (task.status === 'Возвращена') return 'returned'
+  return canComplete(task.status) ? 'inWork' : 'waiting'
 }
 
 /** Причина возврата: житель (return_reason) или менеджер (manager_return_reason). */
@@ -52,15 +82,16 @@ function time(iso: string | null | undefined): number {
   return Number.isNaN(ms) ? Number.MAX_SAFE_INTEGER : ms
 }
 
-const STATE_RANK: Record<TileState, number> = { returned: 0, inWork: 1, pending: 2 }
+const STATE_RANK: Record<TileState, number> = { retake: 0, returned: 0, inWork: 1, waiting: 2, pending: 3 }
 
 /**
- * Порядок «Мои»: вернули → срочные → по времени (старые первыми — дольше
- * ждут). «Ждёт отправки» — в конце: работа сделана, осталось доставить фото.
+ * Порядок «Мои»: вернули / переснять → в работе → ждут менеджера, внутри —
+ * срочные первыми, затем по времени (старые первыми — дольше ждут).
+ * «Ждёт отправки» — в конце: работа сделана, осталось доставить фото.
  */
-export function sortMine(tasks: readonly TwaRequest[], pending: ReadonlySet<string>): TwaRequest[] {
+export function sortMine(tasks: readonly TwaRequest[], marks: QueueMarks): TwaRequest[] {
   return [...tasks].sort((a, b) => {
-    const byState = STATE_RANK[tileState(a, pending)] - STATE_RANK[tileState(b, pending)]
+    const byState = STATE_RANK[tileState(a, marks)] - STATE_RANK[tileState(b, marks)]
     if (byState !== 0) return byState
     const byUrgency = Number(isUrgent(b.urgency)) - Number(isUrgent(a.urgency))
     if (byUrgency !== 0) return byUrgency

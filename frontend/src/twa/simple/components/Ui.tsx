@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Check, Hourglass, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, Check, Hourglass, Lock, RotateCcw, X } from 'lucide-react'
 
 // Размеры простого режима: главная кнопка 72 px во всю ширину, вторичные
 // ≥ 56 px, текст ≥ 18 px. Держим классы в одном месте.
@@ -42,6 +42,19 @@ export function WaitManagerPlate() {
       className="w-full h-[72px] rounded-2xl bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-[22px] font-bold flex items-center justify-center gap-3"
     >
       <Hourglass size={30} aria-hidden /> {t('twa.simple.waitManager')}
+    </div>
+  )
+}
+
+/** Плашка «Заявка закрыта»: выполнена/принята/отменена — действий нет. */
+export function ClosedPlate() {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="status"
+      className="w-full h-[72px] rounded-2xl bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-[22px] font-bold flex items-center justify-center gap-3"
+    >
+      <Lock size={30} aria-hidden /> {t('twa.simple.task.closed')}
     </div>
   )
 }

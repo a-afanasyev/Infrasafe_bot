@@ -10,8 +10,8 @@ import { useCompletionQueue } from '../queue/CompletionQueue'
 export function ConnectionBar() {
   const { t } = useTranslation()
   const online = useOnline()
-  const { items } = useCompletionQueue()
-  if (online && items.length === 0) return null
+  const { pendingCount } = useCompletionQueue()
+  if (online && pendingCount === 0) return null
   return (
     <div
       role="status"
@@ -24,9 +24,9 @@ export function ConnectionBar() {
           <WifiOff size={22} aria-hidden /> {t('twa.simple.offline')}
         </span>
       )}
-      {items.length > 0 && (
+      {pendingCount > 0 && (
         <span className="inline-flex items-center gap-2">
-          <Clock size={22} aria-hidden /> {t('twa.simple.pendingPhotos', { count: items.length })}
+          <Clock size={22} aria-hidden /> {t('twa.simple.pendingPhotos', { count: pendingCount })}
         </span>
       )}
     </div>
@@ -37,22 +37,25 @@ export function ConnectionBar() {
 export function ShiftBanner() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { data: shift, isLoading } = useCurrentShift()
+  const { data: shift, isLoading, isError } = useCurrentShift()
   const elapsed = useElapsed(shift?.start_time)
   if (isLoading) return null
+  // Состояние смены неизвестно (ошибка без данных) — нейтрально «Смена»,
+  // а не «Смена не начата»: неверная подсказка хуже никакой.
+  const unknown = isError && shift === undefined
   const on = !!shift?.id
   return (
     <button
       type="button"
       onClick={() => navigate('/twa/s/shift')}
       className={`w-full h-[56px] flex items-center justify-center gap-3 text-[18px] font-semibold ${
-        on
+        on && !unknown
           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
           : 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
       }`}
     >
       <Clock size={24} aria-hidden />
-      {on ? `${t('twa.simple.shift.on')} ${elapsed}` : t('twa.simple.shift.off')}
+      {unknown ? t('twa.simple.shift.title') : on ? `${t('twa.simple.shift.on')} ${elapsed}` : t('twa.simple.shift.off')}
     </button>
   )
 }

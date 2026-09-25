@@ -141,9 +141,9 @@ function TWAContent() {
         <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
 
         {/* Простой режим исполнителя: крупные кнопки, фото вместо текста, очередь «Готово». */}
-        <Route path="/s/lang" element={<RoleGuard required="executor"><SimpleLangPage /></RoleGuard>} />
         <Route path="/s" element={<RoleGuard required="executor"><SimpleShell /></RoleGuard>}>
           <Route index element={<SimpleMinePage />} />
+          <Route path="lang" element={<SimpleLangPage />} />
           <Route path="pool" element={<SimplePoolPage />} />
           <Route path="task/:number" element={<SimpleTaskPage />} />
           <Route path="task/:number/done" element={<SimpleDonePage />} />

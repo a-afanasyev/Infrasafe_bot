@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { DoorClosed, PackageX, Pencil, RotateCcw, UserX, Wrench, type LucideIcon } from 'lucide-react'
+import { DoorClosed, Home, PackageX, Pencil, RotateCcw, UserX, Wrench, type LucideIcon } from 'lucide-react'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { apiErrorStatus } from '../../../utils/errorMessage'
 import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
@@ -65,7 +65,7 @@ export default function ProblemPage() {
         )}
         {!retryable && (
           <button type="button" onClick={() => navigate('/twa/s', { replace: true })} className={`${PRIMARY_BTN} bg-white text-red-700`}>
-            {t('twa.simple.done.toMine')}
+            <Home size={30} aria-hidden /> {t('twa.simple.done.toMine')}
           </button>
         )}
       </ResultScreen>
@@ -74,6 +74,10 @@ export default function ProblemPage() {
 
   return (
     <main className="p-3 pb-[calc(12px+env(safe-area-inset-bottom))] flex flex-col gap-3">
+      {/* Шаблон обязателен (ProblemBody.template): с текстом — подсказка выбрать его. */}
+      {text.trim() && (
+        <p className="text-[20px] font-bold text-center">{t('twa.simple.problem.pickTemplate')}</p>
+      )}
       {TEMPLATES.map(({ template, icon: Icon }) => (
         <button
           key={template}
@@ -113,6 +117,9 @@ export default function ProblemPage() {
           onYes={() => send.mutate(chosen)}
         >
           <p className="text-[20px] text-center font-semibold">{t(`twa.simple.problem.templates.${chosen}`)}</p>
+          {text.trim() && (
+            <p className="text-[18px] text-center break-words whitespace-pre-line text-gray-700 dark:text-gray-300">{text.trim()}</p>
+          )}
         </ConfirmSheet>
       )}
     </main>

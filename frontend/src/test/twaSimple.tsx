@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { CompletionQueueProvider } from '../twa/simple/queue/CompletionQueue'
 import { createMemoryStore } from '../twa/simple/queue/store'
+import { createQueueItem } from '../twa/simple/queue/engine'
 import type { QueueItem, QueueStore } from '../twa/simple/queue/types'
 
 // Хелперы тестов простого режима исполнителя (twa/simple).
@@ -37,8 +38,25 @@ export async function memoryQueueWith(items: QueueItem[] = []): Promise<QueueSto
   return store
 }
 
+/** Пользователь тестов простого режима (profile.id). */
+export const TEST_USER_ID = 1
+
 export function QueueWrapper({ store, children }: { store: QueueStore; children: ReactNode }) {
-  return <CompletionQueueProvider openStore={() => Promise.resolve(store)}>{children}</CompletionQueueProvider>
+  return (
+    <CompletionQueueProvider openStore={() => Promise.resolve(store)} userId={TEST_USER_ID}>
+      {children}
+    </CompletionQueueProvider>
+  )
+}
+
+/** Запись очереди для тестов: по умолчанию — пользователя тестов, срок позже. */
+export function queued(requestNumber: string, over: Partial<QueueItem> = {}): QueueItem {
+  const now = Date.now()
+  return {
+    ...createQueueItem({ userId: TEST_USER_ID, requestNumber, photo: new Blob(['x'], { type: 'image/jpeg' }), fileName: 'a.jpg' }, now),
+    nextAttemptAt: now + 60_000,
+    ...over,
+  }
 }
 
 /** navigator.onLine для офлайн-сценариев. */

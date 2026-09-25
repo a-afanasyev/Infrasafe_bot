@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, within, waitFor } from '../../../test/test-utils'
-import { QueueWrapper, memoryQueueWith, setOnline } from '../../../test/twaSimple'
+import { Routes, Route } from 'react-router'
+import { render, screen, within, waitFor, fireEvent } from '../../../test/test-utils'
+import { QueueWrapper, memoryQueueWith, queued, setOnline } from '../../../test/twaSimple'
 import { ConnectionBar } from '../components/Chrome'
-import { createQueueItem } from '../queue/engine'
+import type { QueueItem } from '../queue/types'
 import MinePage from './MinePage'
 
 // «Мои» простого режима: вернули → срочные → по времени; «ждёт отправки» —
@@ -16,6 +17,7 @@ const TASKS = [
   { request_number: '260925-002', status: 'В работе', category: 'electricity', urgency: 'high', address: 'Дом 2, кв 2', created_at: '2026-09-25T10:00:00Z' },
   { request_number: '260926-003', status: 'Возвращена', category: 'cleaning', return_reason: 'Грязно в подъезде', address: 'Дом 3', created_at: '2026-09-26T10:00:00Z' },
   { request_number: '260801-004', status: 'В работе', category: 'repair', address: 'Дом 4', created_at: '2026-08-01T10:00:00Z' },
+  { request_number: '260802-005', status: 'Закуп', category: 'repair', address: 'Дом 5', created_at: '2026-08-02T10:00:00Z' },
 ]
 
 let tasks: unknown = TASKS
@@ -33,27 +35,33 @@ beforeEach(() => {
 
 afterEach(() => setOnline(true))
 
-async function renderMine(pendingNumbers: string[] = []) {
-  const store = await memoryQueueWith(
-    pendingNumbers.map((n, i) => createQueueItem(n, new Blob(['x']), 'a.jpg', Date.now() + 60_000 + i)),
-  )
+async function renderMine(pendingNumbers: string[] = [], extra: QueueItem[] = []) {
+  const store = await memoryQueueWith([...pendingNumbers.map((n) => queued(n)), ...extra])
   // Досылка при открытии не должна успеть закрыть запись в этом тесте.
   mockPost.mockReturnValue(new Promise(() => {}))
-  return render(
+  render(
     <QueueWrapper store={store}>
       <ConnectionBar />
-      <MinePage />
+      <Routes>
+        <Route path="/twa/s" element={<MinePage />} />
+        <Route path="/twa/s/task/:number/done" element={<div>DONE SCREEN</div>} />
+      </Routes>
     </QueueWrapper>,
     { routerEntries: ['/twa/s'] },
   )
+  return store
 }
 
 describe('MinePage', () => {
-  it('сортирует: вернули (с причиной) → срочные → по времени; «ждёт отправки» — в конце', async () => {
+  it('сортирует: вернули → в работе (срочные, по времени) → ждёт менеджера; «ждёт отправки» — в конце', async () => {
     await renderMine(['260801-004'])
     await screen.findByText('Дом 3')
     const tiles = screen.getAllByTestId(/^tile-/).map((el) => el.dataset.testid)
-    expect(tiles).toEqual(['tile-260926-003', 'tile-260925-002', 'tile-260901-001', 'tile-260801-004'])
+    expect(tiles).toEqual(['tile-260926-003', 'tile-260925-002', 'tile-260901-001', 'tile-260802-005', 'tile-260801-004'])
+    // Закуп — не оранжевое «В работе», а серое «Ждёт менеджера».
+    expect(within(screen.getByTestId('tile-260802-005')).getByText('Ждёт менеджера')).toBeInTheDocument()
+    // Срочная — огонь рядом со статусом.
+    expect(within(screen.getByTestId('tile-260925-002')).getByRole('img', { name: 'Срочно' })).toBeInTheDocument()
 
     const returned = within(screen.getByTestId('tile-260926-003'))
     expect(returned.getByText('Вернули')).toBeInTheDocument()
@@ -61,6 +69,24 @@ describe('MinePage', () => {
     expect(within(screen.getByTestId('tile-260901-001')).getByText('Течёт кран')).toBeInTheDocument()
     expect(within(screen.getByTestId('tile-260901-001')).getByText('В работе')).toBeInTheDocument()
     expect(within(screen.getByTestId('tile-260801-004')).getByText('Ждёт отправки')).toBeInTheDocument()
+  })
+
+  it('фото отвергнуто в фоне — плитка «Снимите заново», тап ведёт на «Готово»', async () => {
+    await renderMine([], [queued('260901-001', { failed: 'bad_photo' })])
+    const tile = await screen.findByTestId('tile-260901-001')
+    expect(within(tile).getByText('Снимите заново')).toBeInTheDocument()
+    fireEvent.click(within(tile).getByRole('button'))
+    expect(await screen.findByText('DONE SCREEN')).toBeInTheDocument()
+  })
+
+  it('«Готово» отказано окончательно (заявка закрыта) — крупная плашка, «Понятно» убирает запись', async () => {
+    const store = await renderMine([], [queued('260920-009', { failed: 'closed', label: 'Дом 9, кв 1' })])
+    const lost = await screen.findByTestId('lost-260920-009')
+    expect(within(lost).getByText('Заявка уже закрыта')).toBeInTheDocument()
+    expect(within(lost).getByText('Дом 9, кв 1')).toBeInTheDocument()
+    fireEvent.click(within(lost).getByRole('button', { name: /Понятно/ }))
+    await waitFor(() => expect(screen.queryByTestId('lost-260920-009')).toBeNull())
+    expect(await store.list()).toEqual([])
   })
 
   it('пусто — «Всё сделано»', async () => {

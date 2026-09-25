@@ -47,7 +47,10 @@ describe('ProblemPage', () => {
     renderProblem()
     fireEvent.click(screen.getByRole('button', { name: /Написать/ }))
     fireEvent.change(screen.getByPlaceholderText('Что случилось?'), { target: { value: '  Нужна краска  ' } })
+    expect(screen.getByText('Выберите, что случилось')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Нет материала/ }))
+    // Текст виден в подтверждении.
+    expect(screen.getByRole('dialog')).toHaveTextContent('Нужна краска')
     fireEvent.click(screen.getByRole('button', { name: /Да/ }))
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}/problem`, {

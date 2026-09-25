@@ -3,15 +3,17 @@ import { isLangChosen } from './langFlag'
 import { ConnectionBar } from './components/Chrome'
 import { CompletionQueueProvider } from './queue/CompletionQueue'
 
+const LANG_PATH = '/twa/s/lang'
+
 /**
  * Каркас простого режима (/twa/s/*): очередь «Готово» (досылается при
  * открытии), полоса связи, первый вход — через выбор языка.
  */
 export default function SimpleShell() {
   const { pathname, search } = useLocation()
-  if (!isLangChosen()) {
+  if (pathname !== LANG_PATH && !isLangChosen()) {
     const next = encodeURIComponent(pathname + search)
-    return <Navigate to={`/twa/s/lang?next=${next}`} replace />
+    return <Navigate to={`${LANG_PATH}?next=${next}`} replace />
   }
   return (
     <CompletionQueueProvider>

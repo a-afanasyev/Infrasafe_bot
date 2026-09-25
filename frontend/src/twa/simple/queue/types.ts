@@ -10,15 +10,23 @@
 export interface QueueItem {
   /** = idempotencyKey: одна запись очереди — одна попытка «Готово». */
   id: string
+  /** Чей «Готово»: на общем телефоне очередь другого сотрудника не шлём. */
+  userId: number
   requestNumber: string
   idempotencyKey: string
   photo: Blob
   fileName: string
+  /** Адрес для плитки, если заявка уже ушла из списка «Мои». */
+  label?: string
   /** Сколько неудачных отправок уже было. */
   attempts: number
   /** Когда пробовать снова (ms since epoch). */
   nextAttemptAt: number
   createdAt: number
+  /** Сервер ответил «нет активной смены»: ждём начала смены, не таймер. */
+  noShift?: boolean
+  /** Окончательный отказ в фоне: запись не шлём, показываем исполнителю. */
+  failed?: FinalReason
 }
 
 /** Хранилище очереди: IndexedDB в проде, память — в тестах и как фолбэк. */
@@ -31,7 +39,7 @@ export interface QueueStore {
   readonly persistent: boolean
 }
 
-/** Окончательный отказ: повтор не поможет, запись убирается из очереди. */
+/** Окончательный отказ: повтор не поможет. */
 export type FinalReason =
   | 'closed' // заявка уже закрыта / статус не позволяет
   | 'not_yours' // не назначена этому исполнителю / не найдена

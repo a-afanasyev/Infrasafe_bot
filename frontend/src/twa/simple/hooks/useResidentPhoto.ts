@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { twaClient } from '../../twaClient'
+import { limitMedia } from './useLazyMedia'
 
 interface MediaItem {
   id: number
@@ -16,13 +17,18 @@ function isResidentPhoto(m: MediaItem): boolean {
 /**
  * id первого фото жителя заявки. Ключ и запрос — как у MediaGallery
  * (['twa','media',n]), кэш общий. `known` — id уже известен (плитка пула:
- * число или null «фото нет»), тогда запроса нет.
+ * число или null «фото нет»), тогда запроса нет. `enabled=false` — плитка
+ * ещё не видна, не грузим.
  */
-export function useResidentPhotoId(requestNumber: string | undefined, known?: number | null): number | null {
+export function useResidentPhotoId(
+  requestNumber: string | undefined,
+  known?: number | null,
+  enabled = true,
+): number | null {
   const { data } = useQuery<MediaItem[]>({
     queryKey: ['twa', 'media', requestNumber],
-    queryFn: () => twaClient.get(`/api/v2/media/request/${requestNumber}`).then((r) => r.data),
-    enabled: !!requestNumber && known === undefined,
+    queryFn: () => limitMedia(() => twaClient.get(`/api/v2/media/request/${requestNumber}`).then((r) => r.data)),
+    enabled: enabled && !!requestNumber && known === undefined,
     staleTime: 60_000,
   })
   if (known !== undefined) return known ?? null

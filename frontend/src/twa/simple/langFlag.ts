@@ -24,6 +24,18 @@ export function markLangChosen(): void {
   }
 }
 
+/**
+ * `next` приходит из URL: пускаем только внутренние пути простого режима,
+ * без `..`-сегментов (иначе `/twa/s/../app` увёл бы из панели).
+ */
+export function safeNext(next: string | null): string {
+  if (!next || !/^\/twa\/s(\/|$|\?)/.test(next)) return '/twa/s'
+  const path = next.split('?')[0]
+  if (path.split('/').some((seg) => seg === '..' || seg === '.')) return '/twa/s'
+  if (path.startsWith('/twa/s/lang')) return '/twa/s'
+  return next
+}
+
 /** Только для тестов. */
 export function resetLangChosenForTests(): void {
   memoryFlag = false

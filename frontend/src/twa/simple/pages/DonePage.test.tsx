@@ -10,8 +10,9 @@ import DonePage from './DonePage'
 // ТЕМ ЖЕ ключом (сервер примет его как тот же запрос). twaClient шпионим:
 // msw + FormData на CI падает (см. CompletionReport.test).
 
-const { mockGet, mockPost } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi.fn() }))
+const { mockGet, mockPost, mockDownscale } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi.fn(), mockDownscale: vi.fn() }))
 vi.mock('../../twaClient', () => ({ twaClient: { get: mockGet, post: mockPost, patch: vi.fn() } }))
+vi.mock('../../utils/downscaleImage', () => ({ downscaleImage: mockDownscale }))
 
 const NUMBER = '260926-007'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -22,6 +23,9 @@ let status: string
 beforeEach(async () => {
   mockPost.mockReset()
   mockGet.mockReset()
+  mockDownscale.mockReset()
+  // Сжатая копия — другое имя: проверяем, что уходит (и показывается) она.
+  mockDownscale.mockImplementation(async (f: File) => new File(['small'], `small-${f.name}`, { type: 'image/jpeg' }))
   status = 'В работе'
   mockGet.mockImplementation((url: string) =>
     url === `/api/v2/requests/${NUMBER}`
@@ -66,7 +70,8 @@ describe('DonePage', () => {
     expect(mockPost).toHaveBeenCalledTimes(1)
     expect(mockPost.mock.calls[0][0]).toBe(`/api/v2/requests/${NUMBER}/complete`)
     const form = sentForm(0)
-    expect((form.get('photo') as File).name).toBe('shot.jpg')
+    expect((form.get('photo') as File).name).toBe('small-shot.jpg')
+    expect(mockDownscale).toHaveBeenCalledWith(expect.any(File), expect.objectContaining({ maxDimension: 1280 }))
     expect(form.get('idempotency_key')).toMatch(UUID)
     expect(haptic.notificationOccurred).toHaveBeenCalledWith('success')
     expect(await store.list()).toEqual([])
@@ -79,7 +84,8 @@ describe('DonePage', () => {
     await shootAndSend()
 
     expect(await screen.findByText('Не отправилось')).toBeInTheDocument()
-    expect(screen.getByText('Фото сохранено. Отправим сами')).toBeInTheDocument()
+    expect(screen.getByText('Фото сохранено. Отправится само')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /К моим заявкам/ })).toBeInTheDocument()
     expect(haptic.notificationOccurred).toHaveBeenCalledWith('error')
     expect(haptic.notificationOccurred).not.toHaveBeenCalledWith('success')
     const [queued] = await store.list()
@@ -115,6 +121,38 @@ describe('DonePage', () => {
     expect(screen.queryByRole('button', { name: /Камера/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /К моим заявкам/ }))
     expect(await screen.findByText('MINE')).toBeInTheDocument()
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  it('отменённая заявка — «Заявка закрыта», не «Ждёт менеджера», без камеры', async () => {
+    status = 'Отменена'
+    renderDone()
+    expect(await screen.findByText('Заявка закрыта')).toBeInTheDocument()
+    expect(screen.queryByText('Ждёт менеджера')).toBeNull()
+    expect(screen.queryByTestId('camera-input')).toBeNull()
+  })
+
+  it('камера не открывается по устаревшему кэшу — ждём свежую карточку', async () => {
+    let resolve: (v: unknown) => void = () => {}
+    mockGet.mockImplementation(() => new Promise((r) => { resolve = r }))
+    renderDone()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByTestId('camera-input')).toBeNull()
+    resolve({ data: { request_number: NUMBER, status: 'В работе', category: 'x', created_at: '2026-09-26T08:00:00Z' } })
+    expect(await screen.findByTestId('camera-input')).toBeInTheDocument()
+  })
+
+  it('сжатие не помогло и файл > 8 МиБ — «Фото слишком большое», ничего не отправляется', async () => {
+    stubTelegram()
+    mockDownscale.mockImplementation(async (f: File) => {
+      Object.defineProperty(f, 'size', { value: 9 * 1024 * 1024 })
+      return f
+    })
+    renderDone()
+    const input = (await screen.findByTestId('camera-input')) as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['raw'], 'huge.heic', { type: 'image/heic' })] } })
+    expect(await screen.findByText('Фото слишком большое. Снимите ещё раз')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Заново/ })).toBeInTheDocument()
     expect(mockPost).not.toHaveBeenCalled()
   })
 

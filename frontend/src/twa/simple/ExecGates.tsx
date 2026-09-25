@@ -7,7 +7,7 @@ import { useSimpleMode } from './hooks/useSimpleMode'
 function Loading() {
   const { t } = useTranslation()
   return (
-    <div className="flex items-center justify-center min-h-screen text-gray-400 text-[14px]">
+    <div className="flex items-center justify-center min-h-screen text-gray-400 text-[16px]">
       {t('common.loading')}
     </div>
   )

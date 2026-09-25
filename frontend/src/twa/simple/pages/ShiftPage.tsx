@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList, Play, Square } from 'lucide-react'
+import { AlertTriangle, Clock, ClipboardList, Play, Square } from 'lucide-react'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { useExecutorTasks } from '../../hooks/useExecutorTasks'
-import { notifyError } from '../../utils/errors'
 import { useCurrentShift } from '../api'
 import { useBackTo, useElapsed } from '../hooks/useSimpleNav'
 import { ConfirmSheet, ErrorBlock, Loading } from '../components/Ui'
+import { FlashScreen, useFlash } from '../components/Flash'
 import { useCompletionQueue } from '../queue/CompletionQueue'
 
 /** Смена: круглая кнопка 200 px «Начать» / «Закончить» и таймер. */
@@ -16,12 +16,13 @@ export default function ShiftPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { notify } = useTelegramSDK()
-  const { flushNow } = useCompletionQueue()
+  const { flushNow, pendingCount } = useCompletionQueue()
   const [confirmEnd, setConfirmEnd] = useState(false)
+  const [flash, setFlash] = useFlash()
   useBackTo('/twa/s')
 
   const { data: shift, isLoading, isError, refetch } = useCurrentShift()
-  const { data: tasks = [] } = useExecutorTasks('active')
+  const { data: tasks } = useExecutorTasks('active')
   const elapsed = useElapsed(shift?.start_time)
 
   const refreshAfterShift = () => {
@@ -35,13 +36,14 @@ export default function ShiftPage() {
     mutationFn: () => twaClient.post('/api/v2/executor/shifts/start', {}),
     onSuccess: () => {
       notify('success')
+      setFlash({ ok: true, title: t('twa.simple.shift.started') })
       refreshAfterShift()
       // «Готово», отложенное из-за «нет смены», уходит сразу.
       flushNow()
     },
-    onError: (err: unknown) => {
+    onError: () => {
       notify('error')
-      notifyError(err, t('twa.simple.shift.failed'))
+      setFlash({ ok: false, title: t('twa.simple.shift.failed'), retry: () => start.mutate() })
     },
   })
 
@@ -50,11 +52,13 @@ export default function ShiftPage() {
     onSuccess: () => {
       notify('success')
       setConfirmEnd(false)
+      setFlash({ ok: true, title: t('twa.simple.shift.ended') })
       refreshAfterShift()
     },
-    onError: (err: unknown) => {
+    onError: (_err: unknown, id: number) => {
       notify('error')
-      notifyError(err, t('twa.simple.shift.failed'))
+      setConfirmEnd(false)
+      setFlash({ ok: false, title: t('twa.simple.shift.failed'), retry: () => end.mutate(id) })
     },
   })
 
@@ -85,11 +89,24 @@ export default function ShiftPage() {
           onNo={() => setConfirmEnd(false)}
           onYes={() => end.mutate(shift.id)}
         >
-          <p className="flex items-center justify-center gap-2 text-[20px] font-semibold text-orange-700 dark:text-orange-300">
-            <ClipboardList size={26} aria-hidden /> {t('twa.simple.shift.openTasks', { count: tasks.length })}
-          </p>
+          {tasks && (
+            <p className="flex items-center justify-center gap-2 text-[20px] font-semibold text-orange-700 dark:text-orange-300">
+              <ClipboardList size={26} aria-hidden /> {t('twa.simple.shift.openTasks', { count: tasks.length })}
+            </p>
+          )}
+          {pendingCount > 0 && (
+            <div role="alert" className="flex flex-col items-center gap-1 rounded-2xl bg-red-100 dark:bg-red-900/40 p-3 text-red-800 dark:text-red-200">
+              <p className="flex items-center gap-2 text-[20px] font-bold">
+                <Clock size={26} aria-hidden /> {t('twa.simple.pendingPhotos', { count: pendingCount })}
+              </p>
+              <p className="flex items-center gap-2 text-[18px] font-semibold">
+                <AlertTriangle size={22} aria-hidden /> {t('twa.simple.shift.photosWarning')}
+              </p>
+            </div>
+          )}
         </ConfirmSheet>
       )}
+      <FlashScreen flash={flash} onClose={() => setFlash(null)} />
     </main>
   )
 }

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { testI18n } from '../../test/test-utils'
 import type { TwaRequest } from '../types'
-import { firstLine, isUrgent, poolAddress, returnReason, sortMine, tileState, urgencyStripClass } from './model'
+import { NO_MARKS, firstLine, isUrgent, poolAddress, returnReason, sortMine, tileState, urgencyStripClass, type QueueMarks } from './model'
+
+const marks = (pending: string[] = [], retake: string[] = []): QueueMarks => ({ pending: new Set(pending), retake: new Set(retake) })
 
 const task = (n: string, over: Partial<TwaRequest> = {}): TwaRequest => ({
   request_number: n,
@@ -20,17 +22,24 @@ describe('sortMine: вернули → срочные → по времени, �
       task('returned', { status: 'Возвращена', created_at: '2026-09-26T10:00:00Z' }),
       task('newer-normal', { created_at: '2026-09-10T10:00:00Z' }),
       task('legacy-urgent', { urgency: 'Критическая', created_at: '2026-09-24T10:00:00Z' }),
+      task('purchase', { status: 'Закуп', urgency: 'critical', created_at: '2026-07-01T10:00:00Z' }),
+      task('retake', { created_at: '2026-09-26T11:00:00Z' }),
     ]
-    const order = sortMine(tasks, new Set(['pending'])).map((t) => t.request_number)
-    expect(order).toEqual(['returned', 'legacy-urgent', 'new-urgent', 'old-normal', 'newer-normal', 'pending'])
+    const order = sortMine(tasks, marks(['pending'], ['retake'])).map((t) => t.request_number)
+    expect(order).toEqual(['returned', 'retake', 'legacy-urgent', 'new-urgent', 'old-normal', 'newer-normal', 'purchase', 'pending'])
     // Вход не мутируется.
     expect(tasks[0].request_number).toBe('old-normal')
   })
 
   it('tileState и причина возврата', () => {
-    expect(tileState(task('a', { status: 'Возвращена' }), new Set())).toBe('returned')
-    expect(tileState(task('a', { status: 'Закуп' }), new Set())).toBe('inWork')
-    expect(tileState(task('a', { status: 'Возвращена' }), new Set(['a']))).toBe('pending')
+    expect(tileState(task('a', { status: 'Возвращена' }), NO_MARKS)).toBe('returned')
+    expect(tileState(task('a'), NO_MARKS)).toBe('inWork')
+    // Закуп / Уточнение / Новая — не оранжевое «В работе», а «Ждёт менеджера».
+    for (const status of ['Закуп', 'Уточнение', 'Новая']) {
+      expect(tileState(task('a', { status }), NO_MARKS)).toBe('waiting')
+    }
+    expect(tileState(task('a', { status: 'Возвращена' }), marks(['a']))).toBe('pending')
+    expect(tileState(task('a'), marks([], ['a']))).toBe('retake')
     expect(returnReason({ return_reason: '  ', manager_return_reason: 'Грязно' })).toBe('Грязно')
     expect(returnReason({ return_reason: null })).toBeNull()
   })

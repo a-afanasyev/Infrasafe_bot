@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ArrowUpDown, Clock, Droplet, Flame, Hammer, HelpCircle, KeyRound, Shield, Sparkles, Trees,
-  Undo2, Wifi, Wind, Zap, type LucideIcon,
+  ArrowUpDown, Camera, Clock, Droplet, Flame, Hammer, HelpCircle, Hourglass, KeyRound, Shield, Sparkles,
+  Trees, Undo2, Wifi, Wind, Zap, type LucideIcon,
 } from 'lucide-react'
 import { CATEGORY_MAP, type ApiCategory } from '../../../i18n/apiMaps'
-import { urgencyStripClass, type TileState } from '../model'
+import { isUrgent, urgencyStripClass, type TileState } from '../model'
 import { AuthPhoto } from './Photo'
 import { useResidentPhotoId } from '../hooks/useResidentPhoto'
+import { useInView } from '../hooks/useLazyMedia'
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
   'category.electrical': Zap,
@@ -27,10 +28,15 @@ export function CategoryIcon({ category, size }: { category: string; size: numbe
   return <Icon size={size} aria-hidden />
 }
 
+const RED = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+const GRAY = 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+
 const STATE_STYLE: Record<TileState, { icon: LucideIcon; className: string; key: string }> = {
   inWork: { icon: KeyRound, className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300', key: 'twa.simple.status.inWork' },
-  returned: { icon: Undo2, className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', key: 'twa.simple.status.returned' },
-  pending: { icon: Clock, className: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200', key: 'twa.simple.status.pending' },
+  returned: { icon: Undo2, className: RED, key: 'twa.simple.status.returned' },
+  retake: { icon: Camera, className: RED, key: 'twa.simple.status.retake' },
+  waiting: { icon: Hourglass, className: GRAY, key: 'twa.simple.waitManager' },
+  pending: { icon: Clock, className: GRAY, key: 'twa.simple.status.pending' },
 }
 
 /** Статус тремя каналами: цвет + иконка + слово. */
@@ -40,6 +46,17 @@ export function StateChip({ state }: { state: TileState }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[16px] font-semibold ${className}`}>
       <Icon size={18} aria-hidden /> {t(key)}
+    </span>
+  )
+}
+
+/** Срочная/критическая — огонь рядом со статусом (вдобавок к полосе). */
+export function UrgentMark({ urgency }: { urgency?: string | null }) {
+  const { t } = useTranslation()
+  if (!isUrgent(urgency)) return null
+  return (
+    <span role="img" aria-label={t('twa.simple.urgent')} className="inline-flex text-red-600 dark:text-red-400">
+      <Flame size={24} fill="currentColor" aria-hidden />
     </span>
   )
 }
@@ -61,7 +78,9 @@ interface Props {
 /** Плитка заявки: фото/иконка, адрес крупно, одна строка текста, полоса срочности. */
 export default function TaskTile({ requestNumber, category, address, text, urgency, state, reason, photoMediaId, onOpen, action }: Props) {
   const { t } = useTranslation()
-  const photoId = useResidentPhotoId(requestNumber, photoMediaId)
+  const ref = useRef<HTMLLIElement>(null)
+  const visible = useInView(ref)
+  const photoId = useResidentPhotoId(requestNumber, photoMediaId, visible)
   const strip = urgencyStripClass(urgency)
   const icon = (
     <div className="w-20 h-20 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 flex items-center justify-center shrink-0">
@@ -71,10 +90,21 @@ export default function TaskTile({ requestNumber, category, address, text, urgen
   const body = (
     <div className="flex gap-3 items-start">
       {photoId != null ? (
-        <AuthPhoto mediaId={photoId} alt={t('twa.simple.task.photoAlt')} className="w-20 h-20 rounded-xl object-cover shrink-0" fallback={icon} />
+        <AuthPhoto
+          mediaId={photoId}
+          enabled={visible}
+          alt={t('twa.simple.task.photoAlt')}
+          className="w-20 h-20 rounded-xl object-cover shrink-0"
+          fallback={icon}
+        />
       ) : icon}
       <div className="min-w-0 flex-1">
-        {state && <StateChip state={state} />}
+        {(state || isUrgent(urgency)) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {state && <StateChip state={state} />}
+            <UrgentMark urgency={urgency} />
+          </div>
+        )}
         <p className="mt-1 text-[24px] font-bold leading-tight text-gray-900 dark:text-gray-50 break-words">{address}</p>
         {text && <p className="mt-1 text-[18px] text-gray-700 dark:text-gray-300 truncate">{text}</p>}
         {state === 'returned' && reason && (
@@ -85,6 +115,7 @@ export default function TaskTile({ requestNumber, category, address, text, urgen
   )
   return (
     <li
+      ref={ref}
       data-testid={`tile-${requestNumber}`}
       className="relative list-none min-h-[120px] rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden"
     >

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import { Routes, Route } from 'react-router'
 import { render, screen, fireEvent, waitFor, testI18n } from '../../../test/test-utils'
-import { isLangChosen, resetLangChosenForTests } from '../langFlag'
+import { isLangChosen, resetLangChosenForTests, safeNext } from '../langFlag'
 import LangPage from './LangPage'
 
 // Выбор языка простого режима: три кнопки-самоназвания, PATCH /profile,
@@ -53,12 +53,25 @@ describe('LangPage', () => {
     expect(await screen.findByText('MINE')).toBeInTheDocument()
   })
 
-  it('ошибка сохранения — флаг не ставится, остаёмся на экране', async () => {
-    mockPatch.mockRejectedValue({ response: { status: 500 } })
+  it('ошибка сохранения — крест на весь экран, флаг не ставится; «Ещё раз» повторяет выбор', async () => {
+    mockPatch.mockRejectedValueOnce({ response: { status: 500 } })
     renderLang()
     fireEvent.click(screen.getByRole('button', { name: 'O‘zbekcha' }))
-    await waitFor(() => expect(mockPatch).toHaveBeenCalled())
+    expect(await screen.findByRole('alert')).toHaveTextContent('Язык не сохранился')
     expect(isLangChosen()).toBe(false)
-    expect(screen.getByRole('button', { name: 'O‘zbekcha' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Ещё раз/ }))
+    await waitFor(() => expect(mockPatch).toHaveBeenLastCalledWith('/api/v2/profile', { language: 'uz' }))
+    expect(await screen.findByText('DONE SCREEN')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['/twa/s/../app', '/twa/s'],
+    ['/twa/s/./pool', '/twa/s'],
+    ['/twa/s/lang?next=x', '/twa/s'],
+    ['//evil.example', '/twa/s'],
+    ['/twa/s/task/1/done', '/twa/s/task/1/done'],
+    ['/twa/s?x=1', '/twa/s?x=1'],
+  ])('safeNext(%s) → %s', (next, expected) => {
+    expect(safeNext(next)).toBe(expected)
   })
 })

@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
-import { notifyError } from '../../utils/errors'
-import { markLangChosen } from '../langFlag'
+import { markLangChosen, safeNext } from '../langFlag'
+import { FlashScreen, useFlash } from '../components/Flash'
 
 type Lang = 'uz' | 'uz_cyrl' | 'ru'
 
@@ -15,18 +15,14 @@ const LANGS: readonly { code: Lang; label: string }[] = [
   { code: 'ru', label: 'Русский' },
 ]
 
-/** Только внутренние пути простого режима — `next` приходит из URL. */
-function safeNext(next: string | null): string {
-  return next && /^\/twa\/s(\/|$|\?)/.test(next) && !next.startsWith('/twa/s/lang') ? next : '/twa/s'
-}
-
 /** Выбор языка: три кнопки по 88 px. Первый вход в простой режим. */
 export default function LangPage() {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const queryClient = useQueryClient()
   const { notify } = useTelegramSDK()
+  const [flash, setFlash] = useFlash()
 
   const save = useMutation({
     mutationFn: (language: Lang) => twaClient.patch('/api/v2/profile', { language }),
@@ -37,14 +33,14 @@ export default function LangPage() {
       queryClient.invalidateQueries({ queryKey: ['twa', 'profile'] })
       navigate(safeNext(params.get('next')), { replace: true })
     },
-    onError: (err: unknown) => {
+    onError: (_err: unknown, language: Lang) => {
       notify('error')
-      notifyError(err)
+      setFlash({ ok: false, title: t('twa.simple.lang.failed'), retry: () => save.mutate(language) })
     },
   })
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 flex flex-col justify-center gap-4 p-4">
+    <div className="min-h-[90vh] flex flex-col justify-center gap-4 p-4">
       {LANGS.map(({ code, label }) => (
         <button
           key={code}
@@ -57,6 +53,7 @@ export default function LangPage() {
           {label}
         </button>
       ))}
+      <FlashScreen flash={flash} onClose={() => setFlash(null)} />
     </div>
   )
 }
