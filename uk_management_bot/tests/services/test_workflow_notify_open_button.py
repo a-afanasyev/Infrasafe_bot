@@ -171,3 +171,60 @@ class TestCollectAndSend:
         bot = _FakeBot()
         assert await send_notify_messages(bot, [(1, "t")]) == 1
         assert bot.sent == [(1, "t", None)]
+
+
+class TestReturnedForRework:
+    """Фаза 4: возврат жителем (APPLICANT_RETURN) ставит «Возвращена», а не
+    «В работе» — исполнителю «вернули на доработку» + причина + «Открыть»."""
+
+    def _set_returned(self, db, reason):
+        from uk_management_bot.database.models.request import Request
+
+        request = db.get(Request, NUMBER)
+        request.status = "Возвращена"
+        request.return_reason = reason
+        db.commit()
+
+    @pytest.mark.parametrize("language,head,reason_label", [
+        ("ru", f"↩️ Заявку #{NUMBER} вернули на доработку", "📝 Причина: "),
+        ("uz", f"↩️ #{NUMBER} arizani qayta ishlashga qaytarishdi", "📝 Sabab: "),
+    ])
+    def test_text_is_truthful_with_reason_and_button(self, db, frontend, language,
+                                                     head, reason_label):
+        from uk_management_bot.database.models.user import User
+        from uk_management_bot.services.workflow_notifications import (
+            collect_notify_messages_sync,
+        )
+
+        db.get(User, EXECUTOR_ID).language = language
+        self._set_returned(db, "кран <снова> течёт & капает")
+        (message,) = collect_notify_messages_sync(
+            db, NUMBER, _intents(Action.APPLICANT_RETURN))
+        chat_id, text = message
+        assert chat_id == EXECUTOR_TG
+        assert text.startswith(head)
+        assert "В работе" not in text and "Jarayonda" not in text
+        assert reason_label + "кран &lt;снова&gt; течёт &amp; капает" in text
+        assert _single_webapp_url(message.reply_markup) == TASK_URL
+
+    def test_no_reason_line_without_reason(self, db, frontend):
+        from uk_management_bot.services.workflow_notifications import (
+            collect_notify_messages_sync,
+        )
+
+        self._set_returned(db, None)
+        ((_chat_id, text),) = collect_notify_messages_sync(
+            db, NUMBER, _intents(Action.APPLICANT_RETURN))
+        assert "Причина" not in text and "Sabab" not in text
+
+    def test_manager_return_to_work_text_unchanged(self, db, frontend):
+        """Возврат МЕНЕДЖЕРОМ действительно ставит «В работе» — текст прежний."""
+        from uk_management_bot.services.workflow_notifications import (
+            collect_notify_messages_sync,
+        )
+
+        messages = collect_notify_messages_sync(
+            db, NUMBER, _intents(Action.MANAGER_RETURN_TO_WORK))
+        texts = [t for _cid, t in messages]
+        assert texts
+        assert all("возвращена в работу" in t or "ishga qaytarildi" in t for t in texts)

@@ -188,7 +188,19 @@ async def end_shift(
     await db.commit()
     await db.refresh(shift)
     background.add_task(_notify_shift, _shift_notify_payload(user, shift, started=False))
+    background.add_task(_remind_open_tasks, user.id)
     return _shift_out(shift)
+
+
+async def _remind_open_tasks(user_id: int) -> None:
+    """Фаза 4: незакрытые заявки после конца смены — личка исполнителю (как
+    в боте). Best-effort: смена уже завершена, сбой здесь её не касается."""
+    try:
+        from uk_management_bot.services.executor_done_prompt import remind_after_shift_end
+        from uk_management_bot.services.notification_service import _get_shared_bot
+        await remind_after_shift_end(_get_shared_bot(), user_id)
+    except Exception as e:
+        logger.warning("open-tasks reminder skipped: %s", type(e).__name__)
 
 
 def _shift_notify_payload(user: User, shift: Shift, *, started: bool):
