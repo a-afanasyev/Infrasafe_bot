@@ -4277,6 +4277,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "language": {
+            "default": "ru",
+            "title": "Language",
+            "type": "string"
+          },
           "last_name": {
             "anyOf": [
               {
@@ -4384,6 +4389,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "language": {
+            "default": "ru",
+            "title": "Language",
+            "type": "string"
+          },
           "last_name": {
             "anyOf": [
               {
@@ -4469,6 +4479,21 @@
           "total_completed"
         ],
         "title": "EmployeeDetail",
+        "type": "object"
+      },
+      "EmployeeLanguageRequest": {
+        "additionalProperties": false,
+        "description": "Сменить сотруднику язык профиля (бот и Mini App).",
+        "properties": {
+          "language": {
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "language"
+        ],
+        "title": "EmployeeLanguageRequest",
         "type": "object"
       },
       "ExecutorStat": {
@@ -19972,6 +19997,62 @@
           }
         ],
         "summary": "Delete Employee",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/language": {
+      "patch": {
+        "description": "Сменить сотруднику язык профиля (бот и Mini App).",
+        "operationId": "set_employee_language_api_v2_shifts_employees__user_id__language_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeLanguageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Employee Language",
         "tags": [
           "shifts"
         ]

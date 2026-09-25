@@ -112,3 +112,73 @@ async def test_flag_exposed_in_employee_card_and_list(client, db_session):
     by_id = {row["id"]: row for row in listing.json()}
     assert by_id[on.id]["simple_mode"] is True
     assert by_id[off.id]["simple_mode"] is False
+
+
+# ═══════════════════ Язык сотрудника (меняет менеджер) ═══════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", ["ru", "uz", "uz_cyrl"])
+async def test_manager_sets_employee_language(client, db_session, language):
+    u = await _user(db_session, 3100 + len(language))
+
+    resp = await client.patch(f"{EP}/{u.id}/language", json={"language": language})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"id": u.id, "language": language}
+    await db_session.refresh(u)
+    assert u.language == language
+
+
+@pytest.mark.asyncio
+async def test_unsupported_language_rejected_422(client, db_session):
+    u = await _user(db_session, 3110)
+    resp = await client.patch(f"{EP}/{u.id}/language", json={"language": "en"})
+    assert resp.status_code == 422
+    await db_session.refresh(u)
+    assert u.language == "ru"
+
+
+@pytest.mark.asyncio
+async def test_language_extra_fields_rejected(client, db_session):
+    u = await _user(db_session, 3111)
+    resp = await client.patch(f"{EP}/{u.id}/language", json={"language": "uz", "x": 1})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_language_unknown_user_404(client):
+    resp = await client.patch(f"{EP}/999999/language", json={"language": "uz"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_executor_cannot_set_language_via_manager_endpoint_403(client, db_session):
+    u = await _user(db_session, 3112)
+
+    async def _as_executor():
+        return u
+
+    app.dependency_overrides[get_current_user] = _as_executor
+    resp = await client.patch(f"{EP}/{u.id}/language", json={"language": "uz"})
+    assert resp.status_code == 403
+
+
+def test_language_validation_shares_profile_source():
+    """Один источник допустимых языков — профиль и карточка сотрудника не расходятся."""
+    from uk_management_bot.api.profile.router import ALLOWED_LANGUAGES
+    from uk_management_bot.api.shifts import schemas
+
+    assert schemas.ALLOWED_LANGUAGES is ALLOWED_LANGUAGES
+
+
+@pytest.mark.asyncio
+async def test_language_exposed_in_employee_card_and_list(client, db_session):
+    u = await _user(db_session, 3113)
+    u.language = "uz_cyrl"
+    await db_session.commit()
+
+    card = await client.get(f"{EP}/{u.id}")
+    assert card.json()["language"] == "uz_cyrl"
+    listing = await client.get(EP)
+    assert {row["id"]: row for row in listing.json()}[u.id]["language"] == "uz_cyrl"

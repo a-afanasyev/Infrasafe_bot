@@ -22,6 +22,8 @@ export interface EmployeeBrief {
   bot_blocked: boolean
   /** Простой режим исполнителя в Mini App (включает менеджер). */
   simple_mode: boolean
+  /** Язык профиля: ru / uz (латиница) / uz_cyrl (кириллица). */
+  language: string
 }
 
 export interface ShiftBrief {

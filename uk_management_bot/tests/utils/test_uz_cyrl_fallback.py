@@ -76,3 +76,22 @@ def test_uz_cyrl_keyboard_marks_uzbek_as_selected():
     cyrl = get_language_choice_keyboard("uz_cyrl")
     texts = lambda m: [b.text for row in m.inline_keyboard for b in row]  # noqa: E731
     assert texts(cyrl) == texts(uz)
+
+
+def test_localization_middleware_takes_language_from_fresh_user_record():
+    """Язык не кэшируется: middleware берёт users.language из пользователя,
+    которого auth-middleware читает из БД на каждом апдейте, — смена языка
+    менеджером действует со следующего сообщения без рестарта бота."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from uk_management_bot.middlewares.localization import localization_middleware
+
+    async def handler(event, data):
+        return data["language"]
+
+    async def run(language):
+        return await localization_middleware(handler, object(), {"user": SimpleNamespace(language=language)})
+
+    assert asyncio.run(run("uz_cyrl")) == "uz_cyrl"
+    assert asyncio.run(run("ru")) == "ru"

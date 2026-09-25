@@ -25,6 +25,7 @@ from uk_management_bot.api.shifts.schemas import (
     EmployeeSortField,
     MeterEntryToggleRequest,
     SimpleModeToggleRequest,
+    EmployeeLanguageRequest,
     SortOrder,
 )
 from uk_management_bot.database.models.user import User
@@ -341,6 +342,25 @@ async def toggle_simple_mode(
         raise HTTPException(status_code=422, detail="Simple mode is available only for executors")
     await service.set_simple_mode(db, user, body.enabled)
     return {"id": user.id, "simple_mode": body.enabled}
+
+
+@router.patch("/employees/{user_id}/language", dependencies=[Depends(require_roles("manager"))])
+async def set_employee_language(
+    user_id: int,
+    body: EmployeeLanguageRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Сменить сотруднику язык профиля (бот и Mini App)."""
+    # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
+    #
+    # Бот читает users.language из БД на каждом апдейте (auth-middleware →
+    # localization), кэша языка нет — новый язык действует со следующего
+    # сообщения без рестарта.
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await service.set_user_language(db, user, body.language)
+    return {"id": user.id, "language": body.language}
 
 
 @router.post("/employees/{user_id}/request-phone", dependencies=[Depends(require_roles("manager"))])

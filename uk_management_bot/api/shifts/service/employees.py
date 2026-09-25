@@ -256,6 +256,16 @@ async def set_simple_mode(db: AsyncSession, user: User, enabled: bool) -> User:
     return user
 
 
+async def set_user_language(db: AsyncSession, user: User, language: str) -> User:
+    """Сменить язык профиля (users.language). Идемпотентна; валидация — в схеме."""
+    if user.language == language:
+        return user
+    user.language = language
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 async def list_pending_staff(db: AsyncSession) -> list[User]:
     """Сотрудники (manager/executor/inspector) со `status='pending'` — очередь
     активации аккаунта в дашборде.
