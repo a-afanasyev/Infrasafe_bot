@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 import { useMyTransfers, useRespondTransfer, type TwaTransfer } from '../hooks/useTransfers'
 import { useTelegramSDK } from '../hooks/useTelegramSDK'
-import { getErrorMessage } from '../utils/errors'
+import { apiErrorDetail } from '../../utils/errorMessage'
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'text-amber-600',
@@ -36,7 +36,8 @@ export default function TransfersList() {
       )
     } catch (err) {
       haptic('notification')
-      const key = getErrorMessage(err, '')
+      // detail передачи смен — машинный код (not_your_shift, …), не текст
+      const key = apiErrorDetail(err) ?? ''
       const localized = t(`twa.exec.transfer.errors.${key}`, '')
       toast.error(localized || t('twa.exec.transfer.toastRespondFailed'))
     }

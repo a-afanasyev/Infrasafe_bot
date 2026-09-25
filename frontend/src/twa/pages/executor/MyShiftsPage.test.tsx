@@ -101,3 +101,27 @@ describe('TWA MyShiftsPage — transfers (PR-T2)', () => {
     expect(screen.queryByRole('button', { name: /Передать смену/ })).not.toBeInTheDocument()
   })
 })
+
+describe('TWA MyShiftsPage — статус смены', () => {
+  beforeEach(() => server.resetHandlers())
+
+  const PLANNED = { ...ACTIVE_SHIFT, id: 11, status: 'planned' }
+  const DONE = { ...ACTIVE_SHIFT, id: 12, status: 'completed' }
+  const CANCELLED = { ...ACTIVE_SHIFT, id: 13, status: 'cancelled' }
+
+  it('запланированная смена подписана «Планируется», а не «Завершена»; вкладка «Завершена» её не показывает', async () => {
+    const user = userEvent.setup()
+    seed({ shifts: [PLANNED, DONE, CANCELLED] })
+    render(<MyShiftsPage />)
+
+    const planned = (await screen.findByText('#11')).parentElement!
+    expect(planned).toHaveTextContent('Планируется')
+    expect(planned).not.toHaveTextContent('Завершена')
+    expect(screen.getByText('#12').parentElement!).toHaveTextContent('Завершена')
+    expect(screen.getByText('#13').parentElement!).toHaveTextContent('Отменена')
+
+    await user.click(screen.getByRole('button', { name: 'Завершена' }))
+    expect(screen.queryByText('#11')).toBeNull()
+    expect(screen.getByText('#12')).toBeInTheDocument()
+  })
+})

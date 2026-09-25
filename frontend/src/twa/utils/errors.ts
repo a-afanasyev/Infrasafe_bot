@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { getI18n } from 'react-i18next'
-import { apiErrorDetail } from '../../utils/errorMessage'
+import axios from 'axios'
+import { apiErrorStatus } from '../../utils/errorMessage'
 
 // Текст по умолчанию — на текущем языке (инстанс, зарегистрированный initReactI18next).
 function genericErrorText(): string {
@@ -8,22 +9,35 @@ function genericErrorText(): string {
   return i18n?.isInitialized ? i18n.t('twa.errors.generic') : 'Error'
 }
 
+// Статусы, для которых общий текст полезнее контекстного fallback вызывающего:
+// они говорят пользователю, ЧТО делать (проверить сеть, подождать, повторить).
+function statusErrorKey(err: unknown): string | null {
+  if (!axios.isAxiosError(err)) return null
+  const status = apiErrorStatus(err)
+  if (status === null || status === 408) return 'twa.errors.network'
+  if (status === 403) return 'twa.errors.forbidden'
+  if (status === 413) return 'twa.errors.tooLarge'
+  if (status === 429) return 'twa.errors.tooMany'
+  if (status >= 500) return 'twa.errors.server'
+  return null
+}
+
 /**
- * Extract a human-readable message from an axios/fetch error.
+ * Локализованный текст ошибки для пользователя TWA.
  *
- * Order of preference:
- *   1. FastAPI 422 list of {loc, msg, type} → joined "field: reason; …"
- *   2. FastAPI {detail: string}            → that string
- *   3. fallback                            → caller-provided (по умолчанию — twa.errors.generic)
+ *   1. Сеть/408, 403, 413, 429, 5xx → общий текст по статусу (twa.errors.*)
+ *   2. иначе                          → fallback вызывающего (по умолчанию — twa.errors.generic)
  *
- * A9-P2-31: err.message НЕ показываем — у axios это английский технический текст
- * («Request failed with status code 500», «Network Error»), и он перекрывал
- * локализованный fallback вызывающего.
+ * Сырой `detail` ответа НЕ показываем: это технический текст бэкенда, чаще
+ * всего на английском («Transition not allowed», «description: too short»).
+ * err.message (A9-P2-31) — тоже нет. Машинный код ошибки, если он нужен для
+ * ветвления, читать через utils/errorMessage (apiErrorCode/apiErrorDetail).
+ * Дашборд этим не пользуется — у него свой safeErrorMessage с detail.
  */
 export function getErrorMessage(err: unknown, fallback = genericErrorText()): string {
-  // A9-P3-20: разбор detail — единый канон utils/errorMessage.apiErrorDetail.
-  const detail = apiErrorDetail(err)
-  if (detail) return detail
+  const key = statusErrorKey(err)
+  const i18n = getI18n()
+  if (key && i18n?.isInitialized) return i18n.t(key)
   return fallback
 }
 

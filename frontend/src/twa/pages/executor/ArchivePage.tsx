@@ -5,11 +5,12 @@ import { twaClient } from '../../twaClient'
 import RequestCard from '../../components/RequestCard'
 import { Star } from 'lucide-react'
 import { CardSkeleton } from '../../components/Skeleton'
+import QueryErrorState from '../../components/QueryErrorState'
 
 export default function ArchivePage() {
   const { t } = useTranslation()
 
-  const { data: requests = [], isLoading } = useQuery({
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { view: 'assigned', limit: 50 }
@@ -35,7 +36,9 @@ export default function ArchivePage() {
 
       {isLoading && <CardSkeleton />}
 
-      {!isLoading && archive.length === 0 && (
+      {isError && <QueryErrorState onRetry={() => refetch()} />}
+
+      {!isLoading && !isError && archive.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-400 text-[14px]">{t('twa.exec.archive.empty')}</p>
         </div>

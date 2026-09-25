@@ -8,6 +8,7 @@ import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import RequestCard from '../../components/RequestCard'
 import { CardSkeleton } from '../../components/Skeleton'
+import QueryErrorState from '../../components/QueryErrorState'
 
 export default function PurchasePage() {
   const { t } = useTranslation()
@@ -15,7 +16,7 @@ export default function PurchasePage() {
   const queryClient = useQueryClient()
   const { haptic } = useTelegramSDK()
 
-  const { data: requests = [], isLoading } = useQuery({
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['twa', 'executor-tasks'],
     queryFn: () => twaClient.get('/api/v2/requests', {
       params: { view: 'assigned', limit: 50 }
@@ -46,7 +47,9 @@ export default function PurchasePage() {
 
       {isLoading && <CardSkeleton />}
 
-      {!isLoading && purchases.length === 0 && (
+      {isError && <QueryErrorState onRetry={() => refetch()} />}
+
+      {!isLoading && !isError && purchases.length === 0 && (
         <div className="text-center py-12">
           <p className="text-[40px] mb-2">🛒</p>
           <p className="text-gray-400 text-[14px]">{t('twa.exec.purchase.empty')}</p>

@@ -56,7 +56,10 @@ export default function MyShiftsPage() {
   )
 
   const visible = shifts.filter((s: ShiftRow) =>
-    filter === 'all' ? true : filter === 'active' ? s.status === 'active' : s.status !== 'active'
+    filter === 'all' ? true
+      : filter === 'active' ? s.status === 'active'
+      // «Завершена» — прошедшие смены; запланированная сюда не относится.
+      : s.status !== 'active' && s.status !== 'planned'
   )
   const truncated = shifts.length >= SHIFTS_LIMIT
 
@@ -106,7 +109,7 @@ export default function MyShiftsPage() {
               <div className="flex items-center gap-2">
                 <Clock size={14} className={isActive ? 'text-emerald-500' : 'text-gray-400'} />
                 <span className={`text-[12px] font-semibold ${isActive ? 'text-emerald-600' : 'text-gray-500'}`}>
-                  {isActive ? t('twa.exec.myShifts.active') : t('twa.exec.myShifts.completed')}
+                  {isActive ? t('twa.exec.myShifts.active') : t(`shiftStatus.${s.status}`, { defaultValue: s.status })}
                 </span>
               </div>
               <span className="text-[11px] text-gray-400">#{s.id}</span>
