@@ -1,9 +1,8 @@
 """Язык профиля uz_cyrl (узбекская кириллица) и цепочка фолбэка переводов.
 
-Переводов на кириллицу пока нет (Фаза 3), но язык уже можно выбрать в
-профиле. Бот при ``language='uz_cyrl'`` не должен падать или откатываться на
-русский: цепочка uz_cyrl → uz (латиница) → ru — сначала локаль uz_cyrl (когда
-появится), при отсутствии файла или ключа — uz, затем ru.
+Своего файла у кириллицы нет: локаль строится транслитерацией uz.json
+(``utils/uz_translit``, Фаза 3). Цепочка ключа uz_cyrl → uz → ru — ключ,
+которого нет в uz, отдаётся по-русски (русский не транслитерируется).
 """
 import os
 
@@ -13,18 +12,20 @@ from uk_management_bot.utils import helpers
 from uk_management_bot.utils.helpers import _locale_cache, get_text, load_locale
 
 
-def test_no_uz_cyrl_locale_file_yet():
-    # Предпосылка теста фолбэка: файл кириллицы появится в Фазе 3.
+def test_no_hand_maintained_uz_cyrl_locale_file():
+    # Ручной uz_cyrl.json разъехался бы с uz.json — кириллица только производная.
     assert not os.path.exists(os.path.join(helpers._resolve_locales_dir(), "uz_cyrl.json"))
 
 
-def test_missing_uz_cyrl_file_falls_back_to_uz_not_ru():
+def test_missing_uz_cyrl_file_builds_cyrillic_from_uz():
+    from uk_management_bot.utils.uz_translit import to_cyrillic
+
     _locale_cache.pop("uz_cyrl", None)
     uz = get_text("buttons.cancel", language="uz")
     ru = get_text("buttons.cancel", language="ru")
     assert uz != ru  # иначе тест не различает uz и ru
-    assert get_text("buttons.cancel", language="uz_cyrl") == uz
-    assert load_locale("uz_cyrl") is load_locale("uz")
+    assert get_text("buttons.cancel", language="uz_cyrl") == to_cyrillic(uz)
+    assert set(load_locale("uz_cyrl")) == set(load_locale("uz"))
 
 
 def test_chain_prefers_uz_cyrl_then_uz_then_ru(monkeypatch):
@@ -74,8 +75,11 @@ def test_uz_cyrl_keyboard_marks_uzbek_as_selected():
 
     uz = get_language_choice_keyboard("uz")
     cyrl = get_language_choice_keyboard("uz_cyrl")
+    from uk_management_bot.utils.uz_translit import to_cyrillic
+
     texts = lambda m: [b.text for row in m.inline_keyboard for b in row]  # noqa: E731
-    assert texts(cyrl) == texts(uz)
+    # Те же кнопки (отмечен узбекский), только кириллицей.
+    assert texts(cyrl) == [to_cyrillic(t) for t in texts(uz)]
 
 
 def test_localization_middleware_takes_language_from_fresh_user_record():
