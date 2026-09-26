@@ -47,8 +47,10 @@ export default function DonePage() {
 
   // «Готово» — только из «В работе» (канон EXECUTOR_COMPLETE). Решаем по
   // СВЕЖЕЙ карточке (кэш мог устареть: заявку отменили); без сети — камеру
-  // не блокируем, для того и очередь.
-  const { data: task, isError, isFetchedAfterMount, fetchStatus } = useTaskCard(number)
+  // не блокируем, для того и очередь. fresh: карточку только что открыли —
+  // кэш моложе staleTime, без принудительного запроса isFetchedAfterMount
+  // навсегда false и экран висит на скелетоне.
+  const { data: task, isError, isFetchedAfterMount, fetchStatus } = useTaskCard(number, { fresh: true })
   const settled = isFetchedAfterMount || isError || fetchStatus === 'paused'
   const closed = settled && !!task && isClosed(task.status)
   const blocked = settled && !!task && !canComplete(task.status)

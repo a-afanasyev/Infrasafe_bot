@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router'
 import { render, screen, fireEvent, waitFor } from '../../../test/test-utils'
 import { QueueWrapper, memoryQueueWith, stubTelegram, unstubTelegram } from '../../../test/twaSimple'
 import type { QueueStore } from '../queue/types'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createTwaQueryClient } from '../../queryRetry'
 import DonePage from './DonePage'
 
 // «Готово»: камера → превью → «Отправить». Фото сначала ложится в очередь,
@@ -60,6 +62,26 @@ async function shootAndSend() {
 const sentForm = (call: number) => mockPost.mock.calls[call][1] as FormData
 
 describe('DonePage', () => {
+  it('карточка уже в кэше и свежая (staleTime клиента TWA) — не висит на загрузке, открывает камеру', async () => {
+    // Прод-кейс: тап «Готово» сразу после карточки — данные моложе 30 с,
+    // react-query не перезапрашивает, isFetchedAfterMount без refetchOnMount
+    // навсегда false → бесконечный скелетон.
+    const client = createTwaQueryClient()
+    client.setQueryData(['twa', 'request', NUMBER], { request_number: NUMBER, status: 'В работе', category: 'x', created_at: '2026-09-26T08:00:00Z' })
+    render(
+      <QueryClientProvider client={client}>
+        <QueueWrapper store={store}>
+          <Routes>
+            <Route path="/twa/s/task/:number/done" element={<DonePage />} />
+          </Routes>
+        </QueueWrapper>
+      </QueryClientProvider>,
+      { routerEntries: [`/twa/s/task/${NUMBER}/done`] },
+    )
+    expect(await screen.findByRole('button', { name: /Камера/ })).toBeInTheDocument()
+    expect(mockGet).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}`)
+  })
+
   it('отправляет multipart photo + idempotency_key; успех — галка и вибрация success; очередь пуста', async () => {
     const { haptic } = stubTelegram()
     mockPost.mockResolvedValue({ data: {} })
