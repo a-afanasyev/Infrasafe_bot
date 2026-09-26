@@ -19,6 +19,8 @@ const DOWNSCALE = { maxDimension: 1280, thresholdBytes: 400_000 }
 /** = COMPLETION_PHOTO_MAX_BYTES бэкенда: больше — 413, слать бессмысленно. */
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024
 const SUCCESS_HOLD_MS = 1500
+/** Свежая карточка не пришла (плохая сеть, запрос висит) — решаем по кэшу, не держим скелетон. */
+const CARD_WAIT_MS = 4000
 
 type Stage =
   | { kind: 'camera' }
@@ -47,9 +49,16 @@ export default function DonePage() {
 
   // «Готово» — только из «В работе» (канон EXECUTOR_COMPLETE). Решаем по
   // СВЕЖЕЙ карточке (кэш мог устареть: заявку отменили); без сети — камеру
-  // не блокируем, для того и очередь.
-  const { data: task, isError, isFetchedAfterMount, fetchStatus } = useTaskCard(number)
-  const settled = isFetchedAfterMount || isError || fetchStatus === 'paused'
+  // не блокируем, для того и очередь. fresh: карточку только что открыли —
+  // кэш моложе staleTime, без принудительного запроса isFetchedAfterMount
+  // навсегда false и экран висит на скелетоне.
+  const { data: task, isError, isFetchedAfterMount, fetchStatus } = useTaskCard(number, { fresh: true })
+  const [waitedLong, setWaitedLong] = useState(false)
+  useEffect(() => {
+    const id = window.setTimeout(() => setWaitedLong(true), CARD_WAIT_MS)
+    return () => window.clearTimeout(id)
+  }, [])
+  const settled = isFetchedAfterMount || isError || fetchStatus === 'paused' || waitedLong
   const closed = settled && !!task && isClosed(task.status)
   const blocked = settled && !!task && !canComplete(task.status)
 

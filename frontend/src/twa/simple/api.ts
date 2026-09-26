@@ -59,11 +59,13 @@ export function useCurrentShift() {
 }
 
 /** Карточка заявки; ключ — как у pages/executor/TaskDetailPage (общий кэш). */
-export function useTaskCard(number: string) {
+/** `fresh` — всегда перезапросить при входе на экран (даже если кэш моложе staleTime). */
+export function useTaskCard(number: string, { fresh = false }: { fresh?: boolean } = {}) {
   return useQuery<TwaRequest>({
     queryKey: ['twa', 'request', number],
     queryFn: () => twaClient.get(`/api/v2/requests/${encodeURIComponent(number)}`).then((r) => r.data),
     enabled: !!number,
+    ...(fresh ? { refetchOnMount: 'always' as const } : {}),
   })
 }
 
