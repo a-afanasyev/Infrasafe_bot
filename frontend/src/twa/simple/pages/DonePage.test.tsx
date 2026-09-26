@@ -62,6 +62,30 @@ async function shootAndSend() {
 const sentForm = (call: number) => mockPost.mock.calls[call][1] as FormData
 
 describe('DonePage', () => {
+  it('запрос карточки повис (плохая сеть) — через 4 с камера по кэшу, а не вечный скелетон', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      mockGet.mockImplementation(() => new Promise(() => {}))
+      const client = createTwaQueryClient()
+      client.setQueryData(['twa', 'request', NUMBER], { request_number: NUMBER, status: 'В работе', category: 'x', created_at: '2026-09-26T08:00:00Z' })
+      render(
+        <QueryClientProvider client={client}>
+          <QueueWrapper store={store}>
+            <Routes>
+              <Route path="/twa/s/task/:number/done" element={<DonePage />} />
+            </Routes>
+          </QueueWrapper>
+        </QueryClientProvider>,
+        { routerEntries: [`/twa/s/task/${NUMBER}/done`] },
+      )
+      expect(screen.queryByRole('button', { name: /Камера/ })).not.toBeInTheDocument()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(await screen.findByRole('button', { name: /Камера/ })).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('карточка уже в кэше и свежая (staleTime клиента TWA) — не висит на загрузке, открывает камеру', async () => {
     // Прод-кейс: тап «Готово» сразу после карточки — данные моложе 30 с,
     // react-query не перезапрашивает, isFetchedAfterMount без refetchOnMount
