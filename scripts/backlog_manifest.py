@@ -372,6 +372,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-36 закрыт 2026-09-24 (PR #633).
     # A9-P3-35 закрыт 2026-09-24 (PR #635).
     # A9-P3-34 закрыт 2026-09-24 (PR #636).
+    "A9-P3-39": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-28", services="media-service, api, access-api", note="media: отложенные находки ревью 2026-09-28 (права ключей, rate limit, контрактный тест, мелочи)"),
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
@@ -405,7 +406,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-21 закрыт 2026-09-23 (PR #619).
     # A9-P2-22 закрыт 2026-09-23 (PR #613).
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
-    "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка: ~40% media_service — SDK и эндпоинты без потребителей"),
+    "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка media_service: SDK и то, чем не пользуются ни код, ни владелец (поиск — оставить)"),
     # A9-P2-25 закрыт 2026-09-23 (PR #612).
     "A9-P2-26": A(pkg="AUD9-W8", status="deferred", method="owner-decision-2026-09-23", services="bot, БД", note="Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает"),
     # A9-P2-27 закрыт 2026-09-23 (PR #630).
