@@ -107,6 +107,7 @@ def _sniff_image_mime(data: bytes) -> Optional[str]:
 # иначе INSERT падал уже после публикации, и файл оставался в канале без
 # строки в БД (ревью 2026-09-28, C2).
 INT4_MAX = 2**31 - 1
+BIGINT_MAX = 2**63 - 1
 REQUEST_NUMBER_MAX = 20
 
 
@@ -128,6 +129,7 @@ async def upload_media(
     description: Optional[str] = Form(None, description="Описание файла"),
     tags: Optional[str] = Form(None, description="Теги через запятую"),
     uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="Внутренний users.id (INT4), не Telegram ID"),
+    uploaded_by_telegram_id: Optional[int] = Form(None, ge=1, le=BIGINT_MAX, description="Telegram ID загрузившего"),
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
@@ -166,7 +168,8 @@ async def upload_media(
             category=category,
             description=description,
             tags=tags_list,
-            uploaded_by=uploaded_by
+            uploaded_by=uploaded_by,
+            uploaded_by_telegram_id=uploaded_by_telegram_id,
         )
 
         logger.info(f"Media uploaded successfully: {media_file.id} for request {request_number}")
@@ -192,6 +195,7 @@ async def upload_report_media(
     description: Optional[str] = Form(None, description="Описание"),
     tags: Optional[str] = Form(None, description="Теги через запятую"),
     uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="Внутренний users.id (INT4), не Telegram ID"),
+    uploaded_by_telegram_id: Optional[int] = Form(None, ge=1, le=BIGINT_MAX, description="Telegram ID загрузившего"),
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
@@ -227,7 +231,8 @@ async def upload_report_media(
             report_type=report_type,
             description=description,
             tags=tags_list,
-            uploaded_by=uploaded_by
+            uploaded_by=uploaded_by,
+            uploaded_by_telegram_id=uploaded_by_telegram_id,
         )
 
         logger.info(f"Report media uploaded successfully: {media_file.id}")
@@ -327,6 +332,7 @@ async def search_media(
     categories: Optional[str] = Query(None, description="Категории через запятую"),
     telegram_file_id: Optional[str] = Query(None, description="Telegram file_id"),
     uploaded_by: Optional[int] = Query(None, description="ID загрузившего пользователя"),
+    uploaded_by_telegram_id: Optional[int] = Query(None, ge=1, le=BIGINT_MAX, description="Telegram ID загрузившего"),
     status: MediaStatusEnum = Query(default=MediaStatusEnum.ACTIVE, description="Статус файлов"),
     limit: int = Query(default=50, ge=1, le=200, description="Лимит результатов"),
     offset: int = Query(default=0, ge=0, description="Смещение"),
@@ -364,6 +370,7 @@ async def search_media(
             categories=categories_list,
             telegram_file_id=telegram_file_id,
             uploaded_by=uploaded_by,
+            uploaded_by_telegram_id=uploaded_by_telegram_id,
             status=status.value,
             limit=limit,
             offset=offset

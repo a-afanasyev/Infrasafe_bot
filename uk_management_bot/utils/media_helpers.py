@@ -179,7 +179,8 @@ async def upload_document_to_media_service(
         user_telegram_id: Telegram ID пользователя — ключ `USER_{tg}`, по нему
             документы находит `delete_user_documents_from_media_service`
         uploaded_by_user_id: внутренний users.id. Telegram ID сюда нельзя:
-            колонка в media-service INT4 (ревью 2026-09-28, C2)
+            колонка в media-service INT4 (ревью 2026-09-28, C2); сам Telegram ID
+            уходит отдельным полем uploaded_by_telegram_id (BIGINT)
         description: Описание документа
 
     Returns:
@@ -222,6 +223,7 @@ async def upload_document_to_media_service(
             category="archive",
             description=description or f"Документ пользователя {user_telegram_id}",
             uploaded_by=uploaded_by_user_id,
+            uploaded_by_telegram_id=user_telegram_id,
             content_type=content_type,
         )
 

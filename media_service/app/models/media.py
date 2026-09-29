@@ -47,6 +47,10 @@ class MediaFile(Base):
     # === ASSOCIATIONS ===
     request_number = Column(String(20), nullable=True, index=True)  # Связь с заявкой
     uploaded_by_user_id = Column(Integer, nullable=False)
+    # Telegram ID загрузившего — рядом с внутренним users.id (решение владельца
+    # 2026-09-29). BIGINT: Telegram ID не влезает в INT4. Существующие БД —
+    # migrations/0002_uploaded_by_telegram_id.sql (create_all колонку не добавит).
+    uploaded_by_telegram_id = Column(BigInteger, nullable=True, index=True)
 
     # === CATEGORIZATION ===
     category = Column(String(50), nullable=False)    # request_photo, report_photo, etc.

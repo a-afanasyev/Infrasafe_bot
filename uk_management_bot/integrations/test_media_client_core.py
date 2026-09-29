@@ -106,6 +106,31 @@ class TestUploadRequestMediaValidation:
         client.client.post.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_upload_request_media_forwards_telegram_id(self, tmp_path):
+        client = MediaServiceClient("http://localhost")
+        response = MagicMock()
+        response.json.return_value = {"media_file": {"id": 1}}
+        response.raise_for_status = MagicMock()
+        client.client = MagicMock()
+        client.client.post = AsyncMock(return_value=response)
+
+        await client.upload_request_media(
+            "USER_6055402868", io.BytesIO(b"x"), uploaded_by=53, uploaded_by_telegram_id=6055402868
+        )
+        data = client.client.post.await_args.kwargs["data"]
+        assert data["uploaded_by"] == "53"
+        assert data["uploaded_by_telegram_id"] == "6055402868"
+
+    @pytest.mark.asyncio
+    async def test_upload_request_media_rejects_bad_telegram_id(self, tmp_path):
+        client = MediaServiceClient("http://localhost")
+        client.client = MagicMock()
+        client.client.post = AsyncMock()
+        with pytest.raises(ValueError, match="uploaded_by_telegram_id"):
+            await client.upload_request_media("USER_1", io.BytesIO(b"x"), uploaded_by_telegram_id=0)
+        client.client.post.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_upload_request_media_forwards_content_type(self, tmp_path):
         client = MediaServiceClient("http://localhost")
         response = MagicMock()

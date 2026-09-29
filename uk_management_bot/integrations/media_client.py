@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 _UPLOADED_BY_MAX = 2**31 - 1
 
 
+def _checked_telegram_id(telegram_id: Any) -> int:
+    """Telegram ID загрузившего — положительный int (колонка BIGINT)."""
+    if not isinstance(telegram_id, int) or isinstance(telegram_id, bool) or telegram_id <= 0:
+        raise ValueError("uploaded_by_telegram_id must be a positive integer")
+    return telegram_id
+
+
 def _checked_uploaded_by(uploaded_by: Any) -> int:
     """Security: server-derived внутренний users.id, не клиентский ввод и не
     Telegram ID (тот не влезает в INT4 и ронял INSERT уже ПОСЛЕ отправки файла
@@ -67,6 +74,7 @@ class MediaServiceClient:
         tags: Optional[List[str]] = None,
         uploaded_by: Optional[int] = None,
         content_type: Optional[str] = None,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Загрузка медиа-файла для заявки
@@ -80,6 +88,7 @@ class MediaServiceClient:
             tags: Список тегов
             uploaded_by: внутренний users.id загрузившего (не Telegram ID)
             content_type: Тип файла, выведенный сервером (сниффер по байтам).
+            uploaded_by_telegram_id: Telegram ID загрузившего (BIGINT, рядом с users.id)
 
         Returns:
             Информация о загруженном файле
@@ -121,6 +130,8 @@ class MediaServiceClient:
 
             if uploaded_by is not None:
                 data["uploaded_by"] = str(_checked_uploaded_by(uploaded_by))
+            if uploaded_by_telegram_id is not None:
+                data["uploaded_by_telegram_id"] = str(_checked_telegram_id(uploaded_by_telegram_id))
 
             # Отправка запроса
             response = await self.client.post(
