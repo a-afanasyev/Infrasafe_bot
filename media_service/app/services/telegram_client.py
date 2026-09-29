@@ -21,7 +21,11 @@ from aiogram.exceptions import (
 )
 
 from app.core.config import settings
-from app.core.log_sanitize import TelegramDownloadError, describe_http_error
+from app.core.log_sanitize import (
+    TelegramDownloadError,
+    TelegramFileNotFoundError,
+    describe_http_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -303,12 +307,18 @@ class TelegramClientService:
                         # E1: `raise` исходного пронёс бы URL с токеном в traceback
                         # и в debug-ответ глобального хендлера. `from None` —
                         # осознанно: цепочка причин напечатала бы исходный текст.
-                        raise TelegramDownloadError(
+                        raise TelegramFileNotFoundError(
                             f"download_file {file_id}: {describe_http_error(e)}"
                         ) from None
                     last_exc = e
                     logger.warning("download_file %s: попытка %d не удалась: %s",
                                    file_id, attempt, describe_http_error(e))
+                except TelegramBadRequest as e:
+                    # Неверный/чужой file_id: Bot API отвечает 400 по существу
+                    # запроса — повтор даст то же самое (ревью 2026-09-28).
+                    raise TelegramFileNotFoundError(
+                        f"download_file {file_id}: {describe_http_error(e)}"
+                    ) from None
                 except (httpx.HTTPError, TelegramAPIError) as e:
                     last_exc = e
                     logger.warning("download_file %s: попытка %d не удалась: %s",

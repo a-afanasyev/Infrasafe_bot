@@ -34,6 +34,7 @@
 - [tech/ROLES_AND_ACCESS.md](tech/ROLES_AND_ACCESS.md) — роли (RBAC), матрица доступа, `admin` vs `system_admin`
 - [tech/ARCHITECTURE_DIAGRAMS.md](tech/ARCHITECTURE_DIAGRAMS.md) — диаграммы (контейнеры, модули, ER)
 - [tech/PAYMENT_CONTROL.md](tech/PAYMENT_CONTROL.md) — контроль платежей
+- [tech/MEDIA_SERVICE.md](tech/MEDIA_SERVICE.md) — media-service: эндпоинты, потребители, ручной поиск фото через VPN
 - [MATERIALS_MODULE.md](MATERIALS_MODULE.md) — модуль «Склад материалов» (FIFO)
 - [ELEVATORS_MODULE.md](ELEVATORS_MODULE.md) — модуль «Лифты»
 - [ASSETS_MODULE.md](ASSETS_MODULE.md) — ТЗ модуля «Учёт ассетов» (не реализовано)
