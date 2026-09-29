@@ -165,6 +165,20 @@ describe('RequestDetailModal — фотоотчёт: загрузка менед
     expect(screen.getByRole('button', { name: 'Добавить фото работ' })).toBeInTheDocument()
   })
 
+  // Ревью медиасервиса 2026-09-28: сбой media-service прокси отдаёт ошибкой,
+  // а не пустым списком — дашборд показывает её, а не молча «фото нет».
+  it('сбой списка медиа: видна ошибка, даже без права загрузки', async () => {
+    mockHasRole.mockReturnValue(false)
+    mockHasAnyRole.mockReturnValue(false)
+    server.use(
+      http.get('*/api/v2/media/request/:number', () => new HttpResponse(null, { status: 502 })),
+      http.get('*/api/v2/materials/by-request/:number', () =>
+        HttpResponse.json({ items: [], total_cost: 0 })),
+    )
+    await renderModal(makeRequest({}))
+    expect(await screen.findByText('Не удалось загрузить фото — попробуйте позже')).toBeInTheDocument()
+  })
+
   it('не-менеджер без медиа: раздела и кнопки нет', async () => {
     mockHasRole.mockReturnValue(false)
     mockHasAnyRole.mockReturnValue(false)

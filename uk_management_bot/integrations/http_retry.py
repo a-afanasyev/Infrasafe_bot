@@ -20,7 +20,11 @@ DEFAULT_RETRIES = 3
 DEFAULT_BACKOFF_BASE = 0.5  # секунды
 # Транзиентные gateway-ошибки media-service (рестарт/перегрузка) — ретраим.
 # 500 не ретраим: чаще детерминированная ошибка приложения.
-_RETRYABLE_STATUS = frozenset({502, 503, 504})
+RETRYABLE_STATUS = frozenset({502, 503, 504})
+# `/media/{id}/file` и `/preview`: 502 там значит «media-service уже ретраил
+# скачивание у Telegram в своём бюджете» — повтор прокси только упрётся в 504
+# edge и удвоит нагрузку на Telegram (ревью 2026-09-28).
+FILE_RETRY_STATUSES = frozenset({503, 504})
 
 
 async def get_with_retries(
@@ -29,6 +33,7 @@ async def get_with_retries(
     *,
     retries: int = DEFAULT_RETRIES,
     backoff_base: float = DEFAULT_BACKOFF_BASE,
+    retry_statuses: frozenset[int] = RETRYABLE_STATUS,
     **kwargs: Any,
 ) -> httpx.Response:
     """GET `url` с ретраями транзиентных ошибок и backoff.
@@ -60,7 +65,7 @@ async def get_with_retries(
             await asyncio.sleep(delay)
             continue
 
-        if resp.status_code in _RETRYABLE_STATUS and attempt < retries - 1:
+        if resp.status_code in retry_statuses and attempt < retries - 1:
             delay = backoff_base * (2 ** attempt)
             logger.info(
                 "media GET %s -> %d (attempt %d/%d), retry in %.1fs",
@@ -83,6 +88,7 @@ async def stream_with_retries(
     *,
     retries: int = DEFAULT_RETRIES,
     backoff_base: float = DEFAULT_BACKOFF_BASE,
+    retry_statuses: frozenset[int] = RETRYABLE_STATUS,
     **kwargs: Any,
 ) -> httpx.Response:
     """Как `get_with_retries`, но открывает ПОТОК и возвращает его незакрытым.
@@ -119,7 +125,7 @@ async def stream_with_retries(
             await asyncio.sleep(delay)
             continue
 
-        if resp.status_code in _RETRYABLE_STATUS and attempt < retries - 1:
+        if resp.status_code in retry_statuses and attempt < retries - 1:
             # Тело этой попытки не понадобится — закрываем, иначе соединение
             # останется висеть до сборки мусора.
             await resp.aclose()

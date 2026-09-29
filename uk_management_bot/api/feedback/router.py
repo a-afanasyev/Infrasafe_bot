@@ -35,6 +35,10 @@ from uk_management_bot.api.feedback.schemas import (
     FeedbackUpdate,
 )
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.routes.media_proxy import (
+    _MEDIA_STREAM_TIMEOUT,
+    media_upstream_error,
+)
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.feedback import Feedback
 from uk_management_bot.database.models.user import User
@@ -143,7 +147,8 @@ async def create_feedback(
     tg_fid: Optional[str] = None
     if photo_bytes:
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            # BUG-189: бюджет меньше 30 с edge.
+            async with httpx.AsyncClient(timeout=_MEDIA_STREAM_TIMEOUT) as client:
                 resp = await client.post(
                     f"{_media_base()}/api/v1/media/upload",
                     headers=_media_headers(),
@@ -301,10 +306,16 @@ async def feedback_media_file(
     allowed_ids = {int(m) for m in (fb.media_files or [])}
     if media_id not in allowed_ids:
         raise HTTPException(status_code=404, detail="Media not found for this feedback")
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(f"{_media_base()}/api/v1/media/{media_id}/file", headers=_media_headers())
+    # Без ретраев: 502 от /file значит, что media-service уже ретраил скачивание
+    # у Telegram в своём бюджете; бюджет запроса меньше 30 с edge (BUG-189).
+    try:
+        async with httpx.AsyncClient(timeout=_MEDIA_STREAM_TIMEOUT) as client:
+            resp = await client.get(f"{_media_base()}/api/v1/media/{media_id}/file", headers=_media_headers())
+    except httpx.TransportError as exc:
+        logger.warning("Media service unreachable for feedback media %s: %s", media_id, exc)
+        raise HTTPException(status_code=503, detail="Media service unavailable")
     if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail="Media service error")
+        raise media_upstream_error(resp.status_code, "feedback file", media_id)
     # Не отражаем произвольный content-type из апстрима: только картинки, иначе октеты.
     ct = (resp.headers.get("content-type") or "").split(";")[0].strip()
     if ct not in ALLOWED_IMAGE_TYPES:

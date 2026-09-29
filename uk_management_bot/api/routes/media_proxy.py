@@ -23,6 +23,7 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.database.models.user import User
 from uk_management_bot.integrations.http_retry import (
+    FILE_RETRY_STATUSES,
     get_with_retries,
     stream_with_retries,
 )
@@ -60,6 +61,33 @@ _MEDIA_META_TIMEOUT = httpx.Timeout(
 _MEDIA_STREAM_TIMEOUT = httpx.Timeout(
     connect=_MEDIA_CONNECT_TIMEOUT_SECONDS, read=25.0, write=5.0, pool=5.0
 )
+# Потолок `limit` у GET /media/request/{n} в media-service.
+_MEDIA_LIST_LIMIT = 200
+
+
+def media_upstream_error(status: int, what: str, ident: object) -> HTTPException:
+    """Ответ media-service (не 2xx) → ответ браузеру.
+
+    401/403 media-service — это рассинхрон MEDIA_API_KEY между сервисами, а не
+    «пользователь не авторизован»: проброшенный 401 запускал на фронте refresh
+    сессии на каждый запрос картинки. 5xx — сбой зависимости (502), 503/504 —
+    недоступность (503). Прочие 4xx (404, 413/415/422 валидации загрузки)
+    осмысленны для клиента и проходят как есть. Тело апстрима не пробрасываем
+    (AUD3-34).
+    """
+    if status in (401, 403):
+        _logger.error(
+            "Media service rejected API key (%s) for %s %s — MEDIA_API_KEY out of sync?",
+            status, what, ident,
+        )
+        return HTTPException(status_code=502, detail="Media service error")
+    if status in (503, 504):
+        _logger.warning("Media service unavailable (%s) for %s %s", status, what, ident)
+        return HTTPException(status_code=503, detail="Media service unavailable")
+    if status >= 500:
+        _logger.error("Media service error %s for %s %s", status, what, ident)
+        return HTTPException(status_code=502, detail="Media service error")
+    return HTTPException(status_code=status, detail="Media service error")
 
 
 class FileCategories(str, Enum):
@@ -210,8 +238,7 @@ async def _forward_upload(media_url: str, *, files: dict, data: dict) -> object:
     if resp.status_code != 200 and resp.status_code != 201:
         # AUD3-34: статус — да, тело downstream — нет. В ответе media-service
         # может оказаться что угодно, включая эхо загруженного контента.
-        _logger.error("Media service upload error %s for %s", resp.status_code, request_number)
-        raise HTTPException(status_code=resp.status_code, detail="Media service error")
+        raise media_upstream_error(resp.status_code, "upload", request_number)
     try:
         return resp.json()
     except ValueError:
@@ -310,20 +337,22 @@ async def proxy_media_list(
         headers["X-API-Key"] = settings.MEDIA_SERVICE_API_KEY
 
     # ARCH-03: идемпотентный GET — ретраим транзиентные сбои media-service.
-    # Явная деградация: при исчерпании попыток (transport error) возвращаем
-    # пустой список, а не 500 — список вложений не критичен для рендера.
-    async with httpx.AsyncClient(timeout=10) as client:
+    # Сбой — ошибка, а не пустой список: `[]` выглядел как «фото нет», и
+    # недоступность media-service никто не замечал (ревью 2026-09-28).
+    # limit — потолок media-service: дефолтные 50 молча обрезали длинные списки.
+    async with httpx.AsyncClient(timeout=_MEDIA_META_TIMEOUT) as client:
         try:
             resp = await get_with_retries(
                 client,
                 f"{media_url}/api/v1/media/request/{request_number}",
                 headers=headers,
+                params={"limit": _MEDIA_LIST_LIMIT},
             )
         except httpx.TransportError as exc:
             _logger.warning("Media service unreachable for list %s: %s", request_number, exc)
-            return []
+            raise HTTPException(status_code=503, detail="Media service unavailable")
         if resp.status_code != 200:
-            return []
+            raise media_upstream_error(resp.status_code, "list", request_number)
         return resp.json()
 
 
@@ -370,7 +399,7 @@ async def proxy_media_file(
             _logger.warning("Media service unreachable for meta %s: %s", media_id, exc)
             raise HTTPException(status_code=503, detail="Media service unavailable")
         if meta_resp.status_code != 200:
-            raise HTTPException(status_code=meta_resp.status_code, detail="Media not found")
+            raise media_upstream_error(meta_resp.status_code, "meta", media_id)
         request_number = meta_resp.json().get("request_number")
         if not request_number:
             raise HTTPException(status_code=404, detail="Media has no associated request")
@@ -398,6 +427,7 @@ async def proxy_media_file(
             client,
             f"{media_url}/api/v1/media/{media_id}/file",
             headers=headers,
+            retry_statuses=FILE_RETRY_STATUSES,
         )
     except httpx.TransportError as exc:
         await client.aclose()
@@ -407,8 +437,7 @@ async def proxy_media_file(
     if upstream.status_code != 200:
         status = upstream.status_code
         await _close()
-        _logger.error("Media service file error %s for media %s", status, media_id)
-        raise HTTPException(status_code=status, detail="Media service error")
+        raise media_upstream_error(status, "file", media_id)
 
     async def body():
         sent = 0

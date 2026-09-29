@@ -894,7 +894,7 @@ function RequestMedia({ requestNumber }: { requestNumber: string }) {
   // мутации заявки; backend-гейт — check_request_access).
   const canUpload = useHasAnyRole(['manager', 'system_admin'])
 
-  const { data: items = [] } = useQuery<MediaItem[]>({
+  const { data: items = [], isError } = useQuery<MediaItem[]>({
     queryKey: ['request-media', requestNumber],
     queryFn: () => apiClient.get(`/api/v2/media/request/${requestNumber}`).then(r => r.data),
     enabled: !!requestNumber,
@@ -907,10 +907,12 @@ function RequestMedia({ requestNumber }: { requestNumber: string }) {
   const requestItems = items.filter((m) => !COMPLETION_CATEGORIES.has(m.category ?? ''))
   const completionItems = items.filter((m) => COMPLETION_CATEGORIES.has(m.category ?? ''))
 
-  if (items.length === 0 && !canUpload) return null
+  // Сбой media-service — не «фото нет»: прокси отвечает ошибкой, а не [].
+  if (items.length === 0 && !canUpload && !isError) return null
 
   return (
     <div className="flex flex-col gap-3">
+      {isError && <div className="text-[12px] text-red">{t('kanban.mediaListError')}</div>}
       {(requestItems.length > 0 || canUpload) && (
         <div>
           <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">

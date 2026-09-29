@@ -1324,7 +1324,8 @@
     "categoryRedispatchedExecutor": "Заявка передана дежурному: {{name}}",
     "categoryRedispatchedGroup": "Заявка адресована группе «{{spec}}» — дежурного сейчас нет",
     "categorySpecMismatch": "Специализация текущего исполнителя не соответствует новой категории",
-    "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя"
+    "categoryLeftUnassigned": "Заявка осталась «Новая» без группы — назначьте исполнителя",
+    "mediaListError": "Не удалось загрузить фото — попробуйте позже"
   },
   "callcenter": {
     "elevator": {
@@ -2306,7 +2307,8 @@
       "dialog": "Диалог",
       "dialogPlaceholder": "Написать сообщение...",
       "dialogEmpty": "Пока нет сообщений",
-      "mediaLoadError": "Не удалось загрузить"
+      "mediaLoadError": "Не удалось загрузить",
+      "mediaListError": "Не удалось загрузить фото — попробуйте позже"
     },
     "exec": {
       "tabs": {
