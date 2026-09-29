@@ -32,24 +32,32 @@ install_root_filter()
 logger = logging.getLogger(__name__)
 
 
-def _check_publication_lock_column() -> None:
-    """Fail-fast preflight: media_files.publication_locked должна существовать.
+# Колонки, которые create_all на существующих БД не добавит — их приносят
+# migrations/*.sql (шаг media-migrate до старта сервиса).
+_MIGRATED_COLUMNS = {
+    "publication_locked": "0001_publication_lock.sql",
+    "uploaded_by_telegram_id": "0002_uploaded_by_telegram_id.sql",
+}
 
-    На свежих БД её создаёт create_tables() (через обновлённую модель) — там
-    проверка проходит тривиально. На существующих БД (profk.uz, infrasafe.uz),
-    предшествующих этой колонке, create_all её не добавит (создаёт только
-    отсутствующие таблицы) — нужен разовый прогон
-    media_service/migrations/0001_publication_lock.sql. Импорт engine — внутри
-    функции, чтобы не тревожить порядок импортов модуля на верхнем уровне.
+
+def _check_migrated_columns() -> None:
+    """Fail-fast preflight: колонки из migrations/*.sql должны существовать.
+
+    На свежих БД их создаёт create_tables() (через модель) — там проверка
+    проходит тривиально. На существующих БД (profk.uz, infrasafe.uz) create_all
+    их не добавит (создаёт только отсутствующие таблицы) — нужен шаг
+    media-migrate. Импорт engine — внутри функции, чтобы не тревожить порядок
+    импортов модуля на верхнем уровне.
     """
     from sqlalchemy import inspect
     from app.db.database import engine
 
     columns = {c["name"] for c in inspect(engine).get_columns("media_files")}
-    if "publication_locked" not in columns:
+    missing = [f"{col} ({mig})" for col, mig in _MIGRATED_COLUMNS.items() if col not in columns]
+    if missing:
         raise RuntimeError(
-            "media_files.publication_locked column is missing — run "
-            "media_service/migrations/0001_publication_lock.sql before starting this service."
+            "media_files is missing migrated column(s): " + ", ".join(missing)
+            + " — run media_service/migrations (media-migrate) before starting this service."
         )
 
 
@@ -68,7 +76,7 @@ async def lifespan(app: FastAPI):
 
         # Preflight: колонка publication_locked должна существовать
         # (на pre-existing БД её добавляет только миграция 0001, не create_all)
-        _check_publication_lock_column()
+        _check_migrated_columns()
 
         # Проверка подключения к БД
         if not check_db_connection():

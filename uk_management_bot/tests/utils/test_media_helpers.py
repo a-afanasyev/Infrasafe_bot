@@ -276,6 +276,8 @@ class TestUploadDocumentToMediaService:
         await _upload_doc(client, _make_doc_bot(), user_telegram_id=6055402868, uploaded_by_user_id=53)
         assert captured.get("uploaded_by") == 53
         assert captured.get("request_number") == "USER_6055402868"
+        # Решение владельца 2026-09-29: и users.id, и Telegram ID.
+        assert captured.get("uploaded_by_telegram_id") == 6055402868
 
     @pytest.mark.asyncio
     async def test_content_type_is_sniffed_from_bytes(self):

@@ -136,6 +136,7 @@ class MediaFileResponse(BaseModel):
     # идентификатор хранится в тегах (ref:...). Для заявок поле как и раньше.
     request_number: Optional[str] = None
     uploaded_by_user_id: int
+    uploaded_by_telegram_id: Optional[int] = None
     category: MediaCategoryEnum
     tags: List[str] = []
     upload_source: Optional[str] = None

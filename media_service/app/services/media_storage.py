@@ -188,7 +188,8 @@ class MediaStorageService:
         category: str = FileCategories.REQUEST_PHOTO,
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        uploaded_by: int = None
+        uploaded_by: int = None,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> MediaFile:
         """
         Загружает медиа-файл для заявки в соответствующий канал
@@ -218,6 +219,7 @@ class MediaStorageService:
             media_file = await run_sync(
                 self._persist_upload_sync, message, request_number, category,
                 description, tags, uploaded_by, filename, content_type, len(file_data),
+                uploaded_by_telegram_id=uploaded_by_telegram_id,
             )
 
             logger.info(f"Media uploaded successfully: {media_file.id}")
@@ -236,7 +238,8 @@ class MediaStorageService:
         report_type: str = FileCategories.COMPLETION_PHOTO,
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        uploaded_by: int = None
+        uploaded_by: int = None,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> MediaFile:
         """
         Загружает медиа-файлы для отчетов о выполнении
@@ -256,7 +259,8 @@ class MediaStorageService:
             category=report_type,
             description=description,
             tags=all_tags,
-            uploaded_by=uploaded_by
+            uploaded_by=uploaded_by,
+            uploaded_by_telegram_id=uploaded_by_telegram_id,
         )
 
         logger.info(f"Report media uploaded successfully: {media_file.id}")
@@ -879,6 +883,8 @@ class MediaStorageService:
         filename: str,
         content_type: str,
         file_size: int,
+        *,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> MediaFile:
         """Метаданные + статистика тегов одной короткой транзакцией; наружу —
         отсоединённый объект (сессия закрыта при выходе).
@@ -893,6 +899,7 @@ class MediaStorageService:
             return self._persist_upload_once(
                 message, request_number, category, description, tags,
                 uploaded_by, filename, content_type, file_size,
+                uploaded_by_telegram_id=uploaded_by_telegram_id,
             )
         except IntegrityError:
             telegram_file_id = _message_file(message)[1]
@@ -919,11 +926,14 @@ class MediaStorageService:
         filename: str,
         content_type: str,
         file_size: int,
+        *,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> MediaFile:
         with get_db_context() as db:
             media_file = self._save_media_metadata(
                 db, message, request_number, category, description,
-                tags, uploaded_by, filename, content_type, file_size
+                tags, uploaded_by, filename, content_type, file_size,
+                uploaded_by_telegram_id=uploaded_by_telegram_id,
             )
             if tags:
                 self._update_tags_usage(db, tags)
@@ -944,7 +954,9 @@ class MediaStorageService:
         uploaded_by: Optional[int],
         filename: str,
         content_type: str,
-        file_size: int
+        file_size: int,
+        *,
+        uploaded_by_telegram_id: Optional[int] = None,
     ) -> MediaFile:
         """
         Сохраняет метаданные медиа-файла в БД
@@ -968,6 +980,15 @@ class MediaStorageService:
                 telegram_file_id, request_number, existing.id,
                 existing.request_number, existing.status,
             )
+            # Повторная загрузка того же документа тем же пользователем
+            # дописывает Telegram ID, если строка создана без него. Чужую
+            # заявку не трогаем — связь «файл ↔ другой владелец» не перешиваем.
+            if (
+                uploaded_by_telegram_id
+                and existing.uploaded_by_telegram_id is None
+                and existing.request_number == request_number
+            ):
+                existing.uploaded_by_telegram_id = uploaded_by_telegram_id
             return existing
 
         media_file = MediaFile(
@@ -982,6 +1003,7 @@ class MediaStorageService:
             caption=message.caption,
             request_number=request_number,
             uploaded_by_user_id=uploaded_by or 0,
+            uploaded_by_telegram_id=uploaded_by_telegram_id,
             category=category,
             tags=tags or [],
             upload_source="api"

@@ -35,6 +35,8 @@ curl -s -H "X-API-Key: $KEY" "$M/request/260926-001?limit=200" | jq '.[] | {id, 
 curl -s -H "X-API-Key: $KEY" "$M/request/260926-001/timeline" | jq
 # сам файл
 curl -s -H "X-API-Key: $KEY" "$M/123/file" -o 123.jpg
+# документы пользователя по его Telegram ID
+curl -s -G -H "X-API-Key: $KEY" "$M/search" --data-urlencode "uploaded_by_telegram_id=6055402868" --data-urlencode "categories=archive" | jq
 # поиск: текст (регистр не важен, кириллица тоже), теги, даты, категории
 curl -s -G -H "X-API-Key: $KEY" "$M/search" --data-urlencode "query=кран" \
      --data-urlencode "categories=completion_photo" --data-urlencode "date_from=2026-09-01T00:00:00" | jq
@@ -48,7 +50,7 @@ curl -s -H "X-API-Key: $KEY" "$M/tags/popular" | jq
 
 Параметры `/search`: `query`, `request_numbers`, `tags`, `file_types`,
 `categories` (списки через запятую), `date_from`/`date_to` (ISO),
-`telegram_file_id`, `uploaded_by` (внутренний `users.id`), `status`
+`telegram_file_id`, `uploaded_by` (внутренний `users.id`), `uploaded_by_telegram_id`, `status`
 (по умолчанию `active`), `limit` ≤ 200, `offset`.
 
 ## Эндпоинты и потребители
@@ -74,6 +76,9 @@ curl -s -H "X-API-Key: $KEY" "$M/tags/popular" | jq
 - Ответ загрузки вложенный: `media_file.id`, а не `id`.
 - `uploaded_by` — внутренний `users.id` (колонка INT4), не Telegram ID;
   `request_number` ≤ 20 символов. Нарушение — 422 до отправки в Telegram.
+- `uploaded_by_telegram_id` — Telegram ID загрузившего (BIGINT, необязательно).
+  Бот передаёт его для документов пользователей; у старых документов заполнен
+  миграцией `0002` из `request_number` вида `USER_<tg>`.
 - Тип файла сервис выводит из байтов; заявленный `Content-Type` роли не играет.
 - `telegram_file_id` выдан медиа-ботом — основной бот отправляет такие файлы
   байтами (`services/request_media_entries.send_media_entries`).

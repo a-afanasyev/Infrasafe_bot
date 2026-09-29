@@ -80,6 +80,7 @@ class MediaSearchService:
         categories: Optional[List[str]] = None,
         telegram_file_id: Optional[str] = None,
         uploaded_by: Optional[int] = None,
+        uploaded_by_telegram_id: Optional[int] = None,
         status: str = "active",
         limit: int = 100,
         offset: int = 0
@@ -140,6 +141,9 @@ class MediaSearchService:
             if uploaded_by:
                 query_obj = query_obj.filter(MediaFile.uploaded_by_user_id == uploaded_by)
 
+            if uploaded_by_telegram_id:
+                query_obj = query_obj.filter(MediaFile.uploaded_by_telegram_id == uploaded_by_telegram_id)
+
             # Подсчет общего количества
             total_count = query_obj.count()
 
@@ -162,6 +166,7 @@ class MediaSearchService:
                     "caption": media_file.caption,
                     "request_number": media_file.request_number,
                     "uploaded_by_user_id": media_file.uploaded_by_user_id,
+                    "uploaded_by_telegram_id": media_file.uploaded_by_telegram_id,
                     "category": media_file.category,
                     "tags": media_file.tags,
                     "upload_source": media_file.upload_source,
