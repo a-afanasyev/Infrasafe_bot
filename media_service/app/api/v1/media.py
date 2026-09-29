@@ -28,6 +28,7 @@ from app.services.media_storage import (
 )
 from app.services.telegram_client import get_telegram_client
 from aiogram.exceptions import TelegramAPIError
+from app.core.log_sanitize import TelegramFileNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -140,11 +141,15 @@ async def upload_media(
         if file.size and file.size > settings.max_file_size:
             raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
 
-        if file.content_type not in settings.allowed_file_types:
-            raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+        # Тип — только из байтов (_derive_content_type): ранний отсев по
+        # заявленному Content-Type отвергал JPEG без типа или с
+        # application/octet-stream ещё до сниффера (ревью 2026-09-28).
 
         # Читаем содержимое файла
         file_data = await file.read()
+        # file.size — заявленный; настоящий размер известен только после чтения.
+        if len(file_data) > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
         effective_content_type = _derive_content_type(file_data, file.content_type)
 
         # Обработка тегов
@@ -201,8 +206,9 @@ async def upload_report_media(
         if file.size and file.size > settings.max_file_size:
             raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
 
-        if file.content_type not in settings.allowed_file_types:
-            raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+        # Тип — только из байтов (_derive_content_type): ранний отсев по
+        # заявленному Content-Type отвергал JPEG без типа или с
+        # application/octet-stream ещё до сниффера (ревью 2026-09-28).
 
         file_data = await file.read()
         if len(file_data) > settings.max_file_size:
@@ -273,10 +279,13 @@ async def upload_access_media(
         if file.size and file.size > settings.max_file_size:
             raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
 
-        if file.content_type not in settings.allowed_file_types:
-            raise HTTPException(status_code=400, detail=f"Тип файла {file.content_type} не разрешен")
+        # Тип — только из байтов (_derive_content_type): ранний отсев по
+        # заявленному Content-Type отвергал JPEG без типа или с
+        # application/octet-stream ещё до сниффера (ревью 2026-09-28).
 
         file_data = await file.read()
+        if len(file_data) > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
         effective_content_type = _derive_content_type(file_data, file.content_type, images_only=True)
 
         media_file = await storage_service.upload_domain_media(
@@ -767,7 +776,7 @@ async def stream_telegram_file(
 
     except HTTPException:
         raise
-    except TelegramAPIError:
+    except (TelegramAPIError, TelegramFileNotFoundError):
         raise HTTPException(status_code=404, detail="Файл в Telegram не найден или недоступен")
     except Exception as e:
         logger.error(f"Failed to stream telegram file {telegram_file_id}: {e}")

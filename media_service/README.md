@@ -1,339 +1,46 @@
 # UK Media Service
 
-> _Последнее редактирование: 2026-07-02_
+FastAPI-сервис хранения фото/видео: байты — в приватных Telegram-каналах
+(свой бот), метаданные — в БД `uk_media`. Эндпоинты, потребители, ручной
+поиск фото через VPN и контракт с клиентами — `docs/tech/MEDIA_SERVICE.md`.
+Деплой и секреты (Doppler, роль `uk_media_owner`) — `.claude/skills/uk-deploy/SKILL.md`.
 
-Микросервис для управления медиа-файлами через Telegram каналы для UK Management Bot.
-
-## Описание
-
-Media Service предоставляет централизованное хранение и управление медиа-файлами (фото, видео, документы) с использованием приватных Telegram каналов как бесплатного хранилища. Микросервис интегрируется с основным UK Management Bot через REST API.
-
-## Основные возможности
-
-- ✅ Загрузка медиа-файлов в приватные Telegram каналы
-- ✅ Универсальный поиск с множественными фильтрами
-- ✅ Система тегов для организации контента
-- ✅ Статистика и аналитика использования
-- ✅ Временные линии для заявок
-- ✅ Поиск похожих файлов по тегам
-- ✅ Архивация и управление жизненным циклом
-- ✅ REST API с OpenAPI документацией
-- ✅ Интеграционный клиент для Telegram бота
-
-## Архитектура
-
-```
-media_service/
-├── app/                    # Основное приложение
-│   ├── api/v1/            # REST API endpoints
-│   ├── core/              # Конфигурация и настройки
-│   ├── db/                # База данных и миграции
-│   ├── models/            # SQLAlchemy модели
-│   ├── schemas/           # Pydantic схемы
-│   ├── services/          # Бизнес-логика
-│   └── main.py            # FastAPI приложение
-├── client/                # Клиент для интеграции
-├── tests/                 # Тесты
-├── docker-compose.yml     # Production deployment
-├── docker-compose.dev.yml # Development environment
-└── Dockerfile             # Container definition
-```
-
-## Технологический стек
-
-- **FastAPI** - Web framework
-- **SQLAlchemy 2.0** - ORM
-- **PostgreSQL** - База данных
-- **Redis** - Кэширование
-- **Aiogram 3.x** - Telegram Bot API
-- **Pydantic** - Валидация данных
-- **Docker** - Контейнеризация
-
-## Быстрый старт
-
-### 1. Подготовка
-
-```bash
-# Клонирование репозитория
-git clone <repository_url>
-cd media_service
-
-# Копирование конфигурации
-cp .env.example .env
-```
-
-### 2. Настройка переменных окружения
-
-Отредактируйте `.env` файл:
-
-```bash
-# Обязательные параметры
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-CHANNEL_REQUESTS=@your_private_channel_requests
-CHANNEL_REPORTS=@your_private_channel_reports
-CHANNEL_ARCHIVE=@your_private_channel_archive
-CHANNEL_BACKUP=@your_private_channel_backup
-```
-
-### 3. Запуск для разработки
-
-```bash
-# Запуск всех сервисов
-docker-compose -f docker-compose.dev.yml up -d
-
-# Просмотр логов
-docker-compose -f docker-compose.dev.yml logs -f media-api
-
-# Проверка здоровья
-curl http://localhost:8001/api/v1/health
-```
-
-### 4. Доступ к сервисам
-
-- **API**: http://localhost:8001
-- **Документация**: http://localhost:8001/docs
-- **PostgreSQL**: localhost:5434
-- **Redis**: localhost:6380
-- **PgAdmin**: http://localhost:8082 (admin@uk-media.local / admin123)
-- **Redis Commander**: http://localhost:8083
-
-## API Endpoints
-
-### Основные операции
-
-```bash
-# Загрузка медиа для заявки
-POST /api/v1/media/upload
-
-# Загрузка медиа для отчета
-POST /api/v1/media/upload-report
-
-# Поиск медиа-файлов
-GET /api/v1/media/search?query=damage&tags=urgent
-
-# Получение медиа заявки
-GET /api/v1/media/request/{request_number}
-
-# Получение временной линии
-GET /api/v1/media/request/{request_number}/timeline
-
-# Статистика
-GET /api/v1/media/statistics
-
-# Популярные теги
-GET /api/v1/media/tags/popular
-```
-
-### Управление файлами
-
-```bash
-# Получение информации о файле
-GET /api/v1/media/{media_id}
-
-# Получение URL файла
-GET /api/v1/media/{media_id}/url
-
-# Обновление тегов
-PUT /api/v1/media/{media_id}/tags
-
-# Архивация
-POST /api/v1/media/{media_id}/archive
-
-# Удаление
-DELETE /api/v1/media/{media_id}
-```
-
-## Интеграция с основным ботом
-
-> **Примечание.** `media_service/client/` — эталонный/публикуемый клиентский SDK
-> сервиса (вбит в media-образ, `Dockerfile: COPY client/`). In-repo потребители
-> используют **собственные** клиенты, т.к. их образы не содержат `media_service/`:
-> бот — `uk_management_bot/integrations/media_client.py`, access_control —
-> `access_control/integrations/media.py`. Это осознанный выбор границы деплоя;
-> данный SDK — для внешних/будущих потребителей и как справочный контракт API.
-
-### Пример использования клиента
-
-```python
-from media_service.client import MediaServiceClient, BotMediaIntegration
-
-# Инициализация клиента
-media_client = MediaServiceClient(\"http://media-service:8000\")
-
-# Интеграция с ботом
-integration = BotMediaIntegration(media_client, bot)
-
-# Обработка фото заявки
-result = await integration.handle_request_photo(
-    message=message,
-    request_number=\"250920-001\",
-    user_id=user.id,
-    description=\"Повреждение трубы\",
-    tags=[\"plumbing\", \"urgent\"]
-)
-
-# Получение галереи заявки
-gallery = await integration.get_request_media_gallery(\"250920-001\")
-```
-
-### Быстрые функции
-
-```python
-from media_service.client import upload_request_photo, upload_completion_photo
-
-# Загрузка фото заявки
-await upload_request_photo(
-    client=media_client,
-    request_number=\"250920-001\",
-    photo_path=\"/path/to/photo.jpg\",
-    description=\"Фото проблемы\",
-    uploaded_by=user_id
-)
-
-# Загрузка фото завершения
-await upload_completion_photo(
-    client=media_client,
-    request_number=\"250920-001\",
-    photo_path=\"/path/to/completion.jpg\",
-    uploaded_by=user_id
-)
-```
-
-## Конфигурация каналов
-
-Сервис использует 4 приватных Telegram канала:
-
-1. **Requests** - Медиа-файлы заявок
-2. **Reports** - Фото отчетов о выполнении
-3. **Archive** - Архивные файлы
-4. **Backup** - Резервные копии
-
-### Настройка каналов
-
-1. Создайте 4 приватных канала в Telegram
-2. Добавьте бота как администратора с правами:
-   - Отправка сообщений
-   - Редактирование сообщений
-   - Удаление сообщений
-3. Укажите username каналов в `.env`
-
-## Разработка
-
-### Структура проекта
+## Устройство
 
 ```
 app/
-├── api/v1/               # API версии 1
-│   ├── media.py         # Media endpoints
-│   ├── health.py        # Health checks
-│   └── router.py        # Main router
-├── core/
-│   └── config.py        # Configuration
-├── db/
-│   └── database.py      # Database setup
-├── models/
-│   └── media.py         # Database models
-├── schemas/
-│   └── media.py         # Pydantic schemas
-└── services/
-    ├── media_storage.py  # Storage service
-    ├── media_search.py   # Search service
-    └── telegram_client.py # Telegram API
+  main.py              lifespan (preflight схемы, общий Telegram-клиент), X-API-Key middleware
+  api/v1/media.py      загрузка, выдача байтов, поиск, publication-lock, обслуживание
+  api/v1/health.py     /health (без проверок), /health/ready (БД; цель healthcheck)
+  services/
+    media_storage.py   Telegram ↔ БД: загрузка, архив/удаление (саги), каналы
+    telegram_client.py скачивание с общим бюджетом 25 с и ретраями
+    media_search.py    поиск/статистика/timeline (ручной поиск владельца)
+    preview_cache.py   дисковый кэш превью публичной витрины
+  core/config.py       настройки; в проде fail-fast на пустые каналы/ключи/SECRET_KEY
+migrations/            идемпотентные SQL (run_migrations.py, шаг media-migrate)
+schema_baseline/       прод-схема до 0001 — для дрейф-гейта
 ```
 
-### Локальная разработка
+Схему пустой БД строит `create_all` при старте, изменения — `migrations/*.sql`
+(перевод на alembic — бэклог A9-P3-33).
+
+## Тесты
+
+Как в CI (`.github/workflows/ci.yml`, джоба `media-tests`): Telegram мокается,
+основная БД — sqlite, дрейф-гейт и поиск — на настоящем PostgreSQL.
 
 ```bash
-# Установка зависимостей
-pip install -r requirements.txt
-
-# Запуск базы данных
-docker-compose -f docker-compose.dev.yml up -d media-db media-redis
-
-# Запуск приложения
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Тестирование
-pytest tests/ -v
+cd media_service
+pip install --require-hashes -r requirements-dev.txt
+MEDIA_PG_DRIFT_URL=postgresql+psycopg2://media:<pw>@localhost:5432/uk_media \
+MEDIA_REQUIRE_PG_TESTS=1 pytest -q --cov=app --cov=run_migrations --cov-fail-under=73
 ```
 
-### Работа с моделями
+`test_upload.py` — ручной smoke живого стека, из pytest исключён (`pytest.ini`).
 
-```python
-# Создание новой миграции
-alembic revision --autogenerate -m \"Add new field\"
+## Конфигурация
 
-# Применение миграций
-alembic upgrade head
-
-# Откат миграций
-alembic downgrade -1
-```
-
-## Тестирование
-
-```bash
-# Запуск всех тестов
-docker-compose -f docker-compose.dev.yml exec media-api pytest
-
-# Тесты с покрытием
-docker-compose -f docker-compose.dev.yml exec media-api pytest --cov=app
-
-# Интеграционные тесты
-docker-compose -f docker-compose.dev.yml exec media-api pytest tests/integration/
-
-# Тестирование API
-docker-compose -f docker-compose.dev.yml exec media-api pytest tests/api/
-```
-
-## Производство
-
-### Развертывание
-
-```bash
-# Production build
-docker-compose up -d
-
-# Проверка состояния
-docker-compose ps
-
-# Просмотр логов
-docker-compose logs -f media-api
-
-# Обновление
-docker-compose pull
-docker-compose up -d --force-recreate
-```
-
-### Мониторинг
-
-```bash
-# Health check
-curl http://localhost:8001/api/v1/health/detailed
-
-# Метрики
-curl http://localhost:8001/api/v1/media/statistics
-```
-
-## Безопасность
-
-- Все медиа-файлы хранятся в приватных Telegram каналах
-- Валидация типов и размеров файлов
-- Rate limiting на API endpoints
-- Логирование всех операций
-- Использование непривилегированного пользователя в контейнере
-
-## Ограничения
-
-- Максимальный размер файла: 50MB (Telegram ограничение)
-- Поддерживаемые форматы: JPG, PNG, GIF, MP4, PDF, DOC, DOCX
-- Telegram API rate limits применяются
-- Бесплатное хранилище ограничено политиками Telegram
-
-## Лицензия
-
-Proprietary - UK Management System
-
-## Поддержка
-
-Для вопросов и поддержки обращайтесь к команде разработки UK Management Bot.
+Секреты (`TELEGRAM_BOT_TOKEN`, `SECRET_KEY`, `MEDIA_API_KEYS`, `DATABASE_URL`)
+на хостах приходят из Doppler с префиксом `MEDIA_`; несекретное (каналы,
+`ALLOWED_ORIGINS`) — `media_service/.env` (см. `.env.example`).

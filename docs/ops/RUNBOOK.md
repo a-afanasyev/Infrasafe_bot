@@ -252,7 +252,8 @@ docker exec uk-redis sh -c 'redis-cli -a "$REDIS_PASSWORD" ping'   # если Re
 # Health-эндпоинты (изнутри контейнеров)
 docker exec uk-management-api curl -sf http://localhost:8080/health
 docker exec uk-access-api    curl -sf http://localhost:8080/health
-docker exec uk-media-service curl -sf http://localhost:8000/api/v1/health
+# в образе media нет curl — проверка тем же python, что и healthcheck (БД включительно)
+docker exec uk-media-service python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=5).read())"
 ```
 
 Диагностика по симптомам:

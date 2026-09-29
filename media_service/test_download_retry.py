@@ -259,3 +259,22 @@ async def test_semaphore_wait_counts_toward_budget(client, monkeypatch):
 
     assert calls == []
     sem.release()
+
+
+async def test_bad_file_id_is_permanent_not_retried(client, monkeypatch):
+    """Ревью 2026-09-28: `get_file` с неверным/чужим file_id отвечает 400 Bad
+    Request — повтор не поможет. Раньше он ретраился как транзиентный (три
+    обращения к Bot API) и превращался в 500 на /telegram/{id}/file."""
+    from aiogram.exceptions import TelegramBadRequest
+    from app.core.log_sanitize import TelegramFileNotFoundError
+
+    calls = {"n": 0}
+
+    async def bad_get_file(file_id):
+        calls["n"] += 1
+        raise TelegramBadRequest(method=SimpleNamespace(), message="Bad Request: invalid file_id")
+
+    monkeypatch.setattr(client, "get_file", bad_get_file)
+    with pytest.raises(TelegramFileNotFoundError):
+        await client.download_file("NOT-A-FILE")
+    assert calls["n"] == 1

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 
-from app.db.database import check_db_connection
+from app.db.database import check_db_connection, run_sync
 from app.schemas import HealthResponse
 from app.core.config import settings
 from app.services.telegram_client import get_telegram_client
@@ -133,11 +133,12 @@ async def telegram_health():
 @router.get("/ready")
 async def readiness_check():
     """
-    Проверка готовности сервиса (для Kubernetes)
+    Готовность: БД отвечает. Цель docker healthcheck (без API-ключа): прежний
+    `/api/v1/health` отвечал ok при лежащей БД — контейнер числился healthy.
     """
     try:
-        # Проверяем все критически важные компоненты
-        db_ok = check_db_connection()
+        # sync-проверка — в рабочем потоке, не в event loop (AUD7-ARCH-01).
+        db_ok = await run_sync(check_db_connection)
 
         if not db_ok:
             raise HTTPException(status_code=503, detail="Service not ready - database unavailable")

@@ -143,3 +143,67 @@ def test_telegram_file_stream_unknown_file_id_still_served(client_and_telegram):
     resp = client.get("/api/v1/media/telegram/NOT-IN-DB/file", headers=KEY)
     assert resp.status_code == 200
     assert telegram.download_file_calls == ["NOT-IN-DB"]
+
+
+def test_telegram_file_stream_bad_file_id_is_404(client_and_telegram):
+    """Неверный file_id (Telegram: Bad Request) — 404, а не 500."""
+    from app.core.log_sanitize import TelegramFileNotFoundError
+
+    client, telegram = client_and_telegram
+
+    async def not_found(file_id):
+        raise TelegramFileNotFoundError(f"download_file {file_id}: Bad Request")
+
+    telegram.download_file = not_found
+    resp = client.get("/api/v1/media/telegram/NOT-A-FILE/file", headers=KEY)
+    assert resp.status_code == 404
+
+
+# ---------- тип файла — только по байтам ----------
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+
+
+@pytest.mark.parametrize("claimed", ["application/octet-stream", "", "image/png"])
+def test_type_comes_from_bytes_not_claimed_header(client_and_telegram, claimed):
+    """JPEG с «неправильным» или пустым Content-Type — принимается как JPEG."""
+    client, _ = client_and_telegram
+    file = ("p.jpg", JPEG, claimed) if claimed else ("p.jpg", JPEG)
+    resp = client.post("/api/v1/media/upload", headers=KEY, files={"file": file},
+                       data={"request_number": "260928-003"})
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["media_file"]["mime_type"] == "image/jpeg"
+
+
+def test_html_claimed_as_image_is_rejected(client_and_telegram):
+    client, telegram = client_and_telegram
+    resp = client.post("/api/v1/media/upload", headers=KEY,
+                       files={"file": ("x.jpg", b"<html>hi</html>", "image/jpeg")},
+                       data={"request_number": "260928-003"})
+    assert resp.status_code == 415
+    assert telegram.send_photo_calls == []
+
+
+def test_unknown_bytes_with_generic_type_is_rejected(client_and_telegram):
+    client, telegram = client_and_telegram
+    resp = client.post("/api/v1/media/upload", headers=KEY,
+                       files={"file": ("x.bin", b"garbage-bytes", "application/octet-stream")},
+                       data={"request_number": "260928-003"})
+    assert resp.status_code == 400
+    assert telegram.send_photo_calls == []
+
+
+@pytest.mark.parametrize("path,data", [
+    ("/api/v1/media/upload", {"request_number": "260928-004"}),
+    ("/api/v1/media/upload-access", {"kind": "plate", "ref": "G1|1"}),
+])
+def test_real_size_checked_after_read(client_and_telegram, monkeypatch, path, data):
+    """Заявленный file.size может отсутствовать — лимит проверяется и по байтам."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "max_file_size", 16)
+    monkeypatch.setattr(settings, "channel_access", "@uk_media_access_private")
+    client, telegram = client_and_telegram
+    resp = client.post(path, headers=KEY, files={"file": ("p.jpg", JPEG, "image/jpeg")}, data=data)
+    assert resp.status_code == 400, resp.text
+    assert telegram.send_photo_calls == []

@@ -193,8 +193,10 @@ class MediaTimelineItem(BaseModel):
     category: MediaCategoryEnum
     description: Optional[str] = None
     tags: List[str] = []
-    file_size: int
-    filename: str
+    # Колонки nullable: одна старая строка без размера/имени роняла весь
+    # timeline в 500 (ревью 2026-09-28).
+    file_size: Optional[int] = None
+    filename: Optional[str] = None
 
     # То же, что в MediaFileResponse: NULL в столбце tags законен, и один такой
     # элемент не должен ронять весь timeline.

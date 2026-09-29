@@ -187,8 +187,10 @@ flowchart TB
 Фото/видео заявок и проездов хранит отдельный `media-service` (своя БД
 `uk_media`, `docker-compose.media.yml`). Клиенты (бот, API, access-API) ходят в
 него по внутреннему URL `http://media-service:8000` с `X-API-Key`. API отдаёт
-медиа фронтенду через прокси-роут (`api/routes/media_proxy.py`, подписанные
-signed-URL). Медиа-канал вынесен из «горячего» пути решений access-домена.
+медиа фронтенду через прокси-роут (`api/routes/media_proxy.py`): проверяет
+доступ к заявке и стримит байты, ключ media-service браузеру не уходит.
+Медиа-канал вынесен из «горячего» пути решений access-домена. Эндпоинты,
+потребители и ручной поиск фото — `docs/tech/MEDIA_SERVICE.md`.
 
 **Preview-cache** (`media_service/app/services/preview_cache.py`): media-service
 скачивает оригиналы из Telegram по требованию, и публичная витрина «до/после»

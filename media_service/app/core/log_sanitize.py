@@ -44,6 +44,11 @@ class TelegramDownloadError(Exception):
     """
 
 
+class TelegramFileNotFoundError(TelegramDownloadError):
+    """Файл не существует или недоступен этому боту (Bad Request / 4xx) —
+    постоянная ошибка: повтор её не лечит, наружу это 404, а не 5xx."""
+
+
 class TokenSanitizingFilter(logging.Filter):
     """Второй рубеж на root-логгере: маскирует токен в message И в traceback.
 

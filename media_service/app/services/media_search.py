@@ -4,9 +4,10 @@
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from sqlalchemy import or_, func
+from sqlalchemy import String, cast, collate, or_, func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.media import MediaFile, MediaTag
 from app.db.database import get_db_context, sync_unit
@@ -17,6 +18,33 @@ logger = logging.getLogger(__name__)
 def _escape_like(value: str) -> str:
     """Escape special LIKE/ILIKE characters to prevent wildcard injection."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# `und` — language-agnostic корень CLDR (как uk_management_bot/utils/sql_search):
+# юникодное сворачивание регистра не зависит от LC_COLLATE базы. В локали C
+# ILIKE не сворачивает кириллицу — «течёт» не находил «Течёт».
+ICU_COLLATION = "und-x-icu"
+
+
+def _is_postgres(db) -> bool:
+    return db.get_bind().dialect.name == "postgresql"
+
+
+def _ci_contains(column, text_value: str, *, is_postgres: bool):
+    """Регистронезависимое «содержит» с экранированными LIKE-символами."""
+    pattern = f"%{_escape_like(text_value)}%"
+    if is_postgres:
+        return func.lower(collate(column, ICU_COLLATION)).like(pattern.lower(), escape="\\")
+    return column.ilike(pattern, escape="\\")
+
+
+def _has_tag(tag: str, *, is_postgres: bool):
+    """Колонка tags — JSON (не JSONB): оператора `@>` у json в PostgreSQL нет,
+    и `.contains([tag])` падал 500 (`json ~~ text`). На PG — каст в JSONB."""
+    if is_postgres:
+        return cast(MediaFile.tags, JSONB).contains([tag])
+    # sqlite (тесты): JSON хранится текстом — ищем элемент массива как строку.
+    return cast(MediaFile.tags, String).like(f'%"{_escape_like(tag)}"%', escape="\\")
 
 
 def _popular_tags(db, limit: int) -> List[Dict[str, Any]]:
@@ -66,15 +94,18 @@ class MediaSearchService:
             query_obj = db.query(MediaFile).filter(MediaFile.status == status)
 
             # Фильтр по текстовому запросу (escape LIKE wildcards)
+            pg = _is_postgres(db)
             if query:
-                escaped = _escape_like(query)
                 query_obj = query_obj.filter(
-                    or_(
-                        MediaFile.description.ilike(f"%{escaped}%"),
-                        MediaFile.caption.ilike(f"%{escaped}%"),
-                        MediaFile.title.ilike(f"%{escaped}%"),
-                        MediaFile.original_filename.ilike(f"%{escaped}%")
-                    )
+                    or_(*(
+                        _ci_contains(column, query, is_postgres=pg)
+                        for column in (
+                            MediaFile.description,
+                            MediaFile.caption,
+                            MediaFile.title,
+                            MediaFile.original_filename,
+                        )
+                    ))
                 )
 
             # Фильтр по номерам заявок
@@ -84,7 +115,7 @@ class MediaSearchService:
             # Фильтр по тегам
             if tags:
                 for tag in tags:
-                    query_obj = query_obj.filter(MediaFile.tags.contains([tag]))
+                    query_obj = query_obj.filter(_has_tag(tag, is_postgres=pg))
 
             # Фильтр по дате
             if date_from:
@@ -197,7 +228,7 @@ class MediaSearchService:
 
             # Статистика загрузок по дням (последние 30 дней)
             from datetime import timedelta
-            date_30_days_ago = datetime.now() - timedelta(days=30)
+            date_30_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
             daily_uploads = db.query(
                 func.date(MediaFile.uploaded_at).label('date'),
