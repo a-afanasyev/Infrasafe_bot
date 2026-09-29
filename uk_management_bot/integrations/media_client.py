@@ -13,6 +13,24 @@ from uk_management_bot.integrations.http_retry import get_with_retries
 
 logger = logging.getLogger(__name__)
 
+# media_files.uploaded_by_user_id — INTEGER (INT4) в media-service.
+_UPLOADED_BY_MAX = 2**31 - 1
+
+
+def _checked_uploaded_by(uploaded_by: Any) -> int:
+    """Security: server-derived внутренний users.id, не клиентский ввод и не
+    Telegram ID (тот не влезает в INT4 и ронял INSERT уже ПОСЛЕ отправки файла
+    в канал — ревью 2026-09-28, C2)."""
+    if (
+        not isinstance(uploaded_by, int)
+        or isinstance(uploaded_by, bool)
+        or not 0 < uploaded_by <= _UPLOADED_BY_MAX
+    ):
+        raise ValueError(
+            "uploaded_by must be a positive integer (server-derived user ID) within INT4"
+        )
+    return uploaded_by
+
 
 class MediaServiceClient:
     """
@@ -47,7 +65,8 @@ class MediaServiceClient:
         category: str = "request_photo",
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        uploaded_by: Optional[int] = None
+        uploaded_by: Optional[int] = None,
+        content_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Загрузка медиа-файла для заявки
@@ -59,7 +78,8 @@ class MediaServiceClient:
             category: Категория файла
             description: Описание файла
             tags: Список тегов
-            uploaded_by: ID пользователя, загрузившего файл
+            uploaded_by: внутренний users.id загрузившего (не Telegram ID)
+            content_type: Тип файла, выведенный сервером (сниффер по байтам).
 
         Returns:
             Информация о загруженном файле
@@ -82,6 +102,10 @@ class MediaServiceClient:
                 else:
                     filename = filename or "upload"
                 file_obj = ("file", (filename, file_content))
+            if content_type:
+                # Server-derived (сниффер по байтам); без него httpx угадывает
+                # тип по расширению имени файла.
+                file_obj = ("file", (filename, file_content, content_type))
 
             # Подготовка данных формы
             data = {
@@ -95,11 +119,8 @@ class MediaServiceClient:
             if tags:
                 data["tags"] = ",".join(tags)
 
-            # Security: uploaded_by must be a server-derived user ID, never client input
             if uploaded_by is not None:
-                if not isinstance(uploaded_by, int) or uploaded_by <= 0:
-                    raise ValueError("uploaded_by must be a positive integer (server-derived user ID)")
-                data["uploaded_by"] = str(uploaded_by)
+                data["uploaded_by"] = str(_checked_uploaded_by(uploaded_by))
 
             # Отправка запроса
             response = await self.client.post(
@@ -183,11 +204,8 @@ class MediaServiceClient:
             if tags:
                 data["tags"] = ",".join(tags)
 
-            # Security: uploaded_by must be a server-derived user ID, never client input
             if uploaded_by is not None:
-                if not isinstance(uploaded_by, int) or uploaded_by <= 0:
-                    raise ValueError("uploaded_by must be a positive integer (server-derived user ID)")
-                data["uploaded_by"] = str(uploaded_by)
+                data["uploaded_by"] = str(_checked_uploaded_by(uploaded_by))
 
             post_kwargs: Dict[str, Any] = {"files": [file_obj], "data": data}
             if timeout is not None:

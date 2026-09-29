@@ -146,6 +146,25 @@ def _find_active_channel(db: Session, channel_purpose: str) -> Optional[MediaCha
     ).first()
 
 
+def _message_file(message: Message) -> Tuple[str, str]:
+    """(file_type, telegram_file_id) отправленного сообщения."""
+    if message.photo:
+        return "photo", message.photo[-1].file_id  # самое большое разрешение
+    if message.video:
+        return "video", message.video.file_id
+    if message.document:
+        return "document", message.document.file_id
+    raise ValueError("Unknown file type")
+
+
+def _find_by_telegram_file_id(db: Session, telegram_file_id: str) -> Optional[MediaFile]:
+    return (
+        db.query(MediaFile)
+        .filter(MediaFile.telegram_file_id == telegram_file_id)
+        .first()
+    )
+
+
 class MediaStorageService:
     """Основной сервис для работы с медиа-хранилищем в Telegram каналах
 
@@ -862,7 +881,45 @@ class MediaStorageService:
         file_size: int,
     ) -> MediaFile:
         """Метаданные + статистика тегов одной короткой транзакцией; наружу —
-        отсоединённый объект (сессия закрыта при выходе)."""
+        отсоединённый объект (сессия закрыта при выходе).
+
+        MEDIA-02 ищет строку с тем же `telegram_file_id` ДО вставки, но две
+        параллельные загрузки одних и тех же байтов обе видят «строки нет»:
+        проигравший INSERT получает IntegrityError (UNIQUE telegram_file_id).
+        Как в A9-P3-23 — проигравший перечитывает строку победителя новой
+        сессией, а не отвечает 500 (ревью 2026-09-28).
+        """
+        try:
+            return self._persist_upload_once(
+                message, request_number, category, description, tags,
+                uploaded_by, filename, content_type, file_size,
+            )
+        except IntegrityError:
+            telegram_file_id = _message_file(message)[1]
+            with get_db_context() as db:
+                existing = _find_by_telegram_file_id(db, telegram_file_id)
+                if existing is None:
+                    # Конфликт не по telegram_file_id — не гонка, а настоящая ошибка.
+                    raise
+                logger.info(
+                    "Concurrent upload of telegram_file_id=%s: reusing media_file id=%s",
+                    telegram_file_id, existing.id,
+                )
+                db.expunge(existing)
+                return existing
+
+    def _persist_upload_once(
+        self,
+        message: Message,
+        request_number: Optional[str],
+        category: str,
+        description: Optional[str],
+        tags: Optional[List[str]],
+        uploaded_by: Optional[int],
+        filename: str,
+        content_type: str,
+        file_size: int,
+    ) -> MediaFile:
         with get_db_context() as db:
             media_file = self._save_media_metadata(
                 db, message, request_number, category, description,
@@ -892,18 +949,7 @@ class MediaStorageService:
         """
         Сохраняет метаданные медиа-файла в БД
         """
-        # Определяем тип файла
-        if message.photo:
-            file_type = "photo"
-            telegram_file_id = message.photo[-1].file_id  # Берем самое большое разрешение
-        elif message.video:
-            file_type = "video"
-            telegram_file_id = message.video.file_id
-        elif message.document:
-            file_type = "document"
-            telegram_file_id = message.document.file_id
-        else:
-            raise ValueError("Unknown file type")
+        file_type, telegram_file_id = _message_file(message)
 
         # MEDIA-02: Telegram returns the same telegram_file_id for the same
         # file content across uploads. The DB has UNIQUE(telegram_file_id);
@@ -911,15 +957,16 @@ class MediaStorageService:
         # first and reuse it (idempotent) — the freshly-posted Telegram
         # message in this case is a harmless duplicate post, but we don't
         # explode for the caller. Same payload, same row.
-        existing = (
-            db.query(MediaFile)
-            .filter(MediaFile.telegram_file_id == telegram_file_id)
-            .first()
-        )
+        existing = _find_by_telegram_file_id(db, telegram_file_id)
         if existing is not None:
+            # C8: строка может принадлежать другой заявке или быть не active —
+            # её возвращаем как есть (UNIQUE не даёт завести вторую), но в логе
+            # это должно быть видно.
             logger.warning(
-                f"Duplicate telegram_file_id={telegram_file_id} for request "
-                f"{request_number}; reusing existing media_file id={existing.id}"
+                "Duplicate telegram_file_id=%s for request %s; reusing existing "
+                "media_file id=%s (request=%s, status=%s)",
+                telegram_file_id, request_number, existing.id,
+                existing.request_number, existing.status,
             )
             return existing
 

@@ -11,7 +11,9 @@ Tests verify:
 - upload_telegram_file_to_media_service: returns result dict on successful upload
 - upload_multiple_telegram_files: aggregates results, skips failures
 - upload_report_file_to_media_service: returns None when media client is absent
-- upload_document_to_media_service: builds USER_{id} request_number correctly
+- upload_document_to_media_service: builds USER_{id} request_number correctly;
+  uploaded_by = internal user.id (INT4 in media-service), not telegram id;
+  content_type sniffed from bytes; unsupported formats are not sent
 - delete_user_documents_from_media_service: returns True when media client absent
 - delete_user_documents_from_media_service: deletes each file and returns True
 """
@@ -207,59 +209,89 @@ class TestUploadReportFileToMediaService:
 # upload_document_to_media_service
 # ---------------------------------------------------------------------------
 
+JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 16
+PDF_BYTES = b"%PDF-1.7\n" + b"\x00" * 16
+
+
+def _make_doc_bot(data: bytes = JPEG_BYTES, file_path: str = "documents/file.jpg") -> MagicMock:
+    bot = _make_bot(file_path)
+
+    async def download(_path, destination):
+        destination.write(data)
+
+    bot.download_file = AsyncMock(side_effect=download)
+    return bot
+
+
+def _capturing_client() -> tuple[MagicMock, dict]:
+    client = MagicMock()
+    captured: dict = {}
+
+    async def capture(**kwargs):
+        captured.update(kwargs)
+        return {"media_file": {"id": 1}}
+
+    client.upload_request_media = capture
+    return client, captured
+
+
+async def _upload_doc(client, bot, *, user_telegram_id=12345, uploaded_by_user_id=7):
+    with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
+        from uk_management_bot.utils.media_helpers import upload_document_to_media_service
+        return await upload_document_to_media_service(
+            bot=bot,
+            file_id="doc",
+            user_telegram_id=user_telegram_id,
+            uploaded_by_user_id=uploaded_by_user_id,
+        )
+
+
 class TestUploadDocumentToMediaService:
     @pytest.mark.asyncio
     async def test_returns_none_when_no_media_client(self):
-        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=None):
-            from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-            result = await upload_document_to_media_service(
-                bot=MagicMock(),
-                file_id="doc1",
-                user_telegram_id=999,
-            )
+        result = await _upload_doc(None, MagicMock())
         assert result is None
 
     @pytest.mark.asyncio
     async def test_uses_user_request_number(self):
-        """The request_number passed to the client must be USER_{user_id}."""
-        client = MagicMock()
-        captured = {}
-
-        async def capture(**kwargs):
-            captured.update(kwargs)
-            return {"media_file": {"id": "docX"}}
-
-        client.upload_request_media = capture
-        bot = _make_bot()
-        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-            await upload_document_to_media_service(
-                bot=bot,
-                file_id="doc2",
-                user_telegram_id=12345,
-            )
+        """The request_number passed to the client must be USER_{telegram_id}:
+        по нему delete_user_documents_from_media_service находит сканы."""
+        client, captured = _capturing_client()
+        await _upload_doc(client, _make_doc_bot(), user_telegram_id=12345)
         assert captured.get("request_number") == "USER_12345"
 
     @pytest.mark.asyncio
     async def test_category_is_archive(self):
         """The category must always be 'archive' for user documents."""
-        client = MagicMock()
-        captured = {}
-
-        async def capture(**kwargs):
-            captured.update(kwargs)
-            return {"media_file": {"id": "docY"}}
-
-        client.upload_request_media = capture
-        bot = _make_bot()
-        with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-            from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-            await upload_document_to_media_service(
-                bot=bot,
-                file_id="doc3",
-                user_telegram_id=777,
-            )
+        client, captured = _capturing_client()
+        await _upload_doc(client, _make_doc_bot())
         assert captured.get("category") == "archive"
+
+    @pytest.mark.asyncio
+    async def test_uploaded_by_is_internal_user_id_not_telegram_id(self):
+        """C2 (ревью 2026-09-28): uploaded_by_user_id в media-service — INT4.
+        Telegram ID > 2^31-1 ронял INSERT уже ПОСЛЕ отправки в архивный канал —
+        скан оставался в канале без строки, удаление его не находило."""
+        client, captured = _capturing_client()
+        await _upload_doc(client, _make_doc_bot(), user_telegram_id=6055402868, uploaded_by_user_id=53)
+        assert captured.get("uploaded_by") == 53
+        assert captured.get("request_number") == "USER_6055402868"
+
+    @pytest.mark.asyncio
+    async def test_content_type_is_sniffed_from_bytes(self):
+        """httpx угадывал тип по расширению (.jpg/.pdf/...) — передаём сниффленный."""
+        client, captured = _capturing_client()
+        await _upload_doc(client, _make_doc_bot(JPEG_BYTES, "documents/file.bin"))
+        assert captured.get("content_type") == "image/jpeg"
+
+    @pytest.mark.asyncio
+    async def test_unsupported_format_is_not_sent(self):
+        """PDF media-service не хранит (allowlist) — не гоняем его по сети впустую."""
+        client = MagicMock()
+        client.upload_request_media = AsyncMock()
+        result = await _upload_doc(client, _make_doc_bot(PDF_BYTES, "documents/file.pdf"))
+        assert result is None
+        client.upload_request_media.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

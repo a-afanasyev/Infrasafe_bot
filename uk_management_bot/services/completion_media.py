@@ -2,20 +2,24 @@
 
 Решение владельца (2026-08-10): фотоотчёт (категории completion_*) читается из
 media-service, потому что дашборд и TWA грузят файлы туда через media-proxy и
-legacy-поле `Request.completion_media` не трогают. media-service заливает файл в
-Telegram-канал и хранит настоящий `telegram_file_id`, поэтому бот отправляет
-такие файлы обычным `answer_photo(file_id)` без скачивания байтов.
+legacy-поле `Request.completion_media` не трогают.
+
+Файлы media-service отдаются как `MediaEntry(media_id=…)` и уходят в Telegram
+БАЙТАМИ (`services/request_media_entries.send_media_entries`): media-service
+живёт под своим бот-токеном (`MEDIA_BOT_TOKEN`), его `telegram_file_id` для
+основного бота не годится («wrong file identifier»).
 
 Legacy-поле остаётся страховкой, а не вторым источником: старые заявки, залитые
 до media-service, и записи executor-flow, сделанные при недоступном media-service
-(там лежат сырые telegram file_id). Писателей поля этот модуль не трогает.
+(там лежат сырые telegram file_id основного бота). Писателей поля этот модуль не
+трогает.
 """
 
-import json
 import logging
 from typing import Any, List
 
 from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.request_media_entries import MediaEntry, parse_media_entries
 
 logger = logging.getLogger(__name__)
 
@@ -23,36 +27,37 @@ logger = logging.getLogger(__name__)
 COMPLETION_CATEGORIES = frozenset(
     {"completion_photo", "completion_video", "completion_document"}
 )
+_KIND_BY_CATEGORY = {
+    "completion_photo": "photo",
+    "completion_video": "video",
+    "completion_document": "document",
+}
 
 
-def legacy_completion_file_ids(raw: Any) -> List[str]:
-    """Достаёт telegram file_id из legacy `Request.completion_media`.
+def legacy_completion_entries(raw: Any) -> List[MediaEntry]:
+    """Записи legacy `Request.completion_media` с telegram file_id основного бота.
 
-    Поле исторически разнородно: JSON-строка или list; элементы — строки-file_id
-    либо dict'ы `{"type", "file_id"}` (fallback executor-flow). Dict'ы формы
-    media-service (`{"media_id", "file_url", ...}`) file_id не содержат и
-    пропускаются — их содержимое и так придёт из media-service.
+    Поле исторически разнородно (см. `parse_media_entries`). Dict'ы формы
+    media-service (`{"media_id", "file_url", ...}`) пропускаются — их содержимое
+    и так приходит из media-service, а при его недоступности скачать их нельзя.
     """
-    if not raw:
-        return []
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return []
-    if not isinstance(raw, list):
-        return []
-    file_ids: List[str] = []
-    for item in raw:
-        if isinstance(item, str) and item:
-            file_ids.append(item)
-        elif isinstance(item, dict) and item.get("file_id"):
-            file_ids.append(item["file_id"])
-    return file_ids
+    return [entry for entry in parse_media_entries(raw) if entry.file_id]
 
 
-async def get_completion_media_file_ids(request_number: str, legacy_raw: Any) -> List[str]:
-    """Telegram file_id фотоотчёта заявки: media-service, при пустоте/сбое — legacy.
+def _media_service_entry(item: Any) -> MediaEntry | None:
+    if not isinstance(item, dict) or item.get("category") not in COMPLETION_CATEGORIES:
+        return None
+    media_id = item.get("id")
+    if not isinstance(media_id, int) or isinstance(media_id, bool):
+        return None
+    kind = item.get("file_type")
+    if kind not in ("photo", "video", "document"):
+        kind = _KIND_BY_CATEGORY[item["category"]]
+    return MediaEntry(kind=kind, media_id=media_id)
+
+
+async def get_completion_media_entries(request_number: str, legacy_raw: Any) -> List[MediaEntry]:
+    """Фотоотчёт заявки: media-service, при пустоте/сбое — legacy.
 
     Один вызов списка без фильтра категории (фильтруем сами): категорий три,
     а поход по HTTP один.
@@ -63,19 +68,13 @@ async def get_completion_media_file_ids(request_number: str, legacy_raw: Any) ->
             # retries=1: у нас мгновенный фолбэк на legacy-поле, бэкофф-ожидание
             # ретраев (~1.5 c) в интерактивном хендлере хуже быстрого фолбэка.
             items = await client.get_request_media(request_number, retries=1) or []
-            file_ids = [
-                item["telegram_file_id"]
-                for item in items
-                if isinstance(item, dict)
-                and item.get("category") in COMPLETION_CATEGORIES
-                and item.get("telegram_file_id")
-            ]
-            if file_ids:
-                return file_ids
+            entries = [e for e in map(_media_service_entry, items) if e is not None]
+            if entries:
+                return entries
         except Exception as e:  # noqa: BLE001 — недоступность сервиса не должна ронять хендлер
             logger.warning(
                 "media-service недоступен для фотоотчёта %s, используем legacy-поле: %s",
                 request_number,
                 e,
             )
-    return legacy_completion_file_ids(legacy_raw)
+    return legacy_completion_entries(legacy_raw)

@@ -23,6 +23,7 @@ from typing import Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.database.models.request import Request
@@ -43,7 +44,9 @@ from uk_management_bot.services.workflow_notifications import (
     send_channel_status_text,
     send_notify_messages,
 )
-from uk_management_bot.services.completion_media import get_completion_media_file_ids
+from uk_management_bot.services.completion_media import get_completion_media_entries
+from uk_management_bot.services.request_media_entries import send_media_entries
+from uk_management_bot.integrations import get_media_client
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
     can_accept,
@@ -324,7 +327,7 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
         # Проверяем наличие медиа: SSOT — media-service (дашборд/TWA грузят
         # фотоотчёт туда, минуя legacy-поле), фолбэк — legacy-поле из DTO.
         # Вызов — в async-слое, вне db-фазы run_db (это HTTP, не БД).
-        completion_media = await get_completion_media_file_ids(
+        completion_media = await get_completion_media_entries(
             view.request_number, view.completion_media
         )
         if len(completion_media) > 0:
@@ -358,8 +361,6 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
 async def view_completion_media(callback: CallbackQuery, language: str = "ru", *, _db=None):
     """Просмотр медиафайлов выполненной заявки"""
     try:
-        from aiogram.types import InputMediaPhoto, InputMediaDocument
-
         request_number = callback.data.replace("view_completion_media_", "")
 
         verdict, request_number_display, completion_media = await run_db(
@@ -375,14 +376,13 @@ async def view_completion_media(callback: CallbackQuery, language: str = "ru", *
             await callback.answer(get_text("request_acceptance.handlers.not_your_request", language=language), show_alert=True)
             return
 
-        # SSOT — media-service (см. services/completion_media): элементы —
-        # telegram file_id, фолбэк — legacy-поле из db-фазы. Вызов — в
-        # async-слое, вне run_db (это HTTP, не БД).
-        completion_media = await get_completion_media_file_ids(
+        # SSOT — media-service (см. services/completion_media), фолбэк —
+        # legacy-поле из db-фазы. Вызов — в async-слое, вне run_db (это HTTP).
+        entries = await get_completion_media_entries(
             request_number_display, completion_media
         )
 
-        if not completion_media:
+        if not entries:
             await callback.answer(get_text("request_acceptance.handlers.media_not_found", language=language), show_alert=True)
             return
 
@@ -394,42 +394,25 @@ async def view_completion_media(callback: CallbackQuery, language: str = "ru", *
             parse_mode="HTML"
         )
 
-        # Отправляем медиафайлы
-        if len(completion_media) > 1:
-            media_group = []
-            for idx, file_id in enumerate(completion_media):
-                try:
-                    if idx == 0:
-                        media_group.append(InputMediaPhoto(
-                            media=file_id,
-                            caption=get_text("request_acceptance.handlers.media_photo_caption", language=lang).format(
-                                index=idx + 1, total=len(completion_media)
-                            )
-                        ))
-                    else:
-                        media_group.append(InputMediaPhoto(media=file_id))
-                except Exception:
-                    if idx == 0:
-                        media_group.append(InputMediaDocument(
-                            media=file_id,
-                            caption=get_text("request_acceptance.handlers.media_file_caption", language=lang).format(
-                                index=idx + 1, total=len(completion_media)
-                            )
-                        ))
-                    else:
-                        media_group.append(InputMediaDocument(media=file_id))
-
-            if media_group:
-                await callback.message.answer_media_group(media=media_group)
-        else:
-            try:
-                await callback.message.answer_photo(photo=completion_media[0])
-            except Exception:
-                try:
-                    await callback.message.answer_document(document=completion_media[0])
-                except Exception as e:
-                    logger.error(f"Ошибка отправки медиафайла: {e}")
-                    await callback.message.answer(get_text("request_acceptance.handlers.media_send_failed", language=lang))
+        # Файлы media-service — байтами (его file_id основному боту не годятся),
+        # чанки по лимиту Telegram — внутри send_media_entries.
+        caption_key = (
+            "request_acceptance.handlers.media_file_caption" if entries[0].kind == "document"
+            else "request_acceptance.handlers.media_photo_caption"
+        )
+        first_caption = (
+            get_text(caption_key, language=lang).format(index=1, total=len(entries))
+            if len(entries) > 1 else None
+        )
+        try:
+            sent = await send_media_entries(
+                callback.message, entries, get_media_client(), first_caption=first_caption
+            )
+        except TelegramAPIError as e:
+            logger.error("Ошибка отправки фотоотчёта заявки %s: %s", request_number_display, e)
+            sent = 0
+        if sent == 0:
+            await callback.message.answer(get_text("request_acceptance.handlers.media_send_failed", language=lang))
 
         await callback.answer(get_text("request_acceptance.handlers.media_sent", language=lang))
 
