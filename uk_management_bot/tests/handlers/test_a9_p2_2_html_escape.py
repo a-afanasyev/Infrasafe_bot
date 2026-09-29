@@ -99,7 +99,7 @@ class TestManagerRequestCard:
 
         manager = self._seed(db)
         # Фотоотчёт тянется из media-service — сеть тесту не нужна.
-        monkeypatch.setattr(views, "get_completion_media_file_ids",
+        monkeypatch.setattr(views, "get_completion_media_entries",
                             AsyncMock(return_value=[]))
         cb = _callback(f"mview_{NUMBER}")
         await views.handle_manager_view_request(

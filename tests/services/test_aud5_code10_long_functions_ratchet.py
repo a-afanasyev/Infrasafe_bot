@@ -39,7 +39,7 @@ BASELINE: dict[str, int] = {
     "uk_management_bot/api/work_reports/public_router.py": 1,
     "uk_management_bot/handlers/admin/actions.py": 1,
     "uk_management_bot/handlers/admin/shared.py": 1,
-    "uk_management_bot/handlers/admin/views.py": 2,
+    "uk_management_bot/handlers/admin/views.py": 1,
     "uk_management_bot/handlers/auth.py": 1,
     "uk_management_bot/handlers/group_intake.py": 1,
     "uk_management_bot/handlers/my_shifts/viewing.py": 1,

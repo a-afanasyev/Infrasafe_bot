@@ -7,6 +7,7 @@ from typing import Optional, List
 from io import BytesIO
 from aiogram import Bot
 from uk_management_bot.integrations import get_media_client
+from uk_management_bot.utils.media_sniff import MEDIA_SERVICE_ACCEPTED_TYPES, sniff_media_mime
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,8 @@ async def upload_document_to_media_service(
     bot: Bot,
     file_id: str,
     user_telegram_id: int,
+    *,
+    uploaded_by_user_id: int,
     description: Optional[str] = None
 ) -> Optional[dict]:
     """
@@ -173,7 +176,10 @@ async def upload_document_to_media_service(
     Args:
         bot: Экземпляр бота
         file_id: File ID из Telegram
-        user_telegram_id: Telegram ID пользователя (для идентификации в ARCHIVE)
+        user_telegram_id: Telegram ID пользователя — ключ `USER_{tg}`, по нему
+            документы находит `delete_user_documents_from_media_service`
+        uploaded_by_user_id: внутренний users.id. Telegram ID сюда нельзя:
+            колонка в media-service INT4 (ревью 2026-09-28, C2)
         description: Описание документа
 
     Returns:
@@ -191,6 +197,16 @@ async def upload_document_to_media_service(
         await bot.download_file(file.file_path, file_bytes)
         file_bytes.seek(0)
 
+        # Тип — по байтам, а не по расширению: media-service хранит только свой
+        # allowlist (PDF и пр. он отвергает 400 — не гоняем их по сети).
+        content_type = sniff_media_mime(file_bytes.getvalue())
+        if content_type not in MEDIA_SERVICE_ACCEPTED_TYPES:
+            logger.info(
+                "Документ пользователя %s не загружен в Media Service: формат %s не поддерживается",
+                user_telegram_id, content_type or "не распознан",
+            )
+            return None
+
         # Определяем имя файла
         file_extension = file.file_path.split('.')[-1] if '.' in file.file_path else 'jpg'
         filename = f"user_{user_telegram_id}_doc.{file_extension}"
@@ -205,7 +221,8 @@ async def upload_document_to_media_service(
             filename=filename,
             category="archive",
             description=description or f"Документ пользователя {user_telegram_id}",
-            uploaded_by=user_telegram_id
+            uploaded_by=uploaded_by_user_id,
+            content_type=content_type,
         )
 
         logger.info(f"Документ пользователя загружен в Media Service: {result['media_file']['id']}")

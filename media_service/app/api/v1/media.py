@@ -101,6 +101,14 @@ def _sniff_image_mime(data: bytes) -> Optional[str]:
     return None
 
 
+# Границы колонок media_files (uploaded_by_user_id INTEGER, request_number
+# VARCHAR(20)). Проверяются на входе (422), ДО отправки файла в Telegram-канал:
+# иначе INSERT падал уже после публикации, и файл оставался в канале без
+# строки в БД (ревью 2026-09-28, C2).
+INT4_MAX = 2**31 - 1
+REQUEST_NUMBER_MAX = 20
+
+
 # Dependency для сервисов. A9-P2-15: сервис per-request и лёгкий, Telegram-клиент
 # под ним — процессный (создаётся в lifespan, закрывается на shutdown).
 async def get_storage_service() -> MediaStorageService:
@@ -114,11 +122,11 @@ async def get_search_service() -> MediaSearchService:
 @router.post("/upload", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media(
     file: UploadFile = File(..., description="Медиа-файл для загрузки"),
-    request_number: str = Form(..., description="Номер заявки"),
+    request_number: str = Form(..., min_length=1, max_length=REQUEST_NUMBER_MAX, description="Номер заявки"),
     category: MediaCategoryEnum = Form(default=MediaCategoryEnum.REQUEST_PHOTO, description="Категория файла"),
     description: Optional[str] = Form(None, description="Описание файла"),
     tags: Optional[str] = Form(None, description="Теги через запятую"),
-    uploaded_by: Optional[int] = Form(None, description="ID пользователя"),
+    uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="Внутренний users.id (INT4), не Telegram ID"),
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
@@ -174,11 +182,11 @@ async def upload_media(
 @router.post("/upload-report", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_report_media(
     file: UploadFile = File(..., description="Медиа-файл отчета"),
-    request_number: str = Form(..., description="Номер заявки"),
+    request_number: str = Form(..., min_length=1, max_length=REQUEST_NUMBER_MAX, description="Номер заявки"),
     report_type: MediaCategoryEnum = Form(default=MediaCategoryEnum.COMPLETION_PHOTO, description="Тип отчета"),
     description: Optional[str] = Form(None, description="Описание"),
     tags: Optional[str] = Form(None, description="Теги через запятую"),
-    uploaded_by: Optional[int] = Form(None, description="ID пользователя"),
+    uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="Внутренний users.id (INT4), не Telegram ID"),
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
@@ -238,7 +246,7 @@ async def upload_access_media(
     file: UploadFile = File(..., description="Фото проезда (jpg/png)"),
     kind: str = Form(..., description="Тип кадра: 'plate' (номер) или 'overview' (обзор)"),
     ref: str = Form(..., description="Домен-нейтральный идентификатор, напр. 'controller|event_id'"),
-    uploaded_by: Optional[int] = Form(None, description="ID пользователя/системы"),
+    uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="ID пользователя/системы (INT4)"),
     storage_service: MediaStorageService = Depends(get_storage_service)
 ):
     """
@@ -514,6 +522,11 @@ async def resolve_stale_transitions(
         raise HTTPException(status_code=500, detail="Ошибка восстановления зависших переходов")
 
 
+def _is_servable(row) -> bool:
+    """Отдавать байты можно только `active` и `archived` с publication_locked."""
+    return row.status == "active" or (row.status == "archived" and row.publication_locked)
+
+
 def _load_servable_media(media_id: int) -> Optional[dict]:
     """Прочитать метаданные файла КОРОТКОЙ сессией и сразу её закрыть.
 
@@ -535,10 +548,7 @@ def _load_servable_media(media_id: int) -> Optional[dict]:
         row = db.query(MediaFile).filter(MediaFile.id == media_id).first()
         if row is None:
             return None
-        servable = row.status == "active" or (
-            row.status == "archived" and row.publication_locked
-        )
-        if not servable:
+        if not _is_servable(row):
             return None
         return {
             "id": row.id,
@@ -680,6 +690,15 @@ def _telegram_lookup_sync(telegram_file_id: str) -> Optional[MediaTelegramLookup
         )
 
 
+def _telegram_file_servable_sync(telegram_file_id: str) -> bool:
+    """True — file_id неизвестен БД или его строка отдаваема (`_is_servable`)."""
+    from app.models.media import MediaFile
+
+    with SessionLocal() as db:
+        row = db.query(MediaFile).filter(MediaFile.telegram_file_id == telegram_file_id).first()
+        return row is None or _is_servable(row)
+
+
 @router.get("/telegram/{telegram_file_id}", response_model=MediaTelegramLookupResponse)
 async def get_media_by_telegram_file_id(
     telegram_file_id: str,
@@ -725,8 +744,15 @@ async def stream_telegram_file(
     """
     Stream file bytes by telegram_file_id (for files not in DB).
     Token stays server-side.
+
+    Файл, известный БД, отдаётся по тем же правилам, что `/{id}/file`: удалённое
+    (soft-delete) и уходящее из-под нас — 404. Иначе этот маршрут обходил
+    удаление: сообщение в канале может пережить строку (ревью 2026-09-28).
+    Неизвестные БД file_id отдаются как раньше — ручной поиск по каналу.
     """
     try:
+        if not await run_sync(_telegram_file_servable_sync, telegram_file_id):
+            raise HTTPException(status_code=404, detail="Медиа-файл не найден")
         file_bytes, content_type = await storage_service.telegram.download_file(
             telegram_file_id
         )
@@ -739,6 +765,8 @@ async def stream_telegram_file(
             },
         )
 
+    except HTTPException:
+        raise
     except TelegramAPIError:
         raise HTTPException(status_code=404, detail="Файл в Telegram не найден или недоступен")
     except Exception as e:

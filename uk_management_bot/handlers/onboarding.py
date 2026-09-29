@@ -385,6 +385,7 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
                 bot=message.bot,
                 file_id=file_id,
                 user_telegram_id=message.from_user.id,
+                uploaded_by_user_id=user_id,
                 description=f"Документ пользователя: {document_type_value}"
             )
             if media_result is not None:

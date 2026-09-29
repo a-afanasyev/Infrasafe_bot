@@ -90,6 +90,37 @@ class TestUploadRequestMediaValidation:
             )
 
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["upload_request_media", "upload_report_media"])
+    async def test_raises_value_error_above_int4(self, method, tmp_path):
+        """uploaded_by_user_id в media-service — INTEGER: Telegram ID туда не влезает.
+        Ошибка должна случиться ДО отправки файла в канал, а не после."""
+        client = MediaServiceClient("http://localhost")
+        client.client = MagicMock()
+        client.client.post = AsyncMock()
+        f = tmp_path / "photo.jpg"
+        f.write_bytes(b"image data")
+
+        with pytest.raises(ValueError, match="uploaded_by"):
+            await getattr(client, method)("260401-001", str(f), uploaded_by=2**31)
+        client.client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_request_media_forwards_content_type(self, tmp_path):
+        client = MediaServiceClient("http://localhost")
+        response = MagicMock()
+        response.json.return_value = {"media_file": {"id": 1}}
+        response.raise_for_status = MagicMock()
+        client.client = MagicMock()
+        client.client.post = AsyncMock(return_value=response)
+
+        await client.upload_request_media(
+            "USER_1", io.BytesIO(b"x"), filename="doc.bin", content_type="image/jpeg"
+        )
+        files = client.client.post.await_args.kwargs["files"]
+        assert files == [("file", ("doc.bin", b"x", "image/jpeg"))]
+
+
 # ---------------------------------------------------------------------------
 # upload_request_media — request formatting
 # ---------------------------------------------------------------------------
