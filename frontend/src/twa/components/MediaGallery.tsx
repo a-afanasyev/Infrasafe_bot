@@ -43,7 +43,7 @@ export default function MediaGallery({ requestNumber, kind, title, onLightboxCha
   const { t } = useTranslation()
   const [lightboxId, setLightboxId] = useState<number | null>(null)
 
-  const { data: items = [], isLoading } = useQuery<MediaItem[]>({
+  const { data: items = [], isLoading, isError } = useQuery<MediaItem[]>({
     queryKey: ['twa', 'media', requestNumber],
     queryFn: () =>
       twaClient
@@ -66,6 +66,11 @@ export default function MediaGallery({ requestNumber, kind, title, onLightboxCha
     if (kind === 'request') return m.category !== 'completion_photo'
     return true
   })
+
+  // Сбой media-service — не «фото нет»: прокси отвечает ошибкой, а не [].
+  if (isError) {
+    return <div className="text-[12px] text-red-500">{t('twa.detail.mediaListError')}</div>
+  }
 
   // While loading we render nothing (title included) to avoid an empty card
   // flash; same once we know there's no matching media.

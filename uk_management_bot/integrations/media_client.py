@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any, BinaryIO, Union
 import httpx
 from pathlib import Path
 
-from uk_management_bot.integrations.http_retry import get_with_retries
+from uk_management_bot.integrations.http_retry import FILE_RETRY_STATUSES, get_with_retries
 
 logger = logging.getLogger(__name__)
 
@@ -389,10 +389,13 @@ class MediaServiceClient:
         Нужен боту для показа файлов, загруженных мимо него (дашборд/TWA):
         `telegram_file_id` медиа-сервиса выдан под другим бот-токеном и
         основному боту не годится, поэтому файл пересылается байтами
-        (services/request_media_entries.py). Идемпотентный GET — с ретраями.
+        (services/request_media_entries.py). Идемпотентный GET — с ретраями,
+        кроме 502: media-service уже ретраил скачивание у Telegram сам.
         """
         try:
-            response = await get_with_retries(self.client, f"/media/{media_id}/file")
+            response = await get_with_retries(
+                self.client, f"/media/{media_id}/file", retry_statuses=FILE_RETRY_STATUSES
+            )
             response.raise_for_status()
         except (httpx.HTTPError, RuntimeError) as e:
             # RuntimeError — исчерпанные попытки get_with_retries; один

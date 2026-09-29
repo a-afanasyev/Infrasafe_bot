@@ -145,3 +145,52 @@ class TestBackoffAndValidation:
 
         client.get.assert_called_once()
         _no_sleep.assert_not_called()
+
+
+class TestRetryStatuses:
+    """FILE_RETRY_STATUSES (ревью 2026-09-28): 502 от /file не повторяем —
+    media-service уже ретраил скачивание у Telegram в своём бюджете."""
+
+    @pytest.mark.asyncio
+    async def test_file_statuses_do_not_retry_502(self, _no_sleep):
+        from uk_management_bot.integrations.http_retry import FILE_RETRY_STATUSES
+
+        client = MagicMock()
+        client.get = AsyncMock(return_value=_resp(502))
+
+        resp = await get_with_retries(client, "/x", retry_statuses=FILE_RETRY_STATUSES)
+
+        assert resp.status_code == 502
+        client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_file_statuses_still_retry_503(self, _no_sleep):
+        from uk_management_bot.integrations.http_retry import FILE_RETRY_STATUSES
+
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=[_resp(503), _resp(200)])
+
+        resp = await get_with_retries(client, "/x", retry_statuses=FILE_RETRY_STATUSES)
+
+        assert resp.status_code == 200
+        assert client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_bot_download_media_file_does_not_retry_502(self, _no_sleep):
+        from uk_management_bot.integrations.media_client import MediaServiceClient
+
+        media = MediaServiceClient("http://media.test")
+        calls = {"n": 0}
+
+        def handler(request):
+            calls["n"] += 1
+            return httpx.Response(502, request=request)
+
+        media.client = httpx.AsyncClient(
+            base_url="http://media.test", transport=httpx.MockTransport(handler)
+        )
+        try:
+            assert await media.download_media_file(5) is None
+        finally:
+            await media.client.aclose()
+        assert calls["n"] == 1
