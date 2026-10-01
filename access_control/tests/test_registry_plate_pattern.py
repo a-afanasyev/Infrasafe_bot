@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from access_control.api.registry import _photo_media_id, _plate_pat
+from access_control.api.registry import _photo_media_id
+from access_control.repositories.sql_filters import plate_contains_pattern as _plate_pat
 
 
 def test_plate_pattern_escapes_like_metachars() -> None:
