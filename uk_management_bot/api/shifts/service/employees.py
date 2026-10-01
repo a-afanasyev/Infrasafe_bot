@@ -28,6 +28,7 @@ from uk_management_bot.utils.sql_search import (
     escape_like as _escape_like,
     is_postgres,
 )
+from uk_management_bot.database.roles_type import roles_contain
 
 # Роли, считающиеся «сотрудником» (в отличие от жителя-applicant). Используются
 # в фиде pending-стаффа и guard'ах активации/отклонения.
@@ -87,7 +88,7 @@ def _employees_filtered(
     """Выборка сотрудников под фильтрами — без сортировки и среза страницы."""
     scoped_role = role or "executor"
     query = select(User).where(
-        User.roles.like(f'%"{_escape_like(scoped_role)}"%'),
+        roles_contain(User.roles, scoped_role),
         User.deleted_at.is_(None),
     )
 
@@ -282,9 +283,9 @@ async def list_pending_staff(db: AsyncSession) -> list[User]:
             User.deleted_at.is_(None),
             User.verification_status != "rejected",
             or_(
-                User.roles.like('%"manager"%'),
-                User.roles.like('%"executor"%'),
-                User.roles.like('%"inspector"%'),
+                roles_contain(User.roles, "manager"),
+                roles_contain(User.roles, "executor"),
+                roles_contain(User.roles, "inspector"),
             ),
         )
         .order_by(User.created_at)

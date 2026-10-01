@@ -534,21 +534,14 @@ class AuthService:
     def get_users_by_role_sync(self, role: str) -> list[User]:
         """Получить пользователей по роли (sync; SQL-level filtering).
 
-        Uses LIKE with JSON-style quoting to match exact role strings
-        in the JSON array stored in User.roles TEXT column.
+        CODE-07: точный элемент JSON-массива ролей, не подстрока (DB-049:
+        ``roles_contain`` через ``legacy_role_filter``).
         """
-        from sqlalchemy import or_
-        # CODE-07: матчим точный элемент JSON-массива — "role" в кавычках
-        # (ловит и ["role"], и [..., "role", ...], не ловит подстроки).
-        exact_match = f'"{role}"'
         # A9-P3-11: только roles — ветка `User.active_role == role` включала в
         # получателей (админ-уведомления с ПД) держателя устаревшей active_role.
         return self.db.query(User).filter(
             User.status == "approved",
-            or_(
-                User.roles.contains(exact_match),
-                legacy_role_filter(role),
-            )
+            legacy_role_filter(role),
         ).all()
 
     def make_admin_by_password_sync(self, telegram_id: int, password: str) -> bool:

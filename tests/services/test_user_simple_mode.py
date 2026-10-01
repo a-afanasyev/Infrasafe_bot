@@ -47,11 +47,10 @@ def test_model_column_is_not_null_with_server_default():
     assert column.server_default is not None
 
 
-def test_migration_021_is_head_and_adds_the_column():
+def test_migration_021_adds_the_column():
     cfg = Config(str(REPO_ROOT / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_current_head() == "021"
     revision = script.get_revision("021")
     assert revision.down_revision == "020"
     source = Path(revision.path).read_text(encoding="utf-8")

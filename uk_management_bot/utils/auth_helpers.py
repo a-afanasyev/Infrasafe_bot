@@ -5,8 +5,8 @@
 import json
 import logging
 from typing import Optional, List
-from sqlalchemy import or_
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.utils.constants import ROLE_APPLICANT
 
 logger = logging.getLogger(__name__)
@@ -192,19 +192,16 @@ def legacy_role_filter(*roles: str):
     """SQLAlchemy-выражение «у пользователя есть хотя бы одна из ролей».
 
     DB-060/AUD3-01 (PR-31): legacy-колонка ``User.role`` удалена. Фильтр теперь
-    идёт по JSON-массиву ``User.roles`` (хранится как TEXT, напр.
-    ``'["applicant", "executor"]'``) через ``LIKE '%"role"%'`` — кросс-диалектно
-    (sqlite-тесты + postgres-прод), матчит закавыченный токен роли. Это РАСШИРЯЕТ
+    идёт по JSON-массиву ``User.roles`` через ``roles_contain`` (DB-049: на
+    PostgreSQL — ``roles @> '["role"]'`` под GIN, на sqlite — ``LIKE '%"role"%'``),
+    точное совпадение элемента массива. Это РАСШИРЯЕТ
     прежнее ``role == x`` (одна основная роль) до «роль среди всех ролей» —
     устаревшая колонка расходилась с реальным набором ролей (см. AUD3-01).
 
     Args:
         *roles: одна или несколько ролей; результат — ИЛИ по вхождению любой.
     """
-    clauses = [User.roles.like(f'%"{role}"%') for role in roles]
-    if len(clauses) == 1:
-        return clauses[0]
-    return or_(*clauses)
+    return roles_contain(User.roles, *roles)
 
 
 def sync_legacy_role(user: User, primary_role: str) -> None:

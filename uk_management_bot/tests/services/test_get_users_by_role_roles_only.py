@@ -54,7 +54,7 @@ def test_exact_token_and_status(session):
 
 def test_sql_has_no_active_role_branch_on_postgres_dialect():
     """Тот же запрос, скомпилированный под PG: active_role в фильтре нет,
-    матч — LIKE по закавыченному токену (одинаково для sqlite и PG)."""
+    матч — jsonb-containment `roles @> '["admin"]'` (DB-049, под GIN)."""
     from unittest.mock import MagicMock
 
     captured = {}
@@ -79,4 +79,4 @@ def test_sql_has_no_active_role_branch_on_postgres_dialect():
         for c in captured["clauses"]
     )
     assert "active_role" not in sql
-    assert "LIKE" in sql
+    assert "@>" in sql and '["admin"]' in sql

@@ -21,6 +21,7 @@ from uk_management_bot.utils.sql_search import (
     escape_like as _escape_like,
     is_postgres,
 )
+from uk_management_bot.database.roles_type import roles_contain
 
 
 async def search_approved_applicants(db: AsyncSession, *, q: str):
@@ -49,7 +50,7 @@ async def search_approved_applicants(db: AsyncSession, *, q: str):
             # нельзя создать заявку (план «Обходчик», R52).
             User.status == "approved",
             or_(
-                User.roles.like('%"applicant"%'),
+                roles_contain(User.roles, "applicant"),
                 legacy_role_filter("applicant"),
             ),
             ci_contains_any(
