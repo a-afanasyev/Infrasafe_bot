@@ -1,19 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { apiClient } from '@/api/client'
-import type { AccountBalance } from '@/types/paymentControl'
+import { useApartmentPayment } from '@/hooks/usePaymentControl'
 
 export default function ApartmentPaymentBlock({ apartmentId, accountNumber }: { apartmentId: number; accountNumber?: string | null }) {
   const { t } = useTranslation()
-  const query = useQuery<AccountBalance>({
-    queryKey: ['apartment-payment', apartmentId, accountNumber],
-    queryFn: () => apiClient.get(`/api/v2/payment-control/apartments/${apartmentId}`).then(r => r.data),
-    enabled: !!accountNumber,
-    staleTime: 0,
-    refetchInterval: 60_000,
-    retry: false,
-  })
+  const query = useApartmentPayment(apartmentId, accountNumber)
   const current = !query.isError ? query.data?.current : null
   const params = new URLSearchParams()
   if (accountNumber) params.set('account', accountNumber)

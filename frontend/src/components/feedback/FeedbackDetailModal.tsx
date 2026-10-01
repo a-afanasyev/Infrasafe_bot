@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { apiClient } from '../../api/client'
 import {
   useFeedbackDetail,
   useUpdateFeedback,
   type FeedbackStatus,
 } from '../../hooks/useFeedback'
+import { fetchFileAsDataUrl } from '../../api/fileDataUrl'
 import {
   Dialog,
   DialogContent,
@@ -129,15 +129,8 @@ function FeedbackPhoto({ feedbackId, mediaId }: { feedbackId: number; mediaId: n
 
   useEffect(() => {
     let cancelled = false
-    apiClient
-      .get(`/api/v2/feedback/${feedbackId}/media/${mediaId}/file`, { responseType: 'blob' })
-      .then((r) => new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('bad'))
-        reader.onerror = () => reject(reader.error)
-        reader.readAsDataURL(r.data as Blob)
-      }))
-      .then((dataUrl) => { if (!cancelled) setUrl(dataUrl) })
+    fetchFileAsDataUrl(`/api/v2/feedback/${feedbackId}/media/${mediaId}/file`)
+      .then(({ dataUrl }) => { if (!cancelled) setUrl(dataUrl) })
       .catch(() => { if (!cancelled) setErrored(true) })
     return () => { cancelled = true }
   }, [feedbackId, mediaId])

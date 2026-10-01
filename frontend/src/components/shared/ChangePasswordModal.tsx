@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { apiClient } from '@/api/client'
+import { submitPasswordChange } from '@/api/profile'
 import { apiErrorDetail, safeErrorMessage } from '@/utils/errorMessage'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'sonner'
@@ -70,7 +70,7 @@ export default function ChangePasswordModal({ open, onClose }: Props) {
     setLoading(true)
     setError('')
     try {
-      await apiClient.post('/api/v2/auth/set-password', {
+      await submitPasswordChange({
         password,
         confirm_password: confirm,
         ...(currentNeeded ? { current_password: current } : {}),

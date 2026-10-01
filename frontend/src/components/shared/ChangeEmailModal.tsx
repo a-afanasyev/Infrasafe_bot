@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { apiClient } from '@/api/client'
+import { fetchProfileContact, updateProfileEmail } from '@/api/profile'
 import { toast } from 'sonner'
 
 interface Props {
@@ -36,11 +36,10 @@ export default function ChangeEmailModal({ open, onClose }: Props) {
     let cancelled = false
     touched.current = false
     setError('')
-    apiClient
-      .get('/api/v2/profile')
-      .then((r) => {
+    fetchProfileContact()
+      .then((profile) => {
         if (cancelled || touched.current) return
-        const current = (r.data?.email as string | null) ?? ''
+        const current = profile?.email ?? ''
         setEmail(current)
         setInitial(current)
       })
@@ -66,7 +65,7 @@ export default function ChangeEmailModal({ open, onClose }: Props) {
     setLoading(true)
     setError('')
     try {
-      await apiClient.patch('/api/v2/profile', { email: value })
+      await updateProfileEmail(value)
       toast.success(t('changeEmail.success'))
       handleClose()
     } catch (e: unknown) {

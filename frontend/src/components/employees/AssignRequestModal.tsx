@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { apiClient } from '../../api/client'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
-import type { KanbanColumn, RequestCard } from '../../hooks/useKanban'
+import { useKanbanSnapshot, type RequestCard } from '../../hooks/useKanban'
+import { useAssignRequestExecutor } from '../../hooks/useRequestMutations'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
@@ -20,29 +19,18 @@ interface Props {
 export default function AssignRequestModal({ employee, onClose }: Props) {
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
-  const queryClient = useQueryClient()
   const [assignError, setAssignError] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery<{ columns: KanbanColumn[] }>({
-    queryKey: ['kanban', {}],
-    queryFn: () => apiClient.get('/api/v2/requests/kanban').then(r => r.data),
-    staleTime: 30_000,
-  })
+  const { data, isLoading } = useKanbanSnapshot()
 
   // Column order from API response determines display order (typically 'Новая' before 'В работе')
   const requests: RequestCard[] = (data?.columns ?? [])
     .filter(col => ASSIGNABLE_STATUSES.has(col.status))
     .flatMap(col => col.requests)
 
-  const assignMutation = useMutation({
-    mutationFn: (requestNumber: string) =>
-      apiClient
-        .patch(`/api/v2/requests/${requestNumber}`, { executor_id: employee.id })
-        .then(r => r.data),
+  const assignMutation = useAssignRequestExecutor({
     onSuccess: () => {
       toast.success(t('toast.requestUpdated'))
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      queryClient.invalidateQueries({ queryKey: ['employees'] })
       onClose()
     },
     onError: () => {
@@ -78,7 +66,7 @@ export default function AssignRequestModal({ employee, onClose }: Props) {
                   key={req.request_number}
                   request={req}
                   isPending={assignMutation.isPending}
-                  onSelect={() => assignMutation.mutate(req.request_number)}
+                  onSelect={() => assignMutation.mutate({ requestNumber: req.request_number, executor: employee.id })}
                 />
               ))}
             </div>

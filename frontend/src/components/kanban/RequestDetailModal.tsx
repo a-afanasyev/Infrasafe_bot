@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { ChevronDown, ImageOff, TriangleAlert, X as XIcon } from 'lucide-react'
-import { apiClient } from '../../api/client'
-import { safeErrorMessage } from '@/utils/errorMessage'
-import { tStatus, tUrgency, tCategory, tSpecialization } from '../../i18n/apiMaps'
-import { useHasRole, useHasAnyRole } from '../../hooks/useHasRole'
+import { ChevronDown, TriangleAlert, X as XIcon } from 'lucide-react'
+import { tUrgency, tCategory } from '../../i18n/apiMaps'
+import { useHasRole } from '../../hooks/useHasRole'
 import { useSeenRequests } from '../../hooks/useSeenRequests'
+import { useRequest, useRequestComments } from '../../hooks/useRequestDetail'
+import { categoryChangeWarning, useRequestMutations, type CategoryWarning } from '../../hooks/useRequestMutations'
 import { CATEGORIES, MAX_REQUEST_TEXT_LENGTH, URGENCIES, normalizeUrgency } from '../../constants'
 import { formatDate } from '../../i18n/formatters'
 import { cn } from '@/lib/utils'
@@ -23,7 +21,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,44 +30,17 @@ import TransitionModal, { type TransitionData } from './TransitionModal'
 import ReassignExecutorModal from './ReassignExecutorModal'
 import { REASSIGNABLE_STATUSES } from './transitions'
 import RequestMaterialsBlock from '../materials/RequestMaterialsBlock'
-import MediaUploadTile from './MediaUploadTile'
-import { useRequestMediaUpload } from './useRequestMediaUpload'
-import { VALID_TRANSITIONS, MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal, needsReturnReasonModal } from './transitions'
-import { STATUS_BADGE, STATUS_DOT } from './statusStyles'
+import RequestMedia from './RequestMedia'
+import RequestAlertContext from './RequestAlertContext'
+import StatusDropdown from './StatusDropdown'
+import { MODAL_STATUSES, FROZEN_STATUSES, inProgressNeedsExecutorModal, needsReturnReasonModal } from './transitions'
+import { STATUS_BADGE } from './statusStyles'
 import ElevatorStatusPromptDialog from '../elevators/ElevatorStatusPromptDialog'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
 import { getUrgencyStyle } from './urgencyStyle'
 
-/** Ответ PATCH /requests/{n}/category — см. api/requests/schemas.CategoryChangeOut. */
-interface CategoryChangeOut {
-  no_op: boolean
-  new_category: string
-  new_specialization?: string | null
-  redispatched: boolean
-  /** assigned | grouped | disabled | failed | no_spec; null — передиспетч не требовался */
-  dispatch_kind?: string | null
-  executor_id?: number | null
-  executor_name?: string | null
-  executor_spec_mismatch: boolean
-  can_reassign: boolean
-}
-
 const SOURCE_ICON: Record<string, string> = {
   bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
-}
-
-// FE-119: format the InfraSafe working-range band. One-sided when only min OR
-// max is present (e.g. heating ≥40 °C, transformer load ≤80 %).
-function formatWorkingRange(
-  min?: number | null,
-  max?: number | null,
-  unit?: string | null,
-): string | null {
-  const u = unit ? ` ${unit}` : ''
-  if (min != null && max != null) return `${min}–${max}${u}`
-  if (min != null) return `≥ ${min}${u}`
-  if (max != null) return `≤ ${max}${u}`
-  return null
 }
 
 interface Props {
@@ -87,7 +57,6 @@ interface Props {
 export default function RequestDetailModal({ requestNumber, onClose, onOpenRelated }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
-  const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
   const [confirmNote, setConfirmNote] = useState('')
   const [showConfirmSection, setShowConfirmSection] = useState(false)
@@ -98,15 +67,10 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   const [remindStatus, setRemindStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [pendingTargetStatus, setPendingTargetStatus] = useState<string | null>(null)
   const [reassignOpen, setReassignOpen] = useState(false)
-  // Итог смены категории. `mismatch`: исполнитель «В работе» остался, но его
-  // специализация не покрывает новую категорию. `unassigned`: канон снял
-  // старую группу, а диспетч новую не поставил (выключен/упал) — заявка
-  // «Новая» без группы, пул дежурных её не видит. Кнопка назначения — только
+  // Итог смены категории (см. CategoryWarning). Кнопка назначения — только
   // там, где канон пускает MANAGER_ASSIGN (флаг с сервера). Баннер гаснет при
   // успешном (пере)назначении и при no_op (live-QA 2026-09-03).
-  const [categoryWarning, setCategoryWarning] = useState<
-    { kind: 'mismatch' | 'unassigned'; canReassign: boolean } | null
-  >(null)
+  const [categoryWarning, setCategoryWarning] = useState<CategoryWarning | null>(null)
   // Модуль «Лифты»: после подтверждения заявки с elevator_id — подсказка
   // «Лифт работает?» (смена статуса лифта одним касанием, Ф4a-3).
   const [elevatorPromptOpen, setElevatorPromptOpen] = useState(false)
@@ -132,17 +96,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     setElevatorPromptOpen(false)
   }
 
-  const { data: request } = useQuery({
-    queryKey: ['request', requestNumber],
-    queryFn: () => apiClient.get(`/api/v2/requests/${requestNumber}`).then(r => r.data),
-    enabled: !!requestNumber,
-  })
-
-  const { data: comments } = useQuery({
-    queryKey: ['comments', requestNumber],
-    queryFn: () => apiClient.get(`/api/v2/requests/${requestNumber}/comments`).then(r => r.data),
-    enabled: !!requestNumber,
-  })
+  const { data: request } = useRequest(requestNumber)
+  const { data: comments } = useRequestComments(requestNumber)
 
   // Открытая карточка считается прочитанной на своей текущей версии. Эффект
   // по `updated_at` покрывает оба пути входа — клик по карточке на доске и
@@ -161,104 +116,36 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   // список берётся из общего места, а не объявляется здесь второй раз.
   const canReassign = isManager && REASSIGNABLE_STATUSES.has(request?.status ?? '')
 
-  const updateRequest = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      apiClient.patch(`/api/v2/requests/${requestNumber}`, data).then(r => r.data),
-    onSuccess: () => {
-      toast.success(t('toast.requestUpdated'))
-      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      setShowConfirmSection(false)
-      setConfirmNote('')
+  const { updateRequest, changeCategory, forceAccept, remindApplicant, postComment } = useRequestMutations(
+    requestNumber,
+    {
+      onUpdated: () => {
+        setShowConfirmSection(false)
+        setConfirmNote('')
+      },
+      onCategoryChanged: (data) => setCategoryWarning(categoryChangeWarning(data)),
+      onForceAccepted: () => {
+        setShowForceAcceptSection(false)
+        setForceAcceptNote('')
+      },
+      onCommentPosted: () => setComment(''),
     },
-    onError: (error: unknown) => {
-      toast.error(t('toast.requestUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
-    },
-  })
+  )
 
-  // Смена категории — свой эндпоинт (канон MANAGER_CHANGE_CATEGORY): ответ
-  // несёт итог передиспетча и флаг несоответствия специализации исполнителя,
-  // которых голая карточка из PATCH не даёт.
-  const changeCategory = useMutation({
-    mutationFn: (category: string) =>
-      apiClient.patch(`/api/v2/requests/${requestNumber}/category`, { category })
-        .then(r => r.data as CategoryChangeOut),
-    onSuccess: (data) => {
-      if (data.no_op) {
-        toast.info(t('kanban.categoryUnchanged'))
-        setCategoryWarning(null)
-        return
-      }
-      toast.success(t('toast.categoryUpdated'))
-      if (data.redispatched && data.executor_name) {
-        toast.info(t('kanban.categoryRedispatchedExecutor', { name: data.executor_name }))
-      } else if (data.redispatched) {
-        toast.info(t('kanban.categoryRedispatchedGroup', {
-          spec: tSpecialization(data.new_specialization ?? '', t),
-        }))
-      }
-      const leftUnassigned = ['disabled', 'failed', 'no_spec'].includes(data.dispatch_kind ?? '')
-      setCategoryWarning(
-        data.executor_spec_mismatch
-          ? { kind: 'mismatch', canReassign: data.can_reassign }
-          : leftUnassigned
-            ? { kind: 'unassigned', canReassign: data.can_reassign }
-            : null,
-      )
-      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
-    },
-    onError: (error: unknown) => {
-      toast.error(t('toast.categoryUpdateFailed'), { description: safeErrorMessage(error, 'An error occurred') })
-    },
-  })
-
-  const forceAccept = useMutation({
-    mutationFn: (note: string) =>
-      apiClient.patch(`/api/v2/requests/${requestNumber}`, {
-        status: 'Принято',
-        manager_confirmation_notes: note,
-      }).then(r => r.data),
-    onSuccess: () => {
-      toast.success(t('toast.requestForceAccepted'))
-      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      setShowForceAcceptSection(false)
-      setForceAcceptNote('')
-    },
-    onError: (error: unknown) => {
-      toast.error(t('toast.requestForceAcceptFailed'), { description: safeErrorMessage(error, 'An error occurred') })
-    },
-  })
-
-  const sendReminder = async () => {
+  const resetRemindStatusLater = () => setTimeout(() => setRemindStatus('idle'), 3000)
+  const sendReminder = () => {
     setRemindStatus('sending')
-    try {
-      await apiClient.post(`/api/v2/requests/${requestNumber}/remind-applicant`)
-      toast.success(t('toast.reminderSent'))
-      setRemindStatus('sent')
-      setTimeout(() => setRemindStatus('idle'), 3000)
-    } catch (error: unknown) {
-      // 409 «житель заблокировал бота» — причину показываем, а не общий отказ.
-      toast.error(t('toast.reminderFailed'), { description: safeErrorMessage(error, '') || undefined })
-      setRemindStatus('error')
-      setTimeout(() => setRemindStatus('idle'), 3000)
-    }
+    remindApplicant.mutate(undefined, {
+      onSuccess: () => {
+        setRemindStatus('sent')
+        resetRemindStatusLater()
+      },
+      onError: () => {
+        setRemindStatus('error')
+        resetRemindStatusLater()
+      },
+    })
   }
-
-  const postComment = useMutation({
-    mutationFn: (text: string) =>
-      apiClient.post(`/api/v2/requests/${requestNumber}/comments`, { text, is_internal: true }).then(r => r.data),
-    onSuccess: () => {
-      toast.success(t('toast.noteAdded'))
-      queryClient.invalidateQueries({ queryKey: ['comments', requestNumber] })
-      setComment('')
-    },
-    onError: (error: unknown) => {
-      toast.error(t('toast.noteAddFailed'), { description: safeErrorMessage(error, 'An error occurred') })
-    },
-  })
 
   const handleTransitionConfirm = (data: TransitionData) => {
     updateRequest.mutate(data as unknown as Record<string, unknown>)
@@ -428,89 +315,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 )}
               </div>
 
-              {/* INT-120 #4 — Sprint 10 reopen-chain context.
-                  Backend surfaces these from webhook_inbox.payload.alert when
-                  the request was created via inbound InfraSafe alert (sub-task
-                  #3). reopen_sequence is null for first-time alerts and
-                  manual requests; engineer_required_reason is non-null only
-                  on alert.engineer_required chain-end transitions. */}
-              {(request.reopen_sequence || request.engineer_required_reason) && (
-                <div className="bg-amber/8 border border-amber/25 rounded-[10px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5">
-                  {request.reopen_sequence && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-semibold text-[#d97706]">
-                        🔁 {t('kanban.reopenBadge', { n: request.reopen_sequence })}
-                      </span>
-                      {request.related_request_number && (
-                        <>
-                          <span className="text-text-muted">·</span>
-                          <span className="text-text-secondary">
-                            {t('kanban.relatedRequest')}{' '}
-                          </span>
-                          {onOpenRelated ? (
-                            <button
-                              type="button"
-                              onClick={() => onOpenRelated(request.related_request_number)}
-                              className="font-[family-name:var(--font-mono)] text-blue hover:underline cursor-pointer"
-                            >
-                              {request.related_request_number}
-                            </button>
-                          ) : (
-                            <span className="font-[family-name:var(--font-mono)] text-text-primary">
-                              {request.related_request_number}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {request.engineer_required_reason && (
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber/15">
-                      <span className="font-semibold text-red">
-                        ⚠ {t('kanban.engineerEscalation')}
-                      </span>
-                      <span className="text-text-secondary">
-                        {t('kanban.engineerReason')}{' '}
-                      </span>
-                      <span className="font-[family-name:var(--font-mono)] text-text-primary text-[12px]">
-                        {request.engineer_required_reason}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* FE-119 — InfraSafe alert context (metric + infrastructure).
-                  Rendered only for requests created from an inbound alert.
-                  metric_value absent → label-only (e.g. LEAK_DETECTED). */}
-              {(request.metric_label || request.infrastructure_label) && (
-                <div className="bg-blue/8 border border-blue/25 rounded-[10px] px-3 py-2.5 text-[13px] flex flex-col gap-1">
-                  <span className="font-semibold text-blue text-[11px] uppercase tracking-wide font-[family-name:var(--font-display)]">
-                    📡 {t('kanban.alertSource')}
-                  </span>
-                  {request.infrastructure_label && (
-                    <div className="text-text-secondary">{request.infrastructure_label}</div>
-                  )}
-                  {request.metric_label && (
-                    <div className="text-text-primary">
-                      {request.metric_label}
-                      {request.metric_value != null && (
-                        <>
-                          {': '}
-                          <span className="font-[family-name:var(--font-mono)] font-semibold">
-                            {request.metric_value}{request.metric_unit ? ` ${request.metric_unit}` : ''}
-                          </span>
-                          {formatWorkingRange(request.metric_normal_min, request.metric_normal_max, request.metric_unit) && (
-                            <span className="text-text-muted">
-                              {' '}({t('kanban.workingRange')} {formatWorkingRange(request.metric_normal_min, request.metric_normal_max, request.metric_unit)})
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              <RequestAlertContext request={request} onOpenRelated={onOpenRelated} />
 
               {/* Description */}
               {request.description && (
@@ -859,261 +664,5 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
       />
     )}
     </>
-  )
-}
-
-interface MediaItem {
-  id: number
-  file_type: string
-  mime_type: string
-  category?: string | null
-}
-
-// Site-wide CSP (infrasafe-nginx) запрещает blob: в img-src → грузим байты
-// через apiClient (Bearer) и конвертируем в data: URL (как FeedbackDetailModal /
-// twa/MediaGallery). Без этого фото к заявке не отображались на канбане вовсе —
-// раздела медиа в модалке просто не было.
-async function fetchMediaDataUrl(mediaId: number): Promise<string> {
-  const r = await apiClient.get(`/api/v2/media/${mediaId}/file`, { responseType: 'blob' })
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => (typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('bad')))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(r.data as Blob)
-  })
-}
-
-// Категории фотоотчёта — зеркалят FileCategories media-прокси (SEC-021 whitelist).
-const COMPLETION_CATEGORIES = new Set(['completion_photo', 'completion_video', 'completion_document'])
-
-function RequestMedia({ requestNumber }: { requestNumber: string }) {
-  const { t } = useTranslation()
-  const [lightboxId, setLightboxId] = useState<number | null>(null)
-  // Менеджер прикладывает и фото заявки (проблема пришла по телефону, фото —
-  // в мессенджер), и фотоотчёт (та же пара ролей, что и остальные менеджерские
-  // мутации заявки; backend-гейт — check_request_access).
-  const canUpload = useHasAnyRole(['manager', 'system_admin'])
-
-  const { data: items = [], isError } = useQuery<MediaItem[]>({
-    queryKey: ['request-media', requestNumber],
-    queryFn: () => apiClient.get(`/api/v2/media/request/${requestNumber}`).then(r => r.data),
-    enabled: !!requestNumber,
-    staleTime: 60_000,
-  })
-
-  const uploadRequest = useRequestMediaUpload({ requestNumber, kind: 'request' })
-  const uploadCompletion = useRequestMediaUpload({ requestNumber, kind: 'completion' })
-
-  const requestItems = items.filter((m) => !COMPLETION_CATEGORIES.has(m.category ?? ''))
-  const completionItems = items.filter((m) => COMPLETION_CATEGORIES.has(m.category ?? ''))
-
-  // Сбой media-service — не «фото нет»: прокси отвечает ошибкой, а не [].
-  if (items.length === 0 && !canUpload && !isError) return null
-
-  return (
-    <div className="flex flex-col gap-3">
-      {isError && <div className="text-[12px] text-red">{t('kanban.mediaListError')}</div>}
-      {(requestItems.length > 0 || canUpload) && (
-        <div>
-          <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
-            {t('kanban.photos')}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {requestItems.map((m) => (
-              <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
-            ))}
-            {canUpload && (
-              <MediaUploadTile
-                label={t('kanban.addRequestPhotos')}
-                testId="request-upload-input"
-                disabled={uploadRequest.isPending}
-                onFiles={(files) => uploadRequest.mutate(files)}
-              />
-            )}
-          </div>
-        </div>
-      )}
-      {(completionItems.length > 0 || canUpload) && (
-        <div>
-          <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
-            {t('kanban.completionPhotos')}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {completionItems.map((m) => (
-              <MediaThumb key={m.id} id={m.id} isVideo={m.file_type === 'video'} onOpen={() => setLightboxId(m.id)} />
-            ))}
-            {canUpload && (
-              <MediaUploadTile
-                label={t('kanban.addWorkPhotos')}
-                testId="completion-upload-input"
-                disabled={uploadCompletion.isPending}
-                onFiles={(files) => uploadCompletion.mutate(files)}
-              />
-            )}
-          </div>
-        </div>
-      )}
-      {lightboxId !== null && (
-        <MediaLightbox key={lightboxId} id={lightboxId} onClose={() => setLightboxId(null)} />
-      )}
-    </div>
-  )
-}
-
-function MediaThumb({ id, isVideo, onOpen }: { id: number; isVideo: boolean; onOpen: () => void }) {
-  const { t } = useTranslation()
-  // FE-11: cache the blob data-URL by media id (shared queryKey with the
-  // lightbox) so re-opening the modal or the viewer doesn't re-download.
-  const { data: url, isError: errored } = useQuery({
-    queryKey: ['media-blob', id],
-    queryFn: () => fetchMediaDataUrl(id),
-    staleTime: 5 * 60_000,
-    // WR-08: base64 data-URLs are heavy; with the default 5-min gcTime they
-    // linger in cache long after the modal closes. Drop them ~30s after the
-    // last observer unmounts to free memory promptly.
-    gcTime: 30_000,
-    retry: false,
-  })
-
-  if (errored) {
-    return (
-      <div className="w-20 h-20 rounded-lg border border-border-default bg-bg-surface flex items-center justify-center text-text-secondary" title={t('kanban.mediaError')}>
-        <ImageOff size={18} />
-      </div>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="relative w-20 h-20 rounded-lg overflow-hidden border border-border-default bg-bg-surface"
-    >
-      {url ? (
-        isVideo ? (
-          <video src={url} className="w-full h-full object-cover" muted />
-        ) : (
-          <img src={url} alt="" className="w-full h-full object-cover" />
-        )
-      ) : (
-        <div className="w-full h-full animate-pulse bg-bg-surface" />
-      )}
-      {isVideo && (
-        <span className="absolute inset-0 flex items-center justify-center text-white text-lg drop-shadow">▶</span>
-      )}
-    </button>
-  )
-}
-
-function MediaLightbox({ id, onClose }: { id: number; onClose: () => void }) {
-  // FE-11: reuse the cached blob (shared ['media-blob', id]) — opening the
-  // viewer for a thumb that already loaded is instant, no re-download.
-  const { data: url, isError } = useQuery({
-    queryKey: ['media-blob', id],
-    queryFn: () => fetchMediaDataUrl(id),
-    staleTime: 5 * 60_000,
-    // WR-08: match the thumbnail query so the cached data-URL is freed ~30s after
-    // the last observer (thumb or lightbox) unmounts.
-    gcTime: 30_000,
-    retry: false,
-  })
-  const isVideo = url?.startsWith('data:video') ?? false
-
-  useEffect(() => {
-    if (isError) onClose()
-  }, [isError, onClose])
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/15 text-white flex items-center justify-center"
-      >
-        <XIcon size={18} />
-      </button>
-      {url && (
-        isVideo ? (
-          <video src={url} controls autoPlay className="max-w-full max-h-[85vh] rounded-lg" onClick={(e) => e.stopPropagation()} />
-        ) : (
-          <img src={url} alt="" className="max-w-full max-h-[85vh] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
-        )
-      )}
-    </div>
-  )
-}
-
-function StatusDropdown({
-  status,
-  statusStyle,
-  onSelect,
-}: {
-  status: string
-  statusStyle: { bg: string; text: string }
-  onSelect: (targetStatus: string) => void
-}) {
-  const { t } = useTranslation()
-  const frozen = FROZEN_STATUSES.has(status)
-  const transitions = VALID_TRANSITIONS[status]
-  const hasTransitions = transitions && transitions.size > 0
-
-  // Frozen or no transitions — static badge
-  if (frozen || !hasTransitions) {
-    return (
-      <span className={cn(
-        'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
-        statusStyle.bg, statusStyle.text
-      )}>
-        {tStatus(status, t)}
-      </span>
-    )
-  }
-
-  const items = Array.from(transitions)
-  const cancelIdx = items.indexOf('Отменена')
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className={cn(
-          'inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)] transition-colors cursor-pointer',
-          'hover:ring-2 hover:ring-offset-1 hover:ring-offset-bg-card',
-          statusStyle.bg, statusStyle.text,
-          // ring color matches status
-          status === 'Новая' && 'hover:ring-[#60a5fa]/40',
-          status === 'В работе' && 'hover:ring-[#fbbf24]/40',
-          status === 'Закуп' && 'hover:ring-[#a78bfa]/40',
-          status === 'Уточнение' && 'hover:ring-[#22d3ee]/40',
-          status === 'Выполнена' && 'hover:ring-[#34d399]/40',
-          status === 'Исполнено' && 'hover:ring-accent/40',
-        )}>
-          {tStatus(status, t)}
-          <ChevronDown className="w-3 h-3 opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6} className="min-w-[180px]">
-        {items.map((targetStatus) => (
-          <span key={targetStatus}>
-            {/* Separator before Отменена */}
-            {targetStatus === 'Отменена' && cancelIdx > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem
-              onClick={() => onSelect(targetStatus)}
-              variant={targetStatus === 'Отменена' ? 'destructive' : 'default'}
-              className="gap-2.5 py-2 px-2.5"
-            >
-              <span className={cn(
-                'w-2 h-2 rounded-full shrink-0',
-                STATUS_DOT[targetStatus as keyof typeof STATUS_DOT] ?? 'bg-text-muted'
-              )} />
-              <span className="font-[family-name:var(--font-display)] font-semibold text-[13px]">
-                {tStatus(targetStatus, t)}
-              </span>
-            </DropdownMenuItem>
-          </span>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }

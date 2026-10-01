@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { apiClient } from '../../api/client'
+import { apiClient } from '../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
+import { requestMediaQueryKey } from './useRequestMedia'
 
 /**
  * Загрузка медиа в заявку из карточки дашборда (менеджер).
@@ -65,7 +66,7 @@ export function useRequestMediaUpload({ requestNumber, kind }: { requestNumber: 
     },
     onSuccess: ({ total, failures }) => {
       if (failures.length < total) {
-        queryClient.invalidateQueries({ queryKey: ['request-media', requestNumber] })
+        queryClient.invalidateQueries({ queryKey: requestMediaQueryKey(requestNumber) })
       }
       if (failures.length === 0) {
         toast.success(t(TOAST_KEYS[kind].ok))

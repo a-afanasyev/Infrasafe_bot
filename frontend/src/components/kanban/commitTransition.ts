@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
-import { apiClient } from '../../api/client'
 import { KANBAN_QUERY_PREFIX, type KanbanColumn, type RequestCard } from '../../hooks/useKanban'
+import { patchRequest } from '../../hooks/useRequestMutations'
 import type { TransitionData } from './TransitionModal'
 
 /** Снимок доски в кэше — ровно то, что кладёт туда `useKanban`. */
@@ -92,8 +92,8 @@ export async function commitTransition({
   )
 
   try {
-    const response = await apiClient.patch(`/api/v2/requests/${requestNumber}`, data)
-    onSuccess?.(response?.data as RequestCard | undefined)
+    const card = await patchRequest<RequestCard | undefined>(requestNumber, data)
+    onSuccess?.(card)
   } catch (err) {
     const detail = (err as { response?: { data?: { detail?: unknown } } })
       ?.response?.data?.detail

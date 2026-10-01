@@ -49,13 +49,28 @@ export function kanbanQueryKey(filters: Record<string, string | undefined> = {})
   return [...KANBAN_QUERY_PREFIX, filters] as const
 }
 
+function fetchKanban(filters: Record<string, string | undefined>): Promise<{ columns: KanbanColumn[] }> {
+  return apiClient.get('/api/v2/requests/kanban', { params: filters }).then((r) => r.data)
+}
+
+/** Снимок доски тем же ключом, что у `useKanban`, но без WS-подписки и
+ *  автообновления — для пикеров вне канбана («Сотрудники → Назначить заявку»).
+ *  Общий ключ = общий кэш и общая инвалидация по `KANBAN_QUERY_PREFIX`. */
+export function useKanbanSnapshot(filters: Record<string, string | undefined> = {}) {
+  return useQuery<{ columns: KanbanColumn[] }>({
+    queryKey: kanbanQueryKey(filters),
+    queryFn: () => fetchKanban(filters),
+    staleTime: 30_000,
+  })
+}
+
 export function useKanban(filters: Record<string, string | undefined> = {}) {
   const queryClient = useQueryClient()
   const queryKey = kanbanQueryKey(filters)
 
   const { data, isLoading, isError } = useQuery<{ columns: KanbanColumn[] }>({
     queryKey,
-    queryFn: () => apiClient.get('/api/v2/requests/kanban', { params: filters }).then((r) => r.data),
+    queryFn: () => fetchKanban(filters),
     staleTime: 30_000,
     // Страховка к WS: доска обязана показать ответ жителя на уточнение даже
     // если сокет мёртв (AUD5-APIFE-7). Минута — компромисс между свежестью

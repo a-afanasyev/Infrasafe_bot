@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { apiClient } from '@/api/client'
 import type { BalanceSnapshot } from '../types/paymentControl'
+import { paymentKeys } from './usePaymentControl'
 
 /** Потолок счетов в одном запросе — тот же, что у сервиса. */
 const CHUNK = 200
@@ -48,7 +49,7 @@ export function useApartmentBalances(accounts: (string | null | undefined)[]): A
 
   const queries = useQueries({
     queries: chunks.map(chunk => ({
-      queryKey: ['apartment-balances', chunk],
+      queryKey: [...paymentKeys.apartmentBalances, chunk],
       queryFn: async () => {
         const { data } = await apiClient.post(URL, { account_numbers: chunk })
         return (data?.balances ?? {}) as Record<string, BalanceSnapshot>

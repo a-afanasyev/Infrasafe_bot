@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '@/api/client'
+import { mintResourceTicket } from '@/api/resourceAccounting'
 import { cn } from '@/lib/utils'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import {
@@ -28,10 +28,6 @@ import {
 const RESOURCE_BASE_URL = '/uk/api/resource'
 const RESOURCE_BASE_PATH = '/dashboard/resource-accounting'
 
-// mint — наш существующий backend-эндпоинт (роль-маппинг УК→ресурс на бэке).
-const mint = async (): Promise<string> =>
-  (await apiClient.post('/api/v2/resource-accounting/ticket')).data.ticket
-
 // Single-flight: модульный api-клиент дёргает onUnauthorized на КАЖДЫЙ 401, а
 // на старте раздела их несколько (ensureSession's own /v1/auth/me + self-bootstrap
 // ResourceAuthProvider + запросы страниц). Без гарда каждый 401 запускал новый
@@ -40,7 +36,7 @@ const mint = async (): Promise<string> =>
 let inflightSession: Promise<void> | null = null
 const ensureSession = (): Promise<void> => {
   if (inflightSession) return inflightSession
-  inflightSession = ensureResourceSession(mint).finally(() => {
+  inflightSession = ensureResourceSession(mintResourceTicket).finally(() => {
     inflightSession = null
   })
   return inflightSession

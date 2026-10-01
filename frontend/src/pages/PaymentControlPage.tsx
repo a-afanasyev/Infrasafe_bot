@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { apiClient } from '@/api/client'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { todayInDisplayTz } from '../utils/timezone'
 import { safeErrorMessage } from '@/utils/errorMessage'
@@ -10,15 +8,20 @@ import AccountLookupSection from '../components/payment/AccountLookupSection'
 import ImportUploadSection, { type ImportKind } from '../components/payment/ImportUploadSection'
 import ImportDetailSection from '../components/payment/ImportDetailSection'
 import ImportHistorySection from '../components/payment/ImportHistorySection'
-import type { AccountBalance, PaymentImport } from '@/types/paymentControl'
+import {
+  useChangePaymentImport,
+  usePaymentAccount,
+  usePaymentImport,
+  usePaymentImports,
+  useRefreshPaymentControl,
+  useUploadPaymentImport,
+} from '../hooks/usePaymentControl'
 
-const BASE = '/api/v2/payment-control'
 const ROW_PAGE = 200
 
 export default function PaymentControlPage() {
   const { t } = useTranslation()
   usePageTitle(t('paymentControl.title'))
-  const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const account = params.get('account') || ''
   const selectedId = Number(params.get('import')) || null
@@ -32,21 +35,9 @@ export default function PaymentControlPage() {
   const [reason, setReason] = useState('')
   const [offset, setOffset] = useState(0)
 
-  const imports = useQuery<PaymentImport[]>({
-    queryKey: ['payment-imports', offset],
-    queryFn: () => apiClient.get(`${BASE}/imports`, { params: { offset } }).then(r => r.data),
-    retry: false,
-  })
-  const detail = useQuery<PaymentImport>({
-    queryKey: ['payment-import', selectedId, rowOffset],
-    queryFn: () => apiClient.get(`${BASE}/imports/${selectedId}`, { params: { offset: rowOffset } }).then(r => r.data),
-    enabled: !!selectedId, retry: false,
-  })
-  const balance = useQuery<AccountBalance>({
-    queryKey: ['payment-account', account],
-    queryFn: () => apiClient.get(`${BASE}/account`, { params: { account_number: account } }).then(r => r.data),
-    enabled: !!account, retry: false,
-  })
+  const imports = usePaymentImports(offset)
+  const detail = usePaymentImport(selectedId, rowOffset)
+  const balance = usePaymentAccount(account)
 
   function selectImport(importId: number, position = 0) {
     const next = new URLSearchParams(params)
@@ -57,29 +48,9 @@ export default function PaymentControlPage() {
     setParams(next)
     setReason('')
   }
-  async function refresh() {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ['payment-imports'] }), qc.invalidateQueries({ queryKey: ['payment-import'] }),
-      qc.invalidateQueries({ queryKey: ['payment-account'] }), qc.invalidateQueries({ queryKey: ['apartment-payment'] }),
-      // Список квартир в разделе «Адреса» показывает те же суммы — активация
-      // импорта обязана обновить и его, иначе таблица останется на старой дате.
-      qc.invalidateQueries({ queryKey: ['apartment-balances'] }),
-    ])
-  }
-  const upload = useMutation({
-    mutationFn: async () => {
-      const body = new FormData()
-      body.append('kind', kind); body.append('as_of', asOf); body.append('source', source.trim())
-      if (file) body.append('file', file)
-      return (await apiClient.post<PaymentImport>(`${BASE}/imports/preview`, body)).data
-    },
-    onSuccess: async data => { selectImport(data.id); await refresh() },
-  })
-  const change = useMutation({
-    mutationFn: (action: 'activate' | 'deactivate') =>
-      apiClient.post(`${BASE}/imports/${selectedId}/${action}`, action === 'deactivate' ? { reason: reason.trim() } : undefined),
-    onSuccess: refresh,
-  })
+  const refresh = useRefreshPaymentControl()
+  const upload = useUploadPaymentImport(async data => { selectImport(data.id); await refresh() })
+  const change = useChangePaymentImport(refresh)
   const error = upload.error || change.error || detail.error
 
   return <div className="space-y-5 p-4 md:p-6">
@@ -94,12 +65,12 @@ export default function PaymentControlPage() {
     <ImportUploadSection
       kind={kind} source={source} asOf={asOf} file={file} isPending={upload.isPending}
       onKindChange={setKind} onSourceChange={setSource} onAsOfChange={setAsOf} onFileChange={setFile}
-      onUpload={() => upload.mutate()}
+      onUpload={() => upload.mutate({ kind, asOf, source, file })}
     />
     {error && <p role="alert" className="text-red">{safeErrorMessage(error, t('paymentControl.error'))}</p>}
     {detail.data && !detail.isError && <ImportDetailSection
       report={detail.data} account={account} rowOffset={rowOffset} reason={reason} isChanging={change.isPending}
-      onRowOffsetChange={setRowOffset} onReasonChange={setReason} onChange={action => change.mutate(action)}
+      onRowOffsetChange={setRowOffset} onReasonChange={setReason} onChange={action => change.mutate({ importId: selectedId, action, reason })}
     />}
     <ImportHistorySection imports={imports} offset={offset} onOffsetChange={setOffset} onSelectImport={selectImport} />
   </div>

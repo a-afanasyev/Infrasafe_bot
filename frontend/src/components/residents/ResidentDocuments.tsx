@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ResidentDocument } from '../../types/api'
-import { apiClient } from '../../api/client'
+import { fetchFileAsDataUrl } from '../../api/fileDataUrl'
 import { formatDate as fmtDate } from '../../i18n/formatters'
 import { Button } from '@/components/ui/button'
 
@@ -10,24 +10,9 @@ interface Props {
   documents: ResidentDocument[]
 }
 
-/** Читаем файл как **data:** URL, а не blob:.
- *
- *  На `/uk/*` действует CSP с `img-src` без `blob:` — превью через
- *  `URL.createObjectURL` там молча не отрисовывается. data: URL проходит.
- *  Цена — файл целиком в памяти вкладки, но документ ограничен 20 МБ лимитом
- *  Telegram, а открывают их по одному.
- */
-async function fetchAsDataUrl(url: string): Promise<{ dataUrl: string; type: string }> {
-  const response = await apiClient.get(url, { responseType: 'blob' })
-  const blob = response.data as Blob
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
-  return { dataUrl, type: blob.type }
-}
+// Файл читается как **data:** URL, а не blob: — на `/uk/*` CSP с `img-src`
+// без `blob:` (см. fetchFileAsDataUrl). Цена — файл целиком в памяти вкладки,
+// но документ ограничен 20 МБ лимитом Telegram, а открывают их по одному.
 
 export default function ResidentDocuments({ residentId, documents }: Props) {
   const { t } = useTranslation()
@@ -44,7 +29,7 @@ export default function ResidentDocuments({ residentId, documents }: Props) {
     setLoadingId(doc.id)
     setError(null)
     try {
-      const loaded = await fetchAsDataUrl(
+      const loaded = await fetchFileAsDataUrl(
         `/api/v2/residents/${residentId}/documents/${doc.id}/file`,
       )
       if (loaded.type.startsWith('image/')) {
