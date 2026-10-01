@@ -27,7 +27,6 @@ interface Props {
   onClose: () => void
 }
 
-
 export default function ElevatorStatusPromptDialog({
   open, elevatorId, elevatorLabel, currentStatus, requestNumbers, onClose,
 }: Props) {
