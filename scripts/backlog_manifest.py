@@ -336,8 +336,7 @@ ASSIGNMENT: dict[str, dict] = {
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
     "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-09-11",
                  note="AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
-    "DB-049": A(pkg="—", status="deferred", method="verified-2026-07-27",
-                note="jsonb+GIN — когда появится запрос по ролям, которому нужен индекс"),
+    # DB-049 закрыт 2026-10-01 (PR #660).
     "SEC-115": A(pkg="—", status="deferred", method="verified-2026-09-11",
                  note="UK-часть сделана (/api/uk-buildings-metrics + x-service-token при INFRASAFE_INVENTORY_TOKEN); остаток внешний — принуждение auth на стороне InfraSafe и проверка токена на продах"),
     # ── Календарь: `PENT-F04` жил здесь до 2026-08-30 — единственный
@@ -425,7 +424,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-9 закрыт 2026-09-23 (PR #606).
     # A9-P3-10 закрыт 2026-09-23 (PR #606).
     # A9-P3-11 закрыт 2026-09-23 (PR #623).
-    "A9-P3-12": A(pkg="AUD9-W5", status="actionable", method="audit9-2026-09-22", services="access-api", note="access: `registry.py` обходит слой репозиториев; long-poll на `time.sleep` занимает поток"),
+    # A9-P3-12 закрыт 2026-10-01 (PR #657).
     # A9-P3-13 закрыт 2026-09-23 (PR #602).
     # A9-P3-14 закрыт 2026-09-23 (PR #608).
     # A9-P3-15 закрыт 2026-09-23 (PR #598).
@@ -434,7 +433,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-18 закрыт 2026-09-23 (PR #612).
     # A9-P3-19 закрыт 2026-09-23 (PR #609).
     # A9-P3-20 закрыт 2026-09-23 (PR #609).
-    "A9-P3-21": A(pkg="AUD9-W6", status="actionable", method="audit9-2026-09-22", services="frontend", note="Фронт: god-компоненты и 44 файла с прямыми вызовами `apiClient`"),
+    # A9-P3-21 закрыт 2026-10-01 (PR #658).
     # A9-P3-22 закрыт 2026-09-23 (PR #618).
     # A9-P3-23 закрыт 2026-09-23 (PR #611).
     # A9-P3-24 закрыт 2026-09-23 (PR #613).
