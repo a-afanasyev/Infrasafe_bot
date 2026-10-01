@@ -40,7 +40,7 @@ def page_requests(
     ).scalar_one()
     rows = db.execute(
         text(
-            f"SELECT {_REQUEST_COLS}FROM resident_access_requests {where} "
+            f"SELECT {_REQUEST_COLS} FROM resident_access_requests {where} "
             "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
         ),
         {**params, "limit": limit, "offset": offset},
@@ -51,7 +51,7 @@ def page_requests(
 def get_request(db: Session, request_id: int) -> dict | None:
     """Заявка по id либо ``None``."""
     row = db.execute(
-        text(f"SELECT {_REQUEST_COLS}FROM resident_access_requests WHERE id = :id"),
+        text(f"SELECT {_REQUEST_COLS} FROM resident_access_requests WHERE id = :id"),
         {"id": request_id},
     ).mappings().first()
     return dict(row) if row is not None else None

@@ -63,7 +63,7 @@ def page_passes(
     ).scalar_one()
     rows = db.execute(
         text(
-            f"SELECT {_PASS_COLS}FROM access_passes {where} "
+            f"SELECT {_PASS_COLS} FROM access_passes {where} "
             "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"
         ),
         {**params, "limit": limit, "offset": offset},
@@ -74,7 +74,7 @@ def page_passes(
 def get_pass(db: Session, pass_id: int) -> dict | None:
     """Пропуск по id либо ``None``."""
     row = db.execute(
-        text(f"SELECT {_PASS_COLS}FROM access_passes WHERE id = :id"),
+        text(f"SELECT {_PASS_COLS} FROM access_passes WHERE id = :id"),
         {"id": pass_id},
     ).mappings().first()
     return dict(row) if row is not None else None
