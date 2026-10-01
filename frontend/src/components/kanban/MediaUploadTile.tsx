@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { UPLOAD_ACCEPT } from './useRequestMediaUpload'
+import { UPLOAD_ACCEPT } from '../../hooks/useRequestMediaUpload'
 
 /**
  * Плитка «добавить» в ряду превью медиа + скрытый file-input. Одна на секцию

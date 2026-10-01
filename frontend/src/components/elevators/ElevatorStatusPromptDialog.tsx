@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { ElevatorStatusDot } from './ElevatorStatusBadge'
 import { buildStatusReason } from './statusReason'
 import { elevatorKeys, useSetElevatorStatus } from '../../hooks/useElevators'
+import { REQUEST_QUERY_PREFIX } from '../../hooks/useRequestDetail'
 import { ELEVATOR_STATUSES, type ElevatorStatus } from '../../types/elevators'
 
 /**
@@ -26,8 +27,6 @@ interface Props {
   onClose: () => void
 }
 
-/** Префикс кэша карточек заявок (`['request', number]`). */
-const REQUEST_QUERY_PREFIX = ['request'] as const
 
 export default function ElevatorStatusPromptDialog({
   open, elevatorId, elevatorLabel, currentStatus, requestNumbers, onClose,

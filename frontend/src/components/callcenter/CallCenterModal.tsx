@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { apiClient } from '../../api/client'
-import { useQueryClient } from '@tanstack/react-query'
+import {
+  searchCallCenterResidents,
+  useCreateCallCenterRequest,
+  type CallCenterBody,
+  type CallCenterResident,
+} from '../../hooks/useCallCenter'
 import { tCategory, tUrgency } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
 import {
@@ -28,30 +32,17 @@ import { CATEGORIES, URGENCIES } from '../../constants'
 
 const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '' }
 
-/** Тело POST /api/v2/callcenter/requests (CallCenterCreateRequest): адрес —
- *  либо свободный `address`, либо `building_id` (+ поля лифта). */
-interface CallCenterBody {
-  category: string
-  urgency: string
-  description: string
-  user_id?: number
-  address?: string
-  building_id?: number | null
-  elevator_id?: number | null
-  elevator_operational?: boolean | null
-}
-
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
   const [query, setQuery] = useState('')
-  const [residents, setResidents] = useState<Array<{ id: number; full_name: string; phone: string }>>([])
+  const [residents, setResidents] = useState<CallCenterResident[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [form, setForm] = useState(INITIAL_FORM)
   const [elevator, setElevator] = useState<CallCenterElevatorValue>(EMPTY_ELEVATOR_VALUE)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const queryClient = useQueryClient()
+  const createRequest = useCreateCallCenterRequest()
 
   // Категория «Лифт» при включённом модуле: адрес — дом из справочника
   // (building_id), плюс лифт и «работает?»; свободный текст адреса скрыт —
@@ -71,8 +62,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
 
   const search = async () => {
     try {
-      const { data } = await apiClient.get('/api/v2/callcenter/search-resident', { params: { q: query } })
-      setResidents(data)
+      setResidents(await searchCallCenterResidents(query))
     } catch {
       setError(t('errors.searchResident'))
     }
@@ -99,8 +89,7 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
     setLoading(true)
     setError('')
     try {
-      await apiClient.post('/api/v2/callcenter/requests', buildBody())
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
+      await createRequest.mutateAsync(buildBody())
       onClose()
     } catch (e: unknown) {
       // 422 от сервера (в т.ч. Р11: лифт обязателен) — detail строкой или

@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { apiClient } from '../../api/client'
+import { useAssignRequestExecutor } from '../../hooks/useRequestMutations'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import ExecutorPicker, { type ExecutorChoice } from './ExecutorPicker'
 import {
@@ -51,23 +50,12 @@ export default function ReassignExecutorModal({
 }: Props) {
   const { t } = useTranslation()
   const { name: personName } = usePersonName()
-  const queryClient = useQueryClient()
   const [choice, setChoice] = useState<ExecutorChoice>('')
   const [error, setError] = useState<string | null>(null)
 
-  const mutation = useMutation({
-    mutationFn: (value: ExecutorChoice) => {
-      const body =
-        value === 'duty'
-          ? { status: 'В работе', assign_to_duty: true }
-          : { executor_id: value as number }
-      return apiClient.patch(`/api/v2/requests/${requestNumber}`, body).then(r => r.data)
-    },
+  const mutation = useAssignRequestExecutor({
     onSuccess: () => {
       toast.success(t('toast.requestUpdated'))
-      queryClient.invalidateQueries({ queryKey: ['kanban'] })
-      queryClient.invalidateQueries({ queryKey: ['request', requestNumber] })
-      queryClient.invalidateQueries({ queryKey: ['employees'] })
       onReassigned?.()
       onClose()
     },
@@ -113,7 +101,7 @@ export default function ReassignExecutorModal({
             {t('common.cancel')}
           </Button>
           <Button
-            onClick={() => mutation.mutate(choice)}
+            onClick={() => choice !== '' && mutation.mutate({ requestNumber, executor: choice })}
             disabled={choice === '' || mutation.isPending}
           >
             {isReassign ? t('kanban.reassignConfirm') : t('kanban.assignConfirm')}
