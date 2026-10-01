@@ -29,6 +29,7 @@ from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.user_names import full_name
 from uk_management_bot.utils.business_time import fmt_datetime
+from uk_management_bot.database.roles_type import roles_contain
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -147,7 +148,9 @@ def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lan
     notices: list[_ManagerNotice] = []
     try:
         managers = db.query(User).filter(
-            User.roles.contains('manager') | User.roles.contains('admin')
+            # DB-049: прежний contains('admin') — подстрока, ловившая и
+            # system_admin; точное совпадение сохраняет тот же круг адресатов.
+            roles_contain(User.roles, "manager", "admin", "system_admin")
         ).all()
 
         for manager in managers:

@@ -58,6 +58,7 @@ from uk_management_bot.utils.fsm_media import BOT_MEDIA_MAX_FILES, append_fsm_me
 from uk_management_bot.utils.helpers import get_text
 
 import logging
+from uk_management_bot.database.roles_type import roles_contain
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -215,7 +216,7 @@ def _collect_return_notifications(db, request_number: str, outcome, return_reaso
     manager_text = None
     if request is not None:
         managers = db.query(User).filter(
-            User.roles.contains('"manager"'),
+            roles_contain(User.roles, "manager"),
             User.status == "approved"
         ).all()
         manager_ids = [m.telegram_id for m in managers if m.telegram_id]

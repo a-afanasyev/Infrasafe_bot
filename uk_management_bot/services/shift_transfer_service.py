@@ -38,6 +38,7 @@ from uk_management_bot.utils.specializations import has_required_specs
 from uk_management_bot.utils.datetime_utils import utc_now as _utcnow
 # ARCH-116: показ времени смен — только через канон бизнес-зоны.
 from uk_management_bot.utils.business_time import fmt_datetime, fmt_day_month_time
+from uk_management_bot.database.roles_type import roles_contain
 
 logger = logging.getLogger(__name__)
 
@@ -408,7 +409,7 @@ class ShiftTransferService:
         Фильтр в Python ПОСЛЕ выборки → ``limit`` применяем после него.
         """
         users = self.db.query(User).filter(
-            User.roles.contains("executor"),
+            roles_contain(User.roles, "executor"),
             User.status == "approved",
             User.id != exclude_user_id,
         ).order_by(User.first_name).all()

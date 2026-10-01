@@ -20,6 +20,7 @@ from uk_management_bot.utils.auth_helpers import legacy_role_filter, parse_roles
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.sql_search import ci_contains_any, escape_like, is_postgres
+from uk_management_bot.database.roles_type import roles_contain, roles_empty
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,9 @@ class UserManagementService:
                 and_(
                     User.status == 'pending',
                     or_(
-                        User.roles.contains('applicant'),
+                        roles_contain(User.roles, "applicant"),
                         and_(
-                            or_(User.roles.is_(None), User.roles == ''),
+                            roles_empty(User.roles),
                             legacy_role_filter('applicant')
                         )
                     )
@@ -59,9 +60,9 @@ class UserManagementService:
                 and_(
                     User.status == 'approved',
                     or_(
-                        User.roles.contains('applicant'),
+                        roles_contain(User.roles, "applicant"),
                         and_(
-                            or_(User.roles.is_(None), User.roles == ''),
+                            roles_empty(User.roles),
                             legacy_role_filter('applicant')
                         )
                     )
@@ -72,9 +73,9 @@ class UserManagementService:
                 and_(
                     User.status == 'blocked',
                     or_(
-                        User.roles.contains('applicant'),
+                        roles_contain(User.roles, "applicant"),
                         and_(
-                            or_(User.roles.is_(None), User.roles == ''),
+                            roles_empty(User.roles),
                             legacy_role_filter('applicant')
                         )
                     )
@@ -84,9 +85,9 @@ class UserManagementService:
             # Подсчет сотрудников (executor, manager или inspector)
             staff_count = self.db.query(User).filter(
                 or_(
-                    User.roles.contains('executor'),
-                    User.roles.contains('manager'),
-                    User.roles.contains('inspector')
+                    roles_contain(User.roles, "executor"),
+                    roles_contain(User.roles, "manager"),
+                    roles_contain(User.roles, "inspector")
                 )
             ).count()
             
@@ -130,9 +131,9 @@ class UserManagementService:
                 and_(
                     User.status == 'pending',
                     or_(
-                        User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%'),
-                        User.roles.like('%"inspector"%'),
+                        roles_contain(User.roles, "executor"),
+                        roles_contain(User.roles, "manager"),
+                        roles_contain(User.roles, "inspector"),
                         legacy_role_filter('executor'),
                         legacy_role_filter('manager'),
                         legacy_role_filter('inspector')
@@ -145,9 +146,9 @@ class UserManagementService:
                 and_(
                     User.status == 'approved',
                     or_(
-                        User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%'),
-                        User.roles.like('%"inspector"%'),
+                        roles_contain(User.roles, "executor"),
+                        roles_contain(User.roles, "manager"),
+                        roles_contain(User.roles, "inspector"),
                         legacy_role_filter('executor'),
                         legacy_role_filter('manager'),
                         legacy_role_filter('inspector')
@@ -160,9 +161,9 @@ class UserManagementService:
                 and_(
                     User.status == 'blocked',
                     or_(
-                        User.roles.like('%"executor"%'),
-                        User.roles.like('%"manager"%'),
-                        User.roles.like('%"inspector"%'),
+                        roles_contain(User.roles, "executor"),
+                        roles_contain(User.roles, "manager"),
+                        roles_contain(User.roles, "inspector"),
                         legacy_role_filter('executor'),
                         legacy_role_filter('manager'),
                         legacy_role_filter('inspector')
@@ -173,7 +174,7 @@ class UserManagementService:
             # Исполнители (executor)
             executors = self.db.query(User).filter(
                 or_(
-                    User.roles.like('%"executor"%'),
+                    roles_contain(User.roles, "executor"),
                     legacy_role_filter('executor')
                 )
             ).count()
@@ -181,7 +182,7 @@ class UserManagementService:
             # Менеджеры (manager)
             managers = self.db.query(User).filter(
                 or_(
-                    User.roles.like('%"manager"%'),
+                    roles_contain(User.roles, "manager"),
                     legacy_role_filter('manager')
                 )
             ).count()
@@ -233,10 +234,10 @@ class UserManagementService:
                     User.status == status,
                     or_(
                         # Новая система ролей (JSON поле roles)
-                        User.roles.contains('applicant'),
+                        roles_contain(User.roles, "applicant"),
                         # Старая система ролей (поле role) - для обратной совместимости
                         and_(
-                            or_(User.roles.is_(None), User.roles == ''),
+                            roles_empty(User.roles),
                             legacy_role_filter('applicant')
                         )
                     )
@@ -315,9 +316,9 @@ class UserManagementService:
             # Включаем всех сотрудников, независимо от других ролей
             query = self.db.query(User).filter(
                 or_(
-                    User.roles.contains('executor'),
-                    User.roles.contains('manager'),
-                    User.roles.contains('inspector')
+                    roles_contain(User.roles, "executor"),
+                    roles_contain(User.roles, "manager"),
+                    roles_contain(User.roles, "inspector")
                 )
             )
             
@@ -373,9 +374,9 @@ class UserManagementService:
                 .filter(
                     and_(
                         or_(
-                            User.roles.contains('applicant'),
+                            roles_contain(User.roles, "applicant"),
                             and_(
-                                or_(User.roles.is_(None), User.roles == ''),
+                                roles_empty(User.roles),
                                 legacy_role_filter('applicant'),
                             ),
                         ),
@@ -569,9 +570,9 @@ class UserManagementService:
             # Проверяем оба поля: role (старая система) и roles (новая система)
             base_query = self.db.query(User).filter(
                 or_(
-                    User.roles.like('%"executor"%'),
-                    User.roles.like('%"manager"%'),
-                    User.roles.like('%"inspector"%'),
+                    roles_contain(User.roles, "executor"),
+                    roles_contain(User.roles, "manager"),
+                    roles_contain(User.roles, "inspector"),
                     legacy_role_filter('executor'),
                     legacy_role_filter('manager'),
                     legacy_role_filter('inspector')
@@ -588,14 +589,14 @@ class UserManagementService:
             elif list_type == 'executors':
                 query = base_query.filter(
                     or_(
-                        User.roles.like('%"executor"%'),
+                        roles_contain(User.roles, "executor"),
                         legacy_role_filter('executor')
                     )
                 )
             elif list_type == 'managers':
                 query = base_query.filter(
                     or_(
-                        User.roles.like('%"manager"%'),
+                        roles_contain(User.roles, "manager"),
                         legacy_role_filter('manager')
                     )
                 )

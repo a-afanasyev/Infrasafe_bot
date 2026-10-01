@@ -1,10 +1,18 @@
-from sqlalchemy import Column, Integer, BigInteger, Boolean, String, DateTime, Text, ForeignKey, text
+from sqlalchemy import Column, Integer, BigInteger, Boolean, String, DateTime, Text, ForeignKey, Index, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
+from uk_management_bot.database.roles_type import RolesJSON
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # DB-049: «есть роль» = roles @> '["role"]' — обслуживает jsonb_path_ops.
+        Index(
+            "ix_users_roles_gin", "roles",
+            postgresql_using="gin", postgresql_ops={"roles": "jsonb_path_ops"},
+        ),
+    )
     
     id = Column(Integer, primary_key=True)
     telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
@@ -12,9 +20,10 @@ class User(Base):
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
     
-    # Роли: список ролей в JSON (храним как TEXT для простоты в SQLite)
-    # Пример значения: '["applicant", "executor"]'
-    roles = Column(Text, nullable=True)
+    # Роли: JSON-массив. DB-049: на PostgreSQL — jsonb под GIN-индексом
+    # (миграция 022), в Python — по-прежнему JSON-строка '["applicant", "executor"]'
+    # (см. database/roles_type.py). Фильтры — только roles_contain/roles_empty.
+    roles = Column(RolesJSON(), nullable=True)
 
     # Активная роль пользователя: applicant | executor | manager
     active_role = Column(String(50), nullable=True)

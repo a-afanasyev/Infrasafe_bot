@@ -24,6 +24,7 @@ from sqlalchemy import and_, case, exists, func, or_, select
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.database.models.user_apartment import (
     UserApartment, UserApartmentStatus,
 )
@@ -82,7 +83,7 @@ BELONGING_STATUSES = (
 def _resident_scope():
     """Общий WHERE «это житель»: роль applicant + не soft-deleted."""
     return (
-        User.roles.like(f'%"{RESIDENT_ROLE}"%'),
+        roles_contain(User.roles, RESIDENT_ROLE),
         User.deleted_at.is_(None),
     )
 

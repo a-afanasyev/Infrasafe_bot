@@ -19,6 +19,7 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.constants.specializations import CANONICAL_SPECIALIZATIONS
+from uk_management_bot.database.roles_type import roles_contain
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ class SpecializationService:
             detailed_stats = {}
             
             # Получаем всех исполнителей
-            executors = self.db.query(User).filter(User.roles.contains('executor')).all()
+            executors = self.db.query(User).filter(roles_contain(User.roles, "executor")).all()
             
             # Инициализируем структуру для каждой специализации
             for spec in self.AVAILABLE_SPECIALIZATIONS:

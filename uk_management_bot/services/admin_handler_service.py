@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from sqlalchemy import String, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.request import Request
@@ -51,6 +51,7 @@ from uk_management_bot.utils.workflow_predicates import (
     awaiting_manager_clause,
     returned_for_review_clause,
 )
+from uk_management_bot.database.roles_type import roles_contain
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ class AdminHandlerService:
         return (
             self.db.query(User)
             .filter(
-                User.roles.cast(String).contains('"executor"'),
+                roles_contain(User.roles, "executor"),
                 User.status == "approved",
             )
             .all()

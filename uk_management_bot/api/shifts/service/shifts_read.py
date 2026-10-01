@@ -12,6 +12,7 @@ from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.shift_transfer import ShiftTransfer
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
+from uk_management_bot.database.roles_type import roles_contain
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +109,7 @@ async def get_stats(db: AsyncSession, *, period_start: datetime,
             User.status == "approved",
             or_(
                 legacy_role_filter("executor"),
-                User.roles.like('%"executor"%'),
+                roles_contain(User.roles, "executor"),
             ),
         )
     )
