@@ -8,7 +8,7 @@ import AccessDatabasePage from './AccessDatabasePage'
 import { actionsFor } from '../../test/authz'
 
 // Гейтинг действий менеджера на «Базе доступа»: кнопки создания/блокировки/
-// рассмотрения рендерятся ТОЛЬКО для manager/system_admin (ACCESS_MANAGER_ROLES),
+// рассмотрения рендерятся ТОЛЬКО для manager/system_admin (действие access.registry.manage),
 // и скрыты для security_operator.
 
 const activeVehicle = {

@@ -111,6 +111,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
   }, [requestNumber, requestUpdatedAt, markSeen])
 
   const isManager = useCan('requests.manage')
+  // Смена исполнителя — решение именно менеджера (workflow MANAGER_ASSIGN, без
+  // admin). Сегодня роли совпадают с requests.manage, но это разные права.
   const canManagerDecide = useCan('management.decide')
 
   // Канон MANAGER_ASSIGN пускает смену исполнителя только из этих статусов —

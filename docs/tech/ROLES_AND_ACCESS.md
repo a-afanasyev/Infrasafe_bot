@@ -8,7 +8,7 @@
 >
 > Реестр ролей: бот — `uk_management_bot/utils/constants.py` (`USER_ROLES`),
 > `config/settings.py`, `utils/enums.py` (`UserRole`), parity-тест
-> `tests/test_roles_parity.py`; фронт — `frontend/src/constants/roles.ts`.
+> `uk_management_bot/tests/test_roles_parity.py`; фронт — `frontend/src/constants/roles.ts`.
 > Кто что может — `uk_management_bot/authz/catalog.py`.
 > `user.roles` — массив строк (jsonb, DB-049), `user.active_role` — режим меню,
 > прав не даёт (legacy-колонка `user.role` УДАЛЕНА миграцией 022).
@@ -16,7 +16,7 @@
 ## 1. Канонические роли (реестр, 6 шт.)
 
 Проверяются на паритет между `Settings.USER_ROLES == constants.USER_ROLES ==
-enum UserRole` (`tests/test_roles_parity.py:23-32`) и зеркалятся во фронте
+enum UserRole` (`uk_management_bot/tests/test_roles_parity.py:23-32`) и зеркалятся во фронте
 (`constants/roles.ts:USER_ROLES`).
 
 | Роль | Назначение |

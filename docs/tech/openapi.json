@@ -6242,6 +6242,14 @@
       },
       "ProfileOut": {
         "properties": {
+          "actions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
           "active_role": {
             "anyOf": [
               {
