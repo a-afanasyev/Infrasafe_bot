@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from uk_management_bot.api.dependencies import get_db, get_current_user, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.authz import actions_for_roles
 from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
@@ -31,12 +32,18 @@ class ProfileOut(BaseModel):
     # Простой режим исполнителя: TWA показывает упрощённый интерфейс. Включает
     # менеджер (PATCH /shifts/employees/{id}/simple-mode), сам пользователь — нет.
     simple_mode: bool = False
+    # RBAC A1: действия, которые дают роли пользователя (authz/catalog.py). Это
+    # ПОДСКАЗКА интерфейсу — какие разделы и кнопки показывать; статус аккаунта
+    # здесь не учитывается, как не учитывался при гейтинге по ролям. Решение
+    # принимает сервер на каждом запросе (require_action).
+    actions: list[str] = []
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_user(cls, user: User) -> "ProfileOut":
         roles_list = get_user_roles(user)
         return cls(
+            actions=sorted(actions_for_roles(roles_list)),
             id=user.id,
             telegram_id=user.telegram_id,
             first_name=user.first_name,
@@ -167,7 +174,7 @@ class RequestAddressesOut(BaseModel):
 
 @router.get("/request-addresses", response_model=RequestAddressesOut)
 async def get_request_addresses(
-    user: User = Depends(require_approved_roles("applicant")),
+    user: User = Depends(require_action("requests.create")),
     db: AsyncSession = Depends(get_db),
 ):
     """Три набора доступных жителю уровней адреса для создания заявки.

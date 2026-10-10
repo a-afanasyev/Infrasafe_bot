@@ -18,7 +18,7 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.database.session import run_db
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.utils.helpers import get_text
 
@@ -270,8 +270,8 @@ def _admin_approve_apartment(db, user_apartment_id: int, admin_telegram_id: int)
     # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
     # состояния: решение принимается только по pending-заявке (паритет с
     # канон-путём _review_apartment_request).
-    from uk_management_bot.utils.auth_helpers import get_user_roles
-    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+    from uk_management_bot.authz import has_action_roles
+    if not has_action_roles(admin, "apartments.moderate"):
         return "admin_not_found"
     if user_apartment.status != "pending":
         return "not_pending"
@@ -318,8 +318,8 @@ def _admin_reject_apartment(db, user_apartment_id: int, admin_telegram_id: int) 
     # ЗАПИСИ — @require_role хендлера не единственная защита. Плюс guard
     # состояния: решение принимается только по pending-заявке (паритет с
     # канон-путём _review_apartment_request).
-    from uk_management_bot.utils.auth_helpers import get_user_roles
-    if not ({"manager", "admin"} & set(get_user_roles(admin) or [])):
+    from uk_management_bot.authz import has_action_roles
+    if not has_action_roles(admin, "apartments.moderate"):
         return "admin_not_found"
     if user_apartment.status != "pending":
         return "not_pending"
@@ -662,7 +662,7 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext, *, _db=Non
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.callback_query(F.data.startswith("admin_manage_apartments_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: просмотр и управление квартирами пользователя"""
     await state.clear()
@@ -741,7 +741,7 @@ async def admin_manage_user_apartments(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("admin_apartment_detail_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: просмотр деталей квартиры"""
     await state.clear()
@@ -806,7 +806,7 @@ async def admin_apartment_detail(callback: CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(F.data.startswith("admin_approve_apartment_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: одобрить квартиру"""
     lang = language
@@ -845,7 +845,7 @@ async def admin_approve_apartment(callback: CallbackQuery, state: FSMContext, la
 
 
 @router.callback_query(F.data.startswith("admin_reject_apartment_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: отклонить квартиру"""
     lang = language
@@ -883,7 +883,7 @@ async def admin_reject_apartment(callback: CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(F.data.startswith("admin_toggle_owner_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def admin_toggle_owner_status(callback: CallbackQuery, state: FSMContext, language: str = "ru", roles: list = None, user=None, *, _db=None):
     """Админ: переключить статус владелец/жилец"""
     lang = language

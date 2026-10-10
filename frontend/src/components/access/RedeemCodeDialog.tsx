@@ -26,7 +26,7 @@ import type { RedeemCodeResponse } from '../../types/access'
  *    деталь не раскрываем;
  *  - 429 (too_many_attempts): «Слишком много попыток, попробуйте позже».
  *
- * Гейтинг — на уровне роута (/dashboard/access гейтится ACCESS_MODULE_ROLES,
+ * Гейтинг — на уровне роута (/dashboard/access гейтится access.events.read,
  * что совпадает с RBAC redeem-эндпоинта: security_operator/manager/system_admin).
  */
 

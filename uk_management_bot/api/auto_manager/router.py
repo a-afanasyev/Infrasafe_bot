@@ -1,7 +1,7 @@
 """API конфига автоматического менеджера (dashboard).
 
 В отличие от `board_config`, здесь ОБА маршрута приватные: GET и PUT доступны
-роли manager ИЛИ admin (`require_roles("manager", "admin")` — OR-семантика,
+роли manager ИЛИ admin (`require_action("auto_manager.configure")` — OR-семантика,
 см. `api/dependencies.py::require_roles`). Загрузка/сохранение целиком
 делегированы `services/auto_manager/config.py` (async `load_config`/
 `save_config`) — не дублируем здесь DEFAULT_CONFIG/upsert-логику, она уже
@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.auto_manager.schemas import AutoManagerConfigData
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import load_config, save_config
@@ -26,7 +26,7 @@ router = APIRouter()
 @router.get("/auto-manager-config", response_model=AutoManagerConfigData)
 async def get_auto_manager_config(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager", "admin")),
+    user: User = Depends(require_action("auto_manager.configure")),
 ) -> AutoManagerConfigData:
     """Текущий конфиг авто-менеджера. Доступен manager ИЛИ admin.
 
@@ -42,7 +42,7 @@ async def update_auto_manager_config(
     request: Request,
     payload: AutoManagerConfigData,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager", "admin")),
+    user: User = Depends(require_action("auto_manager.configure")),
 ) -> AutoManagerConfigData:
     """Сохранить конфиг авто-менеджера. Доступен manager ИЛИ admin.
 

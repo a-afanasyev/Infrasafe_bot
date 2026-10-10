@@ -6,14 +6,14 @@ id из callback.data И идёт в БД И не имеет признака а
 (admin_approve_apartment использовал from_user.id и выглядел «своим»).
 
 Признаки авторизации (см. план аудита):
-  * @require_role на хендлере;
+  * @require_action (RBAC-действие) или прежний @require_role на хендлере;
   * вызов has_admin_access / has_executor_access / check_user_role[_sync] /
     has_request_access_sync / request_access_reason_sync — С ИСПОЛЬЗОВАНИЕМ
     результата в условии (голый вызов не считается);
   * канон run_command_sync/async (авторизует внутри по PrincipalRef) — как
     прямым вызовом, так и ПЕРЕДАННЫЙ АРГУМЕНТОМ в asyncio.to_thread /
     run_in_executor (канон уезжает в поток целиком, см. _canon_passed_to_runner);
-  * роутер модуля несёт RoleGate (module-level идиома волны A/D).
+  * роутер модуля несёт ActionGate/RoleGate (module-level идиома волны A/D).
 
 НЕ признаки: StateFilter (даёт ложную гарантию); ownership-сравнение — оно
 живёт только КАТЕГОРИЕЙ в BASELINE (OWNER-CHECK@...), иначе фильтр запроса
@@ -43,6 +43,9 @@ HANDLERS_DIR = Path(__file__).resolve().parents[2] / "uk_management_bot" / "hand
 AUTH_CALLS = {
     "has_admin_access", "has_executor_access", "check_user_role",
     "check_user_role_sync", "has_request_access_sync", "request_access_reason_sync",
+    # RBAC A1: проверка действия из authz/catalog.py — тот же признак, что и
+    # прежние ролевые предикаты (засчитывается только при использовании в условии).
+    "can", "has_action_roles", "action_allowed_for_roles",
 }
 CANON_CALLS = {"run_command_sync", "run_command_async"}
 DATA_CALLS = {"query", "run_db", "session_scope", "execute", "add", "commit", "delete"}
@@ -204,12 +207,21 @@ def _inline_role_guard(fns) -> bool:
     return False
 
 
+# Root-фильтры роутера, закрывающие весь модуль: прежний по ролям и RBAC-действие.
+_ROOT_GATE_CALLS = (".filter(RoleGate(", ".filter(ActionGate(")
+# Декораторы-гейты хендлера: прежний по ролям и RBAC-действие (authz/catalog.py).
+_DECORATOR_GATES = ("require_role", "require_action")
+
+
 def _module_gated(path: Path) -> bool:
     src = path.read_text(encoding="utf-8")
-    if "RoleGate" in src and ".filter(RoleGate(" in src:
+    if any(call in src for call in _ROOT_GATE_CALLS):
         return True
     pkg_router = path.parent / "_router.py"
-    return pkg_router.exists() and ".filter(RoleGate(" in pkg_router.read_text(encoding="utf-8")
+    if not pkg_router.exists():
+        return False
+    router_src = pkg_router.read_text(encoding="utf-8")
+    return any(call in router_src for call in _ROOT_GATE_CALLS)
 
 
 def _candidates():
@@ -224,7 +236,7 @@ def _candidates():
             decos = [ast.unparse(d) for d in fn.decorator_list]
             if not any(".callback_query" in d for d in decos):
                 continue
-            if any("require_role" in d for d in decos) or gated:
+            if any(gate in d for gate in _DECORATOR_GATES for d in decos) or gated:
                 continue
             body_src = ast.unparse(fn)
             takes_id = "callback.data" in body_src and any(
@@ -271,7 +283,7 @@ def test_every_candidate_is_in_baseline():
     new = candidates - set(BASELINE)
     assert not new, (
         f"Новые хендлеры с id из callback.data + БД без признака авторизации: "
-        f"{sorted(new)}. Добавьте авторизацию (канон: @require_role / RoleGate / "
+        f"{sorted(new)}. Добавьте авторизацию (канон: @require_action / ActionGate / "
         f"has_request_access_sync) либо запись в BASELINE с обоснованием."
     )
 

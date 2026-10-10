@@ -6,7 +6,7 @@ import { joinPersonName } from '../../utils/nameCase'
 import { useHandleTransfer } from '../../hooks/useShifts'
 import { useEmployeePicker } from '../../hooks/useEmployeePicker'
 import EmployeePickerSearch from '../employees/EmployeePickerSearch'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { TransferOut } from '../../types/api'
@@ -31,7 +31,7 @@ export default function TransferRequestCard({ transfer }: Props) {
   const { t } = useTranslation()
   const { name: personName, full: fullName } = usePersonName()
   const handle = useHandleTransfer()
-  const isManager = useHasRole('manager')
+  const isManager = useCan('shifts.manage')
   const [assigning, setAssigning] = useState(false)
   const [picked, setPicked] = useState('')
   const picker = useEmployeePicker()

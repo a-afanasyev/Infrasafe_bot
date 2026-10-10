@@ -13,7 +13,7 @@ import type { AccessEventsFilters as Filters } from '../../types/access'
 /**
  * Экран «История проездов» (менеджер, §6/§13.2). Таблица событий с расширенными
  * фильтрами (период, решение, зона, номер, источник), пагинацией и деталью.
- * Гард — manager/system_admin (ACCESS_MANAGER_ROLES).
+ * Гард — действие access.registry.manage (manager/system_admin).
  */
 const PAGE_LIMIT = 50
 

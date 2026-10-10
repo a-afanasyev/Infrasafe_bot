@@ -40,6 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
+from uk_management_bot.authz.catalog import get_action
 from uk_management_bot.utils.specializations import matches_required_specs
 
 #: Порядок правил канона. Служит и документацией, и опорой для тестов.
@@ -88,13 +89,13 @@ def access_reason(facts: RequestAccessFacts) -> Optional[str]:
     «пустил как менеджера» и «пустил как соседа», иначе регрессия вроде
     «менеджер проходит только потому, что он же и владелец» была бы незаметна.
     """
-    if "manager" in facts.roles:
+    if get_action("requests.read_all").allows(facts.roles):
         return "manager"
 
     if facts.request_owner_id is not None and facts.request_owner_id == facts.user_id:
         return "owner"
 
-    if "executor" in facts.roles:
+    if get_action("requests.execute").allows(facts.roles):
         if facts.request_executor_id is not None and facts.request_executor_id == facts.user_id:
             return "executor_direct"
         if facts.has_individual_assignment:

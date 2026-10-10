@@ -5,6 +5,7 @@ import { server } from '../../test/msw/server'
 import { useAuthStore } from '../../stores/authStore'
 import ShiftDetailModal from './ShiftDetailModal'
 import type { ShiftDetail } from '../../types/api'
+import { actionsFor } from '../../test/authz'
 
 // TEST-068: модалка смены — детали, метрики, действия по статусу/роли,
 // завершение через подтверждение и переназначение (REG-02) на настоящих
@@ -44,7 +45,7 @@ const employees = [
 let posts: Array<{ url: string; body: unknown }>
 
 function setRole(role: string) {
-  useAuthStore.setState({ user: { id: 1, roles: [role] }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles: [role], actions: actionsFor([role]) }, isAuthenticated: true, hydrating: false })
 }
 
 beforeEach(() => {

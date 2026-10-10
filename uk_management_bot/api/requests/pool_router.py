@@ -17,7 +17,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import service as svc
 from uk_management_bot.api.requests.elevator_fields import card_language
 from uk_management_bot.api.requests.schemas import PoolItem, PoolResponse
@@ -70,7 +70,7 @@ async def get_claim_pool(
     limit: int = Query(POOL_DEFAULT_LIMIT, ge=1, le=POOL_MAX_LIMIT),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("requests.execute")),
 ):
     """Заявки, которые исполнитель может взять сейчас: срочные первыми, затем
     по очереди (старые раньше). Не на смене → `on_shift=false`, пустой список."""

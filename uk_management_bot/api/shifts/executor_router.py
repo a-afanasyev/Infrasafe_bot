@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.shifts import service
 from uk_management_bot.services import shift_lifecycle
 from uk_management_bot.database.models.shift import Shift
@@ -102,7 +102,7 @@ def _shift_out(shift: Shift) -> ShiftOut:
 
 @router.get("/current", response_model=Optional[ShiftOut])
 async def get_current_shift(
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the current active shift for the authenticated executor, or null.
@@ -128,7 +128,7 @@ async def get_current_shift(
 @router.get("/me", response_model=list[ShiftOut])
 async def get_my_shifts(
     limit: int = Query(default=20, ge=1, le=100),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns list of the authenticated executor's shifts (all statuses), ordered by start_time desc."""
@@ -146,7 +146,7 @@ async def get_my_shifts(
 async def start_shift(
     body: StartShiftBody,
     background: BackgroundTasks,
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Creates a new active shift for the authenticated executor."""
@@ -165,7 +165,7 @@ async def start_shift(
 async def end_shift(
     shift_id: int,
     background: BackgroundTasks,
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Ends a specific active shift belonging to the authenticated executor."""
@@ -300,7 +300,7 @@ async def _notify_many(jobs: list[tuple[int, str]]) -> None:
 async def list_my_transfers(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Передачи текущего исполнителя (инициированные ИМ + назначенные ЕМУ)."""
@@ -315,7 +315,7 @@ async def list_my_transfers(
 async def create_my_transfer(
     body: CreateTransferBody,
     background: BackgroundTasks,
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Исполнитель инициирует передачу своей смены (pending) + уведомляет менеджеров."""
@@ -353,7 +353,7 @@ async def respond_my_transfer(
     transfer_id: int,
     body: RespondTransferBody,
     background: BackgroundTasks,
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("shifts.own")),
     db: AsyncSession = Depends(get_db),
 ):
     """Получатель принимает (assigned→completed, перенос смены+заявок) или

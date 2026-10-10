@@ -20,7 +20,7 @@ from uk_management_bot.keyboards.my_shifts import (
     get_shift_actions_keyboard
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_text
 # ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
 from uk_management_bot.utils.business_time import (
@@ -30,6 +30,7 @@ from uk_management_bot.utils.business_time import (
     fmt_day_month,
     fmt_time,
 )
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import _load_current_shifts, _load_week_shifts, _load_shift_details
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "view_current_shifts")
-@require_role(['executor'])
+@require_action("execution.work")
 async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                                 user: User = None, roles: list = None, *, _db=None):
     """Просмотр текущих смен."""
@@ -127,7 +128,7 @@ async def handle_current_shifts(callback: CallbackQuery, state: FSMContext, lang
 
 
 @router.callback_query(F.data == "view_week_schedule")
-@require_role(['admin', 'manager', 'executor'])
+@require_action("shifts.history")
 async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                                roles: list = None, user: User = None, *, _db=None):
     """Просмотр расписания на неделю.
@@ -138,7 +139,7 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
     try:
         lang = language
         user_db_id = user.id if user is not None else None
-        is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
+        is_privileged = bool(roles) and has_action_roles(roles, "admin_panel.use")
 
         user_found, today, week_shifts = await run_db(
             lambda s: _load_week_shifts(s, callback.from_user.id, user_db_id, is_privileged), db=_db,
@@ -230,7 +231,7 @@ async def handle_week_schedule(callback: CallbackQuery, state: FSMContext, langu
 
 
 @router.callback_query(F.data.startswith("shift_details:"))
-@require_role(['executor'])
+@require_action("execution.work")
 async def handle_shift_details(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                                user: User = None, roles: list = None, *, _db=None):
     """Подробная информация о смене.
@@ -348,7 +349,7 @@ async def handle_shift_details(callback: CallbackQuery, state: FSMContext, langu
 
 
 @router.callback_query(F.data.startswith("shift_requests:"))
-@require_role(['executor'])
+@require_action("execution.work")
 async def open_shift_requests(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                               user: User = None, roles: list = None, *, _db=None):
     """«Мои заявки» из карточки активной смены → существующий раздел заявок.

@@ -16,6 +16,7 @@ from uk_management_bot.database.models.user_verification import (
     VerificationStatus
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import _fmt_created_at, _load_document, _verify_document
@@ -31,7 +32,7 @@ async def verify_document(callback: CallbackQuery, roles: list = None, language:
     document_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -83,7 +84,7 @@ async def approve_document(callback: CallbackQuery, roles: list = None, language
     document_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -123,7 +124,7 @@ async def reject_document(callback: CallbackQuery, roles: list = None, language:
     document_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True

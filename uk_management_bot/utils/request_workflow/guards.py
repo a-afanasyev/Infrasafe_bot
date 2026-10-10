@@ -8,16 +8,20 @@ from __future__ import annotations
 
 from typing import Mapping
 
+from uk_management_bot.authz.catalog import get_action
 from uk_management_bot.utils.constants import (
     ACCEPTANCE_MODE_MANAGER,
     REQUEST_STATUS_NEW,
-    ROLE_APPLICANT,
-    ROLE_EXECUTOR,
-    ROLE_MANAGER,
 )
 
 from .projections import normalize_status
 from .types import Action, ActorContext, WorkflowSnapshot
+
+
+def _actor_may(actor: ActorContext, action_key: str) -> bool:
+    """Роль-право действующего человека (каталог authz). Отношения к заявке
+    (владелец, назначенный, смена) проверяются отдельно — каждым гардом."""
+    return actor.kind == "user" and get_action(action_key).allows(actor.roles)
 
 # ---------------------------------------------------------------------------
 # Авторизация per-action (PR0 Р2)
@@ -40,11 +44,11 @@ SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
 
 
 def _is_manager(actor: ActorContext) -> bool:
-    return actor.kind == "user" and ROLE_MANAGER in actor.roles
+    return _actor_may(actor, "management.decide")
 
 
 def _is_assigned_executor(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
-    if actor.kind != "user" or ROLE_EXECUTOR not in actor.roles:
+    if not _actor_may(actor, "requests.execute"):
         return False
     assigned = snap.active_assignment_executor_id or snap.request.executor_id
     return assigned is not None and assigned == actor.user_id
@@ -74,7 +78,7 @@ def executor_in_claim_pool(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     для тех, кто мог бы взять сам: остальным — единый отказ, без оракула
     «занята ли чужая заявка».
     """
-    if actor.kind != "user" or ROLE_EXECUTOR not in actor.roles:
+    if not _actor_may(actor, "requests.execute"):
         return False
     if not snap.actor_has_active_shift:
         return False
@@ -150,5 +154,5 @@ def _can_cancel(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     if _is_manager(actor):
         return True
     # applicant-owner может отменить только свою НОВУЮ заявку
-    return (_is_owner(snap, actor) and ROLE_APPLICANT in actor.roles
+    return (_is_owner(snap, actor) and _actor_may(actor, "requests.own")
             and normalize_status(snap.request) == REQUEST_STATUS_NEW)

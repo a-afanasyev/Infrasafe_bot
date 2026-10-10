@@ -5,6 +5,7 @@ import { render } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import { useAuthStore } from '@/stores/authStore'
 import AccessDatabasePage from './AccessDatabasePage'
+import { actionsFor } from '../../test/authz'
 
 // Гейтинг действий менеджера на «Базе доступа»: кнопки создания/блокировки/
 // рассмотрения рендерятся ТОЛЬКО для manager/system_admin (ACCESS_MANAGER_ROLES),
@@ -58,7 +59,7 @@ function installHandlers() {
 
 function setRole(role: string) {
   useAuthStore.setState({
-    user: { id: 1, roles: [role] },
+    user: { id: 1, roles: [role], actions: actionsFor([role]) },
     isAuthenticated: true,
     hydrating: false,
   })

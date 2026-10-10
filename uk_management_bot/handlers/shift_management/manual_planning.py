@@ -15,7 +15,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_date_selection_keyboard,
 )
 from uk_management_bot.states.shift_management import ShiftManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.datetime_utils import utc_now
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "create_shift_from_template")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_create_shift_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смены из шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -64,7 +64,7 @@ async def handle_create_shift_template(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("select_template:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_template_selection(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Выбор шаблона и даты"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -105,7 +105,7 @@ async def handle_template_selection(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data.startswith("select_date:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смены на выбранную дату"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -156,7 +156,7 @@ async def handle_date_selection(callback: CallbackQuery, state: FSMContext, db=N
 
 
 @router.callback_query(F.data == "plan_weekly_schedule")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение недельного планирования (без создания смен)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -194,7 +194,7 @@ async def handle_weekly_planning(callback: CallbackQuery, state: FSMContext, db=
 
 
 @router.callback_query(F.data == "cancel_plan_weekly_schedule")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_weekly_planning_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Отмена недельного планирования — возврат в меню планирования."""
     try:
@@ -213,7 +213,7 @@ async def handle_weekly_planning_cancel(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data == "confirm_plan_weekly_schedule")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_weekly_planning_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Планирование недельного расписания (выполнение после подтверждения)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

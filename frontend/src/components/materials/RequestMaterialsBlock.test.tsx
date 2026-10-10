@@ -5,6 +5,7 @@ import { server } from '../../test/msw/server'
 import { useAuthStore } from '../../stores/authStore'
 import type { RequestMaterialsOut } from '../../types/materials'
 import RequestMaterialsBlock from './RequestMaterialsBlock'
+import { actionsFor } from '../../test/authz'
 
 // TEST-068 (порция materials): блок «Материалы» в карточке заявки —
 // только для ролей модуля, только при наличии списаний.
@@ -21,7 +22,7 @@ const DATA: RequestMaterialsOut = {
 }
 
 function setRoles(roles: string[]) {
-  useAuthStore.setState({ user: { id: 1, roles }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles, actions: actionsFor(roles) }, isAuthenticated: true, hydrating: false })
 }
 
 beforeEach(() => setRoles(['manager']))

@@ -16,10 +16,8 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import (
-    get_db, get_current_user, require_roles, require_approved_roles,
-)
-from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
+from uk_management_bot.authz import has_action_roles
 from uk_management_bot.api.dependencies_access import check_request_access, is_assigned_executor
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
@@ -182,7 +180,7 @@ async def get_kanban(
     executor_id: Optional[int] = Query(None),
     category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("requests.manage")),
 ):
     """Доска заявок для менеджера, сгруппированная по статусам.
 
@@ -306,7 +304,7 @@ async def create_request(
     body: CreateRequestBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_approved_roles("applicant")),
+    user: User = Depends(require_action("requests.create")),
 ):
     """Заявка жителя: структурный {address_type, address_id} (любой из 3 уровней).
 
@@ -349,7 +347,7 @@ async def create_inspector_request(
     body: CreateInspectorRequestBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_approved_roles("inspector")),
+    user: User = Depends(require_action("requests.create_inspection")),
 ):
     """Заявка обходчика: building-only. Любой активный дом (двор активен),
     принадлежность не требуется. yard/apartment отсечены схемой (422)."""
@@ -460,7 +458,7 @@ async def change_request_category(
     body: ChangeCategoryBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("requests.manage")),
 ):
     """Смена категории менеджером (решение владельца 2026-09-03).
 
@@ -522,7 +520,7 @@ async def update_request(
     body: UpdateRequestBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager", "applicant", "executor")),
+    user: User = Depends(require_action("requests.update")),
 ):
     updates = body.model_dump(exclude_unset=True)
 
@@ -553,7 +551,7 @@ async def update_request(
         # дежурного». Без этого гейта житель различал бы по коду ответа
         # (409/403/404) существование чужой заявки, её специализацию и
         # укомплектованность смен — оракул на чужие данные.
-        if "manager" not in get_user_roles(user):
+        if not has_action_roles(user, "requests.manage"):
             raise HTTPException(
                 status_code=403, detail="Not permitted for this transition")
         from uk_management_bot.constants.categories import get_specialization_for_category
@@ -693,10 +691,12 @@ async def update_request(
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    user_roles = set(get_user_roles(user))
+    # Ветка определяется правами: «управляет заявками» правит любую, иначе —
+    # исполнитель свою назначенную, иначе автор — оценку своей.
+    manages = has_action_roles(user, "requests.manage")
 
     # ── Executor path: контент-поля своей заявки ──
-    if "executor" in user_roles and "manager" not in user_roles:
+    if has_action_roles(user, "requests.execute") and not manages:
         assignments = await svc.assignments_for(db, request_number)
         if not is_assigned_executor(req, user, assignments):
             raise HTTPException(status_code=403, detail="Not assigned to this request")
@@ -705,7 +705,7 @@ async def update_request(
                 del updates[field]
 
     # ── Applicant path: владелец правит только rating своей заявки ──
-    elif "applicant" in user_roles and "manager" not in user_roles:
+    elif has_action_roles(user, "requests.own") and not manages:
         if req.user_id != user.id:
             raise HTTPException(status_code=403, detail="Cannot update another user's request")
         if not set(updates.keys()).issubset({"rating"}):
@@ -756,7 +756,7 @@ async def claim_request(
     request_number: str,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("requests.execute")),
 ):
     """Исполнитель берёт заявку из группового пула (канон EXECUTOR_CLAIM).
 
@@ -831,9 +831,8 @@ async def get_comments(
 
     # Внутренние записи (смена категории, «Проблема») — сотрудникам заявки:
     # менеджеру/админу и исполнителю ЭТОЙ заявки; житель их не видит.
-    user_roles = get_user_roles(user)
     include_internal = (
-        any(r in user_roles for r in ["manager", "admin"])
+        has_action_roles(user, "requests.internal_comments")
         or await can_see_internal_comments_async(db, user, req)
     )
 
@@ -854,8 +853,7 @@ async def add_comment(
 
     # Only managers can create internal comments
     if body.is_internal:
-        user_roles = get_user_roles(user)
-        if not any(r in user_roles for r in ["manager", "admin"]):
+        if not has_action_roles(user, "requests.internal_comments"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can create internal comments")
 
     return await svc.create_comment(
@@ -869,7 +867,7 @@ async def add_comment(
 
 @router.post(
     "/{request_number}/remind-applicant",
-    dependencies=[Depends(require_roles("manager"))],
+    dependencies=[Depends(require_action("requests.manage"))],
 )
 async def remind_applicant(
     request_number: str,

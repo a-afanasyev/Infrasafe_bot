@@ -6,6 +6,7 @@ import { server } from '../../test/msw/server'
 import { useAuthStore } from '@/stores/authStore'
 import type { TransferOut } from '../../types/api'
 import TransferRequestCard from './TransferRequestCard'
+import { actionsFor } from '../../test/authz'
 
 const EMPLOYEES = [
   { id: 5, first_name: 'Электрик', last_name: 'Тест1', phone: '+998901111113', specialization: ['electrician'], active_shift_id: null, verification_status: 'verified', status: 'approved' },
@@ -20,7 +21,7 @@ function transfer(over: Partial<TransferOut> = {}): TransferOut {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ user: { id: 1, roles: ['manager'] }, isAuthenticated: true })
+  useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']) }, isAuthenticated: true })
   server.use(http.get('*/api/v2/shifts/employees', () => HttpResponse.json(EMPLOYEES)))
 })
 
@@ -65,7 +66,7 @@ describe('TransferRequestCard', () => {
   })
 
   it('hides action buttons for non-managers', () => {
-    useAuthStore.setState({ user: { id: 2, roles: ['executor'] }, isAuthenticated: true })
+    useAuthStore.setState({ user: { id: 2, roles: ['executor'], actions: actionsFor(['executor']) }, isAuthenticated: true })
     render(<TransferRequestCard transfer={transfer()} />)
     expect(screen.queryByRole('button', { name: 'Назначить' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Отменить' })).not.toBeInTheDocument()

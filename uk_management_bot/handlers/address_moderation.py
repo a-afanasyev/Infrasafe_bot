@@ -20,7 +20,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
 from uk_management_bot.database.session import run_db
-from uk_management_bot.handlers._role_gate import RoleGate
+from uk_management_bot.handlers._role_gate import ActionGate
 from uk_management_bot.services.address_service import AddressService
 from uk_management_bot.states.address_management import ApartmentModerationStates
 from uk_management_bot.keyboards.address_management import (
@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 # Гейт всего роутера (см. handlers/_role_gate.py): отказ = UNHANDLED, транзит цел.
-router.callback_query.filter(RoleGate())
-router.message.filter(RoleGate())
+router.callback_query.filter(ActionGate("admin_panel.use"))
+router.message.filter(ActionGate("admin_panel.use"))
 
 
 # ==========================================================================

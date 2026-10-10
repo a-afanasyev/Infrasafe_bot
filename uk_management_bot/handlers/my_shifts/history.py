@@ -13,10 +13,11 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.database.models.user import User
 from uk_management_bot.keyboards.my_shifts import get_my_shifts_menu
 from uk_management_bot.states.my_shifts import MyShiftsStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_text
 # ARCH-116: показ и дневные бакеты — в бизнес-зоне (БД остаётся UTC).
 from uk_management_bot.utils.business_time import fmt_day_month, fmt_time
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import _load_shift_history
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "shift_history")
-@require_role(['admin', 'manager', 'executor'])
+@require_action("shifts.history")
 async def handle_shift_history(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                                roles: list = None, user: User = None, *, _db=None):
     """История смен.
@@ -37,7 +38,7 @@ async def handle_shift_history(callback: CallbackQuery, state: FSMContext, langu
     try:
         lang = language
         user_db_id = user.id if user is not None else None
-        is_privileged = bool(roles) and any(r in ('admin', 'manager') for r in roles)
+        is_privileged = bool(roles) and has_action_roles(roles, "admin_panel.use")
 
         user_found, history_shifts = await run_db(
             lambda s: _load_shift_history(s, callback.from_user.id, user_db_id, is_privileged), db=_db,

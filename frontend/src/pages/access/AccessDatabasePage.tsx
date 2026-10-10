@@ -30,8 +30,7 @@ import {
   useCreateTaxiPass,
   useReviewRequest,
 } from '../../hooks/useAccessRegistry'
-import { useHasAnyRole } from '../../hooks/useHasRole'
-import { ACCESS_MANAGER_ROLES } from '../../constants/roles'
+import { useCan } from '../../hooks/useCan'
 import type {
   VehiclesFilters,
   PassesFilters,
@@ -44,8 +43,8 @@ import { Button } from '@/components/ui/button'
 
 /**
  * Экран «База доступа» (менеджер, §6/§13). Табы: Автомобили / Пропуска / Заявки.
- * Гард — manager/system_admin (ACCESS_MANAGER_ROLES). Действия (создание/блок/
- * рассмотрение) рендерятся только для этих ролей (useHasAnyRole), хотя route уже
+ * Гард — действие access.registry.manage (manager/system_admin). Действия (создание/блок/
+ * рассмотрение) рендерятся только при этом действии (useCan), хотя route уже
  * закрыт тем же набором — двойная страховка от чужого UI.
  */
 const PAGE_LIMIT = 50
@@ -365,7 +364,7 @@ export default function AccessDatabasePage() {
   const { t } = useTranslation()
   usePageTitle(t('accessControl.database.title'))
   const [tab, setTab] = useState<Tab>('vehicles')
-  const canManage = useHasAnyRole(ACCESS_MANAGER_ROLES)
+  const canManage = useCan('access.registry.manage')
 
   const tabs = [
     { key: 'vehicles', label: t('accessControl.database.vehicles') },

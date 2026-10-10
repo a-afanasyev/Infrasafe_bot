@@ -11,12 +11,14 @@
 Что снимается:
   * API ядра и API охраны — каждый маршрут: публичный / любой вошедший /
     гейт по ролям с множеством пропускаемых профилей;
-  * бот — декораторы `require_role`, root-фильтры `RoleGate` и фильтры
-    `RoleFilter` (режим меню по `active_role`) с вычисленным результатом;
-    inline-вызовы предикатов в телах хендлеров — картой «хендлер → предикаты»
-    (их семантику пиннит tests/services/test_rbac_role_predicates.py).
+  * бот — декораторы (`require_role`/`require_action`), root-фильтры роутеров
+    (`RoleGate`/`ActionGate`) и фильтры режима меню `RoleFilter` (по
+    `active_role`) — с вычисленным результатом, ключи нейтральны к механизму;
+  * инвентарь сравнений роли со строкой-именем в телах функций
+    (`inline_checks.json`, двунаправленный ратчет).
 
-Чего НЕ снимает: ветвления по ролям внутри тел функций, объектные проверки
+Чего НЕ снимает: ветвления внутри тел функций (их предикаты пиннит
+tests/services/test_rbac_role_predicates.py), объектные проверки
 (check_request_access, workflow guards) — у них свои тесты.
 
 Команды:
@@ -80,6 +82,20 @@ PROFILES: tuple[Profile, ...] = (
 )
 
 
+def run_coro(coro):
+    """Выполнить корутину на СОБСТВЕННОМ loop, не трогая текущий.
+
+    `asyncio.run` в конце сбрасывает текущий loop (`set_event_loop(None)`), и
+    соседние тесты на `get_event_loop()` в Python 3.13 падают по порядку
+    запуска. Снимок вызывается из тестов — он обязан не загрязнять окружение.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
 def fake_user(profile: Profile) -> SimpleNamespace:
     return SimpleNamespace(
         id=1000, telegram_id=1000, roles=json.dumps(list(profile.roles)),
@@ -138,7 +154,7 @@ def _gate_passes(gate: Callable, user: SimpleNamespace) -> bool:
     try:
         result = gate(user=user)
         if asyncio.iscoroutine(result):
-            asyncio.run(result)
+            run_coro(result)
         return True
     except HTTPException as exc:
         if exc.status_code in (401, 403):
@@ -231,7 +247,7 @@ def _decorator_allows(decorator_factory: Callable, args: tuple, kwargs: dict) ->
     gated = decorator_factory(*args, **kwargs)(probe)
 
     def ok(p: Profile) -> bool:
-        result = asyncio.run(gated(None, roles=resolved_roles(p), user=fake_user(p)))
+        result = run_coro(gated(None, roles=resolved_roles(p), user=fake_user(p)))
         return result is sentinel
 
     return _allowed(ok)
@@ -245,7 +261,7 @@ def _require_role_allows(roles: Iterable[str]) -> list[str]:
 
 def _root_gate_allows(gate_factory: Callable, args: tuple) -> list[str]:
     gate = gate_factory(*args)
-    return _allowed(lambda p: asyncio.run(
+    return _allowed(lambda p: run_coro(
         gate(None, roles=resolved_roles(p), user=fake_user(p))))
 
 
@@ -255,8 +271,8 @@ def _role_filter_modes(args: tuple, kwargs: dict) -> list[str]:
 
     flt = RoleFilter(*args, **kwargs)
     modes = sorted({r for p in PROFILES for r in resolved_roles(p)} | {"applicant"})
-    allowed = [m for m in modes if asyncio.run(flt(None, active_role=m))]
-    return allowed + (["<none>"] if asyncio.run(flt(None, active_role=None)) else [])
+    allowed = [m for m in modes if run_coro(flt(None, active_role=m))]
+    return allowed + (["<none>"] if run_coro(flt(None, active_role=None)) else [])
 
 
 def snapshot_bot() -> dict[str, Any]:
@@ -321,19 +337,30 @@ KNOWN_ROLES = frozenset({
 })
 
 
-def _role_literals(node: ast.AST) -> set[str]:
-    """Имена ролей, участвующие в сравнениях (`in`, `==`, …) внутри узла.
+def _role_constants(node: ast.AST) -> set[str]:
+    return {c.value for c in ast.walk(node)
+            if isinstance(c, ast.Constant) and c.value in KNOWN_ROLES}
 
-    Ловит `"manager" in roles`, `role == "admin"`, `r in ("admin", "manager")`.
+
+def _role_literals(node: ast.AST) -> set[str]:
+    """Имена ролей, по которым принимается решение внутри узла.
+
+    Ловит три формы:
+      * сравнения: `"manager" in roles`, `role == "admin"`, `r in ("admin", "manager")`;
+      * итерируемое генератора: `any(r in roles for r in ["manager", "admin"])`;
+      * пересечение множеств: `{"manager", "admin"} & set(roles)`.
     """
     found: set[str] = set()
     for sub in ast.walk(node):
-        if not isinstance(sub, ast.Compare):
-            continue
-        for part in [sub.left, *sub.comparators]:
-            for const in ast.walk(part):
-                if isinstance(const, ast.Constant) and const.value in KNOWN_ROLES:
-                    found.add(const.value)
+        if isinstance(sub, ast.Compare):
+            for part in [sub.left, *sub.comparators]:
+                found |= _role_constants(part)
+        elif isinstance(sub, ast.comprehension) and isinstance(sub.iter, (ast.List, ast.Tuple, ast.Set)):
+            found |= _role_constants(sub.iter)
+        elif isinstance(sub, ast.BinOp) and isinstance(sub.op, (ast.BitAnd, ast.BitOr, ast.Sub)):
+            for side in (sub.left, sub.right):
+                if isinstance(side, (ast.Set, ast.List, ast.Tuple)):
+                    found |= _role_constants(side)
     return found
 
 

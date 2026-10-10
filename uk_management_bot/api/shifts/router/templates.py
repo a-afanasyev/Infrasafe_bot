@@ -5,7 +5,7 @@ CRUD /templates* + POST /from-template. Тела перенесены байт-�
 from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import (
     CreateFromTemplateBody, CreateTemplateBody, ShiftDetail,
@@ -23,7 +23,7 @@ async def list_templates(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     templates = await service.list_templates(db, limit=limit, offset=offset)
     return [TemplateBrief.model_validate(t) for t in templates]
@@ -33,7 +33,7 @@ async def list_templates(
 async def get_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     tmpl = await service.get_template(db, template_id)
     if not tmpl:
@@ -45,7 +45,7 @@ async def get_template(
 async def create_template(
     body: CreateTemplateBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     tmpl = await service.create_template(db, body=body)
     return TemplateBrief.model_validate(tmpl)
@@ -56,7 +56,7 @@ async def update_template(
     template_id: int,
     body: UpdateTemplateBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     tmpl = await service.get_template(db, template_id)
     if not tmpl:
@@ -71,7 +71,7 @@ async def update_template(
 async def delete_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     tmpl = await service.get_template(db, template_id)
     if not tmpl:
@@ -84,7 +84,7 @@ async def delete_template(
 async def create_from_template(
     body: CreateFromTemplateBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     tmpl = await service.get_active_template(db, body.template_id)
     if not tmpl:

@@ -13,7 +13,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_executor_assignment_keyboard,
 )
 from uk_management_bot.states.shift_management import ExecutorAssignmentStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.datetime_utils import utc_now
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "bulk_auto_assign")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Автоматическое назначение всех смен"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -110,7 +110,7 @@ async def handle_bulk_auto_assign(callback: CallbackQuery, state: FSMContext, db
 
 
 @router.callback_query(F.data == "bulk_by_specialization")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение по специализациям"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -186,7 +186,7 @@ async def handle_bulk_by_specialization(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data == "bulk_by_period")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение на период"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -254,7 +254,7 @@ async def handle_bulk_by_period(callback: CallbackQuery, state: FSMContext, db: 
 
 
 @router.callback_query(F.data == "bulk_by_priority")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Массовое назначение по приоритету"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -318,7 +318,7 @@ async def handle_bulk_by_priority(callback: CallbackQuery, state: FSMContext, db
 
 
 @router.callback_query(F.data.startswith("select_shift_for_assignment:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Выбор конкретной смены для назначения исполнителя"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -413,7 +413,7 @@ async def handle_select_shift_for_assignment(callback: CallbackQuery, state: FSM
 
 
 @router.callback_query(F.data.startswith("assign_executor_to_shift:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителя на смену"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -586,7 +586,7 @@ async def handle_assign_executor_to_shift(callback: CallbackQuery, state: FSMCon
 
 
 @router.callback_query(F.data.startswith("force_assign:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Принудительное назначение с конфликтом расписания"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -684,7 +684,7 @@ async def handle_force_assign(callback: CallbackQuery, state: FSMContext, db: Se
 
 
 @router.callback_query(F.data == "executor_assignment")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_executor_assignment_back(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Возврат к меню назначения исполнителей"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

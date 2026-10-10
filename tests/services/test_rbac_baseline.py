@@ -88,6 +88,40 @@ def test_role_literal_comparisons_ratchet():
     )
 
 
+# Гейты по именам ролей, вытесненные действиями (RBAC A1). Разрешены только их
+# определения (совместимость и тесты самой механики).
+_LEGACY_GATES = ("require_roles", "require_approved_roles", "require_role", "RoleGate")
+_LEGACY_GATE_HOMES = {
+    "uk_management_bot/api/dependencies.py",
+    "uk_management_bot/middlewares/auth.py",
+    "uk_management_bot/handlers/_role_gate.py",
+}
+
+
+def test_no_role_name_gates_in_production_code():
+    """Новые гейты — только через действия: require_action / ActionGate / can."""
+    import ast
+
+    root = Path(__file__).resolve().parents[2]
+    offenders = []
+    for top in ("uk_management_bot", "access_control"):
+        for path in sorted((root / top).rglob("*.py")):
+            rel = path.relative_to(root).as_posix()
+            if (rel in _LEGACY_GATE_HOMES or path.name.startswith("test_")
+                    or path.name == "conftest.py" or "/tests/" in rel):
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                    if name in _LEGACY_GATES:
+                        offenders.append(f"{rel}:{node.lineno} {name}(...)")
+    assert not offenders, (
+        "гейт по именам ролей мимо каталога действий — используйте "
+        "require_action / ActionGate / authz.can:\n  " + "\n  ".join(offenders)
+    )
+
+
 def test_core_api_has_no_unexplained_public_routes():
     """Публичный маршрут без единой auth-зависимости — только известные."""
     entries = json.loads(rbac_baseline.baseline_path("core_api").read_text())["entries"]

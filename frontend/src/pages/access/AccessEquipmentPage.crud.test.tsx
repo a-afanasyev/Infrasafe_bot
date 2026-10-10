@@ -5,6 +5,7 @@ import { render } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import { useAuthStore } from '@/stores/authStore'
 import AccessEquipmentPage from './AccessEquipmentPage'
+import { actionsFor } from '../../test/authz'
 
 // TEST-068: CRUD-панели «Оборудования» через настоящие хуки + msw. Для каждой
 // мутации проверяем метод/URL/тело — форма собирает payload (числа из select,
@@ -73,7 +74,7 @@ function installHandlers(captured: Captured[]) {
 }
 
 function setRole(role: string) {
-  useAuthStore.setState({ user: { id: 1, roles: [role] }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles: [role], actions: actionsFor([role]) }, isAuthenticated: true, hydrating: false })
 }
 
 function only(captured: Captured[], method: string, urlPart: string) {

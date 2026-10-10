@@ -64,6 +64,25 @@ class RoleGate(Filter):
         return False
 
 
+class ActionGate(RoleGate):
+    """Root-фильтр роутера по действию из `authz/catalog.py`.
+
+    Та же механика, что у `RoleGate` (роли из middleware, затем fallback на
+    `user.roles`), но состав ролей берётся из каталога — кто что может
+    решается в одном месте. Действия с `approved_only` здесь запрещены:
+    root-фильтр бота статус аккаунта не проверяет.
+    """
+
+    def __init__(self, action_key: str):
+        from uk_management_bot.authz.catalog import get_action
+
+        action = get_action(action_key)
+        if action.approved_only:
+            raise ValueError(f"Действие {action_key} требует одобренный аккаунт — ActionGate статус не проверяет")
+        self.action_key = action_key
+        super().__init__(tuple(sorted(action.roles)))
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Callback-пространство адресного кластера (SSOT для deny-роутера и ратчета R1)
 # ══════════════════════════════════════════════════════════════════════════════

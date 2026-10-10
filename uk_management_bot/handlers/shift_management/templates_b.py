@@ -32,7 +32,7 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.services.shift_management_service import ShiftManagementService
 from uk_management_bot.services.template_manager import TemplateManager
 from uk_management_bot.states.shift_management import TemplateManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.constants.specializations import (
     CANONICAL_SPECIALIZATIONS,
@@ -286,7 +286,7 @@ async def handle_template_create_no_specs(callback: CallbackQuery, state: FSMCon
 
 
 @router.callback_query(F.data.startswith("template_edit_specializations_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_specializations(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Изменение специализаций шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -327,7 +327,7 @@ async def handle_edit_template_specializations(callback: CallbackQuery, state: F
 
 
 @router.callback_query(F.data.startswith("template_spec_toggle_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_toggle_template_specialization(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Переключение специализации шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -379,7 +379,7 @@ async def handle_toggle_template_specialization(callback: CallbackQuery, state: 
 
 
 @router.callback_query(F.data.startswith("template_spec_save_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_save_template_specializations(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Сохранение специализаций шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -410,7 +410,7 @@ async def handle_save_template_specializations(callback: CallbackQuery, state: F
 
 
 @router.callback_query(lambda c: c.data.startswith("template_delete_") and not c.data.startswith("template_delete_confirm_") and c.data.replace("template_delete_", "").isdigit())
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_delete_template(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Удаление шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -446,7 +446,7 @@ async def handle_delete_template(callback: CallbackQuery, state: FSMContext, rol
 
 
 @router.callback_query(lambda c: c.data.startswith("template_delete_confirm_") and c.data.replace("template_delete_confirm_", "").isdigit())
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Подтверждение удаления шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -487,7 +487,7 @@ async def handle_delete_template_confirm(callback: CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data.startswith("template_force_delete_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_force_delete_template(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Принудительное удаление шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

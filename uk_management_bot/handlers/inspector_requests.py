@@ -103,11 +103,13 @@ async def _lang(event) -> str:
 
 
 def _approved_inspector(db, telegram_id: int) -> bool:
-    from uk_management_bot.utils.auth_helpers import get_user_roles
+    """Может ли пользователь создать заявку обхода — то же действие, что у
+    API-маршрута (`requests.create_inspection`, только одобренный аккаунт)."""
+    from uk_management_bot.authz import can
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
-    if not user or user.status != "approved":
+    if not user:
         return False
-    return "inspector" in get_user_roles(user)
+    return can(user, "requests.create_inspection")
 
 
 def _active_yards(db) -> list[tuple[int, str]]:

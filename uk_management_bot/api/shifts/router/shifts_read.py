@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import ShiftBrief, ShiftStatsOut, TransferOut
 from uk_management_bot.database.models.user import User
@@ -33,7 +33,7 @@ async def list_shifts(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     shifts, users_map = await service.list_shifts(
         db,
@@ -53,7 +53,7 @@ async def get_schedule(
     date_from: datetime = Query(...),
     date_to: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     if date_to < date_from:
         raise HTTPException(status_code=422, detail="date_to must be >= date_from")
@@ -67,7 +67,7 @@ async def get_schedule(
 async def get_stats(
     period: str = Query("7d"),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     # Parse period
     days = 7
@@ -110,7 +110,7 @@ async def list_transfers(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     rows = await service.list_transfers(db, limit=limit, offset=offset)
     out = []

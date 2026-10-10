@@ -21,7 +21,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.elevators import service as api_service
 from uk_management_bot.api.elevators.errors import http_error
 from uk_management_bot.api.elevators.router_calendar import router as calendar_router
@@ -65,9 +65,9 @@ async def _require_elevators_enabled() -> None:
 
 router = APIRouter(dependencies=[Depends(_require_elevators_enabled)])
 
-_staff = require_approved_roles("executor", "manager")
-_manager_only = require_approved_roles("manager")
-_any_approved = require_approved_roles("applicant", "executor", "inspector", "manager")
+_staff = require_action("elevators.read")
+_manager_only = require_action("elevators.manage")
+_any_approved = require_action("elevators.lookup")
 
 
 # ── Реестр (статичные пути) ──────────────────────────────────────────

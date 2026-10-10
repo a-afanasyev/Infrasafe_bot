@@ -9,7 +9,7 @@ admin-действие), оно проходит ТОТ ЖЕ Decision Engine, ч
 Назначение — проверить корректность конфигурации реальной точки (привязка зоны/
 gate/шлагбаума, правила доступа авто, генерация команды) без реальной камеры.
 
-USER-API (JWT/cookie — ``require_approved_roles``, НЕ device-auth). RBAC: только
+USER-API (JWT/cookie — ``require_action``, НЕ device-auth). RBAC: только
 ``system_admin`` (как управление контроллерами, §6.1); прочие → 403, без auth → 401.
 
 PD (§11): синтетический номер по умолчанию (``DIAG…``); в аудит номер НЕ пишется —
@@ -35,7 +35,7 @@ from access_control.services.ingestion import (
     ingest_anpr,
 )
 from access_control.services.management import write_audit
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 # AUD6-P2-41: канон вместо локальной копии (15 идентичных def _utcnow по
 # репо — ровно тот класс дрейфа, что уже стрелял tz-багами, AUD5-CODE-3).
@@ -46,7 +46,6 @@ router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-diagnostic
 logger = logging.getLogger(__name__)
 
 # RBAC: диагностика приравнена к управлению оборудованием (§6.1) — только админ.
-ADMIN_ONLY_ROLES = ("system_admin",)
 
 # Синтетические дефолты приёмки (§15): номер не ПД, confidence заведомо выше порога.
 DEFAULT_DIAG_PLATE = "DIAG0001"
@@ -93,7 +92,7 @@ def post_test_event(
     request: Request,
     controller_id: int = Path(..., description="edge_controllers.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.diagnostics")),
 ) -> TestEventResponse:
     """Прогнать синтетическое ANPR-событие через реальный Decision Engine (§7).
 

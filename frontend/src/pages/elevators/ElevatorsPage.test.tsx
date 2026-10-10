@@ -6,6 +6,7 @@ import { server } from '../../test/msw/server'
 import { useAuthStore } from '../../stores/authStore'
 import { ELEVATOR_CARD, ELEVATOR_SUMMARY } from '../../test/fixtures/elevators'
 import ElevatorsPage from './ElevatorsPage'
+import { actionsFor } from '../../test/authz'
 
 function mockRegistry() {
   const urls: URL[] = []
@@ -21,7 +22,7 @@ function mockRegistry() {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ user: { id: 1, roles: ['manager'] }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']) }, isAuthenticated: true, hydrating: false })
 })
 
 describe('ElevatorsPage', () => {
@@ -62,7 +63,7 @@ describe('ElevatorsPage', () => {
   })
 
   it('«Добавить лифт» скрыта у executor', async () => {
-    useAuthStore.setState({ user: { id: 2, roles: ['executor'] }, isAuthenticated: true, hydrating: false })
+    useAuthStore.setState({ user: { id: 2, roles: ['executor'], actions: actionsFor(['executor']) }, isAuthenticated: true, hydrating: false })
     mockRegistry()
     render(<ElevatorsPage />)
     await screen.findByText('Лифт 1, подъезд 2')

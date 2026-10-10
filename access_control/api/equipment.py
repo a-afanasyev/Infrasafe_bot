@@ -3,7 +3,7 @@
 Реестр реальной точки въезда: парковочные зоны (+ привязка фаз ЖК) и въезды
 (gates) — manager/system_admin (§6.2 «настройка зон»); камеры, шлагбаумы,
 edge-контроллеры + device-credentials — ТОЛЬКО system_admin (§6.1). USER-API
-(JWT/cookie — ``require_approved_roles``, НЕ device-auth).
+(JWT/cookie — ``require_action``, НЕ device-auth).
 
 RBAC: applicant/executor/inspector/security_operator → 403; без auth → 401.
 Конверт списков — ``{items, total, limit, offset}`` (как registry). Create/PATCH
@@ -25,14 +25,12 @@ from sqlalchemy.orm import Session
 
 from access_control.services import equipment_admin as svc
 from access_control.services.device_auth import resolve_client_ip
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-equipment"])
 
 # RBAC-наборы (решение CTO): зоны/въезды — менеджер+админ; остальное — только админ.
-ZONE_GATE_ROLES = ("manager", "system_admin")
-ADMIN_ONLY_ROLES = ("system_admin",)
 
 # A6-P2-50: пагинация/DTO-база/404 — общие, см. api/pagination.py
 from access_control.api.pagination import (  # noqa: E402
@@ -274,7 +272,7 @@ def list_zones(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    _user=Depends(require_action("access.zones.manage")),
 ):
     rows, total = svc.list_zones(db, limit=limit, offset=offset)
     yard_map = svc.get_zone_yard_ids_map(db, [r.id for r in rows])
@@ -289,7 +287,7 @@ def create_zone(
     body: ZoneCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     try:
         zone = svc.create_zone(
@@ -310,7 +308,7 @@ def patch_zone(
     request: Request,
     zone_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     if "max_permanent_per_apartment" in fields:
@@ -335,7 +333,7 @@ def set_zone_yards(
     request: Request,
     zone_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     try:
         yard_ids = svc.set_zone_yards(
@@ -375,7 +373,7 @@ def list_gates(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    _user=Depends(require_action("access.zones.manage")),
 ):
     rows, total = svc.list_gates(db, limit=limit, offset=offset)
     return GatesPage(items=[_gate_row(r) for r in rows], total=total, limit=limit, offset=offset)
@@ -386,7 +384,7 @@ def create_gate(
     body: GateCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     try:
         gate = svc.create_gate(
@@ -407,7 +405,7 @@ def patch_gate(
     request: Request,
     gate_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -456,7 +454,7 @@ def list_cameras(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    _user=Depends(require_action("access.equipment.manage")),
 ):
     rows, total = svc.list_cameras(db, limit=limit, offset=offset)
     return CamerasPage(items=[_camera_row(r) for r in rows], total=total, limit=limit, offset=offset)
@@ -467,7 +465,7 @@ def create_camera(
     body: CameraCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     try:
         camera = svc.create_camera(
@@ -489,7 +487,7 @@ def patch_camera(
     request: Request,
     camera_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -536,7 +534,7 @@ def list_barriers(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    _user=Depends(require_action("access.equipment.manage")),
 ):
     rows, total = svc.list_barriers(db, limit=limit, offset=offset)
     return BarriersPage(items=[_barrier_row(r) for r in rows], total=total, limit=limit, offset=offset)
@@ -547,7 +545,7 @@ def create_barrier(
     body: BarrierCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     try:
         barrier = svc.create_barrier(
@@ -569,7 +567,7 @@ def patch_barrier(
     request: Request,
     barrier_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -617,7 +615,7 @@ def list_controllers(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    _user=Depends(require_action("access.equipment.manage")),
 ):
     rows, total = svc.list_controllers(db, limit=limit, offset=offset)
     return ControllersPage(
@@ -633,7 +631,7 @@ def create_controller(
     body: ControllerCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     """Создать контроллер + device API-ключ (§9.1). ``api_key`` отдаётся ОДИН раз."""
     try:
@@ -659,7 +657,7 @@ def patch_controller(
     request: Request,
     controller_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -679,7 +677,7 @@ def rotate_controller_key(
     request: Request,
     controller_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ADMIN_ONLY_ROLES)),
+    user=Depends(require_action("access.equipment.manage")),
 ):
     """Ротация device API-ключа (§9.1). Новый ``api_key`` отдаётся ОДИН раз."""
     try:

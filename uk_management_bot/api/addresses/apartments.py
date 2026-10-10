@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.addresses.schemas import (
     ApartmentOut, ApartmentCreate, ApartmentUpdate,
     BulkCreateApartments, BulkCreateResult,
@@ -32,7 +32,7 @@ async def list_apartments(
     building_id: int,
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     # Verify building exists and fetch related info
     bld = await queries.get_building_with_yard_name(db, building_id)
@@ -58,7 +58,7 @@ async def list_apartments(
 async def create_apartment(
     body: ApartmentCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     apartment = await core.create_apartment(
         db,
@@ -85,7 +85,7 @@ async def create_apartment(
 async def bulk_create(
     body: BulkCreateApartments,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     created, skipped, errors = await core.bulk_create_apartments(
         db,
@@ -101,7 +101,7 @@ async def update_apartment(
     apartment_id: int,
     body: ApartmentUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     apartment = await core.update_apartment(
         db, apartment_id, body.model_dump(exclude_unset=True)
@@ -122,7 +122,7 @@ async def update_apartment(
 async def delete_apartment(
     apartment_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     await core.delete_apartment(db, apartment_id)
     return {"ok": True, "detail": "Apartment deactivated"}
@@ -132,7 +132,7 @@ async def delete_apartment(
 async def purge_apartment(
     apartment_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     """Hard-delete a soft-deleted apartment.
 
@@ -155,7 +155,7 @@ async def list_all_apartments(
     building_id: Optional[int] = Query(None),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     rows, residents_map = await queries.list_all_apartments(
         db, yard_id=yard_id, building_id=building_id, include_inactive=include_inactive
@@ -175,7 +175,7 @@ async def list_all_apartments(
 async def get_apartment_detail(
     apartment_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     apt_row = await queries.get_apartment_with_address(db, apartment_id)
     if not apt_row:

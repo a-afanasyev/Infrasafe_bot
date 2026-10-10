@@ -4,13 +4,15 @@ Pure mapping helpers (ORM column extraction + role checks) — NO data-access.
 Extracted from the former monolithic router.py so each entity module can map
 ORM rows to response schemas without duplicating the column-extraction logic.
 """
-from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.authz import has_action_roles
 from uk_management_bot.database.models.user import User
 
 
 def is_manager(user: User) -> bool:
-    """Менеджер сохраняет доступ к неактивным дворам/домам; обходчик — нет."""
-    return "manager" in get_user_roles(user)
+    """Видит неактивные дворы/дома тот, кто управляет справочником адресов
+    (действие `addresses.manage`); обходчик — нет. Статус здесь не нужен:
+    маршрут уже прошёл свой гейт."""
+    return has_action_roles(user, "addresses.manage")
 
 
 def yard_dict(y) -> dict:

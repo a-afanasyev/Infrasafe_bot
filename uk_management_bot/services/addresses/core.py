@@ -613,13 +613,13 @@ async def _review_apartment_request(
     event = "apartment_request.approved" if approve else "apartment_request.rejected"
 
     # BUG-177: перепроверка роли ревьюера В ТОЧКЕ ЗАПИСИ (канон BUG-172) —
-    # второй рубеж поверх RoleGate бота и require_roles API на случай будущей
-    # ошибки роутинга/рефакторинга. Семантика has_admin_access: manager|admin.
+    # второй рубеж поверх ActionGate бота и require_action API на случай будущей
+    # ошибки роутинга/рефакторинга. Действие apartments.moderate (manager|admin).
     from uk_management_bot.database.models import User
-    from uk_management_bot.utils.auth_helpers import get_user_roles
+    from uk_management_bot.authz import has_action_roles
 
     reviewer = await db.get(User, reviewer_id)
-    if reviewer is None or not ({"manager", "admin"} & set(get_user_roles(reviewer) or [])):
+    if reviewer is None or not has_action_roles(reviewer, "apartments.moderate"):
         raise AddressPermissionError(
             "Недостаточно прав для модерации заявок на квартиры",
             code="moderation_no_permission")

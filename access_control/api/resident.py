@@ -1,7 +1,7 @@
 """APPLICANT-API контроля доступа: личный кабинет жителя (§6.4, §16.2).
 
 Единый API для бота И TWA (§4 п.4-5): клиент без бизнес-логики. Аутентификация —
-существующая JWT/cookie (``require_approved_roles``, НЕ device-auth). RBAC: только
+существующая JWT/cookie (``require_action``, НЕ device-auth). RBAC: только
 роль ``applicant`` (личный кабинет жителя); прочие роли → 403, без auth → 401.
 
 КЛЮЧЕВАЯ ГРАНИЦА (§6.4): житель видит/создаёт ТОЛЬКО для своих approved-квартир
@@ -62,13 +62,12 @@ from access_control.services.resident import (
     list_resident_vehicles,
     toggle_resident_spot_limit,
 )
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-resident"])
 
 # RBAC (§6.4): личный кабинет жителя — только applicant. Прочие роли → 403.
-RESIDENT_ROLES = ("applicant",)
 
 # A6-P2-50: пагинация — общая, см. api/pagination.py
 from access_control.api.pagination import (  # noqa: E402
@@ -286,7 +285,7 @@ def my_vehicles(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> VehiclesPage:
     """Авто, активно привязанные к approved-квартирам жителя (§6.4)."""
     rows, total = list_resident_vehicles(db, user_id=user.id, limit=limit, offset=offset)
@@ -325,7 +324,7 @@ def my_passes(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> PassesPage:
     """Пропуска квартир жителя ИЛИ созданные им самим (§6.4). Фильтр ``status``."""
     rows, total = list_resident_passes(
@@ -344,7 +343,7 @@ def my_requests(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> RequestsPage:
     """Заявки жителя на постоянный авто: созданные им ИЛИ по его квартирам (§6.4)."""
     rows, total = list_resident_requests(
@@ -362,7 +361,7 @@ def my_events(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> ResidentEventsPage:
     """События проезда по авто/квартирам жителя (§6.4: только свои события).
 
@@ -381,7 +380,7 @@ def my_events(
 @router.get("/my/spots", response_model=SpotAssignmentsPage)
 def my_spots(
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> SpotAssignmentsPage:
     """Закрепления парковочных мест квартир жителя (§6.4, «Моё место»).
 
@@ -405,7 +404,7 @@ def post_toggle_spot_limit(
     request: Request,
     assignment_id: int = Path(..., description="parking_spot_assignments.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> ToggleLimitResponse:
     """Включить/выключить лимит места на СВОЁМ закреплении (§6.4, §10.3).
 
@@ -445,7 +444,7 @@ def post_request(
     body: CreateResidentRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> RequestRow:
     """Создать заявку на постоянный авто (§6.4). 403 если квартира не своя.
 
@@ -489,7 +488,7 @@ def post_pass(
     body: CreateResidentPass,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> CreatePassResponse:
     """Создать временный пропуск (§6.4). 403 если квартира не своя; 422 если зона
     не определена однозначно (нужен ``zone_id``).
@@ -545,7 +544,7 @@ def post_cancel_pass(
     request: Request,
     pass_id: int = Path(..., description="access_passes.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> CancelResponse:
     """Отменить свой пропуск → ``revoked`` (§6.4). Идемпотентно. 404/403 для чужого."""
     try:
@@ -582,7 +581,7 @@ def post_confirm_entry(
     request: Request,
     decision_id: int = Path(..., description="access_decisions.id (спорный въезд)"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*RESIDENT_ROLES)),
+    user=Depends(require_action("access.resident.self")),
 ) -> ConfirmEntryResponse:
     """Подтвердить/опровергнуть спорный въезд (§6.4, §9.4). Идемпотентно (upsert).
 

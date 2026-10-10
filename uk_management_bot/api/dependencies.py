@@ -70,8 +70,37 @@ async def get_current_user(
     return user
 
 
+def require_action(action_key: str):
+    """Dependency factory: пропустить, если пользователю разрешено действие.
+
+    `Depends(require_action("staff.manage"))`. Кто может — в
+    `uk_management_bot/authz/catalog.py`. Порядок проверок и тексты отказов
+    совпадают с прежними `require_roles` / `require_approved_roles`: сначала
+    роли (403 Insufficient permissions), затем — для `approved_only` — статус
+    (403 Account not approved). Неизвестное действие — ошибка при импорте
+    модуля роутера, а не тихий отказ в рантайме.
+    """
+    from uk_management_bot.authz.catalog import get_action
+
+    action = get_action(action_key)
+
+    async def checker(user: User = Depends(get_current_user)) -> User:
+        if not action.allows(get_user_roles(user)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        if action.approved_only and user.status != "approved":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not approved")
+        return user
+
+    checker.__qualname__ = f"require_action[{action_key}]"
+    return checker
+
+
 def require_roles(*roles: str):
-    """Dependency factory: require_roles('manager', 'executor')"""
+    """Dependency factory: require_roles('manager', 'executor')
+
+    Устаревший путь: новые маршруты используют `require_action`; ратчет
+    tests/services/test_rbac_baseline.py не даёт добавлять гейты по ролям.
+    """
     async def checker(user: User = Depends(get_current_user)) -> User:
         # A9-P3-11: канонический резолвер бота — пустые roles = applicant,
         # active_role ролей не добавляет (прежний фолбэк на неё эскалировал).

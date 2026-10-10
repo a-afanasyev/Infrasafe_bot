@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.business_time import business_date_of
@@ -56,7 +56,7 @@ class RequestStatsOut(BaseModel):
 async def get_request_stats(
     period: str = Query("7d"),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("requests.stats")),
 ):
     # Parse period
     days = 7

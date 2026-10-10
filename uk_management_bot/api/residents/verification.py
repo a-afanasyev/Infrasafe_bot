@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents import notify
 from uk_management_bot.api.residents.schemas import (
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_manager_only = require_roles("manager")
+_manager_only = require_action("residents.manage")
 
 #: Строже прочих мутаций: КАЖДЫЙ вызов отправляет жителю сообщение в Telegram,
 #: то есть сессией менеджера можно завалить чужой чат.

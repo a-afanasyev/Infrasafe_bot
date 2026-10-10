@@ -17,7 +17,6 @@
 """
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import sys
 from pathlib import Path
@@ -122,7 +121,7 @@ def test_role_gate_default_equals_has_admin_access():
     from uk_management_bot.handlers._role_gate import RoleGate
 
     gate = RoleGate()
-    allowed = _allowed(lambda p: asyncio.run(gate(None, roles=_roles(p), user=_user(p))))
+    allowed = _allowed(lambda p: rbac_baseline.run_coro(gate(None, roles=_roles(p), user=_user(p))))
     assert allowed == ADMIN_OR_MANAGER
 
 

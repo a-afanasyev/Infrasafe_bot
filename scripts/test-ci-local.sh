@@ -87,6 +87,9 @@ CONFIG_MOUNTS=(
   # Тот же случай: лимит длины ФИО живёт в двух языках (валидация бэкенда и
   # клиентская проверка формы), и гейт сверяет их числами.
   -v "${ROOT}/frontend/src/utils/personName.ts:/app/frontend/src/utils/personName.ts:ro"
+  # RBAC A1: фронт держит копию каталога действий (ключи для гейтов UI), тест
+  # бэкенда проверяет её актуальность.
+  -v "${ROOT}/frontend/src/authz/catalog.generated.json:/app/frontend/src/authz/catalog.generated.json:ro"
   # Реестр бэкапов (AUD7-ENG-07) читает BACKUPS.md: в CI — полный чекаут, в
   # образе файла нет, и гейт падал «нет реестра» только в эталоне.
   -v "${ROOT}/docs/ops/BACKUPS.md:/app/docs/ops/BACKUPS.md:ro"

@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.addresses.schemas import BuildingOut, BuildingCreate, BuildingUpdate
 from uk_management_bot.api.addresses._helpers import is_manager, building_dict
 from uk_management_bot.database.models.user import User
@@ -23,7 +23,7 @@ async def list_all_buildings(
     yard_id: Optional[int] = Query(None),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     rows, apt_map = await queries.list_all_buildings(
         db, yard_id=yard_id, include_inactive=include_inactive
@@ -39,7 +39,7 @@ async def list_buildings(
     yard_id: int,
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_approved_roles("manager", "inspector")),
+    user: User = Depends(require_action("addresses.read")),
 ):
     # Verify yard exists
     yard = await queries.get_yard(db, yard_id)
@@ -67,7 +67,7 @@ async def list_buildings(
 async def create_building(
     body: BuildingCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     building = await core.create_building(
         db,
@@ -89,7 +89,7 @@ async def update_building(
     building_id: int,
     body: BuildingUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     building = await core.update_building(
         db, building_id, body.model_dump(exclude_unset=True)
@@ -103,7 +103,7 @@ async def update_building(
 async def delete_building(
     building_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     await core.delete_building(db, building_id)
     return {"ok": True, "detail": "Building deactivated"}
@@ -113,7 +113,7 @@ async def delete_building(
 async def purge_building(
     building_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     """Hard-delete a building that has already been soft-deleted.
 

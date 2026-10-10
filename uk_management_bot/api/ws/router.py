@@ -87,19 +87,20 @@ _WS_IDENTITY_RECHECK_INTERVAL = 60.0
 
 
 async def _ws_identity_ok(user_id: int) -> bool:
-    """Существует ли пользователь СЕЙЧАС, не заблокирован и всё ещё manager.
+    """Существует ли пользователь СЕЙЧАС, не заблокирован и всё ещё имеет право
+    на живой поток дашборда (действие `dashboard.live`).
 
     Источник правды — БД, а не `roles` из JWT: токен это слепок на момент
     выдачи, и до его истечения снятие роли/блокировка иначе не замечались.
     Предикат намеренно повторяет HTTP-путь (`api/dependencies.get_current_user`
-    + `require_roles("manager")`): одна дверь не должна быть мягче другой.
+    + `require_action`): одна дверь не должна быть мягче другой.
 
     Сессия открывается и ЗАКРЫВАЕТСЯ внутри вызова. Это не стилистика: держать
     сессию открытой на всё время WS-стрима — ровно тот класс бага, что уже
     стоил прод-инцидента в media-service (сессия жила через сетевой I/O → пул
     выеден → 504). Соединение живёт часами, пул — нет.
     """
-    from uk_management_bot.utils.auth_helpers import get_user_roles
+    from uk_management_bot.authz import can
     from uk_management_bot.database.session import AsyncSessionLocal
     from uk_management_bot.database.models.user import User
 
@@ -110,7 +111,7 @@ async def _ws_identity_ok(user_id: int) -> bool:
         user = await session.get(User, user_id)
         if user is None or user.status == "blocked":
             return False
-        return "manager" in get_user_roles(user)
+        return can(user, "dashboard.live")
 
 
 def _payload_user_id(payload: dict) -> Optional[int]:

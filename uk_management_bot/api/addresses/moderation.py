@@ -7,7 +7,7 @@ services/addresses/queries.py (reads).
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.addresses.schemas import ModerationItemOut, ModerationAction
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.addresses import core, queries
@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/moderation", response_model=list[ModerationItemOut])
 async def list_pending(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     rows = await queries.list_pending_moderation(db)
 
@@ -70,7 +70,7 @@ async def approve_request(
     item_id: int,
     body: ModerationAction = ModerationAction(),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     ua = await core.approve_apartment_request(
         db, user_apartment_id=item_id, reviewer_id=user.id, comment=body.comment
@@ -83,7 +83,7 @@ async def reject_request(
     item_id: int,
     body: ModerationAction,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     # Comment required for rejection (>= 3 chars)
     if not body.comment or len(body.comment.strip()) < 3:

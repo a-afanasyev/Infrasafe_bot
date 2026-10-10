@@ -31,6 +31,7 @@ from uk_management_bot.utils.request_access import (
     RequestAccessFacts,
     access_reason,
 )
+from uk_management_bot.authz.catalog import get_action
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.specializations import (
     matches_required_specs,
@@ -63,7 +64,7 @@ def _base_facts(user, request, **extra) -> RequestAccessFacts:
 
 def _needs_group_lookup(facts: RequestAccessFacts) -> bool:
     """Групповое назначение проверяем только если человек вообще исполнитель."""
-    return "executor" in facts.roles
+    return get_action("requests.execute").allows(facts.roles)
 
 
 def _needs_resident_lookup(facts: RequestAccessFacts) -> bool:

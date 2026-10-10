@@ -17,6 +17,7 @@ from uk_management_bot.keyboards.user_verification import (
 )
 from uk_management_bot.states.user_verification import UserVerificationStates
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import _create_request_and_collect_notify, _load_verification_stats
@@ -35,7 +36,7 @@ async def select_info_type(callback: CallbackQuery, state: FSMContext, roles: li
     info_type = "_".join(parts[3:])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -74,7 +75,7 @@ async def process_request_comment(message: Message, state: FSMContext, roles: li
     comment = message.text
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await message.answer(get_text('errors.permission_denied', language=lang))
         return
 

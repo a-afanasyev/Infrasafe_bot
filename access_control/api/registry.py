@@ -1,7 +1,7 @@
 """READ-эндпоинты реестра access_control: история событий + база (§6, §11, §13.2).
 
 Экраны охранника и менеджера. Все эндпоинты read-only (USER-API, JWT/cookie —
-``require_approved_roles``, НЕ device-auth). Конверт ответа единый:
+``require_action``, НЕ device-auth). Конверт ответа единый:
 ``{items, total, limit, offset}`` (фронт-контракт).
 
 RBAC (§6.2/§6.3):
@@ -40,21 +40,18 @@ from access_control.services import photo_urls
 from access_control.services.device_auth import resolve_client_ip
 from access_control.services.management import write_audit
 from uk_management_bot.api.auth.service import verify_access_token
-from uk_management_bot.api.dependencies import require_approved_roles
-from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.api.dependencies import require_action
+from uk_management_bot.utils.auth_helpers import get_user_roles, action_allowed_for_roles
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-registry"])
 
 logger = logging.getLogger(__name__)
 
-# RBAC-наборы ролей (§6.2/§6.3).
-EVENTS_PASSES_ROLES = ("security_operator", "manager", "system_admin")
-VEHICLES_REQUESTS_ROLES = ("manager", "system_admin")
-# Отдельное разрешение на ПРОСМОТР фото (§11). Пока совпадает с набором, видящим
-# события, НО вынесено отдельно, чтобы потом сузить.
-# TODO(§11): сузить до явного photo-view права (а не «кто видит события»).
-PHOTO_VIEW_ROLES = ("security_operator", "manager", "system_admin")
+# RBAC (§6.2/§6.3, §11): права — действия каталога uk_management_bot/authz/catalog.py:
+# access.events.read (события/пропуска), access.registry.manage (база авто/заявок),
+# access.photos.read (просмотр фото). Фото — отдельное действие, хотя состав ролей
+# сейчас совпадает с событиями: сузить можно одной строкой каталога.
 
 # Сколько последних событий по номеру отдаём в детали авто.
 VEHICLE_RECENT_EVENTS = 20
@@ -112,20 +109,17 @@ def can_view_photos(user) -> bool:
     """Есть ли у пользователя отдельное разрешение на просмотр фото (§11).
 
     Предикат для гейтинга полей ``*_photo_url`` в реестре (не зависимость — чтобы
-    отдавать ``null`` вместо 403 на эндпоинте). TODO(§11): сузить до явного права.
+    отдавать ``null`` вместо 403 на эндпоинте). Действие ``access.photos.read``;
+    статус здесь не проверяется — эндпоинты реестра уже требуют одобренный аккаунт.
     """
     roles = get_user_roles(user)
-    return any(r in roles for r in PHOTO_VIEW_ROLES)
+    return action_allowed_for_roles("access.photos.read", roles)
 
 
 def require_photo_view():
-    """Зависимость отдельного разрешения на просмотр фото (§11).
-
-    Сейчас = ``PHOTO_VIEW_ROLES`` + approved (как остальной реестр). Вынесена
-    отдельно от ``EVENTS_PASSES_ROLES`` намеренно.
-    TODO(§11): сузить до явного photo-view права.
-    """
-    return require_approved_roles(*PHOTO_VIEW_ROLES)
+    """Зависимость отдельного разрешения на просмотр фото (§11): действие
+    ``access.photos.read`` + одобренный аккаунт (как остальной реестр)."""
+    return require_action("access.photos.read")
 
 
 def _signed_photo_url(event_id: int, stored: str | None, kind: str, can_view: bool) -> str | None:
@@ -364,7 +358,7 @@ def list_events(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    user=Depends(require_action("access.events.read")),
 ) -> EventsPage:
     """История событий: камера-событие + occurred_at + текущее решение группы.
 
@@ -438,7 +432,7 @@ def _command_row(r: dict) -> CommandRow:
 def get_event(
     event_id: int = Path(..., description="camera_events.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    user=Depends(require_action("access.events.read")),
 ) -> EventDetail:
     """Деталь события: камера-событие + цепочка решений + команды + ручные открытия.
 
@@ -488,7 +482,7 @@ def list_vehicles(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*VEHICLES_REQUESTS_ROLES)),
+    _user=Depends(require_action("access.registry.manage")),
 ) -> VehiclesPage:
     """База авто + связи vehicle_apartments."""
     total, rows = vehicles_repo.page_vehicles(
@@ -523,7 +517,7 @@ def _apartment_details(db: Session, links: list[ApartmentLink]) -> list[Apartmen
 def get_vehicle(
     vehicle_id: int = Path(..., description="vehicles.id"),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*VEHICLES_REQUESTS_ROLES)),
+    _user=Depends(require_action("access.registry.manage")),
 ) -> VehicleDetail:
     """Деталь авто + связи + последние события по нормализованному номеру."""
     r = vehicles_repo.get_vehicle(db, vehicle_id)
@@ -551,7 +545,7 @@ def get_vehicle(
 def get_apartment_serving_zones(
     apartment_id: int = Path(..., description="apartments.id"),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    _user=Depends(require_action("access.events.read")),
 ) -> list[ZoneRef]:
     """Обслуживающие зоны квартиры (apartment→yard→zone) — кандидаты-чекбоксы для
     форм создания пропуска/привязки зон, когда деталь объекта ещё не загружена."""
@@ -569,7 +563,7 @@ def list_passes(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    _user=Depends(require_action("access.events.read")),
 ) -> PassesPage:
     """Временные пропуска (пилот — taxi)."""
     total, rows = passes_repo.page_passes(
@@ -584,7 +578,7 @@ def list_passes(
 def get_pass(
     pass_id: int = Path(..., description="access_passes.id"),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*EVENTS_PASSES_ROLES)),
+    _user=Depends(require_action("access.events.read")),
 ) -> PassDetail:
     """Деталь пропуска + заявитель (житель), адрес квартиры и зона."""
     r = passes_repo.get_pass(db, pass_id)
@@ -617,7 +611,7 @@ def list_requests(
     limit: int = _limit(DEFAULT_LIMIT),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*VEHICLES_REQUESTS_ROLES)),
+    _user=Depends(require_action("access.registry.manage")),
 ) -> RequestsPage:
     """Заявки жителей на постоянный автомобиль (resident_access_requests).
 
@@ -635,7 +629,7 @@ def list_requests(
 def get_request(
     request_id: int = Path(..., description="resident_access_requests.id"),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*VEHICLES_REQUESTS_ROLES)),
+    _user=Depends(require_action("access.registry.manage")),
 ) -> RequestDetail:
     """Деталь заявки на авто + заявитель (житель), адрес, обслуживающие зоны и авто."""
     r = resident_requests_repo.get_request(db, request_id)

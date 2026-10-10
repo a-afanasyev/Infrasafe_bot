@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.group_intake.schemas import (
     MonitoredGroupCreate,
     MonitoredGroupListOut,
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 @router.get("", response_model=MonitoredGroupListOut)
 async def list_groups(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("group_intake.manage")),
 ) -> MonitoredGroupListOut:
     rows = (
         (await db.execute(select(MonitoredGroup).order_by(MonitoredGroup.id)))
@@ -55,7 +55,7 @@ async def create_group(
     request: Request,
     body: MonitoredGroupCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("group_intake.manage")),
 ) -> MonitoredGroupOut:
     existing = (
         await db.execute(
@@ -96,7 +96,7 @@ async def update_group(
     group_id: int,
     body: MonitoredGroupUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("group_intake.manage")),
 ) -> MonitoredGroupOut:
     group = (
         await db.execute(select(MonitoredGroup).where(MonitoredGroup.id == group_id))
@@ -139,7 +139,7 @@ async def delete_group(
     request: Request,
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("group_intake.manage")),
 ) -> None:
     group = (
         await db.execute(select(MonitoredGroup).where(MonitoredGroup.id == group_id))

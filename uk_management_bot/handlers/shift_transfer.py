@@ -47,7 +47,8 @@ from uk_management_bot.keyboards.shift_transfer import (
     transfer_response_keyboard,
 )
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
+from uk_management_bot.authz import has_action_roles
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
@@ -321,7 +322,7 @@ def _load_my_transfers(db, telegram_id: int):
 # ========== ИНИЦИАЦИЯ ПЕРЕДАЧИ СМЕНЫ ==========
 
 @router.message(Command("transfer_shift"))
-@require_role(['executor'])
+@require_action("execution.work")
 async def cmd_transfer_shift(message: Message, state: FSMContext,
                              user: User = None, roles: list = None, *, _db=None):
     """Команда для передачи смены"""
@@ -550,7 +551,7 @@ async def handle_transfer_confirmation(callback: CallbackQuery, state: FSMContex
 # ========== НАЗНАЧЕНИЕ ИСПОЛНИТЕЛЯ (ДЛЯ МЕНЕДЖЕРОВ) ==========
 
 @router.message(Command("pending_transfers"))
-@require_role(['manager'])
+@require_action("shift_transfers.approve")
 async def cmd_pending_transfers(message: Message, state: FSMContext = None,
                                 user: User = None, roles: list = None, *, _db=None):
     """Команда для просмотра ожидающих передач (для менеджеров)"""
@@ -579,7 +580,7 @@ async def cmd_pending_transfers(message: Message, state: FSMContext = None,
 
 
 @router.message(F.text.regexp(r"^/assign_(\d+)$"))
-@require_role(['manager'])
+@require_action("shift_transfers.approve")
 async def cmd_assign_transfer(message: Message, state: FSMContext = None,
                               user: User = None, roles: list = None, *, _db=None):
     """Менеджер выбирает исполнителя для передачи (/assign_<id>)."""
@@ -607,7 +608,7 @@ async def cmd_assign_transfer(message: Message, state: FSMContext = None,
 
 
 @router.callback_query(F.data.startswith("transfer_assign_executor:"))
-@require_role(['manager'])
+@require_action("shift_transfers.approve")
 async def handle_transfer_assign_executor(callback: CallbackQuery, state: FSMContext = None,
                                           user: User = None, roles: list = None, *, _db=None):
     """Назначение получателя передачи + уведомление получателю с клавиатурой ответа."""
@@ -644,7 +645,7 @@ async def handle_transfer_assign_executor(callback: CallbackQuery, state: FSMCon
 
 
 @router.callback_query(F.data.startswith("transfer_response:"))
-@require_role(['executor', 'manager'])
+@require_action("shift_transfers.respond")
 async def handle_transfer_response(callback: CallbackQuery, state: FSMContext = None,
                                    user: User = None, roles: list = None, *, _db=None):
     """Ответ получателя на передачу: accept / reject / details."""
@@ -687,14 +688,14 @@ async def handle_transfer_response(callback: CallbackQuery, state: FSMContext = 
 
 
 @router.callback_query(F.data.startswith("view_transfer:"))
-@require_role(['executor', 'manager'])
+@require_action("shift_transfers.respond")
 async def handle_view_transfer(callback: CallbackQuery, state: FSMContext = None,
                                user: User = None, roles: list = None, *, _db=None):
     """Детали передачи (из списка «Мои передачи»). Только участник или менеджер."""
     user_lang = "ru"
     try:
         transfer_id = int(callback.data.split(":")[1])
-        is_manager = bool(roles and "manager" in roles)
+        is_manager = has_action_roles(roles or [], "shift_transfers.approve")
 
         user_lang, verdict, details = await run_db(
             lambda s: _load_view_transfer(s, callback.from_user.id, transfer_id, is_manager), db=_db,
@@ -724,7 +725,7 @@ async def handle_view_transfer(callback: CallbackQuery, state: FSMContext = None
 # ========== ПРОСМОТР ПЕРЕДАЧ ==========
 
 @router.message(Command("my_transfers"))
-@require_role(['executor', 'manager'])
+@require_action("shift_transfers.respond")
 async def cmd_my_transfers(message: Message, state: FSMContext = None,
                            user: User = None, roles: list = None, *, _db=None):
     """Команда для просмотра своих передач"""

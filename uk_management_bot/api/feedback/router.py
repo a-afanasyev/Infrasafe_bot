@@ -25,7 +25,7 @@ from fastapi import (
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_current_user, get_db, require_roles
+from uk_management_bot.api.dependencies import get_current_user, get_db, require_action
 from uk_management_bot.api.feedback import service
 from uk_management_bot.api.feedback.schemas import (
     FeedbackDetailOut,
@@ -198,7 +198,7 @@ async def list_feedback(
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("feedback.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     if feedback_type and feedback_type not in FEEDBACK_TYPES:
@@ -241,7 +241,7 @@ def _detail(fb: Feedback, author: Optional[User]) -> FeedbackDetailOut:
 @router.get("/{fid}", response_model=FeedbackDetailOut)
 async def get_feedback(
     fid: int,
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("feedback.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     fb = await _get_feedback_or_404(db, fid)
@@ -253,7 +253,7 @@ async def get_feedback(
 async def update_feedback(
     fid: int,
     body: FeedbackUpdate,
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("feedback.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     fb = await _get_feedback_or_404(db, fid)
@@ -297,7 +297,7 @@ async def update_feedback(
 async def feedback_media_file(
     fid: int,
     media_id: int,
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("feedback.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """Стрим байтов вложения. IDOR-защита по членству media_id в fb.media_files."""

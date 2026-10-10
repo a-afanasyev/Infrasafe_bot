@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.users.rename import (
     FullNameIn,
@@ -75,7 +75,7 @@ async def list_employees(
     offset: int = Query(0, ge=0),
     response: Response = None,  # noqa: RUF013 — заполняет FastAPI
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("staff.manage")),
 ):
     users, active_shifts, total = await service.list_employees(
         db,
@@ -107,7 +107,7 @@ async def list_employees(
 @router.get("/employees/pending", response_model=list[EmployeeBrief])
 async def list_pending_staff(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("staff.manage")),
 ):
     """Сотрудники (manager/executor/inspector), ожидающие активации аккаунта.
 
@@ -126,7 +126,7 @@ async def list_pending_staff(
 async def create_invite(
     body: CreateInviteRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("manager")),
+    current_user: User = Depends(require_action("staff.manage")),
 ):
     """Generate an invite token for a new employee to join via the Telegram bot."""
     import asyncio
@@ -198,7 +198,7 @@ async def create_invite(
     )
 
 
-@router.patch("/employees/{user_id}/approve", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/approve", dependencies=[Depends(require_action("staff.manage"))])
 async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Approve a pending user (set verification_status = 'verified')"""
     user = await service.get_user(db, user_id)
@@ -213,7 +213,7 @@ async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"id": user.id, "verification_status": user.verification_status}
 
 
-@router.patch("/employees/{user_id}/reject", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/reject", dependencies=[Depends(require_action("staff.manage"))])
 async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Reject a pending user (set verification_status = 'rejected')"""
     user = await service.get_user(db, user_id)
@@ -226,7 +226,7 @@ async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"id": user.id, "verification_status": user.verification_status}
 
 
-@router.patch("/employees/{user_id}/block", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/block", dependencies=[Depends(require_action("staff.manage"))])
 async def block_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Block an employee — sets status='blocked', preventing system access."""
     user = await service.get_user(db, user_id)
@@ -239,7 +239,7 @@ async def block_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "blocked"}
 
 
-@router.patch("/employees/{user_id}/unblock", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/unblock", dependencies=[Depends(require_action("staff.manage"))])
 async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     """Unblock an employee — sets status back to 'approved'."""
     user = await service.get_user(db, user_id)
@@ -252,7 +252,7 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "unblocked"}
 
 
-@router.patch("/employees/{user_id}/activate", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/activate", dependencies=[Depends(require_action("staff.manage"))])
 async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
     """Активировать pending-СТАФФ аккаунт (status='approved'). Допускает менеджеров.
 
@@ -272,7 +272,7 @@ async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"id": user.id, "status": user.status, "active_role": user.active_role}
 
 
-@router.patch("/employees/{user_id}/decline", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/decline", dependencies=[Depends(require_action("staff.manage"))])
 async def decline_staff(user_id: int, db: AsyncSession = Depends(get_db)):
     """Отклонить pending-СТАФФ заявку (status='blocked'). Те же guard'ы, что activate."""
     user = await service.get_user(db, user_id)
@@ -291,7 +291,7 @@ async def rename_employee(
     user_id: int,
     body: FullNameIn,
     db: AsyncSession = Depends(get_db),
-    actor: User = Depends(require_roles("manager")),
+    actor: User = Depends(require_action("staff.manage")),
 ):
     """Исправить ФИО сотрудника."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
@@ -306,7 +306,7 @@ async def rename_employee(
     return await rename_user_http(db, user, body.full_name, actor_id=actor.id)
 
 
-@router.patch("/employees/{user_id}/meter-entry", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/meter-entry", dependencies=[Depends(require_action("staff.manage"))])
 async def toggle_meter_entry(
     user_id: int,
     body: MeterEntryToggleRequest,
@@ -336,7 +336,7 @@ def _ensure_staff_target(user: User, *, action: str) -> None:
         raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
 
 
-@router.patch("/employees/{user_id}/simple-mode", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/simple-mode", dependencies=[Depends(require_action("staff.manage"))])
 async def toggle_simple_mode(
     user_id: int,
     body: SimpleModeToggleRequest,
@@ -358,7 +358,7 @@ async def toggle_simple_mode(
     return {"id": user.id, "simple_mode": body.enabled}
 
 
-@router.patch("/employees/{user_id}/language", dependencies=[Depends(require_roles("manager"))])
+@router.patch("/employees/{user_id}/language", dependencies=[Depends(require_action("staff.manage"))])
 async def set_employee_language(
     user_id: int,
     body: EmployeeLanguageRequest,
@@ -378,7 +378,7 @@ async def set_employee_language(
     return {"id": user.id, "language": body.language}
 
 
-@router.post("/employees/{user_id}/request-phone", dependencies=[Depends(require_roles("manager"))])
+@router.post("/employees/{user_id}/request-phone", dependencies=[Depends(require_action("staff.manage"))])
 async def request_employee_phone(user_id: int, db: AsyncSession = Depends(get_db)):
     """Отправить сотруднику в Telegram запрос поделиться контактом (номером)."""
     # Однострочно намеренно — докстринг попадает в публичный OpenAPI.
@@ -399,7 +399,7 @@ async def request_employee_phone(user_id: int, db: AsyncSession = Depends(get_db
 async def get_active_requests_count(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("staff.manage")),
 ):
     """Return number of active requests assigned to this employee."""
     count = await service.count_active_requests(db, user_id)
@@ -411,7 +411,7 @@ async def delete_employee(
     user_id: int,
     body: DeleteEmployeeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles("manager")),
+    current_user: User = Depends(require_action("staff.manage")),
 ):
     """Soft-delete an employee, optionally reassigning their active requests."""
     user = await service.get_user(db, user_id)
@@ -456,7 +456,7 @@ async def delete_employee(
 async def get_employee(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("staff.manage")),
 ):
     data = await service.get_employee_with_stats(db, user_id)
     if data is None:

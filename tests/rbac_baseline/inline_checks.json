@@ -1,23 +1,10 @@
 {
  "entries": {
-  "uk_management_bot/api/addresses/_helpers.py::is_manager": [
-   "manager"
-  ],
   "uk_management_bot/api/callcenter/router.py::create_call_center_request": [
    "applicant"
   ],
-  "uk_management_bot/api/requests/router.py::update_request": [
-   "applicant",
-   "executor",
-   "manager"
-  ],
-  "uk_management_bot/api/requests/service.py::list_requests_rows": [
-   "executor",
-   "manager"
-  ],
-  "uk_management_bot/api/resource_accounting/router.py::_resource_role": [
-   "admin",
-   "system_admin"
+  "uk_management_bot/api/registration/service.py::_is_privileged": [
+   "applicant"
   ],
   "uk_management_bot/api/shifts/router/_helpers.py::_ensure_not_privileged": [
    "admin",
@@ -41,9 +28,6 @@
   "uk_management_bot/api/shifts/service/web_transfers.py::reassign_shift_web": [
    "executor"
   ],
-  "uk_management_bot/api/ws/router.py::_ws_identity_ok": [
-   "manager"
-  ],
   "uk_management_bot/database/init_admin.py::init_admin_user": [
    "manager"
   ],
@@ -56,10 +40,6 @@
   "uk_management_bot/handlers/admin/invites.py::handle_invite_role_selection": [
    "executor",
    "inspector",
-   "manager"
-  ],
-  "uk_management_bot/handlers/admin/lists.py::test_middleware": [
-   "admin",
    "manager"
   ],
   "uk_management_bot/handlers/admin/reassignment.py::_preflight": [
@@ -93,21 +73,6 @@
   "uk_management_bot/handlers/group_intake.py::_regate_sync": [
    "applicant"
   ],
-  "uk_management_bot/handlers/health.py::detailed_health_check_command": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/inspector_requests.py::_approved_inspector": [
-   "inspector"
-  ],
-  "uk_management_bot/handlers/my_shifts/history.py::handle_shift_history": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/my_shifts/viewing.py::handle_week_schedule": [
-   "admin",
-   "manager"
-  ],
   "uk_management_bot/handlers/requests/create.py::_load_applicant_gate": [
    "applicant"
   ],
@@ -131,81 +96,8 @@
   "uk_management_bot/handlers/shift_management/assignment_b.py::handle_select_shift_for_assignment": [
    "executor"
   ],
-  "uk_management_bot/handlers/shift_transfer.py::handle_view_transfer": [
-   "manager"
-  ],
   "uk_management_bot/handlers/shifts.py::start_shift": [
    "executor"
-  ],
-  "uk_management_bot/handlers/user_management/panels.py::handle_approve_user_from_notification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_management/panels.py::handle_reject_user_from_notification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_management/panels.py::handle_view_user_from_notification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/access_decision.py::approve_user_verification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/access_decision.py::manage_access_rights": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/access_decision.py::reject_user_verification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/document_review.py::approve_document": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/document_review.py::reject_document": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/document_review.py::verify_document": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/documents.py::download_user_document": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/documents.py::request_additional_info": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/documents.py::view_user_documents": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/info_requests.py::process_request_comment": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/info_requests.py::select_info_type": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/panel.py::show_user_verification": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/handlers/user_verification/panel.py::show_verification_panel": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/keyboards/admin.py::get_change_category_button_row": [
-   "manager"
-  ],
-  "uk_management_bot/keyboards/admin.py::get_reassign_button_row": [
-   "manager"
   ],
   "uk_management_bot/keyboards/base.py::get_main_keyboard_for_role": [
    "admin",
@@ -237,9 +129,6 @@
    "executor",
    "manager"
   ],
-  "uk_management_bot/services/request_access.py::_needs_group_lookup": [
-   "executor"
-  ],
   "uk_management_bot/services/request_address.py::resolve_request_address_async": [
    "applicant"
   ],
@@ -269,22 +158,6 @@
   ],
   "uk_management_bot/services/user_management_service.py::_format_user_specializations": [
    "executor"
-  ],
-  "uk_management_bot/utils/auth_helpers.py::has_admin_access": [
-   "admin",
-   "manager"
-  ],
-  "uk_management_bot/utils/auth_helpers.py::has_executor_access": [
-   "admin",
-   "executor",
-   "manager"
-  ],
-  "uk_management_bot/utils/auth_helpers.py::has_manager_role": [
-   "manager"
-  ],
-  "uk_management_bot/utils/request_access.py::access_reason": [
-   "executor",
-   "manager"
   ],
   "uk_management_bot/utils/request_helpers.py::format_request_details": [
    "executor"
