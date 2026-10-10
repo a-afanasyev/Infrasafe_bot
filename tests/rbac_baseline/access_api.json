@@ -1,0 +1,823 @@
+{
+ "_profiles": {
+  "applicant": {
+   "roles": [
+    "applicant"
+   ],
+   "status": "approved"
+  },
+  "executor": {
+   "roles": [
+    "executor"
+   ],
+   "status": "approved"
+  },
+  "inspector": {
+   "roles": [
+    "inspector"
+   ],
+   "status": "approved"
+  },
+  "manager": {
+   "roles": [
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "admin": {
+   "roles": [
+    "admin"
+   ],
+   "status": "approved"
+  },
+  "system_admin": {
+   "roles": [
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "security_operator": {
+   "roles": [
+    "security_operator"
+   ],
+   "status": "approved"
+  },
+  "resource_meter_entry": {
+   "roles": [
+    "resource_meter_entry"
+   ],
+   "status": "approved"
+  },
+  "executor+inspector": {
+   "roles": [
+    "executor",
+    "inspector"
+   ],
+   "status": "approved"
+  },
+  "executor+resource_meter_entry": {
+   "roles": [
+    "executor",
+    "resource_meter_entry"
+   ],
+   "status": "approved"
+  },
+  "applicant+manager": {
+   "roles": [
+    "applicant",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "executor+inspector+manager": {
+   "roles": [
+    "executor",
+    "inspector",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "applicant+executor+manager": {
+   "roles": [
+    "applicant",
+    "executor",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "applicant+executor+manager+system_admin": {
+   "roles": [
+    "applicant",
+    "executor",
+    "manager",
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "superuser7": {
+   "roles": [
+    "admin",
+    "applicant",
+    "executor",
+    "inspector",
+    "manager",
+    "resource_meter_entry",
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "empty_roles": {
+   "roles": [],
+   "status": "approved"
+  },
+  "applicant@pending": {
+   "roles": [
+    "applicant"
+   ],
+   "status": "pending"
+  },
+  "executor@pending": {
+   "roles": [
+    "executor"
+   ],
+   "status": "pending"
+  },
+  "manager@pending": {
+   "roles": [
+    "manager"
+   ],
+   "status": "pending"
+  }
+ },
+ "entries": {
+  "GET /api/v1/access/admin/barriers": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/cameras": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/controllers": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/gates": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/presence": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/spot-assignments": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/spots": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/zones": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/admin/zones/{zone_id}/occupancy": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/apartments/{apartment_id}/serving-zones": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/edge/{controller_id}/access-snapshot": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "GET /api/v1/access/edge/{controller_id}/commands/next": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "GET /api/v1/access/events": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/events/{event_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/metrics": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/my/events": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "GET /api/v1/access/my/passes": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "GET /api/v1/access/my/requests": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "GET /api/v1/access/my/spots": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "GET /api/v1/access/my/vehicles": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "GET /api/v1/access/passes": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/passes/{pass_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/photos/{kind}/{event_id}": {
+   "auth": "public",
+   "deps": [
+    "get_access_media_client"
+   ]
+  },
+  "GET /api/v1/access/requests": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/requests/{request_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/vehicles": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /api/v1/access/vehicles/{vehicle_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "GET /health": {
+   "auth": "public"
+  },
+  "GET /metrics": {
+   "auth": "public",
+   "deps": [
+    "require_metrics_token"
+   ]
+  },
+  "PATCH /api/v1/access/admin/barriers/{barrier_id}": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/cameras/{camera_id}": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/controllers/{controller_id}": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/gates/{gate_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/spot-assignments/{assignment_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/spots/{spot_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/admin/zones/{zone_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/passes/{pass_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/vehicles/{vehicle_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "PATCH /api/v1/access/vehicles/{vehicle_id}/status": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/barriers": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/cameras": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/controllers": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/controllers/{controller_id}/rotate-key": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/controllers/{controller_id}/test-event": {
+   "auth": "roles",
+   "allow": [
+    "system_admin",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/gates": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/spot-assignments": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/spots": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/zones": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/admin/zones/{zone_id}/yards": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/barriers/{barrier_id}/manual-open": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/camera-events/anpr": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "POST /api/v1/access/edge/{controller_id}/camera-events/{event_id}/photos": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge",
+    "get_access_media_client"
+   ]
+  },
+  "POST /api/v1/access/edge/{controller_id}/commands/{command_id}/ack": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "POST /api/v1/access/edge/{controller_id}/heartbeat": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "POST /api/v1/access/edge/{controller_id}/sync-events": {
+   "auth": "public",
+   "deps": [
+    "authenticate_edge"
+   ]
+  },
+  "POST /api/v1/access/events/{event_id}/resolve": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/my/entries/{decision_id}/confirm": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "POST /api/v1/access/my/spot-assignments/{assignment_id}/toggle-limit": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "POST /api/v1/access/passes": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "POST /api/v1/access/passes/redeem-code": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/passes/taxi": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/passes/{pass_id}/cancel": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "POST /api/v1/access/presence/{session_id}/close": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "security_operator",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/requests": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ]
+  },
+  "POST /api/v1/access/requests/{request_id}/review": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "POST /api/v1/access/vehicles": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "system_admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ]
+  },
+  "WS /ws/v1/access/security": {
+   "auth": "public"
+  }
+ }
+}
