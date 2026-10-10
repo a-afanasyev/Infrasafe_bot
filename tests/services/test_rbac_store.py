@@ -116,6 +116,9 @@ def test_read_error_keeps_last_known_rights(loader):
     loader.extend([revoked, RuntimeError("pool timeout")])
     assert not can(["manager"], "requests.stats")
     store.invalidate()
+    store.current_snapshot()
+    store.wait_for_refresh()
+    assert not loader, "фоновое обновление должно было сходить в базу"
     assert store.current_snapshot() is revoked
     assert not can(["manager"], "requests.stats")
 
@@ -133,8 +136,56 @@ def test_invalidate_rereads_without_dropping_state(loader):
     loader.extend([first, second])
     assert store.current_snapshot() is first
     store.invalidate()
+    assert store.current_snapshot() is first  # отдаётся сразу, читается в фоне
+    store.wait_for_refresh()
     assert store.current_snapshot() is second
     assert not can(["manager"], "requests.stats")
+
+
+def test_slow_database_does_not_block_checks(monkeypatch):
+    """После первого чтения проверка прав не ждёт базу — сверка идёт в фоне."""
+    import threading
+
+    gate, started = threading.Event(), threading.Event()
+    calls = []
+
+    def _slow_load(current):
+        calls.append(current)
+        if len(calls) > 1:
+            started.set()
+            gate.wait(5)
+        return _snap(roles={"manager"})
+
+    monkeypatch.setattr(store, "_load", _slow_load)
+    store.reset_for_tests()
+    try:
+        first = store.current_snapshot()
+        store.invalidate()
+        assert store.current_snapshot() is first  # фоновый поток висит, ответ — сразу
+        assert can(["manager"], "requests.stats")
+        assert started.wait(2) and len(calls) == 2  # сверка идёт, но в фоне
+    finally:
+        gate.set()
+        store.reset_for_tests()
+
+
+def test_access_service_can_read_rbac_tables():
+    """Каждая таблица, которую читает store, выдана охране (access_app_rw) в 024.
+
+    Иначе access-api под `uk_access_runtime` получает permission denied и
+    молча остаётся на правах из каталога.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from uk_management_bot.database.models.rbac import RbacRole, RbacRolePermission, RbacState
+
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0024_rbac_access_read.py"
+    spec = importlib.util.spec_from_file_location("m0024", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    read_by_store = {m.__tablename__ for m in (RbacRole, RbacRolePermission, RbacState)}
+    assert read_by_store <= set(module.RBAC_TABLES)
 
 
 def test_cache_lives_in_its_snapshot():

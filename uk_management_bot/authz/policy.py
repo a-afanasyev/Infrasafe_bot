@@ -38,20 +38,30 @@ def has_action_roles(subject: Subject, action_key: str) -> bool:
 SUPERADMIN_PREFIX = "rbac."
 
 
+def is_listed_superadmin(subject: Subject) -> bool:
+    """telegram_id прописан в ADMIN_USER_IDS — независимо от статуса аккаунта.
+
+    Для защиты такого аккаунта от чужих действий (блокировка, удаление):
+    заблокированный суперадмин прав не имеет, но и снять блокировку с него
+    менеджер не должен мочь, как и поставить её.
+    """
+    telegram_id = getattr(subject, "telegram_id", None)
+    if telegram_id is None:
+        return False
+    from uk_management_bot.config.settings import settings
+
+    return int(telegram_id) in set(settings.ADMIN_USER_IDS or ())
+
+
 def is_superadmin(subject: Subject) -> bool:
     """Суперадмин — пользователь, чей telegram_id прописан в ADMIN_USER_IDS.
 
     Назначается только через env/Doppler и рестарт: в админке его не снять и
     не выдать. Заблокированный или удалённый аккаунт суперадмином не считается.
     """
-    telegram_id = getattr(subject, "telegram_id", None)
-    if telegram_id is None:
-        return False
     if getattr(subject, "status", None) in ("blocked", "deleted") or getattr(subject, "deleted_at", None):
         return False
-    from uk_management_bot.config.settings import settings
-
-    return int(telegram_id) in set(settings.ADMIN_USER_IDS or ())
+    return is_listed_superadmin(subject)
 
 
 def can(subject: Subject, action_key: str) -> bool:

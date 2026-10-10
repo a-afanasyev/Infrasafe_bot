@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
+from uk_management_bot.authz.policy import has_action_roles, is_listed_superadmin
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts.schemas import ShiftBrief, ShiftDetail
 from uk_management_bot.database.models.shift import Shift
@@ -107,7 +108,18 @@ def _shift_detail(shift: Shift, user: Optional[User] = None) -> ShiftDetail:
 
 
 def _ensure_not_privileged(user: User, *, action: str) -> None:
-    """Raise 403 if the target user is a manager/admin (cannot be modified)."""
+    """Raise 403 if the target user is privileged (cannot be modified).
+
+    Привилегированный: роль manager/admin; суперадмин из ADMIN_USER_IDS (иначе
+    менеджер мог бы заблокировать того, кто настраивает права); любой, чьи роли
+    дают управление сотрудниками (`staff.manage`) — в том числе выданное своей
+    ролью в админке ролей.
+    """
     target_roles = set(get_user_roles(user))
-    if "manager" in target_roles or "admin" in target_roles:
+    if (
+        "manager" in target_roles
+        or "admin" in target_roles
+        or is_listed_superadmin(user)
+        or has_action_roles(sorted(target_roles), "staff.manage")
+    ):
         raise HTTPException(status_code=403, detail=action)

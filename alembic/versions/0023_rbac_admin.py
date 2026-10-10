@@ -11,8 +11,8 @@
 * ``rbac_state`` — одна строка со счётчиком версий; процессы перечитывают
   права, увидев новую версию (``authz/store.py``).
 
-Гранты не нужны: новые таблицы покрывает ALTER DEFAULT PRIVILEGES роли
-миграций (scripts/dba_ownership_transfer.sql).
+Гранты боту и API даёт ALTER DEFAULT PRIVILEGES роли миграций
+(scripts/dba_ownership_transfer.sql); охране (access_app_rw) — миграция 024.
 
 Revision ID: 023
 Revises: 022

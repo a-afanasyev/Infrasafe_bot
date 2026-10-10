@@ -232,3 +232,46 @@ async def test_rbac_paths_do_not_fall_into_employee_routes(client):
     """/employees/rbac/... обслуживает админка, а не /employees/{user_id}."""
     resp = await (await client(MANAGER)).get(f"{BASE}/rbac/catalog")
     assert resp.status_code == 200
+
+
+# ── защита и границы ────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_superadmin_flag_visible_only_to_superadmin(client):
+    as_manager = await (await client(MANAGER)).get(f"{BASE}/{SUPERADMIN}/roles")
+    assert as_manager.status_code == 200 and as_manager.json()["is_superadmin"] is False
+    as_superadmin = await (await client(SUPERADMIN)).get(f"{BASE}/{SUPERADMIN}/roles")
+    assert as_superadmin.json()["is_superadmin"] is True
+
+
+@pytest.mark.asyncio
+async def test_manager_cannot_block_superadmin(client):
+    """Суперадмин без менеджерских ролей всё равно защищён от блокировки."""
+    resp = await (await client(MANAGER)).patch(f"{BASE}/{SUPERADMIN}/block")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_holder_of_staff_rights_via_custom_role_is_protected(client, monkeypatch):
+    """Своя роль с управлением сотрудниками защищает так же, как роль manager."""
+    from uk_management_bot.authz import store
+
+    # Проверки читают права через store (синхронная сессия процесса), а не
+    # через тестовую async-базу — даём ему то, что он прочитал бы после правки.
+    hr_snapshot = store.Snapshot(version=2, overrides={("hr_lead", "staff.manage"): True},
+                                 roles=frozenset({*SYSTEM, "hr_lead"}))
+    monkeypatch.setattr(store, "current_snapshot", lambda: hr_snapshot)
+    sa = await client(SUPERADMIN)
+    await sa.post(f"{BASE}/rbac/roles", json={"key": "hr_lead", "title": "HR", "actions": ["staff.manage"]})
+    await sa.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["executor", "hr_lead"]})
+    resp = await (await client(MANAGER)).patch(f"{BASE}/{EXECUTOR}/block")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_payload_size_is_bounded(client):
+    c = await client(SUPERADMIN)
+    too_many_roles = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["executor"] * 33})
+    assert too_many_roles.status_code == 422
+    too_many_actions = await c.put(f"{BASE}/rbac/roles/manager", json={"actions": ["x"] * 501})
+    assert too_many_actions.status_code == 422

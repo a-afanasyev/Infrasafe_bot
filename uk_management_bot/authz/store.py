@@ -11,6 +11,11 @@
 и только при новой версии перечитываем таблицы. Изменение из админки
 доходит до API, бота и охраны за несколько секунд без рестарта.
 
+Проверки прав зовутся из async-кода (FastAPI, aiogram), а чтение синхронное.
+Поэтому в базу синхронно ходит только самая первая проверка процесса; дальше
+проверки берут состояние из памяти, а сверку версии делает фоновый поток —
+медленная база не останавливает event loop.
+
 Отказоустойчивость: если таблиц нет или база ни разу не прочиталась, действуют
 права из каталога — прежнее поведение, а не «всё разрешено». Если база была
 прочитана, а потом временно недоступна, действует последнее прочитанное
@@ -25,9 +30,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Mapping, Optional
 
+from sqlalchemy import text
+
 logger = logging.getLogger(__name__)
 
 _CHECK_INTERVAL = 5.0
+#: Потолок одного запроса чтения прав в PostgreSQL.
+_STATEMENT_TIMEOUT = "3s"
 
 
 @dataclass(frozen=True)
@@ -53,6 +62,10 @@ _lock = threading.Lock()
 _snapshot: Optional[Snapshot] = None
 _checked_at = 0.0
 _failing = False
+#: Первое чтение процесса уже было (удачное или нет) — дальше только в фоне.
+_first_done = False
+#: Идущее фоновое обновление (одно на процесс).
+_refresh_thread: Optional[threading.Thread] = None
 
 
 def _read_version(session) -> Optional[int]:
@@ -84,6 +97,8 @@ def _load(current: Optional[Snapshot]) -> Optional[Snapshot]:
 
         session = SessionLocal()
         try:
+            if session.get_bind().dialect.name == "postgresql":
+                session.execute(text(f"SET LOCAL statement_timeout = '{_STATEMENT_TIMEOUT}'"))
             version = _read_version(session)
             if version is None:
                 return None
@@ -96,14 +111,10 @@ def _load(current: Optional[Snapshot]) -> Optional[Snapshot]:
         raise _ReadError(str(exc)) from exc
 
 
-def current_snapshot() -> Optional[Snapshot]:
-    """Состояние прав, не старше `_CHECK_INTERVAL` секунд."""
-    global _snapshot, _checked_at, _failing
-    now = time.monotonic()
+def _refresh() -> None:
+    """Перечитать состояние; при ошибке оставить последнее известное."""
+    global _snapshot, _failing
     with _lock:
-        if now - _checked_at < _CHECK_INTERVAL:
-            return _snapshot
-        _checked_at = now
         current = _snapshot
     try:
         fresh = _load(current)
@@ -113,10 +124,43 @@ def current_snapshot() -> Optional[Snapshot]:
                 fallback = f"версия {_snapshot.version}" if _snapshot else "права из каталога"
                 logger.warning("RBAC: таблицы прав не читаются, действует %s: %s", fallback, exc)
             _failing = True
-            return _snapshot
+        return
     with _lock:
         _snapshot = fresh
         _failing = False
+
+
+def _refresh_in_background() -> None:
+    try:
+        _refresh()
+    except Exception:  # noqa: BLE001 — поток не должен умирать молча
+        logger.exception("RBAC: фоновое обновление прав упало")
+
+
+def current_snapshot() -> Optional[Snapshot]:
+    """Состояние прав из памяти; не старше `_CHECK_INTERVAL` секунд + время чтения.
+
+    Первая проверка процесса читает базу сама (иначе первые запросы после
+    рестарта прошли бы по правам из каталога). Дальше устаревшее состояние
+    отдаётся сразу, а сверка версии запускается в фоновом потоке.
+    """
+    global _checked_at, _first_done, _refresh_thread
+    now = time.monotonic()
+    with _lock:
+        first = not _first_done
+        stale = now - _checked_at >= _CHECK_INTERVAL
+        busy = _refresh_thread is not None and _refresh_thread.is_alive()
+        if first:
+            _first_done = True
+            _checked_at = now
+        elif stale and not busy:
+            _checked_at = now
+            _refresh_thread = threading.Thread(target=_refresh_in_background, name="rbac-refresh", daemon=True)
+            _refresh_thread.start()
+        if not first:
+            return _snapshot
+    _refresh()
+    with _lock:
         return _snapshot
 
 
@@ -156,10 +200,19 @@ def invalidate() -> None:
         _checked_at = 0.0
 
 
+def wait_for_refresh(timeout: float = 5.0) -> None:
+    """Дождаться идущего фонового обновления (для тестов)."""
+    thread = _refresh_thread
+    if thread is not None:
+        thread.join(timeout)
+
+
 def reset_for_tests() -> None:
     """Забыть прочитанное состояние целиком (только для тестов)."""
-    global _checked_at, _snapshot, _failing
+    global _checked_at, _snapshot, _failing, _first_done
+    wait_for_refresh()
     with _lock:
         _checked_at = 0.0
         _snapshot = None
         _failing = False
+        _first_done = False

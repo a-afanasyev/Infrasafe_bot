@@ -31,9 +31,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+#: Чтение доступно и менеджерам — ограничиваем перебор сотрудников.
+READ_LIMIT = "120/minute"
+
 
 @router.get("/employees/rbac/catalog", response_model=list[ActionOut])
-async def get_catalog(user: User = Depends(require_action("rbac.view"))):
+@limiter.limit(READ_LIMIT)
+async def get_catalog(request: Request, user: User = Depends(require_action("rbac.view"))):
     """Все действия системы: что можно разрешить роли."""
     return [
         ActionOut(key=key, title=a.title, area=svc.area_of(key), approved_only=a.approved_only,
@@ -43,7 +47,9 @@ async def get_catalog(user: User = Depends(require_action("rbac.view"))):
 
 
 @router.get("/employees/rbac/roles", response_model=RolesOut)
-async def list_roles(db: AsyncSession = Depends(get_db), user: User = Depends(require_action("rbac.view"))):
+@limiter.limit(READ_LIMIT)
+async def list_roles(request: Request, db: AsyncSession = Depends(get_db),
+                     user: User = Depends(require_action("rbac.view"))):
     """Роли с их текущими правами и числом сотрудников."""
     snapshot = await svc.read_snapshot(db)
     counts = await svc.users_count_by_role(db)
@@ -141,14 +147,17 @@ async def delete_role(request: Request, key: str, db: AsyncSession = Depends(get
 
 
 @router.get("/employees/{user_id}/roles", response_model=UserRolesOut)
-async def get_user_roles_view(user_id: int, db: AsyncSession = Depends(get_db),
+@limiter.limit(READ_LIMIT)
+async def get_user_roles_view(request: Request, user_id: int, db: AsyncSession = Depends(get_db),
                               user: User = Depends(require_action("rbac.view"))):
-    """Роли сотрудника."""
+    """Роли сотрудника. Кто суперадмин — видно только суперадмину."""
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
+    viewer_is_superadmin = is_superadmin(user)
     return UserRolesOut(user_id=target.id, roles=svc.user_roles_list(target), active_role=target.active_role,
-                        is_superadmin=is_superadmin(target), can_edit=is_superadmin(user))
+                        is_superadmin=viewer_is_superadmin and is_superadmin(target),
+                        can_edit=viewer_is_superadmin)
 
 
 @router.put("/employees/{user_id}/roles", response_model=UserRolesOut)
@@ -157,7 +166,9 @@ async def set_user_roles(request: Request, user_id: int, body: UserRolesUpdate,
                          db: AsyncSession = Depends(get_db),
                          user: User = Depends(require_action("rbac.manage"))):
     """Назначить сотруднику роли (полный набор)."""
-    target = await db.get(User, user_id)
+    # Под блокировкой строки: роли пишут и другие эндпоинты (капабилити
+    # контролёра в карточке) — без неё одна правка молча затёрла бы другую.
+    target = await db.get(User, user_id, with_for_update=True, populate_existing=True)
     if target is None or target.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
     unknown = set(body.roles) - await svc.known_role_keys(db)
