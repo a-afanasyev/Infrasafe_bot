@@ -35,6 +35,7 @@ export default function RolesPage() {
         <div>
           <h1 className="text-[18px] font-semibold text-text-primary">{t('rbac.title')}</h1>
           <p className="text-[12px] text-text-muted max-w-[640px]">{t('rbac.subtitle')}</p>
+          <p className="text-[11px] text-text-muted max-w-[640px] mt-1">{t('rbac.scopeNote')}</p>
         </div>
         {canEdit && !creating && <Button onClick={() => setCreating(true)}>{t('rbac.newRole')}</Button>}
       </div>

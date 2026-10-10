@@ -3227,6 +3227,7 @@
   "rbac": {
     "title": "Rollar va huquqlar",
     "subtitle": "Rol bir qator amallarga ruxsat beradi. Rolga nimalar ruxsat etilganini belgilang; o'zgarishlar bir necha soniyada vebda, botda va API'da kuchga kiradi.",
+    "scopeNote": "Bu yerda kirish tekshiruvlari sozlanadi. Bot menyusi, xodim rejimi va smenalarga ijrochi tanlash avvalgidek tizim roliga (Ijrochi, Menejer va h.k.) bog'liq.",
     "readOnly": "Faqat ko'rish. Rollar va huquqlarni server sozlamalarida ko'rsatilgan superadmin o'zgartiradi.",
     "rolesList": "Rollar ro'yxati",
     "system": "tizim",

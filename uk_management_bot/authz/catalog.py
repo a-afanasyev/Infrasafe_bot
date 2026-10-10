@@ -52,6 +52,9 @@ class Action:
     действующий набор с учётом переопределений, его и читают все проверки.
     `superadmin_only` — действие только для суперадмина из `ADMIN_USER_IDS`:
     ролям не выдаётся и в админке не редактируется.
+    `superadmin_bypass` — суперадмин проходит действие независимо от своих
+    ролей (админка ролей: иначе её можно было бы «запереть»). Флаг явный, а не
+    по префиксу ключа: новое действие не получает обход случайно.
     """
 
     key: str
@@ -59,6 +62,7 @@ class Action:
     title: str
     approved_only: bool = False
     superadmin_only: bool = False
+    superadmin_bypass: bool = False
 
     @property
     def roles(self) -> frozenset[str]:
@@ -73,9 +77,10 @@ class Action:
 
 
 def _action(key: str, roles: Iterable[str], title: str, *, approved_only: bool = False,
-            superadmin_only: bool = False) -> Action:
+            superadmin_only: bool = False, superadmin_bypass: bool = False) -> Action:
     return Action(key=key, default_roles=frozenset(roles), title=title,
-                  approved_only=approved_only, superadmin_only=superadmin_only)
+                  approved_only=approved_only, superadmin_only=superadmin_only,
+                  superadmin_bypass=superadmin_only or superadmin_bypass)
 
 
 _M, _A, _E, _AP = MANAGER, ADMIN, EXECUTOR, APPLICANT
@@ -149,7 +154,7 @@ _ACTIONS: tuple[Action, ...] = (
     # ---------------------------------------------------------- роли и права
     # Просмотр страницы «Роли и права» и ролей сотрудников. Суперадмин видит
     # её всегда; остальным — по ролям (по умолчанию менеджер, только чтение).
-    _action("rbac.view", {_M}, "Роли и права: просмотр"),
+    _action("rbac.view", {_M}, "Роли и права: просмотр", superadmin_bypass=True),
     # Изменение ролей, их прав и ролей сотрудников — только суперадмин из
     # ADMIN_USER_IDS. Ролям не выдаётся: иначе админка могла бы раздать сама себя.
     _action("rbac.manage", set(), "Роли и права: изменение (только суперадмин)", superadmin_only=True),

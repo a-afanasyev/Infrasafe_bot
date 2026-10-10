@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.authz import ACTIONS, actions_for_roles, is_superadmin
-from uk_management_bot.authz.policy import SUPERADMIN_PREFIX
 from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
@@ -48,7 +47,7 @@ class ProfileOut(BaseModel):
         actions = set(actions_for_roles(roles_list))
         superadmin = is_superadmin(user)
         if superadmin:
-            actions |= {key for key in ACTIONS if key.startswith(SUPERADMIN_PREFIX)}
+            actions |= {key for key, action in ACTIONS.items() if action.superadmin_bypass}
         return cls(
             actions=sorted(actions),
             is_superadmin=superadmin,

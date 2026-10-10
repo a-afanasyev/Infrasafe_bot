@@ -24,9 +24,9 @@ SYSTEM = ("applicant", "executor", "manager", "inspector", "admin", "system_admi
           "security_operator", "resource_meter_entry")
 
 
-def _user(uid: int, roles: list[str], tg: int | None = None, **kw) -> User:
+def _user(uid: int, roles: list[str], tg: int | None = None, status: str = "approved", **kw) -> User:
     return User(id=uid, telegram_id=tg or 100000 + uid, roles=json.dumps(roles),
-                active_role=roles[0] if roles else None, status="approved", language="ru",
+                active_role=roles[0] if roles else None, status=status, language="ru",
                 verification_status="verified", **kw)
 
 
@@ -275,3 +275,31 @@ async def test_payload_size_is_bounded(client):
     assert too_many_roles.status_code == 422
     too_many_actions = await c.put(f"{BASE}/rbac/roles/manager", json={"actions": ["x"] * 501})
     assert too_many_actions.status_code == 422
+
+
+# ── сироты и подсчёт ────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_admin_write_purges_rows_of_removed_actions(client, seeded):
+    """Переопределение действия, которого нет в каталоге, удаляется при записи."""
+    async with seeded() as s:
+        s.add(RbacRolePermission(role_key="manager", action_key="gone.action", allowed=True))
+        await s.commit()
+    await (await client(SUPERADMIN)).post(f"{BASE}/rbac/roles/executor/reset")
+    assert await _rows(seeded, "manager") == set()
+
+
+@pytest.mark.asyncio
+async def test_users_count_is_exact_and_skips_deleted(client, seeded):
+    async with seeded() as s:
+        s.add_all([
+            _user(10, ["manager", "executor"]),
+            _user(11, ["manager"], status="deleted"),
+            _user(12, ["manager_assistant"]),
+        ])
+        await s.commit()
+    roles = (await (await client(MANAGER)).get(f"{BASE}/rbac/roles")).json()["roles"]
+    counts = {r["key"]: r["users_count"] for r in roles}
+    # MANAGER и id 10; удалённый и «manager_assistant» (похожий ключ) не считаются.
+    assert counts["manager"] == 2
+    assert counts["executor"] == 2

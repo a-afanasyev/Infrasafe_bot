@@ -52,9 +52,9 @@ async def list_roles(request: Request, db: AsyncSession = Depends(get_db),
                      user: User = Depends(require_action("rbac.view"))):
     """Роли с их текущими правами и числом сотрудников."""
     snapshot = await svc.read_snapshot(db)
-    counts = await svc.users_count_by_role(db)
     roles = (await db.execute(RbacRole.__table__.select().order_by(
         RbacRole.is_system.desc(), RbacRole.key))).mappings().all()
+    counts = await svc.users_count_by_role(db, [row["key"] for row in roles])
     out = []
     for row in roles:
         actions = svc.role_actions(row["key"], snapshot)
@@ -137,7 +137,7 @@ async def delete_role(request: Request, key: str, db: AsyncSession = Depends(get
     role = await svc.get_role(db, key)
     if role.is_system:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Системную роль удалить нельзя")
-    holders = (await svc.users_count_by_role(db)).get(key, 0)
+    holders = (await svc.users_count_by_role(db, [key]))[key]
     if holders:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Роль выдана сотрудникам: {holders}. Сначала снимите её")
     await svc.drop_permissions(db, key)

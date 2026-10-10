@@ -76,11 +76,16 @@ def _read_version(session) -> Optional[int]:
 
 
 def _read_snapshot(session, version: int) -> Snapshot:
+    from uk_management_bot.authz.catalog import ACTIONS
     from uk_management_bot.database.models.rbac import RbacRole, RbacRolePermission
 
+    # Строки по действиям, которых больше нет в каталоге, не читаем: если ключ
+    # когда-нибудь займёт новое действие, старое переопределение не оживёт.
+    # Сами строки удаляет первая же запись в админке (`purge_orphans`).
     overrides = {
         (p.role_key, p.action_key): bool(p.allowed)
         for p in session.query(RbacRolePermission).all()
+        if p.action_key in ACTIONS
     }
     roles = frozenset(key for (key,) in session.query(RbacRole.key).all())
     return Snapshot(version=version, overrides=overrides, roles=roles)

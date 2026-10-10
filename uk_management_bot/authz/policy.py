@@ -34,10 +34,6 @@ def has_action_roles(subject: Subject, action_key: str) -> bool:
     return get_action(action_key).allows(roles_of(subject))
 
 
-#: Действия админки ролей: суперадмин проходит их независимо от своих ролей.
-SUPERADMIN_PREFIX = "rbac."
-
-
 def is_listed_superadmin(subject: Subject) -> bool:
     """telegram_id прописан в ADMIN_USER_IDS — независимо от статуса аккаунта.
 
@@ -70,7 +66,7 @@ def can(subject: Subject, action_key: str) -> bool:
     Для `approved_only`-действия пользователь обязан быть одобрен. Если
     субъект — голый набор ролей, статус неизвестен: такая проверка для
     `approved_only` невозможна и запрещена (передайте пользователя).
-    Действия админки ролей (`rbac.*`) суперадмину разрешены всегда.
+    Действия с `superadmin_bypass` (админка ролей) суперадмину разрешены всегда.
     """
     action = get_action(action_key)
     is_user = hasattr(subject, "roles") and hasattr(subject, "status")
@@ -78,7 +74,7 @@ def can(subject: Subject, action_key: str) -> bool:
         raise TypeError(
             f"Действие {action_key} требует одобренный аккаунт — передайте пользователя, а не роли"
         )
-    if is_user and action_key.startswith(SUPERADMIN_PREFIX) and is_superadmin(subject):
+    if is_user and action.superadmin_bypass and is_superadmin(subject):
         return True
     if not action.allows(roles_of(subject)):
         return False

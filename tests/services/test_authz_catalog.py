@@ -30,6 +30,16 @@ def test_catalog_is_consistent():
         assert action.title, f"у действия {key} нет описания"
 
 
+def test_superadmin_bypass_is_explicit_and_narrow():
+    """Обход для суперадмина — только у действий админки ролей и только флагом.
+
+    Новое действие с ключом `rbac.*` обход не получает случайно, а расширение
+    списка — осознанная правка этого теста.
+    """
+    assert {k for k, a in ACTIONS.items() if a.superadmin_bypass} == {"rbac.view", "rbac.manage"}
+    assert all(a.superadmin_bypass for a in ACTIONS.values() if a.superadmin_only)
+
+
 def test_unknown_action_fails_loudly():
     with pytest.raises(KeyError, match="Неизвестное действие"):
         get_action("no.such.action")

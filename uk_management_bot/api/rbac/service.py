@@ -12,7 +12,7 @@ import json
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.authz import store
@@ -20,6 +20,7 @@ from uk_management_bot.authz.catalog import ACTIONS, SYSTEM_ROLES
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.rbac import RbacRole, RbacRolePermission, RbacState
 from uk_management_bot.database.models.user import User
+from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 #: Область действия для группировки на странице — по префиксу ключа.
@@ -62,15 +63,20 @@ def default_actions(role_key: str) -> set[str]:
     return {key for key, action in ACTIONS.items() if role_key in action.default_roles}
 
 
-async def users_count_by_role(db: AsyncSession) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    rows = (await db.execute(
-        select(User.roles).where(User.status != "deleted", User.deleted_at.is_(None))
-    )).scalars().all()
-    for raw in rows:
-        for role in set(parse_roles_safe(raw)):
-            counts[role] = counts.get(role, 0) + 1
-    return counts
+async def users_count_by_role(db: AsyncSession, role_keys: Iterable[str]) -> dict[str, int]:
+    """Число не удалённых пользователей с каждой ролью — одним запросом в базе.
+
+    `roles_contain` компилируется в jsonb `@>` на PostgreSQL (GIN-индекс
+    ix_users_roles_gin) и в точный LIKE на sqlite.
+    """
+    keys = sorted(set(role_keys))
+    if not keys:
+        return {}
+    columns = [func.coalesce(func.sum(case((roles_contain(User.roles, key), 1), else_=0)), 0) for key in keys]
+    row = (await db.execute(
+        select(*columns).where(User.status != "deleted", User.deleted_at.is_(None))
+    )).one()
+    return {key: int(count) for key, count in zip(keys, row)}
 
 
 def validate_actions(actions: Iterable[str]) -> set[str]:
@@ -118,6 +124,12 @@ async def begin_change(db: AsyncSession) -> None:
     if result.rowcount == 0:
         db.add(RbacState(id=1, version=1))
         await db.flush()
+    await purge_orphans(db)
+
+
+async def purge_orphans(db: AsyncSession) -> None:
+    """Удалить переопределения действий, которых больше нет в каталоге."""
+    await db.execute(delete(RbacRolePermission).where(RbacRolePermission.action_key.not_in(list(ACTIONS))))
 
 
 def audit(db: AsyncSession, actor: User, action: str, details: dict) -> None:
