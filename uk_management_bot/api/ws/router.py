@@ -111,6 +111,10 @@ async def _ws_identity_ok(user_id: int) -> bool:
         user = await session.get(User, user_id)
         if user is None or user.status == "blocked":
             return False
+        # Soft-delete сохраняет роли — без этой проверки удалённый менеджер
+        # держал бы живой поток, хотя HTTP уже отвечает 403 «Account deleted».
+        if getattr(user, "deleted_at", None) is not None:
+            return False
         return can(user, "dashboard.live")
 
 
