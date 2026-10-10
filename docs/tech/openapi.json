@@ -1,6 +1,47 @@
 {
   "components": {
     "schemas": {
+      "ActionOut": {
+        "properties": {
+          "approved_only": {
+            "title": "Approved Only",
+            "type": "boolean"
+          },
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "default_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Default Roles",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "superadmin_only": {
+            "title": "Superadmin Only",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "area",
+          "approved_only",
+          "superadmin_only",
+          "default_roles"
+        ],
+        "title": "ActionOut",
+        "type": "object"
+      },
       "ActiveRequestsCount": {
         "properties": {
           "count": {
@@ -6292,6 +6333,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_superadmin": {
+            "default": false,
+            "title": "Is Superadmin",
+            "type": "boolean"
+          },
           "language": {
             "default": "ru",
             "title": "Language",
@@ -8653,6 +8699,103 @@
         "title": "RespondTransferBody",
         "type": "object"
       },
+      "RoleCreate": {
+        "properties": {
+          "actions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "key": {
+            "description": "латиница, цифры и _; 3–32 символа",
+            "pattern": "^[a-z][a-z0-9_]{2,31}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "RoleCreate",
+        "type": "object"
+      },
+      "RoleOut": {
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "customized": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Customized",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_system": {
+            "title": "Is System",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "users_count": {
+            "default": 0,
+            "title": "Users Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "is_system",
+          "actions"
+        ],
+        "title": "RoleOut",
+        "type": "object"
+      },
       "RoleSwitchBody": {
         "properties": {
           "active_role": {
@@ -8685,6 +8828,72 @@
           "roles"
         ],
         "title": "RoleSwitchOut",
+        "type": "object"
+      },
+      "RoleUpdate": {
+        "properties": {
+          "actions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actions"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "RoleUpdate",
+        "type": "object"
+      },
+      "RolesOut": {
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleOut"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles",
+          "can_edit"
+        ],
+        "title": "RolesOut",
         "type": "object"
       },
       "SetPasswordRequest": {
@@ -10033,6 +10242,65 @@
           }
         },
         "title": "UpdateTemplateBody",
+        "type": "object"
+      },
+      "UserRolesOut": {
+        "properties": {
+          "active_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Role"
+          },
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "is_superadmin": {
+            "title": "Is Superadmin",
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "roles",
+          "is_superadmin",
+          "can_edit"
+        ],
+        "title": "UserRolesOut",
+        "type": "object"
+      },
+      "UserRolesUpdate": {
+        "properties": {
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles"
+        ],
+        "title": "UserRolesUpdate",
         "type": "object"
       },
       "ValidationError": {
@@ -20070,6 +20338,254 @@
         ]
       }
     },
+    "/api/v2/shifts/employees/rbac/catalog": {
+      "get": {
+        "description": "Все действия системы: что можно разрешить роли.",
+        "operationId": "get_catalog_api_v2_shifts_employees_rbac_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActionOut"
+                  },
+                  "title": "Response Get Catalog Api V2 Shifts Employees Rbac Catalog Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Catalog",
+        "tags": [
+          "rbac"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/rbac/roles": {
+      "get": {
+        "description": "Роли с их текущими правами и числом сотрудников.",
+        "operationId": "list_roles_api_v2_shifts_employees_rbac_roles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Roles",
+        "tags": [
+          "rbac"
+        ]
+      },
+      "post": {
+        "description": "Создать свою роль с набором прав.",
+        "operationId": "create_role_api_v2_shifts_employees_rbac_roles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Role",
+        "tags": [
+          "rbac"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/rbac/roles/{key}": {
+      "delete": {
+        "description": "Удалить свою роль. Системные не удаляются; роль с сотрудниками — тоже.",
+        "operationId": "delete_role_api_v2_shifts_employees_rbac_roles__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Role",
+        "tags": [
+          "rbac"
+        ]
+      },
+      "put": {
+        "description": "Изменить название, описание и/или права роли (системной тоже).",
+        "operationId": "update_role_api_v2_shifts_employees_rbac_roles__key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Role",
+        "tags": [
+          "rbac"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/rbac/roles/{key}/reset": {
+      "post": {
+        "description": "Вернуть системной роли права «из коробки».",
+        "operationId": "reset_role_api_v2_shifts_employees_rbac_roles__key__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Role",
+        "tags": [
+          "rbac"
+        ]
+      }
+    },
     "/api/v2/shifts/employees/{user_id}": {
       "get": {
         "operationId": "get_employee_api_v2_shifts_employees__user_id__get",
@@ -20664,6 +21180,110 @@
         "summary": "Request Employee Phone",
         "tags": [
           "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/roles": {
+      "get": {
+        "description": "Роли сотрудника.",
+        "operationId": "get_user_roles_view_api_v2_shifts_employees__user_id__roles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRolesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get User Roles View",
+        "tags": [
+          "rbac"
+        ]
+      },
+      "put": {
+        "description": "Назначить сотруднику роли (полный набор).",
+        "operationId": "set_user_roles_api_v2_shifts_employees__user_id__roles_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRolesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRolesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set User Roles",
+        "tags": [
+          "rbac"
         ]
       }
     },
