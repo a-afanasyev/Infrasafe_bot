@@ -32,6 +32,7 @@ const ResidentsPage = lazy(() => import('./pages/ResidentsPage'))
 // Group Intake: реестр мониторимых ТГ-групп. Пункт меню виден только manager
 // (действие group_intake.manage в NAV_ENTRIES) — API гейтит то же действие.
 const GroupsPage = lazy(() => import('./pages/GroupsPage'))
+const RolesPage = lazy(() => import('./pages/RolesPage'))
 const ResidentDetailPage = lazy(() => import('./pages/ResidentDetailPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
@@ -182,6 +183,13 @@ export default function App() {
                   контроллеры внутри доступны только system_admin (гейтинг табов). */}
               <Route path="/dashboard/access/equipment" element={<ProtectedRoute action="access.registry.manage"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessEquipmentPage /></PageErrorBoundary>} />
+              </Route>
+
+              {/* Роли и права: смотрит тот, у кого rbac.view (по умолчанию
+                  менеджер), меняет только суперадмин из ADMIN_USER_IDS. Отдельный
+                  group: суперадмину не обязательно иметь dashboard.use. */}
+              <Route path="/dashboard/roles" element={<ProtectedRoute action="rbac.view"><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><RolesPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Складской учёт материалов: номенклатура, остатки, журнал

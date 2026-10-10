@@ -47,6 +47,7 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
+  UserCog,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -131,6 +132,8 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, action: 'materials.manage' },
+  // Роли и права: просмотр — rbac.view (менеджер), правка — суперадмин из ADMIN_USER_IDS.
+  { to: '/dashboard/roles', labelKey: 'nav.roles', Icon: UserCog, action: 'rbac.view' },
   // Лифты: реестр/карточка/календарь/конфиг. DARK за VITE_ELEVATORS_ENABLED;
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'

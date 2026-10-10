@@ -114,6 +114,7 @@
     "menuItem": "F.I.Sh. bosh harflar bilan"
   },
   "nav": {
+    "roles": "Rollar va huquqlar",
     "analytics": "Analitika",
     "requests": "Arizalar",
     "employees": "Xodimlar",
@@ -3222,5 +3223,44 @@
       "repairCreated": "Ta'mir arizasi yaratildi",
       "configSaved": "Sozlamalar saqlandi"
     }
+  },
+  "rbac": {
+    "title": "Rollar va huquqlar",
+    "subtitle": "Rol bir qator amallarga ruxsat beradi. Rolga nimalar ruxsat etilganini belgilang; o'zgarishlar bir necha soniyada vebda, botda va API'da kuchga kiradi.",
+    "readOnly": "Faqat ko'rish. Rollar va huquqlarni server sozlamalarida ko'rsatilgan superadmin o'zgartiradi.",
+    "rolesList": "Rollar ro'yxati",
+    "system": "tizim",
+    "custom": "maxsus",
+    "usersCount_one": "{{count}} xodim",
+    "usersCount_other": "{{count}} xodim",
+    "changedCount": "o'zgartirilgan: {{count}}",
+    "actionsCount": "amallar: {{count}}",
+    "approvedOnly": "faqat tasdiqlanganlarga",
+    "addedToDefault": "qo'shildi",
+    "removedFromDefault": "olib tashlandi",
+    "roleTitle": "Rol nomi",
+    "roleTitlePlaceholder": "Masalan, Katta ijrochi",
+    "roleKey": "Rol kaliti",
+    "keyHint": "Lotin harflari, raqamlar va _, 3–32 belgi. Keyin o'zgarmaydi.",
+    "keyTaken": "Bunday kalit allaqachon bor",
+    "copyFrom": "Huquqlar quyidagi roldagidek",
+    "copyNone": "Huquqsiz — o'zim belgilayman",
+    "newRole": "Yangi rol",
+    "create": "Yaratish",
+    "save": "Saqlash",
+    "reset": "Standart huquqlarni qaytarish",
+    "delete": "Rolni o'chirish",
+    "deleteConfirm": "Rostdan o'chirilsinmi?",
+    "created": "Rol yaratildi",
+    "saved": "Saqlandi",
+    "resetDone": "Rol huquqlari standart holatga qaytarildi",
+    "deleted": "Rol o'chirildi",
+    "saveFailed": "Saqlab bo'lmadi",
+    "loadFailed": "Rollarni yuklab bo'lmadi",
+    "employeeRoles": "Rollar",
+    "employeeRolesHint": "Xodimning rollarini belgilang va saqlang.",
+    "employeeRolesReadOnly": "Rollarni faqat superadmin o'zgartira oladi.",
+    "userRolesSaved": "Xodim rollari saqlandi",
+    "superadmin": "superadmin"
   }
 }
