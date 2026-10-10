@@ -226,6 +226,10 @@
     "manager@pending"
    ]
   },
+  "DELETE /api/v2/shifts/employees/rbac/roles/{key}": {
+   "auth": "roles",
+   "allow": []
+  },
   "DELETE /api/v2/shifts/templates/{template_id}": {
    "auth": "roles",
    "allow": [
@@ -977,6 +981,30 @@
     "manager@pending"
    ]
   },
+  "GET /api/v2/shifts/employees/rbac/catalog": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "GET /api/v2/shifts/employees/rbac/roles": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "GET /api/v2/shifts/employees/{user_id}": {
    "auth": "roles",
    "allow": [
@@ -990,6 +1018,18 @@
    ]
   },
   "GET /api/v2/shifts/employees/{user_id}/active-requests-count": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "GET /api/v2/shifts/employees/{user_id}/roles": {
    "auth": "roles",
    "allow": [
     "manager",
@@ -2088,6 +2128,14 @@
     "manager@pending"
    ]
   },
+  "POST /api/v2/shifts/employees/rbac/roles": {
+   "auth": "roles",
+   "allow": []
+  },
+  "POST /api/v2/shifts/employees/rbac/roles/{key}/reset": {
+   "auth": "roles",
+   "allow": []
+  },
   "POST /api/v2/shifts/employees/{user_id}/request-phone": {
    "auth": "roles",
    "allow": [
@@ -2358,6 +2406,14 @@
    "deps": [
     "_require_elevators_enabled"
    ]
+  },
+  "PUT /api/v2/shifts/employees/rbac/roles/{key}": {
+   "auth": "roles",
+   "allow": []
+  },
+  "PUT /api/v2/shifts/employees/{user_id}/roles": {
+   "auth": "roles",
+   "allow": []
   },
   "PUT /api/v2/work-reports/settings": {
    "auth": "roles",

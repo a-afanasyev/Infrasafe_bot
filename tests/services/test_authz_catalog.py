@@ -23,7 +23,10 @@ def test_catalog_is_consistent():
     assert ACTIONS, "каталог пуст"
     for key, action in ACTIONS.items():
         assert key == action.key
-        assert action.roles and action.roles <= KNOWN_ROLES, key
+        if action.superadmin_only:
+            assert not action.default_roles, f"{key}: только суперадмин — роли не выдаются"
+        else:
+            assert action.default_roles and action.default_roles <= KNOWN_ROLES, key
         assert action.title, f"у действия {key} нет описания"
 
 

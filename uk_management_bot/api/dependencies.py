@@ -81,10 +81,13 @@ def require_action(action_key: str):
     модуля роутера, а не тихий отказ в рантайме.
     """
     from uk_management_bot.authz.catalog import get_action
+    from uk_management_bot.authz.policy import SUPERADMIN_PREFIX, is_superadmin
 
     action = get_action(action_key)
 
     async def checker(user: User = Depends(get_current_user)) -> User:
+        if action_key.startswith(SUPERADMIN_PREFIX) and is_superadmin(user):
+            return user
         if not action.allows(get_user_roles(user)):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         if action.approved_only and user.status != "approved":

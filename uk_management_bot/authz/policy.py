@@ -34,12 +34,33 @@ def has_action_roles(subject: Subject, action_key: str) -> bool:
     return get_action(action_key).allows(roles_of(subject))
 
 
+#: Действия админки ролей: суперадмин проходит их независимо от своих ролей.
+SUPERADMIN_PREFIX = "rbac."
+
+
+def is_superadmin(subject: Subject) -> bool:
+    """Суперадмин — пользователь, чей telegram_id прописан в ADMIN_USER_IDS.
+
+    Назначается только через env/Doppler и рестарт: в админке его не снять и
+    не выдать. Заблокированный или удалённый аккаунт суперадмином не считается.
+    """
+    telegram_id = getattr(subject, "telegram_id", None)
+    if telegram_id is None:
+        return False
+    if getattr(subject, "status", None) in ("blocked", "deleted") or getattr(subject, "deleted_at", None):
+        return False
+    from uk_management_bot.config.settings import settings
+
+    return int(telegram_id) in set(settings.ADMIN_USER_IDS or ())
+
+
 def can(subject: Subject, action_key: str) -> bool:
     """Разрешено ли действие субъекту.
 
     Для `approved_only`-действия пользователь обязан быть одобрен. Если
     субъект — голый набор ролей, статус неизвестен: такая проверка для
     `approved_only` невозможна и запрещена (передайте пользователя).
+    Действия админки ролей (`rbac.*`) суперадмину разрешены всегда.
     """
     action = get_action(action_key)
     is_user = hasattr(subject, "roles") and hasattr(subject, "status")
@@ -47,6 +68,8 @@ def can(subject: Subject, action_key: str) -> bool:
         raise TypeError(
             f"Действие {action_key} требует одобренный аккаунт — передайте пользователя, а не роли"
         )
+    if is_user and action_key.startswith(SUPERADMIN_PREFIX) and is_superadmin(subject):
+        return True
     if not action.allows(roles_of(subject)):
         return False
     if action.approved_only and getattr(subject, "status", None) != "approved":

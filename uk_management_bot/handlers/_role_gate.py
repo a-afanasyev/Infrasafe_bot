@@ -80,7 +80,12 @@ class ActionGate(RoleGate):
         if action.approved_only:
             raise ValueError(f"Действие {action_key} требует одобренный аккаунт — ActionGate статус не проверяет")
         self.action_key = action_key
-        super().__init__(tuple(sorted(action.roles)))
+        self._action = action
+
+    @property
+    def allowed_roles(self) -> tuple:
+        # Читается на каждый апдейт: права могли поменять в админке ролей.
+        return tuple(sorted(self._action.roles))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

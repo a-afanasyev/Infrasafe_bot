@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
-from uk_management_bot.authz import actions_for_roles
+from uk_management_bot.authz import ACTIONS, actions_for_roles, is_superadmin
+from uk_management_bot.authz.policy import SUPERADMIN_PREFIX
 from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
@@ -37,13 +38,20 @@ class ProfileOut(BaseModel):
     # здесь не учитывается, как не учитывался при гейтинге по ролям. Решение
     # принимает сервер на каждом запросе (require_action).
     actions: list[str] = []
+    # Суперадмин из ADMIN_USER_IDS: может менять роли и права в админке ролей.
+    is_superadmin: bool = False
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_user(cls, user: User) -> "ProfileOut":
         roles_list = get_user_roles(user)
+        actions = set(actions_for_roles(roles_list))
+        superadmin = is_superadmin(user)
+        if superadmin:
+            actions |= {key for key in ACTIONS if key.startswith(SUPERADMIN_PREFIX)}
         return cls(
-            actions=sorted(actions_for_roles(roles_list)),
+            actions=sorted(actions),
+            is_superadmin=superadmin,
             id=user.id,
             telegram_id=user.telegram_id,
             first_name=user.first_name,

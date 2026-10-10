@@ -5,8 +5,9 @@
 * Точка входа (маршрут API, хендлер бота, workflow-команда) спрашивает не
   «есть ли у человека роль manager», а «разрешено ли ему действие
   `staff.manage`». Какие роли дают действие — написано здесь, одной строкой.
-* Роли по-прежнему хранятся в `users.roles`; новых таблиц нет. Действие —
-  это имя операции плюс набор ролей, которые её разрешают.
+* Роли хранятся в `users.roles`. Действие — это имя операции плюс набор
+  ролей, которые её разрешают «из коробки» (`default_roles`). Суперадмин может
+  переопределить права и завести свои роли в админке — см. `authz/store.py`.
 * `approved_only=True` — действие доступно только одобренному аккаунту
   (`users.status == "approved"`); прежний `require_approved_roles`.
 
@@ -44,19 +45,37 @@ KNOWN_ROLES: frozenset[str] = frozenset({
 
 @dataclass(frozen=True)
 class Action:
-    """Именованная операция и роли, которые её разрешают."""
+    """Именованная операция и роли, которые её разрешают.
+
+    `default_roles` — права «из коробки», записанные здесь. Админка ролей
+    (`authz/store.py`, таблицы rbac_*) может их переопределить; `roles` —
+    действующий набор с учётом переопределений, его и читают все проверки.
+    `superadmin_only` — действие только для суперадмина из `ADMIN_USER_IDS`:
+    ролям не выдаётся и в админке не редактируется.
+    """
 
     key: str
-    roles: frozenset[str]
+    default_roles: frozenset[str]
     title: str
     approved_only: bool = False
+    superadmin_only: bool = False
+
+    @property
+    def roles(self) -> frozenset[str]:
+        # Ленивый импорт: store опирается на каталог.
+        from uk_management_bot.authz.store import effective_roles
+
+        return effective_roles(self)
 
     def allows(self, roles: Iterable[str]) -> bool:
-        return any(role in self.roles for role in roles)
+        current = self.roles
+        return any(role in current for role in roles)
 
 
-def _action(key: str, roles: Iterable[str], title: str, *, approved_only: bool = False) -> Action:
-    return Action(key=key, roles=frozenset(roles), title=title, approved_only=approved_only)
+def _action(key: str, roles: Iterable[str], title: str, *, approved_only: bool = False,
+            superadmin_only: bool = False) -> Action:
+    return Action(key=key, default_roles=frozenset(roles), title=title,
+                  approved_only=approved_only, superadmin_only=superadmin_only)
 
 
 _M, _A, _E, _AP = MANAGER, ADMIN, EXECUTOR, APPLICANT
@@ -127,6 +146,13 @@ _ACTIONS: tuple[Action, ...] = (
     _action("shift_transfers.respond", {_E, _M}, "Бот: ответ на передачу смены"),
     _action("shifts.history", {_A, _M, _E}, "Бот: история и просмотр смен"),
     _action("elevators.technician", {_E, _M, _A}, "Бот: раздел лифтов"),
+    # ---------------------------------------------------------- роли и права
+    # Просмотр страницы «Роли и права» и ролей сотрудников. Суперадмин видит
+    # её всегда; остальным — по ролям (по умолчанию менеджер, только чтение).
+    _action("rbac.view", {_M}, "Роли и права: просмотр"),
+    # Изменение ролей, их прав и ролей сотрудников — только суперадмин из
+    # ADMIN_USER_IDS. Ролям не выдаётся: иначе админка могла бы раздать сама себя.
+    _action("rbac.manage", set(), "Роли и права: изменение (только суперадмин)", superadmin_only=True),
 )
 
 ACTIONS: Mapping[str, Action] = MappingProxyType({a.key: a for a in _ACTIONS})
@@ -146,14 +172,22 @@ def actions_for_roles(roles: Iterable[str]) -> frozenset[str]:
     return frozenset(a.key for a in _ACTIONS if a.roles & role_set)
 
 
+#: Роли «из коробки»: в админке их нельзя удалить, только поменять права.
+SYSTEM_ROLES: frozenset[str] = KNOWN_ROLES
+
+
 def _validate() -> None:
     keys = [a.key for a in _ACTIONS]
     duplicates = {k for k in keys if keys.count(k) > 1}
     if duplicates:
         raise RuntimeError(f"Дубли действий в каталоге: {sorted(duplicates)}")
     for action in _ACTIONS:
-        unknown = action.roles - KNOWN_ROLES
-        if not action.roles or unknown:
+        unknown = action.default_roles - KNOWN_ROLES
+        if action.superadmin_only:
+            if action.default_roles:
+                raise RuntimeError(f"Действие {action.key} только для суперадмина — роли ему не выдаются")
+            continue
+        if not action.default_roles or unknown:
             raise RuntimeError(f"Действие {action.key}: пустой или неизвестный набор ролей {sorted(unknown)}")
 
 

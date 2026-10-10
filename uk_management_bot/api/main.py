@@ -36,6 +36,7 @@ from uk_management_bot.api.callcenter.router import router as callcenter_router
 # живёт (бот-уведомления).
 from uk_management_bot.api.profile.router import router as profile_router
 from uk_management_bot.api.ws.router import router as ws_router
+from uk_management_bot.api.rbac.router import router as rbac_router
 from uk_management_bot.api.shifts.router import router as shifts_router
 from uk_management_bot.api.shifts.executor_router import router as executor_shifts_router
 from uk_management_bot.api.requests.stats_router import router as requests_stats_router
@@ -151,6 +152,9 @@ app.include_router(requests_executor_router, prefix="/api/v2/requests", tags=["r
 app.include_router(callcenter_router, prefix="/api/v2/callcenter", tags=["callcenter"])
 app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])
 app.include_router(ws_router, prefix="/ws/v2", tags=["websocket"])
+# Админка ролей живёт под /api/v2/shifts/employees (префикс открыт на edge) и
+# подключается ДО роутера смен: иначе /employees/rbac/... ушёл бы в /employees/{user_id}.
+app.include_router(rbac_router, prefix="/api/v2/shifts", tags=["rbac"])
 app.include_router(shifts_router, prefix="/api/v2/shifts", tags=["shifts"])
 app.include_router(addresses_router, prefix="/api/v2/addresses", tags=["addresses"])
 app.include_router(residents_router, prefix="/api/v2/residents", tags=["residents"])

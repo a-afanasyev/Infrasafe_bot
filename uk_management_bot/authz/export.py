@@ -21,13 +21,14 @@ FRONTEND_COPY = Path(__file__).resolve().parents[2] / "frontend" / "src" / "auth
 
 
 def catalog_payload() -> dict:
-    """Каталог в стабильном виде: ключ → роли, признак одобрения, описание."""
+    """Каталог в стабильном виде: ключ → роли по умолчанию, признаки, описание."""
     return {
         "_comment": "Сгенерировано: python -m uk_management_bot.authz.export --write. Не править руками.",
         "actions": {
             key: {
-                "roles": sorted(action.roles),
+                "roles": sorted(action.default_roles),
                 "approved_only": action.approved_only,
+                "superadmin_only": action.superadmin_only,
                 "title": action.title,
             }
             for key, action in sorted(ACTIONS.items())
@@ -46,7 +47,7 @@ def render_markdown() -> str:
         "|---|---|:-:|---|",
     ]
     for key, action in sorted(ACTIONS.items()):
-        roles = ", ".join(f"`{r}`" for r in sorted(action.roles))
+        roles = ", ".join(f"`{r}`" for r in sorted(action.default_roles)) or "суперадмин"
         approved = "да" if action.approved_only else ""
         lines.append(f"| `{key}` | {roles} | {approved} | {action.title} |")
     return "\n".join(lines) + "\n"

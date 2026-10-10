@@ -9,12 +9,13 @@
   `ActionGate("...")`;
 * в коде: `can(user, "requests.manage")` / `can(roles, "admin_panel.use")`.
 
-Кто что может — только в `authz/catalog.py`.
+Какие действия существуют и их права «из коробки» — `authz/catalog.py`.
+Переопределения из админки ролей — `authz/store.py` (таблицы rbac_*).
 """
 from uk_management_bot.authz.catalog import ACTIONS, Action, actions_for_roles, get_action
-from uk_management_bot.authz.policy import can, has_action_roles, roles_of
+from uk_management_bot.authz.policy import can, has_action_roles, is_superadmin, roles_of
 
 __all__ = [
     "ACTIONS", "Action", "actions_for_roles", "can", "get_action",
-    "has_action_roles", "roles_of",
+    "has_action_roles", "is_superadmin", "roles_of",
 ]
