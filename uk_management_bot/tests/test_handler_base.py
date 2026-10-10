@@ -524,6 +524,38 @@ class TestSwitchRole:
         assert call_kwargs.get("show_alert") is True
 
     @pytest.mark.asyncio
+    async def test_switch_role_to_custom_role_is_refused(self):
+        """Своя роль из админки — не режим меню, даже если она у пользователя есть."""
+        from uk_management_bot.handlers.base import switch_role
+        from uk_management_bot.utils.callback_factories import RoleSwitchCB
+
+        cb = _make_callback()
+        db = _make_db()
+
+        await switch_role(
+            cb,
+            callback_data=RoleSwitchCB(target="senior_exec"),
+            _db=db,
+            roles=["executor", "senior_exec"],
+            active_role="executor",
+        )
+
+        _, call_kwargs = cb.answer.call_args
+        assert call_kwargs.get("show_alert") is True
+        db.commit.assert_not_called()
+
+    def test_role_switch_keyboard_lists_only_menu_modes(self):
+        from uk_management_bot.keyboards.base import get_main_keyboard_for_role, get_role_switch_inline
+
+        inline = get_role_switch_inline(["executor", "senior_exec", "resource_meter_entry"], "executor")
+        targets = [b.callback_data for row in inline.inline_keyboard for b in row]
+        assert targets == ["role:executor"]
+        main = get_main_keyboard_for_role("executor", ["executor", "senior_exec"], "approved")
+        texts = [b.text for row in main.keyboard for b in row]
+        from uk_management_bot.utils.helpers import get_text
+        assert get_text("main_menu.switch_role", language="ru") not in texts
+
+    @pytest.mark.asyncio
     async def test_switch_role_user_not_found_in_db(self):
         """switch_role shows error alert when user is missing from DB."""
         from uk_management_bot.handlers.base import switch_role

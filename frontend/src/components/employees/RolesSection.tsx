@@ -26,6 +26,11 @@ export default function RolesSection({ employeeId }: Props) {
   const chosen = draft ?? current
   const canEdit = userRoles.data.can_edit
   const dirty = draft !== null && (draft.size !== current.size || [...draft].some((r) => !current.has(r)))
+  // Своя роль выдаётся только вместе с системной: меню бота строится по
+  // системным ролям. Системные — первыми, чтобы режим меню был системным.
+  const systemKeys = new Set(roles.data.roles.filter((r) => r.is_system).map((r) => r.key))
+  const hasSystem = [...chosen].some((r) => systemKeys.has(r))
+  const ordered = [...chosen].sort((a, b) => Number(systemKeys.has(b)) - Number(systemKeys.has(a)))
 
   const toggle = (key: string) => {
     const next = new Set(chosen)
@@ -76,12 +81,15 @@ export default function RolesSection({ employeeId }: Props) {
           )
         })}
       </div>
+      {canEdit && dirty && !hasSystem && (
+        <div className="text-[11px] text-amber">{t('rbac.needSystemRole')}</div>
+      )}
       {canEdit && (
         <div className="flex gap-2">
           <Button
             size="sm"
-            disabled={!dirty || chosen.size === 0 || setRoles.isPending}
-            onClick={() => setRoles.mutate([...chosen], { onSuccess: () => setDraft(null) })}
+            disabled={!dirty || !hasSystem || setRoles.isPending}
+            onClick={() => setRoles.mutate(ordered, { onSuccess: () => setDraft(null) })}
           >
             {t('rbac.save')}
           </Button>

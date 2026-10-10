@@ -1,9 +1,10 @@
 """Логика админки ролей: чтение прав, правка ролей, роли сотрудников.
 
 Права читаются здесь напрямую из таблиц (не из кэша `authz/store`), чтобы
-страница сразу показывала только что сохранённое. После каждой записи —
-`rbac_state.version += 1` (другие процессы перечитают права) и сброс кэша
-этого процесса.
+страница сразу показывала только что сохранённое. Каждая запись начинается с
+`begin_change` (`rbac_state.version += 1` под блокировкой строки — другие
+процессы перечитают права, параллельные правки идут по очереди) и кончается
+`commit_change` (коммит + перечитать права в этом процессе).
 """
 from __future__ import annotations
 
@@ -89,20 +90,34 @@ async def drop_permissions(db: AsyncSession, role_key: str) -> None:
 
 
 async def write_permissions(db: AsyncSession, role_key: str, actions: set[str]) -> None:
-    """Записать полный набор прав роли: явное «да/нет» по каждому действию."""
+    """Записать права роли: строки только там, где они расходятся с каталогом.
+
+    Совпадающее с правами «из коробки» не хранится — иначе роль «замёрзла» бы,
+    и будущая правка `default_roles` в коде к ней бы не применилась. Для своей
+    роли «из коробки» нет ничего, поэтому хранятся только разрешения.
+    """
     await drop_permissions(db, role_key)
+    defaults = default_actions(role_key)
     db.add_all(
         RbacRolePermission(role_key=role_key, action_key=key, allowed=key in actions)
         for key in sorted(EDITABLE_ACTIONS)
+        if (key in actions) != (key in defaults)
     )
 
 
-async def bump_version(db: AsyncSession) -> None:
+async def begin_change(db: AsyncSession) -> None:
+    """Начать запись в админке: поднять версию прав первым же запросом.
+
+    UPDATE строки `rbac_state` держит её блокировку до коммита, поэтому две
+    одновременные правки (две вкладки) идут по очереди, а не падают на
+    дубле ключа при «удалить строки → вставить заново».
+    """
     result = await db.execute(
         update(RbacState).where(RbacState.id == 1).values(version=RbacState.version + 1)
     )
     if result.rowcount == 0:
         db.add(RbacState(id=1, version=1))
+        await db.flush()
 
 
 def audit(db: AsyncSession, actor: User, action: str, details: dict) -> None:
@@ -110,7 +125,7 @@ def audit(db: AsyncSession, actor: User, action: str, details: dict) -> None:
 
 
 async def commit_change(db: AsyncSession) -> None:
-    await bump_version(db)
+    """Закрыть запись: коммит и перечитать права в этом процессе сразу."""
     await db.commit()
     store.invalidate()
 
@@ -130,10 +145,21 @@ def user_roles_list(user: User) -> list[str]:
     return parse_roles_safe(user.roles)
 
 
+#: Роль-капабилити: даёт кнопку ввода показаний, режимом меню не бывает.
+_NOT_A_MENU_MODE = frozenset({"resource_meter_entry"})
+
+
 def apply_user_roles(user: User, roles: list[str]) -> Optional[str]:
-    """Записать роли пользователю; режим меню — на первую роль, если прежней нет."""
+    """Записать роли пользователю; режим меню — только системная роль.
+
+    Прежний режим сохраняется, если роль осталась. Иначе — первая системная
+    роль из списка (своя роль режимом меню не становится: меню бота строится
+    по системным ролям).
+    """
     unique = list(dict.fromkeys(roles))
     user.roles = json.dumps(unique)
-    if user.active_role not in unique:
-        user.active_role = unique[0]
+    modes = [r for r in unique if r in SYSTEM_ROLES and r not in _NOT_A_MENU_MODE]
+    if user.active_role not in modes:
+        system = [r for r in unique if r in SYSTEM_ROLES]
+        user.active_role = (modes or system or unique)[0]
     return user.active_role

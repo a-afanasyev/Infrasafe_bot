@@ -64,9 +64,10 @@ async def list_roles(db: AsyncSession = Depends(get_db), user: User = Depends(re
 async def create_role(request: Request, body: RoleCreate, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_action("rbac.manage"))):
     """Создать свою роль с набором прав."""
+    actions = svc.validate_actions(body.actions)
+    await svc.begin_change(db)
     if body.key in SYSTEM_ROLES or await db.get(RbacRole, body.key) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Роль с таким ключом уже есть")
-    actions = svc.validate_actions(body.actions)
     db.add(RbacRole(key=body.key, title=body.title, description=body.description,
                     is_system=False, updated_by=user.id))
     await db.flush()
@@ -83,6 +84,8 @@ async def create_role(request: Request, body: RoleCreate, db: AsyncSession = Dep
 async def update_role(request: Request, key: str, body: RoleUpdate, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_action("rbac.manage"))):
     """Изменить название, описание и/или права роли (системной тоже)."""
+    actions = svc.validate_actions(body.actions) if body.actions is not None else None
+    await svc.begin_change(db)
     role = await svc.get_role(db, key)
     details: dict = {"role": key}
     if body.title is not None:
@@ -90,9 +93,8 @@ async def update_role(request: Request, key: str, body: RoleUpdate, db: AsyncSes
     if body.description is not None:
         role.description = body.description
     role.updated_by = user.id
-    if body.actions is not None:
+    if actions is not None:
         before = svc.role_actions(key, await svc.read_snapshot(db))
-        actions = svc.validate_actions(body.actions)
         await svc.write_permissions(db, key, actions)
         details.update(added=sorted(actions - before), removed=sorted(before - actions))
     svc.audit(db, user, "rbac.role.updated", details)
@@ -108,11 +110,12 @@ async def update_role(request: Request, key: str, body: RoleUpdate, db: AsyncSes
 @limiter.limit("30/minute")
 async def reset_role(request: Request, key: str, db: AsyncSession = Depends(get_db),
                      user: User = Depends(require_action("rbac.manage"))):
-    """Вернуть системной роли права «из коробки»."""
+    """Вернуть системной роли права «из коробки» (удалить её переопределения)."""
+    await svc.begin_change(db)
     role = await svc.get_role(db, key)
     if not role.is_system:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Сбросить можно только системную роль")
-    await svc.write_permissions(db, key, svc.default_actions(key))
+    await svc.drop_permissions(db, key)
     svc.audit(db, user, "rbac.role.reset", {"role": key})
     await svc.commit_change(db)
     return RoleOut(key=key, title=role.title, description=role.description, is_system=True,
@@ -124,6 +127,7 @@ async def reset_role(request: Request, key: str, db: AsyncSession = Depends(get_
 async def delete_role(request: Request, key: str, db: AsyncSession = Depends(get_db),
                       user: User = Depends(require_action("rbac.manage"))):
     """Удалить свою роль. Системные не удаляются; роль с сотрудниками — тоже."""
+    await svc.begin_change(db)
     role = await svc.get_role(db, key)
     if role.is_system:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Системную роль удалить нельзя")
@@ -159,6 +163,11 @@ async def set_user_roles(request: Request, user_id: int, body: UserRolesUpdate,
     unknown = set(body.roles) - await svc.known_role_keys(db)
     if unknown:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Неизвестные роли: {sorted(unknown)}")
+    if not set(body.roles) & SYSTEM_ROLES:
+        # Меню бота и режимы строятся по системным ролям; одна своя роль
+        # оставила бы человека без меню.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "Нужна хотя бы одна системная роль (своя роль выдаётся вместе с ней)")
     before = svc.user_roles_list(target)
     active = svc.apply_user_roles(target, body.roles)
     svc.audit(db, user, "rbac.user_roles.changed",

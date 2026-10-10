@@ -9,6 +9,7 @@ const BASE = '*/api/v2/shifts/employees'
 const ROLES = [
   { key: 'executor', title: 'Исполнитель', is_system: true, actions: [], customized: [], users_count: 1 },
   { key: 'security_operator', title: 'Оператор охраны', is_system: true, actions: [], customized: [], users_count: 0 },
+  { key: 'senior_exec', title: 'Старший исполнитель', is_system: false, actions: [], customized: [], users_count: 0 },
 ]
 
 function mockApi(canEdit: boolean, onPut?: (roles: string[]) => void) {
@@ -43,5 +44,18 @@ describe('RolesSection', () => {
     await user.click(await screen.findByRole('checkbox', { name: 'Оператор охраны' }))
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(sent).toEqual(['executor', 'security_operator']))
+  })
+  it('custom role needs a system role and goes after it', async () => {
+    let sent: string[] | null = null
+    mockApi(true, (roles) => { sent = roles })
+    const user = userEvent.setup()
+    render(<RolesSection employeeId={7} />)
+    await user.click(await screen.findByRole('checkbox', { name: 'Старший исполнитель' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Исполнитель' }))
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled()
+    expect(screen.getByText(/Нужна хотя бы одна системная роль/)).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Исполнитель' }))
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(sent).toEqual(['executor', 'senior_exec']))
   })
 })

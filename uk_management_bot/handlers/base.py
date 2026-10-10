@@ -34,6 +34,7 @@ from uk_management_bot.keyboards.base import (
     get_role_switch_inline,
     get_start_role_choice_inline,
     get_user_contextual_keyboard,
+    is_menu_mode,
 )
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import (
@@ -769,8 +770,9 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, roles: lis
     roles = roles or ["applicant"]
     target = callback_data.target
 
-    # Проверяем, что целевая роль доступна пользователю
-    if target not in roles:
+    # Проверяем, что целевая роль доступна пользователю и бывает режимом меню
+    # (callback_data шлёт клиент — своя роль из админки режимом не бывает).
+    if target not in roles or not is_menu_mode(target):
         lang = language
         await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
         return

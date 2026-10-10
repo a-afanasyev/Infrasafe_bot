@@ -15,7 +15,7 @@ from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.main import app
 from uk_management_bot.authz import get_action
 from uk_management_bot.database.models.audit import AuditLog
-from uk_management_bot.database.models.rbac import RbacRole, RbacState
+from uk_management_bot.database.models.rbac import RbacRole, RbacRolePermission, RbacState
 from uk_management_bot.database.models.user import User
 
 BASE = "/api/v2/shifts/employees"
@@ -157,6 +157,39 @@ async def test_edit_and_reset_system_role(client):
     assert reset.status_code == 200 and "requests.stats" in reset.json()["actions"]
 
 
+async def _rows(seeded, role):
+    async with seeded() as s:
+        rows = (await s.execute(select(RbacRolePermission).where(RbacRolePermission.role_key == role))).scalars()
+        return {(r.action_key, r.allowed) for r in rows}
+
+
+@pytest.mark.asyncio
+async def test_only_differences_from_catalog_are_stored(client, seeded):
+    """Совпадающее с каталогом не хранится — будущая правка кода дойдёт до роли."""
+    c = await client(SUPERADMIN)
+    manager_now = next(r for r in (await c.get(f"{BASE}/rbac/roles")).json()["roles"] if r["key"] == "manager")
+    await c.put(f"{BASE}/rbac/roles/manager", json={"actions": manager_now["actions"]})
+    assert await _rows(seeded, "manager") == set()
+    reduced = [a for a in manager_now["actions"] if a != "requests.stats"]
+    await c.put(f"{BASE}/rbac/roles/manager", json={"actions": reduced})
+    assert await _rows(seeded, "manager") == {("requests.stats", False)}
+    await c.post(f"{BASE}/rbac/roles/manager/reset")
+    assert await _rows(seeded, "manager") == set()
+    await c.post(f"{BASE}/rbac/roles", json={"key": "senior_exec", "title": "S", "actions": ["requests.stats"]})
+    assert await _rows(seeded, "senior_exec") == {("requests.stats", True)}
+
+
+@pytest.mark.asyncio
+async def test_every_write_bumps_version(client, seeded):
+    c = await client(SUPERADMIN)
+    await c.post(f"{BASE}/rbac/roles", json={"key": "temp_role", "title": "T"})
+    await c.put(f"{BASE}/rbac/roles/temp_role", json={"title": "T2"})
+    await c.post(f"{BASE}/rbac/roles/manager/reset")
+    await c.delete(f"{BASE}/rbac/roles/temp_role")
+    async with seeded() as s:
+        assert (await s.get(RbacState, 1)).version == 5
+
+
 @pytest.mark.asyncio
 async def test_delete_rules(client):
     c = await client(SUPERADMIN)
@@ -181,6 +214,17 @@ async def test_user_roles_read_and_assign(client):
     assert resp.json()["active_role"] == "security_operator"
     bad = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["ghost"]})
     assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_custom_role_goes_with_a_system_role(client):
+    """Своя роль — только вместе с системной; режим меню остаётся системным."""
+    c = await client(SUPERADMIN)
+    await c.post(f"{BASE}/rbac/roles", json={"key": "senior_exec", "title": "S"})
+    alone = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["senior_exec"]})
+    assert alone.status_code == 422
+    both = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["senior_exec", "manager"]})
+    assert both.status_code == 200 and both.json()["active_role"] == "manager"
 
 
 @pytest.mark.asyncio

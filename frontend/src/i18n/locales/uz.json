@@ -3261,6 +3261,7 @@
     "employeeRolesHint": "Xodimning rollarini belgilang va saqlang.",
     "employeeRolesReadOnly": "Rollarni faqat superadmin o'zgartira oladi.",
     "userRolesSaved": "Xodim rollari saqlandi",
-    "superadmin": "superadmin"
+    "superadmin": "superadmin",
+    "needSystemRole": "Kamida bitta tizim roli kerak — o'z rolingiz u bilan birga beriladi."
   }
 }

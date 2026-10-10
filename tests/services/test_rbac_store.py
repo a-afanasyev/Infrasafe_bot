@@ -22,14 +22,13 @@ def snapshot(monkeypatch):
     """Подменить состояние прав, которое видят проверки."""
     holder = {"snap": None}
     monkeypatch.setattr(store, "current_snapshot", lambda: holder["snap"])
-    store.invalidate()
+    store.reset_for_tests()
 
     def _set(snap):
         holder["snap"] = snap
-        store._effective_cache.clear()
 
     yield _set
-    store.invalidate()
+    store.reset_for_tests()
 
 
 def _user(roles, status="approved", telegram_id=1):
@@ -90,6 +89,60 @@ def test_bot_action_gate_reads_rights_per_update(snapshot):
     assert not asyncio.run(gate(event, roles=["executor"], user=None))
     snapshot(_snap({("executor", "admin_panel.use"): True}, roles={"executor"}))
     assert asyncio.run(gate(event, roles=["executor"], user=None))
+
+
+# ── кэш и сбои чтения ──────────────────────────────────────────────────
+
+@pytest.fixture
+def loader(monkeypatch):
+    """Подменить чтение базы: очередь ответов (снимок / None / исключение)."""
+    answers: list = []
+
+    def _fake_load(current):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise store._ReadError(str(answer))
+        return answer
+
+    monkeypatch.setattr(store, "_load", _fake_load)
+    store.reset_for_tests()
+    yield answers
+    store.reset_for_tests()
+
+
+def test_read_error_keeps_last_known_rights(loader):
+    """Снятое в админке право не возвращается из-за сбоя чтения базы."""
+    revoked = _snap({("manager", "requests.stats"): False}, roles={"manager"})
+    loader.extend([revoked, RuntimeError("pool timeout")])
+    assert not can(["manager"], "requests.stats")
+    store.invalidate()
+    assert store.current_snapshot() is revoked
+    assert not can(["manager"], "requests.stats")
+
+
+def test_read_error_before_first_load_means_catalog(loader):
+    loader.append(RuntimeError("db down"))
+    assert store.current_snapshot() is None
+    assert can(["manager"], "requests.stats")
+
+
+def test_invalidate_rereads_without_dropping_state(loader):
+    first = _snap(roles={"manager"})
+    second = store.Snapshot(version=8, overrides={("manager", "requests.stats"): False},
+                            roles=frozenset({"manager"}))
+    loader.extend([first, second])
+    assert store.current_snapshot() is first
+    store.invalidate()
+    assert store.current_snapshot() is second
+    assert not can(["manager"], "requests.stats")
+
+
+def test_cache_lives_in_its_snapshot():
+    """Посчитанное по старому снимку не попадает в кэш нового."""
+    action = get_action("requests.stats")
+    old, new = _snap(roles={"manager"}), _snap({("manager", "requests.stats"): False}, roles={"manager"})
+    old.cache[action.key] = store.resolve(action, old)
+    assert action.key not in new.cache
 
 
 # ── суперадмин ──────────────────────────────────────────────────────────

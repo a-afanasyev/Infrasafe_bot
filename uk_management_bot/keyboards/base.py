@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 # web_app-кнопку Mini App, но НЕ участвует в переключении active_role.
 METER_ENTRY_ROLE = "resource_meter_entry"
 
+
+def is_menu_mode(role: str) -> bool:
+    """Роль, в режим которой можно переключиться: системная, не капабилити.
+
+    Свои роли из админки ролей режимом меню не бывают — меню строится по
+    системным ролям, а права своей роли действуют в любом режиме.
+    """
+    from uk_management_bot.authz.catalog import SYSTEM_ROLES
+
+    return role in SYSTEM_ROLES and role != METER_ENTRY_ROLE
+
 def get_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Главная клавиатура (вариант по умолчанию для обратной совместимости).
 
@@ -195,8 +206,8 @@ def get_main_keyboard_for_role(
     builder.add(KeyboardButton(text=get_text("main_menu.feedback", language=language)))
 
     # Кнопка выбор роли при наличии ≥2 переключаемых ролей (капабилити
-    # resource_meter_entry не переключается — не считаем её).
-    switchable_roles = [r for r in unique_roles if r != METER_ENTRY_ROLE]
+    # resource_meter_entry и свои роли из админки не переключаются).
+    switchable_roles = [r for r in unique_roles if is_menu_mode(r)]
     if len(switchable_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
 
@@ -217,8 +228,8 @@ def get_role_switch_inline(roles: list[str], active_role: str, language: str = "
     builder = InlineKeyboardBuilder()
 
     for role in roles or []:
-        if role == METER_ENTRY_ROLE:
-            continue  # капабилити, не переключаемая роль
+        if not is_menu_mode(role):
+            continue  # капабилити или своя роль — не режим меню
         name = get_text(f"roles.{role}", language=language)
         mark = " ✓" if role == active_role else ""
         builder.add(InlineKeyboardButton(
