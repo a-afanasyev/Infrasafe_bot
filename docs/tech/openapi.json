@@ -726,6 +726,14 @@
           "org": {
             "$ref": "#/components/schemas/OrgCfg"
           },
+          "planned_works": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedWorkCfg"
+            },
+            "maxItems": 20,
+            "title": "Planned Works",
+            "type": "array"
+          },
           "work_reports": {
             "$ref": "#/components/schemas/WorkReportsCfg"
           },
@@ -778,6 +786,14 @@
           },
           "org": {
             "$ref": "#/components/schemas/OrgCfgIn"
+          },
+          "planned_works": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedWorkCfgIn"
+            },
+            "maxItems": 20,
+            "title": "Planned Works",
+            "type": "array"
           },
           "work_reports": {
             "$ref": "#/components/schemas/WorkReportsCfgIn"
@@ -5986,6 +6002,88 @@
         "title": "PaymentAccountsIn",
         "type": "object"
       },
+      "PlannedWorkCfg": {
+        "description": "Плановая работа для блока «Ближайшие работы» страницы жителей.\n\n`date` — бизнес-дата `YYYY-MM-DD` (без зоны: это день на стене объекта);\nвремя — `HH:MM` или пусто («весь день»). Прошедшие даты не отсекаются здесь —\nстраница сама показывает только сегодняшние и будущие.",
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "place": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "text": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "time_from": {
+            "default": "",
+            "title": "Time From",
+            "type": "string"
+          },
+          "time_to": {
+            "default": "",
+            "title": "Time To",
+            "type": "string"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "title"
+        ],
+        "title": "PlannedWorkCfg",
+        "type": "object"
+      },
+      "PlannedWorkCfgIn": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "place": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "text": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "time_from": {
+            "default": "",
+            "title": "Time From",
+            "type": "string"
+          },
+          "time_to": {
+            "default": "",
+            "title": "Time To",
+            "type": "string"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "title"
+        ],
+        "title": "PlannedWorkCfgIn",
+        "type": "object"
+      },
       "PoolItem": {
         "description": "Плитка вкладки «Взять» (простой режим исполнителя, TWA).",
         "properties": {
@@ -6441,6 +6539,20 @@
             ],
             "title": "Avg Resolution Hours"
           },
+          "category_counts": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Category Counts",
+            "type": "object"
+          },
+          "completed_month": {
+            "title": "Completed Month",
+            "type": "integer"
+          },
           "status_counts": {
             "additionalProperties": {
               "type": "integer"
@@ -6454,7 +6566,9 @@
           "active_requests",
           "active_executors",
           "avg_resolution_hours",
-          "avg_rating"
+          "avg_rating",
+          "completed_month",
+          "category_counts"
         ],
         "title": "PublicBoardOut",
         "type": "object"

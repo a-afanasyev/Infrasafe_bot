@@ -27,6 +27,28 @@ async def status_counts_raw(db: AsyncSession) -> dict[str, int]:
     return {status: count for status, count in counts_result.all()}
 
 
+async def category_counts(
+    db: AsyncSession,
+    *,
+    statuses: list[str],
+    completed_since: Optional[datetime] = None,
+) -> dict[str, int]:
+    """Счётчики заявок по категориям для набора статусов — без персональных полей.
+
+    `completed_since` — только закрытые не раньше этого инстанта (для «решено
+    за месяц»); заявки без completed_at тогда не считаются.
+    """
+    query = (
+        select(RequestModel.category, func.count())
+        .where(RequestModel.status.in_(statuses))
+        .group_by(RequestModel.category)
+    )
+    if completed_since is not None:
+        query = query.where(RequestModel.completed_at >= completed_since)
+    result = await db.execute(query)
+    return {category: count for category, count in result.all()}
+
+
 async def pipeline_rows(db: AsyncSession, *, status: str, limit: int):
     """Узкая проекция активных заявок одного статуса — без персональных полей."""
     rows_result = await db.execute(

@@ -53,6 +53,9 @@
   /* Глубокий зелёный публичного табло (ResidentBoard): тикер, бейдж, акценты
      показателей. Дефолт — InfraSafe; PROFK переопределяет в бренд-блоке ниже. */
   --board-green: #1a6b52;
+  /* Текст/иконка поверх --board-green (кнопки страницы жителей): на тёмном
+     зелёном InfraSafe — белый, на светлом зелёном PROFK — тёмный. */
+  --board-on-green: #ffffff;
 
   /* ── Aliases for inline style references (non-theming) ── */
   --accent: #00d4aa;
@@ -151,6 +154,7 @@ html[data-brand="profk"] body {
 
   /* Табло PROFK — фирменный зелёный вместо тёмно-зелёного InfraSafe. */
   --board-green: #44c24a;
+  --board-on-green: #123518;
 
   --radius-default: 8px;
   --radius-sm: 6px;

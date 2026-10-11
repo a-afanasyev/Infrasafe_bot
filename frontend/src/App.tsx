@@ -35,6 +35,7 @@ const GroupsPage = lazy(() => import('./pages/GroupsPage'))
 const RolesPage = lazy(() => import('./pages/RolesPage'))
 const ResidentDetailPage = lazy(() => import('./pages/ResidentDetailPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
+const ResidentHomePage = lazy(() => import('./pages/ResidentHomePage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
@@ -94,19 +95,20 @@ function ProtectedRoute({ children, action }: ProtectedRouteProps) {
     return <Navigate to={`/login?next=${next}`} replace />
   }
   if (action && !hasAction(user?.actions, action)) {
-    return <Navigate to="/resident-board" replace />
+    return <Navigate to="/home" replace />
   }
   return <>{children}</>
 }
 
-// Root entry: anonymous visitors land on the public board (УК main page),
+// Root entry: anonymous visitors land on the resident home page (УК main page;
+// the lobby-screen board stays at /resident-board),
 // authenticated staff go to the dashboard, TWA users to the Mini App.
-function RootRedirect() {
+export function RootRedirect() {
   const { isAuthenticated, hydrating } = useAuthStore()
   if (isTWA()) return <Navigate to="/twa" replace />
   if (hydrating) return <LoadingSpinner />
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
-  return <Navigate to="/resident-board" replace />
+  return <Navigate to="/home" replace />
 }
 
 export default function App() {
@@ -233,7 +235,10 @@ export default function App() {
                 </Route>
               )}
 
-              {/* Resident board - public standalone page (УК landing) */}
+              {/* Страница жителей «Ваш дом сегодня» — публичная главная (сюда ведёт «/»). */}
+              <Route path="/home" element={<PageErrorBoundary><ResidentHomePage /></PageErrorBoundary>} />
+
+              {/* Resident board — табло для экрана в холле (публичное, standalone) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />
 
               {/* Публичный архив визуальных отчётов «до/после» — полная лента

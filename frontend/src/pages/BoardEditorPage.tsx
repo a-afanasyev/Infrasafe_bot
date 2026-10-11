@@ -20,7 +20,6 @@ import { CSS } from '@dnd-kit/utilities'
 import { Columns2, GripVertical, Plus, RectangleHorizontal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig, useUpdateBoardConfig } from '../hooks/useBoardConfig'
 import { defaultBoardConfig, toEditableBoardConfig } from '../types/boardConfig'
@@ -29,9 +28,13 @@ import type {
   AnnouncementCfg,
   BoardConfigData,
   LayoutItem,
-  LocalizedText,
 } from '../types/boardConfig'
+import LocalizedField from '../components/board/LocalizedField'
+import PlannedWorksEditor from '../components/board/PlannedWorksEditor'
 import ResidentBoardPage from './ResidentBoardPage'
+import ResidentHomePage from './ResidentHomePage'
+
+type PreviewMode = 'board' | 'home'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,41 +52,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h3 className="mb-3 text-sm font-bold text-text-primary">{title}</h3>
       <div className="flex flex-col gap-3">{children}</div>
     </section>
-  )
-}
-
-function LocalizedField({
-  label,
-  value,
-  onChange,
-  textarea,
-}: {
-  label: string
-  value: LocalizedText
-  onChange: (v: LocalizedText) => void
-  textarea?: boolean
-}) {
-  const Field = textarea ? Textarea : Input
-  return (
-    <div>
-      <div className="mb-1 text-xs font-semibold text-text-muted">{label}</div>
-      <div className="grid grid-cols-2 gap-2">
-        <Field
-          value={value.ru}
-          placeholder="RU"
-          onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-            onChange({ ...value, ru: e.target.value })
-          }
-        />
-        <Field
-          value={value.uz}
-          placeholder="UZ"
-          onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-            onChange({ ...value, uz: e.target.value })
-          }
-        />
-      </div>
-    </div>
   )
 }
 
@@ -143,6 +111,7 @@ export default function BoardEditorPage() {
   const updateConfig = useUpdateBoardConfig()
 
   const [draft, setDraft] = useState<BoardConfigData | null>(null)
+  const [preview, setPreview] = useState<PreviewMode>('board')
   // FE-034: seed the editable draft from server config when it arrives, using the
   // render-time "adjust state when input changes" pattern (no effect → no cascading
   // re-render / set-state-in-effect smell; see react.dev "You Might Not Need an Effect").
@@ -381,6 +350,14 @@ export default function BoardEditorPage() {
             </Button>
           </Section>
 
+          {/* Planned works — блок «Ближайшие работы» страницы жителей */}
+          <Section title={t('boardEditor.plannedWorks')}>
+            <PlannedWorksEditor
+              works={draft.planned_works ?? []}
+              onChange={(works) => patch((d) => { d.planned_works = works })}
+            />
+          </Section>
+
           {/* Working hours */}
           <Section title={t('boardEditor.workingHours')}>
             {[...draft.working_hours]
@@ -419,9 +396,28 @@ export default function BoardEditorPage() {
           </Section>
         </div>
 
-        {/* ── Right: live preview ───────────────────────────────────────── */}
-        <div className="overflow-auto rounded-md border border-border-default">
-          <ResidentBoardPage configOverride={draft} />
+        {/* ── Right: live preview — табло или страница жителей ─────────── */}
+        <div className="flex min-h-0 flex-col gap-2">
+          <div className="flex gap-1 self-start rounded-md border border-border-default p-1" role="group">
+            {(['board', 'home'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={preview === mode}
+                onClick={() => setPreview(mode)}
+                className={preview === mode
+                  ? 'rounded-sm bg-accent px-3 py-1 text-xs font-semibold text-white'
+                  : 'rounded-sm px-3 py-1 text-xs font-semibold text-text-muted hover:text-text-primary'}
+              >
+                {mode === 'board' ? t('boardEditor.previewBoard') : t('boardEditor.previewHome')}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border-default">
+            {preview === 'board'
+              ? <ResidentBoardPage configOverride={draft} />
+              : <ResidentHomePage configOverride={draft} />}
+          </div>
         </div>
       </div>
     </div>
