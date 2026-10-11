@@ -9,12 +9,14 @@ export const WORKS_LIMIT = 3
 
 interface WorksCardProps {
   works: PlannedWorkCfg[]
+  // Заголовок из редактора витрины; '' → i18n-дефолт.
+  title: string
   today: string
   lang: Lang
   onOpen: (content: DetailContent) => void
 }
 
-export default function WorksCard({ works, today, lang, onOpen }: WorksCardProps) {
+export default function WorksCard({ works, title, today, lang, onOpen }: WorksCardProps) {
   const { t } = useTranslation()
   const loc = (v: { ru: string; uz: string }) => v[lang] || v.ru
   const list = upcomingWorks(works.filter((w) => loc(w.title)), today, WORKS_LIMIT)
@@ -23,7 +25,7 @@ export default function WorksCard({ works, today, lang, onOpen }: WorksCardProps
     <section className="rh-card rh-works" aria-labelledby="rh-works-heading">
       <div className="rh-section-heading">
         <div>
-          <h2 id="rh-works-heading">{t('home.upcomingWorks')}</h2>
+          <h2 id="rh-works-heading">{title || t('home.upcomingWorks')}</h2>
           <p>{t('home.worksSub')}</p>
         </div>
         <span className="rh-calendar-icon"><HomeIcon name="calendar" /></span>

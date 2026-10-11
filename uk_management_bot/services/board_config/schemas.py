@@ -22,13 +22,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from uk_management_bot.services.board_config.defaults import ALL_MODULE_IDS, MODULE_DEFAULTS
+from uk_management_bot.services.board_config.defaults import ALL_MODULE_IDS, HOME_BLOCK_IDS, MODULE_DEFAULTS
 
 _DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 # Плановых работ на витрине — разумный потолок: блок показывает ближайшие, а
 # список без лимита превращает публичный конфиг в склад.
 MAX_PLANNED_WORKS = 20
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+# Строгий тип id блока на входе; список значений = defaults.HOME_BLOCK_IDS
+# (сверяется тестом test_board_config_home).
+HomeBlockId = Literal["announcements", "contacts", "requests", "works", "elevators", "workreports"]
 
 
 class LocalizedText(BaseModel):
@@ -107,6 +110,47 @@ class PlannedWorkCfg(BaseModel):
         return v
 
 
+class HomeBlockCfg(BaseModel):
+    """Блок страницы жителей: видимость и свой заголовок (пусто = i18n-дефолт)."""
+
+    id: str
+    visible: bool = True
+    title: LocalizedText = Field(default_factory=LocalizedText)
+
+
+def _default_home_blocks() -> list[HomeBlockCfg]:
+    return [HomeBlockCfg(id=block_id) for block_id in HOME_BLOCK_IDS]
+
+
+class HomeCfg(BaseModel):
+    """Настройки страницы жителей (/home). Пустые тексты = i18n-дефолт на клиенте.
+
+    `complex_name` — название жилого комплекса в шапке; страница работает в
+    рамках одной площадки = одного комплекса, поэтому и сводка обращений, и
+    плановые работы — «по комплексу».
+    """
+
+    complex_name: LocalizedText = Field(default_factory=LocalizedText)
+    title: LocalizedText = Field(default_factory=LocalizedText)
+    eyebrow: LocalizedText = Field(default_factory=LocalizedText)
+    tagline: LocalizedText = Field(default_factory=LocalizedText)
+    blocks: list[HomeBlockCfg] = Field(default_factory=_default_home_blocks)
+
+
+def normalize_home_blocks(blocks: list[HomeBlockCfg]) -> list[HomeBlockCfg]:
+    """Все известные блоки ровно один раз, в каноническом порядке.
+
+    Неизвестные id отбрасываются (строка БД после отката релиза), дубликаты
+    схлопываются (побеждает первое вхождение), недостающие дописываются
+    видимыми — как и layout табло, идемпотентно.
+    """
+    first: dict[str, HomeBlockCfg] = {}
+    for block in blocks:
+        if block.id in HOME_BLOCK_IDS and block.id not in first:
+            first[block.id] = block
+    return [first.get(block_id) or HomeBlockCfg(id=block_id) for block_id in HOME_BLOCK_IDS]
+
+
 class LayoutItem(BaseModel):
     id: str
     visible: bool = True
@@ -182,6 +226,7 @@ class _BoardConfigFields(BaseModel):
     work_reports: WorkReportsCfg = Field(default_factory=WorkReportsCfg)
     elevators: ElevatorsCfg = Field(default_factory=ElevatorsCfg)
     planned_works: list[PlannedWorkCfg] = Field(default_factory=list, max_length=MAX_PLANNED_WORKS)
+    home: HomeCfg = Field(default_factory=HomeCfg)
 
     @field_validator("working_hours")
     @classmethod
@@ -234,6 +279,13 @@ class StoredBoardConfigData(_BoardConfigFields):
                 kept.append(LayoutItem.model_validate(MODULE_DEFAULTS[module_id]))
 
         return kept
+
+    @field_validator("home")
+    @classmethod
+    def _normalize_home(cls, v: HomeCfg) -> HomeCfg:
+        """Как layout: нормализация блоков только у хранимой модели — ответ
+        несёт уже вырезанные по флагам блоки, и дозаполнять их нельзя."""
+        return v.model_copy(update={"blocks": normalize_home_blocks(v.blocks)})
 
 
 class BoardConfigResponse(_BoardConfigFields):
@@ -306,6 +358,19 @@ class LayoutItemIn(LayoutItem, _StrictIn):
     pass
 
 
+class HomeBlockCfgIn(HomeBlockCfg, _StrictIn):
+    id: HomeBlockId
+    title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+
+
+class HomeCfgIn(HomeCfg, _StrictIn):
+    complex_name: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+    title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+    eyebrow: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+    tagline: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+    blocks: list[HomeBlockCfgIn] = Field(default_factory=list, max_length=len(HOME_BLOCK_IDS) * 2)
+
+
 class PlannedWorkCfgIn(PlannedWorkCfg, _StrictIn):
     title: LocalizedTextIn
     place: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
@@ -338,6 +403,7 @@ class BoardConfigUpdateIn(_BoardConfigFields, _StrictIn):
     work_reports: WorkReportsCfgIn = Field(default_factory=WorkReportsCfgIn)
     elevators: ElevatorsCfgIn = Field(default_factory=ElevatorsCfgIn)
     planned_works: list[PlannedWorkCfgIn] = Field(default_factory=list, max_length=MAX_PLANNED_WORKS)
+    home: HomeCfgIn = Field(default_factory=HomeCfgIn)
 
 
 # Alias для обратной совместимости: tests/api/test_board_config_layout_width.py

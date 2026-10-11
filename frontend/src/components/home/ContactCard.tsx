@@ -6,12 +6,14 @@ import { botHandle, formatWorkingHours, telHref, type Lang } from './homeFormat'
 
 interface ContactCardProps {
   config: BoardConfigData
+  // Заголовок из редактора витрины; '' → i18n-дефолт.
+  title: string
   lang: Lang
 }
 
 // «Мы на связи»: диспетчерская, бот (QR + кнопка), часы работы, аварийная.
 // Всё из конфига витрины — правится в «Редакторе витрины».
-export default function ContactCard({ config, lang }: ContactCardProps) {
+export default function ContactCard({ config, title, lang }: ContactCardProps) {
   const { t } = useTranslation()
   const loc = (v: { ru: string; uz: string }) => v[lang] || v.ru
   const bot = botHandle(config.bot.username)
@@ -24,7 +26,7 @@ export default function ContactCard({ config, lang }: ContactCardProps) {
       <div className="rh-contact-heading">
         <span className="rh-contact-icon"><HomeIcon name="phone" /></span>
         <div>
-          <h2 id="rh-contact-heading">{t('home.stayInTouch')}</h2>
+          <h2 id="rh-contact-heading">{title || t('home.stayInTouch')}</h2>
           <p>{t('home.contactSub')}</p>
         </div>
       </div>

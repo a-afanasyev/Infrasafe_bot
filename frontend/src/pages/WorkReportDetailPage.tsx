@@ -132,7 +132,7 @@ export default function WorkReportDetailPage() {
           {t('workReportDetail.title')}
         </div>
         <Link
-          to="/resident-board"
+          to="/home"
           style={{
             fontFamily: "'IBM Plex Mono',monospace",
             fontSize: '0.85rem',
@@ -141,7 +141,7 @@ export default function WorkReportDetailPage() {
             textDecoration: 'none',
           }}
         >
-          {t('workReportsArchive.backToBoard')}
+          {t('workReportsArchive.backToHome')}
         </Link>
       </header>
 

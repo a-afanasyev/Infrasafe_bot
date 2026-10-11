@@ -52,6 +52,10 @@ function ruField(sec: HTMLElement, label: string): HTMLInputElement {
   return within(labelEl.parentElement as HTMLElement).getByPlaceholderText('RU') as HTMLInputElement
 }
 
+function openTab(name: 'Страница жителей' | 'Табло для экрана') {
+  fireEvent.click(screen.getByRole('tab', { name }))
+}
+
 async function renderReady() {
   render(<BoardEditorPage />)
   await waitFor(() => expect(screen.getByRole('heading', { level: 3, name: 'Контакты' })).toBeInTheDocument())
@@ -64,8 +68,9 @@ describe('BoardEditorPage', () => {
     await waitFor(() => expect(screen.getByRole('heading', { level: 3, name: 'Контакты' })).toBeInTheDocument())
     expect(ruField(section('Управляющая компания'), 'Наименование').value).toBe('УК Пример')
     expect(screen.getByDisplayValue('example_bot')).toBeInTheDocument()
-    // Все модули из layout перечислены под своими подписями.
-    const modules = section('Блоки страницы')
+    // Все модули из layout перечислены под своими подписями (вкладка табло).
+    openTab('Табло для экрана')
+    const modules = section('Блоки табло')
     for (const l of defaultBoardConfig.layout) {
       expect(within(modules).getByText(MODULE_LABELS[l.id])).toBeInTheDocument()
     }
@@ -85,7 +90,8 @@ describe('BoardEditorPage', () => {
 
   it('видимость и ширина модуля переключаются и уходят в layout', async () => {
     await renderReady()
-    const modules = section('Блоки страницы')
+    openTab('Табло для экрана')
+    const modules = section('Блоки табло')
     const statsRow = within(modules).getByText('Сводка').closest('div') as HTMLElement
     const visible = within(statsRow).getByRole('checkbox') as HTMLInputElement
     expect(visible.checked).toBe(true)
@@ -125,6 +131,43 @@ describe('BoardEditorPage', () => {
     expect(sent[sent.length - 1]).toMatchObject({ important: true, title: { ru: 'Отключение воды' } })
   })
 
+  it('страница жителей: превью по умолчанию; название комплекса и скрытый блок уходят в PUT', async () => {
+    await renderReady()
+    expect(screen.getByRole('tab', { name: 'Страница жителей' })).toHaveAttribute('aria-selected', 'true')
+    const home = section('Страница жителей')
+    expect(within(home).getByText('Где видно:')).toBeInTheDocument()
+    fireEvent.change(ruField(home, 'Название жилого комплекса (в шапке)'), { target: { value: 'ЖК Olmazor' } })
+    // Превью сразу показывает черновик.
+    expect(await screen.findByText('ЖК Olmazor', { selector: 'b' })).toBeInTheDocument()
+    fireEvent.click(within(within(home).getByTestId('home-block-works')).getByRole('checkbox'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(putBodies).toHaveLength(1))
+    const sent = putBodies[0].home as { complex_name: { ru: string }; blocks: Array<{ id: string; visible: boolean }> }
+    expect(sent.complex_name.ru).toBe('ЖК Olmazor')
+    expect(sent.blocks.find((b) => b.id === 'works')?.visible).toBe(false)
+  })
+
+  it('вкладки: поля слева и превью справа — только выбранной страницы', async () => {
+    await renderReady()
+    // Страница жителей: её раздел и плановые работы есть, блоков табло нет.
+    expect(screen.getByRole('heading', { level: 3, name: 'Страница жителей' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Плановые работы' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 3, name: 'Блоки табло' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Обращения по комплексу' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Телефон' }))
+    expect(screen.getByRole('button', { name: 'Телефон' })).toHaveAttribute('aria-pressed', 'true')
+
+    openTab('Табло для экрана')
+    expect(screen.getByRole('heading', { level: 3, name: 'Блоки табло' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 3, name: 'Страница жителей' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 3, name: 'Плановые работы' })).not.toBeInTheDocument()
+    // Общие данные — на обеих вкладках.
+    expect(screen.getByRole('heading', { level: 3, name: 'Контакты' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Обращения по комплексу' })).not.toBeInTheDocument())
+  })
+
   it('плановые работы: добавить → заполнить → уходят в PUT; видны в превью страницы жителей', async () => {
     await renderReady()
     const works = section('Плановые работы')
@@ -133,8 +176,7 @@ describe('BoardEditorPage', () => {
     const titleRu = within(within(block).getByText('Что делаем').parentElement as HTMLElement).getByPlaceholderText('RU')
     fireEvent.change(titleRu, { target: { value: 'Покраска ограждений' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Страница жителей' }))
-    expect(screen.getByRole('button', { name: 'Страница жителей' })).toHaveAttribute('aria-pressed', 'true')
+    // Превью страницы жителей открыто по умолчанию.
     expect(await screen.findByRole('heading', { name: 'Ближайшие работы' })).toBeInTheDocument()
     expect(screen.getByText('Покраска ограждений', { selector: 'strong' })).toBeInTheDocument()
 

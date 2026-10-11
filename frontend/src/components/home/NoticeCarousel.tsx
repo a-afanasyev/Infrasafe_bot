@@ -11,6 +11,8 @@ export const SLIDE_INTERVAL_MS = 8000
 
 interface NoticeCarouselProps {
   announcements: AnnouncementCfg[]
+  // Надпись-кикер из редактора витрины; '' → «Важное для вас».
+  title?: string
   lang: Lang
   onOpen: (content: DetailContent) => void
 }
@@ -19,7 +21,7 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-export default function NoticeCarousel({ announcements, lang, onOpen }: NoticeCarouselProps) {
+export default function NoticeCarousel({ announcements, title: heading = '', lang, onOpen }: NoticeCarouselProps) {
   const { t } = useTranslation()
   const [index, setIndex] = useState(0)
   // Без автосмены при «уменьшить движение» — пользователь листает сам.
@@ -40,7 +42,7 @@ export default function NoticeCarousel({ announcements, lang, onOpen }: NoticeCa
     return (
       <section className="rh-notice" aria-label={t('home.carousel.label')}>
         <div className="rh-notice-top">
-          <div className="rh-kicker"><HomeIcon name="notice" />{t('home.important')}</div>
+          <div className="rh-kicker"><HomeIcon name="notice" />{heading || t('home.important')}</div>
         </div>
         <div className="rh-notice-content">
           <h2>{t('home.noAnnouncementsTitle')}</h2>
@@ -60,7 +62,7 @@ export default function NoticeCarousel({ announcements, lang, onOpen }: NoticeCa
   return (
     <section className="rh-notice" aria-roledescription="carousel" aria-label={t('home.carousel.label')}>
       <div className="rh-notice-top">
-        <div className="rh-kicker"><HomeIcon name="notice" />{t('home.important')}</div>
+        <div className="rh-kicker"><HomeIcon name="notice" />{heading || t('home.important')}</div>
         <span className={current.important ? 'rh-notice-tag rh-notice-tag--important' : 'rh-notice-tag'}>{kicker}</span>
       </div>
       <div className="rh-notice-content" aria-live={paused ? 'polite' : 'off'}>

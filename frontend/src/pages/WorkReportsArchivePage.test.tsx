@@ -78,10 +78,10 @@ describe('WorkReportsArchivePage', () => {
     expect(screen.getAllByRole('img')).toHaveLength(4)
   })
 
-  it('has a link back to the resident board', async () => {
+  it('has a link back to the resident home page', async () => {
     mockQuery.data = { pages: [makePage([makeReport()])] }
     render(<WorkReportsArchivePage />)
-    expect(await screen.findByRole('link', { name: '← На табло' })).toHaveAttribute('href', '/resident-board')
+    expect(await screen.findByRole('link', { name: '← На главную' })).toHaveAttribute('href', '/home')
   })
 
   it('photo src points directly at publicWorkReportMediaUrl output, no blob:/data: prefix', async () => {

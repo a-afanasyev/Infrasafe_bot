@@ -3,8 +3,9 @@ import { http, HttpResponse } from 'msw'
 import { act, fireEvent, render, screen, waitFor, within } from '../test/test-utils'
 import { testI18n } from '../test/test-utils'
 import { server } from '../test/msw/server'
-import { defaultBoardConfig } from '../types/boardConfig'
-import type { AnnouncementCfg, BoardConfigData, PlannedWorkCfg } from '../types/boardConfig'
+import { defaultBoardConfig, defaultHomeConfig } from '../types/boardConfig'
+import type { AnnouncementCfg, BoardConfigData, HomeBlockCfg, PlannedWorkCfg } from '../types/boardConfig'
+import { makeTwoYardsData, servePublicElevators } from '../test/fixtures/publicElevators'
 import NoticeCarousel, { SLIDE_INTERVAL_MS } from '../components/home/NoticeCarousel'
 import ResidentHomePage from './ResidentHomePage'
 
@@ -63,8 +64,13 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllEnvs()
   void testI18n.changeLanguage('ru')
 })
+
+function withHome(blocks: (b: HomeBlockCfg) => HomeBlockCfg, texts: Partial<BoardConfigData['home']> = {}): BoardConfigData {
+  return config({ home: { ...defaultHomeConfig, ...texts, blocks: defaultHomeConfig.blocks.map(blocks) } })
+}
 
 describe('ResidentHomePage', () => {
   it('шапка, заголовок, контакты из конфига витрины', async () => {
@@ -88,11 +94,11 @@ describe('ResidentHomePage', () => {
 
   it('счётчики обращений и разбивка по категориям по нажатию', async () => {
     render(<ResidentHomePage configOverride={config()} />)
-    const card = screen.getByRole('heading', { name: 'Обращения по дому' }).closest('section') as HTMLElement
+    const card = screen.getByRole('heading', { name: 'Обращения по комплексу' }).closest('section') as HTMLElement
     const newBtn = await within(card).findByRole('button', { name: /Новые\s*3/ })
     expect(within(card).getByRole('button', { name: /В работе\s*8/ })).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Решено за месяц\s*24/ })).toBeInTheDocument()
-    expect(within(card).getByText('Октябрь · общая сводка по дому')).toBeInTheDocument()
+    expect(within(card).getByText('Октябрь · сводка по комплексу')).toBeInTheDocument()
 
     fireEvent.click(newBtn)
     expect(newBtn).toHaveAttribute('aria-pressed', 'true')
@@ -102,7 +108,7 @@ describe('ResidentHomePage', () => {
     expect(within(card).getByText('В этой группе сейчас пусто')).toBeInTheDocument()
 
     fireEvent.click(within(card).getByRole('button', { name: 'Показать все обращения' }))
-    expect(within(card).getByText('Октябрь · общая сводка по дому')).toBeInTheDocument()
+    expect(within(card).getByText('Октябрь · сводка по комплексу')).toBeInTheDocument()
   })
 
   it('старый бэкенд без completed_month — прочерк, а не ноль', async () => {
@@ -111,7 +117,7 @@ describe('ResidentHomePage', () => {
     delete legacy.category_counts
     server.use(http.get('*/api/v2/public/board', () => HttpResponse.json(legacy)))
     render(<ResidentHomePage configOverride={config()} />)
-    const card = screen.getByRole('heading', { name: 'Обращения по дому' }).closest('section') as HTMLElement
+    const card = screen.getByRole('heading', { name: 'Обращения по комплексу' }).closest('section') as HTMLElement
     await within(card).findByRole('button', { name: /Новые\s*3/ })
     expect(within(card).getByRole('button', { name: /Решено за месяц\s*—/ })).toBeInTheDocument()
   })
@@ -159,6 +165,66 @@ describe('ResidentHomePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'UZ' }))
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Uyingiz bugun')
     expect(screen.getByRole('button', { name: 'UZ' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('ResidentHomePage — настройки страницы из редактора витрины', () => {
+  it('название комплекса в шапке, свои заголовок, надпись и подпись', () => {
+    render(<ResidentHomePage configOverride={withHome((b) => b, {
+      complex_name: { ru: 'ЖК Olmazor Business City', uz: '' },
+      title: { ru: 'Наш комплекс сегодня', uz: '' },
+      eyebrow: { ru: 'Для жителей Olmazor', uz: '' },
+      tagline: { ru: 'Всегда рядом.', uz: '' },
+    })} />)
+    expect(screen.getByText('Ваш жилой комплекс')).toBeInTheDocument()
+    expect(screen.getByText('ЖК Olmazor Business City')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Наш комплекс сегодня')
+    expect(screen.getByText('Для жителей Olmazor')).toBeInTheDocument()
+    expect(screen.getByText(/Всегда рядом\./)).toBeInTheDocument()
+  })
+
+  it('без названия комплекса — блока в шапке нет', () => {
+    render(<ResidentHomePage configOverride={config()} />)
+    expect(screen.queryByText('Ваш жилой комплекс')).not.toBeInTheDocument()
+  })
+
+  it('скрытый блок не рендерится, свой заголовок блока заменяет стандартный', () => {
+    render(<ResidentHomePage configOverride={withHome((b) =>
+      b.id === 'works' ? { ...b, visible: false }
+        : b.id === 'requests' ? { ...b, title: { ru: 'Заявки жителей ЖК', uz: '' } } : b,
+    )} />)
+    expect(screen.queryByRole('heading', { name: 'Ближайшие работы' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Заявки жителей ЖК' })).toBeInTheDocument()
+  })
+
+  it('«Лифты»: сводка, неработающие, ссылка на полный список', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    servePublicElevators(makeTwoYardsData())
+    render(<ResidentHomePage configOverride={config()} />)
+    const card = screen.getByRole('heading', { name: 'Лифты' }).closest('section') as HTMLElement
+    expect(await within(card).findByText('работают')).toBeInTheDocument()
+    expect(within(card).getByText('/ 5', { exact: false })).toBeInTheDocument()
+    expect(within(card).getByText('ул. Мира, д. 3, подъезд 1, лифт 1')).toBeInTheDocument()
+    expect(within(card).getByRole('link', { name: /Все лифты/ })).toHaveAttribute('href', '/elevators')
+  })
+
+  it('модуль лифтов выключен — блока нет, даже если он видим в конфиге', () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', '')
+    render(<ResidentHomePage configOverride={config()} />)
+    expect(screen.queryByRole('heading', { name: 'Лифты' })).not.toBeInTheDocument()
+  })
+
+  it('«Отчёты о работах»: свежие отчёты и ссылка на архив', async () => {
+    vi.stubEnv('VITE_WORK_REPORTS_ENABLED', 'true')
+    server.use(http.get('*/api/v2/public/work-reports', () => HttpResponse.json({
+      items: [{ id: 7, category_key: 'plumbing', address: 'ул. Мира, д. 3', completed_on: '2026-10-09', before: [1], after: [2] }],
+      total: 1, limit: 24, offset: 0,
+    })))
+    render(<ResidentHomePage configOverride={config()} />)
+    const card = screen.getByRole('heading', { name: 'Отчёты о работах' }).closest('section') as HTMLElement
+    expect(await within(card).findByText('Сантехника')).toBeInTheDocument()
+    expect(within(card).getByText('09.10.2026 · ул. Мира, д. 3')).toBeInTheDocument()
+    expect(within(card).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/work-reports', '/work-reports/7'])
   })
 })
 
