@@ -32,6 +32,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_PURCHASE,
+    URGENCY_RU_TO_KEY,
 )
 from uk_management_bot.utils.workflow_predicates import status_in_clause
 
@@ -144,7 +145,7 @@ async def load_accepted(
     return [
         AcceptedRequest(
             request_number=r[0], executor_id=r[1], executor_name=person_name(r[2], r[3]),
-            category=r[4], urgency=r[5], source=r[6], address=r[7], created_at=r[8],
+            category=r[4], urgency=URGENCY_RU_TO_KEY.get(r[5], r[5]), source=r[6], address=r[7], created_at=r[8],
             assigned_at=r[9], executed_at=r[10], completed_at=r[11], returned_at=r[12],
             manager_return_reason=r[13], return_reason=r[14], completion_report=r[15],
             has_photos=bool(r[16]), rating=r[17], review=r[18], apartment_id=r[19],

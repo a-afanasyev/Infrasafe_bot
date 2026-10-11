@@ -1,4 +1,4 @@
-"""Статистика заявок дашборда: обзор периода, исполнители, CSV-выгрузки.
+"""Статистика заявок дашборда: обзор, исполнители, CSV, сроки, хвост, адреса, затраты.
 
 Тонкий HTTP-слой: парсинг периода, права (`requests.stats`), сборка DTO.
 Прямого ORM здесь нет (AST-гейт `tests/api/test_stats_router_inventory.py`) —
@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +20,9 @@ from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import load_config
 from uk_management_bot.services.request_analytics import csv_export
+from uk_management_bot.services.request_analytics import operations
 from uk_management_bot.services.request_analytics import period as P
+from uk_management_bot.services.request_analytics import quality as quality_service
 from uk_management_bot.services.request_analytics.executors import executor_summaries
 
 router = APIRouter()
@@ -167,3 +169,176 @@ async def export_executors(
     rows = await executor_summaries(db, period.first, period.last, await _sla_hours(db))
     return _csv_response(csv_export.executors_csv(rows), csv_export.export_filename(
         "executors_summary", period.first, period.last))
+
+
+# ---------------------------------------------------------------------------
+# Сроки и качество
+# ---------------------------------------------------------------------------
+
+class UrgencySlaOut(BaseModel):
+    urgency: str
+    sla_hours: int
+    accepted: int
+    measured: int
+    median_hours: Optional[float]
+    p90_hours: Optional[float]
+    overdue: int
+
+
+class CategoryReturnsOut(BaseModel):
+    category: str
+    accepted: int
+    returned: int
+
+
+class ReviewOut(BaseModel):
+    request_number: str
+    rating: int
+    review: str
+    executor_name: Optional[str]
+    completed_at: Optional[datetime]
+
+
+class QualityOut(BaseModel):
+    sla_hours: dict[str, int]
+    by_urgency: list[UrgencySlaOut]
+    returns_by_category: list[CategoryReturnsOut]
+    ratings: dict[int, int]
+    recent_reviews: list[ReviewOut]
+
+
+@router.get("/stats/quality", response_model=QualityOut)
+async def get_quality(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    data = await quality_service.quality(db, period.first, period.last, await _sla_hours(db))
+    return QualityOut(**asdict(data))
+
+
+# ---------------------------------------------------------------------------
+# Хвост и адреса
+# ---------------------------------------------------------------------------
+
+class OpenRequestOut(BaseModel):
+    request_number: str
+    status: str
+    category: str
+    created_at: datetime
+    executor_id: Optional[int]
+    executor_name: Optional[str]
+    age_days: float
+
+
+class QueueOut(BaseModel):
+    user_id: Optional[int]
+    name: Optional[str]
+    open: int
+    oldest_age_days: float
+
+
+class BacklogOut(BaseModel):
+    total: int
+    by_age: dict[str, int]
+    queues: list[QueueOut]
+    oldest: list[OpenRequestOut]
+
+
+@router.get("/stats/backlog", response_model=BacklogOut)
+async def get_backlog(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Открытые заявки сейчас: возраст, очереди исполнителей, самые старые."""
+    return BacklogOut(**asdict(await operations.backlog(db)))
+
+
+class AddressCountOut(BaseModel):
+    id: int
+    name: str
+    count: int
+
+
+class RepeatOut(BaseModel):
+    request_number: str
+    previous_number: str
+    address: Optional[str]
+    category: str
+    days_after: float
+
+
+class AddressesOut(BaseModel):
+    buildings: list[AddressCountOut]
+    yards: list[AddressCountOut]
+    repeats: list[RepeatOut]
+
+
+@router.get("/stats/addresses", response_model=AddressesOut)
+async def get_addresses(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    return AddressesOut(**asdict(await operations.addresses(db, period.first, period.last)))
+
+
+# ---------------------------------------------------------------------------
+# Каналы и затраты
+# ---------------------------------------------------------------------------
+
+class ChannelPoint(BaseModel):
+    bucket: str
+    counts: dict[str, int]
+
+
+class ChannelsOut(BaseModel):
+    granularity: Literal["day", "month", "year"]
+    totals: dict[str, int]
+    series: list[ChannelPoint]
+
+
+@router.get("/stats/channels", response_model=ChannelsOut)
+async def get_channels(
+    granularity: Optional[Literal["day", "month", "year"]] = Query(None),
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    gran = granularity or P.auto_granularity(period.first, period.last)
+    data = await operations.channels(db, period.first, period.last, gran)
+    return ChannelsOut(
+        granularity=gran, totals=data.totals,
+        series=[ChannelPoint(bucket=b, counts=c) for b, c in data.series],
+    )
+
+
+class BuildingCostOut(BaseModel):
+    id: int
+    name: str
+    amount: float
+
+
+class CostsOut(BaseModel):
+    total: float
+    requests_with_materials: int
+    accepted: int
+    by_category: dict[str, float]
+    by_building: list[BuildingCostOut]
+
+
+@router.get("/stats/costs", response_model=CostsOut)
+async def get_costs(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Материалы по заявкам, принятым в периоде (сторно не входит)."""
+    data = await operations.costs(db, period.first, period.last)
+    return CostsOut(
+        total=float(data.total),
+        requests_with_materials=data.requests_with_materials,
+        accepted=data.accepted,
+        by_category={k: float(v) for k, v in data.by_category.items()},
+        by_building=[BuildingCostOut(id=i, name=n, amount=float(a)) for i, n, a in data.by_building],
+    )

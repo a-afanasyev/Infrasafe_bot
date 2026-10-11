@@ -75,6 +75,8 @@ SWEPT_FILES: tuple[str, ...] = (
     "services/request_analytics/period.py",
     "services/request_analytics/executors.py",
     "services/request_analytics/csv_export.py",
+    "services/request_analytics/quality.py",
+    "services/request_analytics/operations.py",
     "api/requests/stats_router.py",
     # ARCH-137 фаза C: остатки UTC-показа человеку вне shift-домена.
     "handlers/unaccepted_requests.py",

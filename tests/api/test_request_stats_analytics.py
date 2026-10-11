@@ -245,3 +245,147 @@ async def executor_client(db_session_factory, people):
 @pytest.mark.asyncio
 async def test_non_manager_forbidden(executor_client, path):
     assert (await executor_client.get(STATS + path, params=october())).status_code == 403
+
+
+# ═══ Фаза 3: сроки и качество ═══
+
+
+@pytest.mark.asyncio
+async def test_quality_by_urgency_returns_ratings_reviews(client, seeded):
+    resp = await client.get(f"{STATS}/quality", params=october())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["sla_hours"] == {"critical": 4, "high": 24, "medium": 72, "low": 168}, \
+        "без строки конфига — дефолтные нормативы"
+    urg = {u["urgency"]: u for u in body["by_urgency"]}
+    assert (urg["medium"]["accepted"], urg["medium"]["overdue"]) == (2, 0)
+    assert urg["medium"]["median_hours"] == 3.5, "4 ч и 3 ч от создания до сдачи"
+    assert (urg["high"]["accepted"], urg["high"]["overdue"], urg["high"]["p90_hours"]) == (1, 1, 30.0)
+    assert urg["critical"]["median_hours"] is None
+    assert body["returns_by_category"] == [
+        {"category": "plumbing", "accepted": 2, "returned": 1},
+        {"category": "electricity", "accepted": 1, "returned": 1},
+    ]
+    assert body["ratings"] == {"1": 0, "2": 0, "3": 0, "4": 0, "5": 1}
+    assert [r["request_number"] for r in body["recent_reviews"]] == ["261001-001"]
+
+
+def test_percentile_nearest_rank():
+    from uk_management_bot.services.request_analytics.quality import percentile
+
+    assert percentile([], 0.9) is None
+    assert percentile([5.0], 0.9) == 5.0
+    assert percentile([float(i) for i in range(1, 11)], 0.9) == 9.0
+    assert percentile([float(i) for i in range(1, 12)], 0.9) == 10.0
+
+
+# ═══ Фаза 4: хвост и адреса ═══
+
+
+@pytest.mark.asyncio
+async def test_backlog_ages_queues_oldest(db_session, seeded):
+    from uk_management_bot.services.request_analytics.operations import backlog
+
+    data = await backlog(db_session, now=utc(2026, 10, 13, 0))
+    assert data.total == 2
+    assert data.by_age == {"lt1": 1, "d1_3": 1, "d3_7": 0, "d7_30": 0, "gt30": 0}
+    assert [q.name for q in data.queues] in (
+        ["Борис Электрик", None], [None, "Борис Электрик"])
+    assert data.oldest[0].request_number == "261011-001"
+
+
+@pytest.mark.asyncio
+async def test_backlog_endpoint(client, seeded):
+    resp = await client.get(f"{STATS}/backlog")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["total"] == 2
+
+
+@pytest_asyncio.fixture
+async def addressed(db_session, people):
+    from uk_management_bot.database.models.apartment import Apartment
+    from uk_management_bot.database.models.building import Building
+    from uk_management_bot.database.models.yard import Yard
+
+    db = db_session
+    yard = Yard(name="Двор А")
+    db.add(yard)
+    await db.flush()
+    house = Building(address="ул. Садовая, 5", yard_id=yard.id)
+    db.add(house)
+    await db.flush()
+    flat = Apartment(building_id=house.id, apartment_number="12")
+    db.add(flat)
+    await db.flush()
+
+    def req(number, *, created, status="Новая", completed=None, category="plumbing",
+            apartment=True, source="bot"):
+        return Request(
+            request_number=number, user_id=people["applicant"].id, category=category,
+            status=status, description="d", urgency="low", is_returned=False,
+            manager_confirmed=False, source=source, created_at=created,
+            completed_at=completed, address="ул. Садовая, 5, кв. 12",
+            address_type="apartment" if apartment else "building",
+            apartment_id=flat.id if apartment else None,
+            building_id=None if apartment else house.id,
+        )
+
+    db.add_all([
+        req("261002-101", created=utc(2026, 10, 1, 5), status="Принято",
+            completed=utc(2026, 10, 2, 5)),
+        # повтор: та же квартира и категория через 18 дней после приёмки
+        req("261020-101", created=utc(2026, 10, 20, 5), source="twa"),
+        # другая категория — не повтор
+        req("261021-101", created=utc(2026, 10, 21, 5), category="electricity"),
+        # на дом целиком
+        req("261022-101", created=utc(2026, 10, 22, 5), apartment=False),
+        # через 40 дней после приёмки — не повтор
+        req("261111-101", created=utc(2026, 11, 11, 5)),
+    ])
+    await db.commit()
+    return {"yard": yard, "house": house}
+
+
+@pytest.mark.asyncio
+async def test_addresses_top_and_repeats(client, addressed):
+    resp = await client.get(f"{STATS}/addresses", params=october())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["buildings"] == [
+        {"id": addressed["house"].id, "name": "ул. Садовая, 5", "count": 4}]
+    assert body["yards"] == [{"id": addressed["yard"].id, "name": "Двор А", "count": 4}]
+    assert [(r["request_number"], r["previous_number"], r["days_after"])
+            for r in body["repeats"]] == [("261020-101", "261002-101", 18.0)]
+    november = await client.get(f"{STATS}/addresses",
+                                params={"date_from": "2026-11-01", "date_to": "2026-11-30"})
+    assert november.json()["repeats"] == [], "40 дней после приёмки — уже не повтор"
+
+
+# ═══ Фаза 5: каналы и затраты ═══
+
+
+@pytest.mark.asyncio
+async def test_channels_totals_and_series(client, addressed):
+    resp = await client.get(f"{STATS}/channels", params=october())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["totals"] == {"bot": 3, "twa": 1}
+    point = {p["bucket"]: p["counts"] for p in body["series"]}
+    assert point["2026-10-20"] == {"twa": 1} and point["2026-10-05"] == {}
+    assert len(body["series"]) == 31
+
+
+@pytest.mark.asyncio
+async def test_costs_by_category(client, seeded):
+    resp = await client.get(f"{STATS}/costs", params=october())
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 150.0 and body["requests_with_materials"] == 1
+    assert body["accepted"] == 3
+    assert body["by_category"] == {"electricity": 150.0}
+
+
+@pytest.mark.parametrize("path", ["/quality", "/backlog", "/addresses", "/channels", "/costs"])
+@pytest.mark.asyncio
+async def test_non_manager_forbidden_new_sections(executor_client, path):
+    assert (await executor_client.get(STATS + path, params=october())).status_code == 403
