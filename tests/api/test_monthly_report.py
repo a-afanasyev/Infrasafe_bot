@@ -14,9 +14,10 @@ class FakeBot:
         self.sent = []
         self.fail_for = set(fail_for)
 
-    async def send_document(self, chat_id, document, caption=None):
+    async def send_document(self, chat_id, document, caption=None, parse_mode=None):
         if chat_id in self.fail_for:
             raise RuntimeError("blocked")
+        assert parse_mode == "HTML", "подпись с <b> — без HTML теги придут текстом"
         self.sent.append((chat_id, document, caption))
 
 

@@ -121,6 +121,9 @@ async def send_monthly_report(
             await bot.send_document(
                 telegram_id, BufferedInputFile(data, filename=filename),
                 caption=caption(summary, first, lang),
+                # Подпись размечена HTML (имена экранированы) — не полагаемся на
+                # дефолт бота: без parse_mode теги приходят текстом.
+                parse_mode="HTML",
             )
             sent += 1
         except Exception as exc:  # noqa: BLE001 — best-effort, текст Bot API не логируем
