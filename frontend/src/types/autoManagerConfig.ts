@@ -21,4 +21,13 @@ export interface AutoManagerConfigData {
   window_end: string // HH:MM
   timezone: string // IANA, напр. "Asia/Tashkent"
   max_requests_per_run: number
+  /** Нормативы сроков аналитики, часы от создания до сдачи работы. */
+  sla_hours: SlaHours
+}
+
+export interface SlaHours {
+  critical: number
+  high: number
+  medium: number
+  low: number
 }

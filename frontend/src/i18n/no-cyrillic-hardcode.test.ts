@@ -11,7 +11,7 @@ import uz from './locales/uz.json'
 // Новую зону i18n-чистоты добавлять в SCOPES.
 
 const SRC = join(__dirname, '..')
-const SCOPES = ['features/resource-accounting', 'twa', 'pages/LoginPage.tsx']
+const SCOPES = ['features/resource-accounting', 'twa', 'pages/LoginPage.tsx', 'components/analytics', 'pages/AnalyticsPage.tsx', 'utils/analyticsPeriod.ts']
 
 // Не UI-текст, а значения протокола: канон-статусы заявки приходят/уходят по API
 // по-русски (см. utils/status_display.py в боте) — их сравнивают и шлют как есть.
