@@ -34,7 +34,6 @@ _EXCLUDED_PREFIXES = (
 BASELINE: dict[str, int] = {
     "uk_management_bot/api/lifecycle.py": 1,
     "uk_management_bot/api/requests/router.py": 1,
-    "uk_management_bot/api/requests/stats_router.py": 1,
     "uk_management_bot/api/routes/media_proxy.py": 1,
     "uk_management_bot/api/work_reports/public_router.py": 1,
     "uk_management_bot/handlers/admin/actions.py": 1,

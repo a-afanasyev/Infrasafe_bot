@@ -38,6 +38,8 @@ from uk_management_bot.api.requests.schemas import (
     CommentBody, CommentOut,
 )
 from uk_management_bot.services.category_change import change_category_async
+from uk_management_bot.services.request_analytics.period import parse_range
+from uk_management_bot.utils.business_time import business_days_window
 from uk_management_bot.services.request_access import can_see_internal_comments_async
 from uk_management_bot.services.elevator_service import ElevatorValidationError
 from uk_management_bot.database.models.user import User
@@ -222,6 +224,19 @@ def _validated_statuses(values: Optional[list[str]]) -> Optional[list[str]]:
     return list(dict.fromkeys(values))
 
 
+def _accepted_window(accepted_from: Optional[str], accepted_to: Optional[str]):
+    """Бизнес-даты приёмки → UTC-окно; только парой, иначе 422."""
+    if accepted_from is None and accepted_to is None:
+        return None
+    if accepted_from is None or accepted_to is None:
+        raise HTTPException(status_code=422, detail="accepted_from и accepted_to — только вместе")
+    try:
+        first, last = parse_range(accepted_from, accepted_to)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Некорректный период: {exc}") from exc
+    return business_days_window(first, last)
+
+
 @router.get("", response_model=list[RequestCard])
 async def list_requests(
     status: Optional[list[str]] = Query(
@@ -234,6 +249,10 @@ async def list_requests(
     category: Optional[str] = Query(None),
     executor_id: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
+    accepted_from: Optional[str] = Query(
+        None, description="Принята не раньше бизнес-дня YYYY-MM-DD (вместе с accepted_to)"),
+    accepted_to: Optional[str] = Query(
+        None, description="Принята не позже бизнес-дня YYYY-MM-DD включительно"),
     view: Optional[svc.RequestListView] = Query(
         None,
         description=(
@@ -258,6 +277,7 @@ async def list_requests(
         category=category,
         executor_id=executor_id,
         source=source,
+        accepted_window=_accepted_window(accepted_from, accepted_to),
         limit=limit,
         offset=offset,
     )

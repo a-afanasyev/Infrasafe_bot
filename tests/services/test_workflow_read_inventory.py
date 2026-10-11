@@ -147,10 +147,6 @@ BASELINE: set[tuple[str, str, str]] = {
     # проецированный `card.status == st` (project_public_status в
     # _make_request_card) → 'cmp:r' status в этом файле исчез.
     ('uk_management_bot/api/requests/router.py', 'cmp:req', 'status'),
-    # ARC-06: data-access stats-роутера вынесен в api/requests/stats_service.py
-    # (тонкий роутер, ARCH-05a-паттерн) → `Request.status.in_/not_in(CLOSED_STATUSES)`
-    # переехал вместе с ORM-слоем (ср. api/shifts/service.py ниже).
-    ('uk_management_bot/api/requests/stats_service.py', 'in_:Request', 'status'),
     # AUD5-ARCH-3 волна 5, block-move: api/shifts/service.py разнесён на пакет;
     # in_:Request status разошёлся по двум под-модулям (байт-в-байт):
     # employees.py — count_active_requests/soft_delete_employee (ACTIVE_REQUEST_

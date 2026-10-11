@@ -71,6 +71,10 @@ SWEPT_FILES: tuple[str, ...] = (
     # ARCH-135 фаза 1: дневные бакеты статистики дашборда переведены на
     # бизнес-дату (Python-бакет через business_date_of; func.date снят).
     "api/requests/stats_service.py",
+    # Аналитика заявок (календарные периоды, срезы, CSV, автоотчёт).
+    "services/request_analytics/period.py",
+    "services/request_analytics/executors.py",
+    "services/request_analytics/csv_export.py",
     "api/requests/stats_router.py",
     # ARCH-137 фаза C: остатки UTC-показа человеку вне shift-домена.
     "handlers/unaccepted_requests.py",

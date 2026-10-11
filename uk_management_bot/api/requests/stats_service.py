@@ -1,202 +1,122 @@
-"""Async data-access service for the request-stats API (ARC-06).
+"""Async data-access слой статистики заявок дашборда (ARC-06).
 
-Весь прямой ORM/data-access слой роутера `api/requests/stats_router.py`
-(`get_request_stats`) вынесен сюда: 10 агрегирующих `select`/`db.execute`.
-Роутер остаётся тонким HTTP-слоем (auth-dep, парсинг периода, сборка DTO,
-`resolve_category_key`-нормализация, `STATUS_TO_EVENT`-маппинг).
+Роутер `api/requests/stats_router.py` — тонкий HTTP-слой без ORM (AST-гейт
+`tests/api/test_stats_router_inventory.py`). Здесь — выборки обзора за
+календарный период; исполнители, выгрузки, сроки и прочие срезы живут в
+общем для API и бота пакете `services/request_analytics`.
 
-Функции принимают `db: AsyncSession` + plain-параметры и возвращают СЫРЫЕ
-результаты (списки Row / скаляры / служебные dict), НЕ response-схемы. where-
-клаузы перенесены БУКВАЛЬНО — date-фильтры неоднородны (created_at vs
-completed_at), не унифицировать.
-
-AST-гейт `tests/api/test_stats_router_inventory.py` фиксирует отсутствие
-прямого ORM в роутере на нуле.
+Период — бизнес-даты включительно → полуоткрытое UTC-окно
+(`business_days_window`). Бакеты дня/месяца/года считаются в Python по
+бизнес-дате (`func.date` резал сутки по зоне сессии БД — ARCH-135); объёмы
+пилотные, выборка — одна колонка за период.
 """
+from __future__ import annotations
 
-import logging
-from collections import Counter
-from typing import Optional, Sequence
+from dataclasses import dataclass
+from datetime import date
+from typing import Optional
 
-from sqlalchemy import select, func
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy import func, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.business_time import business_date_of
+from uk_management_bot.services.request_analytics import period as P
+from uk_management_bot.services.request_analytics.executors import AcceptedRequest, load_accepted
+from uk_management_bot.utils.business_time import business_days_window
+from uk_management_bot.utils.categories import resolve_category_key
+from uk_management_bot.utils.workflow_predicates import status_in_clause
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_CANCELLED,
+    REQUEST_STATUS_COMPLETED,
+    REQUEST_STATUS_EXECUTED,
+    REQUEST_STATUS_RETURNED,
+)
 
-logger = logging.getLogger(__name__)
-
-# «Возвращена» (канон cutover PR3+4): до cutover кодировалась как «Исполнено»
-# и входила в closed-набор статистики; добавлена рядом для сохранения прежней
-# классификации (наружу = «Исполнено» по проекции).
-CLOSED_STATUSES = ["Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
-
-
-def _bucket_by_business_day(timestamps) -> list[tuple]:
-    """(business-date, count) по инстантам — бакет дня в бизнес-зоне.
-
-    ARCH-135: `func.date(col)` резал сутки по зоне сессии БД (UTC) при
-    ташкентской подписи оси графика — вечерние (19:00+ по Ташкенту) заявки
-    падали в соседний день. Бакетируем в Python через канон ARCH-116
-    (`business_date_of`): SQL-вариант (`func.timezone`) непереносим на sqlite
-    сьюта, который эмулирует date питоном и прятал бы дефект, а объёмы
-    дашборда — пилотные (счёт по одному периоду, не по всей таблице).
-    """
-    return sorted(Counter(business_date_of(ts) for (ts,) in timestamps).items())
+#: Не «открытые»: работа сдана (ждёт проверки/приёмки), принята или отменена.
+NOT_OPEN_STATUSES = [
+    REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED, REQUEST_STATUS_RETURNED,
+    REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED,
+]
 
 
-async def created_by_day(db: AsyncSession, *, period_start) -> Sequence:
-    """Строки (business-date, count) созданных заявок по дням за период."""
-    result = await db.execute(
-        select(Request.created_at).where(Request.created_at >= period_start)
+@dataclass(frozen=True)
+class Kpi:
+    created: int
+    accepted: int
+    avg_assign_hours: Optional[float]
+    avg_work_hours: Optional[float]
+    avg_to_accept_hours: Optional[float]
+    avg_satisfaction: Optional[float]
+    returned: int
+
+
+@dataclass(frozen=True)
+class Overview:
+    series: list[tuple[str, int, int]]  # (bucket, created, accepted)
+    by_category: dict[str, int]
+    open_by_status: dict[str, int]
+    kpi: Kpi
+    previous: Kpi
+
+
+async def _created(db: AsyncSession, first: date, last: date) -> list[tuple]:
+    start, end = business_days_window(first, last)
+    rows = await db.execute(
+        select(Request.created_at, Request.category)
+        .where(Request.created_at >= start, Request.created_at < end)
     )
-    return _bucket_by_business_day(result)
+    return rows.all()
 
 
-async def closed_by_day(db: AsyncSession, *, period_start) -> Sequence:
-    """Строки (business-date, count) закрытых заявок по дням за период."""
-    result = await db.execute(
-        select(Request.completed_at).where(
-            Request.completed_at.isnot(None),
-            Request.completed_at >= period_start,
-        )
+def _kpi(created: int, accepted: list[AcceptedRequest]) -> Kpi:
+    return Kpi(
+        created=created,
+        accepted=len(accepted),
+        avg_assign_hours=P.mean(P.hours_between(r.created_at, r.assigned_at) for r in accepted),
+        avg_work_hours=P.mean(r.work_hours for r in accepted),
+        avg_to_accept_hours=P.mean(r.to_accept_hours for r in accepted),
+        avg_satisfaction=P.mean(float(r.rating) for r in accepted if r.rating is not None),
+        returned=sum(1 for r in accepted if r.returned_by),
     )
-    return _bucket_by_business_day(result)
 
 
-async def count_by_category(db: AsyncSession, *, period_start) -> Sequence:
-    """Сырые строки (category, count) за период — нормализация в роутере."""
-    result = await db.execute(
-        select(Request.category, func.count())
-        .where(Request.created_at >= period_start)
-        .group_by(Request.category)
-    )
-    return result.all()
-
-
-async def count_by_status(db: AsyncSession, *, period_start) -> Sequence:
-    """Строки (status, count) открытых заявок (не в CLOSED_STATUSES) за период."""
-    result = await db.execute(
+async def open_by_status(db: AsyncSession) -> dict[str, int]:
+    """Открытые заявки сейчас по статусам — снимок, без периода."""
+    rows = await db.execute(
         select(Request.status, func.count())
-        .where(
-            Request.status.not_in(CLOSED_STATUSES),
-            Request.created_at >= period_start,
-        )
+        .where(not_(status_in_clause(NOT_OPEN_STATUSES)))
         .group_by(Request.status)
     )
-    return result.all()
+    return {status: n for status, n in rows.all() if status}
 
 
-async def top_executors_counts(db: AsyncSession, *, period_start, limit: int = 10) -> Sequence:
-    """Топ-исполнители по числу закрытых заявок: строки (executor_id, completed)."""
-    result = await db.execute(
-        select(
-            Request.executor_id,
-            func.count().label("completed"),
-        )
-        .where(
-            Request.status.in_(CLOSED_STATUSES),
-            Request.completed_at >= period_start,
-            Request.executor_id.isnot(None),
-        )
-        .group_by(Request.executor_id)
-        .order_by(func.count().desc())
-        .limit(limit)
+async def overview(
+    db: AsyncSession, first: date, last: date, granularity: P.Granularity,
+) -> Overview:
+    created = await _created(db, first, last)
+    accepted = await load_accepted(db, first, last)
+    created_buckets = P.count_by_bucket((ts for ts, _ in created), granularity)
+    accepted_buckets = P.count_by_bucket((r.completed_at for r in accepted), granularity)
+    series = [
+        (key, created_buckets.get(key, 0), accepted_buckets.get(key, 0))
+        for key in P.axis(first, last, granularity)
+    ]
+
+    # FS-04: legacy RU-лейблы схлопываются в канон-ключ — иначе дольки двоятся.
+    by_category: dict[str, int] = {}
+    for _, raw in created:
+        if raw:
+            key = resolve_category_key(raw)
+            by_category[key] = by_category.get(key, 0) + 1
+
+    prev_first, prev_last = P.previous_range(first, last)
+    prev_created = await _created(db, prev_first, prev_last)
+    prev_accepted = await load_accepted(db, prev_first, prev_last)
+    return Overview(
+        series=series,
+        by_category=by_category,
+        open_by_status=await open_by_status(db),
+        kpi=_kpi(len(created), accepted),
+        previous=_kpi(len(prev_created), prev_accepted),
     )
-    return result.all()
-
-
-async def top_executors_avg_hours(
-    db: AsyncSession, *, executor_ids, period_start
-) -> dict[int, Optional[float]]:
-    """Средние часы разрешения по исполнителям. Изолирует epoch-extraction:
-    при неподдерживающей БД (OperationalError/ProgrammingError) → пустой dict.
-    ⚠ Фильтр по created_at (не completed_at) — сохранено буквально из исходника.
-    """
-    avg_hours_map: dict[int, Optional[float]] = {}
-    if not executor_ids:
-        return avg_hours_map
-    try:
-        ah_result = await db.execute(
-            select(
-                Request.executor_id,
-                func.avg(
-                    func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
-                ),
-            )
-            .where(
-                Request.executor_id.in_(executor_ids),
-                Request.completed_at.isnot(None),
-                Request.assigned_at.isnot(None),
-                Request.created_at >= period_start,
-            )
-            .group_by(Request.executor_id)
-        )
-        for uid, avg_h in ah_result.all():
-            avg_hours_map[uid] = float(avg_h) if avg_h is not None else None
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("DB doesn't support epoch extraction: %s", e)
-    return avg_hours_map
-
-
-async def load_users_by_ids(db: AsyncSession, *, ids) -> list[User]:
-    """Батч-загрузка пользователей по списку id (пустой список → [])."""
-    if not ids:
-        return []
-    result = await db.execute(select(User).where(User.id.in_(ids)))
-    return list(result.scalars().all())
-
-
-async def recent_actions(db: AsyncSession, *, period_start, limit: int = 20) -> Sequence:
-    """Последние заявки за период: строки (request_number, status, created_at,
-    first_name, last_name) с outer-join исполнителя. Маппинг событий — в роутере.
-    """
-    result = await db.execute(
-        select(
-            Request.request_number,
-            Request.status,
-            Request.created_at,
-            User.first_name,
-            User.last_name,
-        )
-        .outerjoin(User, Request.executor_id == User.id)
-        .where(Request.created_at >= period_start)
-        .order_by(Request.created_at.desc())
-        .limit(limit)
-    )
-    return result.all()
-
-
-async def total_requests(db: AsyncSession, *, period_start) -> int:
-    """Всего заявок за период."""
-    result = await db.execute(
-        select(func.count(Request.request_number)).where(Request.created_at >= period_start)
-    )
-    return result.scalar() or 0
-
-
-async def avg_resolution_hours(db: AsyncSession, *, period_start) -> Optional[float]:
-    """Среднее время разрешения (часы) по закрытым заявкам за период.
-    Изолирует epoch-extraction: при неподдерживающей БД → None.
-    """
-    try:
-        result = await db.execute(
-            select(
-                func.avg(
-                    func.extract("epoch", Request.completed_at - Request.assigned_at) / 3600
-                )
-            )
-            .where(
-                Request.status.in_(CLOSED_STATUSES),
-                Request.completed_at >= period_start,
-                Request.completed_at.isnot(None),
-                Request.assigned_at.isnot(None),
-            )
-        )
-        scalar = result.scalar()
-        return float(scalar) if scalar is not None else None
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("DB doesn't support epoch extraction: %s", e)
-        return None

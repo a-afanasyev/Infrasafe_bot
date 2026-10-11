@@ -62,3 +62,39 @@ async def test_unknown_status_is_422(client, rows):
                                            ("status", "Bogus")])
     assert r.status_code == 422, r.text
     assert "Bogus" in r.text
+
+
+# ═══ Фильтр по дате приёмки (переход из аналитики исполнителей) ═══
+
+
+@pytest.mark.asyncio
+async def test_accepted_window_filters_by_business_dates(client, db_session, manager_user):
+    from datetime import datetime, timezone
+
+    def utc(*a):
+        return datetime(*a, tzinfo=timezone.utc)
+
+    db_session.add_all([
+        Request(request_number=n, user_id=manager_user.id, category="plumbing",
+                description="x", status=C.REQUEST_STATUS_APPROVED, urgency="low",
+                completed_at=ts)
+        for n, ts in {
+            "261001-001": utc(2026, 10, 1, 5),
+            "261031-001": utc(2026, 10, 31, 18, 59),   # 23:59 31.10 Ташкента
+            "261031-002": utc(2026, 10, 31, 19, 0),    # 00:00 01.11 Ташкента
+            "260930-001": utc(2026, 9, 30, 18, 59),
+        }.items()
+    ])
+    await db_session.commit()
+    params = {"accepted_from": "2026-10-01", "accepted_to": "2026-10-31"}
+    assert await _numbers(client, params) == ["261001-001", "261031-001"]
+
+
+@pytest.mark.parametrize("params", [
+    {"accepted_from": "2026-10-01"},
+    {"accepted_from": "2026-10-31", "accepted_to": "2026-10-01"},
+    {"accepted_from": "x", "accepted_to": "2026-10-01"},
+])
+@pytest.mark.asyncio
+async def test_accepted_window_validation(client, params):
+    assert (await client.get(LIST_URL, params=params)).status_code == 422

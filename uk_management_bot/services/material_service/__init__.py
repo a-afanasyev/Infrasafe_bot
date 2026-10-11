@@ -51,6 +51,7 @@ from .movements import adjust, create_receipt, issue_material
 from .reads import (
     get_procurement,
     get_request_materials,
+    get_requests_material_costs,
     get_stock,
     list_operations,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "get_material_stock_sync",
     "get_procurement",
     "get_request_materials",
+    "get_requests_material_costs",
     "get_stock",
     "is_postgres",
     "issue_material",

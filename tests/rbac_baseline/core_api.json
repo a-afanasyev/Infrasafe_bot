@@ -877,6 +877,54 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ],
+   "deps": [
+    "get_period"
+   ]
+  },
+  "GET /api/v2/requests/stats/executors": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "get_period"
+   ]
+  },
+  "GET /api/v2/requests/stats/export": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "get_period"
+   ]
+  },
+  "GET /api/v2/requests/stats/export/executors": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "get_period"
    ]
   },
   "GET /api/v2/requests/{request_number}": {

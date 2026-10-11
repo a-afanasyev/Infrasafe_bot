@@ -40,7 +40,14 @@ DEFAULT_CONFIG: dict = {
     # захардкоженная копия названия зоны в репо не появляется.
     "timezone": str(BUSINESS_TZ),
     "max_requests_per_run": 10,
+    # Нормативы сроков аналитики (часы от создания до сдачи работы) по
+    # срочности. Не про авто-менеджер, но это единственный настраиваемый
+    # singleton-конфиг заявок: отдельная таблица ради четырёх чисел не нужна.
+    "sla_hours": {"critical": 4, "high": 24, "medium": 72, "low": 168},
 }
+
+#: Норматив в часах: от часа до года — защита от опечаток вида 0 или 99999.
+SLA_HOURS_MAX = 8784
 
 # Строгий HH:MM: два ровно разряда часов и минут. Сам по себе пропускает
 # "99:99" (не валидное время) — поэтому дополнительно нужен strptime ниже.
@@ -64,6 +71,23 @@ def _validate_time(value: object, field_name: str) -> str:
     return value
 
 
+def _validate_sla_hours(raw: object) -> dict:
+    """Частичный dict поверх дефолта; каждый норматив — целые часы 1..SLA_HOURS_MAX."""
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"sla_hours: ожидается dict, получено {raw!r}")
+    defaults = DEFAULT_CONFIG["sla_hours"]
+    unknown = sorted(set(raw) - set(defaults))
+    if unknown:
+        raise ValueError(f"sla_hours: неизвестные срочности {unknown}")
+    merged = {**defaults, **raw}
+    for key, hours in merged.items():
+        if isinstance(hours, bool) or not isinstance(hours, int) or not 1 <= hours <= SLA_HOURS_MAX:
+            raise ValueError(f"sla_hours.{key}: ожидается целое 1..{SLA_HOURS_MAX}, получено {hours!r}")
+    return merged
+
+
 def validate_config(raw: dict) -> dict:
     """Чистая валидация + нормализация конфига авто-менеджера.
 
@@ -78,6 +102,7 @@ def validate_config(raw: dict) -> dict:
         raise ValueError(f"config: ожидается dict, получено {type(raw).__name__}")
 
     cfg = {**DEFAULT_CONFIG, **raw}
+    cfg["sla_hours"] = _validate_sla_hours(raw.get("sla_hours"))
 
     if not isinstance(cfg["enabled"], bool):
         raise ValueError(f"enabled: ожидается bool, получено {cfg['enabled']!r}")
