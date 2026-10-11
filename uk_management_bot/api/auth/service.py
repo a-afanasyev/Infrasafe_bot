@@ -10,9 +10,17 @@ from typing import Optional
 from urllib.parse import unquote, parse_qsl
 
 import bcrypt
+import jwt
 import redis.asyncio as aioredis
-from jose import jwt, JWTError
-from jose.exceptions import ExpiredSignatureError, JWTClaimsError
+from jwt.exceptions import (
+    ExpiredSignatureError,
+    ImmatureSignatureError,
+    InvalidAudienceError,
+    InvalidIssuedAtError,
+    InvalidIssuerError,
+    InvalidSubjectError,
+    MissingRequiredClaimError,
+)
 
 from uk_management_bot.config.settings import settings
 
@@ -33,6 +41,18 @@ if not SECRET_KEY:
         raise RuntimeError("JWT_SECRET must be set")
 
 ALGORITHM = "HS256"
+
+# Любая ошибка токена (битый, чужая подпись, истёк, не те claims). PyJWT вместо
+# python-jose (GHSA-3qf3-8w2g-rqmx: у jose нет исправленной версии); имя
+# оставлено — его ловят вызывающие (auth, регистрация).
+JWTError = jwt.PyJWTError
+
+# Ошибки claims: PyJWT проверяет их ПОСЛЕ подписи, значит подпись уже совпала с
+# этим ключом — перебирать остальные ключи набора бессмысленно.
+_CLAIMS_ERRORS = (
+    ExpiredSignatureError, ImmatureSignatureError, InvalidAudienceError, InvalidIssuedAtError,
+    InvalidIssuerError, InvalidSubjectError, MissingRequiredClaimError,
+)
 
 # ARCH-107: graceful-ротация JWT_SECRET по форме webhook-секретов (§4.4/R-18).
 # Набор ключей {primary, next}; каждый выпущенный токен несёт `kid` в заголовке,
@@ -82,7 +102,7 @@ def decode_jwt(token: str, **decode_kwargs) -> dict:
     for key in candidates:
         try:
             return jwt.decode(token, key, algorithms=[ALGORITHM], **decode_kwargs)
-        except (ExpiredSignatureError, JWTClaimsError):
+        except _CLAIMS_ERRORS:
             # Signature already matched this key (claims are checked after it),
             # so no other key can succeed — surface the precise error.
             raise
