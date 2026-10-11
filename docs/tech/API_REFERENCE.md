@@ -184,13 +184,22 @@
 | Метод | Путь | RBAC | Rate-limit |
 |-------|------|------|-----------|
 | GET | `/public/board-config` | публичный | 120/min |
-| PUT | `/board-config` | `require_roles(manager)` | 30/min |
+| PUT | `/board-config` | `require_action("board.configure")` | 30/min |
+
+Один конфиг на две публичные страницы — страницу жителей `/home` и табло
+`/resident-board`. Кроме контактов/бота/объявлений/часов/`layout` табло несёт
+`planned_works` (до 20; дата `YYYY-MM-DD`, время `HH:MM` или пусто) и `home`
+(`complex_name`, `title`, `eyebrow`, `tagline`, `blocks[{id, visible, title}]`,
+id ∈ announcements/contacts/requests/works/elevators/workreports). Вход строгий
+(`extra="forbid"`), чтение толерантное; блоки `elevators`/`workreports` и модули
+табло вырезаются из ответа при выключенном флаге модуля, а при PUT их сохранённые
+настройки не теряются (union-мёрж, как у `layout`).
 
 ### 2.12. Public — `/api/v2/public` (`public/router.py`)
 
 | Метод | Путь | RBAC | Назначение |
 |-------|------|------|-----------|
-| GET | `/board` | публичный, 120/min | Анонимная витрина (агрегаты, кэш 30с) |
+| GET | `/board` | публичный, 120/min | Анонимная витрина (агрегаты, кэш 30с): `status_counts`, `active_requests`, `active_executors`, `avg_resolution_hours`, `avg_rating`, `completed_month` (Выполнена/Исполнено/Принято с `completed_at` в текущем бизнес-месяце), `category_counts` (`new`/`in_progress`/`completed_month` → категория → число) |
 
 Под тем же префиксом смонтирован публичный роутер визуальных отчётов
 (`work_reports/public_router.py`) — см. §2.16.

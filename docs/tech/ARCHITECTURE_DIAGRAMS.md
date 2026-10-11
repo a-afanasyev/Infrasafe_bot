@@ -149,8 +149,8 @@ group-intake-бота: только группа-роутер + свой polling
 | `/api/v2/executor/shifts` | executor_shifts | Смены глазами исполнителя |
 | `/api/v2/addresses` | addresses | Справочник двор/дом/квартира |
 | `/api/v2/residents` | residents, verification, documents | Жители, модерация, документы |
-| `/api/v2/public` | public, work-reports public | Табло, витрина «до/после» (без auth) |
-| `/api/v2/board-config` | board_config | Конфиг табло |
+| `/api/v2/public` | public, work-reports public | Страница жителей и табло, витрина «до/после» (без auth) |
+| `/api/v2/board-config` | board_config | Конфиг витрины: страница жителей + табло |
 | `/api/v2/auto-manager` | auto_manager | Тумблер и правила авто-назначения |
 | `/api/v2/webhooks` | webhooks | Входящие InfraSafe (inbox) |
 | `/api/v2/registration` | registration | WebApp-регистрация жителя |
@@ -167,7 +167,8 @@ group-intake-бота: только группа-роутер + свой polling
 flowchart TB
     subgraph PUB[Публичные маршруты]
         LOGIN[/login/]
-        BOARD[/resident-board — табло/]
+        HOME[/home — страница жителей, главная/]
+        BOARD[/resident-board — табло для экрана/]
         WR[/work-reports — витрина до-после/]
         REG[/register — WebApp регистрации/]
         TWA[/twa/* — Mini App/]

@@ -18,7 +18,7 @@
 | Telegram-бот | `uk_management_bot/` | aiogram 3, Python 3.11 | Основной канал жителей/исполнителей; точка сборки `main.py` |
 | Group-Intake-бот | тот же образ, `group_intake_main.py` | aiogram 3 + Anthropic SDK | Отдельный контейнер `uk-group-intake-bot` (compose-профиль `group-intake`, свой токен): LLM-приём заявок из Telegram-групп; уведомления шлёт от лица основного бота |
 | REST + WS API | `uk_management_bot/api/` | FastAPI, SQLAlchemy async | Бэкенд дашборда и Mini App; собирается в `Dockerfile.api` |
-| Frontend SPA | `frontend/` | Vite + TS, React, shadcn/ui, TanStack Query, Zustand, i18next | Дашборд `/dashboard`, табло `/resident-board`, Mini App `/twa`, регистрация `/register`; base-path `/uk/` |
+| Frontend SPA | `frontend/` | Vite + TS, React, shadcn/ui, TanStack Query, Zustand, i18next | Дашборд `/dashboard`, страница жителей `/home` (главная для гостей), табло `/resident-board`, Mini App `/twa`, регистрация `/register`; base-path `/uk/` |
 | Контроль доступа | `access_control/` | FastAPI, отдельный образ `Dockerfile.access` | ANPR/пропуска/проезды; собственный API, общая БД/Redis |
 | Медиа-сервис | `media_service/` | FastAPI | Хранение и раздача фото/видео; своя логическая БД `uk_media`; дисковый preview-cache (§3.2) |
 | Учёт ресурсов | `resource-accounting/backend/` | FastAPI + worker | Отдельный сервис в монорепо: показания счётчиков; своя БД `resource-postgres`; s2s launch-tickets из основного API (§3.5) |

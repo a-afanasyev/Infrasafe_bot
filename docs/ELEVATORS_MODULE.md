@@ -348,9 +348,12 @@ batch-запросом на страницу (`api/requests/elevator_fields.py`,
   (`ElevatorStatusChips`, нулевые скрыты, «Работают» всегда), до 5 проблемных лифтов
   (`not_working`/`under_repair`, «и ещё K»), «Все лифты работают», ссылка «Все лифты →»
   на `/elevators` (`Link`, base `/uk` подставляет роутер). Строки i18n `board.elevators.*`.
+- **Страница жителей (`/home`)** — блок `components/home/ElevatorsCard.tsx`: «N / M работают»,
+  счётчики по статусам, до 3 неработающих, ссылка «Все лифты» на `/elevators`. Тот же хук и
+  ответ; видимость/заголовок — `board_config.home.blocks` (`elevators`), гейт тем же флагом.
 - **Публичная страница `/elevators` (Р17)** — `pages/ResidentElevatorsPage.tsx`, роут в
   `App.tsx` рядом с `/resident-board` (объявлен всегда; при выключенном `VITE_ELEVATORS_ENABLED`
-  страница сама редиректит на `/resident-board`). Тот же ответ и хук (поллинг 60 с). Компоненты
+  страница сама редиректит на главную `/home`; ссылка «← На главную»). Тот же ответ и хук (поллинг 60 с). Компоненты
   `components/elevators-public/`: `PublicElevatorsSummary` (та же строка и чипы, что на табло;
   на странице чипы — фильтр по статусу), `PublicElevatorsFilters` (поиск по адресу дома/имени
   двора без регистра, селект двора при > 1 двора), `PublicElevatorsList` (двор → карточка дома
