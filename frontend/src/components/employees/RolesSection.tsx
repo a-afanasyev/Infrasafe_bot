@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useRbacRoles, useSetUserRoles, useUserRoles } from '../../hooks/useRbac'
+import { roleTitle } from '../rbac/labels'
 
 interface Props {
   employeeId: number
@@ -82,7 +83,7 @@ export default function RolesSection({ employeeId }: Props) {
                 onChange={() => toggle(role.key)}
                 className="accent-[var(--accent)]"
               />
-              {role.title}
+              {roleTitle(t, role)}
             </label>
           )
         })}

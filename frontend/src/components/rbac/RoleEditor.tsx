@@ -9,6 +9,7 @@ import {
   type RbacAction,
   type RbacRole,
 } from '../../hooks/useRbac'
+import { actionTitle, roleDescription, roleTitle } from './labels'
 
 interface Props {
   role: RbacRole
@@ -29,7 +30,11 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
   const reset = useResetRole()
   const remove = useDeleteRole()
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(role.actions))
-  const [title, setTitle] = useState(role.title)
+  // В поле — название на языке интерфейса; на сервер уходит, только если
+  // его действительно изменили (иначе перевод записался бы в базу).
+  const shownTitle = roleTitle(t, role)
+  const [title, setTitle] = useState(shownTitle)
+  const titleChanged = title.trim() !== shownTitle
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const groups = useMemo(() => {
@@ -42,7 +47,7 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
   }, [catalog])
 
   const dirty =
-    title.trim() !== role.title ||
+    titleChanged ||
     chosen.size !== role.actions.length ||
     role.actions.some((a) => !chosen.has(a))
 
@@ -50,7 +55,7 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
 
   const discard = () => {
     setChosen(new Set(role.actions))
-    setTitle(role.title)
+    setTitle(shownTitle)
   }
 
   const toggle = (key: string) =>
@@ -62,7 +67,12 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
     })
 
   const save = () =>
-    update.mutate({ key: role.key, title: title.trim(), actions: [...chosen].sort() })
+    update.mutate({
+      key: role.key,
+      ...(titleChanged ? { title: title.trim() } : {}),
+      actions: [...chosen].sort(),
+    })
+  const description = roleDescription(t, role)
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,11 +87,11 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
             className="rounded-md border border-border-default bg-bg-surface px-3 py-2 text-[15px] font-semibold text-text-primary"
           />
         ) : (
-          <h2 className="text-[15px] font-semibold text-text-primary">{role.title}</h2>
+          <h2 className="text-[15px] font-semibold text-text-primary">{shownTitle}</h2>
         )}
         <div className="text-[12px] text-text-muted">
           <code>{role.key}</code>
-          {role.description ? ` · ${role.description}` : ''}
+          {description ? ` · ${description}` : ''}
           {' · '}
           {t('rbac.actionsCount', { count: chosen.size })}
         </div>
@@ -113,7 +123,7 @@ export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Pr
                     className="mt-0.5 accent-[var(--accent)]"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="text-text-primary">{action.title}</span>
+                    <span className="text-text-primary">{actionTitle(t, action)}</span>
                     <span className="block text-[11px] text-text-muted">
                       <code>{action.key}</code>
                       {action.approved_only && ` · ${t('rbac.approvedOnly')}`}

@@ -58,6 +58,8 @@ describe('RolesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(sent).not.toBeNull())
     expect(sent!.actions).toEqual(['staff.manage'])
+    // название не меняли — не отправляем (иначе перевод с экрана попал бы в базу)
+    expect(sent).not.toHaveProperty('title')
   })
 
   it('lists custom roles with their badge and user counts', async () => {

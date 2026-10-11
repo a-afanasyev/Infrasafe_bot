@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useCreateRole, type RbacRole } from '../../hooks/useRbac'
+import { roleTitle } from './labels'
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]{2,31}$/
 
@@ -68,7 +69,7 @@ export default function CreateRoleForm({ roles, onCreated, onCancel }: Props) {
           <option value="">{t('rbac.copyNone')}</option>
           {roles.map((r) => (
             <option key={r.key} value={r.key}>
-              {r.title}
+              {roleTitle(t, r)}
             </option>
           ))}
         </select>

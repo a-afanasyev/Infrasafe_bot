@@ -7,6 +7,7 @@ import RoleEditor from '../components/rbac/RoleEditor'
 import CreateRoleForm from '../components/rbac/CreateRoleForm'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useRbacCatalog, useRbacRoles } from '../hooks/useRbac'
+import { roleTitle } from '../components/rbac/labels'
 
 /**
  * «Роли и права». Суперадмин (ADMIN_USER_IDS) создаёт роли и меняет их права;
@@ -14,7 +15,7 @@ import { useRbacCatalog, useRbacRoles } from '../hooks/useRbac'
  * сервер: can_edit приходит из API, а не из догадок интерфейса.
  */
 export default function RolesPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   usePageTitle(t('rbac.title'))
   const roles = useRbacRoles()
   const catalog = useRbacCatalog()
@@ -82,7 +83,7 @@ export default function RolesPage() {
                 role="alert"
                 className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
               >
-                <span className="flex-1 min-w-[200px]">{t('rbac.unsavedSwitch', { role: current.title })}</span>
+                <span className="flex-1 min-w-[200px]">{t('rbac.unsavedSwitch', { role: roleTitle(t, current) })}</span>
                 <Button size="sm" variant="outline" onClick={() => leave(pending)}>
                   {t('rbac.discardAndGo')}
                 </Button>
@@ -93,7 +94,7 @@ export default function RolesPage() {
             )}
             {/* key: при выборе другой роли состояние редактора начинается заново. */}
             <RoleEditor
-              key={`${current.key}:${current.actions.join(',')}:${current.title}`}
+              key={`${current.key}:${current.actions.join(',')}:${current.title}:${i18n.language}`}
               role={current}
               catalog={catalog.data}
               canEdit={canEdit}

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import type { RbacRole } from '../../hooks/useRbac'
+import { roleTitle } from './labels'
 
 interface Props {
   roles: RbacRole[]
@@ -28,7 +29,7 @@ export default function RoleList({ roles, selected, onSelect }: Props) {
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[13px] font-semibold text-text-primary truncate">{role.title}</span>
+              <span className="text-[13px] font-semibold text-text-primary truncate">{roleTitle(t, role)}</span>
               <span className="text-[11px] text-text-muted shrink-0 tabular-nums">
                 {t('rbac.usersCount', { count: role.users_count })}
               </span>
