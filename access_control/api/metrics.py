@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from access_control.services import metrics
 from access_control.services.barrier_worker import queue_metrics
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 # (числа, PD-safe, но операционно чувствительны) → гейтим на manager/system_admin.
 # Prometheus-текст (/metrics) без role-gate: его скрейпит alloy (bearer-JWT
 # скрейперу недоступен) — вместо роли сервис-токен ACCESS_METRICS_TOKEN (A9-P3-2).
-METRICS_ROLES = ("manager", "system_admin")
 
 # A9-P3-2: сервис-токен скрейпа /metrics (аналог UK HEALTH_METRICS_TOKEN).
 METRICS_TOKEN_ENV = "ACCESS_METRICS_TOKEN"
@@ -72,7 +71,7 @@ def get_prometheus_metrics(db: Session = Depends(get_db)) -> Response:
 @json_router.get("/metrics")
 def get_json_metrics(
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*METRICS_ROLES)),
+    _user=Depends(require_action("access.metrics.read")),
 ) -> JSONResponse:
     """JSON-сводка задержки (перцентили + бюджет §10.2) и очереди barrier_commands.
 

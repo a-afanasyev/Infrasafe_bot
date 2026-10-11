@@ -1,0 +1,1349 @@
+{
+ "_profiles": {
+  "applicant": {
+   "roles": [
+    "applicant"
+   ],
+   "status": "approved"
+  },
+  "executor": {
+   "roles": [
+    "executor"
+   ],
+   "status": "approved"
+  },
+  "inspector": {
+   "roles": [
+    "inspector"
+   ],
+   "status": "approved"
+  },
+  "manager": {
+   "roles": [
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "admin": {
+   "roles": [
+    "admin"
+   ],
+   "status": "approved"
+  },
+  "system_admin": {
+   "roles": [
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "security_operator": {
+   "roles": [
+    "security_operator"
+   ],
+   "status": "approved"
+  },
+  "resource_meter_entry": {
+   "roles": [
+    "resource_meter_entry"
+   ],
+   "status": "approved"
+  },
+  "executor+inspector": {
+   "roles": [
+    "executor",
+    "inspector"
+   ],
+   "status": "approved"
+  },
+  "executor+resource_meter_entry": {
+   "roles": [
+    "executor",
+    "resource_meter_entry"
+   ],
+   "status": "approved"
+  },
+  "applicant+manager": {
+   "roles": [
+    "applicant",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "executor+inspector+manager": {
+   "roles": [
+    "executor",
+    "inspector",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "applicant+executor+manager": {
+   "roles": [
+    "applicant",
+    "executor",
+    "manager"
+   ],
+   "status": "approved"
+  },
+  "applicant+executor+manager+system_admin": {
+   "roles": [
+    "applicant",
+    "executor",
+    "manager",
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "superuser7": {
+   "roles": [
+    "admin",
+    "applicant",
+    "executor",
+    "inspector",
+    "manager",
+    "resource_meter_entry",
+    "system_admin"
+   ],
+   "status": "approved"
+  },
+  "empty_roles": {
+   "roles": [],
+   "status": "approved"
+  },
+  "applicant@pending": {
+   "roles": [
+    "applicant"
+   ],
+   "status": "pending"
+  },
+  "executor@pending": {
+   "roles": [
+    "executor"
+   ],
+   "status": "pending"
+  },
+  "manager@pending": {
+   "roles": [
+    "manager"
+   ],
+   "status": "pending"
+  }
+ },
+ "entries": {
+  "uk_management_bot/handlers/address_apartments/_router.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_apartments/_router.py::<router.message.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_buildings.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_buildings.py::<router.message.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_moderation.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_moderation.py::<router.message.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_yards.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/address_yards.py::<router.message.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/admin/lists.py::list_archive_requests": {
+   "role_filter_modes": [
+    [
+     "admin",
+     "manager"
+    ]
+   ]
+  },
+  "uk_management_bot/handlers/auto_manager.py::handle_auto_manager_change_window": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/auto_manager.py::handle_auto_manager_menu": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/auto_manager.py::handle_auto_manager_mode_ai": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/auto_manager.py::handle_auto_manager_toggle": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/auto_manager.py::handle_auto_manager_window_input": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/base.py::executor_archive_requests": {
+   "role_filter_modes": [
+    [
+     "applicant",
+     "executor",
+     "<none>"
+    ]
+   ]
+  },
+  "uk_management_bot/handlers/base.py::executor_shift_menu": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/elevators/_router.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "executor",
+    "manager",
+    "admin",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/elevators/_router.py::<router.message.filter>": {
+   "root_filter": [
+    "executor",
+    "manager",
+    "admin",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/history.py::handle_shift_history": {
+   "decorator": [
+    "executor",
+    "manager",
+    "admin",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/lifecycle.py::handle_end_shift": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/lifecycle.py::handle_start_shift": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/viewing.py::handle_current_shifts": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/viewing.py::handle_shift_details": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/viewing.py::handle_week_schedule": {
+   "decorator": [
+    "executor",
+    "manager",
+    "admin",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/my_shifts/viewing.py::open_shift_requests": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/_router.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/_router.py::<router.message.filter>": {
+   "root_filter": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_efficiency_analysis": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_monthly_analytics": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_optimization_recommendations": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_shift_analytics": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_shift_executor_assignment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_weekly_analytics": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/analytics.py::handle_workload_forecast": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_ai_assignment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_assign_to_shift": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_bulk_assignment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_redistribute_load": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_schedule_conflicts": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_a.py::handle_workload_analysis": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_assign_executor_to_shift": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_bulk_auto_assign": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_bulk_by_period": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_bulk_by_priority": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_bulk_by_specialization": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_executor_assignment_back": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_force_assign": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_select_shift_for_assignment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::cmd_shifts": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_month": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_month_cancel": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_month_confirm": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_tomorrow": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_tomorrow_cancel": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_tomorrow_confirm": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_week": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_week_cancel": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_plan_week_confirm": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_auto_planning": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/auto_planning.py::handle_shift_planning": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_create_shift_template": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_date_selection": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_template_selection": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_weekly_planning": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_weekly_planning_cancel": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/manual_planning.py::handle_weekly_planning_confirm": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_reassign_executor": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_reassign_shift_pick": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_schedule_date": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_schedule_month_view": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_schedule_week_view": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/schedule.py::handle_view_schedule": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_create_new_template": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_template_description": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_template_details": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_template_duration": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_template_name": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_template_time": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_edit_templates": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_template_management": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_toggle_template_active": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_a.py::handle_view_all_templates": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_delete_template": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_delete_template_confirm": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_edit_template_specializations": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_force_delete_template": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_save_template_specializations": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_management/templates_b.py::handle_toggle_template_specialization": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::cmd_assign_transfer": {
+   "decorator": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::cmd_my_transfers": {
+   "decorator": [
+    "executor",
+    "manager",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::cmd_pending_transfers": {
+   "decorator": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::cmd_transfer_shift": {
+   "decorator": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::handle_transfer_assign_executor": {
+   "decorator": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::handle_transfer_response": {
+   "decorator": [
+    "executor",
+    "manager",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/shift_transfer.py::handle_view_transfer": {
+   "decorator": [
+    "executor",
+    "manager",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/user_apartments.py::admin_apartment_detail": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/user_apartments.py::admin_approve_apartment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/user_apartments.py::admin_manage_user_apartments": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/user_apartments.py::admin_reject_apartment": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "uk_management_bot/handlers/user_apartments.py::admin_toggle_owner_status": {
+   "decorator": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  }
+ }
+}

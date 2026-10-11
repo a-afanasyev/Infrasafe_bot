@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../stores/authStore'
 import { useNameCaseStore } from '../stores/nameCaseStore'
 import { usePersonName } from '../hooks/usePersonName'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, ELEVATORS_MODULE_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from '../constants/roles'
+import { hasAction, type ActionKey } from '../authz/actions'
 import { TopbarProvider } from '../contexts/TopbarContext'
 import { useTopbar } from '../contexts/topbar'
 import { useTheme } from '../hooks/useTheme'
@@ -47,6 +47,7 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
+  UserCog,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -59,9 +60,9 @@ interface NavLeaf {
   labelKey: string
   Icon: IconType
   end?: boolean
-  // Если задано — пункт виден только пользователю с одной из этих ролей.
+  // Если задано — пункт виден только тому, кому разрешено действие (RBAC).
   // Без поля пункт виден всем (текущее поведение остальных пунктов).
-  allowedRoles?: readonly string[]
+  action?: ActionKey
 }
 
 // Раскрываемая группа: заголовок-аккордеон, внутри — обычные пункты.
@@ -97,16 +98,15 @@ const NAV_ENTRIES: NavEntry[] = [
   // VITE_PAYMENTS_ENABLED: пока overlay не поднят и префикс /api/v2/payment-control
   // не заявлен в edge-allowlist, раздел отвечал бы 404/503 на весь экран.
   ...(import.meta.env.VITE_PAYMENTS_ENABLED === 'true'
-    ? [{ to: '/dashboard/payment-control', labelKey: 'paymentControl.title', Icon: Table2, allowedRoles: ['manager', 'admin'] as const }]
+    ? [{ to: '/dashboard/payment-control', labelKey: 'paymentControl.title', Icon: Table2, action: 'payments.manage' as const }]
     : []),
   { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
-  // Жители: список/карточка/модерация привязок. allowedRoles=['manager'] —
-  // API раздела гейтит require_roles('manager'), и вести admin-без-manager
-  // на гарантированный 403 незачем.
-  { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, allowedRoles: ['manager'] },
-  // Group Intake: реестр мониторимых ТГ-групп. Как residents — API гейтит
-  // require_roles('manager'), пункт скрыт от admin-без-manager.
-  { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, allowedRoles: ['manager'] },
+  // Жители: список/карточка/модерация привязок. Пункт и API раздела гейтятся
+  // одним действием residents.manage — пункт не ведёт на гарантированный 403.
+  { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, action: 'residents.manage' },
+  // Group Intake: реестр мониторимых ТГ-групп. Как residents — пункт и API
+  // гейтятся одним действием group_intake.manage.
+  { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
   { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
   // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
   // пункт появляется только когда фича включена билд-аргом.
@@ -121,26 +121,28 @@ const NAV_ENTRIES: NavEntry[] = [
     Icon: ShieldCheck,
     children: [
       // access_control §9.6: обзор модуля — роли модуля доступа.
-      { to: '/dashboard/access', labelKey: 'nav.accessOverview', Icon: ShieldCheck, end: true, allowedRoles: ACCESS_MODULE_ROLES },
+      { to: '/dashboard/access', labelKey: 'nav.accessOverview', Icon: ShieldCheck, end: true, action: 'access.events.read' },
       // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
-      { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, allowedRoles: ACCESS_MANAGER_ROLES },
-      { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, allowedRoles: ACCESS_MANAGER_ROLES },
+      { to: '/dashboard/access/history', labelKey: 'nav.accessHistory', Icon: History, action: 'access.registry.manage' },
+      { to: '/dashboard/access/database', labelKey: 'nav.accessDatabase', Icon: Database, action: 'access.registry.manage' },
       // «Оборудование» — manager/system_admin (камеры/шлагбаумы/контроллеры внутри
       // только для system_admin).
-      { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, allowedRoles: ACCESS_MANAGER_ROLES },
+      { to: '/dashboard/access/equipment', labelKey: 'nav.accessEquipment', Icon: Cpu, action: 'access.registry.manage' },
     ],
   },
   // Складской учёт материалов (manager/system_admin)
-  { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, allowedRoles: MATERIALS_MODULE_ROLES },
+  { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, action: 'materials.manage' },
+  // Роли и права: просмотр — rbac.view (менеджер), правка — суперадмин из ADMIN_USER_IDS.
+  { to: '/dashboard/roles', labelKey: 'nav.roles', Icon: UserCog, action: 'rbac.view' },
   // Лифты: реестр/карточка/календарь/конфиг. DARK за VITE_ELEVATORS_ENABLED;
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
-    ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, allowedRoles: ELEVATORS_MODULE_ROLES }]
+    ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, action: 'elevators.read' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.
   ...(import.meta.env.VITE_RESOURCES_ENABLED === 'true'
-    ? [{ to: '/dashboard/resource-accounting', labelKey: 'nav.resourceAccounting', Icon: Gauge, allowedRoles: RESOURCE_MODULE_ROLES }]
+    ? [{ to: '/dashboard/resource-accounting', labelKey: 'nav.resourceAccounting', Icon: Gauge, action: 'resources.launch' as const }]
     : []),
 ]
 
@@ -151,9 +153,9 @@ const RESIDENT_BOARD_LEAF: NavLeaf = {
   Icon: BookOpen,
 }
 
-// Виден ли пункт текущим ролям (без allowedRoles — виден всем).
-const isVisibleTo = (item: { allowedRoles?: readonly string[] }, roles?: string[]) =>
-  !item.allowedRoles || item.allowedRoles.some((r) => roles?.includes(r))
+// Виден ли пункт по действиям пользователя (без action — виден всем).
+const isVisibleTo = (item: { action?: ActionKey }, actions?: string[]) =>
+  !item.action || hasAction(actions, item.action)
 
 // ─── Single nav leaf (optional indent for group children) ───────────────────────
 
@@ -486,16 +488,16 @@ function SidebarContent({
 }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const userRoles = useAuthStore((s) => s.user?.roles)
+  const userActions = useAuthStore((s) => s.user?.actions)
 
   // Role-фильтр (гард сайдбара): группы отдают только видимых детей, пустые группы
   // скрываются; листья — как раньше.
   const entries: NavEntry[] = NAV_ENTRIES.map((entry) => {
     if (isGroup(entry)) {
-      const children = entry.children.filter((c) => isVisibleTo(c, userRoles))
+      const children = entry.children.filter((c) => isVisibleTo(c, userActions))
       return children.length ? { ...entry, children } : null
     }
-    return isVisibleTo(entry, userRoles) ? entry : null
+    return isVisibleTo(entry, userActions) ? entry : null
   }).filter((e): e is NavEntry => e !== null)
 
   // Активность дочернего пункта: end → точное совпадение, иначе — префикс пути.

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.callcenter.schemas import ResidentSearchResult, CallCenterCreateRequest
 from uk_management_bot.api.callcenter import service
@@ -22,7 +22,7 @@ router = APIRouter()
 async def search_resident(
     q: str = Query(..., min_length=2),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("callcenter.use")),
 ):
     rows = await service.search_approved_applicants(db, q=q)
     return [
@@ -43,7 +43,7 @@ async def create_call_center_request(
     body: CallCenterCreateRequest,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("callcenter.use")),
 ):
     """Менеджер заводит заявку (call-центр) — от имени жителя или от себя.
 

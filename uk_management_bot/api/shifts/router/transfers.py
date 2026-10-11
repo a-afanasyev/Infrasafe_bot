@@ -8,7 +8,7 @@ import logging
 from fastapi import BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import HandleTransferBody, TransferOut
@@ -46,7 +46,7 @@ async def handle_transfer(
     body: HandleTransferBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     transfer = await service.get_transfer_for_update(db, transfer_id)
     if not transfer:

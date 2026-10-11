@@ -27,6 +27,7 @@ from uk_management_bot.keyboards.requests import resolve_category_key, get_categ
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.auth_helpers import has_admin_access, legacy_primary_role, parse_roles_safe
 from uk_management_bot.filters import RoleFilter
+from uk_management_bot.authz import has_action_roles
 from datetime import datetime, timezone
 
 from ._router import router
@@ -148,11 +149,11 @@ async def test_middleware(message: Message, db: Session, roles: list = None, act
     # Проверяем доступ к админ панели
     has_access = False
     if roles:
-        has_access = any(role in ['admin', 'manager'] for role in roles)
+        has_access = has_action_roles(roles, "admin_panel.use")
     elif user and user.roles:
         # COD-01: канонический парсер ролей (JSON+CSV)
         user_roles = parse_roles_safe(user.roles)
-        has_access = any(role in ['admin', 'manager'] for role in user_roles)
+        has_access = has_action_roles(user_roles, "admin_panel.use")
     
     logger.debug("test_middleware: доступ к админ-панели: %s", has_access)
     

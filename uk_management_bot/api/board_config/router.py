@@ -18,7 +18,7 @@ from uk_management_bot.services.board_config.service import (
     merge_and_save_board_config,
     to_public_response,
 )
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.user import User
 
@@ -48,7 +48,7 @@ async def update_board_config(
     request: Request,
     payload: BoardConfigUpdateIn,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("board.configure")),
 ) -> BoardConfigResponse:
     """Сохранить конфиг витрины. Только для роли manager.
 

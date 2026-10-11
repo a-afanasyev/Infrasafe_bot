@@ -64,6 +64,30 @@ class RoleGate(Filter):
         return False
 
 
+class ActionGate(RoleGate):
+    """Root-фильтр роутера по действию из `authz/catalog.py`.
+
+    Та же механика, что у `RoleGate` (роли из middleware, затем fallback на
+    `user.roles`), но состав ролей берётся из каталога — кто что может
+    решается в одном месте. Действия с `approved_only` здесь запрещены:
+    root-фильтр бота статус аккаунта не проверяет.
+    """
+
+    def __init__(self, action_key: str):
+        from uk_management_bot.authz.catalog import get_action
+
+        action = get_action(action_key)
+        if action.approved_only:
+            raise ValueError(f"Действие {action_key} требует одобренный аккаунт — ActionGate статус не проверяет")
+        self.action_key = action_key
+        self._action = action
+
+    @property
+    def allowed_roles(self) -> tuple:
+        # Читается на каждый апдейт: права могли поменять в админке ролей.
+        return tuple(sorted(self._action.roles))
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Callback-пространство адресного кластера (SSOT для deny-роутера и ратчета R1)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -139,4 +163,11 @@ async def deny_shift_callback(callback: CallbackQuery, language: str = "ru"):
 
 @deny_router.message(ShiftPackageWouldHandle())
 async def deny_shift_message(message, language: str = "ru"):
-    await message.answer(get_text("auth.no_access", language=language))
+    # С меню по текущим правам: устаревшая кнопка исчезает вместе с отказом.
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    try:
+        menu = await get_user_contextual_keyboard(message.from_user.id)
+    except Exception:  # noqa: BLE001 — отказ важнее меню
+        menu = None
+    await message.answer(get_text("auth.no_access", language=language), reply_markup=menu)

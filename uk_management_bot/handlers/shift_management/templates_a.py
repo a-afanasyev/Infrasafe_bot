@@ -12,7 +12,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_template_management_keyboard,
 )
 from uk_management_bot.states.shift_management import ShiftManagementStates, TemplateManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 
 from ._router import router
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "template_management")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_template_management(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Управление шаблонами смен"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -45,7 +45,7 @@ async def handle_template_management(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data == "create_new_template")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_create_new_template(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание нового шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -71,7 +71,7 @@ async def handle_create_new_template(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data == "templates_view_all")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_view_all_templates(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Просмотр всех шаблонов"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -292,7 +292,7 @@ async def handle_template_duration_input(message: Message, state: FSMContext, db
 
 
 @router.callback_query(F.data == "templates_edit")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Редактирование шаблонов смен"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -357,7 +357,7 @@ async def handle_edit_templates(callback: CallbackQuery, state: FSMContext, db=N
 
 
 @router.callback_query(lambda c: c.data.startswith("template_edit_") and c.data.replace("template_edit_", "").isdigit())
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_details(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Редактирование конкретного шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -431,7 +431,7 @@ async def handle_edit_template_details(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data.startswith("template_toggle_active_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_toggle_template_active(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Переключение активности шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -469,7 +469,7 @@ async def handle_toggle_template_active(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data.startswith("template_edit_name_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение названия шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -502,7 +502,7 @@ async def handle_edit_template_name(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data.startswith("template_edit_description_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_description(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение описания шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -536,7 +536,7 @@ async def handle_edit_template_description(callback: CallbackQuery, state: FSMCo
 
 
 @router.callback_query(F.data.startswith("template_edit_time_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение времени начала шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -569,7 +569,7 @@ async def handle_edit_template_time(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data.startswith("template_edit_duration_"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_edit_template_duration(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Изменение продолжительности шаблона"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

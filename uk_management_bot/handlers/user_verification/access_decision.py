@@ -18,6 +18,7 @@ from uk_management_bot.keyboards.user_verification import (
     get_access_rights_keyboard
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import (
@@ -38,7 +39,7 @@ async def manage_access_rights(callback: CallbackQuery, roles: list = None, lang
     user_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -99,7 +100,7 @@ async def approve_user_verification(callback: CallbackQuery, roles: list = None,
     user_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -175,7 +176,7 @@ async def reject_user_verification(callback: CallbackQuery, roles: list = None, 
     user_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True

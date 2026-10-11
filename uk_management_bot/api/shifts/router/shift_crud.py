@@ -9,7 +9,7 @@ from datetime import timezone
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts import service
 from uk_management_bot.api.shifts.schemas import (
@@ -26,7 +26,7 @@ from ._router import router
 async def get_shift(
     shift_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     shift = await service.get_shift(db, shift_id)
     if not shift:
@@ -43,7 +43,7 @@ async def get_shift(
 async def create_shift(
     body: CreateShiftBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     # Validate executor exists and has executor role
     emp = await service.get_user(db, body.user_id)
@@ -83,7 +83,7 @@ async def update_shift(
     shift_id: int,
     body: UpdateShiftBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     shift = await service.get_shift(db, shift_id)
     if not shift:
@@ -173,7 +173,7 @@ async def reassign_shift(
     shift_id: int,
     body: ReassignShiftBody,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     """REG-02: прямой менеджерский reassign смены (без согласия получателя).
 
@@ -206,7 +206,7 @@ async def reassign_shift(
 async def delete_shift(
     shift_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     shift = await service.get_shift(db, shift_id)
     if not shift:
@@ -226,7 +226,7 @@ async def delete_shift(
 async def end_shift(
     shift_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("manager")),
+    _user: User = Depends(require_action("shifts.manage")),
 ):
     shift = await service.get_shift(db, shift_id)
     if not shift:

@@ -1,18 +1,25 @@
 # Роли и модель доступа (RBAC)
 
-> _Последнее редактирование: 2026-08-25_
+> _Последнее редактирование: 2026-10-10_
 
-> Источник истины: бот — `uk_management_bot/utils/constants.py` (`USER_ROLES`),
+> **С 2026-10-10 права решают действия, а не имена ролей** — принцип, рецепты и
+> каталог в [RBAC.md](RBAC.md). Этот документ описывает сами роли и то, какие
+> права они дают сегодня (матрица «как есть», снимок прав — §5).
+> Роли сотрудникам и права ролям меняет суперадмин (`ADMIN_USER_IDS`) на странице
+> «Роли и права» и в карточке сотрудника; менеджер видит их только для чтения —
+> [RBAC.md §5а](RBAC.md#5а-админка-ролей-веб). Ниже — права «из коробки».
+>
+> Реестр ролей: бот — `uk_management_bot/utils/constants.py` (`USER_ROLES`),
 > `config/settings.py`, `utils/enums.py` (`UserRole`), parity-тест
-> `tests/test_roles_parity.py`; фронт — `frontend/src/constants/roles.ts`;
-> access-control — `access_control/api/registry.py`.
-> `user.roles` — JSON-массив строк, `user.active_role` — текущая активная роль
-> (legacy-колонка `user.role` УДАЛЕНА миграцией 022).
+> `uk_management_bot/tests/test_roles_parity.py`; фронт — `frontend/src/constants/roles.ts`.
+> Кто что может — `uk_management_bot/authz/catalog.py`.
+> `user.roles` — массив строк (jsonb, DB-049), `user.active_role` — режим меню,
+> прав не даёт (legacy-колонка `user.role` УДАЛЕНА миграцией 022).
 
 ## 1. Канонические роли (реестр, 6 шт.)
 
 Проверяются на паритет между `Settings.USER_ROLES == constants.USER_ROLES ==
-enum UserRole` (`tests/test_roles_parity.py:23-32`) и зеркалятся во фронте
+enum UserRole` (`uk_management_bot/tests/test_roles_parity.py:23-32`) и зеркалятся во фронте
 (`constants/roles.ts:USER_ROLES`).
 
 | Роль | Назначение |
@@ -26,14 +33,17 @@ enum UserRole` (`tests/test_roles_parity.py:23-32`) и зеркалятся во
 
 ## 2. Роль `admin` — отдельная, но НЕ в реестре (важно)
 
-`admin` — **отдельная действующая роль** (подтверждено владельцем), играет роль
-**общего управленческого администратора ≈ `manager`**. Используется в ~116 местах
-авторизации бота и основного API как `any(role in ['admin','manager'])`:
+`admin` — **отдельная действующая роль** (подтверждено владельцем), задумана как
+**общий управленческий администратор ≈ `manager`**, но на деле равна ему только
+в боте. Точные цифры — в снимке прав (§5):
 
-- `filters/role_filter.py:30`, `keyboards/base.py:134,154`, `utils/auth_helpers.py:62,69,86`
-- `handlers/user_verification.py` (верификация пользователей — 7+ гейтов)
-- `api/requests/router.py:676,699`, `api/shifts/router.py:122`
-- фронт: `App.tsx:102` — основной `/dashboard/*` гейтится `['admin','manager']`
+- **бот**: `has_admin_access`/`RoleGate`/`require_role(['admin','manager'])` пускают
+  `admin` наравне с `manager` (71 декоратор, 12 root-фильтров, ~100 inline-вызовов);
+- **API ядра**: из ~100 менеджерских маршрутов `admin` без `manager` проходит
+  только **11** — `auto-manager-config`, `payment-control/*`, `resource-accounting/ticket`;
+  остальные гейтятся `require_roles("manager")`;
+- **фронт**: основной `/dashboard/*` гейтится `['admin','manager']` (`App.tsx`), то есть
+  чистый `admin` видит дашборд, но получает 403 почти от всех его API.
 
 ⚠️ **Рассинхрон (код-долг, не документация):** `admin` НЕ входит в канонический
 `USER_ROLES` (ни бот-реестр, ни `constants/roles.ts`), не покрыта parity-тестом и
@@ -72,39 +82,89 @@ enum UserRole` (`tests/test_roles_parity.py:23-32`) и зеркалятся во
 
 ## 3. RBAC модуля «Контроль доступа»
 
-Access-control (`access_control/api/registry.py`) гейтится тремя наборами —
-**`admin` в них НЕ участвует** (роли раздельны):
+API охраны гейтится действиями `access.*` каталога ([RBAC.md §9](RBAC.md#9-каталог-действий));
+все требуют одобренный аккаунт, **`admin` в них НЕ участвует** (роли раздельны):
 
-| Набор (registry.py) | Роли | Что покрывает |
+| Действие | Роли | Что покрывает |
 |---|---|---|
-| `EVENTS_PASSES_ROLES` (:40) | `security_operator`, `manager`, `system_admin` | События/пропуска (пост охраны) |
-| `VEHICLES_REQUESTS_ROLES` (:41) | `manager`, `system_admin` | База авто/заявок, история проездов |
-| `PHOTO_VIEW_ROLES` (:45) | `security_operator`, `manager`, `system_admin` | Просмотр фото проездов |
+| `access.events.read`, `access.operator`, `access.live`, `access.presence.read`, `access.photos.read` | `security_operator`, `manager`, `system_admin` | Пост охраны: события, пропуска, пульт, живой поток, фото |
+| `access.registry.manage`, `access.management`, `access.zones.manage`, `access.metrics.read` | `manager`, `system_admin` | База авто/заявок, история, управление, зоны, метрики |
+| `access.equipment.manage`, `access.diagnostics` | `system_admin` | Оборудование (камеры/шлагбаумы/контроллеры), диагностика |
+| `access.resident.self` | `applicant` | Свои авто и пропуска жителя |
 
-Фронт зеркалит это (`constants/roles.ts`): `ACCESS_MODULE_ROLES =
-{manager, system_admin, security_operator}`, `ACCESS_MANAGER_ROLES =
-{manager, system_admin}`. **Оборудование** (камеры/шлагбаумы/контроллеры) — только
-`system_admin` (`AccessEquipmentPage.tsx:914` `useHasRole('system_admin')`; бэкенд
-отдаёт GET только system_admin, manager → 403, табы скрыты).
+Интерфейс использует те же действия: маршрут `/dashboard/access` —
+`access.events.read`, экраны менеджера — `access.registry.manage`, табы
+оборудования — `access.equipment.manage` (`AccessEquipmentPage`, `useCan`).
 
 Иерархия внутри модуля: `security_operator` (пост охраны) ⊂ `manager` (база+история)
 ⊂ `system_admin` (+оборудование).
 
-## 4. Матрица доступа к разделам дашборда (`App.tsx`)
+## 4. Матрица доступа к разделам дашборда (`App.tsx`, `DashboardLayout.tsx`)
 
-| Раздел | Гейт (allowedRoles) | admin | manager | system_admin | security_operator |
-|---|---|:-:|:-:|:-:|:-:|
-| `/dashboard/*` (заявки, персонал, смены, адреса, аналитика, обр.связь) | `['admin','manager']` | ✅ | ✅ | ❌ | ❌ |
-| `/dashboard/access` (обзор) | `ACCESS_MODULE_ROLES` | ❌ | ✅ | ✅ | ✅ |
-| `/dashboard/access/{history,database,equipment}` | `ACCESS_MANAGER_ROLES` | ❌ | ✅ | ✅ | ❌ |
-| `/dashboard/materials` (Склад) | `MATERIALS_MODULE_ROLES` | ❌ | ✅ | ✅ | ❌ |
-| `/dashboard/resource-accounting` (Учёт ресурсов, build-флаг) | `RESOURCE_MODULE_ROLES` | ❌ | ✅ | ✅ | ❌ |
-| `/dashboard/groups` (Group Intake, в составе основного дашборда) | `['admin','manager']` | ✅ | ✅ | ❌ | ❌ |
+Гейты — действия из профиля (`ProtectedRoute action=...`, поле `action` пункта
+меню). Спецификация — `frontend/src/authz/uiActions.test.ts`.
+
+| Раздел | Действие | admin | manager | system_admin | security_operator | executor |
+|---|---|:-:|:-:|:-:|:-:|:-:|
+| `/dashboard/*` (заявки, персонал, смены, адреса, аналитика, обр.связь) | `dashboard.use` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| пункт «Жители» / «Группы» | `residents.manage` / `group_intake.manage` | ❌ | ✅ | ❌ | ❌ | ❌ |
+| пункт «Контроль платежей» (build-флаг) | `payments.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `/dashboard/access` (обзор) | `access.events.read` | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `/dashboard/access/{history,database,equipment}` | `access.registry.manage` | ❌ | ✅ | ✅ | ❌ | ❌ |
+| `/dashboard/materials` (Склад) | `materials.manage` | ❌ | ✅ | ✅ | ❌ | ❌ |
+| `/dashboard/elevators` / `.../config` (build-флаг) | `elevators.read` / `elevators.manage` | ❌ | ✅ | ❌ | ❌ | ✅ / ❌ |
+| `/dashboard/resource-accounting` (Учёт ресурсов, build-флаг) | `resources.launch` | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+`admin` видит «Учёт ресурсов» с RBAC A1 (2026-10-10): API пускал его туда всегда,
+интерфейс прятал. Остальные строки совпадают с прежними массивами ролей.
 
 > Асимметрия `admin`↔`system_admin` (первый — основной дашборд, второй — access/склад)
 > — прямое следствие §2. Если нужен единый «супер-админ», роль требует консолидации.
 
-## 5. Связанные документы
+## 5. Матрица «как есть» — снимок прав (RBAC, этап 0)
+
+Перед переходом на действия вместо имён ролей (вариант O3, решение владельца
+2026-10-10) текущие права зафиксированы **по результату, а не по механизму**:
+каждый гейт вызывается с синтетическими пользователями всех сочетаний ролей,
+найденных на обоих продах, плюс граничные случаи (пустые роли, pending).
+
+| Файл | Что фиксирует | Объём (2026-10-10) |
+|---|---|---|
+| `tests/rbac_baseline/core_api.json` | Каждый маршрут API ядра × профиль → пропуск | 207 маршрутов: 31 публичный, 14 «любой вошедший», 162 по ролям |
+| `tests/rbac_baseline/access_api.json` | То же для API охраны | 67 маршрутов: 11 публичных, 56 по ролям |
+| `tests/rbac_baseline/bot_handlers.json` | `require_role`, root-фильтры `RoleGate`, режимы `RoleFilter` | 100 гейтов: 86 декораторов, 12 root-фильтров, 2 фильтра режима |
+| `tests/rbac_baseline/inline_checks.json` | Функции, сравнивающие роль со строкой-именем в теле (`"manager" in roles`) — двунаправленный ратчет | 82 функции: handlers 43, services 15, api 13, utils 6, keyboards 4, database 1 |
+
+Генератор — `tests/rbac_baseline/builder.py` (`--check` / `--write`). Тесты:
+`tests/services/test_rbac_baseline.py` (матрица = снимок) и
+`tests/services/test_rbac_role_predicates.py` (явная таблица предикатов
+`has_admin_access`, `has_manager_role`, `has_executor_access`, `get_user_roles`,
+`RoleGate`, `is_manager`, workflow `_is_manager` по всем профилям).
+
+**Правило:** красный снимок = изменились полномочия. Перевод проверок на действия
+обязан оставить матрицу прежней. Осознанное изменение прав — отдельный PR с
+решением владельца, `--write` и разбором диффа.
+
+**Особенности текущего поведения, найденные снимком (не исправлены, ждут решения):**
+
+1. **Статус не проверяется большинством гейтов.** `require_roles` (API), `require_role`
+   и `RoleGate` (бот) пускают pending-аккаунт с нужной ролью: приглашённый, но ещё не
+   одобренный менеджер проходит **92 из 148** менеджерских маршрутов API ядра,
+   pending-исполнитель — пул/взятие/выполнение/проблему простого режима. Статус
+   (`require_approved_roles`) проверяют лифты, отчёты о работах, склад, контроль
+   платежей, создание заявок и адресные чтения, а также **все** маршруты API охраны.
+2. **`has_executor_access` расходится сам с собой:** через `roles=` пропускает
+   `executor`, `manager`, `admin`; через `user=` — только `executor`.
+3. **`admin` ≠ `manager`** (см. §2): бот — да, API — 11 маршрутов, workflow-гарды
+   (`_is_manager`) и `has_manager_role` — нет.
+4. **`RoleFilter` смотрит на `active_role`** (режим меню), а не на набор ролей: два
+   хендлера архива показываются по выбранному режиму, а не по правам.
+5. **Простой режим** (`/api/v2/requests/pool`, `/{n}/claim`, `/{n}/complete`,
+   `/{n}/problem`) — `require_roles("executor")`, менеджер без `executor` получает 403.
+6. **Лифты** — 21 приватный маршрут: чтение и смена статуса — `executor`+`manager`,
+   управление реестром и календарём — только `manager`; плюс флаг `ELEVATORS_ENABLED`.
+
+## 6. Связанные документы
 - [../product/OVERVIEW.md](../product/OVERVIEW.md) — роли на бизнес-уровне.
 - [../guides/ADMIN_GUIDE.md](../guides/ADMIN_GUIDE.md) — инструкция `system_admin`.
 - [../access-control/TECHNICAL_SPEC.md](../access-control/TECHNICAL_SPEC.md) — ТЗ модуля доступа.

@@ -13,7 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.elevators import calendar_service
 from uk_management_bot.api.elevators.errors import http_error
 from uk_management_bot.api.elevators.schemas import (
@@ -31,8 +31,8 @@ from uk_management_bot.services.elevator_service import ElevatorServiceError
 
 router = APIRouter()
 
-_staff = require_approved_roles("executor", "manager")
-_manager_only = require_approved_roles("manager")
+_staff = require_action("elevators.read")
+_manager_only = require_action("elevators.manage")
 
 
 # ── Статичные пути (ДО /{elevator_id}) ───────────────────────────────

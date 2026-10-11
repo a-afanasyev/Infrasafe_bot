@@ -3,7 +3,7 @@ import { render, screen, act } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { testI18n } from '../../test/test-utils'
-import { ACCESS_MODULE_ROLES } from '../../constants/roles'
+import catalog from '../../authz/catalog.generated.json'
 import AccessControlPage from './AccessControlPage'
 
 // ── Мок WebSocket ─────────────────────────────────────────────────────────────
@@ -143,14 +143,15 @@ describe('AccessControlPage — live-лента событий охраны', ()
   })
 })
 
-describe('AccessControlPage — гард роли (контракт ACCESS_MODULE_ROLES)', () => {
-  // Роут /dashboard/access и пункт сайдбара гейтятся одним и тем же набором
-  // ACCESS_MODULE_ROLES. Проверяем контракт: модульные роли допущены,
+describe('AccessControlPage — гард (контракт действия access.events.read)', () => {
+  // Роут /dashboard/access и пункт сайдбара гейтятся одним действием
+  // access.events.read. Проверяем контракт: роли модуля допущены,
   // executor/inspector/applicant — нет.
   it('допускает роли модуля и исключает executor/inspector/applicant', () => {
-    expect(ACCESS_MODULE_ROLES).toEqual(['manager', 'system_admin', 'security_operator'])
+    const roles = catalog.actions['access.events.read'].roles
+    expect(roles).toEqual(['manager', 'security_operator', 'system_admin'])
     for (const role of ['executor', 'inspector', 'applicant']) {
-      expect(ACCESS_MODULE_ROLES).not.toContain(role)
+      expect(roles).not.toContain(role)
     }
   })
 })

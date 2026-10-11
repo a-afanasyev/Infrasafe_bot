@@ -5,6 +5,7 @@ import { render } from '@/test/test-utils'
 import { server } from '@/test/msw/server'
 import { useAuthStore } from '@/stores/authStore'
 import AccessEquipmentPage from './AccessEquipmentPage'
+import { actionsFor } from '../../test/authz'
 
 // Раздел «Оборудование»: гейтинг табов по роли + показ api_key контроллера РОВНО
 // ОДИН РАЗ в модалке (и его отсутствие в таблице).
@@ -40,7 +41,7 @@ function installCommonHandlers() {
 }
 
 function setRole(role: string) {
-  useAuthStore.setState({ user: { id: 1, roles: [role] }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles: [role], actions: actionsFor([role]) }, isAuthenticated: true, hydrating: false })
 }
 
 describe('AccessEquipmentPage — гейтинг табов по роли', () => {

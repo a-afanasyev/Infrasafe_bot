@@ -34,14 +34,13 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 from access_control.services.event_broadcaster import get_broker
 from uk_management_bot.api.auth.service import verify_access_token
 from uk_management_bot.api.ws.router import _origin_allowed
-from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.auth_helpers import parse_roles_safe, action_allowed_for_roles
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 # Роли WS-панели охраны (§6.3/§3.2). executor/inspector/applicant — без доступа.
-WS_ROLES = ("security_operator", "manager", "system_admin")
 
 # WS close code «policy violation» (RFC 6455): отказ авторизации.
 WS_POLICY_VIOLATION = 1008
@@ -82,7 +81,7 @@ def _authorized_roles(payload: dict | None) -> bool:
         roles = [str(r) for r in raw]
     else:
         roles = parse_roles_safe(raw)
-    return any(role in WS_ROLES for role in roles)
+    return action_allowed_for_roles("access.live", roles)
 
 
 def _has_query_token(websocket: WebSocket) -> bool:
@@ -121,7 +120,7 @@ def _ws_identity_ok_sync(user_id: int) -> bool:
         # удалённый оператор проходил. Как у HTTP-дверей: только approved и живой.
         if user is None or user.status != "approved" or getattr(user, "deleted_at", None) is not None:
             return False
-        return any(role in WS_ROLES for role in get_user_roles(user))
+        return action_allowed_for_roles("access.live", get_user_roles(user))
 
 
 async def _identity_ok_at_handshake(user_id: int | None) -> bool:

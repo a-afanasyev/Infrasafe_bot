@@ -1,7 +1,7 @@
 """ADMIN-эндпоинты управления парковкой — этап 2 (§5, §6.2, §7, §10.3).
 
 Поверх реестра оборудования (``api/equipment.py``) добавляет управление местами и
-закреплениями + занятость зоны. USER-API (JWT/cookie — ``require_approved_roles``):
+закреплениями + занятость зоны. USER-API (JWT/cookie — ``require_action``):
 
 * МЕСТА (``parking_spots``) и ЗАКРЕПЛЕНИЯ (``parking_spot_assignments``) —
   manager/system_admin (§6.2 «настройка зон»); applicant/executor/inspector/
@@ -31,15 +31,13 @@ from access_control.services import equipment_admin as eq_svc
 from access_control.services import parking_admin as svc
 from access_control.services.device_auth import resolve_client_ip
 from access_control.services.parking_occupancy import zone_occupancy
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access/admin", tags=["access-admin-parking"])
 
 # Парковка (места/закрепления/занятость) — настройка зон (§6.2): менеджер+админ.
-ZONE_GATE_ROLES = ("manager", "system_admin")
 # Просмотр открытых presence-сессий («освободить место»): + охрана (§6.3, §10.3).
-PRESENCE_VIEW_ROLES = ("manager", "system_admin", "security_operator")
 
 # A6-P2-50: пагинация/DTO-база/404 — общие, см. api/pagination.py
 from access_control.api.pagination import (  # noqa: E402
@@ -186,7 +184,7 @@ def list_spots(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    _user=Depends(require_action("access.zones.manage")),
 ):
     rows, total = svc.list_spots(
         db, zone_id=zone_id, status=status_, limit=limit, offset=offset
@@ -201,7 +199,7 @@ def create_spot(
     body: SpotCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     try:
         spot = svc.create_spot(
@@ -221,7 +219,7 @@ def patch_spot(
     request: Request,
     spot_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -263,7 +261,7 @@ def list_spot_assignments(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    _user=Depends(require_action("access.zones.manage")),
 ):
     rows, total = svc.list_spot_assignments(
         db, spot_id=spot_id, apartment_id=apartment_id, status=status_,
@@ -283,7 +281,7 @@ def create_spot_assignment(
     body: AssignmentCreate,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     try:
         assignment = svc.create_spot_assignment(
@@ -305,7 +303,7 @@ def patch_spot_assignment(
     request: Request,
     assignment_id: int = Path(...),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    user=Depends(require_action("access.zones.manage")),
 ):
     fields = body.model_dump(exclude_unset=True)
     try:
@@ -325,7 +323,7 @@ def patch_spot_assignment(
 def get_zone_occupancy(
     zone_id: int = Path(...),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*ZONE_GATE_ROLES)),
+    _user=Depends(require_action("access.zones.manage")),
 ):
     """Учёт заездов зоны (§10.3): разрешённые въезды − выезды (выезд off → exits=0).
 
@@ -352,7 +350,7 @@ def list_open_presence(
     limit: int = _limit_q(),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _user=Depends(require_approved_roles(*PRESENCE_VIEW_ROLES)),
+    _user=Depends(require_action("access.presence.read")),
 ):
     """Список ОТКРЫТЫХ presence-сессий (§10.3) — для выбора сессии под закрытие.
 

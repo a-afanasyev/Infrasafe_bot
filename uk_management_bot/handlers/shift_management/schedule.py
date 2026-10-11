@@ -12,7 +12,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_schedule_view_keyboard,
 )
 from uk_management_bot.states.shift_management import ShiftManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.user_names import display_name
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "view_schedule")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_view_schedule(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Просмотр расписания смен"""
     # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
@@ -58,7 +58,7 @@ async def handle_view_schedule(callback: CallbackQuery, state: FSMContext, db=No
 
 
 @router.callback_query(F.data.startswith("schedule_date:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_schedule_date(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Обработка выбора даты в расписании"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -145,7 +145,7 @@ def _reassign_error_text(error: str, lang: str) -> str:
 
 
 @router.callback_query(F.data.startswith("reassign_shift_pick:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_reassign_shift_pick(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """REG-02: менеджер выбирает нового исполнителя для прямого переназначения смены.
 
@@ -185,7 +185,7 @@ async def handle_reassign_shift_pick(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data.startswith("reassign_executor:"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_reassign_executor(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """REG-02: прямой менеджерский reassign смены (без согласия получателя).
 
@@ -218,7 +218,7 @@ async def handle_reassign_executor(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "schedule_week_view")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Недельное расписание"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -291,7 +291,7 @@ async def handle_schedule_week_view(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data == "schedule_month_view")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_schedule_month_view(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Месячный обзор расписания"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

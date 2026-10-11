@@ -15,7 +15,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_analytics_menu,
 )
 from uk_management_bot.states.shift_management import ShiftManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 from uk_management_bot.utils.datetime_utils import utc_now
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.callback_query(F.data == "shift_analytics")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=None):
     """Меню аналитики смен"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -51,7 +51,7 @@ async def handle_shift_analytics(callback: CallbackQuery, state: FSMContext, db=
 
 
 @router.callback_query(F.data == "shift_executor_assignment")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMContext, db: Session = None, user: User = None, roles: list = None):
     """Назначение исполнителей для смен"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -104,7 +104,7 @@ async def handle_shift_executor_assignment(callback: CallbackQuery, state: FSMCo
 
 
 @router.callback_query(F.data == "weekly_analytics")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Аналитика за неделю"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -186,7 +186,7 @@ async def handle_weekly_analytics(callback: CallbackQuery, state: FSMContext, db
 
 
 @router.callback_query(F.data == "workload_forecast")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Прогноз рабочей нагрузки"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -276,7 +276,7 @@ async def handle_workload_forecast(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "optimization_recommendations")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_optimization_recommendations(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Рекомендации по оптимизации"""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -365,7 +365,7 @@ async def handle_optimization_recommendations(callback: CallbackQuery, state: FS
 
 
 @router.callback_query(F.data == "monthly_analytics")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Месячный отчёт — заглушка (функция в разработке).
 
@@ -390,7 +390,7 @@ async def handle_monthly_analytics(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "efficiency_analysis")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_efficiency_analysis(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Анализ эффективности — заглушка (функция в разработке).
 

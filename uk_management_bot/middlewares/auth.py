@@ -180,15 +180,55 @@ async def role_mode_middleware(handler, event: Any, data: Dict[str, Any]):
     return await handler(event, data)
 
 
+async def _fresh_menu(message: Message):
+    """Главное меню по текущим ролям и правам; None — оставить клавиатуру как есть."""
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    try:
+        return await get_user_contextual_keyboard(message.from_user.id)
+    except Exception as e:  # noqa: BLE001 — отказ важнее меню
+        logger.warning("Не удалось собрать меню к отказу: %r", e)
+        return None
+
+
+def require_action(action_key: str):
+    """Декоратор хендлера бота: пропустить, если пользователю разрешено действие.
+
+    Состав ролей действия — в `uk_management_bot/authz/catalog.py`; отказ,
+    сообщение и логирование те же, что у прежнего `require_role`. Действия бота
+    не требуют одобренного аккаунта (бот исторически не смотрел на статус —
+    это зафиксировано снимком прав), поэтому `approved_only` здесь запрещено.
+    """
+    from uk_management_bot.authz.catalog import get_action
+
+    action = get_action(action_key)
+    if action.approved_only:
+        raise ValueError(
+            f"Действие {action_key} требует одобренный аккаунт — гейт бота статус не проверяет"
+        )
+    return _role_gate_decorator(action.allows, f"action {action_key}")
+
+
 def require_role(required_roles: List[str]):
     """Декоратор для проверки ролей пользователя перед выполнением хэндлера.
-    
+
+    Устаревший путь: новые хендлеры используют `require_action` (действие из
+    `authz/catalog.py`), ратчет tests/services/test_rbac_baseline.py не даёт
+    добавлять новые декораторы по именам ролей.
+
     Args:
         required_roles: Список ролей, одна из которых должна быть у пользователя
-    
+
     Returns:
         Decorator function
     """
+    roles = tuple(required_roles)
+    return _role_gate_decorator(lambda user_roles: any(role in user_roles for role in roles),
+                                str(list(roles)))
+
+
+def _role_gate_decorator(allows, needs: str):
+    """Общая механика гейта хендлера: роли из DI (или из БД), отказ с сообщением."""
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -224,12 +264,12 @@ def require_role(required_roles: List[str]):
             # Проверяем права доступа
             has_access = False
             if user_roles:
-                has_access = any(role in user_roles for role in required_roles)
+                has_access = allows(user_roles)
             else:
                 logger.warning(f"require_role: user_roles пустой! kwargs={list(kwargs.keys())}, event={type(event).__name__ if event else None}, telegram_id={telegram_id}")
             
             if not has_access:
-                logger.warning(f"Access denied for user {user.telegram_id if user else telegram_id or 'unknown'}: has roles {user_roles}, needs {required_roles}")
+                logger.warning(f"Access denied for user {user.telegram_id if user else telegram_id or 'unknown'}: has roles {user_roles}, needs {needs}")
                 
                 # Формируем сообщение об отсутствии прав
                 language = None
@@ -252,7 +292,9 @@ def require_role(required_roles: List[str]):
                 
                 try:
                     if isinstance(event, Message):
-                        await event.answer(text)
+                        # Вместе с отказом — меню по текущим правам: если право сняли
+                        # в админке, устаревшая кнопка исчезнет у человека сразу.
+                        await event.answer(text, reply_markup=await _fresh_menu(event))
                     elif isinstance(event, CallbackQuery):
                         await event.answer(text, show_alert=True)
                 except Exception as e:

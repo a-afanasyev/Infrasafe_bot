@@ -4,7 +4,7 @@ import { usePersonName } from '../../hooks/usePersonName'
 import { useShift, useEndShift, useReassignShift } from '../../hooks/useShifts'
 import { useEmployeePicker } from '../../hooks/useEmployeePicker'
 import EmployeePickerSearch from '../employees/EmployeePickerSearch'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { formatTime, formatDateTime, dayOffset } from '../../utils/timezone'
 import { shiftTypeColor } from '../../utils/shiftWeek'
 import { tSpecialization } from '../../i18n/apiMaps'
@@ -48,7 +48,7 @@ export default function ShiftDetailModal({ shiftId, onClose, onEdit }: Props) {
   const { data: shift, isLoading } = useShift(shiftId)
   const endShift = useEndShift()
   const reassign = useReassignShift()
-  const isManager = useHasRole('manager')
+  const isManager = useCan('shifts.manage')
   const [confirmEndOpen, setConfirmEndOpen] = useState(false)
   const [reassignOpen, setReassignOpen] = useState(false)
   const [pickedExecutor, setPickedExecutor] = useState<string>('')

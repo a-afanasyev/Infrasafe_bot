@@ -16,7 +16,7 @@ from uk_management_bot.keyboards.my_shifts import (
     get_shift_actions_keyboard
 )
 from uk_management_bot.states.my_shifts import MyShiftsStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.services.executor_done_prompt import remind_after_shift_end
 from uk_management_bot.services.shift_lifecycle import send_shift_notify
 from uk_management_bot.utils.helpers import get_text
@@ -40,7 +40,7 @@ async def _send_notify(callback: CallbackQuery, payload) -> None:
 
 
 @router.callback_query(F.data == "start_shift")
-@require_role(['executor'])
+@require_action("execution.work")
 async def handle_start_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                              user: User = None, roles: list = None, *, _db=None):
     """Начать смену"""
@@ -81,7 +81,7 @@ async def handle_start_shift(callback: CallbackQuery, state: FSMContext, languag
 
 
 @router.callback_query(F.data == "end_shift")
-@require_role(['executor'])
+@require_action("execution.work")
 async def handle_end_shift(callback: CallbackQuery, state: FSMContext, language: str = "ru",
                            user: User = None, roles: list = None, *, _db=None):
     """Завершить смену"""

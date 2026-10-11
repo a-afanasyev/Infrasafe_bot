@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api import telegram_send
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import ResidentDocumentOut
 from uk_management_bot.database.models.user import User
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_manager_only = require_roles("manager")
+_manager_only = require_action("residents.manage")
 
 #: Лимит Bot API на скачивание файла: ровно лимит — отдаём, больше — 413
 #: (`download_file` прерывает чтение при `size > max_bytes`).

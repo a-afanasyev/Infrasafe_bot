@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowUpDown, CalendarDays, Plus, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { useElevators, useElevatorsSummary } from '../../hooks/useElevators'
 import AccessPagination from '../../components/access/AccessPagination'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
@@ -27,7 +27,7 @@ const PAGE_LIMIT = 50
 export default function ElevatorsPage() {
   const { t } = useTranslation()
   usePageTitle(t('elevators.title'))
-  const isManager = useHasRole('manager')
+  const isManager = useCan('elevators.manage')
   const [filters, setFilters] = useState<ElevatorListFilters>({ limit: PAGE_LIMIT, offset: 0 })
   const sort = useTableSort<ElevatorCard>(ELEVATOR_COLUMNS, ELEVATORS_SORT_STORAGE_KEY)
 

@@ -2,18 +2,17 @@ import { useTranslation } from 'react-i18next'
 import { useRequestMaterials } from '../../hooks/useMaterials'
 import { fmtMoney, fmtQty } from '../../utils/materialsFormat'
 import { useUnitLabel } from '../../hooks/useUnitLabel'
-import { useHasAnyRole } from '../../hooks/useHasRole'
-import { MATERIALS_MODULE_ROLES } from '../../constants/roles'
+import { useCan } from '../../hooks/useCan'
 
 /**
  * Блок «Материалы» в карточке заявки (RequestDetailModal): списанные материалы
- * + суммарная себестоимость. Рендерится только для MATERIALS_MODULE_ROLES;
+ * + суммарная себестоимость. Рендерится только при действии materials.manage;
  * при отсутствии списаний не показывается вовсе.
  */
 export default function RequestMaterialsBlock({ requestNumber }: { requestNumber: string }) {
   const { t } = useTranslation()
   const unitLabel = useUnitLabel()
-  const allowed = useHasAnyRole(MATERIALS_MODULE_ROLES)
+  const allowed = useCan('materials.manage')
   const { data } = useRequestMaterials(allowed ? requestNumber : null)
 
   if (!allowed || !data || data.items.length === 0) return null

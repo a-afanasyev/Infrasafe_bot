@@ -194,10 +194,11 @@ def _stub_session(monkeypatch, user):
 
 
 class _FakeUser:
-    def __init__(self, roles, status="approved"):
+    def __init__(self, roles, status="approved", deleted_at=None):
         self.roles = roles
         self.status = status
         self.role = None
+        self.deleted_at = deleted_at
 
 
 @pytest.mark.asyncio
@@ -218,6 +219,15 @@ async def test_identity_ok_rejects_blocked_and_non_manager(monkeypatch):
     assert await ws._ws_identity_ok(7) is False
 
     _stub_session(monkeypatch, None)
+    assert await ws._ws_identity_ok(7) is False
+
+
+@pytest.mark.asyncio
+async def test_identity_ok_rejects_deleted_account(monkeypatch):
+    """Soft-delete сохраняет роли — WS обязан отказать, как HTTP (403 «Account deleted»)."""
+    from datetime import datetime, timezone
+
+    _stub_session(monkeypatch, _FakeUser('["manager"]', deleted_at=datetime.now(timezone.utc)))
     assert await ws._ws_identity_ok(7) is False
 
 

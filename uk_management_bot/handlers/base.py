@@ -34,6 +34,7 @@ from uk_management_bot.keyboards.base import (
     get_role_switch_inline,
     get_start_role_choice_inline,
     get_user_contextual_keyboard,
+    is_menu_mode,
 )
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import (
@@ -43,7 +44,7 @@ from uk_management_bot.services.notification_service import (
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.filters import RoleFilter
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.button_texts import (
@@ -685,7 +686,7 @@ async def executor_archive_requests(message: Message, state: FSMContext):
 
 
 @router.message(F.text.in_(SHIFT_TEXTS))
-@require_role(['executor'])
+@require_action("execution.work")
 async def executor_shift_menu(message: Message, user: User = None, roles: list[str] = None, active_role: str = None, *, _db=None):
     """Показывает клавиатуру управления сменой.
 
@@ -769,8 +770,9 @@ async def switch_role(cb: CallbackQuery, callback_data: RoleSwitchCB, roles: lis
     roles = roles or ["applicant"]
     target = callback_data.target
 
-    # Проверяем, что целевая роль доступна пользователю
-    if target not in roles:
+    # Проверяем, что целевая роль доступна пользователю и бывает режимом меню
+    # (callback_data шлёт клиент — своя роль из админки режимом не бывает).
+    if target not in roles or not is_menu_mode(target):
         lang = language
         await cb.answer(get_text("role.not_allowed", language=lang), show_alert=True)
         return

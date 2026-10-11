@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { ELEVATOR_DETAIL } from '../../test/fixtures/elevators'
 import type { ElevatorDetail, ElevatorOccurrence } from '../../types/elevators'
 import ElevatorDetailPage from './ElevatorDetailPage'
+import { actionsFor } from '../../test/authz'
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -43,7 +44,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
-  useAuthStore.setState({ user: { id: 1, roles: ['manager'] }, isAuthenticated: true, hydrating: false })
+  useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']) }, isAuthenticated: true, hydrating: false })
 })
 
 describe('ElevatorDetailPage', () => {
@@ -233,7 +234,7 @@ describe('ElevatorDetailPage', () => {
   })
 
   it('executor: нет кнопок правки/приёмки, но смена статуса доступна', async () => {
-    useAuthStore.setState({ user: { id: 2, roles: ['executor'] }, isAuthenticated: true, hydrating: false })
+    useAuthStore.setState({ user: { id: 2, roles: ['executor'], actions: actionsFor(['executor']) }, isAuthenticated: true, hydrating: false })
     mockDetail(ELEVATOR_DETAIL)
     const user = userEvent.setup()
     renderPage()

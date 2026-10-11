@@ -22,7 +22,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from uk_management_bot.database.session import session_scope
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.services.auto_manager.config import (
     load_config_sync,
     save_config_sync,
@@ -121,7 +121,7 @@ async def _render_status(callback: CallbackQuery, db, lang: str) -> None:
 # ─────────────────────────────────── хендлеры ───────────────────────────────────
 
 @router.callback_query(F.data == "auto_manager_menu")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_manager_menu(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Экран статуса автоменеджера — точка входа с главного меню смен."""
     # A6-P3-21: `as db` затенял параметр — except-ветка дёргала БД по сессии,
@@ -141,7 +141,7 @@ async def handle_auto_manager_menu(callback: CallbackQuery, state: FSMContext, d
 
 
 @router.callback_query(F.data == "auto_manager_toggle")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Немедленное вкл/выкл — без подтверждения (простой флип-и-перерисовка)."""
     lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
@@ -170,7 +170,7 @@ async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext,
 
 
 @router.callback_query(F.data == "auto_manager_mode_ai")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """«ИИ (скоро)» — Фаза 1: заблокирован. Никогда не пишет mode="ai" в БД,
     даже при повторном/двойном тапе или доставке протухшей клавиатуры —
@@ -186,7 +186,7 @@ async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext
 
 
 @router.callback_query(F.data == "auto_manager_change_window")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_manager_change_window(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Вход в FSM-ввод нового окна работы HH:MM-HH:MM."""
     lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
@@ -206,7 +206,7 @@ async def handle_auto_manager_change_window(callback: CallbackQuery, state: FSMC
 
 
 @router.message(StateFilter(AutoManagerStates.entering_window))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_manager_window_input(message: Message, state: FSMContext, db=None, roles: list = None, user=None):
     """Парсинг HH:MM-HH:MM. Валидация — той же ``validate_config``, что и у
     API/шедулера (не реализуем свой regex/strptime повторно). Невалидный ввод

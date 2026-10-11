@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
+from uk_management_bot.authz.catalog import get_action
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.api.requests.schemas import RequestCard
@@ -280,14 +281,14 @@ async def list_requests_rows(
     user_roles = get_user_roles(user)
     # Режим без `view` — прежняя ветка по ролям; менеджер без `view` → mode=None → без фильтра.
     mode = view
-    if mode is None and "manager" not in user_roles:
-        mode = "assigned" if "executor" in user_roles else "own"
+    if mode is None and not get_action("requests.read_all").allows(user_roles):
+        mode = "assigned" if get_action("requests.execute").allows(user_roles) else "own"
     if mode == "own":
         query = query.filter(RequestModel.user_id == user.id)
     elif mode == "assigned":
         query = query.filter(
             await assigned_to_executor_clause(db, user)
-            if "executor" in user_roles
+            if get_action("requests.execute").allows(user_roles)
             else false()
         )
     if statuses:

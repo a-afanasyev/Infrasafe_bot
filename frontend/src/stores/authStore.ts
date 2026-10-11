@@ -18,8 +18,17 @@ localStorage.removeItem('auth-store')
 // Web SPA auth: tokens live only in httpOnly cookies (uk_access on Path=/uk/,
 // uk_refresh on Path=/uk/api/). The store holds user identity for UI gating.
 // TWA flow uses its own store/client (Bearer-based) — do not mix the two.
+interface AuthUser {
+  id: number
+  roles: string[]
+  /** RBAC: действия из профиля — по ним гейтятся разделы и кнопки (docs/tech/RBAC.md). */
+  actions?: string[]
+  first_name?: string
+  has_password?: boolean
+}
+
 interface AuthState {
-  user: { id: number; roles: string[]; first_name?: string; has_password?: boolean } | null
+  user: AuthUser | null
   isAuthenticated: boolean
   // True until the cold-start cookie probe (bootstrap) resolves. Route guards
   // render a spinner while hydrating instead of bouncing to /login, so a fresh
@@ -69,7 +78,9 @@ export const useAuthStore = create<AuthState>()(
       // делит один in-flight промис — иначе один refresh-cookie уходил на сервер
       // дважды, и второй запрос отзывал всю family как reuse.
       bootstrap: () => {
-        if (get().isAuthenticated) {
+        // Пользователь из sessionStorage без `actions` — вкладка открыта до
+        // выкатки RBAC: без повторного запроса профиля гейты скрыли бы всё.
+        if (get().isAuthenticated && get().user?.actions) {
           set({ hydrating: false })
           return Promise.resolve()
         }
@@ -106,7 +117,12 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user
-          ? { id: state.user.id, first_name: state.user.first_name, roles: state.user.roles }
+          ? {
+            id: state.user.id,
+            first_name: state.user.first_name,
+            roles: state.user.roles,
+            actions: state.user.actions,
+          }
           : null,
         isAuthenticated: state.isAuthenticated,
       }),

@@ -15,6 +15,7 @@ from sqlalchemy import text
 from uk_management_bot.config.settings import settings
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.business_time import fmt_date, fmt_time_seconds
+from uk_management_bot.authz import has_action_roles
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -199,7 +200,7 @@ async def detailed_health_check_command(message: Message, db: Session, roles: li
     lang = get_user_language(message.from_user.id, db)
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await message.answer(
             get_text('errors.permission_denied', language=lang)
         )

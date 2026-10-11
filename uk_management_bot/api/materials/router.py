@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.materials import service as api_service
 from uk_management_bot.api.materials.schemas import (
     AdjustmentCreate,
@@ -49,7 +49,7 @@ from uk_management_bot.services.material_service import (
 
 router = APIRouter()
 
-_manager_only = require_approved_roles("manager", "system_admin")
+_manager_only = require_action("materials.manage")
 
 _EXPORT_LIMIT = 10_000
 

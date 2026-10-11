@@ -36,7 +36,7 @@ import type {
 /**
  * Склад материалов (менеджер): вкладки «Остатки» | «Журнал операций» | «На закуп».
  * Операции append-only — исправления только сторно (кнопка на строке журнала).
- * Гард роута — MATERIALS_MODULE_ROLES (manager/system_admin).
+ * Гард роута — действие materials.manage (manager/system_admin).
  */
 const PAGE_LIMIT = 50
 

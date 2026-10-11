@@ -5,6 +5,7 @@ import { render, screen } from '../test/test-utils'
 import DashboardLayout from './DashboardLayout'
 import { useAuthStore } from '../stores/authStore'
 import { useNameCaseStore } from '../stores/nameCaseStore'
+import { actionsFor } from '../test/authz'
 
 // TEST-068 Phase 3: каркас дашборда был 0 строк покрытия, при том что в нём
 // живёт ролевой гейтинг навигации (isVisibleTo) — регресс тут прячет целые
@@ -24,7 +25,7 @@ function renderLayout(route = '/dashboard') {
 function login(roles: string[]) {
   useAuthStore.setState({
     user: {
-      id: 1, first_name: 'Мария', roles,
+      id: 1, first_name: 'Мария', roles, actions: actionsFor(roles),
     } as never,
     isAuthenticated: true,
   })

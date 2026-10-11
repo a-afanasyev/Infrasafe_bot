@@ -6,14 +6,15 @@ import { server } from '../../test/msw/server'
 import { apiClient } from '../../api/client'
 import RequestDetailModal from './RequestDetailModal'
 
-// useHasRole gates the manager-only urgency editor — mock it per test.
-// useHasAnyRole гейтит RequestMaterialsBlock (склад) и загрузчик фотоотчёта;
-// по умолчанию false (beforeEach), включается точечно в тестах фотоотчёта.
+// Гейты карточки — действия (useCan). Две группы, как и раньше:
+//  * менеджерские (правка полей, переназначение) — mockHasRole, задаётся per test;
+//  * склад и загрузчик фото (RequestMaterialsBlock, фотоотчёт) — mockHasAnyRole,
+//    по умолчанию false (beforeEach), включается точечно в тестах фотоотчёта.
+const MANAGER_ACTIONS = new Set(['requests.manage', 'management.decide'])
 const mockHasRole = vi.fn()
 const mockHasAnyRole = vi.fn()
-vi.mock('../../hooks/useHasRole', () => ({
-  useHasRole: (r: string) => mockHasRole(r),
-  useHasAnyRole: (roles: readonly string[]) => mockHasAnyRole(roles),
+vi.mock('../../hooks/useCan', () => ({
+  useCan: (action: string) => (MANAGER_ACTIONS.has(action) ? mockHasRole(action) : mockHasAnyRole(action)),
 }))
 
 function noop() {}
@@ -146,7 +147,7 @@ describe('RequestDetailModal — фотоотчёт: загрузка менед
       http.get('*/api/v2/media/request/:number', () => HttpResponse.json(items)),
       http.get('*/api/v2/media/:id/file', () =>
         new HttpResponse(jpegBytes, { headers: { 'Content-Type': 'image/jpeg' } })),
-      // RequestMaterialsBlock активируется тем же useHasAnyRole-моком.
+      // RequestMaterialsBlock активируется тем же моком (группа склада/фото).
       http.get('*/api/v2/materials/by-request/:number', () =>
         HttpResponse.json({ items: [], total_cost: 0 })),
     )

@@ -20,7 +20,7 @@ import type { AccessEventsFilters as Filters } from '../../types/access'
  *
  * Вкладки: (а) Live-лента (WS, PD-safe), (б) Очередь ручной проверки
  * (manual_review) с действиями открыть/отказать, (в) История/поиск событий с
- * фильтрами и детализацией. Гард роутом/сайдбаром — ACCESS_MODULE_ROLES.
+ * фильтрами и детализацией. Гард роутом/сайдбаром — действие access.events.read.
  */
 
 const PAGE_LIMIT = 50

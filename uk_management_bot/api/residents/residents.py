@@ -10,7 +10,7 @@ from enum import Enum
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import (
     ResidentApartmentOut,
@@ -30,7 +30,7 @@ from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 router = APIRouter()
 
-_manager_only = require_roles("manager")
+_manager_only = require_action("residents.manage")
 
 #: Лимиты раздела. Конвенция проекта — объявлять на маршруте: общего
 #: `default_limits` у лимитера нет, и без декоратора маршрут не ограничен вовсе.

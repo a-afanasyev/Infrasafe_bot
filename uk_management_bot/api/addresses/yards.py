@@ -7,7 +7,7 @@ services/addresses/queries.py (reads + hard purge).
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.addresses.schemas import YardOut, YardCreate, YardUpdate
 from uk_management_bot.api.addresses._helpers import is_manager, yard_dict
 from uk_management_bot.database.models.user import User
@@ -20,7 +20,7 @@ router = APIRouter()
 async def list_yards(
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_approved_roles("manager", "inspector")),
+    user: User = Depends(require_action("addresses.read")),
 ):
     # Обходчик без manager-роли видит ТОЛЬКО активные дворы (для создания заявок);
     # менеджер сохраняет доступ к неактивным через include_inactive.
@@ -38,7 +38,7 @@ async def list_yards(
 async def create_yard(
     body: YardCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     yard = await core.create_yard(
         db,
@@ -56,7 +56,7 @@ async def update_yard(
     yard_id: int,
     body: YardUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     yard = await core.update_yard(db, yard_id, body.model_dump(exclude_unset=True))
     buildings_count = await queries.count_active_buildings(db, yard_id)
@@ -67,7 +67,7 @@ async def update_yard(
 async def delete_yard(
     yard_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     await core.delete_yard(db, yard_id)
     return {"ok": True, "detail": "Yard deactivated"}
@@ -77,7 +77,7 @@ async def delete_yard(
 async def purge_yard(
     yard_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("manager")),
+    user: User = Depends(require_action("addresses.manage")),
 ):
     """Hard-delete a soft-deleted yard. Cascades to buildings → apartments.
 

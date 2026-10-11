@@ -10,6 +10,8 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import SimpleModeBadge from '../components/employees/SimpleModeBadge'
 import SimpleModeSection from '../components/employees/SimpleModeSection'
+import RolesSection from '../components/employees/RolesSection'
+import { useCan } from '../hooks/useCan'
 
 export default function EmployeeDetailPage() {
   const { t } = useTranslation()
@@ -20,6 +22,7 @@ export default function EmployeeDetailPage() {
   const toggleMeterEntry = useToggleMeterEntry(id ? Number(id) : null)
   const rename = useRenameEmployee(id ? Number(id) : null)
   const [renameOpen, setRenameOpen] = useState(false)
+  const canViewRoles = useCan('rbac.view')
   const empName = emp ? fullName(emp, t('employees.noName')) : t('employees.noName')
   usePageTitle(empName)
 
@@ -171,6 +174,8 @@ export default function EmployeeDetailPage() {
           </div>
         )
       })()}
+
+      {canViewRoles && <RolesSection employeeId={emp.id} />}
 
       {canConfigureSimpleMode && (
         <SimpleModeSection

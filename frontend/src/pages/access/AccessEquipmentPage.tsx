@@ -10,7 +10,7 @@ import GatesPanel from '../../components/access/equipment/GatesPanel'
 import CamerasPanel from '../../components/access/equipment/CamerasPanel'
 import BarriersPanel from '../../components/access/equipment/BarriersPanel'
 import ControllersPanel from '../../components/access/equipment/ControllersPanel'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { useAccessZones, useAccessGates } from '../../hooks/useAccessEquipment'
 
 /**
@@ -19,15 +19,15 @@ import { useAccessZones, useAccessGates } from '../../hooks/useAccessEquipment'
  *  - system_admin: + Камеры, Шлагбаумы, Контроллеры (бэкенд отдаёт их GET только
  *    system_admin; manager получил бы 403, поэтому эти табы для него скрыты).
  *
- * Route уже закрыт ACCESS_MANAGER_ROLES (App.tsx) — здесь дополнительный гейтинг
- * табов/действий по system_admin (useHasRole).
+ * Route уже закрыт access.registry.manage (App.tsx) — здесь дополнительный гейтинг
+ * табов/действий по access.equipment.manage (useCan).
  */
 type Tab = 'zones' | 'spots' | 'assignments' | 'gates' | 'cameras' | 'barriers' | 'controllers'
 
 export default function AccessEquipmentPage() {
   const { t } = useTranslation()
   usePageTitle(t('accessControl.equipment.title'))
-  const isAdmin = useHasRole('system_admin')
+  const isAdmin = useCan('access.equipment.manage')
   const [tab, setTab] = useState<Tab>('zones')
 
   // Источники для select'ов (зоны/въезды) + таблицы своих табов.

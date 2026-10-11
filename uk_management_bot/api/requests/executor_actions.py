@@ -14,7 +14,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.dependencies_access import is_assigned_executor
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.requests import service as svc
@@ -61,7 +61,7 @@ async def complete_request(
     photo: UploadFile = File(..., description="Фото «после»: JPEG/PNG, до 8 МиБ"),
     idempotency_key: str = Form(..., description="UUID попытки; повтор с ним же безопасен"),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("requests.execute")),
 ):
     """«Готово»: одно фото «после» → заявка «Выполнена» (EXECUTOR_COMPLETE).
 
@@ -107,7 +107,7 @@ async def report_problem(
     body: ProblemBody,
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("executor")),
+    user: User = Depends(require_action("requests.execute")),
 ):
     """«Проблема»: комментарий исполнителя по шаблону, статус не меняется.
 

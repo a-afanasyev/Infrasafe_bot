@@ -59,18 +59,8 @@ def has_admin_access(roles: Optional[List[str]] = None, user: Optional[User] = N
     Returns:
         bool: True если есть права доступа, False иначе
     """
-    # Проверяем через roles параметр
-    if roles and any(role in ['admin', 'manager'] for role in roles):
-        return True
-    
-    # Fallback проверка через user объект
-    if user:
-        # Проверяем новое поле roles (COD-01: канонический парсер, JSON+CSV)
-        user_roles = parse_roles_safe(getattr(user, "roles", None))
-        if any(role in ['admin', 'manager'] for role in user_roles):
-            return True
-
-    return False
+    # Состав ролей — действие admin_panel.use в authz/catalog.py.
+    return _action_via_roles_or_user("admin_panel.use", roles, user)
 
 def has_manager_role(roles: Optional[List[str]] = None,
                      user: Optional[User] = None) -> bool:
@@ -85,11 +75,7 @@ def has_manager_role(roles: Optional[List[str]] = None,
     только в `roles` из middleware значило бы отказать настоящему менеджеру,
     когда контекст роли не доехал.
     """
-    if roles and "manager" in roles:
-        return True
-    if user and "manager" in parse_roles_safe(getattr(user, "roles", None)):
-        return True
-    return False
+    return _action_via_roles_or_user("management.decide", roles, user)
 
 
 def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] = None) -> bool:
@@ -103,16 +89,44 @@ def has_executor_access(roles: Optional[List[str]] = None, user: Optional[User] 
     Returns:
         bool: True если есть права исполнителя, False иначе
     """
-    # Проверяем через roles параметр
-    if roles and any(role in ['executor', 'manager', 'admin'] for role in roles):
-        return True
-    
-    # Fallback проверка через user объект: только roles (A9-P3-11 — одна
-    # active_role без роли в roles доступа не даёт).
-    if user:
-        if "executor" in parse_roles_safe(getattr(user, "roles", None)):
-            return True
+    # Особенность «как есть» (снимок прав 2026-10-10): ответ зависит от способа
+    # вызова — через roles пускает executor/manager/admin (execution.view), через
+    # user только executor (execution.work). Сведение — решение владельца.
+    from uk_management_bot.authz.catalog import get_action
 
+    if roles and get_action("execution.view").allows(roles):
+        return True
+    # Fallback через user — только roles (A9-P3-11: active_role прав не даёт).
+    if user and get_action("execution.work").allows(parse_roles_safe(getattr(user, "roles", None))):
+        return True
+    return False
+
+
+def action_allowed_for_roles(action_key: str, roles) -> bool:
+    """Даёт ли набор ролей действие из `authz/catalog.py` (статус не проверяется).
+
+    Точка входа для access_control: его граница с ядром (AUD5-ARCH-4) пускает
+    только контрактные модули, и этот модуль среди них — пакет `authz`
+    напрямую оттуда не импортируется.
+    """
+    from uk_management_bot.authz.catalog import get_action
+
+    return get_action(action_key).allows(roles)
+
+
+def _action_via_roles_or_user(action_key: str, roles: Optional[List[str]], user) -> bool:
+    """Общая механика ролевых предикатов бота: сначала роли из middleware,
+    затем fallback на `user.roles` (канонический парсер COD-01).
+
+    Ленивый импорт каталога: authz опирается на этот модуль (цикл модулей).
+    """
+    from uk_management_bot.authz.catalog import get_action
+
+    action = get_action(action_key)
+    if roles and action.allows(roles):
+        return True
+    if user and action.allows(parse_roles_safe(getattr(user, "roles", None))):
+        return True
     return False
 
 def get_user_roles(user: User) -> List[str]:

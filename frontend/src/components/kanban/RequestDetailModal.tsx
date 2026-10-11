@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { ChevronDown, TriangleAlert, X as XIcon } from 'lucide-react'
 import { tUrgency, tCategory } from '../../i18n/apiMaps'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { useSeenRequests } from '../../hooks/useSeenRequests'
 import { useRequest, useRequestComments } from '../../hooks/useRequestDetail'
 import { categoryChangeWarning, useRequestMutations, type CategoryWarning } from '../../hooks/useRequestMutations'
@@ -110,11 +110,14 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
     markSeen(requestNumber, requestUpdatedAt)
   }, [requestNumber, requestUpdatedAt, markSeen])
 
-  const isManager = useHasRole('manager')
+  const isManager = useCan('requests.manage')
+  // Смена исполнителя — решение именно менеджера (workflow MANAGER_ASSIGN, без
+  // admin). Сегодня роли совпадают с requests.manage, но это разные права.
+  const canManagerDecide = useCan('management.decide')
 
   // Канон MANAGER_ASSIGN пускает смену исполнителя только из этих статусов —
   // список берётся из общего места, а не объявляется здесь второй раз.
-  const canReassign = isManager && REASSIGNABLE_STATUSES.has(request?.status ?? '')
+  const canReassign = canManagerDecide && REASSIGNABLE_STATUSES.has(request?.status ?? '')
 
   const { updateRequest, changeCategory, forceAccept, remindApplicant, postComment } = useRequestMutations(
     requestNumber,
@@ -420,7 +423,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 </div>
               )}
               {/* Складской учёт: списанные материалы + себестоимость
-                  (рендерится только MATERIALS_MODULE_ROLES и при наличии списаний) */}
+                  (рендерится только при materials.manage и при наличии списаний) */}
               <div className="bg-bg-surface border border-border-default rounded-[10px] px-3 py-2.5 text-[13px] empty:hidden">
                 <RequestMaterialsBlock requestNumber={request.request_number} />
               </div>

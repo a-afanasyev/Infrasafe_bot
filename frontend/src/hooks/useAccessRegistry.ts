@@ -159,7 +159,7 @@ export function useResolveEvent() {
 
 /**
  * Погашение одноразового гостевого кода оператором (POST /passes/redeem-code, §9.3).
- * RBAC бэкенда: security_operator/manager/system_admin (= ACCESS_MODULE_ROLES).
+ * RBAC бэкенда: действие access.events.read (security_operator/manager/system_admin).
  * Без toast — результат (квартира/ошибка) показывается прямо в диалоге, чтобы
  * 422/429 раскрывались общим текстом без деталей.
  */

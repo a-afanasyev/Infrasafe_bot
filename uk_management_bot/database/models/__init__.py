@@ -56,6 +56,9 @@ from .monitored_group import MonitoredGroup
 from .elevator import Elevator, ElevatorStatusEvent, ElevatorMaintenanceOccurrence
 from .elevators_config import ElevatorsConfig
 
+# Админка ролей: роли, их права и версия для сброса кэша прав
+from .rbac import RbacRole, RbacRolePermission, RbacState
+
 __all__ = [
     'User',
     'Request',
@@ -98,4 +101,7 @@ __all__ = [
     'ElevatorStatusEvent',
     'ElevatorMaintenanceOccurrence',
     'ElevatorsConfig',
+    'RbacRole',
+    'RbacRolePermission',
+    'RbacState',
 ]

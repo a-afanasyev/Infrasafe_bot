@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.services.board_config.schemas import WorkReportsCfg
 from uk_management_bot.services.board_config.service import load_board_config, merge_and_save_board_config
-from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.work_reports import coordination
 from uk_management_bot.api.work_reports import service as api_service
@@ -71,7 +71,7 @@ router = APIRouter(dependencies=[Depends(_require_work_reports_enabled)])
 # открытый интернет, поэтому не-approved менеджер (pending/blocked-на-модерации)
 # не должен им управлять. Строже, чем PUT /board-config (там `require_roles`), и
 # совпадает с модулем материалов (`api/materials/router.py:53`).
-_manager_only = require_approved_roles("manager")
+_manager_only = require_action("work_reports.moderate")
 
 # Статусы отчёта: канон — constants/work_reports.py (AUD6-P2-57). Literal
 # обязан остаться литеральным (статическая типизация не собирается из

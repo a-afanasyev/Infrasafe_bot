@@ -1,0 +1,482 @@
+{
+  "_comment": "Сгенерировано: python -m uk_management_bot.authz.export --write. Не править руками.",
+  "actions": {
+    "access.diagnostics": {
+      "roles": [
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: диагностика"
+    },
+    "access.equipment.manage": {
+      "roles": [
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: оборудование"
+    },
+    "access.events.read": {
+      "roles": [
+        "manager",
+        "security_operator",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: события и пропуска"
+    },
+    "access.live": {
+      "roles": [
+        "manager",
+        "security_operator",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: живой поток событий"
+    },
+    "access.management": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: управление доступом"
+    },
+    "access.metrics.read": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: метрики модуля"
+    },
+    "access.operator": {
+      "roles": [
+        "manager",
+        "security_operator",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: пульт оператора"
+    },
+    "access.photos.read": {
+      "roles": [
+        "manager",
+        "security_operator",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: фото проездов"
+    },
+    "access.presence.read": {
+      "roles": [
+        "manager",
+        "security_operator",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: кто на парковке"
+    },
+    "access.registry.manage": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: база авто и заявок, история"
+    },
+    "access.resident.self": {
+      "roles": [
+        "applicant"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: свои авто и пропуска жителя"
+    },
+    "access.zones.manage": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Охрана: зоны и шлагбаумы"
+    },
+    "addresses.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Справочник адресов: изменение и модерация"
+    },
+    "addresses.read": {
+      "roles": [
+        "inspector",
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Чтение дворов и домов"
+    },
+    "admin_panel.use": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: админ-панель и менеджерские экраны"
+    },
+    "apartments.moderate": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Одобрить или отклонить заявку жителя на привязку квартиры"
+    },
+    "auto_manager.configure": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Настройка автоматического менеджера"
+    },
+    "board.configure": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Настройка табло"
+    },
+    "callcenter.use": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Колл-центр: заявки по звонку"
+    },
+    "dashboard.live": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Живой поток событий дашборда (WebSocket)"
+    },
+    "dashboard.use": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Вход в основной веб-дашборд управления"
+    },
+    "elevators.lookup": {
+      "roles": [
+        "applicant",
+        "executor",
+        "inspector",
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Лифты дома при подаче заявки"
+    },
+    "elevators.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Лифты: изменение реестра и календаря"
+    },
+    "elevators.read": {
+      "roles": [
+        "executor",
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Лифты: реестр, карточка, статус, ТО"
+    },
+    "elevators.technician": {
+      "roles": [
+        "admin",
+        "executor",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: раздел лифтов"
+    },
+    "execution.view": {
+      "roles": [
+        "admin",
+        "executor",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: просмотр исполнительских разделов"
+    },
+    "execution.work": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: экраны и команды исполнителя"
+    },
+    "feedback.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Обратная связь жителей"
+    },
+    "group_intake.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Group Intake: группы и заявки из чатов"
+    },
+    "management.decide": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Решения именно менеджера (без admin): назначение, приёмка, workflow"
+    },
+    "materials.manage": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Склад материалов"
+    },
+    "payments.manage": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Контроль платежей"
+    },
+    "rbac.manage": {
+      "roles": [],
+      "approved_only": false,
+      "superadmin_only": true,
+      "title": "Роли и права: изменение (только суперадмин)"
+    },
+    "rbac.view": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Роли и права: просмотр"
+    },
+    "requests.create": {
+      "roles": [
+        "applicant"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Подать заявку и получить адреса для неё"
+    },
+    "requests.create_inspection": {
+      "roles": [
+        "inspector"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Создать заявку обхода"
+    },
+    "requests.execute": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Работать с заявками как исполнитель: пул, взять, выполнить, проблема"
+    },
+    "requests.internal_comments": {
+      "roles": [
+        "admin",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Видеть и писать внутренние комментарии заявки"
+    },
+    "requests.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Управлять заявками: смена категории, назначение дежурным, правка любой"
+    },
+    "requests.own": {
+      "roles": [
+        "applicant"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Действия автора со своей заявкой: отменить новую, оценить"
+    },
+    "requests.photos.attach": {
+      "roles": [
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Дашборд: кнопка прикрепить фото к заявке"
+    },
+    "requests.read_all": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Видеть любую заявку: карточка и список без ограничения «свои/назначенные»"
+    },
+    "requests.stats": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Статистика заявок"
+    },
+    "requests.update": {
+      "roles": [
+        "applicant",
+        "executor",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Редактировать заявку (бизнес-проверки внутри)"
+    },
+    "residents.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Жители: список, карточка, модерация, документы"
+    },
+    "resources.admin": {
+      "roles": [
+        "admin",
+        "system_admin"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Учёт ресурсов: роль администратора у сервиса (иначе — оператор)"
+    },
+    "resources.launch": {
+      "roles": [
+        "admin",
+        "manager",
+        "system_admin"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Вход в учёт ресурсов"
+    },
+    "resources.meter_entry": {
+      "roles": [
+        "resource_meter_entry"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Ввод показаний счётчиков из Mini App"
+    },
+    "shift_transfers.approve": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: одобрение передачи смены"
+    },
+    "shift_transfers.respond": {
+      "roles": [
+        "executor",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: ответ на передачу смены"
+    },
+    "shifts.history": {
+      "roles": [
+        "admin",
+        "executor",
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Бот: история и просмотр смен"
+    },
+    "shifts.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Смены: создание, шаблоны, чтение, передачи"
+    },
+    "shifts.own": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Свои смены исполнителя: начать, закончить, передать"
+    },
+    "staff.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Сотрудники: список, приглашения, активация, роли"
+    },
+    "work_reports.moderate": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Модерация отчётов о работах"
+    }
+  }
+}

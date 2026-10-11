@@ -18,6 +18,7 @@ from uk_management_bot.database.models.user_verification import (
     VerificationStatus
 )
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 from ._units import _load_user_card, _load_verification_stats
@@ -32,7 +33,7 @@ async def show_verification_panel(callback: CallbackQuery, roles: list = None, l
     lang = language
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -68,7 +69,7 @@ async def show_user_verification(callback: CallbackQuery, roles: list = None, la
     user_id = int(callback.data.split("_")[2])
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True

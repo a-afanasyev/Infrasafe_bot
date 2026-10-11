@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ImageOff, X as XIcon } from 'lucide-react'
-import { useHasAnyRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { useMediaBlob, useRequestMediaList } from '../../hooks/useRequestMedia'
 import { useRequestMediaUpload } from '../../hooks/useRequestMediaUpload'
 import MediaUploadTile from './MediaUploadTile'
@@ -22,7 +22,7 @@ export default function RequestMedia({ requestNumber }: { requestNumber: string 
   // Менеджер прикладывает и фото заявки (проблема пришла по телефону, фото —
   // в мессенджер), и фотоотчёт (та же пара ролей, что и остальные менеджерские
   // мутации заявки; backend-гейт — check_request_access).
-  const canUpload = useHasAnyRole(['manager', 'system_admin'])
+  const canUpload = useCan('requests.photos.attach')
 
   const { data: items = [], isError } = useRequestMediaList(requestNumber)
 

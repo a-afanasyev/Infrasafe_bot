@@ -288,6 +288,23 @@ class TestRequireRole:
         msg.answer.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_denial_carries_menu_of_current_rights(self):
+        """Отказ приходит с меню по текущим правам — снятая в админке кнопка
+        исчезает сразу, а не висит до следующего /start."""
+        from uk_management_bot.middlewares.auth import require_action
+
+        @require_action("admin_panel.use")
+        async def my_handler(event, **kwargs):
+            return "allowed"
+
+        fresh_menu = object()
+        msg = _make_message()
+        with patch("uk_management_bot.keyboards.base.get_user_contextual_keyboard",
+                   AsyncMock(return_value=fresh_menu)):
+            assert await my_handler(msg, roles=["applicant"]) is None
+        assert msg.answer.call_args.kwargs["reply_markup"] is fresh_menu
+
+    @pytest.mark.asyncio
     async def test_denies_access_when_roles_empty(self):
         from uk_management_bot.middlewares.auth import require_role
 

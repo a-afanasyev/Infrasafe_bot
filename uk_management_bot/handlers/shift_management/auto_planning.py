@@ -15,7 +15,7 @@ from uk_management_bot.keyboards.shift_management import (
     get_auto_planning_keyboard,
 )
 from uk_management_bot.states.shift_management import ShiftManagementStates
-from uk_management_bot.middlewares.auth import require_role
+from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.utils.helpers import get_user_language, get_text
 
 from ._router import router
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.message(Command("shifts"))
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def cmd_shifts(message: Message, state: FSMContext, db=None):
     """Главное меню управления сменами"""
     # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
@@ -55,7 +55,7 @@ async def cmd_shifts(message: Message, state: FSMContext, db=None):
 
 
 @router.callback_query(F.data == "shift_planning")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_shift_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Меню планирования смен"""
     # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
@@ -84,7 +84,7 @@ async def handle_shift_planning(callback: CallbackQuery, state: FSMContext, db=N
 
 
 @router.callback_query(F.data == "auto_planning")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автоматическое планирование смен"""
     # WR-06: дефолт ДО try. Без него `lang` присваивается внутри
@@ -113,7 +113,7 @@ async def handle_auto_planning(callback: CallbackQuery, state: FSMContext, db=No
 
 
 @router.callback_query(F.data == "auto_plan_week")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение автопланирования на неделю (без создания смен)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -151,7 +151,7 @@ async def handle_auto_plan_week(callback: CallbackQuery, state: FSMContext, db=N
 
 
 @router.callback_query(F.data == "cancel_auto_plan_week")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_week_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Отмена автопланирования на неделю — возврат в меню автопланирования."""
     try:
@@ -169,7 +169,7 @@ async def handle_auto_plan_week_cancel(callback: CallbackQuery, state: FSMContex
 
 
 @router.callback_query(F.data == "confirm_auto_plan_week")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автопланирование на неделю (выполнение после подтверждения)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -225,7 +225,7 @@ async def handle_auto_plan_week_confirm(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data == "auto_plan_month")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение автопланирования на месяц (без создания смен)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -261,7 +261,7 @@ async def handle_auto_plan_month(callback: CallbackQuery, state: FSMContext, db=
 
 
 @router.callback_query(F.data == "cancel_auto_plan_month")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_month_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Отмена автопланирования на месяц — возврат в меню автопланирования."""
     try:
@@ -279,7 +279,7 @@ async def handle_auto_plan_month_cancel(callback: CallbackQuery, state: FSMConte
 
 
 @router.callback_query(F.data == "confirm_auto_plan_month")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Автопланирование на месяц (выполнение после подтверждения)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -336,7 +336,7 @@ async def handle_auto_plan_month_confirm(callback: CallbackQuery, state: FSMCont
 
 
 @router.callback_query(F.data == "auto_plan_tomorrow")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Подтверждение создания смен на завтра (без создания смен)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted
@@ -371,7 +371,7 @@ async def handle_auto_plan_tomorrow(callback: CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(F.data == "cancel_auto_plan_tomorrow")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_tomorrow_cancel(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Отмена создания смен на завтра — возврат в меню автопланирования."""
     try:
@@ -389,7 +389,7 @@ async def handle_auto_plan_tomorrow_cancel(callback: CallbackQuery, state: FSMCo
 
 
 @router.callback_query(F.data == "confirm_auto_plan_tomorrow")
-@require_role(['admin', 'manager'])
+@require_action("admin_panel.use")
 async def handle_auto_plan_tomorrow_confirm(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
     """Создание смен на завтра (выполнение после подтверждения)."""
     lang = "ru"  # A6-P3-21 (как в PR #334): except не ходит в БД — сессия закрыта/aborted

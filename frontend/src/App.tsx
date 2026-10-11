@@ -5,7 +5,7 @@ import { useAuthStore } from './stores/authStore'
 import LoginPage from './pages/LoginPage'
 import DashboardLayout from './layouts/DashboardLayout'
 import { isTWA } from './utils/isTWA'
-import { ACCESS_MODULE_ROLES, ACCESS_MANAGER_ROLES, ELEVATORS_MODULE_ROLES, MATERIALS_MODULE_ROLES, RESOURCE_MODULE_ROLES } from './constants/roles'
+import { hasAction, type ActionKey } from './authz/actions'
 import { lazy, Suspense, useEffect } from 'react'
 import LoadingSpinner from './components/shared/LoadingSpinner'
 import GlobalErrorBoundary from './components/shared/GlobalErrorBoundary'
@@ -27,11 +27,12 @@ const TemplatesPage = lazy(() => import('./pages/TemplatesPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const AddressesPage = lazy(() => import('./pages/AddressesPage'))
 // Администрирование жителей: список/карточка. Пункт меню виден только
-// manager (allowedRoles в NAV_ENTRIES) — API гейтит require_roles("manager").
+// по действию residents.manage (NAV_ENTRIES) — API гейтит то же действие.
 const ResidentsPage = lazy(() => import('./pages/ResidentsPage'))
 // Group Intake: реестр мониторимых ТГ-групп. Пункт меню виден только manager
-// (allowedRoles в NAV_ENTRIES) — API гейтит require_roles("manager").
+// (действие group_intake.manage в NAV_ENTRIES) — API гейтит то же действие.
 const GroupsPage = lazy(() => import('./pages/GroupsPage'))
+const RolesPage = lazy(() => import('./pages/RolesPage'))
 const ResidentDetailPage = lazy(() => import('./pages/ResidentDetailPage'))
 const ResidentBoardPage = lazy(() => import('./pages/ResidentBoardPage'))
 const BoardEditorPage = lazy(() => import('./pages/BoardEditorPage'))
@@ -41,11 +42,11 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'))
 // модуля доступа, не общий admin/manager дашборда).
 const AccessControlPage = lazy(() => import('./pages/access/AccessControlPage'))
 // access_control §6/§13.2: экраны менеджера (история проездов + база доступа).
-// Гард — ACCESS_MANAGER_ROLES (manager/system_admin; оператор охраны не входит).
+// Гард — действие access.registry.manage (оператор охраны не входит).
 const AccessHistoryPage = lazy(() => import('./pages/access/AccessHistoryPage'))
 const AccessDatabasePage = lazy(() => import('./pages/access/AccessDatabasePage'))
 const AccessEquipmentPage = lazy(() => import('./pages/access/AccessEquipmentPage'))
-// Складской учёт материалов (приход/расход по заявкам). Гард — MATERIALS_MODULE_ROLES.
+// Складской учёт материалов (приход/расход по заявкам). Гард — materials.manage.
 const PaymentControlPage = lazy(() => import('./pages/PaymentControlPage'))
 const MaterialsPage = lazy(() => import('./pages/materials/MaterialsPage'))
 // Нативный раздел «Учёт ресурсов УК» (портируемый модуль). DARK за build-флагом
@@ -77,10 +78,11 @@ const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  allowedRoles?: string[]
+  /** Действие из каталога RBAC; без него — достаточно войти. Решает сервер. */
+  action?: ActionKey
 }
 
-function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+function ProtectedRoute({ children, action }: ProtectedRouteProps) {
   const { isAuthenticated, user, hydrating } = useAuthStore()
   const location = useLocation()
   // Wait for the cold-start cookie probe before deciding — otherwise a fresh tab
@@ -91,7 +93,7 @@ function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
     const next = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/login?next=${next}`} replace />
   }
-  if (allowedRoles && !user?.roles?.some((r: string) => allowedRoles.includes(r))) {
+  if (action && !hasAction(user?.actions, action)) {
     return <Navigate to="/resident-board" replace />
   }
   return <>{children}</>
@@ -133,7 +135,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
 
-              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard" element={<ProtectedRoute action="dashboard.use"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><KanbanPage /></PageErrorBoundary>} />
                 <Route path="analytics" element={<PageErrorBoundary><AnalyticsPage /></PageErrorBoundary>} />
                 <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
@@ -150,7 +152,7 @@ export default function App() {
                 <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
                 {/* Менеджерская очередь модерации визуальных отчётов «до/после».
                     Гард — общий admin/manager группы /dashboard (как board-editor);
-                    "только manager" enforced бэкендом (require_roles("manager")).
+                    "только manager" enforced бэкендом (действие work_reports.moderate).
                     DARK за VITE_WORK_REPORTS_ENABLED. */}
                 {WORK_REPORTS_ENABLED && (
                   <Route path="work-reports" element={<PageErrorBoundary><WorkReportsPage /></PageErrorBoundary>} />
@@ -163,39 +165,46 @@ export default function App() {
                   Вынесен из основного /dashboard, т.к. тот пускает только
                   admin/manager, а security_operator/system_admin должны попадать
                   на панель охраны. executor/inspector/applicant — не видят. */}
-              <Route path="/dashboard/access" element={<ProtectedRoute allowedRoles={[...ACCESS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard/access" element={<ProtectedRoute action="access.events.read"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessControlPage /></PageErrorBoundary>} />
               </Route>
 
               {/* access_control §6/§13.2: экраны менеджера (история проездов +
-                  база доступа). Отдельный route group — гард ACCESS_MANAGER_ROLES
+                  база доступа). Отдельный route group — гард access.registry.manage
                   (manager/system_admin), оператор охраны сюда не допускается. */}
-              <Route path="/dashboard/access/history" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard/access/history" element={<ProtectedRoute action="access.registry.manage"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessHistoryPage /></PageErrorBoundary>} />
               </Route>
-              <Route path="/dashboard/access/database" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard/access/database" element={<ProtectedRoute action="access.registry.manage"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessDatabasePage /></PageErrorBoundary>} />
               </Route>
               {/* access_control: «Оборудование» (зоны/въезды/камеры/шлагбаумы/
-                  контроллеры). Гард — ACCESS_MANAGER_ROLES; камеры/шлагбаумы/
+                  контроллеры). Гард — access.registry.manage; камеры/шлагбаумы/
                   контроллеры внутри доступны только system_admin (гейтинг табов). */}
-              <Route path="/dashboard/access/equipment" element={<ProtectedRoute allowedRoles={[...ACCESS_MANAGER_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+              <Route path="/dashboard/access/equipment" element={<ProtectedRoute action="access.registry.manage"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><AccessEquipmentPage /></PageErrorBoundary>} />
               </Route>
 
+              {/* Роли и права: смотрит тот, у кого rbac.view (по умолчанию
+                  менеджер), меняет только суперадмин из ADMIN_USER_IDS. Отдельный
+                  group: суперадмину не обязательно иметь dashboard.use. */}
+              <Route path="/dashboard/roles" element={<ProtectedRoute action="rbac.view"><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><RolesPage /></PageErrorBoundary>} />
+              </Route>
+
               {/* Складской учёт материалов: номенклатура, остатки, журнал
-                  операций, «на закуп». Гард — MATERIALS_MODULE_ROLES. */}
-              <Route path="/dashboard/materials" element={<ProtectedRoute allowedRoles={[...MATERIALS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                  операций, «на закуп». Гард — materials.manage. */}
+              <Route path="/dashboard/materials" element={<ProtectedRoute action="materials.manage"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><MaterialsPage /></PageErrorBoundary>} />
               </Route>
 
               {/* Лифты: реестр/карточка/форма/календарь — отдельный route group,
                   т.к. общий /dashboard пускает только admin/manager, а реестр
-                  читает и executor (ELEVATORS_MODULE_ROLES). Конфиг — только
+                  читает и executor (elevators.read). Конфиг — только
                   manager, поэтому отдельным group'ом ниже (статический сегмент
                   `config` ранжируется выше `:id`). DARK за VITE_ELEVATORS_ENABLED. */}
               {ELEVATORS_ENABLED && (
-                <Route path="/dashboard/elevators" element={<ProtectedRoute allowedRoles={[...ELEVATORS_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route path="/dashboard/elevators" element={<ProtectedRoute action="elevators.read"><DashboardLayout /></ProtectedRoute>}>
                   <Route index element={<PageErrorBoundary><ElevatorsPage /></PageErrorBoundary>} />
                   <Route path="new" element={<PageErrorBoundary><ElevatorFormPage /></PageErrorBoundary>} />
                   <Route path="calendar" element={<PageErrorBoundary><ElevatorsCalendarPage /></PageErrorBoundary>} />
@@ -204,17 +213,17 @@ export default function App() {
                 </Route>
               )}
               {ELEVATORS_ENABLED && (
-                <Route path="/dashboard/elevators/config" element={<ProtectedRoute allowedRoles={['manager']}><DashboardLayout /></ProtectedRoute>}>
+                <Route path="/dashboard/elevators/config" element={<ProtectedRoute action="elevators.manage"><DashboardLayout /></ProtectedRoute>}>
                   <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
                 </Route>
               )}
 
               {/* Учёт ресурсов УК — нативный портируемый модуль (не iframe).
                   Splat-роут: внутренний <ResourceAccountingRoutes/> резолвит
-                  подпути относительно basePath. Гард — RESOURCE_MODULE_ROLES.
+                  подпути относительно basePath. Гард — resources.launch.
                   DARK за VITE_RESOURCES_ENABLED (edge resource-api пока 404). */}
               {RESOURCES_ENABLED && (
-                <Route path="/dashboard/resource-accounting" element={<ProtectedRoute allowedRoles={[...RESOURCE_MODULE_ROLES]}><DashboardLayout /></ProtectedRoute>}>
+                <Route path="/dashboard/resource-accounting" element={<ProtectedRoute action="resources.launch"><DashboardLayout /></ProtectedRoute>}>
                   {/* index — точный путь (куда ведёт пункт меню): splat `*` не
                       матчит пустой остаток, поэтому нужен отдельный index-роут.
                       `*` — все под-пути (worksheet/meters/...) для вложенных

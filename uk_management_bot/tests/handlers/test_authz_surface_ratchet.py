@@ -165,9 +165,10 @@ ADMIN_CALLBACK_PREFIXES = (
 
 def test_r3_admin_prefixes_of_user_apartments_carry_require_role():
     """Критерий генерический (находка ревью, HIGH): ЛЮБОЙ callback-литерал,
-    начинающийся с admin_, обязан нести @require_role — включая новый шестой
-    хендлер, которого нет в списке известных. Список известных — только для
-    двунаправленности (исчезновение тоже красное)."""
+    начинающийся с admin_, обязан нести гейт-декоратор (@require_action или
+    прежний @require_role) — включая новый шестой хендлер, которого нет в
+    списке известных. Список известных — только для двунаправленности
+    (исчезновение тоже красное)."""
     path = HANDLERS_DIR / "user_apartments.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     seen_prefixes = set()
@@ -183,8 +184,8 @@ def test_r3_admin_prefixes_of_user_apartments_carry_require_role():
             else getattr(d, "id", None)
             for d in fn.decorator_list
         }
-        assert "require_role" in deco_names, (
-            f"{fn.name} ({admin_literals}) без @require_role — находка 3 вернулась"
+        assert deco_names & {"require_action", "require_role"}, (
+            f"{fn.name} ({admin_literals}) без гейт-декоратора — находка 3 вернулась"
         )
     # двунаправленность: известная пятёрка обязана существовать
     assert set(ADMIN_CALLBACK_PREFIXES) <= seen_prefixes

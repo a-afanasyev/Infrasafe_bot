@@ -51,7 +51,7 @@ from access_control.services.presence import (
     PresenceSessionNotFound,
     close_presence_session,
 )
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-operator"])
@@ -61,7 +61,6 @@ logger = logging.getLogger(__name__)
 # Роли operator/admin API (§6.3, §3.2). executor/inspector/applicant — без доступа.
 # M1: оператор должен быть approved (require_approved_roles) — pending-пользователь
 # со старым токеном не получает доступ к ручному открытию/резолюции.
-OPERATOR_ROLES = ("security_operator", "manager", "system_admin")
 
 # Лимит длины пользовательских строк (L2): защита от чрезмерного ввода в audit.
 _REASON_MAX_LEN = 2000
@@ -169,7 +168,7 @@ def post_resolve(
     request: Request,
     event_id: int = Path(..., description="camera_event_id под review"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+    user=Depends(require_action("access.operator")),
 ) -> ResolveResponse:
     """Зарезолвить manual_review: manual_open | deny (§9.5). Идемпотентно."""
     try:
@@ -222,7 +221,7 @@ def post_manual_open(
     request: Request,
     barrier_id: int = Path(..., description="access_barriers.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+    user=Depends(require_action("access.operator")),
 ) -> ManualOpenResponse:
     """Самостоятельное ручное открытие (§13.2). 409 при активном pending_review."""
     # TODO(accepted-risk L1, post-pilot): standalone manual-open не идемпотентен по
@@ -291,7 +290,7 @@ def post_presence_close(
     request: Request,
     session_id: int = Path(..., description="vehicle_presence_sessions.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+    user=Depends(require_action("access.operator")),
 ) -> PresenceCloseResponse:
     """Ручное закрытие presence-сессии (§8.3): «машина уехала, выездной камеры нет».
 
@@ -323,7 +322,7 @@ def post_redeem_code(
     body: RedeemCodeRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*OPERATOR_ROLES)),
+    user=Depends(require_action("access.operator")),
 ) -> RedeemCodeResponse:
     """Проверить и атомарно погасить одноразовый гостевой код, открыв шлагбаум (§9.3).
 

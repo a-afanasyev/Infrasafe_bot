@@ -11,7 +11,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents import notify
 from uk_management_bot.api.users.rename import (
@@ -34,7 +34,7 @@ from uk_management_bot.services.residents.exceptions import ResidentNotFound
 
 router = APIRouter()
 
-_manager_only = require_roles("manager")
+_manager_only = require_action("residents.manage")
 
 #: Мутации раздела. Конвенция проекта — лимит на маршруте (общего
 #: `default_limits` нет). ⚠ auth-зависимости идут ДО лимитера: это защита не

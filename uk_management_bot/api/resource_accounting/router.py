@@ -17,8 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.auth.service import verify_twa_init_data
-from uk_management_bot.api.dependencies import get_db, require_roles
-from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.api.dependencies import get_db, require_action
+from uk_management_bot.authz import has_action_roles
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.users.queries import get_user_by_telegram_id
 from uk_management_bot.config.settings import settings
@@ -30,8 +30,9 @@ router = APIRouter()
 
 _TIMEOUT = 10.0
 
-# Роль-капабилити «полевой контролёр»: только ввод показаний (у партнёра —
-# resource_meter_entry). Хранится строкой в user.roles, выдаётся менеджером.
+# Имя роли «полевой контролёр» У ПАРТНЁРА (протокол ticket-эндпоинта). Право на
+# вход — действие resources.meter_entry (authz/catalog.py); у нас капабилити
+# хранится строкой в user.roles и выдаётся менеджером.
 METER_ENTRY_ROLE = "resource_meter_entry"
 
 
@@ -88,11 +89,11 @@ async def _mint_resource_ticket(external_user_id: str, display_name: str, role: 
 def _resource_role(user: User) -> str:
     """UK-роли → роль партнёра (authoritative, на бэке).
 
-    system_admin/admin → resource_admin; иначе (гейт пропустил только
-    manager-уровень) → resource_operator. reviewer/viewer пока не выдаём.
+    Действие resources.admin (system_admin/admin) → resource_admin; иначе (гейт
+    пропустил только manager-уровень) → resource_operator. reviewer/viewer пока
+    не выдаём.
     """
-    roles = get_user_roles(user)
-    if "system_admin" in roles or "admin" in roles:
+    if has_action_roles(user, "resources.admin"):
         return "resource_admin"
     return "resource_operator"
 
@@ -107,7 +108,7 @@ def _display_name(user: User) -> str:
 @limiter.limit("30/minute")
 async def issue_ticket(
     request: Request,
-    user: User = Depends(require_roles("manager", "system_admin", "admin")),
+    user: User = Depends(require_action("resources.launch")),
 ) -> TicketOut:
     """Одноразовый launch-ticket для встраиваемого раздела ресурсов (дашборд)."""
     return await _mint_resource_ticket(str(user.id), _display_name(user), _resource_role(user))
@@ -139,7 +140,7 @@ async def issue_twa_ticket(
     if not user or user.status != "approved":
         raise HTTPException(status_code=403, detail="User not approved")
 
-    if METER_ENTRY_ROLE not in get_user_roles(user):
+    if not has_action_roles(user, "resources.meter_entry"):
         raise HTTPException(status_code=403, detail="Not a meter-entry controller")
 
     return await _mint_resource_ticket(str(user.id), _display_name(user), METER_ENTRY_ROLE)

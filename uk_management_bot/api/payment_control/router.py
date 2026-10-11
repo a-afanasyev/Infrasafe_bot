@@ -6,14 +6,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api.dependencies import get_db, require_approved_roles
+from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user import User
 
 router = APIRouter()
-staff = require_approved_roles("manager", "admin")
+staff = require_action("payments.manage")
 MAX_BYTES = 5 * 1024 * 1024
 
 

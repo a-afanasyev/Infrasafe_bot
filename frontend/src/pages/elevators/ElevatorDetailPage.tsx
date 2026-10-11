@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Building2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { useHasRole } from '../../hooks/useHasRole'
+import { useCan } from '../../hooks/useCan'
 import { useCommissionElevator, useElevator } from '../../hooks/useElevators'
 import AccessTabBar from '../../components/access/AccessTabBar'
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
@@ -29,7 +29,7 @@ export default function ElevatorDetailPage() {
   const { t } = useTranslation()
   const { id: idParam } = useParams<{ id: string }>()
   const id = Number(idParam)
-  const isManager = useHasRole('manager')
+  const isManager = useCan('elevators.manage')
   const [tab, setTab] = useState<Tab>('passport')
   const [archiveOpen, setArchiveOpen] = useState(false)
 

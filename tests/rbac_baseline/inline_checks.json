@@ -1,0 +1,169 @@
+{
+ "entries": {
+  "uk_management_bot/api/callcenter/router.py::create_call_center_request": [
+   "applicant"
+  ],
+  "uk_management_bot/api/registration/service.py::_is_privileged": [
+   "applicant"
+  ],
+  "uk_management_bot/api/shifts/router/_helpers.py::_ensure_not_privileged": [
+   "admin",
+   "manager"
+  ],
+  "uk_management_bot/api/shifts/router/employees.py::toggle_simple_mode": [
+   "executor"
+  ],
+  "uk_management_bot/api/shifts/router/shift_crud.py::create_shift": [
+   "executor"
+  ],
+  "uk_management_bot/api/shifts/router/transfers.py::handle_transfer": [
+   "executor"
+  ],
+  "uk_management_bot/api/shifts/service/employees.py::set_meter_entry_role": [
+   "resource_meter_entry"
+  ],
+  "uk_management_bot/api/shifts/service/web_transfers.py::accept_transfer_web": [
+   "executor"
+  ],
+  "uk_management_bot/api/shifts/service/web_transfers.py::reassign_shift_web": [
+   "executor"
+  ],
+  "uk_management_bot/database/init_admin.py::init_admin_user": [
+   "manager"
+  ],
+  "uk_management_bot/handlers/admin/invites.py::handle_invite_confirmation": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/admin/invites.py::handle_invite_expiry_selection": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/admin/invites.py::handle_invite_role_selection": [
+   "executor",
+   "inspector",
+   "manager"
+  ],
+  "uk_management_bot/handlers/admin/reassignment.py::_preflight": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/auth.py::_load_join_gate": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/auth.py::_send_confirmation": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/auth.py::handle_position_confirmation": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/auth.py::start_invite_registration": [
+   "applicant",
+   "executor"
+  ],
+  "uk_management_bot/handlers/base.py::_needs_role_choice": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/base.py::cmd_start": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/base.py::needs_onboarding_redraw": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/group_intake.py::_author_gate_sync": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/group_intake.py::_regate_sync": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/requests/create.py::_load_applicant_gate": [
+   "applicant"
+  ],
+  "uk_management_bot/handlers/requests/listing.py::handle_back_to_list": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/requests/listing.py::handle_view_request": [
+   "admin",
+   "executor",
+   "manager"
+  ],
+  "uk_management_bot/handlers/requests/myrequests.py::show_my_requests": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_assign_executor_to_shift": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_force_assign": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/shift_management/assignment_b.py::handle_select_shift_for_assignment": [
+   "executor"
+  ],
+  "uk_management_bot/handlers/shifts.py::start_shift": [
+   "executor"
+  ],
+  "uk_management_bot/keyboards/base.py::get_main_keyboard_for_role": [
+   "admin",
+   "applicant",
+   "executor",
+   "inspector",
+   "manager"
+  ],
+  "uk_management_bot/keyboards/user_management.py::get_user_actions_keyboard": [
+   "executor"
+  ],
+  "uk_management_bot/services/auth_service.py::process_invite_join_sync": [
+   "applicant",
+   "executor"
+  ],
+  "uk_management_bot/services/invite_service.py::generate_invite": [
+   "applicant",
+   "executor",
+   "inspector",
+   "manager"
+  ],
+  "uk_management_bot/services/invite_service.py::validate_invite": [
+   "applicant",
+   "executor",
+   "inspector",
+   "manager"
+  ],
+  "uk_management_bot/services/profile_service.py::format_profile_text": [
+   "executor",
+   "manager"
+  ],
+  "uk_management_bot/services/request_address.py::resolve_request_address_async": [
+   "applicant"
+  ],
+  "uk_management_bot/services/request_address.py::resolve_request_address_sync": [
+   "applicant"
+  ],
+  "uk_management_bot/services/request_handler_service.py::_order_my_requests": [
+   "executor"
+  ],
+  "uk_management_bot/services/request_handler_service.py::_pagination_requests_query": [
+   "executor"
+  ],
+  "uk_management_bot/services/request_handler_service.py::list_my_requests": [
+   "executor"
+  ],
+  "uk_management_bot/services/request_handler_service.py::paginate_back_to_list": [
+   "executor"
+  ],
+  "uk_management_bot/services/request_service.py::delete_request": [
+   "admin"
+  ],
+  "uk_management_bot/services/shift_planning_service/planning.py::_can_executor_work_template": [
+   "executor"
+  ],
+  "uk_management_bot/services/specialization_service.py::_is_executor": [
+   "executor"
+  ],
+  "uk_management_bot/services/user_management_service.py::_format_user_specializations": [
+   "executor"
+  ],
+  "uk_management_bot/utils/request_helpers.py::format_request_details": [
+   "executor"
+  ],
+  "uk_management_bot/utils/request_helpers.py::format_requests_list_header": [
+   "executor"
+  ]
+ }
+}

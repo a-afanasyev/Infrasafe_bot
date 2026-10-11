@@ -1,0 +1,114 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
+import { useRbacRoles, useSetUserRoles, useUserRoles } from '../../hooks/useRbac'
+import { roleTitle } from '../rbac/labels'
+
+interface Props {
+  employeeId: number
+}
+
+/**
+ * Роли сотрудника. Менять может только суперадмин (can_edit от сервера);
+ * менеджер видит набор без кнопок. Роль суперадмина здесь не выдаётся —
+ * она задаётся в ADMIN_USER_IDS.
+ */
+export default function RolesSection({ employeeId }: Props) {
+  const { t } = useTranslation()
+  const userRoles = useUserRoles(employeeId)
+  const roles = useRbacRoles()
+  const setRoles = useSetUserRoles(employeeId)
+  // Черновик помнит, от каких ролей сервера он построен: если роли там уже
+  // другие (кнопка контролёра рядом, другая вкладка), черновик устарел и не
+  // показывается и не отправляется.
+  const [stored, setStored] = useState<{ base: string; roles: Set<string> } | null>(null)
+
+  if (userRoles.isLoading || roles.isLoading) return null
+  if (!userRoles.data || !roles.data) return null
+
+  const current = new Set(userRoles.data.roles)
+  const base = userRoles.data.roles.join(',')
+  const draft = stored?.base === base ? stored.roles : null
+  const setDraft = (roles: Set<string> | null) => setStored(roles ? { base, roles } : null)
+  const chosen = draft ?? current
+  const canEdit = userRoles.data.can_edit
+  const dirty = draft !== null && (draft.size !== current.size || [...draft].some((r) => !current.has(r)))
+  // Своя роль выдаётся только вместе с системной: меню бота строится по
+  // системным ролям. Системные — первыми, чтобы режим меню был системным.
+  const systemKeys = new Set(roles.data.roles.filter((r) => r.is_system).map((r) => r.key))
+  const hasSystem = [...chosen].some((r) => systemKeys.has(r))
+  const ordered = [...chosen].sort((a, b) => Number(systemKeys.has(b)) - Number(systemKeys.has(a)))
+
+  const toggle = (key: string) => {
+    const next = new Set(chosen)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setDraft(next)
+  }
+
+  return (
+    <section
+      aria-labelledby="employee-roles-title"
+      className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-3"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div id="employee-roles-title" className="text-[13px] font-semibold text-text-primary">
+            {t('rbac.employeeRoles')}
+          </div>
+          <div className="text-[11px] text-text-muted mt-0.5">
+            {canEdit ? t('rbac.employeeRolesHint') : t('rbac.employeeRolesReadOnly')}
+          </div>
+        </div>
+        {userRoles.data.is_superadmin && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full border border-accent/40 text-accent">
+            {t('rbac.superadmin')}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {roles.data.roles.map((role) => {
+          const on = chosen.has(role.key)
+          return (
+            <label
+              key={role.key}
+              className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[12px] ${
+                on ? 'border-accent bg-accent/10 text-text-primary' : 'border-border-default text-text-secondary'
+              } ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={!canEdit}
+                onChange={() => toggle(role.key)}
+                className="accent-[var(--accent)]"
+              />
+              {roleTitle(t, role)}
+            </label>
+          )
+        })}
+      </div>
+      {canEdit && dirty && !hasSystem && (
+        <div className="text-[11px] text-amber">{t('rbac.needSystemRole')}</div>
+      )}
+      {canEdit && (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            disabled={!dirty || !hasSystem || setRoles.isPending}
+            onClick={() =>
+              setRoles.mutate({ roles: ordered, expected: [...current] }, { onSuccess: () => setDraft(null) })
+            }
+          >
+            {t('rbac.save')}
+          </Button>
+          {dirty && (
+            <Button size="sm" variant="outline" onClick={() => setDraft(null)}>
+              {t('common.cancel')}
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}

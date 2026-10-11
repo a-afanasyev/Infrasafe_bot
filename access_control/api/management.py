@@ -1,7 +1,7 @@
 """WRITE-эндпоинты менеджера (§13.2, §6.2, §4 п.7).
 
 Менеджерские операции записи поверх общей базы access_control (USER-API, JWT/
-cookie — ``require_approved_roles``, НЕ device-auth):
+cookie — ``require_action``, НЕ device-auth):
 
 * ``POST  /api/v1/access/vehicles`` — создать постоянный авто (+ привязка/правило);
 * ``PATCH /api/v1/access/vehicles/{id}/status`` — active|blocked|archived;
@@ -43,13 +43,12 @@ from access_control.services.management import (
     update_pass,
     update_vehicle,
 )
-from uk_management_bot.api.dependencies import require_approved_roles
+from uk_management_bot.api.dependencies import require_action
 from uk_management_bot.database.session import get_db
 
 router = APIRouter(prefix="/api/v1/access", tags=["access-management"])
 
 # RBAC (§6.2): база авто/пропусков/заявок — только менеджер/админ.
-MANAGEMENT_ROLES = ("manager", "system_admin")
 
 # Лимиты длины пользовательских строк (защита от чрезмерного ввода в audit/БД).
 _PLATE_MAX_LEN = 32
@@ -231,7 +230,7 @@ def post_vehicle(
     body: CreateVehicleRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> VehicleRow:
     """Создать постоянный авто (§6.2). 409 при активном дубле номера."""
     try:
@@ -264,7 +263,7 @@ def patch_vehicle_status(
     request: Request,
     vehicle_id: int = Path(..., description="vehicles.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> VehicleRow:
     """Сменить статус авто: active|blocked|archived (§6.2). blocked требует reason."""
     try:
@@ -289,7 +288,7 @@ def patch_vehicle(
     request: Request,
     vehicle_id: int = Path(..., description="vehicles.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> VehicleRow:
     """Отредактировать карточку авто (§6.2): атрибуты, номер, привязка владельца.
 
@@ -327,7 +326,7 @@ def post_taxi_pass(
     body: TaxiPassRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> PassRow:
     """Создать taxi-пропуск (§13.2)."""
     ap = create_taxi_pass(
@@ -350,7 +349,7 @@ def patch_pass(
     request: Request,
     pass_id: int = Path(..., description="access_passes.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> PassRow:
     """Отредактировать пропуск (§13.2): срок/лимит/номер; status=revoked — отзыв."""
     fields = body.model_dump(exclude_unset=True)
@@ -375,7 +374,7 @@ def post_review(
     request: Request,
     request_id: int = Path(..., description="resident_access_requests.id"),
     db: Session = Depends(get_db),
-    user=Depends(require_approved_roles(*MANAGEMENT_ROLES)),
+    user=Depends(require_action("access.management")),
 ) -> ReviewResponse:
     """Рассмотреть заявку жителя: approve|reject (§6.2, §4 п.7). Идемпотентно."""
     try:

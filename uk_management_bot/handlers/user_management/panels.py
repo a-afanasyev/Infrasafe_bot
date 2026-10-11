@@ -25,6 +25,7 @@ from uk_management_bot.utils.user_names import full_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
+from uk_management_bot.authz import has_action_roles
 
 from ._router import router
 
@@ -284,7 +285,7 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
         return
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -334,7 +335,7 @@ async def handle_reject_user_from_notification(callback: CallbackQuery, roles: l
         return
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True
@@ -395,7 +396,7 @@ async def handle_view_user_from_notification(callback: CallbackQuery, roles: lis
         return
 
     # Проверяем права доступа
-    if not roles or not any(role in ['admin', 'manager'] for role in roles):
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
         await callback.answer(
             get_text('errors.permission_denied', language=lang),
             show_alert=True

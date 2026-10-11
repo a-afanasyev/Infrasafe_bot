@@ -6,6 +6,7 @@ from uk_management_bot.utils.request_helpers import RequestCallbackHelper
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.status_display import STATUS_EMOJI
+from uk_management_bot.authz import has_action_roles
 
 
 def get_manager_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
@@ -313,10 +314,11 @@ def get_reassign_button_row(
     individual = has_executor or assignment_type == "individual"
     if not individual and assignment_type != "group":
         return []
-    if "manager" not in set(roles or []):
+    if not has_action_roles(roles or [], "management.decide"):
         # Здесь намеренно только `roles`: карточка рисуется хендлером, который
         # роли из middleware получает всегда. Скрытая кнопка — косметика, а
-        # настоящий гейт стоит в хендлерах (has_manager_role с fallback).
+        # настоящий гейт стоит в хендлерах (has_manager_role с fallback); то же
+        # действие management.decide проверяет канон workflow (_is_manager).
         return []
 
     key = ("admin.keyboards.reassign_request" if individual
@@ -424,7 +426,7 @@ def get_change_category_button_row(
 
     if status in TERMINAL_STATUSES:
         return []
-    if "manager" not in set(roles or []):
+    if not has_action_roles(roles or [], "management.decide"):
         return []
     return [InlineKeyboardButton(
         text=get_text("admin.keyboards.change_category", language=language),
