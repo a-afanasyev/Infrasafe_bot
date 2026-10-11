@@ -118,7 +118,7 @@ def test_read_error_keeps_last_known_rights(loader):
     store.invalidate()
     store.current_snapshot()
     store.wait_for_refresh()
-    assert not loader, "фоновое обновление должно было сходить в базу"
+    assert not loader, "перечитывание должно было сходить в базу"
     assert store.current_snapshot() is revoked
     assert not can(["manager"], "requests.stats")
 
@@ -136,9 +136,43 @@ def test_invalidate_rereads_without_dropping_state(loader):
     loader.extend([first, second])
     assert store.current_snapshot() is first
     store.invalidate()
-    assert store.current_snapshot() is first  # отдаётся сразу, читается в фоне
+    # после записи в админке процесс перечитывает сразу, а не через интервал
+    assert store.current_snapshot() is second
+    assert not can(["manager"], "requests.stats")
+
+
+def _age(seconds):
+    """Сделать прочитанное состояние старше на `seconds`."""
+    import time
+
+    store._checked_at = time.monotonic() - seconds
+
+
+def test_busy_process_serves_memory_and_refreshes_in_background(loader):
+    """Состояние старше интервала, но свежее _MAX_STALE — ответ сразу, сверка в фоне."""
+    first = _snap(roles={"manager"})
+    second = store.Snapshot(version=8, overrides={("manager", "requests.stats"): False},
+                            roles=frozenset({"manager"}))
+    loader.extend([first, second])
+    assert store.current_snapshot() is first
+    _age(store._CHECK_INTERVAL + 1)
+    assert store.current_snapshot() is first
     store.wait_for_refresh()
     assert store.current_snapshot() is second
+
+
+def test_idle_process_does_not_answer_with_revoked_right(loader):
+    """После простоя первое же действие проверяется по свежим правам.
+
+    Иначе снятое в админке право сработало бы ещё раз — на том самом
+    запросе, который только запускает фоновую сверку (найдено QA в боте).
+    """
+    granted = _snap(roles={"manager"})
+    revoked = store.Snapshot(version=8, overrides={("manager", "requests.stats"): False},
+                             roles=frozenset({"manager"}))
+    loader.extend([granted, revoked])
+    assert can(["manager"], "requests.stats")
+    _age(store._MAX_STALE + 1)
     assert not can(["manager"], "requests.stats")
 
 
@@ -160,7 +194,7 @@ def test_slow_database_does_not_block_checks(monkeypatch):
     store.reset_for_tests()
     try:
         first = store.current_snapshot()
-        store.invalidate()
+        _age(store._CHECK_INTERVAL + 1)
         assert store.current_snapshot() is first  # фоновый поток висит, ответ — сразу
         assert can(["manager"], "requests.stats")
         assert started.wait(2) and len(calls) == 2  # сверка идёт, но в фоне

@@ -12,9 +12,12 @@
 доходит до API, бота и охраны за несколько секунд без рестарта.
 
 Проверки прав зовутся из async-кода (FastAPI, aiogram), а чтение синхронное.
-Поэтому в базу синхронно ходит только самая первая проверка процесса; дальше
-проверки берут состояние из памяти, а сверку версии делает фоновый поток —
-медленная база не останавливает event loop.
+Под нагрузкой проверки берут состояние из памяти, а сверку версии делает
+фоновый поток — медленная база не останавливает event loop. Синхронно база
+читается, только когда состояние старше `_MAX_STALE`: первая проверка
+процесса, первая проверка после простоя и проверка сразу после записи в
+админке. Иначе первое действие после простоя прошло бы по уже снятому праву
+(фоновая сверка лишь начиналась бы на нём).
 
 Отказоустойчивость: если таблиц нет или база ни разу не прочиталась, действуют
 права из каталога — прежнее поведение, а не «всё разрешено». Если база была
@@ -35,6 +38,8 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 _CHECK_INTERVAL = 5.0
+#: Старше — проверка не отдаёт устаревшее, а перечитывает базу сама.
+_MAX_STALE = 3 * _CHECK_INTERVAL
 #: Потолок одного запроса чтения прав в PostgreSQL.
 _STATEMENT_TIMEOUT = "3s"
 
@@ -143,26 +148,27 @@ def _refresh_in_background() -> None:
 
 
 def current_snapshot() -> Optional[Snapshot]:
-    """Состояние прав из памяти; не старше `_CHECK_INTERVAL` секунд + время чтения.
+    """Состояние прав: не старше `_MAX_STALE` секунд, обычно — `_CHECK_INTERVAL`.
 
-    Первая проверка процесса читает базу сама (иначе первые запросы после
-    рестарта прошли бы по правам из каталога). Дальше устаревшее состояние
-    отдаётся сразу, а сверка версии запускается в фоновом потоке.
+    * Первая проверка процесса, проверка после простоя дольше `_MAX_STALE` и
+      после `invalidate()` читают базу сами — по устаревшему не отвечают.
+    * Состояние старше `_CHECK_INTERVAL`, но моложе `_MAX_STALE` (процесс
+      под нагрузкой) отдаётся сразу, а сверка версии идёт в фоновом потоке.
     """
     global _checked_at, _first_done, _refresh_thread
     now = time.monotonic()
     with _lock:
-        first = not _first_done
-        stale = now - _checked_at >= _CHECK_INTERVAL
+        age = now - _checked_at
         busy = _refresh_thread is not None and _refresh_thread.is_alive()
-        if first:
+        sync = not _first_done or (age >= _MAX_STALE and not busy)
+        if sync:
             _first_done = True
             _checked_at = now
-        elif stale and not busy:
+        elif age >= _CHECK_INTERVAL and not busy:
             _checked_at = now
             _refresh_thread = threading.Thread(target=_refresh_in_background, name="rbac-refresh", daemon=True)
             _refresh_thread.start()
-        if not first:
+        if not sync:
             return _snapshot
     _refresh()
     with _lock:
@@ -195,14 +201,16 @@ def effective_roles(action) -> frozenset[str]:
 
 
 def invalidate() -> None:
-    """Перечитать версию при следующей проверке (после записи в админке).
+    """Перечитать версию при следующей проверке (после записи в админке) — сразу,
+    синхронно: процесс, записавший правку, не отвечает по старым правам.
 
     Само состояние не сбрасывается: если перечитать не выйдет, останется
     последнее известное, а не права из каталога.
     """
     global _checked_at
     with _lock:
-        _checked_at = 0.0
+        # -inf, а не 0: time.monotonic() может быть меньше `_MAX_STALE`.
+        _checked_at = float("-inf")
 
 
 def wait_for_refresh(timeout: float = 5.0) -> None:
