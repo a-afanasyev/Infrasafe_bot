@@ -206,6 +206,8 @@ async def test_export_only_accepted_and_escaped(client, seeded):
     assert first["Создана"] == "01.10.2026 10:00", "бизнес-зона Ташкента"
     bob = dict(zip(header, rows[2]))
     assert bob["Кто вернул"] == "Менеджер" and bob["Причина возврата"] == "грязно"
+    alice_late = dict(zip(header, rows[1]))
+    assert alice_late["Возвращали"] == "нет" and alice_late["Причина возврата"] == ""
     assert bob["Материалы, сум"] == "150,00"
     assert bob["Категория"] == "Электрика"
 
@@ -389,3 +391,19 @@ async def test_costs_by_category(client, seeded):
 @pytest.mark.asyncio
 async def test_non_manager_forbidden_new_sections(executor_client, path):
     assert (await executor_client.get(STATS + path, params=october())).status_code == 403
+
+
+def test_returned_by_both_resident_and_manager():
+    from uk_management_bot.services.request_analytics.csv_export import completed_row
+    from uk_management_bot.services.request_analytics.executors import AcceptedRequest
+
+    row = AcceptedRequest(
+        request_number="261001-009", executor_id=1, executor_name="Ф", category="plumbing",
+        urgency="low", source="bot", address="a", created_at=utc(2026, 10, 1, 5),
+        assigned_at=None, executed_at=None, completed_at=utc(2026, 10, 2, 5),
+        returned_at=utc(2026, 10, 1, 9), manager_return_reason="доделать",
+        return_reason="течёт", completion_report=None, has_photos=False, rating=None,
+        review=None, apartment_id=None, building_id=None, yard_id=None,
+    )
+    cells = completed_row(row, {"low": 168}, None)
+    assert "Житель и менеджер" in cells and "течёт / доделать" in cells

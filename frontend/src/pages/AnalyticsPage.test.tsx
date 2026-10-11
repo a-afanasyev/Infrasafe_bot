@@ -167,7 +167,7 @@ describe('AnalyticsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Каналы и затраты' }))
     expect(await screen.findByText('Mini App')).toBeInTheDocument()
-    expect(screen.getAllByText('150,00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('150').length).toBeGreaterThan(0)
   })
 
   it('ошибка запроса — баннер; невалидный период — подсказка и без запроса', async () => {

@@ -14,12 +14,11 @@ import {
   useExecutorAcceptedRequests,
 } from '../../hooks/useAnalytics'
 import { tCategory } from '../../i18n/apiMaps'
-import { fmtMoney } from '../../utils/materialsFormat'
 import type { SortableColumn } from '../../utils/tableSort'
 import type { DateRange } from '../../utils/analyticsPeriod'
 import type { ExecutorStatsRow } from '../../types/api'
 import { Panel, RequestLink, TableShell } from './shared'
-import { TD, TH, fmtHours } from './analyticsFormat'
+import { TD, TH, fmtHours, fmtSum } from './analyticsFormat'
 
 /** `useTableSort` ждёт числовой `id`; строка «без исполнителя» получает 0. */
 type Row = ExecutorStatsRow & { id: number }
@@ -150,7 +149,7 @@ export default function ExecutorsTab({ rows, range }: Props) {
                     </td>
                     <td className={`${TD} font-[family-name:var(--font-mono)]`}>{r.in_work_now}</td>
                     <td className={`${TD} font-[family-name:var(--font-mono)] whitespace-nowrap`}>
-                      {r.materials_cost > 0 ? fmtMoney(r.materials_cost) : '—'}
+                      {r.materials_cost > 0 ? fmtSum(r.materials_cost) : '—'}
                     </td>
                     <td className={TD} onClick={e => e.stopPropagation()}>
                       {r.user_id !== null && r.accepted > 0 && (

@@ -13,10 +13,15 @@ export const PIE_PALETTE = [
 
 export const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
 
-export const TH = 'px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-text-muted whitespace-nowrap'
-export const TD = 'px-3 py-2 border-t border-border-default align-top'
+export const TH = 'px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide leading-tight text-text-muted align-bottom'
+export const TD = 'px-2 py-2 border-t border-border-default align-top'
 
 /** Часы с одним знаком; `—` для пропуска. */
 export function fmtHours(value: number | null | undefined): string {
   return value == null ? '—' : value.toFixed(1)
+}
+
+/** Сумма в сумах без копеек: `65 000`. */
+export function fmtSum(value: number): string {
+  return Math.round(value).toLocaleString('ru-RU')
 }

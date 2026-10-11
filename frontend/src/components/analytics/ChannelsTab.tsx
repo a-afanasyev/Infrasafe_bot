@@ -11,11 +11,10 @@ import {
 } from 'recharts'
 import EmptyState from '../shared/EmptyState'
 import { tCategory } from '../../i18n/apiMaps'
-import { fmtMoney } from '../../utils/materialsFormat'
 import { formatBucket } from '../../utils/analyticsPeriod'
 import type { ChannelStatsOut, CostStatsOut } from '../../types/api'
 import { KpiCard, Panel, TableShell } from './shared'
-import { MONTH_KEYS, PIE_PALETTE, TD, TH } from './analyticsFormat'
+import { MONTH_KEYS, PIE_PALETTE, TD, TH, fmtSum } from './analyticsFormat'
 
 const KNOWN_SOURCES = ['bot', 'twa', 'group', 'call_center', 'web', 'api', 'infrasafe', 'inspector', 'dispatcher', 'unknown']
 
@@ -93,11 +92,11 @@ export default function ChannelsTab({ channels, costs }: Props) {
       {costs && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KpiCard label={t('analytics.costs.total')} value={fmtMoney(costs.total)} hint={t('analytics.costs.hint')} />
+            <KpiCard label={t('analytics.costs.total')} value={fmtSum(costs.total)} hint={t('analytics.costs.hint')} />
             <KpiCard label={t('analytics.costs.withMaterials')} value={costs.requests_with_materials} />
             <KpiCard
               label={t('analytics.costs.avgPerRequest')}
-              value={costs.requests_with_materials ? fmtMoney(costs.total / costs.requests_with_materials) : '—'}
+              value={costs.requests_with_materials ? fmtSum(costs.total / costs.requests_with_materials) : '—'}
             />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -116,7 +115,7 @@ export default function ChannelsTab({ channels, costs }: Props) {
                     {Object.entries(costs.by_category).map(([category, amount]) => (
                       <tr key={category}>
                         <td className={TD}>{tCategory(category, t)}</td>
-                        <td className={`${TD} font-[family-name:var(--font-mono)] text-right`}>{fmtMoney(amount)}</td>
+                        <td className={`${TD} font-[family-name:var(--font-mono)] text-right`}>{fmtSum(amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -138,7 +137,7 @@ export default function ChannelsTab({ channels, costs }: Props) {
                     {costs.by_building.map(b => (
                       <tr key={b.id}>
                         <td className={TD}>{b.name}</td>
-                        <td className={`${TD} font-[family-name:var(--font-mono)] text-right`}>{fmtMoney(b.amount)}</td>
+                        <td className={`${TD} font-[family-name:var(--font-mono)] text-right`}>{fmtSum(b.amount)}</td>
                       </tr>
                     ))}
                   </tbody>

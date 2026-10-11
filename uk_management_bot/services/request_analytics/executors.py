@@ -47,6 +47,8 @@ IN_WORK_STATUSES = (
 
 RETURNED_BY_RESIDENT = "resident"
 RETURNED_BY_MANAGER = "manager"
+#: Возвращали и житель, и менеджер (оба поля остаются после доработки).
+RETURNED_BY_BOTH = "both"
 
 
 def person_name(first: Optional[str], last: Optional[str]) -> Optional[str]:
@@ -92,9 +94,13 @@ class AcceptedRequest:
 
     @property
     def returned_by(self) -> Optional[str]:
-        if self.returned_at is not None:
+        by_resident = self.returned_at is not None
+        by_manager = bool(self.manager_return_reason)
+        if by_resident and by_manager:
+            return RETURNED_BY_BOTH
+        if by_resident:
             return RETURNED_BY_RESIDENT
-        if self.manager_return_reason:
+        if by_manager:
             return RETURNED_BY_MANAGER
         return None
 

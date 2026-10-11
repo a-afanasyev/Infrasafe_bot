@@ -24,6 +24,7 @@ from uk_management_bot.utils.categories import (
 from uk_management_bot.utils.csv_escape import escape_csv_cell
 
 from .executors import (
+    RETURNED_BY_BOTH,
     RETURNED_BY_MANAGER,
     RETURNED_BY_RESIDENT,
     AcceptedRequest,
@@ -51,7 +52,11 @@ SOURCE_LABELS = {
     "inspector": "Обходчик",
     "dispatcher": "Диспетчер",
 }
-_RETURNED_BY_LABELS = {RETURNED_BY_RESIDENT: "Житель", RETURNED_BY_MANAGER: "Менеджер"}
+_RETURNED_BY_LABELS = {
+    RETURNED_BY_RESIDENT: "Житель",
+    RETURNED_BY_MANAGER: "Менеджер",
+    RETURNED_BY_BOTH: "Житель и менеджер",
+}
 
 COMPLETED_HEADER = [
     "Номер", "Исполнитель", "Категория", "Адрес", "Срочность", "Источник",
@@ -111,7 +116,12 @@ def _render(header: list[str], rows: list[list]) -> str:
 
 
 def completed_row(row: AcceptedRequest, sla_hours: dict, cost: Optional[Decimal]) -> list:
-    reason = row.return_reason if row.returned_by == RETURNED_BY_RESIDENT else row.manager_return_reason
+    reasons = {
+        RETURNED_BY_RESIDENT: [row.return_reason],
+        RETURNED_BY_MANAGER: [row.manager_return_reason],
+        RETURNED_BY_BOTH: [row.return_reason, row.manager_return_reason],
+    }.get(row.returned_by or "", [])
+    reason = " / ".join(r.strip() for r in reasons if r and r.strip())
     return [
         escape_csv_cell(row.request_number),
         _text(row.executor_name or NO_EXECUTOR),

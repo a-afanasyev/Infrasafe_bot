@@ -82,12 +82,7 @@ export default function OverviewTab({ stats, onShiftNow }: Props) {
           value={stats.kpi.avg_satisfaction?.toFixed(1) ?? '—'}
           change={change('avg_satisfaction', 'up')}
         />
-        <KpiCard
-          label={t('analytics.kpi.returned')}
-          value={stats.kpi.returned}
-          hint={onShiftNow != null ? t('analytics.kpi.onShiftNow', { n: onShiftNow }) : undefined}
-          change={change('returned', 'down')}
-        />
+        <KpiCard label={t('analytics.kpi.returned')} value={stats.kpi.returned} change={change('returned', 'down')} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
@@ -157,7 +152,12 @@ export default function OverviewTab({ stats, onShiftNow }: Props) {
         </Panel>
       </div>
 
-      <Panel title={t('analytics.openByStatus')}>
+      <Panel
+        title={t('analytics.openByStatus')}
+        actions={onShiftNow != null && (
+          <span className="text-xs text-text-muted">{t('analytics.kpi.onShiftNow', { n: onShiftNow })}</span>
+        )}
+      >
         {statuses.length === 0 ? (
           <EmptyState icon={'\u{1F4CB}'} title={t('analytics.noOpen')} />
         ) : (
