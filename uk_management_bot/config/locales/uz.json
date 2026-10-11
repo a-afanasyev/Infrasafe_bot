@@ -2886,5 +2886,13 @@
     "err_photo": "Rasm to'g'ri kelmadi. Yangisini oling.",
     "err_media": "Rasm yuborilmadi. Yana urinib ko'ring.",
     "err_generic": "Bo'lmadi. Keyinroq urinib ko'ring."
+  },
+  "analytics_report": {
+    "title": "📊 <b>{month} uchun arizalar hisoboti</b>",
+    "accepted": "Qabul qilingan: {count}",
+    "executed": "Ijrochilar bajargan: {count}",
+    "returned": "Qaytarilganlar: {count}",
+    "avg_work": "O'rtacha ish vaqti: {hours} soat",
+    "top": "Qabul qilinganlar bo'yicha eng yaxshi ijrochilar:"
   }
 }

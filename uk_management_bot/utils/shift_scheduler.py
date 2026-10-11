@@ -69,6 +69,7 @@ class ShiftScheduler:
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
             'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
+            'monthly_report': {'success': 0, 'failed': 0, 'last_run': None},
         }
 
     @property
@@ -261,6 +262,18 @@ class ShiftScheduler:
             self._cron(hour=18, minute=0),
             id='executor_open_tasks',
             name='Напоминание исполнителям о незакрытых заявках',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 14. Ежемесячный автоотчёт менеджерам (аналитика, фаза 6): 1-го
+        #     числа в 09:00 по Ташкенту — CSV принятых за прошлый месяц и
+        #     сводка. Повтор за месяц отсекает ключ Redis внутри сервиса.
+        self.scheduler.add_job(
+            self._monthly_report_tick,
+            self._cron(day=1, hour=9, minute=0),
+            id='monthly_report',
+            name='Ежемесячный отчёт по заявкам менеджерам',
             max_instances=1,
             coalesce=True
         )
@@ -924,6 +937,25 @@ class ShiftScheduler:
             self.task_stats[task_name]['failed'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
             logger.exception("Ошибка напоминания о незакрытых заявках")
+
+    async def _monthly_report_tick(self):
+        """CSV принятых за прошлый месяц + сводка — всем активным менеджерам."""
+        from uk_management_bot.services.request_analytics.monthly_report import (
+            send_monthly_report,
+        )
+
+        task_name = 'monthly_report'
+        try:
+            if self._bot is None:
+                logger.info("Ежемесячный отчёт: бот не задан — пропуск")
+            else:
+                await send_monthly_report(self._bot)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            logger.exception("Ошибка ежемесячного отчёта по заявкам")
 
 
 # Глобальный экземпляр планировщика
