@@ -118,12 +118,12 @@ it('фото ведёт на оригинал, а показывает прев�
     expect(hrefs).toContain(publicWorkReportOriginalUrl(42, 201))
   })
 
-  it('links back to the board and to the full archive', () => {
+  it('links back to the resident home page and to the full archive', () => {
     mockQuery.data = makeReport()
     renderAt('42')
 
     const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
-    expect(hrefs).toContain('/resident-board')
+    expect(hrefs).toContain('/home')
     expect(hrefs).toContain('/work-reports')
   })
 })

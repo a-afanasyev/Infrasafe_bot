@@ -55,11 +55,11 @@ export default function PlannedWorksEditor({ works, onChange }: PlannedWorksEdit
             </label>
             <label className="flex items-center gap-1 text-xs text-text-muted">
               {t('boardEditor.workTimeFrom')}
-              <Input type="time" className="w-24" value={w.time_from} onChange={(e) => update(idx, { time_from: e.target.value })} />
+              <Input type="time" className="w-28" value={w.time_from} onChange={(e) => update(idx, { time_from: e.target.value })} />
             </label>
             <label className="flex items-center gap-1 text-xs text-text-muted">
               {t('boardEditor.workTimeTo')}
-              <Input type="time" className="w-24" value={w.time_to} onChange={(e) => update(idx, { time_to: e.target.value })} />
+              <Input type="time" className="w-28" value={w.time_to} onChange={(e) => update(idx, { time_to: e.target.value })} />
             </label>
             <button
               type="button"

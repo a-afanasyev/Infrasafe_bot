@@ -1,8 +1,10 @@
 /* Страница жителей «Ваш дом сегодня» (ResidentHomePage). Всё под .rh — стили
    не протекают в дашборд. Палитра карточки объявлений и иллюстрации — мягкая
    зелёная на обоих брендах; акцент (кнопка бота, точки) — токен --board-green.
-   Вёрстка — макет profk-home-today: на широком экране страница помещается в
-   один экран (сетка по высоте), ≤1050px — обычная прокрутка колонкой. */
+   Вёрстка — макет profk-home-today, разложенная на ряды: объявления+контакты,
+   обращения+работы, лифты+отчёты. Ряд с одним видимым блоком растягивает его на
+   всю ширину; высоты первых двух рядов привязаны к высоте экрана, ≤1050px —
+   прокрутка колонкой. */
 
 .rh {
   --rh-accent: var(--board-green);
@@ -38,12 +40,24 @@
 .rh-dot { color: var(--rh-accent); }
 
 /* ── Каркас ─────────────────────────────────────────────────────────────── */
-.rh-shell { width: 100%; max-width: 1880px; margin: auto; height: 100svh; min-height: 700px; padding: 16px clamp(24px, 3.05vw, 58px) 14px; display: grid; grid-template-rows: 72px minmax(0, 1fr) 30px; gap: 16px; }
-.rh main { display: grid; grid-template-rows: 66px minmax(0, 1.44fr) minmax(0, 1fr); gap: var(--rh-gap); min-height: 0; }
+.rh-shell { width: 100%; max-width: 1880px; margin: auto; min-height: 100svh; padding: 16px clamp(24px, 3.05vw, 58px) 14px; display: flex; flex-direction: column; gap: 16px; }
+.rh main { display: flex; flex-direction: column; gap: var(--rh-gap); flex: 1; }
 .rh main:focus { outline: 0; }
-.rh-primary { display: grid; grid-template-columns: minmax(0, 1.95fr) minmax(0, 1fr); gap: var(--rh-gap); min-height: 0; }
-.rh-secondary { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--rh-gap); min-height: 0; }
+.rh-heading { min-height: 66px; }
+.rh-row { display: grid; gap: var(--rh-gap); min-height: 0; }
+.rh-row--1 { grid-template-columns: minmax(0, 1.95fr) minmax(0, 1fr); height: clamp(360px, calc(56svh - 90px), 600px); }
+.rh-row--2 { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); height: clamp(250px, calc(38svh - 60px), 400px); }
+.rh-row--3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+.rh-row--single { grid-template-columns: minmax(0, 1fr); }
+.rh-slot { display: flex; min-width: 0; min-height: 0; }
+.rh-slot > * { flex: 1; min-width: 0; }
 .rh-card { border: 1px solid #e9eae6; border-radius: var(--rh-radius); background: #fff; min-width: 0; }
+.rh-header-divider { height: 31px; width: 1px; background: #dfe3da; flex: none; }
+.rh-complex { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.rh-complex > .rh-icon { color: #707d69; width: 21px; }
+.rh-complex > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rh-complex-label { font-size: 10px; line-height: 1.1; color: var(--rh-muted); }
+.rh-complex b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Шапка ──────────────────────────────────────────────────────────────── */
 .rh-header { display: flex; align-items: center; gap: 25px; border-bottom: 1px solid #e1e5dd; padding-bottom: 15px; }
@@ -174,8 +188,38 @@
 .rh-work-arrow { margin-left: auto; height: 28px; width: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #92a185; flex: none; }
 .rh-work-arrow .rh-icon { height: 14px; width: 14px; }
 
+/* ── Лифты ──────────────────────────────────────────────────────────────── */
+.rh-elevators, .rh-reports { padding: 23px 26px 20px; display: flex; flex-direction: column; gap: 14px; }
+.rh-section-heading .rh-small-action { white-space: nowrap; }
+.rh-elevators-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; align-items: start; }
+.rh-elevators-number span { font-size: .45em; color: var(--rh-muted); letter-spacing: -.5px; }
+.rh-elevators-main { display: flex; flex-direction: column; align-items: flex-start; }
+.rh-elevators-main .rh-metric-number { color: #4d8238; margin-top: 0; }
+.rh-elevator-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rh-elevator-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 9px; border-radius: 100px; background: #f4f5f2; color: #58614f; }
+.rh-elevator-chip--not_working .rh-status-dot, .rh-elevator-row--not_working::before { background: #c8553d; }
+.rh-elevator-chip--under_repair .rh-status-dot, .rh-elevator-row--under_repair::before { background: #cea656; }
+.rh-elevator-chip--maintenance .rh-status-dot { background: #7a9cc6; }
+.rh-elevator-problems { display: flex; flex-direction: column; gap: 6px; }
+.rh-elevator-row { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px 8px 16px; border-radius: 9px; background: #fafbf8; border: 1px solid var(--rh-line); }
+.rh-elevator-row::before { content: ''; position: absolute; left: 7px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: #b9bdb6; }
+.rh-elevator-row strong { font-size: 13px; font-weight: 500; }
+.rh-elevator-row span { font-size: 11px; color: var(--rh-soft); }
+.rh-elevators-ok { font-size: 14px; font-weight: 600; color: #4d8238; }
+
+/* ── Отчёты о работах ───────────────────────────────────────────────────── */
+.rh-reports-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rh-report { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rh-report-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.rh-report-photos figure { margin: 0; }
+.rh-report-photos figcaption { text-align: center; font-size: 10px; color: var(--rh-muted); margin-top: 3px; }
+.rh-report-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rh-report-meta strong { font-size: 13px; font-weight: 500; }
+.rh-report-meta span { font-size: 11px; color: var(--rh-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rh-report:hover .rh-report-meta strong { color: var(--rh-dark-green); }
+
 /* ── Подвал ─────────────────────────────────────────────────────────────── */
-.rh-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--rh-soft); font-size: 10px; }
+.rh-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--rh-soft); font-size: 10px; padding-top: 4px; }
 .rh-footer-signature { display: flex; align-items: center; gap: 7px; }
 .rh-footer-leaf { color: #79a660; display: flex; }
 .rh-footer-leaf .rh-icon { width: 15px; height: 15px; }
@@ -196,14 +240,27 @@
 .rh-dialog-confirm { margin-top: 26px; border-radius: 9px; padding: 12px 28px; background: var(--rh-accent); color: var(--rh-on-accent); min-height: 44px; font-weight: 600; font-size: 14px; }
 .rh-dialog-confirm:hover { background: var(--rh-accent-hover); }
 
+/* Контейнер адаптивности: блоки ниже раскладываются по ширине .rh-frame (в
+   превью редактора она уже окна). Не на .rh: container-type даёт layout
+   containment, и fixed-модалка внутри позиционировалась бы от него. */
+.rh-frame { container: rh / inline-size; }
+
+/* Модалка привязана к окну — её правила остаются медиа-запросами. */
+@media (max-width: 730px) {
+  .rh-dialog { padding: 20px 23px 25px; }
+  .rh-dialog h2 { font-size: 26px; }
+  .rh-dialog-confirm { width: 100%; }
+  .rh-dialog-close { min-height: 44px; min-width: 44px; }
+}
+
 /* Превью в редакторе витрины: не во весь экран, а по содержимому. */
 .rh--embedded { min-height: 0; }
-.rh--embedded .rh-shell { height: auto; min-height: 0; display: block; }
-.rh--embedded main { display: flex; flex-direction: column; margin: 16px 0; }
-.rh--embedded .rh-notice { min-height: 330px; }
+.rh--embedded .rh-shell { min-height: 0; }
+.rh--embedded .rh-row--1 { height: 380px; }
+.rh--embedded .rh-row--2 { height: 290px; }
 
 /* ── Большие экраны (ТВ, 1600+) ─────────────────────────────────────────── */
-@media (min-width: 1600px) {
+@container rh (min-width: 1600px) {
   .rh-header { gap: 32px; }
   .rh-brand img { width: 55px; height: 55px; }
   .rh-brand-type b { font-size: 28px; }
@@ -213,8 +270,10 @@
   .rh-clock-city { font-size: 10px; }
   .rh-lang button { font-size: 12px; min-width: 40px; min-height: 34px; }
   .rh-tv-link span { font-size: 12px; }
-  .rh-shell { grid-template-rows: 82px minmax(0, 1fr) 33px; gap: 21px; padding-top: 22px; padding-bottom: 17px; }
-  .rh main { grid-template-rows: 75px minmax(0, 1.48fr) minmax(0, 1fr); --rh-gap: 26px; }
+  .rh-shell { gap: 21px; padding-top: 22px; padding-bottom: 17px; }
+  .rh main { --rh-gap: 26px; }
+  .rh-complex b { font-size: 16px; }
+  .rh-complex-label { font-size: 11px; }
   .rh-notice { padding: 30px 36px 22px; }
   .rh-kicker, .rh-notice-tag { font-size: 13px; }
   .rh-notice-date { font-size: 14px; }
@@ -230,7 +289,7 @@
   .rh-telegram-handle { font-size: 23px; }
   .rh-telegram-button { font-size: 14px; min-height: 41px; padding: 11px 13px; }
   .rh-contact-hours { font-size: 12px; }
-  .rh-requests, .rh-works { padding: 29px 32px 22px; }
+  .rh-requests, .rh-works, .rh-elevators, .rh-reports { padding: 29px 32px 22px; }
   .rh-metric-label { font-size: 14px; }
   .rh-metric-caption, .rh-request-detail, .rh-work-copy > span { font-size: 13px; }
   .rh-small-action { font-size: 12px; padding: 7px 10px; }
@@ -243,50 +302,55 @@
 }
 
 /* ── Невысокий десктоп (ноутбук) ────────────────────────────────────────── */
-@media (min-width: 1051px) and (max-height: 850px) {
-  .rh-shell { padding-top: 10px; padding-bottom: 10px; grid-template-rows: 62px minmax(0, 1fr) 23px; gap: 12px; min-height: 760px; }
-  .rh main { grid-template-rows: 59px minmax(0, 1.55fr) minmax(0, 1fr); --rh-gap: 15px; }
-  .rh-header { padding-bottom: 10px; }
-  .rh-brand img { height: 43px; width: 43px; }
-  .rh-brand-type b { font-size: 22px; }
-  .rh-notice { padding: 17px 23px 13px; }
-  .rh-notice-content { padding-top: 8px; padding-bottom: 2px; }
-  .rh-notice-content h2 { font-size: 34px; margin-bottom: 10px; }
-  .rh-notice-date { margin-bottom: 8px; font-size: 11px; }
-  .rh-notice-content > p { font-size: 12px; line-height: 1.45; margin-bottom: 12px; }
-  .rh-details-button { min-height: 35px; padding: 8px 13px; font-size: 11px; }
-  .rh-notice-bottom { margin-top: 3px; min-height: 27px; }
-  .rh-round-button { width: 28px; height: 28px; }
-  .rh-courtyard { bottom: 29px; max-height: 85%; width: 46%; }
-  .rh-contact { padding: 15px 21px 12px; }
-  .rh-contact-heading p { display: none; }
-  .rh-contact-heading h2 { font-size: 19px; margin: 0; }
-  .rh-contact-icon { height: 34px; width: 34px; }
-  .rh-phone-row { margin: 4px 0 2px; }
-  .rh-phone { font-size: 24px; }
-  .rh-qr svg { width: 76px; height: 76px; }
-  .rh-telegram-handle { font-size: 18px; }
-  .rh-telegram-button { padding: 7px 11px; min-height: 32px; font-size: 11px; margin-top: 6px; }
-  .rh-contact-hours { margin-top: 5px; padding-top: 6px; }
-  .rh-requests, .rh-works { padding: 16px 23px 12px; }
-  .rh-section-heading h2 { font-size: 18px; margin-bottom: 4px; }
-  .rh-section-heading p { font-size: 10px; }
-  .rh-metrics { margin-top: 8px; margin-bottom: 6px; }
-  .rh-metric { padding: 5px 10px; }
-  .rh-metric-number { font-size: 36px; margin-top: 6px; margin-bottom: 5px; }
-  .rh-metric-label { font-size: 11px; }
-  .rh-metric-caption, .rh-request-detail, .rh-work-copy > span { font-size: 10px; }
-  .rh-request-detail { padding-top: 7px; min-height: 21px; }
-  .rh-works-list { margin-top: 6px; }
-  .rh-work-row { padding: 6px 0; gap: 11px; }
-  .rh-work-date { height: 43px; width: 41px; }
-  .rh-work-date b { font-size: 21px; }
-  .rh-work-copy strong { font-size: 13px; }
-  .rh-work-copy { gap: 5px; }
-  .rh-calendar-icon { width: 30px; height: 30px; }
+@media (max-height: 850px) {
+  @container rh (min-width: 1051px) {
+    .rh-shell { padding-top: 10px; padding-bottom: 10px; gap: 12px; }
+    .rh main { --rh-gap: 15px; }
+    .rh-heading { min-height: 59px; }
+    .rh-row--1 { height: clamp(340px, calc(60svh - 70px), 480px); }
+    .rh-row--2 { height: clamp(230px, calc(40svh - 40px), 320px); }
+    .rh-header { padding-bottom: 10px; }
+    .rh-brand img { height: 43px; width: 43px; }
+    .rh-brand-type b { font-size: 22px; }
+    .rh-notice { padding: 17px 23px 13px; }
+    .rh-notice-content { padding-top: 8px; padding-bottom: 2px; }
+    .rh-notice-content h2 { font-size: 34px; margin-bottom: 10px; }
+    .rh-notice-date { margin-bottom: 8px; font-size: 11px; }
+    .rh-notice-content > p { font-size: 12px; line-height: 1.45; margin-bottom: 12px; }
+    .rh-details-button { min-height: 35px; padding: 8px 13px; font-size: 11px; }
+    .rh-notice-bottom { margin-top: 3px; min-height: 27px; }
+    .rh-round-button { width: 28px; height: 28px; }
+    .rh-courtyard { bottom: 29px; max-height: 85%; width: 46%; }
+    .rh-contact { padding: 15px 21px 12px; }
+    .rh-contact-heading p { display: none; }
+    .rh-contact-heading h2 { font-size: 19px; margin: 0; }
+    .rh-contact-icon { height: 34px; width: 34px; }
+    .rh-phone-row { margin: 4px 0 2px; }
+    .rh-phone { font-size: 24px; }
+    .rh-qr svg { width: 76px; height: 76px; }
+    .rh-telegram-handle { font-size: 18px; }
+    .rh-telegram-button { padding: 7px 11px; min-height: 32px; font-size: 11px; margin-top: 6px; }
+    .rh-contact-hours { margin-top: 5px; padding-top: 6px; }
+    .rh-requests, .rh-works { padding: 16px 23px 12px; }
+    .rh-section-heading h2 { font-size: 18px; margin-bottom: 4px; }
+    .rh-section-heading p { font-size: 10px; }
+    .rh-metrics { margin-top: 8px; margin-bottom: 6px; }
+    .rh-metric { padding: 5px 10px; }
+    .rh-metric-number { font-size: 36px; margin-top: 6px; margin-bottom: 5px; }
+    .rh-metric-label { font-size: 11px; }
+    .rh-metric-caption, .rh-request-detail, .rh-work-copy > span { font-size: 10px; }
+    .rh-request-detail { padding-top: 7px; min-height: 21px; }
+    .rh-works-list { margin-top: 6px; }
+    .rh-work-row { padding: 6px 0; gap: 11px; }
+    .rh-work-date { height: 43px; width: 41px; }
+    .rh-work-date b { font-size: 21px; }
+    .rh-work-copy strong { font-size: 13px; }
+    .rh-work-copy { gap: 5px; }
+    .rh-calendar-icon { width: 30px; height: 30px; }
+  }
 }
 
-@media (min-width: 1051px) and (max-width: 1250px) {
+@container rh (min-width: 1051px) and (max-width: 1250px) {
   .rh-tv-link span { display: none; }
   .rh-header-end { gap: 15px; }
   .rh-header { gap: 20px; }
@@ -294,23 +358,29 @@
   .rh-phone { font-size: 24px; }
   .rh-telegram-row { gap: 12px; }
   .rh-telegram-handle { font-size: 17px; }
-  .rh-primary { grid-template-columns: 1.8fr 1fr; }
-  .rh-secondary { grid-template-columns: 1.25fr 1fr; }
+  .rh-row--1 { grid-template-columns: 1.8fr 1fr; }
+  .rh-row--2 { grid-template-columns: 1.25fr 1fr; }
+  .rh-complex-label { display: none; }
   .rh-metric-label { font-size: 11px; }
 }
 
 /* ── Планшет: прокрутка колонкой ────────────────────────────────────────── */
-@media (max-width: 1050px) {
-  .rh-shell { height: auto; min-height: 100svh; display: block; padding: 18px 24px; }
+@container rh (max-width: 1050px) {
+  .rh-shell { padding: 18px 24px; }
+  .rh-header-divider { display: none; }
+  .rh-complex { order: 2; width: 100%; background: #ebeee7; border-radius: 10px; padding: 10px 12px; }
+  .rh-complex-label { display: block; }
   .rh-header { flex-wrap: wrap; gap: 17px; padding-bottom: 18px; }
   .rh-header-end { gap: 15px; }
   .rh-clock > time { font-size: 27px; }
   .rh-clock > div { display: none; }
   .rh-tv-link span { display: none; }
-  .rh main { display: flex; flex-direction: column; gap: 18px; }
+  .rh main { gap: 18px; }
+  .rh-row { height: auto; }
+  .rh-row--3 { grid-template-columns: minmax(0, 1fr); }
   .rh-heading { margin-top: 23px; margin-bottom: 3px; }
   .rh h1 { font-size: 32px; }
-  .rh-primary { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; }
+  .rh-row--1 { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; }
   .rh-notice { min-height: 360px; padding: 23px 23px 16px; }
   .rh-notice-content { max-width: 82%; }
   .rh-notice-content h2 { font-size: 34px; }
@@ -322,8 +392,9 @@
   .rh-telegram-handle { font-size: 17px; }
   .rh-telegram-button { padding: 8px 9px; min-height: 34px; font-size: 11px; gap: 5px; }
   .rh-telegram-button > .rh-icon:first-child { display: none; }
-  .rh-secondary { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; }
+  .rh-row--2 { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; }
   .rh-requests, .rh-works { padding: 23px 22px 18px; min-height: 250px; }
+  .rh-row--single.rh-row--1, .rh-row--single.rh-row--2 { grid-template-columns: minmax(0, 1fr); }
   .rh-section-heading h2 { font-size: 18px; }
   .rh-metrics { margin-top: 15px; }
   .rh-metric { padding: 8px; }
@@ -337,7 +408,7 @@
 }
 
 /* ── Телефон ────────────────────────────────────────────────────────────── */
-@media (max-width: 730px) {
+@container rh (max-width: 730px) {
   .rh-shell { padding: 14px 16px 18px; }
   .rh-brand img { width: 42px; height: 42px; }
   .rh-brand-type b { font-size: 21px; }
@@ -348,7 +419,10 @@
   .rh-heading { margin: 22px 0 0; }
   .rh-eyebrow { letter-spacing: 1.2px; }
   .rh h1 { font-size: 31px; letter-spacing: -1.2px; }
-  .rh-primary, .rh-secondary { display: flex; flex-direction: column; gap: 16px; }
+  .rh-row { display: flex; flex-direction: column; gap: 16px; }
+  .rh-elevators-body { grid-template-columns: minmax(0, 1fr); }
+  .rh-reports-list { grid-template-columns: minmax(0, 1fr); }
+  .rh-elevators, .rh-reports { padding: 23px 21px 18px; border-radius: 18px; }
   .rh main { gap: 16px; }
   .rh-notice { min-height: 400px; border-radius: 18px; padding: 22px 21px 16px; }
   .rh-notice-top { gap: 8px; }
@@ -397,13 +471,9 @@
   .rh-work-copy strong { font-size: 15px; }
   .rh-work-copy > span { font-size: 11px; }
   .rh-footer { flex-direction: column; align-items: flex-start; gap: 12px; padding: 22px 3px 0; }
-  .rh-dialog { padding: 20px 23px 25px; }
-  .rh-dialog h2 { font-size: 26px; }
-  .rh-dialog-confirm { width: 100%; }
-  .rh-dialog-close { min-height: 44px; min-width: 44px; }
 }
 
-@media (max-width: 360px) {
+@container rh (max-width: 360px) {
   .rh-shell { padding-left: 12px; padding-right: 12px; }
   .rh-notice { padding-left: 17px; padding-right: 17px; }
   .rh-notice-content h2 { font-size: 30px; }

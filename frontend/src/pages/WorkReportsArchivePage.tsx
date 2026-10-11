@@ -87,10 +87,10 @@ export default function WorkReportsArchivePage() {
           {t('workReportsArchive.title')}
         </div>
         <Link
-          to="/resident-board"
+          to="/home"
           style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.85rem', fontWeight: 700, color: '#2563eb', textDecoration: 'none' }}
         >
-          {t('workReportsArchive.backToBoard')}
+          {t('workReportsArchive.backToHome')}
         </Link>
       </header>
 

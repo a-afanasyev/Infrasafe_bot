@@ -100,6 +100,38 @@ export interface PlannedWorkCfg {
   text: LocalizedText
 }
 
+// Страница жителей (/home): блоки в каноническом порядке — сетка свёрстана,
+// менеджер включает/выключает блоки и меняет заголовки, но не переставляет.
+// Зеркало HOME_BLOCK_IDS бэкенда (services/board_config/defaults.py).
+export const HOME_BLOCK_IDS = ['announcements', 'contacts', 'requests', 'works', 'elevators', 'workreports'] as const
+export type HomeBlockId = (typeof HOME_BLOCK_IDS)[number]
+
+export interface HomeBlockCfg {
+  id: HomeBlockId
+  visible: boolean
+  // Пусто = i18n-дефолт.
+  title: LocalizedText
+}
+
+// Пустые тексты = i18n-дефолт на клиенте.
+export interface HomeCfg {
+  complex_name: LocalizedText
+  title: LocalizedText
+  eyebrow: LocalizedText
+  tagline: LocalizedText
+  blocks: HomeBlockCfg[]
+}
+
+const EMPTY_TEXT: LocalizedText = { ru: '', uz: '' }
+
+export const defaultHomeConfig: HomeCfg = {
+  complex_name: EMPTY_TEXT,
+  title: EMPTY_TEXT,
+  eyebrow: EMPTY_TEXT,
+  tagline: EMPTY_TEXT,
+  blocks: HOME_BLOCK_IDS.map((id) => ({ id, visible: true, title: EMPTY_TEXT })),
+}
+
 export interface BoardConfigData {
   org: OrgCfg
   contacts: ContactsCfg
@@ -112,6 +144,9 @@ export interface BoardConfigData {
   elevators?: ElevatorsCfg
   // Опционально по той же причине: ответ бэкенда до появления поля.
   planned_works?: PlannedWorkCfg[]
+  // Опционально: ответ бэкенда до появления поля. Блоки «Лифты»/«Отчёты»
+  // бэкенд вырезает из ответа, пока их модуль выключен флагом.
+  home?: HomeCfg
 }
 
 // ARCH-137 B5: ответ публичного board-config несёт display_tz — зону показа
@@ -199,4 +234,5 @@ export const defaultBoardConfig: BoardConfigData = {
     title: { ru: 'Лифты', uz: 'Liftlar' },
   },
   planned_works: [],
+  home: defaultHomeConfig,
 }

@@ -16,7 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFIG, enabled_module_ids
+from uk_management_bot.services.board_config.defaults import (
+    ALL_MODULE_IDS,
+    DEFAULT_BOARD_CONFIG,
+    enabled_module_ids,
+)
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.board_config.schemas import (
     BoardConfigResponse,
@@ -112,6 +116,15 @@ async def merge_and_save_board_config(
         carried_over = [item for item in stored.get("layout", []) if item["id"] not in incoming_ids]
         merged["layout"] = list(incoming) + carried_over
 
+    if isinstance(updates.get("home"), dict):
+        # Как layout: блок, вырезанный из ответа флагом (лифты/отчёты), клиент
+        # не видел и не прислал — его сохранённые видимость/заголовок не теряем.
+        incoming_blocks = updates["home"].get("blocks") or []
+        incoming_ids = {block["id"] for block in incoming_blocks}
+        stored_blocks = (stored.get("home") or {}).get("blocks") or []
+        carried = [block for block in stored_blocks if block.get("id") not in incoming_ids]
+        merged["home"] = {**updates["home"], "blocks": list(incoming_blocks) + carried}
+
     if "work_reports" in merged:
         before_autopost = bool(stored.get("work_reports", {}).get("autopost"))
         after_autopost = bool(merged["work_reports"].get("autopost"))
@@ -169,6 +182,11 @@ def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
     enabled = set(enabled_module_ids())
     data = cfg.model_dump(mode="json")
     data["layout"] = [item for item in data["layout"] if item["id"] in enabled]
+    # Блоки страницы жителей «Лифты»/«Отчёты» — те же модули, тот же флаг.
+    data["home"]["blocks"] = [
+        block for block in data["home"]["blocks"]
+        if block["id"] not in ALL_MODULE_IDS or block["id"] in enabled
+    ]
     # ARCH-137 B5: зона показа — свойство ответа, не хранимого конфига.
     data["display_tz"] = settings.DISPLAY_TZ
     return BoardConfigResponse.model_validate(data)

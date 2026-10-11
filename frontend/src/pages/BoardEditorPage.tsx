@@ -22,19 +22,27 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig, useUpdateBoardConfig } from '../hooks/useBoardConfig'
-import { defaultBoardConfig, toEditableBoardConfig } from '../types/boardConfig'
+import { defaultBoardConfig, defaultHomeConfig, toEditableBoardConfig } from '../types/boardConfig'
 import { isoToDatetimeLocal } from '../utils/timezone'
 import type {
   AnnouncementCfg,
   BoardConfigData,
   LayoutItem,
 } from '../types/boardConfig'
+import HomePageEditor from '../components/board/HomePageEditor'
 import LocalizedField from '../components/board/LocalizedField'
 import PlannedWorksEditor from '../components/board/PlannedWorksEditor'
+import ScaledPreview from '../components/board/ScaledPreview'
 import ResidentBoardPage from './ResidentBoardPage'
 import ResidentHomePage from './ResidentHomePage'
 
-type PreviewMode = 'board' | 'home'
+type HomeView = 'desktop' | 'phone'
+
+// Превью рендерит страницу в ширину реального экрана и уменьшает до колонки
+// (миниатюра): табло — ТВ в холле, страница жителей — компьютер; «телефон» —
+// в натуральную ширину смартфона.
+const DESKTOP_PREVIEW_WIDTH = 1280
+const PHONE_PREVIEW_WIDTH = 390
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,10 +54,33 @@ function clone(c: BoardConfigData): BoardConfigData {
 
 // ── small editor primitives ─────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+type Surface = 'board' | 'home'
+
+// Раздел редактора + пометка, на какой публичной странице видны его данные:
+// один конфиг кормит и табло для экрана, и страницу жителей.
+interface SectionProps {
+  title: string
+  // Страницы, на которых видны данные раздела.
+  usedOn: Surface[]
+  // Активная вкладка редактора: раздел чужой страницы не показывается.
+  active: Surface
+  children: React.ReactNode
+}
+
+function Section({ title, usedOn, active, children }: SectionProps) {
+  const { t } = useTranslation()
+  if (!usedOn.includes(active)) return null
   return (
     <section className="rounded-md border border-border-default bg-bg-card p-4">
-      <h3 className="mb-3 text-sm font-bold text-text-primary">{title}</h3>
+      <h3 className="mb-1 text-sm font-bold text-text-primary">{title}</h3>
+      <div className="mb-3 flex flex-wrap items-center gap-1 text-[11px] text-text-muted">
+        {t('boardEditor.usedOn')}
+        {usedOn.map((surface) => (
+          <span key={surface} className="rounded-sm border border-border-default px-1.5 py-0.5 font-semibold">
+            {surface === 'board' ? t('boardEditor.usedOnBoard') : t('boardEditor.usedOnHome')}
+          </span>
+        ))}
+      </div>
       <div className="flex flex-col gap-3">{children}</div>
     </section>
   )
@@ -111,7 +142,10 @@ export default function BoardEditorPage() {
   const updateConfig = useUpdateBoardConfig()
 
   const [draft, setDraft] = useState<BoardConfigData | null>(null)
-  const [preview, setPreview] = useState<PreviewMode>('board')
+  // Вкладка редактора: страница жителей (главная для гостей) или табло для
+  // экрана. Определяет и набор полей слева, и превью справа.
+  const [tab, setTab] = useState<Surface>('home')
+  const [homeView, setHomeView] = useState<HomeView>('desktop')
   // FE-034: seed the editable draft from server config when it arrives, using the
   // render-time "adjust state when input changes" pattern (no effect → no cascading
   // re-render / set-state-in-effect smell; see react.dev "You Might Not Need an Effect").
@@ -198,7 +232,7 @@ export default function BoardEditorPage() {
   const onReset = () => setDraft(serverConfig ? toEditableBoardConfig(serverConfig) : clone(defaultBoardConfig))
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-text-primary">{t('nav.boardEditor')}</h1>
         <div className="flex gap-2">
@@ -211,11 +245,41 @@ export default function BoardEditorPage() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
-        {/* ── Left: controls ───────────────────────────────────────────── */}
-        <div className="flex max-h-[calc(100vh-180px)] flex-col gap-4 overflow-y-auto pr-1">
+      <div>
+        <div className="flex gap-1 border-b border-border-default" role="tablist">
+          {(['home', 'board'] as const).map((surface) => (
+            <button
+              key={surface}
+              type="button"
+              role="tab"
+              aria-selected={tab === surface}
+              onClick={() => setTab(surface)}
+              className={tab === surface
+                ? '-mb-px border-b-2 border-accent px-4 py-2 text-sm font-semibold text-text-primary'
+                : '-mb-px border-b-2 border-transparent px-4 py-2 text-sm font-semibold text-text-muted hover:text-text-primary'}
+            >
+              {surface === 'home' ? t('boardEditor.tabHome') : t('boardEditor.tabBoard')}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-text-muted">
+          {tab === 'home' ? t('boardEditor.tabHomeHint') : t('boardEditor.tabBoardHint')}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(360px,460px)_minmax(0,1fr)]">
+        {/* ── Left: поля выбранной вкладки — во всю длину страницы ─────── */}
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Module order */}
-          <Section title={t('boardEditor.modulesOrder')}>
+          {/* Resident home page — тексты и блоки страницы /home */}
+          <Section title={t('boardEditor.homePage')} active={tab} usedOn={['home']}>
+            <HomePageEditor
+              home={draft.home ?? defaultHomeConfig}
+              onChange={(home) => patch((d) => { d.home = home })}
+            />
+          </Section>
+
+          <Section title={t('boardEditor.modulesOrder')} active={tab} usedOn={['board']}>
             <p className="text-xs text-text-muted">{t('boardEditor.modulesHint')}</p>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
               <SortableContext items={draft.layout.map((l) => l.id)} strategy={verticalListSortingStrategy}>
@@ -245,7 +309,7 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Organisation */}
-          <Section title={t('boardEditor.org')}>
+          <Section title={t('boardEditor.org')} active={tab} usedOn={['board', 'home']}>
             <LocalizedField
               label={t('boardEditor.orgName')}
               value={draft.org.name}
@@ -259,7 +323,7 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Contacts */}
-          <Section title={t('boardEditor.contacts')}>
+          <Section title={t('boardEditor.contacts')} active={tab} usedOn={['board', 'home']}>
             <div>
               <div className="mb-1 text-xs font-semibold text-text-muted">{t('boardEditor.dispatchPhone')}</div>
               <Input
@@ -280,7 +344,7 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Bot */}
-          <Section title={t('boardEditor.bot')}>
+          <Section title={t('boardEditor.bot')} active={tab} usedOn={['board', 'home']}>
             <div>
               <div className="mb-1 text-xs font-semibold text-text-muted">{t('boardEditor.botUsername')}</div>
               <Input
@@ -296,12 +360,12 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Announcements */}
-          <Section title={t('boardEditor.announcements')}>
+          <Section title={t('boardEditor.announcements')} active={tab} usedOn={['board', 'home']}>
             {draft.announcements.map((ann, idx) => (
               <div key={ann.id} className="rounded-sm border border-border-default bg-bg-surface p-3">
-                <div className="mb-2 flex items-center gap-2">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Input
-                    className="w-16"
+                    className="w-14 text-center"
                     value={ann.icon}
                     placeholder="📢"
                     onChange={(e) => patch((d) => { d.announcements[idx].icon = e.target.value })}
@@ -316,14 +380,14 @@ export default function BoardEditorPage() {
                   </label>
                   <input
                     type="datetime-local"
-                    className="ml-auto rounded-sm border border-border-default bg-bg-surface px-2 py-1 text-xs text-text-primary"
+                    className="min-w-0 rounded-sm border border-border-default bg-bg-surface px-2 py-1 text-xs text-text-primary"
                     value={ann.published_at.slice(0, 16)}
                     onChange={(e) => patch((d) => { d.announcements[idx].published_at = e.target.value })}
                   />
                   <button
                     type="button"
                     aria-label="remove"
-                    className="text-text-muted hover:text-red-500"
+                    className="ml-auto text-text-muted hover:text-red-500"
                     onClick={() => patch((d) => { d.announcements.splice(idx, 1) })}
                   >
                     <Trash2 size={16} />
@@ -351,7 +415,7 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Planned works — блок «Ближайшие работы» страницы жителей */}
-          <Section title={t('boardEditor.plannedWorks')}>
+          <Section title={t('boardEditor.plannedWorks')} active={tab} usedOn={['home']}>
             <PlannedWorksEditor
               works={draft.planned_works ?? []}
               onChange={(works) => patch((d) => { d.planned_works = works })}
@@ -359,17 +423,17 @@ export default function BoardEditorPage() {
           </Section>
 
           {/* Working hours */}
-          <Section title={t('boardEditor.workingHours')}>
+          <Section title={t('boardEditor.workingHours')} active={tab} usedOn={['board', 'home']}>
             {[...draft.working_hours]
               .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day))
               .map((wh) => {
                 const idx = draft.working_hours.findIndex((x) => x.day === wh.day)
                 return (
                   <div key={wh.day} className="flex items-center gap-2">
-                    <span className="w-9 text-xs font-bold text-text-primary">{t(`days.short.${wh.day}`)}</span>
+                    <span className="w-8 shrink-0 text-xs font-bold text-text-primary">{t(`days.short.${wh.day}`)}</span>
                     <Input
                       type="time"
-                      className="w-28"
+                      className="w-auto min-w-0 flex-1"
                       value={wh.open}
                       disabled={wh.closed}
                       onChange={(e) => patch((d) => { d.working_hours[idx].open = e.target.value })}
@@ -377,12 +441,12 @@ export default function BoardEditorPage() {
                     <span className="text-text-muted">–</span>
                     <Input
                       type="time"
-                      className="w-28"
+                      className="w-auto min-w-0 flex-1"
                       value={wh.close}
                       disabled={wh.closed}
                       onChange={(e) => patch((d) => { d.working_hours[idx].close = e.target.value })}
                     />
-                    <label className="ml-auto flex items-center gap-1.5 text-xs text-text-muted">
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-text-muted">
                       <input
                         type="checkbox"
                         checked={wh.closed}
@@ -396,27 +460,37 @@ export default function BoardEditorPage() {
           </Section>
         </div>
 
-        {/* ── Right: live preview — табло или страница жителей ─────────── */}
-        <div className="flex min-h-0 flex-col gap-2">
-          <div className="flex gap-1 self-start rounded-md border border-border-default p-1" role="group">
-            {(['board', 'home'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={preview === mode}
-                onClick={() => setPreview(mode)}
-                className={preview === mode
-                  ? 'rounded-sm bg-accent px-3 py-1 text-xs font-semibold text-white'
-                  : 'rounded-sm px-3 py-1 text-xs font-semibold text-text-muted hover:text-text-primary'}
-              >
-                {mode === 'board' ? t('boardEditor.previewBoard') : t('boardEditor.previewHome')}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border-default">
-            {preview === 'board'
-              ? <ResidentBoardPage configOverride={draft} />
-              : <ResidentHomePage configOverride={draft} />}
+        {/* ── Right: живое превью выбранной вкладки — прилипает при прокрутке ── */}
+        <div className="flex min-w-0 flex-col gap-2 lg:sticky lg:top-4">
+          {tab === 'home' && (
+            <div className="flex gap-1 self-start rounded-md border border-border-default p-1" role="group">
+              {(['desktop', 'phone'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={homeView === view}
+                  onClick={() => setHomeView(view)}
+                  className={homeView === view
+                    ? 'rounded-sm bg-accent px-3 py-1 text-xs font-semibold text-white'
+                    : 'rounded-sm px-3 py-1 text-xs font-semibold text-text-muted hover:text-text-primary'}
+                >
+                  {view === 'desktop' ? t('boardEditor.previewDesktop') : t('boardEditor.previewPhone')}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="max-h-[calc(100dvh-var(--topbar-h)-6rem)] overflow-auto rounded-md border border-border-default">
+            {tab === 'board' && (
+              <ScaledPreview width={DESKTOP_PREVIEW_WIDTH}><ResidentBoardPage configOverride={draft} /></ScaledPreview>
+            )}
+            {tab === 'home' && homeView === 'desktop' && (
+              <ScaledPreview width={DESKTOP_PREVIEW_WIDTH}><ResidentHomePage configOverride={draft} /></ScaledPreview>
+            )}
+            {tab === 'home' && homeView === 'phone' && (
+              <div className="mx-auto my-4 overflow-hidden rounded-[24px] border border-border-default" style={{ width: PHONE_PREVIEW_WIDTH }}>
+                <ResidentHomePage configOverride={draft} />
+              </div>
+            )}
           </div>
         </div>
       </div>

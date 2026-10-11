@@ -985,7 +985,7 @@
     "reset": "Bekor qilish",
     "saved": "Tablo saqlandi",
     "saveFailed": "Tabloni saqlab bo'lmadi",
-    "modulesOrder": "Sahifa bloklari",
+    "modulesOrder": "Tablo bloklari",
     "modulesHint": "Tartibni o'zgartirish uchun bloklarni torting. Yashirish uchun belgini olib tashlang. Yonma-yon turgan ikkita ½ kenglikdagi blok bir qatorga joylashadi.",
     "widthFull": "To'liq kenglik",
     "widthHalf": "Yarim kenglik (yondagi bilan bir qatorda)",
@@ -1024,8 +1024,47 @@
     "workTitle": "Nima qilinadi",
     "workPlace": "Qayerda",
     "workText": "Batafsil (ixtiyoriy)",
-    "previewBoard": "Tablo",
-    "previewHome": "Aholi sahifasi"
+    "usedOn": "Qayerda ko'rinadi:",
+    "usedOnBoard": "Tablo",
+    "usedOnHome": "Aholi sahifasi",
+    "homePage": "Aholi sahifasi",
+    "homeHint": "Aholi uchun bosh sahifa (/home): BK saytini ochgan har bir kishi shu yerga tushadi. Bo'sh maydon — standart matn.",
+    "homeComplexName": "Turar joy majmuasi nomi (sarlavhada)",
+    "homeTitle": "Sahifa sarlavhasi",
+    "homeEyebrow": "Sarlavha ustidagi yozuv",
+    "homeTagline": "Pastki qismdagi yozuv",
+    "homeBlocks": "Sahifa bloklari",
+    "homeBlocksHint": "Bloklar tartibi sahifa to'ri bilan belgilangan. Blokni yashirish uchun belgini olib tashlang; sarlavhani o'zingiznikiga almashtirish mumkin.",
+    "homeBlockTitle": "O'z sarlavhangiz",
+    "homeOpen": "Sahifani ochish",
+    "homeModuleOff": "Bu maydonchada modul o'chirilgan",
+    "blocks": {
+      "announcements": "E'lonlar",
+      "contacts": "Biz bilan bog'laning",
+      "requests": "Majmua bo'yicha murojaatlar",
+      "works": "Yaqin kunlardagi ishlar",
+      "elevators": "Liftlar",
+      "workreports": "Bajarilgan ishlar hisobotlari"
+    },
+    "blockSources": {
+      "announcements": "Ma'lumot: quyidagi «E'lonlar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
+      "contacts": "Ma'lumot: quyidagi «Aloqa», «Telegram-bot» va «Ish vaqti» bo'limlari. QR-kod bot username'idan yasaladi.",
+      "requests": "Majmuaning barcha arizalari bo'yicha avtomatik hisoblanadi: «Yangi», «Jarayonda» (xarid va aniqlashtirish bilan), «Shu oy hal etilgan» (bajarilgan, tekshirilgan, qabul qilingan). Qo'lda to'ldirilmaydi.",
+      "works": "Ma'lumot: quyidagi «Rejali ishlar» bo'limi. O'tgan sanalar avtomatik yashiriladi.",
+      "elevators": "Ma'lumot: liftlar reyestri va ularning holati.",
+      "workreports": "Ma'lumot: e'lon qilingan «oldin/keyin» hisobotlari."
+    },
+    "manageIn": {
+      "requests": "Arizalar",
+      "elevators": "Liftlar",
+      "workreports": "Ish hisobotlari"
+    },
+    "previewPhone": "Telefon",
+    "tabHome": "Aholi sahifasi",
+    "tabBoard": "Ekran uchun tablo",
+    "tabHomeHint": "Aholi uchun saytning bosh sahifasi (/home). Quyida — uning sozlamalari va umumiy ma'lumotlar; o'ngda — ko'rinishi.",
+    "tabBoardHint": "Foyedagi ekran uchun tablo (/resident-board). Quyida — tablo bloklari va umumiy ma'lumotlar; o'ngda — ko'rinishi.",
+    "previewDesktop": "Kompyuter"
   },
   "sidebar": {
     "title": "Servis paneli",
@@ -2766,21 +2805,21 @@
   },
   "publicElevators": {
     "title": "Liftlar",
-    "backToBoard": "← Tabloga",
     "searchLabel": "Qidiruv",
     "searchPlaceholder": "Manzil yoki hovli bo'yicha qidirish",
     "yardLabel": "Hovli",
     "yardAll": "Barcha hovlilar",
     "notFound": "Hech narsa topilmadi",
     "resetFilters": "Filtrlarni tozalash",
-    "updatedAt": "Ma'lumotlar {{time}} ga dolzarb"
+    "updatedAt": "Ma'lumotlar {{time}} ga dolzarb",
+    "backToHome": "← Bosh sahifaga"
   },
   "workReportsArchive": {
     "title": "Bajarilgan ishlar hisobotlari",
-    "backToBoard": "← Taxtaga",
     "empty": "Hozircha nashr etilgan hisobotlar yo'q",
     "loadMore": "Ko'proq ko'rsatish",
-    "loadingMore": "Yuklanmoqda…"
+    "loadingMore": "Yuklanmoqda…",
+    "backToHome": "← Bosh sahifaga"
   },
   "workReportDetail": {
     "title": "Bajarilgan ishlar hisoboti",
@@ -3392,13 +3431,13 @@
       "play": "E'lonlar almashuvini davom ettirish"
     },
     "stayInTouch": "Biz bilan bog'laning",
-    "contactSub": "Uy bo'yicha savollar — bizga",
+    "contactSub": "Majmua bo'yicha savollar — bizga",
     "requestViaBot": "Telegram orqali murojaatlar",
     "scanQr": "Kamerani QR-kodga qarating yoki botni oching",
     "openBot": "Botni ochish",
     "qrAlt": "QR-kod: @{{bot}} Telegram-boti",
-    "houseRequests": "Uy bo'yicha murojaatlar",
-    "requestsSub": "Har bir masala jamoa e'tiborida",
+    "houseRequests": "Majmua bo'yicha murojaatlar",
+    "requestsSub": "Majmua aholisining barcha murojaatlari",
     "all": "Barchasi",
     "showAll": "Barcha murojaatlarni ko'rsatish",
     "filter": "Murojaatlarni filtrlash",
@@ -3408,10 +3447,10 @@
     "waiting": "Tayinlash kutilmoqda",
     "withTeam": "Mutaxassislarda",
     "closedRequests": "Yakunlangan murojaatlar",
-    "summaryAll": "{{month}} · uy bo'yicha umumiy ma'lumot",
+    "summaryAll": "{{month}} · majmua bo'yicha ma'lumot",
     "summaryEmpty": "Bu guruhda hozircha murojaat yo'q",
     "upcomingWorks": "Yaqin kunlardagi ishlar",
-    "worksSub": "Uyingiz uchun rejalashtirilgan ishlar",
+    "worksSub": "Majmuada rejalashtirilgan ishlar",
     "noWorks": "Rejali ishlar hozircha yo'q",
     "allDay": "Kun davomida",
     "workDetails": "Ish haqida batafsil",
@@ -3447,6 +3486,22 @@
       "oct": "Oktabr",
       "nov": "Noyabr",
       "dec": "Dekabr"
+    },
+    "complexLabel": "Sizning turar joy majmuangiz",
+    "elevators": {
+      "title": "Liftlar",
+      "sub": "Majmua liftlarining hozirgi holati",
+      "working": "ishlamoqda",
+      "allWorking": "Barcha liftlar ishlamoqda",
+      "andMore": "yana {{count}} ta",
+      "viewAll": "Barcha liftlar",
+      "empty": "Liftlar reyestri hali to'ldirilmagan"
+    },
+    "workReports": {
+      "title": "Bajarilgan ishlar hisobotlari",
+      "sub": "Qanday edi va qanday bo'ldi",
+      "viewAll": "Barcha hisobotlar",
+      "empty": "E'lon qilingan hisobotlar hozircha yo'q"
     }
   }
 }

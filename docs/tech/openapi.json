@@ -716,6 +716,9 @@
           "elevators": {
             "$ref": "#/components/schemas/ElevatorsCfg"
           },
+          "home": {
+            "$ref": "#/components/schemas/HomeCfg"
+          },
           "layout": {
             "items": {
               "$ref": "#/components/schemas/LayoutItem"
@@ -776,6 +779,9 @@
           },
           "elevators": {
             "$ref": "#/components/schemas/ElevatorsCfgIn"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeCfgIn"
           },
           "layout": {
             "items": {
@@ -4974,6 +4980,111 @@
           "action"
         ],
         "title": "HandleTransferBody",
+        "type": "object"
+      },
+      "HomeBlockCfg": {
+        "description": "Блок страницы жителей: видимость и свой заголовок (пусто = i18n-дефолт).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "visible": {
+            "default": true,
+            "title": "Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "HomeBlockCfg",
+        "type": "object"
+      },
+      "HomeBlockCfgIn": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "announcements",
+              "contacts",
+              "requests",
+              "works",
+              "elevators",
+              "workreports"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "visible": {
+            "default": true,
+            "title": "Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "HomeBlockCfgIn",
+        "type": "object"
+      },
+      "HomeCfg": {
+        "description": "Настройки страницы жителей (/home). Пустые тексты = i18n-дефолт на клиенте.\n\n`complex_name` — название жилого комплекса в шапке; страница работает в\nрамках одной площадки = одного комплекса, поэтому и сводка обращений, и\nплановые работы — «по комплексу».",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/HomeBlockCfg"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "complex_name": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "eyebrow": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "tagline": {
+            "$ref": "#/components/schemas/LocalizedText"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "title": "HomeCfg",
+        "type": "object"
+      },
+      "HomeCfgIn": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/HomeBlockCfgIn"
+            },
+            "maxItems": 12,
+            "title": "Blocks",
+            "type": "array"
+          },
+          "complex_name": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "eyebrow": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "tagline": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedTextIn"
+          }
+        },
+        "title": "HomeCfgIn",
         "type": "object"
       },
       "IssueCard": {

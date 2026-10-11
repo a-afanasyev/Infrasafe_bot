@@ -6,6 +6,8 @@ import { MONTH_KEYS, categoryLine } from './homeFormat'
 
 interface RequestsCardProps {
   board: PublicBoardData | undefined
+  // Заголовок из редактора витрины; '' → i18n-дефолт.
+  title: string
   // Месяц стенки объекта (0–11) — для подписи «Октябрь · общая сводка».
   month: number
 }
@@ -19,10 +21,11 @@ interface Metric {
   value: number | null
 }
 
-// «Обращения по дому»: три счётчика; нажатие на счётчик показывает разбивку
+// «Обращения по комплексу»: счётчики по ВСЕМ заявкам площадки (площадка = один
+// жилой комплекс), считает GET /public/board сам — вручную не заполняется. Три счётчика; нажатие на счётчик показывает разбивку
 // по категориям внизу карточки, «Все» — общую подпись. Только агрегаты —
 // публичный эндпоинт не отдаёт ничего личного.
-export default function RequestsCard({ board, month }: RequestsCardProps) {
+export default function RequestsCard({ board, title, month }: RequestsCardProps) {
   const { t } = useTranslation()
   const [selected, setSelected] = useState<RequestGroup | null>(null)
   const counts = board?.status_counts ?? {}
@@ -49,7 +52,7 @@ export default function RequestsCard({ board, month }: RequestsCardProps) {
     <section className="rh-card rh-requests" aria-labelledby="rh-requests-heading">
       <div className="rh-section-heading">
         <div>
-          <h2 id="rh-requests-heading">{t('home.houseRequests')}</h2>
+          <h2 id="rh-requests-heading">{title || t('home.houseRequests')}</h2>
           <p>{t('home.requestsSub')}</p>
         </div>
         <button

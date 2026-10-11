@@ -42,7 +42,7 @@ describe('ResidentElevatorsPage', () => {
     renderPage()
 
     expect(await screen.findByText('2 из 5 работают')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '← На табло' })).toHaveAttribute('href', '/resident-board')
+    expect(screen.getByRole('link', { name: '← На главную' })).toHaveAttribute('href', '/home')
     // Имя двора — и заголовок группы, и option в селекте.
     expect(screen.getAllByText('Двор 1')).toHaveLength(2)
     expect(screen.getAllByText('Двор 2')).toHaveLength(2)
@@ -126,18 +126,18 @@ describe('ResidentElevatorsPage', () => {
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
   })
 
-  it('при выключенном флаге редиректит на /resident-board, не дёргая API', async () => {
+  it('при выключенном флаге редиректит на главную /home, не дёргая API', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', '')
     const seen = { value: null as string | null }
     servePublicElevators(makeTwoYardsData(), seen)
     render(
       <Routes>
         <Route path="/elevators" element={<ResidentElevatorsPage />} />
-        <Route path="/resident-board" element={<div>BOARD</div>} />
+        <Route path="/home" element={<div>HOME</div>} />
       </Routes>,
       { routerEntries: ['/elevators'] },
     )
-    expect(await screen.findByText('BOARD')).toBeInTheDocument()
+    expect(await screen.findByText('HOME')).toBeInTheDocument()
     expect(seen.value).toBeNull()
   })
 

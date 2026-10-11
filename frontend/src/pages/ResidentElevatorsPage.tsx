@@ -63,7 +63,7 @@ export default function ResidentElevatorsPage() {
   // enabled: при выключенном флаге запрос не уходит — ниже сразу редирект.
   const { data, isLoading, dataUpdatedAt } = usePublicElevators(lang, { enabled: isElevatorsEnabled() })
 
-  if (!isElevatorsEnabled()) return <Navigate to="/resident-board" replace />
+  if (!isElevatorsEnabled()) return <Navigate to="/home" replace />
 
   const filter = parseFilter(searchParams)
   const yards = data?.yards ?? []
@@ -92,7 +92,7 @@ export default function ResidentElevatorsPage() {
               {'\u{1F4DE}'} {t('board.elevators.dispatch')}: {dispatchPhone}
             </a>
           )}
-          <Link to="/resident-board" style={linkStyle}>{t('publicElevators.backToBoard')}</Link>
+          <Link to="/home" style={linkStyle}>{t('publicElevators.backToHome')}</Link>
         </div>
       </header>
 
