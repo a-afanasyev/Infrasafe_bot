@@ -55,40 +55,27 @@
         "title": "ActiveRequestsCount",
         "type": "object"
       },
-      "ActivityItem": {
+      "AddressCountOut": {
         "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
+          "count": {
+            "title": "Count",
+            "type": "integer"
           },
-          "event_type": {
-            "title": "Event Type",
-            "type": "string"
+          "id": {
+            "title": "Id",
+            "type": "integer"
           },
-          "executor_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Executor Name"
-          },
-          "request_number": {
-            "title": "Request Number",
+          "name": {
+            "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "event_type",
-          "request_number",
-          "executor_name",
-          "created_at"
+          "id",
+          "name",
+          "count"
         ],
-        "title": "ActivityItem",
+        "title": "AddressCountOut",
         "type": "object"
       },
       "AddressStatsOut": {
@@ -137,6 +124,38 @@
           "residents_pending"
         ],
         "title": "AddressStatsOut",
+        "type": "object"
+      },
+      "AddressesOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/AddressCountOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "repeats": {
+            "items": {
+              "$ref": "#/components/schemas/RepeatOut"
+            },
+            "title": "Repeats",
+            "type": "array"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/AddressCountOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "buildings",
+          "yards",
+          "repeats"
+        ],
+        "title": "AddressesOut",
         "type": "object"
       },
       "AdjustmentCreate": {
@@ -669,6 +688,9 @@
             "title": "Mode",
             "type": "string"
           },
+          "sla_hours": {
+            "$ref": "#/components/schemas/SlaHours"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -691,6 +713,43 @@
           "max_requests_per_run"
         ],
         "title": "AutoManagerConfigData",
+        "type": "object"
+      },
+      "BacklogOut": {
+        "properties": {
+          "by_age": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Age",
+            "type": "object"
+          },
+          "oldest": {
+            "items": {
+              "$ref": "#/components/schemas/OpenRequestOut"
+            },
+            "title": "Oldest",
+            "type": "array"
+          },
+          "queues": {
+            "items": {
+              "$ref": "#/components/schemas/QueueOut"
+            },
+            "title": "Queues",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_age",
+          "queues",
+          "oldest"
+        ],
+        "title": "BacklogOut",
         "type": "object"
       },
       "BoardConfigResponse": {
@@ -966,6 +1025,29 @@
           "label"
         ],
         "title": "BotCfgIn",
+        "type": "object"
+      },
+      "BuildingCostOut": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "amount"
+        ],
+        "title": "BuildingCostOut",
         "type": "object"
       },
       "BuildingCreate": {
@@ -1523,6 +1605,29 @@
         "title": "CategoryChangeOut",
         "type": "object"
       },
+      "CategoryReturnsOut": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "accepted",
+          "returned"
+        ],
+        "title": "CategoryReturnsOut",
+        "type": "object"
+      },
       "ChangeCategoryBody": {
         "additionalProperties": false,
         "description": "PATCH /requests/{n}/category — смена категории менеджером.\n\nОтдельное тело, а не поле в `UpdateRequestBody`: ответу нужны флаги\n(передиспетч, несоответствие специализации исполнителя), а edit-ветка\nмолча дропает неизвестные поля и отдаёт голую карточку. Только\nSELECTABLE-категории — служебную `engineering` человек не выбирает.",
@@ -1536,6 +1641,61 @@
           "category"
         ],
         "title": "ChangeCategoryBody",
+        "type": "object"
+      },
+      "ChannelPoint": {
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "bucket",
+          "counts"
+        ],
+        "title": "ChannelPoint",
+        "type": "object"
+      },
+      "ChannelsOut": {
+        "properties": {
+          "granularity": {
+            "enum": [
+              "day",
+              "month",
+              "year"
+            ],
+            "title": "Granularity",
+            "type": "string"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelPoint"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "totals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Totals",
+            "type": "object"
+          }
+        },
+        "required": [
+          "granularity",
+          "totals",
+          "series"
+        ],
+        "title": "ChannelsOut",
         "type": "object"
       },
       "CommentBody": {
@@ -1662,6 +1822,45 @@
           "emergency"
         ],
         "title": "ContactsCfgIn",
+        "type": "object"
+      },
+      "CostsOut": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "by_building": {
+            "items": {
+              "$ref": "#/components/schemas/BuildingCostOut"
+            },
+            "title": "By Building",
+            "type": "array"
+          },
+          "by_category": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "By Category",
+            "type": "object"
+          },
+          "requests_with_materials": {
+            "title": "Requests With Materials",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total",
+          "requests_with_materials",
+          "accepted",
+          "by_category",
+          "by_building"
+        ],
+        "title": "CostsOut",
         "type": "object"
       },
       "CreateFromTemplateBody": {
@@ -2119,29 +2318,6 @@
           "reason"
         ],
         "title": "CreateTransferBody",
-        "type": "object"
-      },
-      "DayStats": {
-        "properties": {
-          "closed": {
-            "title": "Closed",
-            "type": "integer"
-          },
-          "created": {
-            "title": "Created",
-            "type": "integer"
-          },
-          "date": {
-            "title": "Date",
-            "type": "string"
-          }
-        },
-        "required": [
-          "date",
-          "created",
-          "closed"
-        ],
-        "title": "DayStats",
         "type": "object"
       },
       "Deactivate": {
@@ -4580,9 +4756,13 @@
         "title": "EmployeeLanguageRequest",
         "type": "object"
       },
-      "ExecutorStat": {
+      "ExecutorRow": {
         "properties": {
-          "avg_hours": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "avg_rating": {
             "anyOf": [
               {
                 "type": "number"
@@ -4591,11 +4771,41 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Hours"
+            "title": "Avg Rating"
           },
-          "completed": {
-            "title": "Completed",
+          "avg_to_accept_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg To Accept Hours"
+          },
+          "avg_work_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Work Hours"
+          },
+          "executed": {
+            "title": "Executed",
             "type": "integer"
+          },
+          "in_work_now": {
+            "title": "In Work Now",
+            "type": "integer"
+          },
+          "materials_cost": {
+            "title": "Materials Cost",
+            "type": "number"
           },
           "name": {
             "anyOf": [
@@ -4608,30 +4818,45 @@
             ],
             "title": "Name"
           },
-          "score": {
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "ratings_count": {
+            "title": "Ratings Count",
+            "type": "integer"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "integer"
+          },
+          "user_id": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Score"
-          },
-          "user_id": {
-            "title": "User Id",
-            "type": "integer"
+            "title": "User Id"
           }
         },
         "required": [
           "user_id",
           "name",
-          "completed",
-          "avg_hours",
-          "score"
+          "executed",
+          "accepted",
+          "returned",
+          "overdue",
+          "avg_work_hours",
+          "avg_to_accept_hours",
+          "avg_rating",
+          "ratings_count",
+          "in_work_now",
+          "materials_cost"
         ],
-        "title": "ExecutorStat",
+        "title": "ExecutorRow",
         "type": "object"
       },
       "FeedbackDetailOut": {
@@ -5286,6 +5511,77 @@
         "title": "KanbanResponse",
         "type": "object"
       },
+      "KpiOut": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "avg_assign_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Assign Hours"
+          },
+          "avg_satisfaction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Satisfaction"
+          },
+          "avg_to_accept_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg To Accept Hours"
+          },
+          "avg_work_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Work Hours"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "accepted",
+          "avg_assign_hours",
+          "avg_work_hours",
+          "avg_to_accept_hours",
+          "avg_satisfaction",
+          "returned"
+        ],
+        "title": "KpiOut",
+        "type": "object"
+      },
       "LayoutItem": {
         "properties": {
           "id": {
@@ -5917,6 +6213,64 @@
           "request_number"
         ],
         "title": "OpenPurchaseRequest",
+        "type": "object"
+      },
+      "OpenRequestOut": {
+        "properties": {
+          "age_days": {
+            "title": "Age Days",
+            "type": "number"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "executor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Id"
+          },
+          "executor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Name"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "status",
+          "category",
+          "created_at",
+          "executor_id",
+          "executor_name",
+          "age_days"
+        ],
+        "title": "OpenRequestOut",
         "type": "object"
       },
       "OperationRow": {
@@ -7091,6 +7445,96 @@
         "title": "PublicWorkReportsOut",
         "type": "object"
       },
+      "QualityOut": {
+        "properties": {
+          "by_urgency": {
+            "items": {
+              "$ref": "#/components/schemas/UrgencySlaOut"
+            },
+            "title": "By Urgency",
+            "type": "array"
+          },
+          "ratings": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Ratings",
+            "type": "object"
+          },
+          "recent_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewOut"
+            },
+            "title": "Recent Reviews",
+            "type": "array"
+          },
+          "returns_by_category": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryReturnsOut"
+            },
+            "title": "Returns By Category",
+            "type": "array"
+          },
+          "sla_hours": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Sla Hours",
+            "type": "object"
+          }
+        },
+        "required": [
+          "sla_hours",
+          "by_urgency",
+          "returns_by_category",
+          "ratings",
+          "recent_reviews"
+        ],
+        "title": "QualityOut",
+        "type": "object"
+      },
+      "QueueOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "oldest_age_days": {
+            "title": "Oldest Age Days",
+            "type": "number"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "open",
+          "oldest_age_days"
+        ],
+        "title": "QueueOut",
+        "type": "object"
+      },
       "ReassignShiftBody": {
         "properties": {
           "executor_id": {
@@ -7404,6 +7848,46 @@
           "name"
         ],
         "title": "RegistrationYardOut",
+        "type": "object"
+      },
+      "RepeatOut": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "days_after": {
+            "title": "Days After",
+            "type": "number"
+          },
+          "previous_number": {
+            "title": "Previous Number",
+            "type": "string"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "previous_number",
+          "address",
+          "category",
+          "days_after"
+        ],
+        "title": "RepeatOut",
         "type": "object"
       },
       "RequestAddressApartment": {
@@ -7896,28 +8380,6 @@
       },
       "RequestStatsOut": {
         "properties": {
-          "avg_resolution_hours": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avg Resolution Hours"
-          },
-          "avg_satisfaction": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avg Satisfaction"
-          },
           "by_category": {
             "additionalProperties": {
               "type": "integer"
@@ -7925,48 +8387,55 @@
             "title": "By Category",
             "type": "object"
           },
-          "by_day": {
-            "items": {
-              "$ref": "#/components/schemas/DayStats"
-            },
-            "title": "By Day",
-            "type": "array"
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
           },
-          "by_status": {
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "granularity": {
+            "enum": [
+              "day",
+              "month",
+              "year"
+            ],
+            "title": "Granularity",
+            "type": "string"
+          },
+          "kpi": {
+            "$ref": "#/components/schemas/KpiOut"
+          },
+          "open_by_status": {
             "additionalProperties": {
               "type": "integer"
             },
-            "title": "By Status",
+            "title": "Open By Status",
             "type": "object"
           },
-          "recent_actions": {
-            "items": {
-              "$ref": "#/components/schemas/ActivityItem"
-            },
-            "title": "Recent Actions",
-            "type": "array"
+          "previous": {
+            "$ref": "#/components/schemas/KpiOut"
           },
-          "top_executors": {
+          "series": {
             "items": {
-              "$ref": "#/components/schemas/ExecutorStat"
+              "$ref": "#/components/schemas/SeriesPoint"
             },
-            "title": "Top Executors",
+            "title": "Series",
             "type": "array"
-          },
-          "total_requests": {
-            "title": "Total Requests",
-            "type": "integer"
           }
         },
         "required": [
-          "by_day",
+          "date_from",
+          "date_to",
+          "granularity",
+          "series",
           "by_category",
-          "by_status",
-          "top_executors",
-          "recent_actions",
-          "total_requests",
-          "avg_resolution_hours",
-          "avg_satisfaction"
+          "open_by_status",
+          "kpi",
+          "previous"
         ],
         "title": "RequestStatsOut",
         "type": "object"
@@ -8924,6 +9393,54 @@
         "title": "RespondTransferBody",
         "type": "object"
       },
+      "ReviewOut": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "executor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Name"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          },
+          "review": {
+            "title": "Review",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "rating",
+          "review",
+          "executor_name",
+          "completed_at"
+        ],
+        "title": "ReviewOut",
+        "type": "object"
+      },
       "RoleCreate": {
         "properties": {
           "actions": {
@@ -9120,6 +9637,29 @@
           "can_edit"
         ],
         "title": "RolesOut",
+        "type": "object"
+      },
+      "SeriesPoint": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket",
+          "created",
+          "accepted"
+        ],
+        "title": "SeriesPoint",
         "type": "object"
       },
       "SetPasswordRequest": {
@@ -9564,6 +10104,35 @@
           "enabled"
         ],
         "title": "SimpleModeToggleRequest",
+        "type": "object"
+      },
+      "SlaHours": {
+        "description": "Нормативы сроков аналитики, часы (диапазон проверяет `validate_config`).",
+        "properties": {
+          "critical": {
+            "title": "Critical",
+            "type": "integer"
+          },
+          "high": {
+            "title": "High",
+            "type": "integer"
+          },
+          "low": {
+            "title": "Low",
+            "type": "integer"
+          },
+          "medium": {
+            "title": "Medium",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "title": "SlaHours",
         "type": "object"
       },
       "StartIn": {
@@ -10468,6 +11037,63 @@
           }
         },
         "title": "UpdateTemplateBody",
+        "type": "object"
+      },
+      "UrgencySlaOut": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "measured": {
+            "title": "Measured",
+            "type": "integer"
+          },
+          "median_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Hours"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "p90_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P90 Hours"
+          },
+          "sla_hours": {
+            "title": "Sla Hours",
+            "type": "integer"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "urgency",
+          "sla_hours",
+          "accepted",
+          "measured",
+          "median_hours",
+          "p90_hours",
+          "overdue"
+        ],
+        "title": "UrgencySlaOut",
         "type": "object"
       },
       "UserRolesOut": {
@@ -18057,6 +18683,42 @@
             }
           },
           {
+            "description": "Принята не раньше бизнес-дня YYYY-MM-DD (вместе с accepted_to)",
+            "in": "query",
+            "name": "accepted_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Принята не раньше бизнес-дня YYYY-MM-DD (вместе с accepted_to)",
+              "title": "Accepted From"
+            }
+          },
+          {
+            "description": "Принята не позже бизнес-дня YYYY-MM-DD включительно",
+            "in": "query",
+            "name": "accepted_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Принята не позже бизнес-дня YYYY-MM-DD включительно",
+              "title": "Accepted To"
+            }
+          },
+          {
             "description": "Режим просмотра, выбирает клиент; только сужает выборку: `own` — поданные мной, `assigned` — мои назначения. Без параметра — по ролям (менеджер видит всё).",
             "in": "query",
             "name": "view",
@@ -18400,12 +19062,47 @@
         "operationId": "get_request_stats_api_v2_requests_stats_get",
         "parameters": [
           {
+            "description": "Срез оси; без параметра — авто по длине периода",
             "in": "query",
-            "name": "period",
+            "name": "granularity",
             "required": false,
             "schema": {
-              "default": "7d",
-              "title": "Period",
+              "anyOf": [
+                {
+                  "enum": [
+                    "day",
+                    "month",
+                    "year"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Срез оси; без параметра — авто по длине периода",
+              "title": "Granularity"
+            }
+          },
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
               "type": "string"
             }
           }
@@ -18438,6 +19135,495 @@
           }
         ],
         "summary": "Get Request Stats",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/addresses": {
+      "get": {
+        "operationId": "get_addresses_api_v2_requests_stats_addresses_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Addresses",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/backlog": {
+      "get": {
+        "description": "Открытые заявки сейчас: возраст, очереди исполнителей, самые старые.",
+        "operationId": "get_backlog_api_v2_requests_stats_backlog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacklogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Backlog",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/channels": {
+      "get": {
+        "operationId": "get_channels_api_v2_requests_stats_channels_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "granularity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "day",
+                    "month",
+                    "year"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Granularity"
+            }
+          },
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Channels",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/costs": {
+      "get": {
+        "description": "Материалы по заявкам, принятым в периоде (сторно не входит).",
+        "operationId": "get_costs_api_v2_requests_stats_costs_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Costs",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/executors": {
+      "get": {
+        "operationId": "get_executor_stats_api_v2_requests_stats_executors_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExecutorRow"
+                  },
+                  "title": "Response Get Executor Stats Api V2 Requests Stats Executors Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Executor Stats",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/export": {
+      "get": {
+        "description": "CSV принятых в периоде заявок (по строке на заявку).",
+        "operationId": "export_completed_api_v2_requests_stats_export_get",
+        "parameters": [
+          {
+            "description": "Только этот исполнитель",
+            "in": "query",
+            "name": "executor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Только этот исполнитель",
+              "title": "Executor Id"
+            }
+          },
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Completed",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/export/executors": {
+      "get": {
+        "description": "CSV сводки по исполнителям (по строке на человека).",
+        "operationId": "export_executors_api_v2_requests_stats_export_executors_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Executors",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/quality": {
+      "get": {
+        "operationId": "get_quality_api_v2_requests_stats_quality_get",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QualityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Quality",
         "tags": [
           "requests"
         ]
