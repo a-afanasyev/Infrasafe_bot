@@ -94,26 +94,6 @@ def test_frontend_catalog_copy_is_fresh():
     )
 
 
-def test_frontend_role_titles_match_migration_seed():
-    """Фронт переводит системную роль, только если её название — как засеяно в 023.
-
-    Русские `rbac.roleTitles`/`roleDescriptions` в локали — ровно сид миграции;
-    разойдутся — нетронутые роли перестанут переводиться на узбекский.
-    """
-    import importlib.util
-    import json
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location("m0023", root / "alembic" / "versions" / "0023_rbac_admin.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    ru = json.loads((root / "frontend" / "src" / "i18n" / "locales" / "ru.json").read_text(encoding="utf-8"))["rbac"]
-    assert ru["roleTitles"] == {key: title for key, title, _ in module.SYSTEM_ROLES}
-    assert ru["roleDescriptions"] == {key: description for key, _, description in module.SYSTEM_ROLES}
-    assert set(ru["roleTitles"]) == set(KNOWN_ROLES)
-
-
 def test_profile_exposes_actions_of_roles_ignoring_status():
     """Профиль отдаёт интерфейсу действия по ролям (подсказка; решает сервер)."""
     from uk_management_bot.api.profile.router import ProfileOut

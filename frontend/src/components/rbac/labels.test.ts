@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import i18n from '../../i18n'
 import catalog from '../../authz/catalog.generated.json'
 import ru from '../../i18n/locales/ru.json'
@@ -24,6 +26,20 @@ describe('rbac labels', () => {
       expect(CYRILLIC.test(uzTitle), `${key}: ${uzTitle}`).toBe(false)
     }
     expect(Object.keys(uz.rbac.actionTitles).sort()).toEqual(Object.keys(actions).sort())
+  })
+
+  it('ru role titles are exactly the seed of migration 023', () => {
+    // Роль переводится, только пока её название — как засеяно миграцией; если
+    // ru-строки разойдутся с сидом, нетронутые роли перестанут переводиться.
+    // Читаем файл миграции из чекаута (в CI-образ бэкенда локали не попадают).
+    const migration = readFileSync(
+      join(__dirname, '../../../../alembic/versions/0023_rbac_admin.py'),
+      'utf8',
+    )
+    const seed = [...migration.matchAll(/\("([a-z_]+)", "([^"]+)", "([^"]+)"\)/g)]
+    expect(seed.length).toBe(8)
+    expect(ru.rbac.roleTitles).toEqual(Object.fromEntries(seed.map(([, key, title]) => [key, title])))
+    expect(ru.rbac.roleDescriptions).toEqual(Object.fromEntries(seed.map(([, key, , description]) => [key, description])))
   })
 
   it('system roles have uz titles and descriptions without cyrillic', () => {
