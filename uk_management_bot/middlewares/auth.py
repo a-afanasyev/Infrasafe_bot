@@ -180,6 +180,17 @@ async def role_mode_middleware(handler, event: Any, data: Dict[str, Any]):
     return await handler(event, data)
 
 
+async def _fresh_menu(message: Message):
+    """Главное меню по текущим ролям и правам; None — оставить клавиатуру как есть."""
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    try:
+        return await get_user_contextual_keyboard(message.from_user.id)
+    except Exception as e:  # noqa: BLE001 — отказ важнее меню
+        logger.warning("Не удалось собрать меню к отказу: %r", e)
+        return None
+
+
 def require_action(action_key: str):
     """Декоратор хендлера бота: пропустить, если пользователю разрешено действие.
 
@@ -281,7 +292,9 @@ def _role_gate_decorator(allows, needs: str):
                 
                 try:
                     if isinstance(event, Message):
-                        await event.answer(text)
+                        # Вместе с отказом — меню по текущим правам: если право сняли
+                        # в админке, устаревшая кнопка исчезнет у человека сразу.
+                        await event.answer(text, reply_markup=await _fresh_menu(event))
                     elif isinstance(event, CallbackQuery):
                         await event.answer(text, show_alert=True)
                 except Exception as e:

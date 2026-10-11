@@ -13,6 +13,22 @@ logger = logging.getLogger(__name__)
 METER_ENTRY_ROLE = "resource_meter_entry"
 
 
+#: Режимы, где живёт админ-панель.
+ADMIN_PANEL_MODES = frozenset({"manager", "admin"})
+
+
+def _can(roles: list[str], action_key: str) -> bool:
+    """Есть ли у ролей право — с учётом правок в админке ролей.
+
+    Кнопка видна ровно тогда, когда хендлер за ней пропустит: те же действия
+    каталога, что в require_action/ActionGate. Иначе снятое право оставляло
+    кнопку, а нажатие отвечало «нет прав».
+    """
+    from uk_management_bot.authz import has_action_roles
+
+    return bool(roles) and has_action_roles(roles, action_key)
+
+
 def is_menu_mode(role: str) -> bool:
     """Роль, в режим которой можно переключиться: системная, не капабилити.
 
@@ -163,12 +179,13 @@ def get_main_keyboard_for_role(
         builder.add(KeyboardButton(text=get_text("main_menu.archive", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
-        # Быстрый доступ к сменам отдельной кнопкой
-        builder.add(KeyboardButton(text=get_text("main_menu.shift", language=language)))
-        builder.add(KeyboardButton(text=get_text("main_menu.my_shifts", language=language)))
-        # Модуль «Лифты» (Ф5): кнопка лифтёра видна всем executor при включённом
-        # флаге; гейт по специализации «лифты» — в хендлере входа (handlers/elevators).
-        if settings.ELEVATORS_ENABLED:
+        # Смены — хендлеры за этими кнопками требуют execution.work.
+        if _can(unique_roles, "execution.work"):
+            builder.add(KeyboardButton(text=get_text("main_menu.shift", language=language)))
+            builder.add(KeyboardButton(text=get_text("main_menu.my_shifts", language=language)))
+        # Модуль «Лифты» (Ф5): при включённом флаге и праве раздела (ActionGate
+        # роутера); гейт по специализации «лифты» — в хендлере входа.
+        if settings.ELEVATORS_ENABLED and _can(unique_roles, "elevators.technician"):
             builder.add(KeyboardButton(text=get_text("main_menu.elevators", language=language)))
     elif active_role == "inspector":
         # Клавиатура обходчика: одноцелевая роль — завести заявку с обхода
@@ -211,8 +228,12 @@ def get_main_keyboard_for_role(
     if len(switchable_roles) > 1:
         builder.add(KeyboardButton(text=get_text("main_menu.switch_role", language=language)))
 
-    # Кнопки менеджера (только для активных ролей admin/manager)
-    if active_role in ["admin", "manager"]:
+    # Админ-панель — только при праве admin_panel.use (с учётом админки ролей).
+    # Живёт в режиме менеджера/администратора; у кого такого режима нет, а право
+    # пришло от своей роли или правки в админке — в режиме исполнителя.
+    has_panel_mode = any(r in ADMIN_PANEL_MODES for r in unique_roles)
+    panel_here = active_role in ADMIN_PANEL_MODES or (active_role == "executor" and not has_panel_mode)
+    if panel_here and _can(unique_roles, "admin_panel.use"):
         builder.add(KeyboardButton(text=get_text("main_menu.admin_panel", language=language)))
 
     builder.adjust(2)

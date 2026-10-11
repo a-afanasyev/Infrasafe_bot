@@ -163,4 +163,11 @@ async def deny_shift_callback(callback: CallbackQuery, language: str = "ru"):
 
 @deny_router.message(ShiftPackageWouldHandle())
 async def deny_shift_message(message, language: str = "ru"):
-    await message.answer(get_text("auth.no_access", language=language))
+    # С меню по текущим правам: устаревшая кнопка исчезает вместе с отказом.
+    from uk_management_bot.keyboards.base import get_user_contextual_keyboard
+
+    try:
+        menu = await get_user_contextual_keyboard(message.from_user.id)
+    except Exception:  # noqa: BLE001 — отказ важнее меню
+        menu = None
+    await message.answer(get_text("auth.no_access", language=language), reply_markup=menu)

@@ -282,7 +282,7 @@
     "login_button": "🔑 Kirish",
     "login_failed": "Avtorizatsiya amalga oshirilmadi. Keyinroq urinib ko'ring yoki menejer bilan bog'laning.",
     "login_success": "✅ Avtorizatsiya muvaffaqiyatli amalga oshirildi. Siz ariza beruvchi sifatida kirdingiz.",
-    "no_access": "🚫 Sizda bu funksiyaga kirish huquqi yo'q.",
+    "no_access": "❌ Sizda bu harakatni bajarish huquqi yo'q",
     "pending": "⏳ Sizning ro'yxatdan o'tish arizangiz ko'rib chiqilmoqda. Administrator tasdiqlashini kuting.",
     "phone_field": "📱 Telefon:",
     "phone_contact_prompt": "📱 Kontaktni ulashing — quyidagi tugmani bosing. Telefon raqami majburiy.",

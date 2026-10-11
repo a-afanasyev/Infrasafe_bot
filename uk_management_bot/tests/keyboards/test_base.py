@@ -474,3 +474,53 @@ class TestGetMainKeyboardForRoleExtended:
             # Pass a list with non-string mixed in
             result = get_main_keyboard_for_role("applicant", ["applicant", 123, None])
         assert isinstance(result, ReplyKeyboardMarkup)
+
+
+# ---------------------------------------------------------------------------
+# Меню по правам (админка ролей): кнопка видна ровно тогда, когда хендлер
+# за ней пропустит. Состояние прав подменяется снимком store.
+# ---------------------------------------------------------------------------
+
+class TestMenuFollowsRights:
+    TEXTS = {"main_menu.admin_panel": "PANEL", "main_menu.shift": "SHIFT", "main_menu.my_shifts": "MY_SHIFTS"}
+
+    @pytest.fixture
+    def rights(self, monkeypatch):
+        from uk_management_bot.authz import store
+
+        holder = {"snap": None}
+        monkeypatch.setattr(store, "current_snapshot", lambda: holder["snap"])
+
+        def _set(overrides=None, roles=()):
+            holder["snap"] = store.Snapshot(version=2, overrides=dict(overrides or {}), roles=frozenset(roles))
+
+        return _set
+
+    def _menu(self, active_role, roles):
+        with patch(GET_TEXT_PATH, side_effect=_make_get_text(self.TEXTS)):
+            from uk_management_bot.keyboards.base import get_main_keyboard_for_role
+            return _all_button_texts(get_main_keyboard_for_role(active_role, roles, "approved"))
+
+    def test_revoked_admin_panel_hides_button(self, rights):
+        rights({("manager", "admin_panel.use"): False}, roles={"manager"})
+        assert "PANEL" not in self._menu("manager", ["manager"])
+
+    def test_custom_role_shows_panel_in_executor_mode(self, rights):
+        """Право пришло от своей роли, режима менеджера нет — панель у исполнителя."""
+        rights({("hr_lead", "admin_panel.use"): True}, roles={"hr_lead", "executor"})
+        assert "PANEL" in self._menu("executor", ["executor", "hr_lead"])
+
+    def test_manager_in_executor_mode_keeps_familiar_menu(self, rights):
+        """У многоролевого менеджера панель живёт в режиме менеджера, как раньше."""
+        rights()
+        assert "PANEL" not in self._menu("executor", ["executor", "manager"])
+        assert "PANEL" in self._menu("manager", ["executor", "manager"])
+
+    def test_revoked_execution_work_hides_shift_buttons(self, rights):
+        rights({("executor", "execution.work"): False}, roles={"executor"})
+        texts = self._menu("executor", ["executor"])
+        assert "SHIFT" not in texts and "MY_SHIFTS" not in texts
+
+    def test_resident_mode_never_shows_panel(self, rights):
+        rights({("applicant", "admin_panel.use"): True}, roles={"applicant"})
+        assert "PANEL" not in self._menu("applicant", ["applicant"])
