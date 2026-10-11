@@ -366,6 +366,20 @@ class TestPlanTransition:
                     {"completion_report": "готово v2"},
                     principal=PrincipalRef("user", EXECUTOR_ID, "telegram"))
         assert res.new_canon_status == REQUEST_STATUS_EXECUTED
+        # Аналитика: момент сдачи работы исполнителем (перезаписывается
+        # при повторном выполнении после возврата).
+        assert _patch_fields(res)["executed_at"] == (Op.SET_NOW, None)
+
+    def test_executed_at_only_on_complete(self):
+        """executed_at ставят только EXECUTOR_/MANAGER_COMPLETE — приёмка и
+        возврат его не трогают (иначе «время работы» съедет на приёмку)."""
+        res = _plan(_snap(REQUEST_STATUS_COMPLETED), Action.APPLICANT_ACCEPT,
+                    OWNER, {"rating": 5},
+                    principal=PrincipalRef("user", OWNER_ID, "telegram"))
+        assert "executed_at" not in _patch_fields(res)
+        res = _plan(_snap(REQUEST_STATUS_EXECUTED), Action.MANAGER_CONFIRM,
+                    MANAGER, {})
+        assert "executed_at" not in _patch_fields(res)
 
 
 # ===========================================================================

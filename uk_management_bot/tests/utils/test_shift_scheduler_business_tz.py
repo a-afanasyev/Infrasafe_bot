@@ -71,6 +71,7 @@ def test_every_cron_trigger_carries_business_tz():
     assert set(jobs) == {
         "auto_create_shifts", "rebalance_assignments",
         "cleanup_expired", "weekly_planning", "executor_open_tasks",
+        "monthly_report",
     }
     for job_id, trigger in jobs.items():
         assert _tz_key(trigger.timezone) == _tz_key(BUSINESS_TZ), job_id
@@ -99,6 +100,10 @@ def test_every_cron_trigger_carries_business_tz():
         ("executor_open_tasks",
          datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc),
          datetime(2026, 9, 23, 13, 0, tzinfo=timezone.utc)),
+        # Автоотчёт: «1-е число 09:00» по Ташкенту = 04:00 UTC 1-го.
+        ("monthly_report",
+         datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc),
+         datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc)),
     ],
 )
 def test_next_fire_time_is_tashkent_wall_clock(job_id, now_utc, expected_utc):

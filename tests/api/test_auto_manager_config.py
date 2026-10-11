@@ -215,3 +215,40 @@ async def test_put_requires_auth(am_client):
 async def test_put_forbidden_for_neither_manager_nor_admin(am_client):
     resp = await am_client(_user(40, ["executor"])).put(PATH, json=_valid_payload())
     assert resp.status_code == 403
+
+
+# ═══ Нормативы сроков аналитики (sla_hours) ═══
+
+
+def test_sla_hours_default_and_partial_merge():
+    from uk_management_bot.services.auto_manager.config import validate_config
+
+    assert validate_config({})["sla_hours"] == {
+        "critical": 4, "high": 24, "medium": 72, "low": 168}
+    merged = validate_config({"sla_hours": {"critical": 2}})["sla_hours"]
+    assert merged == {"critical": 2, "high": 24, "medium": 72, "low": 168}
+
+
+@pytest.mark.parametrize("bad", [0, -1, 10_000, "4", True, None])
+def test_sla_hours_rejects_bad_values(bad):
+    from uk_management_bot.services.auto_manager.config import validate_config
+
+    with pytest.raises(ValueError):
+        validate_config({"sla_hours": {"high": bad}})
+
+
+def test_sla_hours_rejects_unknown_key():
+    from uk_management_bot.services.auto_manager.config import validate_config
+
+    with pytest.raises(ValueError):
+        validate_config({"sla_hours": {"urgent": 5}})
+
+
+@pytest.mark.asyncio
+async def test_put_roundtrips_sla_hours(am_client):
+    manager = _user(5101, ["manager"])
+    client = am_client(manager)
+    sla = {"critical": 3, "high": 12, "medium": 48, "low": 120}
+    resp = await client.put(PATH, json=_valid_payload(sla_hours=sla))
+    assert resp.status_code == 200, resp.text
+    assert (await client.get(PATH)).json()["sla_hours"] == sla

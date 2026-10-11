@@ -1,178 +1,344 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+"""Статистика заявок дашборда: обзор, исполнители, CSV, сроки, хвост, адреса, затраты.
+
+Тонкий HTTP-слой: парсинг периода, права (`requests.stats`), сборка DTO.
+Прямого ORM здесь нет (AST-гейт `tests/api/test_stats_router_inventory.py`) —
+выборки в `stats_service` и `services/request_analytics`.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict
+from datetime import date, datetime
+from typing import Literal, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
-from uk_management_bot.utils.business_time import business_date_of
+from uk_management_bot.services.auto_manager.config import load_config
+from uk_management_bot.services.request_analytics import csv_export
+from uk_management_bot.services.request_analytics import operations
+from uk_management_bot.services.request_analytics import period as P
+from uk_management_bot.services.request_analytics import quality as quality_service
+from uk_management_bot.services.request_analytics.executors import executor_summaries
 
 router = APIRouter()
 
+_STATS = require_action("requests.stats")
+
 
 # ---------------------------------------------------------------------------
-# Response schemas
+# Период
 # ---------------------------------------------------------------------------
 
-class DayStats(BaseModel):
-    date: str
+class Period(BaseModel):
+    first: date
+    last: date
+
+
+def get_period(
+    date_from: str = Query(..., description="Первый бизнес-день периода, YYYY-MM-DD"),
+    date_to: str = Query(..., description="Последний бизнес-день периода (включительно)"),
+) -> Period:
+    try:
+        first, last = P.parse_range(date_from, date_to)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Некорректный период: {exc}") from exc
+    return Period(first=first, last=last)
+
+
+async def _sla_hours(db: AsyncSession) -> dict:
+    return (await load_config(db))["sla_hours"]
+
+
+def _csv_response(payload: str, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        iter([payload]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Обзор
+# ---------------------------------------------------------------------------
+
+class SeriesPoint(BaseModel):
+    bucket: str
     created: int
-    closed: int
+    accepted: int
 
 
-class ExecutorStat(BaseModel):
-    user_id: int
-    name: Optional[str]
-    completed: int
-    avg_hours: Optional[float]
-    score: Optional[float]
-
-
-class ActivityItem(BaseModel):
-    event_type: str  # derived from request status: 'created', 'assigned', 'completed', 'cancelled'
-    request_number: str
-    executor_name: Optional[str]  # from assigned executor
-    created_at: datetime
+class KpiOut(BaseModel):
+    created: int
+    accepted: int
+    avg_assign_hours: Optional[float]
+    avg_work_hours: Optional[float]
+    avg_to_accept_hours: Optional[float]
+    avg_satisfaction: Optional[float]
+    returned: int
 
 
 class RequestStatsOut(BaseModel):
-    by_day: list[DayStats]
+    date_from: date
+    date_to: date
+    granularity: Literal["day", "month", "year"]
+    series: list[SeriesPoint]
     by_category: dict[str, int]
-    by_status: dict[str, int]
-    top_executors: list[ExecutorStat]
-    recent_actions: list[ActivityItem]
-    total_requests: int
-    avg_resolution_hours: Optional[float]
-    avg_satisfaction: Optional[float]
+    open_by_status: dict[str, int]
+    kpi: KpiOut
+    previous: KpiOut
 
-
-# ---------------------------------------------------------------------------
-# Endpoint
-# ---------------------------------------------------------------------------
 
 @router.get("/stats", response_model=RequestStatsOut)
 async def get_request_stats(
-    period: str = Query("7d"),
+    granularity: Optional[Literal["day", "month", "year"]] = Query(
+        None, description="Срез оси; без параметра — авто по длине периода"),
+    period: Period = Depends(get_period),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_action("requests.stats")),
+    _user: User = Depends(_STATS),
 ):
-    # Parse period
-    days = 7
-    if period.endswith("d"):
-        try:
-            days = int(period[:-1])
-        except ValueError:
-            days = 7
-    days = max(1, min(days, 365))
-
-    now_utc = datetime.now(timezone.utc)
-    period_start = now_utc - timedelta(days=days)
-
-    # --- by_day: created + closed counts per day ---
-    created_map: dict[str, int] = {
-        str(row[0]): row[1] for row in await stats_service.created_by_day(db, period_start=period_start)
-    }
-    closed_map: dict[str, int] = {
-        str(row[0]): row[1] for row in await stats_service.closed_by_day(db, period_start=period_start)
-    }
-
-    # Build full day list (one entry per day, including today).
-    # ARCH-135: ось — БИЗНЕС-даты (как и бакеты created/closed_by_day):
-    # `.date()` от UTC-инстанта давал UTC-сутки при ташкентской подписи оси.
-    start_day = business_date_of(period_start)
-    by_day: list[DayStats] = []
-    for i in range(days + 1):
-        day = start_day + timedelta(days=i)
-        day_str = str(day)
-        by_day.append(DayStats(
-            date=day_str,
-            created=created_map.get(day_str, 0),
-            closed=closed_map.get(day_str, 0),
-        ))
-
-    # --- by_category ---
-    # FS-04: нормализуем legacy RU-лейблы к канон-EN-ключу в Python и схлопываем
-    # дубли (напр. «Сантехника»+«plumbing» → один plumbing), иначе аналитика
-    # двоит дольки. Defense-in-depth: корректно и до миграции данных.
-    from uk_management_bot.utils.categories import resolve_category_key
-    by_category: dict[str, int] = {}
-    for raw, count in await stats_service.count_by_category(db, period_start=period_start):
-        if not raw:
-            continue
-        key = resolve_category_key(raw)
-        by_category[key] = by_category.get(key, 0) + count
-
-    # --- by_status: open requests only (not in CLOSED_STATUSES), scoped to period ---
-    by_status: dict[str, int] = {
-        row[0]: row[1]
-        for row in await stats_service.count_by_status(db, period_start=period_start)
-        if row[0]
-    }
-
-    # --- top_executors ---
-    # First, get top executors by completed count (no epoch extraction here)
-    exec_rows = await stats_service.top_executors_counts(db, period_start=period_start)
-
-    # Compute avg_hours per executor separately to isolate epoch extraction
-    exec_ids = [row[0] for row in exec_rows]
-    avg_hours_map = await stats_service.top_executors_avg_hours(
-        db, executor_ids=exec_ids, period_start=period_start
-    )
-
-    # Batch-load executor users
-    exec_users_map: dict[int, User] = {
-        u.id: u for u in await stats_service.load_users_by_ids(db, ids=exec_ids)
-    }
-
-    top_executors: list[ExecutorStat] = []
-    for row in exec_rows:
-        uid, completed = row[0], row[1]
-        u = exec_users_map.get(uid)
-        name = None
-        if u:
-            name = f"{u.first_name or ''} {u.last_name or ''}".strip() or None
-        top_executors.append(ExecutorStat(
-            user_id=uid,
-            name=name,
-            completed=completed,
-            avg_hours=avg_hours_map.get(uid),
-            score=None,
-        ))
-
-    # --- recent_actions: last 20 requests, scoped to period ---
-    STATUS_TO_EVENT = {
-        'new': 'created', 'pending': 'created',
-        'assigned': 'assigned', 'in_progress': 'assigned',
-        'completed': 'completed',
-        'cancelled': 'cancelled', 'rejected': 'cancelled',
-    }
-    recent_actions: list[ActivityItem] = [
-        ActivityItem(
-            event_type=STATUS_TO_EVENT.get(row.status, 'created'),
-            request_number=str(row.request_number),
-            executor_name=f"{row.first_name or ''} {row.last_name or ''}".strip() or None,
-            created_at=row.created_at,
-        )
-        for row in await stats_service.recent_actions(db, period_start=period_start)
-    ]
-
-    # --- total_requests ---
-    total_requests: int = await stats_service.total_requests(db, period_start=period_start)
-
-    # --- avg_resolution_hours ---
-    avg_resolution_hours: Optional[float] = await stats_service.avg_resolution_hours(
-        db, period_start=period_start
-    )
-
+    gran = granularity or P.auto_granularity(period.first, period.last)
+    data = await stats_service.overview(db, period.first, period.last, gran)
     return RequestStatsOut(
-        by_day=by_day,
-        by_category=by_category,
-        by_status=by_status,
-        top_executors=top_executors,
-        recent_actions=recent_actions,
-        total_requests=total_requests,
-        avg_resolution_hours=avg_resolution_hours,
-        avg_satisfaction=None,
+        date_from=period.first,
+        date_to=period.last,
+        granularity=gran,
+        series=[SeriesPoint(bucket=b, created=c, accepted=a) for b, c, a in data.series],
+        by_category=data.by_category,
+        open_by_status=data.open_by_status,
+        kpi=KpiOut(**asdict(data.kpi)),
+        previous=KpiOut(**asdict(data.previous)),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Исполнители
+# ---------------------------------------------------------------------------
+
+class ExecutorRow(BaseModel):
+    user_id: Optional[int]
+    name: Optional[str]
+    executed: int
+    accepted: int
+    returned: int
+    overdue: int
+    avg_work_hours: Optional[float]
+    avg_to_accept_hours: Optional[float]
+    avg_rating: Optional[float]
+    ratings_count: int
+    in_work_now: int
+    materials_cost: float
+
+
+@router.get("/stats/executors", response_model=list[ExecutorRow])
+async def get_executor_stats(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    rows = await executor_summaries(db, period.first, period.last, await _sla_hours(db))
+    return [ExecutorRow(**{**asdict(r), "materials_cost": float(r.materials_cost)}) for r in rows]
+
+
+@router.get("/stats/export")
+async def export_completed(
+    executor_id: Optional[int] = Query(None, description="Только этот исполнитель"),
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """CSV принятых в периоде заявок (по строке на заявку)."""
+    payload, _count = await csv_export.build_completed_csv(
+        db, period.first, period.last, await _sla_hours(db), executor_id=executor_id)
+    suffix = f"executor{executor_id}" if executor_id is not None else ""
+    return _csv_response(payload, csv_export.export_filename(
+        "completed_requests", period.first, period.last, suffix))
+
+
+@router.get("/stats/export/executors")
+async def export_executors(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """CSV сводки по исполнителям (по строке на человека)."""
+    rows = await executor_summaries(db, period.first, period.last, await _sla_hours(db))
+    return _csv_response(csv_export.executors_csv(rows), csv_export.export_filename(
+        "executors_summary", period.first, period.last))
+
+
+# ---------------------------------------------------------------------------
+# Сроки и качество
+# ---------------------------------------------------------------------------
+
+class UrgencySlaOut(BaseModel):
+    urgency: str
+    sla_hours: int
+    accepted: int
+    measured: int
+    median_hours: Optional[float]
+    p90_hours: Optional[float]
+    overdue: int
+
+
+class CategoryReturnsOut(BaseModel):
+    category: str
+    accepted: int
+    returned: int
+
+
+class ReviewOut(BaseModel):
+    request_number: str
+    rating: int
+    review: str
+    executor_name: Optional[str]
+    completed_at: Optional[datetime]
+
+
+class QualityOut(BaseModel):
+    sla_hours: dict[str, int]
+    by_urgency: list[UrgencySlaOut]
+    returns_by_category: list[CategoryReturnsOut]
+    ratings: dict[int, int]
+    recent_reviews: list[ReviewOut]
+
+
+@router.get("/stats/quality", response_model=QualityOut)
+async def get_quality(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    data = await quality_service.quality(db, period.first, period.last, await _sla_hours(db))
+    return QualityOut(**asdict(data))
+
+
+# ---------------------------------------------------------------------------
+# Хвост и адреса
+# ---------------------------------------------------------------------------
+
+class OpenRequestOut(BaseModel):
+    request_number: str
+    status: str
+    category: str
+    created_at: datetime
+    executor_id: Optional[int]
+    executor_name: Optional[str]
+    age_days: float
+
+
+class QueueOut(BaseModel):
+    user_id: Optional[int]
+    name: Optional[str]
+    open: int
+    oldest_age_days: float
+
+
+class BacklogOut(BaseModel):
+    total: int
+    by_age: dict[str, int]
+    queues: list[QueueOut]
+    oldest: list[OpenRequestOut]
+
+
+@router.get("/stats/backlog", response_model=BacklogOut)
+async def get_backlog(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Открытые заявки сейчас: возраст, очереди исполнителей, самые старые."""
+    return BacklogOut(**asdict(await operations.backlog(db)))
+
+
+class AddressCountOut(BaseModel):
+    id: int
+    name: str
+    count: int
+
+
+class RepeatOut(BaseModel):
+    request_number: str
+    previous_number: str
+    address: Optional[str]
+    category: str
+    days_after: float
+
+
+class AddressesOut(BaseModel):
+    buildings: list[AddressCountOut]
+    yards: list[AddressCountOut]
+    repeats: list[RepeatOut]
+
+
+@router.get("/stats/addresses", response_model=AddressesOut)
+async def get_addresses(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    return AddressesOut(**asdict(await operations.addresses(db, period.first, period.last)))
+
+
+# ---------------------------------------------------------------------------
+# Каналы и затраты
+# ---------------------------------------------------------------------------
+
+class ChannelPoint(BaseModel):
+    bucket: str
+    counts: dict[str, int]
+
+
+class ChannelsOut(BaseModel):
+    granularity: Literal["day", "month", "year"]
+    totals: dict[str, int]
+    series: list[ChannelPoint]
+
+
+@router.get("/stats/channels", response_model=ChannelsOut)
+async def get_channels(
+    granularity: Optional[Literal["day", "month", "year"]] = Query(None),
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    gran = granularity or P.auto_granularity(period.first, period.last)
+    data = await operations.channels(db, period.first, period.last, gran)
+    return ChannelsOut(
+        granularity=gran, totals=data.totals,
+        series=[ChannelPoint(bucket=b, counts=c) for b, c in data.series],
+    )
+
+
+class BuildingCostOut(BaseModel):
+    id: int
+    name: str
+    amount: float
+
+
+class CostsOut(BaseModel):
+    total: float
+    requests_with_materials: int
+    accepted: int
+    by_category: dict[str, float]
+    by_building: list[BuildingCostOut]
+
+
+@router.get("/stats/costs", response_model=CostsOut)
+async def get_costs(
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Материалы по заявкам, принятым в периоде (сторно не входит)."""
+    data = await operations.costs(db, period.first, period.last)
+    return CostsOut(
+        total=float(data.total),
+        requests_with_materials=data.requests_with_materials,
+        accepted=data.accepted,
+        by_category={k: float(v) for k, v in data.by_category.items()},
+        by_building=[BuildingCostOut(id=i, name=n, amount=float(a)) for i, n, a in data.by_building],
     )

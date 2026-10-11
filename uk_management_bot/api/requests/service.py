@@ -256,6 +256,7 @@ async def list_requests_rows(
     source: Optional[str],
     limit: int,
     offset: int,
+    accepted_window: Optional[tuple] = None,
 ) -> list:
     """Список заявок с server-enforced object-level scoping.
 
@@ -299,6 +300,11 @@ async def list_requests_rows(
         query = query.filter(RequestModel.executor_id == executor_id)
     if source:
         query = query.filter(RequestModel.source == source)
+    if accepted_window is not None:
+        # Окно приёмки — полуоткрытое UTC-окно бизнес-дней (из роутера).
+        start, end = accepted_window
+        query = query.filter(RequestModel.completed_at >= start,
+                             RequestModel.completed_at < end)
 
     # Tiebreak по PK обязателен из-за offset-пагинации: у заявок одной секунды
     # порядок по created_at не определён, и строки дублировались/пропадали бы

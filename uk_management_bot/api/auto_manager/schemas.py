@@ -24,9 +24,18 @@ board_config, где PUT ожидает целиком заполненную м
 """
 from typing import Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from uk_management_bot.services.auto_manager.config import validate_config
+from uk_management_bot.services.auto_manager.config import DEFAULT_CONFIG, validate_config
+
+
+class SlaHours(BaseModel):
+    """Нормативы сроков аналитики, часы (диапазон проверяет `validate_config`)."""
+
+    critical: int
+    high: int
+    medium: int
+    low: int
 
 
 class AutoManagerConfigData(BaseModel):
@@ -36,6 +45,11 @@ class AutoManagerConfigData(BaseModel):
     window_end: str
     timezone: str
     max_requests_per_run: int
+    # Дефолт — для клиентов, присланных до появления поля; дашборд шлёт
+    # конфиг целиком поверх свежего GET и поле не теряет.
+    sla_hours: SlaHours = Field(
+        default_factory=lambda: SlaHours(**DEFAULT_CONFIG["sla_hours"])
+    )
 
     @model_validator(mode="after")
     def _validate_via_shared_rules(self) -> "AutoManagerConfigData":

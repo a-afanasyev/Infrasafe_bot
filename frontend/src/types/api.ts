@@ -104,36 +104,119 @@ export interface TemplateBrief {
   priority_level: number
 }
 
-export interface DayStats {
-  date: string
+// ── Аналитика заявок (/api/v2/requests/stats*) ──────────────────────────────
+// Зеркало uk_management_bot/api/requests/stats_router.py. Даты периода —
+// бизнес-даты YYYY-MM-DD включительно.
+
+export type StatsGranularity = 'day' | 'month' | 'year'
+
+export interface StatsSeriesPoint {
+  bucket: string
   created: number
-  closed: number
+  accepted: number
 }
 
-export interface ExecutorStat {
-  user_id: number
-  name: string | null
-  completed: number
-  avg_hours: number | null
-  score: number
-}
-
-export interface ActivityItem {
-  event_type: string
-  request_number: string
-  executor_name: string | null
-  created_at: string
+export interface StatsKpi {
+  created: number
+  accepted: number
+  avg_assign_hours: number | null
+  avg_work_hours: number | null
+  avg_to_accept_hours: number | null
+  avg_satisfaction: number | null
+  returned: number
 }
 
 export interface RequestStatsOut {
-  by_day: DayStats[]
+  date_from: string
+  date_to: string
+  granularity: StatsGranularity
+  series: StatsSeriesPoint[]
   by_category: Record<string, number>
-  by_status: Record<string, number>
-  top_executors: ExecutorStat[]
-  recent_actions: ActivityItem[]
-  total_requests: number
-  avg_resolution_hours: number | null
-  avg_satisfaction: number | null
+  open_by_status: Record<string, number>
+  kpi: StatsKpi
+  previous: StatsKpi
+}
+
+export interface ExecutorStatsRow {
+  user_id: number | null
+  name: string | null
+  executed: number
+  accepted: number
+  returned: number
+  overdue: number
+  avg_work_hours: number | null
+  avg_to_accept_hours: number | null
+  avg_rating: number | null
+  ratings_count: number
+  in_work_now: number
+  materials_cost: number
+}
+
+export interface UrgencySla {
+  urgency: string
+  sla_hours: number
+  accepted: number
+  measured: number
+  median_hours: number | null
+  p90_hours: number | null
+  overdue: number
+}
+
+export interface QualityStatsOut {
+  sla_hours: Record<string, number>
+  by_urgency: UrgencySla[]
+  returns_by_category: { category: string; accepted: number; returned: number }[]
+  ratings: Record<string, number>
+  recent_reviews: {
+    request_number: string
+    rating: number
+    review: string
+    executor_name: string | null
+    completed_at: string | null
+  }[]
+}
+
+export interface BacklogOpenRequest {
+  request_number: string
+  status: string
+  category: string
+  created_at: string
+  executor_id: number | null
+  executor_name: string | null
+  age_days: number
+}
+
+export interface BacklogOut {
+  total: number
+  by_age: Record<string, number>
+  queues: { user_id: number | null; name: string | null; open: number; oldest_age_days: number }[]
+  oldest: BacklogOpenRequest[]
+}
+
+export interface AddressStatsOut {
+  buildings: { id: number; name: string; count: number }[]
+  yards: { id: number; name: string; count: number }[]
+  repeats: {
+    request_number: string
+    previous_number: string
+    address: string | null
+    category: string
+    days_after: number
+  }[]
+}
+
+export interface ChannelStatsOut {
+  granularity: StatsGranularity
+  totals: Record<string, number>
+  series: { bucket: string; counts: Record<string, number> }[]
+}
+
+export interface CostStatsOut {
+  total: number
+  requests_with_materials: number
+  accepted: number
+  by_category: Record<string, number>
+  by_building: { id: number; name: string; amount: number }[]
 }
 
 export interface CreateTemplatePayload {

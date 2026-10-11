@@ -204,6 +204,45 @@ async def get_request_materials(db: AsyncSession, request_number: str) -> dict:
     return {"request_number": request_number, "items": rows, "total_cost": money(total)}
 
 
+async def get_requests_material_costs(
+    db: AsyncSession, request_numbers: list[str]
+) -> dict[str, Decimal]:
+    """Себестоимость материалов по набору заявок: {номер: сумма} (аналитика).
+
+    Та же семантика, что `get_request_materials.total_cost`: только расход
+    `request`, сторнированные (есть surplus-партия с ``reversal_of_issue_id``)
+    не входят. Заявки без расхода в ответ не попадают.
+    """
+    if not request_numbers:
+        return {}
+    issues = (
+        await db.execute(
+            select(MaterialIssue.id, MaterialIssue.request_number, MaterialIssue.total_cost)
+            .where(
+                MaterialIssue.request_number.in_(request_numbers),
+                MaterialIssue.doc_type == "request",
+            )
+        )
+    ).all()
+    if not issues:
+        return {}
+    reversed_ids = {
+        r[0]
+        for r in (
+            await db.execute(
+                select(MaterialReceipt.reversal_of_issue_id.distinct()).where(
+                    MaterialReceipt.reversal_of_issue_id.in_([i.id for i in issues])
+                )
+            )
+        ).all()
+    }
+    totals: dict[str, Decimal] = {}
+    for issue_id, number, cost in issues:
+        if issue_id not in reversed_ids:
+            totals[number] = totals.get(number, Decimal("0")) + Decimal(str(cost))
+    return {number: money(total) for number, total in totals.items()}
+
+
 async def get_procurement(db: AsyncSession) -> dict:
     """Список «на закуп»: дефицит по min_stock + открытые заявки в статусе «Закуп»."""
     from uk_management_bot.database.models.user import User

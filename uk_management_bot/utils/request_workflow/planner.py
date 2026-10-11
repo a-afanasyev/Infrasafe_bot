@@ -120,7 +120,9 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         if payload.get("completion_media") is not None:
             ops += [("completion_media", Op.SET, payload["completion_media"])]
         # Повтор после возврата: пользовательский цикл очищает флаг возврата
-        ops += [("is_returned", Op.SET, False)]
+        ops += [("is_returned", Op.SET, False),
+                # момент сдачи работы — для аналитики; повтор перезаписывает
+                ("executed_at", Op.SET_NOW, None)]
     elif action == Action.CLARIFY_REQUEST:
         # текст уточнения дописывается в notes (форматирование — на адаптере)
         if payload.get("notes") is not None:

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
+import { downloadCsv } from '../utils/download'
 import { safeErrorMessage } from '../utils/errorMessage'
 import type {
   CreateAdjustmentPayload,
@@ -85,16 +86,6 @@ export function useProcurement() {
 }
 
 // ── CSV (fetch-blob + скачивание, cookie-auth сохраняется) ─────────
-
-async function downloadCsv(url: string, params: Record<string, unknown>, filename: string) {
-  const resp = await apiClient.get(url, { params, responseType: 'blob' })
-  const href = URL.createObjectURL(resp.data as Blob)
-  const a = document.createElement('a')
-  a.href = href
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(href)
-}
 
 export function exportOperationsCsv(filters: OperationsFilters) {
   return downloadCsv(
