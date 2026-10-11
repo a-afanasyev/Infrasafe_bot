@@ -17,12 +17,18 @@ export default function RolesSection({ employeeId }: Props) {
   const userRoles = useUserRoles(employeeId)
   const roles = useRbacRoles()
   const setRoles = useSetUserRoles(employeeId)
-  const [draft, setDraft] = useState<Set<string> | null>(null)
+  // Черновик помнит, от каких ролей сервера он построен: если роли там уже
+  // другие (кнопка контролёра рядом, другая вкладка), черновик устарел и не
+  // показывается и не отправляется.
+  const [stored, setStored] = useState<{ base: string; roles: Set<string> } | null>(null)
 
   if (userRoles.isLoading || roles.isLoading) return null
   if (!userRoles.data || !roles.data) return null
 
   const current = new Set(userRoles.data.roles)
+  const base = userRoles.data.roles.join(',')
+  const draft = stored?.base === base ? stored.roles : null
+  const setDraft = (roles: Set<string> | null) => setStored(roles ? { base, roles } : null)
   const chosen = draft ?? current
   const canEdit = userRoles.data.can_edit
   const dirty = draft !== null && (draft.size !== current.size || [...draft].some((r) => !current.has(r)))
@@ -89,7 +95,9 @@ export default function RolesSection({ employeeId }: Props) {
           <Button
             size="sm"
             disabled={!dirty || !hasSystem || setRoles.isPending}
-            onClick={() => setRoles.mutate(ordered, { onSuccess: () => setDraft(null) })}
+            onClick={() =>
+              setRoles.mutate({ roles: ordered, expected: [...current] }, { onSuccess: () => setDraft(null) })
+            }
           >
             {t('rbac.save')}
           </Button>

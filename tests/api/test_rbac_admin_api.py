@@ -102,7 +102,7 @@ async def test_catalog_lists_every_action(client):
     resp = await (await client(MANAGER)).get(f"{BASE}/rbac/catalog")
     keys = {a["key"]: a for a in resp.json()}
     assert keys["rbac.manage"]["superadmin_only"] is True
-    assert keys["staff.manage"]["area"] == "Персонал и смены"
+    assert keys["staff.manage"]["area"] == "staff"
 
 
 # ── изменение: только суперадмин ────────────────────────────────────────
@@ -303,3 +303,19 @@ async def test_users_count_is_exact_and_skips_deleted(client, seeded):
     # MANAGER и id 10; удалённый и «manager_assistant» (похожий ключ) не считаются.
     assert counts["manager"] == 2
     assert counts["executor"] == 2
+
+
+@pytest.mark.asyncio
+async def test_stale_editor_does_not_overwrite_other_change(client):
+    """Роли поменяли рядом (кнопка контролёра) — устаревший набор не затирает их."""
+    meter = await (await client(MANAGER)).patch(f"{BASE}/{EXECUTOR}/meter-entry", json={"enabled": True})
+    assert meter.status_code == 200, meter.text
+    sa = await client(SUPERADMIN)
+    stale = await sa.put(f"{BASE}/{EXECUTOR}/roles",
+                         json={"roles": ["executor", "inspector"], "expected": ["executor"]})
+    assert stale.status_code == 409
+    roles = (await sa.get(f"{BASE}/{EXECUTOR}/roles")).json()["roles"]
+    assert "resource_meter_entry" in roles
+    fresh = await sa.put(f"{BASE}/{EXECUTOR}/roles",
+                         json={"roles": ["executor", "inspector", "resource_meter_entry"], "expected": roles})
+    assert fresh.status_code == 200, fresh.text

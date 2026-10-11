@@ -12,6 +12,7 @@ const BASE = '/api/v2/shifts/employees'
 export interface RbacAction {
   key: string
   title: string
+  /** Код области (requests, staff, …): подпись — `rbac.areas.<код>`. */
   area: string
   approved_only: boolean
   superadmin_only: boolean
@@ -42,7 +43,7 @@ export interface UserRoles {
 }
 
 const ROLES_KEY = ['rbac', 'roles']
-const userRolesKey = (id: number) => ['rbac', 'user', id]
+export const userRolesKey = (id: number) => ['rbac', 'user', id]
 
 function errorText(error: unknown): string {
   if (isAxiosError(error) && typeof error.response?.data?.detail === 'string') {
@@ -67,7 +68,11 @@ export function useRbacRoles() {
   })
 }
 
-function useRolesMutation<TVars>(fn: (vars: TVars) => Promise<unknown>, okKey: string) {
+function useRolesMutation<TVars>(
+  fn: (vars: TVars) => Promise<unknown>,
+  okKey: string,
+  failKey = 'rbac.saveFailed',
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: fn,
@@ -76,7 +81,7 @@ function useRolesMutation<TVars>(fn: (vars: TVars) => Promise<unknown>, okKey: s
       queryClient.invalidateQueries({ queryKey: ['rbac'] })
     },
     onError: (error: unknown) => {
-      toast.error(i18n.t('rbac.saveFailed'), { description: errorText(error) })
+      toast.error(i18n.t(failKey), { description: errorText(error) })
     },
   })
 }
@@ -102,7 +107,11 @@ export function useResetRole() {
 }
 
 export function useDeleteRole() {
-  return useRolesMutation((key: string) => apiClient.delete(`${BASE}/rbac/roles/${key}`), 'rbac.deleted')
+  return useRolesMutation(
+    (key: string) => apiClient.delete(`${BASE}/rbac/roles/${key}`),
+    'rbac.deleted',
+    'rbac.deleteFailed',
+  )
 }
 
 export function useUserRoles(userId: number | null) {
@@ -113,10 +122,14 @@ export function useUserRoles(userId: number | null) {
   })
 }
 
+/** Полный набор ролей сотрудника. `expected` — роли, которые видел редактор:
+ *  если на сервере они уже другие, ответ 409 и свежие данные, а не затёртая
+ *  чужая правка (например, «Выдать доступ» контролёру рядом в карточке). */
 export function useSetUserRoles(userId: number) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (roles: string[]) => apiClient.put(`${BASE}/${userId}/roles`, { roles }).then((r) => r.data),
+    mutationFn: ({ roles, expected }: { roles: string[]; expected: string[] }) =>
+      apiClient.put(`${BASE}/${userId}/roles`, { roles, expected }).then((r) => r.data),
     onSuccess: () => {
       toast.success(i18n.t('rbac.userRolesSaved'))
       queryClient.invalidateQueries({ queryKey: ['rbac'] })
@@ -124,6 +137,7 @@ export function useSetUserRoles(userId: number) {
     },
     onError: (error: unknown) => {
       toast.error(i18n.t('rbac.saveFailed'), { description: errorText(error) })
+      queryClient.invalidateQueries({ queryKey: userRolesKey(userId) })
     },
   })
 }

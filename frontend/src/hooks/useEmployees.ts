@@ -119,6 +119,10 @@ export function useToggleMeterEntry(employeeId: number | null) {
       toast.success(i18n.t('toast.meterEntryUpdated'))
       queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['employees'] })
+      // Это тоже роль (resource_meter_entry): блок «Роли» в карточке и
+      // счётчики «Ролей и прав» должны её увидеть, иначе блок отправит
+      // устаревший набор и снимет только что выданный доступ.
+      queryClient.invalidateQueries({ queryKey: ['rbac'] })
     },
     onError: (error: unknown) => {
       console.error('Toggle meter-entry failed:', error)

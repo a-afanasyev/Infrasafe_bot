@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,8 @@ interface Props {
   role: RbacRole
   catalog: RbacAction[]
   canEdit: boolean
+  /** Есть ли несохранённые правки — страница не даст молча уйти на другую роль. */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * остальные видят то же самое только для чтения. Действия «только
  * суперадмин» здесь не показываются — ролям они не выдаются.
  */
-export default function RoleEditor({ role, catalog, canEdit }: Props) {
+export default function RoleEditor({ role, catalog, canEdit, onDirtyChange }: Props) {
   const { t } = useTranslation()
   const update = useUpdateRole()
   const reset = useResetRole()
@@ -43,6 +45,13 @@ export default function RoleEditor({ role, catalog, canEdit }: Props) {
     title.trim() !== role.title ||
     chosen.size !== role.actions.length ||
     role.actions.some((a) => !chosen.has(a))
+
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
+
+  const discard = () => {
+    setChosen(new Set(role.actions))
+    setTitle(role.title)
+  }
 
   const toggle = (key: string) =>
     setChosen((prev) => {
@@ -80,7 +89,9 @@ export default function RoleEditor({ role, catalog, canEdit }: Props) {
 
       {groups.map(([area, actions]) => (
         <fieldset key={area} className="rounded-md border border-border-default bg-bg-card">
-          <legend className="px-2 ml-2 text-[12px] font-semibold text-text-secondary">{area}</legend>
+          <legend className="px-2 ml-2 text-[12px] font-semibold text-text-secondary">
+            {t(`rbac.areas.${area}`, { defaultValue: area })}
+          </legend>
           <div className="flex flex-col divide-y divide-border-default">
             {actions.map((action) => {
               const isDefault = action.default_roles.includes(role.key)
@@ -126,6 +137,11 @@ export default function RoleEditor({ role, catalog, canEdit }: Props) {
           <Button onClick={save} disabled={!dirty || !title.trim() || update.isPending}>
             {t('rbac.save')}
           </Button>
+          {dirty && (
+            <Button variant="outline" onClick={discard}>
+              {t('common.cancel')}
+            </Button>
+          )}
           {role.is_system && role.customized.length > 0 && (
             <Button variant="outline" onClick={() => reset.mutate(role.key)} disabled={reset.isPending}>
               {t('rbac.reset')}
@@ -135,7 +151,11 @@ export default function RoleEditor({ role, catalog, canEdit }: Props) {
             <Button
               variant="outline"
               disabled={remove.isPending}
-              onClick={() => (confirmDelete ? remove.mutate(role.key) : setConfirmDelete(true))}
+              onClick={() =>
+                confirmDelete
+                  ? remove.mutate(role.key, { onError: () => setConfirmDelete(false) })
+                  : setConfirmDelete(true)
+              }
               className={confirmDelete ? 'border-red-500 text-red-600' : undefined}
             >
               {confirmDelete ? t('rbac.deleteConfirm') : t('rbac.delete')}

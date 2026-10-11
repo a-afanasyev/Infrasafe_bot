@@ -12,13 +12,16 @@ const ROLES = [
   { key: 'senior_exec', title: 'Старший исполнитель', is_system: false, actions: [], customized: [], users_count: 0 },
 ]
 
+let lastExpected: string[] | undefined
+
 function mockApi(canEdit: boolean, onPut?: (roles: string[]) => void) {
   server.use(
     http.get(`${BASE}/rbac/roles`, () => HttpResponse.json({ roles: ROLES, can_edit: canEdit })),
     http.get(`${BASE}/7/roles`, () =>
       HttpResponse.json({ user_id: 7, roles: ['executor'], active_role: 'executor', is_superadmin: false, can_edit: canEdit })),
     http.put(`${BASE}/7/roles`, async ({ request }) => {
-      const body = (await request.json()) as { roles: string[] }
+      const body = (await request.json()) as { roles: string[]; expected?: string[] }
+      lastExpected = body.expected
       onPut?.(body.roles)
       return HttpResponse.json({ user_id: 7, roles: body.roles, active_role: body.roles[0], is_superadmin: false, can_edit: true })
     }),
@@ -44,6 +47,8 @@ describe('RolesSection', () => {
     await user.click(await screen.findByRole('checkbox', { name: 'Оператор охраны' }))
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(sent).toEqual(['executor', 'security_operator']))
+    // какие роли видел редактор — сервер ответит 409, если их уже поменяли
+    expect(lastExpected).toEqual(['executor'])
   })
   it('custom role needs a system role and goes after it', async () => {
     let sent: string[] | null = null

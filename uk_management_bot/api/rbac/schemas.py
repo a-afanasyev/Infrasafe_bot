@@ -60,3 +60,7 @@ class UserRolesOut(BaseModel):
 
 class UserRolesUpdate(BaseModel):
     roles: list[str] = Field(min_length=1, max_length=MAX_ROLES_PER_USER)
+    #: Роли, которые видел редактор (необязательно). Если на сервере они уже
+    #: другие (выдали доступ кнопкой рядом, правка из другой вкладки) — 409,
+    #: а не молча затёртая чужая правка.
+    expected: Optional[list[str]] = Field(default=None, max_length=MAX_ROLES_PER_USER)

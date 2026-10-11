@@ -180,6 +180,9 @@ async def set_user_roles(request: Request, user_id: int, body: UserRolesUpdate,
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             "Нужна хотя бы одна системная роль (своя роль выдаётся вместе с ней)")
     before = svc.user_roles_list(target)
+    if body.expected is not None and set(body.expected) != set(before):
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Роли сотрудника уже изменились — обновите карточку и повторите")
     active = svc.apply_user_roles(target, body.roles)
     svc.audit(db, user, "rbac.user_roles.changed",
               {"target_user_id": target.id, "before": before, "after": list(dict.fromkeys(body.roles))})

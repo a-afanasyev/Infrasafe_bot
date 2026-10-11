@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
@@ -20,6 +20,10 @@ export default function RolesPage() {
   const catalog = useRbacCatalog()
   const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  // Выбрана другая роль, пока в текущей есть несохранённые правки.
+  const [pending, setPending] = useState<string | null>(null)
+  const onDirtyChange = useCallback((value: boolean) => setDirty(value), [])
 
   if (roles.isLoading || catalog.isLoading) return <LoadingSpinner />
   if (roles.isError || catalog.isError || !roles.data || !catalog.data) {
@@ -28,6 +32,17 @@ export default function RolesPage() {
 
   const { roles: list, can_edit: canEdit } = roles.data
   const current = list.find((r) => r.key === selected) ?? list[0]
+
+  const select = (key: string) => {
+    if (key === current?.key) return
+    if (dirty) setPending(key)
+    else setSelected(key)
+  }
+  const leave = (key: string) => {
+    setPending(null)
+    setDirty(false)
+    setSelected(key)
+  }
 
   return (
     <div className="p-5 px-6 flex flex-col gap-4">
@@ -54,20 +69,37 @@ export default function RolesPage() {
               onCancel={() => setCreating(false)}
               onCreated={(key) => {
                 setCreating(false)
-                setSelected(key)
+                leave(key)
               }}
             />
           )}
-          <RoleList roles={list} selected={current?.key ?? null} onSelect={setSelected} />
+          <RoleList roles={list} selected={current?.key ?? null} onSelect={select} />
         </div>
         {current && (
-          // key: при выборе другой роли состояние редактора начинается заново.
-          <RoleEditor
-            key={`${current.key}:${current.actions.join(',')}:${current.title}`}
-            role={current}
-            catalog={catalog.data}
-            canEdit={canEdit}
-          />
+          <div className="flex flex-col gap-3 min-w-0">
+            {pending && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+              >
+                <span className="flex-1 min-w-[200px]">{t('rbac.unsavedSwitch', { role: current.title })}</span>
+                <Button size="sm" variant="outline" onClick={() => leave(pending)}>
+                  {t('rbac.discardAndGo')}
+                </Button>
+                <Button size="sm" onClick={() => setPending(null)}>
+                  {t('rbac.stay')}
+                </Button>
+              </div>
+            )}
+            {/* key: при выборе другой роли состояние редактора начинается заново. */}
+            <RoleEditor
+              key={`${current.key}:${current.actions.join(',')}:${current.title}`}
+              role={current}
+              catalog={catalog.data}
+              canEdit={canEdit}
+              onDirtyChange={onDirtyChange}
+            />
+          </div>
         )}
       </div>
     </div>

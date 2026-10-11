@@ -3263,6 +3263,21 @@
     "employeeRolesReadOnly": "Rollarni faqat superadmin o'zgartira oladi.",
     "userRolesSaved": "Xodim rollari saqlandi",
     "superadmin": "superadmin",
-    "needSystemRole": "Kamida bitta tizim roli kerak — o'z rolingiz u bilan birga beriladi."
+    "needSystemRole": "Kamida bitta tizim roli kerak — o'z rolingiz u bilan birga beriladi.",
+    "unsavedSwitch": "«{{role}}» rolida saqlanmagan o'zgarishlar bor.",
+    "discardAndGo": "Bekor qilib o'tish",
+    "stay": "Qolish",
+    "deleteFailed": "Rolni o'chirib bo'lmadi",
+    "areas": {
+      "requests": "Arizalar",
+      "dashboard": "Boshqaruv paneli",
+      "modules": "Modullar",
+      "staff": "Xodimlar va smenalar",
+      "addresses": "Manzillar va aholi",
+      "access": "Qo'riqlash",
+      "bot": "Bot",
+      "rbac": "Rollar va huquqlar",
+      "other": "Boshqa"
+    }
   }
 }

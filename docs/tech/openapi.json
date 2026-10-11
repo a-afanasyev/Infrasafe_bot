@@ -10289,6 +10289,21 @@
       },
       "UserRolesUpdate": {
         "properties": {
+          "expected": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
           "roles": {
             "items": {
               "type": "string"

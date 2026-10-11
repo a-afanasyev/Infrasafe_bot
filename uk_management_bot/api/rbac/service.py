@@ -23,24 +23,25 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
-#: Область действия для группировки на странице — по префиксу ключа.
+#: Область действия для группировки на странице — по префиксу ключа. Код
+#: области, а не название: подпись переводит фронт (`rbac.areas.<код>`).
 AREAS: tuple[tuple[str, str], ...] = (
-    ("requests.", "Заявки"), ("dashboard.", "Дашборд"), ("callcenter.", "Дашборд"),
-    ("feedback.", "Дашборд"), ("group_intake.", "Дашборд"), ("board.", "Дашборд"),
-    ("auto_manager.", "Дашборд"), ("work_reports.", "Модули"), ("payments.", "Модули"),
-    ("resources.", "Модули"), ("materials.", "Модули"), ("elevators.", "Модули"),
-    ("staff.", "Персонал и смены"), ("shifts.", "Персонал и смены"),
-    ("shift_transfers.", "Персонал и смены"), ("addresses.", "Адреса и жители"),
-    ("residents.", "Адреса и жители"), ("apartments.", "Адреса и жители"),
-    ("access.", "Охрана"), ("admin_panel.", "Бот"), ("management.", "Бот"),
-    ("execution.", "Бот"), ("rbac.", "Роли и права"),
+    ("requests.", "requests"), ("dashboard.", "dashboard"), ("callcenter.", "dashboard"),
+    ("feedback.", "dashboard"), ("group_intake.", "dashboard"), ("board.", "dashboard"),
+    ("auto_manager.", "dashboard"), ("work_reports.", "modules"), ("payments.", "modules"),
+    ("resources.", "modules"), ("materials.", "modules"), ("elevators.", "modules"),
+    ("staff.", "staff"), ("shifts.", "staff"),
+    ("shift_transfers.", "staff"), ("addresses.", "addresses"),
+    ("residents.", "addresses"), ("apartments.", "addresses"),
+    ("access.", "access"), ("admin_panel.", "bot"), ("management.", "bot"),
+    ("execution.", "bot"), ("rbac.", "rbac"),
 )
 
 EDITABLE_ACTIONS: frozenset[str] = frozenset(k for k, a in ACTIONS.items() if not a.superadmin_only)
 
 
 def area_of(key: str) -> str:
-    return next((title for prefix, title in AREAS if key.startswith(prefix)), "Прочее")
+    return next((code for prefix, code in AREAS if key.startswith(prefix)), "other")
 
 
 async def read_snapshot(db: AsyncSession) -> store.Snapshot:
