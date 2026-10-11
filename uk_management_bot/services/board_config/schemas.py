@@ -16,7 +16,8 @@
   его с сохранённым состоянием и только потом валидирует результат через
   `StoredBoardConfigData`.
 """
-from datetime import datetime
+import re
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -24,6 +25,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from uk_management_bot.services.board_config.defaults import ALL_MODULE_IDS, MODULE_DEFAULTS
 
 _DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+# Плановых работ на витрине — разумный потолок: блок показывает ближайшие, а
+# список без лимита превращает публичный конфиг в склад.
+MAX_PLANNED_WORKS = 20
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class LocalizedText(BaseModel):
@@ -67,6 +72,38 @@ class WorkingHourCfg(BaseModel):
     def _known_day(cls, v: str) -> str:
         if v not in _DAYS:
             raise ValueError(f"day must be one of {_DAYS}")
+        return v
+
+
+class PlannedWorkCfg(BaseModel):
+    """Плановая работа для блока «Ближайшие работы» страницы жителей.
+
+    `date` — бизнес-дата `YYYY-MM-DD` (без зоны: это день на стене объекта);
+    время — `HH:MM` или пусто («весь день»). Прошедшие даты не отсекаются здесь —
+    страница сама показывает только сегодняшние и будущие.
+    """
+
+    id: str = Field(min_length=1, max_length=64)
+    date: str
+    time_from: str = ""
+    time_to: str = ""
+    title: LocalizedText
+    place: LocalizedText = Field(default_factory=LocalizedText)
+    text: LocalizedText = Field(default_factory=LocalizedText)
+
+    @field_validator("date")
+    @classmethod
+    def _iso_date(cls, v: str) -> str:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+            raise ValueError("date must be YYYY-MM-DD")
+        date.fromisoformat(v)  # ValueError → 422 на несуществующий день (02-30)
+        return v
+
+    @field_validator("time_from", "time_to")
+    @classmethod
+    def _hhmm(cls, v: str) -> str:
+        if v and not _HHMM.match(v):
+            raise ValueError("time must be HH:MM or empty")
         return v
 
 
@@ -144,6 +181,7 @@ class _BoardConfigFields(BaseModel):
     layout: list[LayoutItem]
     work_reports: WorkReportsCfg = Field(default_factory=WorkReportsCfg)
     elevators: ElevatorsCfg = Field(default_factory=ElevatorsCfg)
+    planned_works: list[PlannedWorkCfg] = Field(default_factory=list, max_length=MAX_PLANNED_WORKS)
 
     @field_validator("working_hours")
     @classmethod
@@ -268,6 +306,12 @@ class LayoutItemIn(LayoutItem, _StrictIn):
     pass
 
 
+class PlannedWorkCfgIn(PlannedWorkCfg, _StrictIn):
+    title: LocalizedTextIn
+    place: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+    text: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
+
+
 class WorkReportsCfgIn(WorkReportsCfg, _StrictIn):
     title: LocalizedTextIn = Field(default_factory=LocalizedTextIn)
 
@@ -293,6 +337,7 @@ class BoardConfigUpdateIn(_BoardConfigFields, _StrictIn):
     layout: list[LayoutItemIn]
     work_reports: WorkReportsCfgIn = Field(default_factory=WorkReportsCfgIn)
     elevators: ElevatorsCfgIn = Field(default_factory=ElevatorsCfgIn)
+    planned_works: list[PlannedWorkCfgIn] = Field(default_factory=list, max_length=MAX_PLANNED_WORKS)
 
 
 # Alias для обратной совместимости: tests/api/test_board_config_layout_width.py

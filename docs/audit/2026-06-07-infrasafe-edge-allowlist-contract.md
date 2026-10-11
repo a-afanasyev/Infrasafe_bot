@@ -27,7 +27,7 @@ Derived from actual code, not assumptions:
 ## Allowlist (prefixes passed through `^~ /uk/api/`)
 
 **Public (no auth, intentional):**
-- `/api/v2/public/` — + `/api/v2/public/elevators` (модуль «Лифты», 2026-09-06, нового префикса нет); публичная страница `/uk/elevators` (T17) — SPA-роут фронта, API-префиксов не добавляет
+- `/api/v2/public/` — + `/api/v2/public/elevators` (модуль «Лифты», 2026-09-06, нового префикса нет); публичная страница `/uk/elevators` (T17) — SPA-роут фронта, API-префиксов не добавляет; страница жителей `/uk/home` (2026-10-11) — тоже SPA-роут, читает только `/api/v2/public/board` и `/api/v2/public/board-config`
 - `/api/v2/board-config` and `/api/v2/public/board-config` (GET public / PUT manager-only)
 - `/api/v2/announcements`
 - `/api/health` (basic liveness, if edge healthcheck needs it)

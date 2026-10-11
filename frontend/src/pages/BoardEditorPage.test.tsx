@@ -125,6 +125,27 @@ describe('BoardEditorPage', () => {
     expect(sent[sent.length - 1]).toMatchObject({ important: true, title: { ru: 'Отключение воды' } })
   })
 
+  it('плановые работы: добавить → заполнить → уходят в PUT; видны в превью страницы жителей', async () => {
+    await renderReady()
+    const works = section('Плановые работы')
+    fireEvent.click(within(works).getByRole('button', { name: 'Добавить работу' }))
+    const block = within(works).getByTestId('planned-work')
+    const titleRu = within(within(block).getByText('Что делаем').parentElement as HTMLElement).getByPlaceholderText('RU')
+    fireEvent.change(titleRu, { target: { value: 'Покраска ограждений' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Страница жителей' }))
+    expect(screen.getByRole('button', { name: 'Страница жителей' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByRole('heading', { name: 'Ближайшие работы' })).toBeInTheDocument()
+    expect(screen.getByText('Покраска ограждений', { selector: 'strong' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(putBodies).toHaveLength(1))
+    const sent = putBodies[0].planned_works as Array<{ date: string; title: { ru: string } }>
+    expect(sent).toHaveLength(1)
+    expect(sent[0].title.ru).toBe('Покраска ограждений')
+    expect(sent[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
   it('часы работы: «Выходной» блокирует время; username бота теряет ведущий @', async () => {
     await renderReady()
     const hours = section('Часы работы')

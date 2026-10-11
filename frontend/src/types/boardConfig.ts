@@ -88,6 +88,18 @@ export interface ElevatorsCfg {
   title: LocalizedText
 }
 
+// Плановая работа для блока «Ближайшие работы» страницы жителей.
+// date — бизнес-дата YYYY-MM-DD; время HH:MM или '' («в течение дня»).
+export interface PlannedWorkCfg {
+  id: string
+  date: string
+  time_from: string
+  time_to: string
+  title: LocalizedText
+  place: LocalizedText
+  text: LocalizedText
+}
+
 export interface BoardConfigData {
   org: OrgCfg
   contacts: ContactsCfg
@@ -98,6 +110,8 @@ export interface BoardConfigData {
   work_reports: WorkReportsCfg
   // Опционально: ответ бэкенда до T16 (rolling deploy) блока не несёт.
   elevators?: ElevatorsCfg
+  // Опционально по той же причине: ответ бэкенда до появления поля.
+  planned_works?: PlannedWorkCfg[]
 }
 
 // ARCH-137 B5: ответ публичного board-config несёт display_tz — зону показа
@@ -184,4 +198,5 @@ export const defaultBoardConfig: BoardConfigData = {
   elevators: {
     title: { ru: 'Лифты', uz: 'Liftlar' },
   },
+  planned_works: [],
 }

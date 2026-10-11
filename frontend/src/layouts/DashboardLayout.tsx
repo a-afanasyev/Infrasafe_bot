@@ -29,6 +29,7 @@ import {
   Database,
   Cpu,
   BookOpen,
+  House,
   Camera,
   Sun,
   Moon,
@@ -146,7 +147,14 @@ const NAV_ENTRIES: NavEntry[] = [
     : []),
 ]
 
-// Пункт «внешнего» блока (табло жителей) — вынесен отдельным листом.
+// Пункты «внешнего» блока (публичные страницы) — вынесены отдельными листами:
+// страница жителей (главная для гостей) и табло для экрана в холле.
+const RESIDENT_HOME_LEAF: NavLeaf = {
+  to: '/home',
+  labelKey: 'nav.residentHome',
+  Icon: House,
+}
+
 const RESIDENT_BOARD_LEAF: NavLeaf = {
   to: '/resident-board',
   labelKey: 'nav.residentBoard',
@@ -576,11 +584,11 @@ function SidebarContent({
             {t('nav.external')}
           </div>
         )}
-        {collapsed ? (
-          <CollapsedNavLeafLink leaf={RESIDENT_BOARD_LEAF} />
+        {[RESIDENT_HOME_LEAF, RESIDENT_BOARD_LEAF].map((leaf) => (collapsed ? (
+          <CollapsedNavLeafLink key={leaf.to} leaf={leaf} />
         ) : (
-          <NavLeafLink leaf={RESIDENT_BOARD_LEAF} onClick={onNavClick} />
-        )}
+          <NavLeafLink key={leaf.to} leaf={leaf} onClick={onNavClick} />
+        )))}
       </nav>
 
       {/* User block */}

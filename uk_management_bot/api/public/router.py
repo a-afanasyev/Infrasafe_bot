@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.public import service
 from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.utils.business_time import business_day_window, business_today
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_RETURNED,
@@ -30,6 +31,12 @@ PIPELINE_STATUSES = ["Новая", "В работе", "Закуп", "Уточн�
 # «Возвращена» (канон cutover PR3+4) добавлена рядом с «Исполнено» (до cutover
 # так кодировалась) для сохранения прежней классификации closed-набора.
 CLOSED_STATUSES = ["Выполнена", "Исполнено", "Возвращена", "Принято", "Отменена"]
+# Группы для страницы жителей: «новые», «в работе» (у специалистов) и «решено».
+# В «решено» нет «Отменена» (отмена — не решение) и «Возвращена» (житель вернул
+# работу, ждёт повторного разбора менеджером).
+NEW_STATUSES = ["Новая"]
+IN_PROGRESS_STATUSES = ["В работе", "Закуп", "Уточнение"]
+RESOLVED_STATUSES = ["Выполнена", "Исполнено", "Принято"]
 # Cards shown per status column — at most 10, newest first.
 PER_STATUS_LIMIT = 10
 
@@ -59,6 +66,10 @@ class PublicBoardOut(BaseModel):
     active_executors: int
     avg_resolution_hours: Optional[float]
     avg_rating: Optional[float]
+    # Выполнена / Исполнено / Принято с completed_at в текущем бизнес-месяце.
+    completed_month: int
+    # Разбивка по категориям: ключи new / in_progress / completed_month.
+    category_counts: dict[str, dict[str, int]]
 
 
 # ---------------------------------------------------------------------------
@@ -116,12 +127,25 @@ async def get_public_board(
     # --- avg_rating: arithmetic mean of resident acceptance stars (1-5) ---
     avg_rating = await service.avg_rating(db)
 
+    # --- completed_month + category_counts: сводка страницы жителей ---
+    month_start = business_day_window(business_today().replace(day=1))[0]
+    resolved_month = await service.category_counts(
+        db, statuses=RESOLVED_STATUSES, completed_since=month_start
+    )
+    category_counts = {
+        "new": await service.category_counts(db, statuses=NEW_STATUSES),
+        "in_progress": await service.category_counts(db, statuses=IN_PROGRESS_STATUSES),
+        "completed_month": resolved_month,
+    }
+
     board = PublicBoardOut(
         status_counts=status_counts,
         active_requests=active_requests,
         active_executors=active_executors,
         avg_resolution_hours=avg_resolution_hours,
         avg_rating=avg_rating,
+        completed_month=sum(resolved_month.values()),
+        category_counts=category_counts,
     )
     _board_cache = (board, now + _CACHE_TTL_SECONDS)
     return board

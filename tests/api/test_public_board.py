@@ -5,12 +5,15 @@ page. The tests assert two things: it works without a session, and the
 payload stays anonymized (no request numbers, descriptions, addresses or
 user/executor identifiers leak).
 """
+from datetime import timedelta
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request as RequestModel
+from uk_management_bot.utils.business_time import business_day_window, business_today
 
 
 @pytest_asyncio.fixture
@@ -41,6 +44,7 @@ async def test_public_board_no_auth_required(client):
     assert set(body.keys()) == {
         "status_counts", "active_requests", "active_executors",
         "avg_resolution_hours", "avg_rating",
+        "completed_month", "category_counts",
     }
 
 
@@ -96,3 +100,40 @@ async def test_public_board_avg_rating_is_arithmetic_mean(
     resp = await client.get("/api/v2/public/board")
     body = resp.json()
     assert body["avg_rating"] == pytest.approx(3.5)
+
+
+@pytest.mark.asyncio
+async def test_public_board_completed_month_counts_only_this_month(
+    client, db_session: AsyncSession, manager_user
+):
+    """«Решено за месяц» — закрытые с completed_at в текущем бизнес-месяце;
+    отменённые, возвращённые жителем и закрытые раньше месяца не считаются."""
+    month_start = business_day_window(business_today().replace(day=1))[0]
+    inside = month_start + timedelta(hours=1)
+    before = month_start - timedelta(hours=1)
+    rows = [
+        ("260516-101", "Сантехника", "Принято", inside),
+        ("260516-102", "Сантехника", "Выполнена", inside),
+        ("260516-103", "Электрика", "Принято", before),
+        ("260516-104", "Уборка", "Отменена", inside),
+        ("260516-105", "Уборка", "Принято", None),
+        ("260516-106", "Уборка", "Возвращена", inside),
+    ]
+    for number, category, status, completed_at in rows:
+        db_session.add(RequestModel(request_number=number, user_id=manager_user.id,
+                                    category=category, description="x", status=status,
+                                    completed_at=completed_at))
+    await db_session.commit()
+
+    body = (await client.get("/api/v2/public/board")).json()
+    assert body["completed_month"] == 2
+    assert body["category_counts"]["completed_month"] == {"Сантехника": 2}
+
+
+@pytest.mark.asyncio
+async def test_public_board_category_counts_by_group(client, seeded_requests):
+    """Разбивка по категориям: «новые» = Новая; «в работе» = В работе/Закуп/Уточнение."""
+    body = (await client.get("/api/v2/public/board")).json()
+    assert body["category_counts"]["new"] == {"Сантехника": 1, "Электрика": 1}
+    assert body["category_counts"]["in_progress"] == {"Лифт": 1}
+    assert body["category_counts"]["completed_month"] == {}
