@@ -72,7 +72,7 @@ _FORBIDDEN_QUERY_TOKEN_KEYS = ("token", "access_token", "jwt")
 def _authorized_roles(payload: dict | None) -> bool:
     """Есть ли у токена хотя бы одна WS-роль (из claim ``roles``, §3.2).
 
-    Claim ``roles`` в JWT — уже JSON-массив (jose декодирует в ``list``); на случай
+    Claim ``roles`` в JWT — уже JSON-массив (PyJWT декодирует в ``list``); на случай
     legacy CSV/JSON-строки делегируем парсинг в ``parse_roles_safe``.
     """
     if not payload:
