@@ -18,7 +18,7 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt as jose_jwt
+import jwt as pyjwt
 
 from uk_management_bot.api.auth import service
 from uk_management_bot.api.registration import tickets
@@ -56,25 +56,25 @@ def _future_exp() -> datetime:
 def _raw_token(key: str, kid: str | None, **claims) -> str:
     payload = {"sub": "7", "roles": ["applicant"], "exp": _future_exp(), **claims}
     headers = {"kid": kid} if kid is not None else None
-    return jose_jwt.encode(payload, key, algorithm="HS256", headers=headers)
+    return pyjwt.encode(payload, key, algorithm="HS256", headers=headers)
 
 
 class TestSigningKid:
     def test_steady_signs_with_primary_kid(self, monkeypatch):
         steady(monkeypatch)
         token = service.create_access_token(7, ["applicant"])
-        assert jose_jwt.get_unverified_header(token)["kid"] == "primary"
+        assert pyjwt.get_unverified_header(token)["kid"] == "primary"
         assert service.verify_access_token(token)["sub"] == "7"
 
     def test_window_still_signs_with_primary(self, monkeypatch):
         window(monkeypatch)
         token = service.create_access_token(7, ["applicant"])
-        assert jose_jwt.get_unverified_header(token)["kid"] == "primary"
+        assert pyjwt.get_unverified_header(token)["kid"] == "primary"
 
     def test_flip_signs_with_next(self, monkeypatch):
         flip(monkeypatch)
         token = service.create_access_token(7, ["applicant"])
-        assert jose_jwt.get_unverified_header(token)["kid"] == "next"
+        assert pyjwt.get_unverified_header(token)["kid"] == "next"
         assert service.verify_access_token(token)["sub"] == "7"
 
 
@@ -105,7 +105,7 @@ class TestRotationGrace:
         перебрать весь набор, а не верить kid буквально."""
         flip(monkeypatch)
         token = service.create_access_token(7, ["applicant"])
-        assert jose_jwt.get_unverified_header(token)["kid"] == "next"
+        assert pyjwt.get_unverified_header(token)["kid"] == "next"
         finalize(monkeypatch)
         assert service.verify_access_token(token) is not None
 
@@ -128,7 +128,7 @@ class TestTokenPopulations:
 
     def test_expired_token_rejected_mid_window(self, monkeypatch):
         window(monkeypatch)
-        expired = jose_jwt.encode(
+        expired = pyjwt.encode(
             {"sub": "7", "roles": [], "exp": datetime.now(timezone.utc) - timedelta(minutes=1)},
             OLD, algorithm="HS256", headers={"kid": "primary"},
         )
@@ -144,6 +144,39 @@ class TestTokenPopulations:
     def test_malformed_token_returns_none(self, monkeypatch):
         window(monkeypatch)
         assert service.verify_access_token("not.a.jwt") is None
+
+    # Выпущены python-jose 3.5.0 (до переезда на PyJWT) ключом OLD, exp=2100-01-01.
+    # Живые сессии на момент выкатки — именно такие; они обязаны пройти.
+    JOSE_WITH_KID = (
+        "eyJhbGciOiJIUzI1NiIsImtpZCI6InByaW1hcnkiLCJ0eXAiOiJKV1QifQ."
+        "eyJzdWIiOiI3Iiwicm9sZXMiOlsiYXBwbGljYW50Il0sImV4cCI6NDEwMjQ0NDgwMH0."
+        "-CTUod6waELd9J2VKyyhdBUavJ4n-kASAC9evreK9JA"
+    )
+    JOSE_NO_KID = (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJzdWIiOiI3Iiwicm9sZXMiOlsiYXBwbGljYW50Il0sImV4cCI6NDEwMjQ0NDgwMH0."
+        "cTSTOqKpOC-GAmtkNxYOcI6SXL5Fv00Me0nnpZeZ8Lk"
+    )
+
+    def test_tokens_issued_by_python_jose_still_verify(self, monkeypatch):
+        """Переезд python-jose → PyJWT не разлогинивает: HS256-токены те же."""
+        steady(monkeypatch)
+        for token in (self.JOSE_WITH_KID, self.JOSE_NO_KID):
+            payload = service.verify_access_token(token)
+            assert payload is not None and payload["sub"] == "7" and payload["roles"] == ["applicant"]
+
+    def test_asymmetric_key_is_never_an_hmac_secret(self, monkeypatch):
+        """GHSA-3qf3-8w2g-rqmx: публичный ключ в роли HMAC-секрета отвергается."""
+        import pytest
+
+        pem = (
+            "-----BEGIN PUBLIC KEY-----\n"
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyrYwKC8Y5mJrd6ASTwVfP0Ue3w5m\n"
+            "Ry0jfSQ8kxLdMmV0Pk0CwMmbkd5Ej+Yt8Df3sQ1pP+0v4kq2qKk7dWm4Xg==\n"
+            "-----END PUBLIC KEY-----\n"
+        )
+        with pytest.raises(pyjwt.exceptions.InvalidKeyError):
+            pyjwt.encode({"sub": "7"}, pem, algorithm="HS256")
 
 
 class TestPurposeTokensRotate:

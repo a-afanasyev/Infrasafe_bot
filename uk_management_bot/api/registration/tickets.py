@@ -3,8 +3,7 @@ Separate from the MFA token: purpose="register", sub=telegram_id."""
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError
-from uk_management_bot.api.auth.service import decode_jwt, encode_jwt
+from uk_management_bot.api.auth.service import JWTError, decode_jwt, encode_jwt
 
 ISSUER = "uk-management"
 PURPOSE = "register"
