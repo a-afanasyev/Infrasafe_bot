@@ -92,7 +92,10 @@ call-site Group Intake для staff-репортов — задаёт прави
 - **Staff-репорты (миграция 013):** `reported_by_user_id` (FK→users SET NULL —
   кто доложил; владелец `user_id` = тот же автор) и `acceptance_mode`
   (CHECK `resident|manager`).
-- **Тайм-стемпы:** `created_at`, `updated_at`, `completed_at` (`request.py:99-101`).
+- **Тайм-стемпы:** `created_at`, `updated_at`, `completed_at` (`request.py:99-101`) и
+  `executed_at` (миграция 025) — момент «Выполнена», ставит планировщик на
+  `EXECUTOR_COMPLETE`/`MANAGER_COMPLETE`; `completed_at` — приёмка. Аналитика:
+  [ANALYTICS.md](ANALYTICS.md).
 
 Связи: `ratings`, `comments`, `assignments`, `apartment_obj`, `building_obj`,
 `yard_obj`, `executor`, `user` (`request.py:32,56-57,64-65,104-109`).

@@ -50,11 +50,21 @@
 
 ### 2.2. Requests — `/api/v2/requests` (`requests/router.py`, `requests/stats_router.py`)
 
+Аналитика (`/stats*`) — правила зачёта и CSV: [ANALYTICS.md](ANALYTICS.md).
+
 | Метод | Путь | RBAC | Назначение |
 |-------|------|------|-----------|
-| GET | `/stats` | `require_roles(manager)` | Статистика заявок |
+| GET | `/stats` | `require_action(requests.stats)` | Обзор периода: ось день/месяц/год, KPI + прошлое окно (`date_from`, `date_to`, `granularity`) |
+| GET | `/stats/executors` | `requests.stats` | Сводка по исполнителям: выполнено/принято/возвраты/просрочки/время/оценка |
+| GET | `/stats/export` | `requests.stats` | CSV принятых заявок (`executor_id` — по одному) |
+| GET | `/stats/export/executors` | `requests.stats` | CSV сводки по исполнителям |
+| GET | `/stats/quality` | `requests.stats` | Сроки по срочности, возвраты, оценки, отзывы |
+| GET | `/stats/backlog` | `requests.stats` | Открытые сейчас: возраст, очереди, самые старые |
+| GET | `/stats/addresses` | `requests.stats` | Топ домов/дворов, повторные заявки |
+| GET | `/stats/channels` | `requests.stats` | Источники заявок по срезу |
+| GET | `/stats/costs` | `requests.stats` | Материалы по категориям и домам |
 | GET | `/kanban` | `require_roles(manager)` | Канбан-доска |
-| GET | `` (список) | `get_current_user` | Список заявок (фильтр по роли) |
+| GET | `` (список) | `get_current_user` | Список заявок (фильтр по роли; `accepted_from`+`accepted_to` — по дате приёмки) |
 | GET | `/acceptance` | `get_current_user` | Заявки на приёмку жителем |
 | GET | `/{request_number}` | `get_current_user` | Карточка заявки |
 | POST | `` | `require_approved_roles(applicant)` | Создать заявку (житель), 20/min |
