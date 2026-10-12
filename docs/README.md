@@ -30,6 +30,7 @@
   а не какой-либо md-снимок: снимки протухают молча, миграции — нет
 - [tech/API_REFERENCE.md](tech/API_REFERENCE.md) — `/api/v2/*`, RBAC-матрица, web-auth
 - [tech/REQUESTS.md](tech/REQUESTS.md) — домен «Заявки» (статусы, назначение, приёмка)
+- [tech/ANALYTICS.md](tech/ANALYTICS.md) — аналитика заявок: периоды и срезы, исполнители, CSV, нормативы, автоотчёт
 - [tech/SHIFTS_AND_ASSIGNMENT.md](tech/SHIFTS_AND_ASSIGNMENT.md) — смены + движок назначения (5 классов)
 - [tech/ROLES_AND_ACCESS.md](tech/ROLES_AND_ACCESS.md) — роли (RBAC), матрица доступа, `admin` vs `system_admin`
 - [tech/ARCHITECTURE_DIAGRAMS.md](tech/ARCHITECTURE_DIAGRAMS.md) — диаграммы (контейнеры, модули, ER)
