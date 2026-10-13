@@ -12,6 +12,7 @@ from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.shifts.schemas import ShiftBrief, ShiftDetail
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.utils.specializations import UNIVERSAL_SPECIALIZATION, parse_specializations
 from uk_management_bot.utils.user_names import full_name
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,17 @@ def _shift_brief(shift: Shift, user: Optional[User] = None) -> ShiftBrief:
         max_requests=shift.max_requests,
         current_request_count=shift.current_request_count,
         load_percentage=load_pct,
-        specialization_focus=shift.specialization_focus,
+        specialization_focus=shift.specialization_focus or _executor_specs(user),
     )
+
+
+def _executor_specs(user: Optional[User]) -> Optional[list[str]]:
+    """FS-10 для дашборда: ad-hoc смена (старт из бота) не несёт
+    specialization_focus — показываем спец-цию исполнителя, иначе фильтр
+    «Смен» кладёт сантехника в «Универсалы». `universal` = те же «Универсалы»."""
+    if user is None:
+        return None
+    return sorted(parse_specializations(user) - {UNIVERSAL_SPECIALIZATION}) or None
 
 
 def _shift_detail(shift: Shift, user: Optional[User] = None) -> ShiftDetail:
