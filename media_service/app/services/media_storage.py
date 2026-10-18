@@ -277,6 +277,7 @@ class MediaStorageService:
         uploaded_by: Optional[int] = None,
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        allowed_types: Optional[frozenset] = None,
     ) -> MediaFile:
         """Домен-нейтральная загрузка медиа в произвольный канал по purpose.
 
@@ -299,8 +300,9 @@ class MediaStorageService:
             f"category={category}, ref={ref}"
         )
 
-        # Валидация файла (размер/тип) — как у заявок
-        await self._validate_file(file_data, content_type)
+        # Валидация файла (размер/тип) — как у заявок; узкий домен может
+        # передать свой allowlist типов, не расширяя общий.
+        await self._validate_file(file_data, content_type, allowed_types)
 
         # Ленивая валидация конфигурации канала
         configured = self._configured_channel_value(channel_purpose)
@@ -679,16 +681,20 @@ class MediaStorageService:
 
     # === HELPER METHODS ===
 
-    async def _validate_file(self, file_data: bytes, content_type: str):
+    async def _validate_file(
+        self, file_data: bytes, content_type: str,
+        allowed_types: Optional[frozenset] = None,
+    ):
         """
-        Валидация файла
+        Валидация файла: размер — всегда; тип — по ``allowed_types`` узкого
+        домена, если передан, иначе по общему ``settings.allowed_file_types``.
         """
         # Проверка размера
         if len(file_data) > settings.max_file_size:
             raise ValueError(ErrorMessages.FILE_TOO_LARGE)
 
         # Проверка типа файла
-        if content_type not in settings.allowed_file_types:
+        if content_type not in (allowed_types or settings.allowed_file_types):
             raise ValueError(ErrorMessages.FILE_TYPE_NOT_ALLOWED)
 
     def _generate_caption(

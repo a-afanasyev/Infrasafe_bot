@@ -189,6 +189,10 @@ class FileCategories:
     ACCESS_PLATE = "access_plate"
     ACCESS_OVERVIEW = "access_overview"
 
+    # Документы жителей (верификация): бот шифрует скан до отправки — сюда
+    # приходит непрозрачный blob, узкий endpoint /upload-resident-document.
+    RESIDENT_DOCUMENT = "resident_document"
+
     # Системные
     ARCHIVE = "archive"
     BACKUP = "backup"
@@ -205,6 +209,7 @@ class FileCategories:
         FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
         ACCESS_PLATE: TelegramChannels.ACCESS,
         ACCESS_OVERVIEW: TelegramChannels.ACCESS,
+        RESIDENT_DOCUMENT: TelegramChannels.ARCHIVE,
         ARCHIVE: TelegramChannels.ARCHIVE,
         BACKUP: TelegramChannels.BACKUP
     }

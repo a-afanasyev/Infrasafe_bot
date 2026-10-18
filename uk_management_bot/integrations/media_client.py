@@ -233,6 +233,22 @@ class MediaServiceClient:
             logger.error(f"Failed to upload report media for request {request_number}: {e}")
             raise
 
+    async def upload_resident_document(self, blob: bytes, uploaded_by: int) -> int:
+        """Загрузка зашифрованного документа жителя → ``media_id``.
+
+        ``blob`` уже зашифрован (`utils/document_crypto`): имя и тип нейтральные,
+        исходное имя файла сервису не передаётся. Ошибки HTTP пробрасываются —
+        вызывающий не создаёт строку документа без ``media_id``.
+        """
+        data = {"uploaded_by": str(_checked_uploaded_by(uploaded_by))}
+        response = await self.client.post(
+            "/media/upload-resident-document",
+            files=[("file", ("document.bin", blob, "application/octet-stream"))],
+            data=data,
+        )
+        response.raise_for_status()
+        return int(response.json()["media_file"]["id"])
+
     async def get_request_media(
         self,
         request_number: str,
