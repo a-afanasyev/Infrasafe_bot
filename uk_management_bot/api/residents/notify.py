@@ -224,10 +224,16 @@ async def notify_verification_approved(resident: User) -> None:
 
 
 async def notify_verification_rejected(resident: User, notes: str) -> None:
+    from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+    from uk_management_bot.utils.auth_helpers import parse_roles_safe
+
     lang = _lang(resident)
+    # Переподача доступна только «чистому» жителю — остальным кнопку не даём.
+    pure = not set(parse_roles_safe(resident.roles)) - PURE_APPLICANT_ROLES
     await _safe_send(resident, get_text(
         "web_notifications.verification_rejected", language=lang, notes=notes,
-    ), reply_markup=_inline_button(get_text("verification_resubmit.btn", language=lang), RESUBMIT_CB))
+    ), reply_markup=_inline_button(
+        get_text("verification_resubmit.btn", language=lang), RESUBMIT_CB) if pure else None)
 
 
 def _inline_button(text: str, callback_data: str) -> dict:

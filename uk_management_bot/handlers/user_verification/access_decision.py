@@ -195,7 +195,7 @@ async def reject_user_verification(callback: CallbackQuery, roles: list = None, 
                     # Кнопка переподачи — на языке жителя, как и текст.
                     await callback.bot.send_message(
                         notify_tg, notify_text, request_timeout=SEND_TIMEOUT,
-                        reply_markup=get_resubmit_inline(notify_lang),
+                        reply_markup=get_resubmit_inline(notify_lang) if notify_lang else None,
                     )
                     logger.info(f"Уведомление об отклонении верификации отправлено пользователю {user_id}")
                 except Exception as e:

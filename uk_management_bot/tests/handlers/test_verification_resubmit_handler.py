@@ -32,16 +32,26 @@ def _state():
     return st
 
 
-async def _press(result):
+async def _press(result, purge=None):
+    from uk_management_bot.services.document_purge import PurgeResult
+    from uk_management_bot.services.user_verification_service import ResubmitOutcome
+
     cb, st = _callback(), _state()
-    with patch.object(onboarding, "run_db", AsyncMock(return_value=result)):
+    outcome = ResubmitOutcome(result, purge or PurgeResult(7301))
+    with patch.object(onboarding, "run_db", AsyncMock(return_value=outcome)), \
+         patch.object(onboarding, "cleanup_purged_documents", AsyncMock()) as cleanup:
         await onboarding.resubmit_verification(cb, st, language="ru")
+    cb.cleanup = cleanup
     return cb, st
 
 
 @pytest.mark.asyncio
 async def test_resubmitted_opens_document_step():
-    cb, st = await _press(ResubmitResult.RESUBMITTED)
+    from uk_management_bot.services.document_purge import PurgeResult
+
+    stale = PurgeResult(7301, (55,), True, 2)
+    cb, st = await _press(ResubmitResult.RESUBMITTED, stale)
+    cb.cleanup.assert_awaited_once_with(stale)  # гигиена документов прошлого отказа
     cb.message.edit_reply_markup.assert_awaited_once()
     st.set_state.assert_awaited_with(OnboardingStates.waiting_for_document_type)
     cb.answer.assert_awaited()

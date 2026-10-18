@@ -35,6 +35,7 @@ from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.services.user_verification_service import (
     ResubmitResult, UploadDenied, UserVerificationService,
 )
@@ -144,6 +145,12 @@ async def _upload_denial(telegram_id: int, _db=None) -> Optional[UploadDenied]:
     return denial
 
 
+def _neutral_document_name(file_name: Optional[str]) -> str:
+    """Имя для хранения и показа: только тип файла, без исходного имени."""
+    lower = (file_name or "").lower()
+    return "document.pdf" if lower.endswith(".pdf") else "photo.png" if lower.endswith(".png") else "photo.jpg"
+
+
 async def _discard_document_blob(media_id: int) -> None:
     """Компенсация: blob загружен, а строки не будет. Без ключа он нечитаем —
     удаление здесь гигиена, сбой только в лог."""
@@ -231,13 +238,14 @@ async def resubmit_verification(callback: CallbackQuery, state: FSMContext, lang
     только всплывающий ответ: без сообщений в чат (флуд нажатиями не
     усиливается) и без снятия кнопки (после кулдауна она пригодится).
     """
-    result = await run_db(
+    outcome = await run_db(
         lambda s: UserVerificationService(s).resubmit_verification(callback.from_user.id), db=_db
     )
-    text = get_text(f"verification_resubmit.{result.value}", language=language)
-    if result is not ResubmitResult.RESUBMITTED:
+    text = get_text(f"verification_resubmit.{outcome.result.value}", language=language)
+    if outcome.result is not ResubmitResult.RESUBMITTED:
         await callback.answer(text, show_alert=True)
         return
+    await cleanup_purged_documents(outcome.purge)
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
@@ -331,22 +339,26 @@ async def process_document_file(message: Message, state: FSMContext, language: s
         # Фото
         photo = message.photo[-1]  # Берем самое большое фото
         file_id = photo.file_id
-        file_name = f"photo_{photo.file_id}.jpg"
+        file_name = "photo.jpg"
         file_size = photo.file_size
     else:
         await message.answer(get_text("onboarding.documents.file_invalid", language=lang))
         return
-    
+
     # Валидируем файл. run_db здесь НЕ нужен: validate_document_file —
     # чистая проверка file_id/размера/расширения, к self.db она не обращается
     # ни в одной ветке, поэтому сессия сервису не передаётся (открывать её
     # ради проверки строки — лишнее соединение из пула на каждый файл).
     verification_service = UserVerificationService(None)
-    is_valid, error_message = verification_service.validate_document_file(file_id, file_name, file_size)
-    
+    is_valid, error_key = verification_service.validate_document_file(file_id, file_name, file_size)
+
     if not is_valid:
-        await message.answer(error_message)
+        await message.answer(get_text(error_key, language=lang))
         return
+
+    # Хранимое имя нейтральное: исходное может содержать ФИО, а у фото Telegram
+    # file_id — готовый токен скачивания открытого файла.
+    file_name = _neutral_document_name(file_name)
     
     # Сохраняем сразу, без шага подтверждения: ошибочный файл безвреден (после
     # решения менеджера документы удаляются), а «Загрузить ещё / Завершить»
@@ -412,6 +424,7 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
                 get_text(f"onboarding.documents.upload_{e.reason}", language=lang),
                 reply_markup=get_document_type_keyboard(lang),
             )
+            await state.set_data({})  # file_id скана не держим в FSM
             await state.set_state(OnboardingStates.waiting_for_document_type)
             return
 
@@ -434,6 +447,14 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
             await state.clear()
             return
 
+        # Открытый скан не остаётся в чате с ботом: копия в системе — только
+        # зашифрованная. Бот может удалить входящее сообщение лички (≤48 ч).
+        try:
+            await message.delete()
+        except Exception as e:  # noqa: BLE001 — не мешает сохранению
+            logger.warning("Не удалось удалить сообщение со сканом %s: %s",
+                           message.from_user.id, type(e).__name__)
+
         # Показываем успешное сообщение
         document_type_name = get_document_type_name(document_type, lang)
         await message.answer(
@@ -448,7 +469,9 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         logger.info(f"Документ сохранен для пользователя {message.from_user.id}: {document_type.value}")
         
     except Exception as e:
-        logger.error(f"Ошибка сохранения документа для {message.from_user.id}: {e}")
+        # Только тип: текст исключения SQLAlchemy несёт параметры INSERT, среди
+        # них ключ шифрования (hide_parameters — вторая линия защиты).
+        logger.error("Ошибка сохранения документа для %s: %s", message.from_user.id, type(e).__name__)
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 

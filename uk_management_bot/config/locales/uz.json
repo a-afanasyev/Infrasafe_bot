@@ -650,6 +650,7 @@
       "upload_not_required": "Hozir hujjatlar talab qilinmaydi.",
       "upload_rejected": "Tekshiruv rad etildi. Hujjatlarni qayta yuklash uchun arizani qayta topshiring.",
       "upload_limit": "Hujjatlarning maksimal soni yuklandi. Menejer qarorini kuting.",
+      "upload_too_large": "❌ Fayl 20 MB dan katta. Kichikroq skan yoki rasm yuboring.",
       "no_documents": "📄 Hujjatlar yuklanmagan",
       "skip_documents": "⏭️ Hujjatni yuklashni o'tkazib yuborish",
       "title": "📄 Hujjatlar yuklanmoqda",

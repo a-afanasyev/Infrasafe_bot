@@ -67,13 +67,33 @@ def test_deleted_user_is_denied(resident):
     assert _add(resident) is UploadDenied.NOT_REQUIRED
 
 
-def test_requested_staff_can_upload(resident):
-    """Менеджер запросил документы у сотрудника — роль applicant не требуется."""
+def test_staff_without_resident_role_cannot_upload_even_if_requested(resident):
+    """Документы сотрудника негде смотреть (карточка жителя видит только applicant)."""
     user = resident.get(User, 1)
     user.roles = '["executor"]'
     user.verification_status = "requested"
     resident.commit()
-    assert _add(resident) is None
+    assert _add(resident) is UploadDenied.NOT_REQUIRED
+
+
+def test_rejected_multirole_gets_no_resubmit_hint(resident):
+    """REJECTED (с кнопкой переподачи) — только «чистому» жителю: стаффу переподача не дана."""
+    user = resident.get(User, 1)
+    user.roles = '["applicant", "executor"]'
+    user.verification_status = "rejected"
+    resident.commit()
+    assert UserVerificationService(resident).check_document_upload(TG)[1] is UploadDenied.NOT_REQUIRED
+
+
+def test_bot_document_request_opens_the_check(resident):
+    """Запрос из панели верификации бота открывает проверку — иначе загрузка «не требуется»."""
+    user = resident.get(User, 1)
+    user.verification_status = "verified"
+    resident.commit()
+    UserVerificationService(resident).create_verification_request(1, 1, {"type": "passport"})
+    resident.expire_all()
+    assert resident.get(User, 1).verification_status == "requested"
+    assert UserVerificationService(resident).check_document_upload(TG)[1] is None
 
 
 def test_unknown_telegram_id_is_denied(resident):

@@ -53,20 +53,31 @@ def _result(user: User, documents: Iterable[UserDocument]) -> PurgeResult:
 
 
 def purge_documents_sync(db: Session, user: User) -> PurgeResult:
-    """Удаляет документы пользователя в текущей транзакции (commit — у вызывающего)."""
+    """Удаляет документы пользователя в текущей транзакции (commit — у вызывающего).
+
+    FOR UPDATE строки пользователя — сериализация с загрузкой документа на ЛЮБОМ
+    пути (загрузка вставляет под тем же локом): иначе документ, закоммиченный
+    между чтением и сменой статуса, удалил бы триггер, а его media_id не попал бы
+    в гигиену. flush сразу — DELETE уходит до UPDATE статуса (иначе триггер
+    удалит строки первым, и ORM получит «0 rows matched»).
+    """
+    db.query(User.id).filter(User.id == user.id).with_for_update().first()
     documents = db.query(UserDocument).filter(UserDocument.user_id == user.id).all()
     for document in documents:
         db.delete(document)
+    db.flush()
     return _result(user, documents)
 
 
 async def purge_documents(db: AsyncSession, user: User) -> PurgeResult:
     """Async-двойник `purge_documents_sync` (commit — у вызывающего)."""
+    await db.execute(select(User.id).where(User.id == user.id).with_for_update())
     documents = (await db.execute(
         select(UserDocument).where(UserDocument.user_id == user.id)
     )).scalars().all()
     for document in documents:
         await db.delete(document)
+    await db.flush()
     return _result(user, documents)
 
 

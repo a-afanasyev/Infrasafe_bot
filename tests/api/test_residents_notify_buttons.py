@@ -15,7 +15,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def _resident():
-    return User(id=1, telegram_id=7401, language="ru", first_name="Ж")
+    return User(id=1, telegram_id=7401, language="ru", first_name="Ж", roles='["applicant"]')
 
 
 async def _sent(coro_factory):
@@ -29,6 +29,15 @@ async def test_rejection_carries_resubmit_button():
     args = await _sent(lambda: notify.notify_verification_rejected(_resident(), "нечитаемо"))
     markup = args.args[2] if len(args.args) > 2 else args.kwargs["reply_markup"]
     assert markup["inline_keyboard"][0][0]["callback_data"] == "verif:resubmit"
+
+
+async def test_rejection_of_multirole_has_no_resubmit_button():
+    """Переподача только «чистому» жителю — кнопка сотруднику ответила бы «недоступна»."""
+    resident = _resident()
+    resident.roles = '["applicant", "executor"]'
+    args = await _sent(lambda: notify.notify_verification_rejected(resident, "нечитаемо"))
+    markup = args.args[2] if len(args.args) > 2 else args.kwargs.get("reply_markup")
+    assert markup is None
 
 
 async def test_documents_request_carries_upload_button():

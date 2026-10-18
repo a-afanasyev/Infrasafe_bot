@@ -9,6 +9,7 @@
 """
 
 import logging
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,11 @@ _DECIDABLE_FROM = frozenset({"pending", "requested"})
 #: строки чистит только решение) и защита от заливки канала.
 MAX_DOCUMENTS_PER_REVIEW = 10
 
+#: 20 МБ — предел bot.get_file (бот скачивает скан для шифрования) и getFile
+#: медиа-сервиса для blob'а; запас под формат шифротекста (v1 + nonce + tag).
+MAX_DOCUMENT_BYTES = 20 * 1024 * 1024 - 1024
+_DOCUMENT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".pdf")
+
 
 #: Не чаще одной переподачи в сутки (первая после отказа — сразу).
 RESUBMIT_COOLDOWN = timedelta(hours=24)
@@ -46,6 +52,12 @@ class ResubmitResult(str, Enum):
     COOLDOWN = "cooldown"                # предыдущая переподача моложе суток
     DENIED = "denied"                    # не «чистый» житель / заблокирован / удалён / verified
     NOT_FOUND = "not_found"
+
+
+@dataclass(frozen=True)
+class ResubmitOutcome:
+    result: ResubmitResult
+    purge: PurgeResult  # документы, оставшиеся от прошлого отказа — гигиена медиа после commit
 
 
 class UploadDenied(str, Enum):
@@ -88,6 +100,12 @@ class UserVerificationService:
             UserVerification объект
         """
         try:
+            # Запрос документов открывает проверку (как API request-documents):
+            # иначе guard загрузки ответил бы «документы не требуются».
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user is not None and user.verification_status != "requested":
+                user.verification_status = "requested"
+
             # Проверяем, есть ли уже активная верификация
             existing_verification = self.db.query(UserVerification).filter(
                 and_(
@@ -443,7 +461,7 @@ class UserVerificationService:
 
     # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ В ОНБОРДИНГЕ ═══
     
-    def resubmit_verification(self, telegram_id: int) -> ResubmitResult:
+    def resubmit_verification(self, telegram_id: int) -> "ResubmitOutcome":
         """Переподача после отказа — одна транзакция под FOR UPDATE пользователя.
 
         Только «чистый» житель (`PURE_APPLICANT_ROLES`: callback шлёт клиент, а
@@ -455,23 +473,29 @@ class UserVerificationService:
         """
         from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
 
+        def refused(result: ResubmitResult) -> ResubmitOutcome:
+            return ResubmitOutcome(result, PurgeResult(telegram_id))
+
         try:
             user = self.db.query(User).filter(User.telegram_id == telegram_id).with_for_update().first()
             if user is None:
-                return ResubmitResult.NOT_FOUND
+                return refused(ResubmitResult.NOT_FOUND)
             if user.verification_status in _DECIDABLE_FROM:
-                return ResubmitResult.ALREADY_PENDING
+                return refused(ResubmitResult.ALREADY_PENDING)
             if (user.verification_status != "rejected" or user.deleted_at is not None
                     or user.status == "blocked"
                     or set(parse_roles_safe(user.roles)) - PURE_APPLICANT_ROLES):
-                return ResubmitResult.DENIED
+                return refused(ResubmitResult.DENIED)
             last = self.db.query(AuditLog.created_at).filter(
                 AuditLog.user_id == user.id, AuditLog.action == _RESUBMIT_ACTION,
             ).order_by(AuditLog.created_at.desc()).first()
             if last and last[0] and as_utc(last[0]) > utc_now() - RESUBMIT_COOLDOWN:
-                return ResubmitResult.COOLDOWN
+                return refused(ResubmitResult.COOLDOWN)
 
             user_id = user.id
+            # Отказ до релиза документы не удалял: новая заявка не должна
+            # подхватить старый паспорт (и съесть им лимит).
+            purge = purge_documents_sync(self.db, user)
             user.verification_status = "pending"
             user.verification_notes = None
             user.verification_date = None
@@ -483,7 +507,7 @@ class UserVerificationService:
             if self.db.in_transaction():
                 self.db.rollback()  # ранний выход или сбой — снять лок
         logger.info("Житель %s переподал заявку на верификацию", user_id)
-        return ResubmitResult.RESUBMITTED
+        return ResubmitOutcome(ResubmitResult.RESUBMITTED, purge)
 
     def check_document_upload(
         self, telegram_id: int, *, lock: bool = False,
@@ -491,22 +515,27 @@ class UserVerificationService:
         """Центральный guard загрузки документа. → (users.id | None, отказ | None).
 
         Принимаем, только пока проверка открыта, у живого незаблокированного
-        жителя (или если менеджер сам запросил документы — `requested`), и не
-        больше MAX_DOCUMENTS_PER_REVIEW. `lock=True` — под FOR UPDATE строки
-        пользователя (вставка сериализуется с решением менеджера).
+        жителя и не больше MAX_DOCUMENTS_PER_REVIEW. Документы сотрудника без
+        роли жителя не принимаются: смотреть их можно только в карточке жителя
+        дашборда, которая видит лишь `applicant`. `lock=True` — под FOR UPDATE
+        строки пользователя (вставка сериализуется с решением менеджера).
         """
+        from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+
         query = self.db.query(User).filter(User.telegram_id == telegram_id)
         user = (query.with_for_update() if lock else query).first()
         if user is None or user.deleted_at is not None or user.status == "blocked":
             return None, UploadDenied.NOT_REQUIRED
-        if user.verification_status == "rejected":
-            return user.id, UploadDenied.REJECTED
-        if user.verification_status not in _DECIDABLE_FROM:
-            return user.id, UploadDenied.NOT_REQUIRED
+        roles = set(parse_roles_safe(user.roles))
         # Доменное правило о человеке-объекте, не право доступа (RBAC-снимок
-        # inline_checks): документы верификации грузит житель; иначе — только
-        # по прямому запросу менеджера (`requested`, в т.ч. сотруднику).
-        if user.verification_status != "requested" and "applicant" not in parse_roles_safe(user.roles):
+        # inline_checks): документы верификации грузит житель.
+        if "applicant" not in roles:
+            return user.id, UploadDenied.NOT_REQUIRED
+        if user.verification_status == "rejected":
+            # Переподача доступна только «чистому» жителю — остальным не предлагаем.
+            pure = not roles - PURE_APPLICANT_ROLES
+            return user.id, UploadDenied.REJECTED if pure else UploadDenied.NOT_REQUIRED
+        if user.verification_status not in _DECIDABLE_FROM:
             return user.id, UploadDenied.NOT_REQUIRED
         count = self.db.query(UserDocument).filter(UserDocument.user_id == user.id).count()
         if count >= MAX_DOCUMENTS_PER_REVIEW:
@@ -609,36 +638,16 @@ class UserVerificationService:
                 'rejected_documents': 0
             }
     
-    def validate_document_file(self, file_id: str, file_name: str = None, file_size: int = None) -> tuple[bool, str]:
-        """
-        Валидировать загружаемый файл документа
-        
-        Args:
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            (is_valid, error_message)
-        """
-        try:
-            # Проверяем наличие file_id
-            if not file_id:
-                return False, "Отсутствует идентификатор файла"
-            
-            # 20 МБ — предел bot.get_file: больший файл бот не скачает для шифрования
-            if file_size and file_size > 20 * 1024 * 1024:
-                return False, "Размер файла превышает 20MB"
+    def validate_document_file(self, file_id: str, file_name: str = None,
+                               file_size: int = None) -> tuple[bool, str]:
+        """Проверка по метаданным Telegram до скачивания. → (ok, locale-ключ ошибки).
 
-            # Проверяем расширение файла (тип всё равно сверяется по байтам при загрузке)
-            if file_name:
-                allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf']
-                file_extension = file_name.lower()
-                if not any(file_extension.endswith(ext) for ext in allowed_extensions):
-                    return False, f"Неподдерживаемый тип файла. Разрешены: {', '.join(allowed_extensions)}"
-            
-            return True, ""
-            
-        except Exception as e:
-            logger.error(f"Ошибка валидации файла: {e}")
-            return False, "Ошибка валидации файла"
+        Тип всё равно сверяется по байтам при загрузке (upload_encrypted_document).
+        """
+        if not file_id:
+            return False, "onboarding.documents.file_invalid"
+        if file_size and file_size > MAX_DOCUMENT_BYTES:
+            return False, "onboarding.documents.upload_too_large"
+        if file_name and not file_name.lower().endswith(_DOCUMENT_EXTENSIONS):
+            return False, "onboarding.documents.file_invalid"
+        return True, ""

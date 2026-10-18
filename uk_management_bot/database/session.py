@@ -16,6 +16,9 @@ from uk_management_bot.config.settings import settings
 engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
+    # Параметры SQL не попадают в тексты ошибок и echo-лог: среди них ключи
+    # шифрования документов жителя (user_documents.encryption_key) и ПДн.
+    hide_parameters=True,
     pool_size=10,
     max_overflow=10,
     pool_timeout=60,
@@ -39,6 +42,7 @@ if "postgresql" in settings.DATABASE_URL:
     async_engine = create_async_engine(
         async_database_url,
         echo=settings.DEBUG,
+        hide_parameters=True,  # см. sync-движок выше
         pool_size=10,
         max_overflow=10,
         pool_timeout=60,

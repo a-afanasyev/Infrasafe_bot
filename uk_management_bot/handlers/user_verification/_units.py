@@ -5,6 +5,7 @@ AUD5-ARCH-3 (волна 11): файл — часть пакета ``user_verific
 под-модулях. Код перенесён 1:1 из handlers/user_verification.py.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
@@ -16,6 +17,8 @@ from uk_management_bot.database.models.user_verification import (
 )
 from uk_management_bot.utils.address_helpers import apartment_address
 from uk_management_bot.utils.user_names import display_name
+
+logger = logging.getLogger(__name__)
 
 # ==========================================================================
 # DTO + sync-юниты (AUD3-07). Сессия живёт только внутри юнита.
@@ -184,34 +187,50 @@ def _load_access_rights_card(db, user_id: int):
     ]
 
 
+
+
+
 def _approve_user_db(db, user_id: int, admin_telegram_id: int):
     """Одобрение одним commit + fetch уведомлений. → (purge | None, notify_pair,
-    restart_target). Сеть (гигиена медиа, отправки) — у вызывающего."""
+    restart_target). Сеть (гигиена медиа, отправки) — у вызывающего.
+
+    Решение уже закоммичено к моменту fetch'а: его сбой не должен терять purge
+    (иначе media_id не дойдут до гигиены) — уведомления просто не уйдут.
+    """
     from uk_management_bot.database.models.user import User
 
     purge = UserVerificationService(db).approve_verification_db(user_id, admin_telegram_id)
     if purge is None:
         return None, None, None
-
-    notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
-
-    restart_target = None
-    target_user = db.query(User).filter(User.id == user_id).first()
-    if target_user:
-        restart_target = (target_user.telegram_id, target_user.language or "ru")
-
+    try:
+        notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
+        target_user = db.query(User).filter(User.id == user_id).first()
+        restart_target = (target_user.telegram_id, target_user.language or "ru") if target_user else None
+    except Exception as e:  # noqa: BLE001
+        logger.error("Уведомления об одобрении %s не собраны: %s", user_id, type(e).__name__)
+        return purge, None, None
     return purge, notify_pair, restart_target
 
 
 def _reject_user_db(db, user_id: int, admin_telegram_id: int, notes: str):
     """Отклонение одним commit (документы удаляются) + fetch уведомления.
-    → (purge | None, notify_pair, язык жителя для кнопки переподачи)."""
+    → (purge | None, notify_pair, язык жителя для кнопки переподачи | None).
+
+    Язык None — кнопку не показывать: переподача доступна только «чистому»
+    жителю (у сотрудника своя очередь, кнопка ответила бы «недоступна»).
+    """
     from uk_management_bot.database.models.user import User
+    from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+    from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
     purge = UserVerificationService(db).reject_verification(user_id, admin_telegram_id, notes)
     if purge is None:
-        return None, None, "ru"
-    resident = db.query(User).filter(User.id == user_id).first()
-    lang = (resident.language if resident else None) or "ru"
-    return purge, NotificationService(db).collect_verification_rejected_message(user_id), lang
-
+        return None, None, None
+    try:
+        resident = db.query(User).filter(User.id == user_id).first()
+        pure = resident is not None and not set(parse_roles_safe(resident.roles)) - PURE_APPLICANT_ROLES
+        lang = ((resident.language or "ru") if pure else None)
+        return purge, NotificationService(db).collect_verification_rejected_message(user_id), lang
+    except Exception as e:  # noqa: BLE001 — решение закоммичено, purge не теряем
+        logger.error("Уведомление об отказе %s не собрано: %s", user_id, type(e).__name__)
+        return purge, None, None

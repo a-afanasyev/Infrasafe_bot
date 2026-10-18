@@ -25,6 +25,7 @@ def _msg():
     msg = MagicMock(spec=Message)
     msg.from_user = MagicMock(id=TG_ID)
     msg.answer = AsyncMock()
+    msg.delete = AsyncMock()
     msg.bot = MagicMock()
     return msg
 
@@ -37,6 +38,7 @@ def _state():
     })
     state.clear = AsyncMock()
     state.set_state = AsyncMock()
+    state.set_data = AsyncMock()
     return state
 
 
@@ -59,7 +61,7 @@ async def _save(run_db_results, upload=None, discard=None):
 @pytest.mark.parametrize("key", [
     "onboarding.documents.upload_unsupported", "onboarding.documents.upload_unavailable",
     "onboarding.documents.upload_not_required", "onboarding.documents.upload_rejected",
-    "onboarding.documents.upload_limit",
+    "onboarding.documents.upload_limit", "onboarding.documents.upload_too_large",
 ])
 def test_upload_texts_exist(key, language):
     """get_text без ключа возвращает сам ключ — без этой проверки тесты выше прошли бы и без локалей."""
@@ -75,6 +77,8 @@ async def test_saved_with_media_id_and_internal_user_id():
     assert upload.await_args.kwargs == {"user_id": USER_ID, "document_type": "passport"}
     discard.assert_not_awaited()
     assert get_text("onboarding.documents.document_saved", language="ru") in _texts(msg)
+    # открытый скан не остаётся в чате с ботом
+    msg.delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -130,7 +134,7 @@ async def test_valid_file_is_saved_without_confirmation_step():
 
     save.assert_awaited_once()
     state.update_data.assert_awaited_once_with(
-        {"file_id": "d", "file_name": "scan.pdf", "file_size": 100})
+        {"file_id": "d", "file_name": "document.pdf", "file_size": 100})  # без исходного имени
     assert OnboardingStates.waiting_for_document_confirmation not in [
         c.args[0] for c in state.set_state.await_args_list]
 
