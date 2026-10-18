@@ -1,8 +1,10 @@
 """Раздел «Жители» — выдача документов менеджеру (PR-5).
 
-Документы жителя лежат в Telegram: в БД хранится только `file_id`. Отдавать
-его клиенту нельзя — это готовый токен скачивания в обход нашей авторизации,
-поэтому файл проксируется: сервер сам ходит в Bot API и отдаёт байты.
+Новые документы лежат в медиа-сервисе зашифрованными (ключ — в строке
+`UserDocument`, миграция 026): сервер берёт blob по `media_id` и расшифровывает.
+Легаси-документы — только Telegram `file_id`; отдавать его клиенту нельзя (это
+готовый токен скачивания в обход авторизации), поэтому сервер сам ходит в
+Bot API. Выдача — `Cache-Control: no-store`.
 
 Три вещи, которые здесь сделаны иначе, чем в медиа-прокси заявок, и это
 намеренно:
@@ -32,7 +34,9 @@ from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.residents.schemas import ResidentDocumentOut
 from uk_management_bot.database.models.user import User
+from uk_management_bot.integrations import get_media_client
 from uk_management_bot.services.residents import queries
+from uk_management_bot.utils.document_crypto import DocumentDecryptError, decrypt, document_aad
 from uk_management_bot.services.residents.exceptions import ResidentNotFound
 
 logger = logging.getLogger(__name__)
@@ -136,6 +140,58 @@ async def get_document_file(
         raise ResidentNotFound("Житель не найден")
     doc = await _require_document(db, resident_id, doc_id)
 
+    if doc.media_id is not None:
+        body = await _load_encrypted(doc, resident_id)
+    else:
+        body = await _load_from_telegram(doc, resident_id)
+
+    content_type = _sniff_document_mime(body)
+    if content_type is None:
+        logger.warning("Документ %s жителя %s: неподдержанный тип содержимого",
+                       doc_id, resident_id)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Неподдерживаемый тип файла",
+        )
+
+    inline = content_type in _INLINE_TYPES
+    return Response(
+        content=body,
+        media_type=content_type,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f"{'inline' if inline else 'attachment'}; "
+                                   f'filename="document-{doc_id}"',
+            # Скан не кэшируется нигде: уничтожение ключа не достанет копию из кэша.
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+async def _load_encrypted(doc, resident_id: int) -> bytes:
+    """Зашифрованный документ: blob из медиа-сервиса + расшифровка ключом строки.
+
+    Сбой медиа-сервиса или расшифровки — 502, без отката на Telegram: новые
+    документы живут только в медиа-сервисе.
+    """
+    client = get_media_client()
+    loaded = await client.download_media_file(doc.media_id) if client is not None else None
+    if loaded is None:
+        logger.warning("Документ %s жителя %s: Media Service не отдал blob", doc.id, resident_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Медиа-сервис недоступен")
+    document_type = getattr(doc.document_type, "value", doc.document_type)
+    try:
+        return decrypt(doc.encryption_key, loaded[0],
+                       document_aad(doc.document_uuid, resident_id, document_type))
+    except DocumentDecryptError:
+        logger.warning("Документ %s жителя %s не расшифровывается", doc.id, resident_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail="Документ недоступен") from None
+
+
+async def _load_from_telegram(doc, resident_id: int) -> bytes:
+    """Легаси-документ (только Telegram file_id) — до удаления последних таких строк."""
+    doc_id = doc.id
     # A9-P2-9: getFile и скачивание — через общий модуль отправки (общий
     # клиент; текст сетевых ошибок без URL с токеном).
     meta = await telegram_send.get_file(doc.file_id, timeout=_TIMEOUT)
@@ -167,26 +223,4 @@ async def get_document_file(
         ) from None
     except telegram_send.TelegramUnavailable as e:
         _telegram_unavailable(doc_id, resident_id, str(e))
-
-    content_type = _sniff_document_mime(body)
-    if content_type is None:
-        logger.warning("Документ %s жителя %s: неподдержанный тип содержимого",
-                       doc_id, resident_id)
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Неподдерживаемый тип файла",
-        )
-
-    inline = content_type in _INLINE_TYPES
-    return Response(
-        content=body,
-        media_type=content_type,
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": f"{'inline' if inline else 'attachment'}; "
-                                   f'filename="document-{doc_id}"',
-            # Приватный кэш на 5 минут: менеджер листает карточку туда-сюда, а
-            # `file_path` из Telegram живёт около часа — дольше держать нечего.
-            "Cache-Control": "private, max-age=300",
-        },
-    )
+    return body

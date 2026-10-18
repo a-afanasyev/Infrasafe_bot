@@ -13,6 +13,7 @@ from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.document_purge import PurgeResult, purge_documents
 from uk_management_bot.services.sql_sorting import apply_sort, text_key
 # AUD7-ARCH-02: общая для API и домена операция живёт в services; здесь —
 # реэкспорт, чтобы `api.shifts.service.set_user_status` остался для роутеров/тестов.
@@ -218,12 +219,17 @@ async def get_user(db: AsyncSession, user_id: int) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
-async def set_user_verification(db: AsyncSession, user: User, value: str) -> User:
-    """Persist a verification_status change (verified/rejected)."""
+async def set_user_verification(db: AsyncSession, user: User, value: str) -> PurgeResult:
+    """Persist a verification_status change (verified/rejected).
+
+    Проверка закрывается — документы и ключи удаляются в той же транзакции,
+    ДО смены статуса (services/document_purge). Гигиена медиа — у роутера.
+    """
+    purge = await purge_documents(db, user)
     user.verification_status = value
     await db.commit()
     await db.refresh(user)
-    return user
+    return purge
 
 
 async def set_meter_entry_role(db: AsyncSession, user: User, enabled: bool) -> User:
@@ -293,17 +299,22 @@ async def list_pending_staff(db: AsyncSession) -> list[User]:
     return list(result.scalars().all())
 
 
-async def activate_employee(db: AsyncSession, user: User) -> User:
+async def activate_employee(db: AsyncSession, user: User) -> PurgeResult:
     """Одобрить pending-стафф: `status`→approved (+verified, если была pending).
 
     Также поднимает `active_role` до стафф-роли, если она всё ещё `applicant`:
     приглашённый через бота сотрудник после `/join` остаётся с
     `active_role='applicant'` (auth_service не меняет валидную active_role), из-за
     чего меню менеджера в боте не появилось бы без ручного переключения.
+
+    pending→verified закрывает проверку — документы удаляются (PurgeResult для
+    гигиены медиа у роутера).
     """
-    user.status = "approved"
+    purge = PurgeResult(user.telegram_id)
     if user.verification_status == "pending":
+        purge = await purge_documents(db, user)
         user.verification_status = "verified"
+    user.status = "approved"
     if user.active_role not in _STAFF_ROLES:
         user_roles = set(parse_roles_safe(user.roles))
         for role in _STAFF_ROLE_PRIORITY:
@@ -312,7 +323,7 @@ async def activate_employee(db: AsyncSession, user: User) -> User:
                 break
     await db.commit()
     await db.refresh(user)
-    return user
+    return purge
 
 
 async def decline_employee(db: AsyncSession, user: User) -> User:
@@ -341,8 +352,11 @@ async def soft_delete_employee(
     reason: str,
     deleted_by_id: int,
     active_count: int,
-) -> None:
+) -> PurgeResult:
     """Reassign active requests (if any), soft-delete the user, end active shifts.
+
+    Удаление пользователя удаляет его документы и ключи (до `deleted_at`, см.
+    services/document_purge); PurgeResult — для гигиены медиа у роутера.
 
     Validation of reassign target (existence / not-deleted) is left to the
     caller via `get_user`; this performs the writes within the handler tx.
@@ -366,6 +380,7 @@ async def soft_delete_employee(
         )
 
     # Soft-delete the user
+    purge = await purge_documents(db, user)
     user.deleted_at = datetime.now(timezone.utc)
     user.deleted_by = deleted_by_id
     user.deletion_reason = reason
@@ -380,6 +395,7 @@ async def soft_delete_employee(
         shift.end_time = datetime.now(timezone.utc)
 
     await db.commit()
+    return purge
 
 
 async def get_employee_with_stats(

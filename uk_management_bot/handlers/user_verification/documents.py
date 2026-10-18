@@ -21,7 +21,7 @@ from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.authz import has_action_roles
 
 from ._router import router
-from ._units import _fmt_created_at, _load_document, _load_documents_page
+from ._units import _fmt_created_at, _load_documents_page
 
 logger = logging.getLogger(__name__)
 
@@ -130,68 +130,3 @@ async def view_user_documents(callback: CallbackQuery, roles: list = None, langu
             get_text('errors.unknown_error', language=lang),
             show_alert=True
         )
-
-@router.callback_query(F.data.startswith("download_document_"))
-async def download_user_document(callback: CallbackQuery, roles: list = None, language: str = "ru", *, _db=None):
-    """Скачать документ пользователя"""
-    lang = language
-    document_id = int(callback.data.split("_")[2])
-
-    # Проверяем права доступа
-    if not roles or not has_action_roles(roles, "admin_panel.use"):
-        await callback.answer(
-            get_text('errors.permission_denied', language=lang),
-            show_alert=True
-        )
-        return
-
-    try:
-        document = await run_db(
-            lambda s: _load_document(s, document_id, with_file=True), db=_db
-        )
-        if document is None:
-            await callback.answer(
-                get_text("user_verification.handlers.document_not_found", language=lang),
-                show_alert=True
-            )
-            return
-
-        # Отправляем файл
-        bot = callback.bot
-
-        try:
-            # BUG-144: «Загружен» — через ключ uploaded_date (как выше), NULL-safe дата.
-            caption = (f"📄 {get_text(f'verification.document_types.{document.type_value}', language=lang)}\n"
-                      f"📅 {get_text('user_verification.handlers.uploaded_date', language=lang)}: {_fmt_created_at(document.created_at)}")
-
-            # Пробуем отправить как документ, если не получится - как фото
-            try:
-                await bot.send_document(
-                    chat_id=callback.from_user.id,
-                    document=document.file_id,
-                    caption=caption
-                )
-                await callback.answer(get_text("user_verification.handlers.document_sent_dm", language=lang))
-            except Exception as doc_error:
-                # Если ошибка "can't use file of type Photo", отправляем как фото
-                if "can't use file of type Photo" in str(doc_error):
-                    logger.info(f"Файл {document.file_id} является фото, отправляем как photo")
-                    await bot.send_photo(
-                        chat_id=callback.from_user.id,
-                        photo=document.file_id,
-                        caption=caption
-                    )
-                    await callback.answer(get_text("user_verification.handlers.document_sent_dm", language=lang))
-                else:
-                    raise  # Пробрасываем другие ошибки
-        except Exception as e:
-            logger.error(f"Ошибка отправки документа: {e}")
-            await callback.answer(get_text("user_verification.handlers.error_sending_document", language=lang), show_alert=True)
-
-    except Exception as e:
-        logger.error(f"Ошибка скачивания документа: {e}")
-        await callback.answer(
-            get_text('errors.unknown_error', language=lang),
-            show_alert=True
-        )
-

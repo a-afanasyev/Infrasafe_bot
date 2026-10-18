@@ -2,9 +2,10 @@
 
 Тонкий HTTP-слой поверх `services/residents/verification_core.py`.
 
-Зачистка файлов в Media Service идёт ПОСЛЕ commit и best-effort: решение
-менеджера уже зафиксировано, недоступный внешний сервис не имеет права его
-откатывать. Подробнее про деградацию — в `_cleanup_media`.
+Документы (и ключи шифрования) удаляются в транзакции решения — одобрения и
+отказа. Гигиена blob'ов в Media Service идёт ПОСЛЕ commit и best-effort
+(`services/document_purge.cleanup_purged_documents`): решение уже
+зафиксировано, а без ключа blob нечитаем.
 """
 import logging
 
@@ -20,6 +21,7 @@ from uk_management_bot.api.residents.schemas import (
     ResidentVerificationRejectIn,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.services.residents import verification_core
 
 logger = logging.getLogger(__name__)
@@ -31,54 +33,6 @@ _manager_only = require_action("residents.manage")
 #: Строже прочих мутаций: КАЖДЫЙ вызов отправляет жителю сообщение в Telegram,
 #: то есть сессией менеджера можно завалить чужой чат.
 _NOTIFY_LIMIT = "20/minute"
-
-
-async def _cleanup_media(resident: User, deleted_ids: list[int]) -> None:
-    """Best-effort зачистка файлов документов в Media Service.
-
-    ⚠ Осознанная деградация: недоступный внешний сервис не имеет права
-    откатывать уже зафиксированное решение менеджера. Но «не роняем» ≠ «молчим»:
-    записи в нашей БД к этому моменту уже удалены, то есть из карточки
-    документы исчезли, а физически могли остаться — и это обязано быть видно
-    в логах. Раньше хелпер возвращал True в том числе на недоступный сервис,
-    поэтому такой случай не оставлял вообще никакого следа.
-
-    `telegram_id` в предупреждении не случайно: это и есть ручка, по которой
-    зачистку можно повторить вручную.
-
-    В лог пишутся количество и id ЗАПИСЕЙ, но НЕ Telegram `file_id`: file_id —
-    готовый токен скачивания файла, и логи не то место, где его хранить.
-    """
-    if not deleted_ids:
-        return
-    try:
-        from uk_management_bot.utils.media_helpers import (
-            MediaCleanupResult, delete_user_documents_from_media_service,
-        )
-        result = await delete_user_documents_from_media_service(resident.telegram_id)
-    except Exception as e:  # noqa: BLE001 — не роняем уже зафиксированное решение
-        logger.warning(
-            "Не удалось удалить документы жителя %s из Media Service "
-            "(записей: %s, id: %s): %s — файлы могли остаться в Media Service "
-            "и Telegram",
-            resident.id, len(deleted_ids), deleted_ids, e,
-        )
-        return
-
-    if result is MediaCleanupResult.DELETED:
-        logger.info("Удалены документы жителя %s из Media Service (записей: %s)",
-                    resident.id, len(deleted_ids))
-    elif result is MediaCleanupResult.NOTHING_TO_DELETE:
-        logger.info("В Media Service документов жителя %s не было (записей в БД: %s)",
-                    resident.id, len(deleted_ids))
-    else:
-        logger.warning(
-            "Зачистка документов жителя %s в Media Service НЕ состоялась (%s); "
-            "записей удалено из БД: %s (id: %s). Файлы остались в Media Service "
-            "и Telegram — повторить по telegram_id %s",
-            resident.id, result.value, len(deleted_ids), deleted_ids,
-            resident.telegram_id,
-        )
 
 
 @router.post("/{resident_id}/verification/request-documents")
@@ -109,15 +63,15 @@ async def approve_verification(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ):
-    resident, deleted_ids = await verification_core.approve_verification(
+    resident, purge = await verification_core.approve_verification(
         db, resident_id=resident_id, actor_id=user.id, notes=body.notes,
     )
-    await _cleanup_media(resident, deleted_ids)
+    await cleanup_purged_documents(purge)
     await notify.notify_verification_approved(resident)
     return {
         "id": resident.id,
         "verification_status": resident.verification_status,
-        "deleted_documents": len(deleted_ids),
+        "deleted_documents": purge.count,
     }
 
 
@@ -130,8 +84,13 @@ async def reject_verification(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ):
-    resident = await verification_core.reject_verification(
+    resident, purge = await verification_core.reject_verification(
         db, resident_id=resident_id, actor_id=user.id, notes=body.notes,
     )
+    await cleanup_purged_documents(purge)
     await notify.notify_verification_rejected(resident, body.notes.strip())
-    return {"id": resident.id, "verification_status": resident.verification_status}
+    return {
+        "id": resident.id,
+        "verification_status": resident.verification_status,
+        "deleted_documents": purge.count,
+    }

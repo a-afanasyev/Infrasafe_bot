@@ -29,6 +29,7 @@ from uk_management_bot.api.shifts.schemas import (
     SortOrder,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.utils.auth_helpers import get_user_roles
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
@@ -209,7 +210,7 @@ async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="User is already verified")
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User was rejected and cannot be re-approved this way")
-    await service.set_user_verification(db, user, "verified")
+    await cleanup_purged_documents(await service.set_user_verification(db, user, "verified"))
     return {"id": user.id, "verification_status": user.verification_status}
 
 
@@ -222,7 +223,7 @@ async def reject_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User is already rejected")
-    await service.set_user_verification(db, user, "rejected")
+    await cleanup_purged_documents(await service.set_user_verification(db, user, "rejected"))
     return {"id": user.id, "verification_status": user.verification_status}
 
 
@@ -268,7 +269,7 @@ async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=422, detail="Not a staff account (manager/executor/inspector)")
     if user.status != "pending":
         raise HTTPException(status_code=409, detail="User is not pending activation")
-    await service.activate_employee(db, user)
+    await cleanup_purged_documents(await service.activate_employee(db, user))
     return {"id": user.id, "status": user.status, "active_role": user.active_role}
 
 
@@ -441,7 +442,7 @@ async def delete_employee(
         if target_user.deleted_at is not None:
             raise HTTPException(status_code=422, detail="Cannot reassign to a deleted employee")
 
-    await service.soft_delete_employee(
+    purge = await service.soft_delete_employee(
         db,
         user=user,
         reassign_to=body.reassign_to,
@@ -449,6 +450,7 @@ async def delete_employee(
         deleted_by_id=current_user.id,
         active_count=active_count,
     )
+    await cleanup_purged_documents(purge)
     return {"message": "deleted", "reassigned_requests": active_count if body.reassign_to else 0}
 
 

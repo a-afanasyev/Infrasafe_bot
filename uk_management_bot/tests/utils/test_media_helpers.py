@@ -11,9 +11,9 @@ Tests verify:
 - upload_telegram_file_to_media_service: returns result dict on successful upload
 - upload_multiple_telegram_files: aggregates results, skips failures
 - upload_report_file_to_media_service: returns None when media client is absent
-- upload_document_to_media_service: builds USER_{id} request_number correctly;
-  uploaded_by = internal user.id (INT4 in media-service), not telegram id;
-  content_type sniffed from bytes; unsupported formats are not sent
+- upload_encrypted_document: only ciphertext reaches media-service (decryptable
+  with the row AAD); jpeg/png/PDF by bytes, others are not sent; uploaded_by =
+  internal user.id; Telegram/media failures → DocumentUploadError("unavailable")
 - delete_user_documents_from_media_service: returns True when media client absent
 - delete_user_documents_from_media_service: deletes each file and returns True
 """
@@ -206,7 +206,7 @@ class TestUploadReportFileToMediaService:
 
 
 # ---------------------------------------------------------------------------
-# upload_document_to_media_service
+# upload_encrypted_document — документ жителя шифруется до отправки
 # ---------------------------------------------------------------------------
 
 JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 16
@@ -223,77 +223,82 @@ def _make_doc_bot(data: bytes = JPEG_BYTES, file_path: str = "documents/file.jpg
     return bot
 
 
-def _capturing_client() -> tuple[MagicMock, dict]:
+def _doc_client(media_id: int = 41) -> MagicMock:
     client = MagicMock()
-    captured: dict = {}
-
-    async def capture(**kwargs):
-        captured.update(kwargs)
-        return {"media_file": {"id": 1}}
-
-    client.upload_request_media = capture
-    return client, captured
+    client.upload_resident_document = AsyncMock(return_value=media_id)
+    return client
 
 
-async def _upload_doc(client, bot, *, user_telegram_id=12345, uploaded_by_user_id=7):
+async def _upload_encrypted(client, bot, *, user_id=7, document_type="passport"):
+    from uk_management_bot.utils.media_helpers import upload_encrypted_document
     with patch("uk_management_bot.utils.media_helpers.get_media_client", return_value=client):
-        from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-        return await upload_document_to_media_service(
-            bot=bot,
-            file_id="doc",
-            user_telegram_id=user_telegram_id,
-            uploaded_by_user_id=uploaded_by_user_id,
-        )
+        return await upload_encrypted_document(bot, "doc", user_id=user_id, document_type=document_type)
 
 
-class TestUploadDocumentToMediaService:
+class TestUploadEncryptedDocument:
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_media_client(self):
-        result = await _upload_doc(None, MagicMock())
-        assert result is None
+    @pytest.mark.parametrize("data", [JPEG_BYTES, PDF_BYTES])
+    async def test_blob_is_encrypted_and_decryptable_with_row_aad(self, data):
+        from uk_management_bot.utils.document_crypto import decrypt, document_aad
 
-    @pytest.mark.asyncio
-    async def test_uses_user_request_number(self):
-        """The request_number passed to the client must be USER_{telegram_id}:
-        по нему delete_user_documents_from_media_service находит сканы."""
-        client, captured = _capturing_client()
-        await _upload_doc(client, _make_doc_bot(), user_telegram_id=12345)
-        assert captured.get("request_number") == "USER_12345"
+        client = _doc_client()
+        upload = await _upload_encrypted(client, _make_doc_bot(data))
 
-    @pytest.mark.asyncio
-    async def test_category_is_archive(self):
-        """The category must always be 'archive' for user documents."""
-        client, captured = _capturing_client()
-        await _upload_doc(client, _make_doc_bot())
-        assert captured.get("category") == "archive"
-
-    @pytest.mark.asyncio
-    async def test_uploaded_by_is_internal_user_id_not_telegram_id(self):
-        """C2 (ревью 2026-09-28): uploaded_by_user_id в media-service — INT4.
-        Telegram ID > 2^31-1 ронял INSERT уже ПОСЛЕ отправки в архивный канал —
-        скан оставался в канале без строки, удаление его не находило."""
-        client, captured = _capturing_client()
-        await _upload_doc(client, _make_doc_bot(), user_telegram_id=6055402868, uploaded_by_user_id=53)
-        assert captured.get("uploaded_by") == 53
-        assert captured.get("request_number") == "USER_6055402868"
-        # Решение владельца 2026-09-29: и users.id, и Telegram ID.
-        assert captured.get("uploaded_by_telegram_id") == 6055402868
-
-    @pytest.mark.asyncio
-    async def test_content_type_is_sniffed_from_bytes(self):
-        """httpx угадывал тип по расширению (.jpg/.pdf/...) — передаём сниффленный."""
-        client, captured = _capturing_client()
-        await _upload_doc(client, _make_doc_bot(JPEG_BYTES, "documents/file.bin"))
-        assert captured.get("content_type") == "image/jpeg"
+        assert upload.media_id == 41
+        blob = client.upload_resident_document.await_args.args[0]
+        assert data not in blob  # в медиа уходит только шифротекст
+        aad = document_aad(upload.document_uuid, 7, "passport")
+        assert decrypt(upload.key, blob, aad) == data
+        assert client.upload_resident_document.await_args.kwargs["uploaded_by"] == 7
 
     @pytest.mark.asyncio
     async def test_unsupported_format_is_not_sent(self):
-        """PDF media-service не хранит (allowlist) — не гоняем его по сети впустую."""
-        client = MagicMock()
-        client.upload_request_media = AsyncMock()
-        result = await _upload_doc(client, _make_doc_bot(PDF_BYTES, "documents/file.pdf"))
-        assert result is None
-        client.upload_request_media.assert_not_awaited()
+        from uk_management_bot.utils.media_helpers import DocumentUploadError
+
+        client = _doc_client()
+        with pytest.raises(DocumentUploadError) as err:
+            await _upload_encrypted(client, _make_doc_bot(b"PK\x03\x04docx", "documents/x.docx"))
+        assert err.value.reason == "unsupported"
+        client.upload_resident_document.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_media_client_is_unavailable(self):
+        from uk_management_bot.utils.media_helpers import DocumentUploadError
+
+        with pytest.raises(DocumentUploadError) as err:
+            await _upload_encrypted(None, _make_doc_bot())
+        assert err.value.reason == "unavailable"
+
+    @pytest.mark.asyncio
+    async def test_media_failure_is_unavailable(self):
+        from uk_management_bot.utils.media_helpers import DocumentUploadError
+
+        client = _doc_client()
+        client.upload_resident_document.side_effect = RuntimeError("503")
+        with pytest.raises(DocumentUploadError) as err:
+            await _upload_encrypted(client, _make_doc_bot())
+        assert err.value.reason == "unavailable"
+        assert client.upload_resident_document.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_transient_media_failure_is_retried_once_with_same_blob(self):
+        client = _doc_client()
+        client.upload_resident_document.side_effect = [RuntimeError("500 timeout"), 42]
+        upload = await _upload_encrypted(client, _make_doc_bot())
+
+        assert upload.media_id == 42
+        first, second = client.upload_resident_document.await_args_list
+        assert first.args[0] == second.args[0]  # тот же blob — ключ строки его откроет
+
+    @pytest.mark.asyncio
+    async def test_telegram_download_failure_is_unavailable(self):
+        from uk_management_bot.utils.media_helpers import DocumentUploadError
+
+        bot = _make_doc_bot()
+        bot.get_file = AsyncMock(side_effect=RuntimeError("tg down"))
+        with pytest.raises(DocumentUploadError) as err:
+            await _upload_encrypted(_doc_client(), bot)
+        assert err.value.reason == "unavailable"
 
 
 # ---------------------------------------------------------------------------

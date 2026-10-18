@@ -25,6 +25,7 @@ from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.session import run_db
 from uk_management_bot.services.user_management_service import UserManagementService
 from uk_management_bot.services.auth_service import AuthService
+from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.keyboards.user_management import (
     get_user_management_main_keyboard,
     get_user_actions_keyboard,
@@ -113,11 +114,9 @@ def _apply_unblock(db, target_user_id: int, manager_id: int, comment: str, lang:
     return _user_card(db, user_mgmt_service, target_user_id, lang)
 
 
-def _apply_delete(db, target_user_id: int, manager_id: int, reason: str) -> bool:
-    """Удаляет пользователя. -> success."""
-    # Выполняем удаление
-    auth_service = AuthService(db)
-    return auth_service.delete_user(target_user_id, manager_id, reason)
+def _apply_delete(db, target_user_id: int, manager_id: int, reason: str):
+    """Удаляет пользователя. -> DeleteUserOutcome (ok + PurgeResult для гигиены медиа)."""
+    return AuthService(db).delete_user_purging_documents(target_user_id, manager_id, reason)
 
 
 def _load_main_panel(db, lang: str):
@@ -371,11 +370,12 @@ async def process_delete_reason(message: Message, state: FSMContext, language: s
         manager_id = data.get('manager_id')
         reason = message.text
 
-        success = await run_db(
+        outcome = await run_db(
             lambda s: _apply_delete(s, target_user_id, manager_id, reason), db=_db
         )
 
-        if success:
+        if outcome.ok:
+            await cleanup_purged_documents(outcome.purge)
             await message.answer(
                 get_text('moderation.user_deleted_successfully', language=lang)
             )

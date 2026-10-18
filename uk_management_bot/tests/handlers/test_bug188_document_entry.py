@@ -134,12 +134,31 @@ class TestUploadCallback:
         cb.message.edit_reply_markup = AsyncMock()
         cb.answer = AsyncMock()
         st = _state()
-        await open_document_upload(cb, st, language="ru")
+        with patch(f"{ONB}._upload_denial", AsyncMock(return_value=None)):
+            await open_document_upload(cb, st, language="ru")
 
         st.set_state.assert_awaited_with(OnboardingStates.waiting_for_document_type)
         kb = cb.message.answer.await_args.kwargs["reply_markup"]
         assert _has_reply_button(kb, _t("onboarding.keyboards.passport"))
         cb.answer.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_callback_without_open_check_does_not_open_upload(self):
+        """Центральный guard: верифицированному/чужому форма загрузки не открывается."""
+        from uk_management_bot.handlers.onboarding import open_document_upload
+        from uk_management_bot.services.user_verification_service import UploadDenied
+
+        cb = MagicMock()
+        cb.from_user = MagicMock(id=123)
+        cb.message = _mock_msg()
+        cb.message.edit_reply_markup = AsyncMock()
+        cb.answer = AsyncMock()
+        st = _state()
+        with patch(f"{ONB}._upload_denial", AsyncMock(return_value=UploadDenied.NOT_REQUIRED)):
+            await open_document_upload(cb, st, language="ru")
+
+        st.set_state.assert_not_awaited()
+        assert cb.message.answer.await_args.args[0] == _t("onboarding.documents.upload_not_required")
 
     @pytest.mark.parametrize("raw_state", [None, "OnboardingStates:waiting_for_document_type"])
     def test_callback_routes_to_onboarding(self, raw_state):

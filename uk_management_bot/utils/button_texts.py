@@ -254,18 +254,9 @@ def _init_button_texts() -> dict:
         fallback_text="⏭️ Пропустить документы"
     )
 
-    # Onboarding document confirmation
-    button_texts['confirm_upload'] = get_button_texts_for_all_languages(
-        "onboarding.keyboards.confirm_upload",
-        fallback_text="✅ Подтвердить загрузку"
-    )
     button_texts['onboarding_cancel'] = get_button_texts_for_all_languages(
         "onboarding.keyboards.cancel",
         fallback_text="❌ Отменить"
-    )
-    button_texts['upload_another_document'] = get_button_texts_for_all_languages(
-        "onboarding.keyboards.upload_another_document",
-        fallback_text="🔄 Загрузить другой документ"
     )
 
     # Address/General
@@ -596,16 +587,8 @@ def get_skip_documents_texts() -> List[str]:
     return BUTTON_TEXTS.get('skip_documents', ["⏭️ Пропустить документы"])
 
 
-def get_confirm_upload_texts() -> List[str]:
-    return BUTTON_TEXTS.get('confirm_upload', ["✅ Подтвердить загрузку"])
-
-
 def get_onboarding_cancel_texts() -> List[str]:
     return BUTTON_TEXTS.get('onboarding_cancel', ["❌ Отменить"])
-
-
-def get_upload_another_document_texts() -> List[str]:
-    return BUTTON_TEXTS.get('upload_another_document', ["🔄 Загрузить другой документ"])
 
 
 def get_address_directory_texts() -> List[str]:

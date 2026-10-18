@@ -9,8 +9,8 @@ sync unit-of-work, исполняемый в worker-потоке через ``ru
 Инвентарь живости (волна 7). ЖИВЫЕ: ``start_phone_input`` (кнопку
 «📱 Указать телефон» рисует base.handle_regular_start), ``process_contact`` и
 ``process_manual_phone`` (FSM waiting_for_phone), весь кластер документов —
-``process_document_type_selection`` / ``process_document_file`` /
-``process_document_confirmation`` / ``save_document`` / ``cancel_document_upload``
+``process_document_type_selection`` / ``process_document_file`` (сохраняет сразу,
+шага подтверждения нет) / ``save_document``
 / ``skip_documents`` / ``start_document_upload`` / ``complete_onboarding_with_documents``
 / ``add_more_documents`` / ``complete_onboarding_final`` (вход даёт
 handlers/user_apartment_selection.py: ставит OnboardingStates.waiting_for_document_type
@@ -34,13 +34,19 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
-from uk_management_bot.services.user_verification_service import UserVerificationService
+from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.document_purge import cleanup_purged_documents
+from uk_management_bot.services.user_verification_service import (
+    ResubmitResult, UploadDenied, UserVerificationService,
+)
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.media_helpers import DocumentUploadError, upload_encrypted_document
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
-from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB, get_upload_documents_inline
+from uk_management_bot.keyboards.documents_entry import (
+    RESUBMIT_CB, UPLOAD_DOCUMENTS_CB, get_resubmit_inline, get_upload_documents_inline,
+)
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
-    get_document_confirmation_keyboard,
     get_onboarding_completion_keyboard,
     get_document_type_from_text,
     get_document_type_name
@@ -55,9 +61,6 @@ from uk_management_bot.utils.button_texts import (
     get_add_more_documents_texts,
     get_complete_onboarding_texts,
     get_skip_documents_texts,
-    get_confirm_upload_texts,
-    get_onboarding_cancel_texts,
-    get_upload_another_document_texts,
     get_profile_texts,
     get_create_request_texts,
     get_my_requests_texts,
@@ -83,9 +86,6 @@ UPLOAD_DOCUMENTS_TEXTS = get_upload_documents_texts()
 ADD_MORE_DOCUMENTS_TEXTS = get_add_more_documents_texts()
 COMPLETE_ONBOARDING_TEXTS = get_complete_onboarding_texts()
 SKIP_DOCUMENTS_TEXTS = get_skip_documents_texts()
-CONFIRM_UPLOAD_TEXTS = get_confirm_upload_texts()
-ONBOARDING_CANCEL_TEXTS = get_onboarding_cancel_texts()
-UPLOAD_ANOTHER_DOCUMENT_TEXTS = get_upload_another_document_texts()
 PROFILE_TEXTS = get_profile_texts()
 CREATE_REQUEST_TEXTS = get_create_request_texts()
 MY_REQUESTS_TEXTS = get_my_requests_texts()
@@ -124,28 +124,42 @@ def _apply_phone(db, telegram_id: int, phone_number: str) -> bool:
     return True
 
 
-def _load_document_owner_id(db, telegram_id: int) -> Optional[int]:
-    """-> user.id | None (пользователя нет в БД). Только id: ORM-строка наружу
-    из потока не выходит."""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-
-    if not user:
-        return None
-
-    return user.id
+#: Отказ guard'а загрузки → текст жителю.
+_UPLOAD_DENIAL_KEYS = {
+    UploadDenied.NOT_REQUIRED: "onboarding.documents.upload_not_required",
+    UploadDenied.REJECTED: "onboarding.documents.upload_rejected",
+    UploadDenied.LIMIT: "onboarding.documents.upload_limit",
+}
 
 
-def _apply_document(db, user_id: int, document_type: DocumentType,
-                    file_id: str, file_name: Optional[str], file_size: Optional[int]) -> None:
-    """Сохраняет документ пользователя (коммитит сам сервис)."""
-    verification_service = UserVerificationService(db)
-    verification_service.save_user_document(
-        user_id=user_id,
-        document_type=document_type,
-        file_id=file_id,
-        file_name=file_name,
-        file_size=file_size
+def _denial_markup(denial: UploadDenied, lang: str):
+    """Отказ «проверка отклонена» несёт кнопку переподачи — вход и для отклонённых до релиза."""
+    return get_resubmit_inline(lang) if denial is UploadDenied.REJECTED else None
+
+
+async def _upload_denial(telegram_id: int, _db=None) -> Optional[UploadDenied]:
+    """Центральный guard загрузки на входе (повторяется при вставке под локом)."""
+    _user_id, denial = await run_db(
+        lambda s: UserVerificationService(s).check_document_upload(telegram_id), db=_db
     )
+    return denial
+
+
+def _neutral_document_name(file_name: Optional[str]) -> str:
+    """Имя для хранения и показа: только тип файла, без исходного имени."""
+    lower = (file_name or "").lower()
+    return "document.pdf" if lower.endswith(".pdf") else "photo.png" if lower.endswith(".png") else "photo.jpg"
+
+
+async def _discard_document_blob(media_id: int) -> None:
+    """Компенсация: blob загружен, а строки не будет. Без ключа он нечитаем —
+    удаление здесь гигиена, сбой только в лог."""
+    client = get_media_client()
+    try:
+        if client is None or not await client.delete_media(media_id):
+            logger.warning("Blob документа %s остался в Media Service (строки нет)", media_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Blob документа %s остался в Media Service: %s", media_id, e)
 
 
 def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
@@ -171,12 +185,9 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
-# Регистрация по UPLOAD_DOCUMENTS_TEXTS мертва (генератор кнопки — мёртвая
-# ``complete_onboarding``), но САМА функция живая: её напрямую зовёт
-# ``process_document_confirmation`` по кнопке «загрузить ещё документ».
 async def _begin_document_type_step(target: Message, state: FSMContext, lang: str) -> None:
     """Экран выбора типа документа + состояние. Общий для reply-кнопки,
-    inline-кнопки «Загрузить документы» (BUG-188) и «загрузить ещё»."""
+    inline-кнопки «Загрузить документы» (BUG-188) и переподачи."""
     await target.answer(
         get_text("onboarding.documents.title", language=lang) + "\n\n" +
         get_text("onboarding.documents.description", language=lang),
@@ -188,6 +199,11 @@ async def _begin_document_type_step(target: Message, state: FSMContext, lang: st
 @router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
 async def start_document_upload(message: Message, state: FSMContext, language: str = "ru"):
     """Начинает процесс загрузки документов"""
+    denial = await _upload_denial(message.from_user.id)
+    if denial is not None:
+        await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language),
+                             reply_markup=_denial_markup(denial, language))
+        return
     await _begin_document_type_step(message, state, language)
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
 
@@ -201,9 +217,41 @@ async def open_document_upload(callback: CallbackQuery, state: FSMContext, langu
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
         logger.debug(f"Не удалось снять inline-кнопку загрузки документов: {e}")
+    denial = await _upload_denial(callback.from_user.id)
+    if denial is not None:
+        await callback.message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language),
+                                     reply_markup=_denial_markup(denial, language))
+        await callback.answer()
+        return
     await _begin_document_type_step(callback.message, state, language)
     await callback.answer()
     logger.info(f"Пользователь {callback.from_user.id} открыл загрузку документов по кнопке")
+
+
+@router.callback_query(F.data == RESUBMIT_CB)
+async def resubmit_verification(callback: CallbackQuery, state: FSMContext, language: str = "ru",
+                                *, _db=None):
+    """«Подать заявку заново» после отказа.
+
+    Успех — кнопка снимается, открывается выбор типа документа (документы
+    необязательны: «Пропустить» = заявка уже в очереди). Любой другой исход —
+    только всплывающий ответ: без сообщений в чат (флуд нажатиями не
+    усиливается) и без снятия кнопки (после кулдауна она пригодится).
+    """
+    outcome = await run_db(
+        lambda s: UserVerificationService(s).resubmit_verification(callback.from_user.id), db=_db
+    )
+    text = get_text(f"verification_resubmit.{outcome.result.value}", language=language)
+    if outcome.result is not ResubmitResult.RESUBMITTED:
+        await callback.answer(text, show_alert=True)
+        return
+    await cleanup_purged_documents(outcome.purge)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
+        logger.debug(f"Не удалось снять кнопку переподачи: {e}")
+    await callback.answer(text)
+    await _begin_document_type_step(callback.message, state, language)
 
 
 @router.message(OnboardingStates.waiting_for_document_type, F.photo | F.document)
@@ -256,7 +304,7 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
     # Запрашиваем файл
     document_type_name = get_document_type_name(document_type, lang)
     await message.answer(
-        f"📤 {get_text('onboarding.documents.upload_file', language=lang)}\n\n" +
+        f"{get_text('onboarding.documents.upload_file', language=lang)}\n\n" +
         get_text("onboarding.handlers.document_type_label", language=lang).format(document_type_name=document_type_name),
         reply_markup=ReplyKeyboardRemove()
     )
@@ -264,7 +312,7 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
     logger.info(f"Пользователь {message.from_user.id} выбрал тип документа: {document_type.value}")
 
 @router.message(OnboardingStates.waiting_for_document_file)
-async def process_document_file(message: Message, state: FSMContext, language: str = "ru"):
+async def process_document_file(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обрабатывает загрузку файла документа"""
     lang = language
     
@@ -276,9 +324,7 @@ async def process_document_file(message: Message, state: FSMContext, language: s
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
         return
-    
-    document_type = DocumentType(document_type_value)
-    
+
     # Получаем информацию о файле
     file_id = None
     file_name = None
@@ -293,58 +339,47 @@ async def process_document_file(message: Message, state: FSMContext, language: s
         # Фото
         photo = message.photo[-1]  # Берем самое большое фото
         file_id = photo.file_id
-        file_name = f"photo_{photo.file_id}.jpg"
+        file_name = "photo.jpg"
         file_size = photo.file_size
     else:
         await message.answer(get_text("onboarding.documents.file_invalid", language=lang))
         return
-    
+
     # Валидируем файл. run_db здесь НЕ нужен: validate_document_file —
     # чистая проверка file_id/размера/расширения, к self.db она не обращается
     # ни в одной ветке, поэтому сессия сервису не передаётся (открывать её
     # ради проверки строки — лишнее соединение из пула на каждый файл).
     verification_service = UserVerificationService(None)
-    is_valid, error_message = verification_service.validate_document_file(file_id, file_name, file_size)
-    
+    is_valid, error_key = verification_service.validate_document_file(file_id, file_name, file_size)
+
     if not is_valid:
-        await message.answer(error_message)
+        await message.answer(get_text(error_key, language=lang))
         return
+
+    # Хранимое имя нейтральное: исходное может содержать ФИО, а у фото Telegram
+    # file_id — готовый токен скачивания открытого файла.
+    file_name = _neutral_document_name(file_name)
     
-    # Сохраняем информацию о файле в состоянии
+    # Сохраняем сразу, без шага подтверждения: ошибочный файл безвреден (после
+    # решения менеджера документы удаляются), а «Загрузить ещё / Завершить»
+    # предлагается уже после сохранения.
     await state.update_data({
         'file_id': file_id,
         'file_name': file_name,
         'file_size': file_size
     })
-    
-    # Показываем подтверждение
-    document_type_name = get_document_type_name(document_type, lang)
-    confirmation_text = (
-        f"📄 {get_text('onboarding.documents.confirm_upload', language=lang)}\n\n"
-        f"{get_text('onboarding.handlers.doc_type_field', language=lang)}: {document_type_name}\n"
-        f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}\n"
-        f"{get_text('onboarding.handlers.size_field', language=lang)}: {file_size // 1024} KB"
-    )
-    
+    await save_document(message, state, language=lang, _db=_db)
+
+
+@router.message(OnboardingStates.waiting_for_document_confirmation)
+async def stale_document_confirmation(message: Message, state: FSMContext, language: str = "ru"):
+    """Шаг подтверждения убран. Застрявшим в нём в момент деплоя — сброс
+    состояния и кнопка входа в загрузку заново."""
+    await state.clear()
     await message.answer(
-        confirmation_text,
-        reply_markup=get_document_confirmation_keyboard(lang)
+        get_text("onboarding.documents.send_after_button", language=language),
+        reply_markup=get_upload_documents_inline(language),
     )
-    await state.set_state(OnboardingStates.waiting_for_document_confirmation)
-
-@router.message(OnboardingStates.waiting_for_document_confirmation, F.text)
-async def process_document_confirmation(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
-    """Обрабатывает подтверждение загрузки документа"""
-    lang = language
-
-    if message.text in CONFIRM_UPLOAD_TEXTS:
-        await save_document(message, state, language=lang, _db=_db)
-    elif message.text in ONBOARDING_CANCEL_TEXTS:
-        await cancel_document_upload(message, state, language=lang)
-    elif message.text in UPLOAD_ANOTHER_DOCUMENT_TEXTS:
-        await start_document_upload(message, state, language=lang)
-    else:
-        await message.answer(get_text("errors.unknown_error", language=lang))
 
 async def save_document(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Сохраняет документ в базе данных.
@@ -368,45 +403,62 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
             await state.clear()
             return
         
-        # Получаем пользователя
-        user_id = await run_db(
-            lambda s: _load_document_owner_id(s, message.from_user.id), db=_db
+        telegram_id = message.from_user.id
+        user_id, denial = await run_db(
+            lambda s: UserVerificationService(s).check_document_upload(telegram_id), db=_db
         )
-
-        if user_id is None:
-            await message.answer(get_text("errors.unknown_error", language=lang))
+        if denial is not None:
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang),
+                                 reply_markup=_denial_markup(denial, lang))
             await state.clear()
             return
 
-        # Загружаем документ в Media Service (в канал ARCHIVE)
-        from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-        try:
-            media_result = await upload_document_to_media_service(
-                bot=message.bot,
-                file_id=file_id,
-                user_telegram_id=message.from_user.id,
-                uploaded_by_user_id=user_id,
-                description=f"Документ пользователя: {document_type_value}"
-            )
-            if media_result is not None:
-                logger.info(f"Документ пользователя {message.from_user.id} загружен в Media Service")
-            else:
-                logger.warning(f"Документ пользователя {message.from_user.id} НЕ загружен в Media Service (см. предыдущие ошибки)")
-        except Exception as e:
-            logger.error(f"Ошибка загрузки документа в Media Service: {e}")
-            # Продолжаем сохранение даже если загрузка не удалась
-
-        # Сохраняем документ в базу данных
+        # Строго: скан шифруется и ложится в медиа-сервис; нет media_id — нет строки.
         document_type = DocumentType(document_type_value)
-        await run_db(
-            lambda s: _apply_document(s, user_id, document_type, file_id, file_name, file_size),
-            db=_db,
-        )
+        try:
+            upload = await upload_encrypted_document(
+                message.bot, file_id, user_id=user_id, document_type=document_type.value,
+            )
+        except DocumentUploadError as e:
+            await message.answer(
+                get_text(f"onboarding.documents.upload_{e.reason}", language=lang),
+                reply_markup=get_document_type_keyboard(lang),
+            )
+            await state.set_data({})  # file_id скана не держим в FSM
+            await state.set_state(OnboardingStates.waiting_for_document_type)
+            return
+
+        try:
+            denial = await run_db(
+                lambda s: UserVerificationService(s).add_encrypted_document(
+                    telegram_id, document_type, media_id=upload.media_id, key=upload.key,
+                    document_uuid=upload.document_uuid, file_name=file_name, file_size=file_size,
+                ),
+                db=_db,
+            )
+        except Exception:
+            await _discard_document_blob(upload.media_id)
+            raise
+        if denial is not None:
+            # Решение менеджера успело закрыть проверку между загрузкой и вставкой.
+            await _discard_document_blob(upload.media_id)
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang),
+                                 reply_markup=_denial_markup(denial, lang))
+            await state.clear()
+            return
+
+        # Открытый скан не остаётся в чате с ботом: копия в системе — только
+        # зашифрованная. Бот может удалить входящее сообщение лички (≤48 ч).
+        try:
+            await message.delete()
+        except Exception as e:  # noqa: BLE001 — не мешает сохранению
+            logger.warning("Не удалось удалить сообщение со сканом %s: %s",
+                           message.from_user.id, type(e).__name__)
 
         # Показываем успешное сообщение
         document_type_name = get_document_type_name(document_type, lang)
         await message.answer(
-            f"✅ {get_text('onboarding.documents.document_saved', language=lang)}\n\n"
+            f"{get_text('onboarding.documents.document_saved', language=lang)}\n\n"
             f"{get_text('onboarding.handlers.type_short_field', language=lang)}: {document_type_name}\n"
             f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}",
             reply_markup=get_onboarding_completion_keyboard(lang)
@@ -417,19 +469,11 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         logger.info(f"Документ сохранен для пользователя {message.from_user.id}: {document_type.value}")
         
     except Exception as e:
-        logger.error(f"Ошибка сохранения документа для {message.from_user.id}: {e}")
+        # Только тип: текст исключения SQLAlchemy несёт параметры INSERT, среди
+        # них ключ шифрования (hide_parameters — вторая линия защиты).
+        logger.error("Ошибка сохранения документа для %s: %s", message.from_user.id, type(e).__name__)
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
-
-async def cancel_document_upload(message: Message, state: FSMContext, language: str = "ru"):
-    """Отменяет загрузку документа"""
-    lang = language
-    
-    await message.answer(
-        get_text("onboarding.documents.upload_cancelled", language=lang),
-        reply_markup=get_onboarding_completion_keyboard(lang)
-    )
-    await state.clear()
 
 async def skip_documents(message: Message, state: FSMContext, language: str = "ru"):
     """Пропускает загрузку документов"""

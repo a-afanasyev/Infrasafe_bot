@@ -190,6 +190,7 @@ class TestRemainingPins:
         from uk_management_bot.handlers.user_management import actions
 
         src = inspect.getsource(actions)
-        assert src.count("file_size is not None") == 2
+        # Подпись скачанного документа ушла вместе с пересылкой файлов в бот
+        # (просмотр только в дашборде) — guard'ы остались в списке документов.
+        assert src.count("file_size is not None") == 1
         assert 'doc.created_at.strftime(\'%d.%m.%Y %H:%M\') if doc.created_at else "—"' in src
-        assert 'if payload.created_at else "—"' in src

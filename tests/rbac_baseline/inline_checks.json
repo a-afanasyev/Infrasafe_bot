@@ -159,6 +159,9 @@
   "uk_management_bot/services/user_management_service.py::_format_user_specializations": [
    "executor"
   ],
+  "uk_management_bot/services/user_verification_service.py::check_document_upload": [
+   "applicant"
+  ],
   "uk_management_bot/utils/request_helpers.py::format_request_details": [
    "executor"
   ],

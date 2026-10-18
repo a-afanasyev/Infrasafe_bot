@@ -32,8 +32,9 @@ from uk_management_bot.database.models.user_apartment import (
     UserApartment, UserApartmentStatus,
 )
 from uk_management_bot.database.models.user_verification import (
-    UserDocument, UserVerification, VerificationStatus,
+    UserVerification, VerificationStatus,
 )
+from uk_management_bot.services.document_purge import PurgeResult, purge_documents
 from uk_management_bot.services.residents import core, queries
 from uk_management_bot.services.residents.exceptions import (
     ResidentConflict, ResidentValidationError,
@@ -124,7 +125,7 @@ async def request_documents(
 
 async def approve_verification(
     db: AsyncSession, *, resident_id: int, actor_id: int, notes: str | None = None,
-) -> tuple[User, list[int]]:
+) -> tuple[User, PurgeResult]:
     """Подтвердить личность жителя.
 
     Побочные эффекты — те же, что у бот-пути, но одной транзакцией:
@@ -134,7 +135,7 @@ async def approve_verification(
         основная остаётся у прежней, иначе ею становится самая старая);
       * удаление строк `UserDocument`.
 
-    → (житель, id удалённых документов). Файлы в Media Service чистит
+    → (житель, PurgeResult удалённых документов). Blob'ы в Media Service чистит
     вызывающий ПОСЛЕ commit — внешний сервис не должен откатывать решение.
     """
     resident = await core._lock_and_require_resident(db, resident_id)
@@ -143,6 +144,9 @@ async def approve_verification(
             f"Верификация уже завершена (статус: {resident.verification_status})",
             code="verification_closed",
         )
+
+    # До смены статуса: иначе flush запустит триггер 026 раньше и media_id не соберутся.
+    purge = await purge_documents(db, resident)
 
     resident.verification_status = "verified"
     resident.verification_notes = notes
@@ -172,29 +176,22 @@ async def approve_verification(
     await db.flush()
     await core._ensure_single_primary(db, resident_id, keep_ua_id=None)
 
-    documents = list((await db.execute(
-        select(UserDocument).where(UserDocument.user_id == resident_id)
-    )).scalars().all())
-    deleted_ids = [d.id for d in documents]
-    for doc in documents:
-        await db.delete(doc)
-
     core._audit(db, action="resident_verification_approved", actor_id=actor_id,
                 resident=resident,
                 details={"auto_approved_apartments": len(pending),
-                         "deleted_documents": len(deleted_ids), "notes": notes})
+                         "deleted_documents": purge.count, "notes": notes})
     await core._finish(db, event=None, payload=None)
     logger.info(
         "Житель %s верифицирован менеджером %s: авто-одобрено квартир %s, "
         "удалено записей документов %s",
-        resident_id, actor_id, len(pending), len(deleted_ids),
+        resident_id, actor_id, len(pending), purge.count,
     )
-    return resident, deleted_ids
+    return resident, purge
 
 
 async def reject_verification(
     db: AsyncSession, *, resident_id: int, actor_id: int, notes: str,
-) -> User:
+) -> tuple[User, PurgeResult]:
     """Отклонить верификацию. Причина обязательна — житель её увидит.
 
     Меняется ТОЛЬКО ось верификации: `User.status` не трогается, иначе
@@ -212,6 +209,10 @@ async def reject_verification(
             code="verification_closed",
         )
 
+    # Отказ терминален — документы и ключи удаляются, как при одобрении
+    # (до смены статуса, см. approve_verification).
+    purge = await purge_documents(db, resident)
+
     resident.verification_status = "rejected"
     resident.verification_notes = notes
     resident.verification_date = _now()
@@ -226,10 +227,10 @@ async def reject_verification(
     await db.flush()
 
     core._audit(db, action="resident_verification_rejected", actor_id=actor_id,
-                resident=resident, details={"notes": notes})
+                resident=resident, details={"notes": notes, "deleted_documents": purge.count})
     await core._finish(db, event=None, payload=None)
     logger.info("Верификация жителя %s отклонена менеджером %s", resident_id, actor_id)
-    return resident
+    return resident, purge
 
 
 def format_requested_documents(types: list[str], lang: str) -> str:

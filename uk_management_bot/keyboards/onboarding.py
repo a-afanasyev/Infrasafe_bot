@@ -7,7 +7,7 @@
 - Навигации по процессу онбординга
 """
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from uk_management_bot.database.models.user_verification import DocumentType
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.language_helpers import SUPPORTED_LANGUAGES
@@ -43,32 +43,6 @@ def get_document_type_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
         one_time_keyboard=False
     )
 
-def get_document_confirmation_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
-    """
-    Создает клавиатуру для подтверждения загрузки документа
-
-    Args:
-        language: Язык интерфейса
-
-    Returns:
-        ReplyKeyboardMarkup с кнопками подтверждения
-    """
-    keyboard = [
-        [
-            KeyboardButton(text=get_text("onboarding.keyboards.confirm_upload", language=language)),
-            KeyboardButton(text=get_text("onboarding.keyboards.cancel", language=language))
-        ],
-        [
-            KeyboardButton(text=get_text("onboarding.keyboards.upload_another_document", language=language))
-        ]
-    ]
-
-    return ReplyKeyboardMarkup(
-        keyboard=keyboard,
-        resize_keyboard=True,
-        one_time_keyboard=False
-    )
-
 def get_onboarding_completion_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """
     Создает клавиатуру для завершения онбординга
@@ -92,36 +66,6 @@ def get_onboarding_completion_keyboard(language: str = "ru") -> ReplyKeyboardMar
         one_time_keyboard=False
     )
 
-def get_document_management_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    """
-    Создает inline клавиатуру для управления документами
-
-    Args:
-        language: Язык интерфейса
-
-    Returns:
-        InlineKeyboardMarkup с кнопками управления
-    """
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.add_document", language=language),
-                callback_data="add_document"
-            ),
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.complete", language=language),
-                callback_data="complete_onboarding"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=get_text("onboarding.keyboards.skip_documents", language=language),
-                callback_data="skip_documents"
-            )
-        ]
-    ]
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_document_type_from_text(text: str, language: str = "ru") -> DocumentType | None:
     """

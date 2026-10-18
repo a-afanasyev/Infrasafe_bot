@@ -333,3 +333,50 @@ class TestGetMediaUrl:
 
 
 # ---------------------------------------------------------------------------
+# upload_resident_document — зашифрованный документ жителя
+# ---------------------------------------------------------------------------
+
+class TestUploadResidentDocument:
+    @staticmethod
+    def _client(media_id=77):
+        client = MediaServiceClient("http://localhost")
+        response = MagicMock()
+        response.json.return_value = {"media_file": {"id": media_id}}
+        response.raise_for_status = MagicMock()
+        client.client = MagicMock()
+        client.client.post = AsyncMock(return_value=response)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_posts_opaque_blob_and_returns_media_id(self):
+        client = self._client()
+        media_id = await client.upload_resident_document(b"v1-ciphertext", uploaded_by=53)
+
+        assert media_id == 77
+        args, kwargs = client.client.post.await_args
+        assert args[0] == "/media/upload-resident-document"
+        # имя и тип нейтральные: исходное имя файла сюда не передаётся
+        assert kwargs["files"] == [("file", ("document.bin", b"v1-ciphertext", "application/octet-stream"))]
+        assert kwargs["data"] == {"uploaded_by": "53"}
+
+    @pytest.mark.asyncio
+    async def test_rejects_bad_uploaded_by_without_request(self):
+        client = self._client()
+        with pytest.raises(ValueError):
+            await client.upload_resident_document(b"x", uploaded_by=0)
+        client.client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_http_error_propagates(self):
+        import httpx
+
+        client = self._client()
+        response = client.client.post.return_value
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "503", request=MagicMock(), response=MagicMock(status_code=503, text="x")
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.upload_resident_document(b"x", uploaded_by=1)
+
+
+# ---------------------------------------------------------------------------

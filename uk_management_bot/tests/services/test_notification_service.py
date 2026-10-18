@@ -610,54 +610,6 @@ class TestNotificationService:
         assert svc._get_user_lang(user) == "ru"
 
     @pytest.mark.asyncio
-    async def test_send_document_approved_calls_bot(self):
-        user = _make_user(telegram_id=600, language="ru")
-        svc, db, bot = self._make_service(user)
-
-        with patch(
-            "uk_management_bot.services.notification_service.service.get_text",
-            return_value="mocked",
-        ):
-            await svc.send_document_approved_notification(user_id=1, document_type="passport")
-
-        bot.send_message.assert_called_once()
-        assert bot.send_message.call_args.args[0] == 600
-
-    @pytest.mark.asyncio
-    async def test_send_document_approved_user_not_found(self):
-        svc, db, bot = self._make_service(user=None)
-        await svc.send_document_approved_notification(user_id=9999, document_type="passport")
-        bot.send_message.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_send_document_rejected_calls_bot(self):
-        user = _make_user(telegram_id=601, language="ru")
-        svc, db, bot = self._make_service(user)
-
-        with patch(
-            "uk_management_bot.services.notification_service.service.get_text",
-            return_value="mocked",
-        ):
-            await svc.send_document_rejected_notification(user_id=1, document_type="passport")
-
-        bot.send_message.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_send_document_rejected_with_reason(self):
-        user = _make_user(telegram_id=602, language="ru")
-        svc, db, bot = self._make_service(user)
-
-        with patch(
-            "uk_management_bot.services.notification_service.service.get_text",
-            return_value="mocked",
-        ):
-            await svc.send_document_rejected_notification(
-                user_id=1, document_type="passport", reason="Wrong doc"
-            )
-
-        bot.send_message.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_send_access_rights_granted_calls_bot(self):
         user = _make_user(telegram_id=700, language="ru")
         svc, db, bot = self._make_service(user)

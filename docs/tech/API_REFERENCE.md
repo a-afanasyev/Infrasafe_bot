@@ -272,7 +272,10 @@
 Пакет-агрегатор (`residents/router.py` собирает под-роутеры): списки/карточка
 (`residents.py`: ``, `/stats`, `/{resident_id}`), модерация и квартиры
 (`moderation.py`: approve/block/unblock, CRUD привязок квартир), документы
-(`documents.py`), верификация (`verification.py`: request-documents/approve/reject).
+(`documents.py`: метаданные и файл — зашифрованные из media-service с
+расшифровкой, легаси — через Bot API; `Cache-Control: no-store`), верификация
+(`verification.py`: request-documents/approve/reject; approve и reject удаляют
+документы и отдают `deleted_documents`).
 
 ### 2.18. Auto-manager — `/api/v2/auto-manager-config` (`auto_manager/router.py`)
 

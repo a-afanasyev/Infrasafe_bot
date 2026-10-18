@@ -2,12 +2,15 @@
 Утилиты для работы с медиа-файлами через Media Service
 """
 import logging
+import uuid
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, List
 from io import BytesIO
 from aiogram import Bot
 from uk_management_bot.integrations import get_media_client
-from uk_management_bot.utils.media_sniff import MEDIA_SERVICE_ACCEPTED_TYPES, sniff_media_mime
+from uk_management_bot.utils.document_crypto import document_aad, encrypt
+from uk_management_bot.utils.media_sniff import sniff_media_mime
 
 logger = logging.getLogger(__name__)
 
@@ -162,77 +165,63 @@ async def upload_report_file_to_media_service(
         return None
 
 
-async def upload_document_to_media_service(
-    bot: Bot,
-    file_id: str,
-    user_telegram_id: int,
-    *,
-    uploaded_by_user_id: int,
-    description: Optional[str] = None
-) -> Optional[dict]:
-    """
-    Загружает документ пользователя в Media Service (в канал ARCHIVE)
+#: Типы документа жителя (по байтам): фото-сканы и PDF — то, что покажет дашборд.
+_DOCUMENT_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
 
-    Args:
-        bot: Экземпляр бота
-        file_id: File ID из Telegram
-        user_telegram_id: Telegram ID пользователя — ключ `USER_{tg}`, по нему
-            документы находит `delete_user_documents_from_media_service`
-        uploaded_by_user_id: внутренний users.id. Telegram ID сюда нельзя:
-            колонка в media-service INT4 (ревью 2026-09-28, C2); сам Telegram ID
-            уходит отдельным полем uploaded_by_telegram_id (BIGINT)
-        description: Описание документа
 
-    Returns:
-        Информация о загруженном документе или None
+class DocumentUploadError(Exception):
+    """Документ не загружен: reason = "unsupported" (повтор не поможет) | "unavailable"."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class EncryptedUpload:
+    media_id: int
+    key: bytes
+    document_uuid: str
+
+
+async def upload_encrypted_document(
+    bot: Bot, file_id: str, *, user_id: int, document_type: str,
+) -> EncryptedUpload:
+    """Скачать документ из Telegram, зашифровать и положить в медиа-сервис.
+
+    Тип — по байтам (jpeg/png/PDF). Ключ и uuid возвращаются вызывающему для
+    строки `UserDocument`; AAD связывает blob с (uuid, users.id, тип). Без
+    медиа-сервиса строка не создаётся — исключение вместо тихого пропуска.
     """
+    client = get_media_client()
+    if client is None:
+        raise DocumentUploadError("unavailable")
     try:
-        media_client = get_media_client()
-        if not media_client:
-            logger.warning("Media Service недоступен, пропускаем загрузку документа")
-            return None
-
-        # Скачиваем файл из Telegram
         file = await bot.get_file(file_id)
-        file_bytes = BytesIO()
-        await bot.download_file(file.file_path, file_bytes)
-        file_bytes.seek(0)
+        buffer = BytesIO()
+        await bot.download_file(file.file_path, buffer)
+    except Exception as e:  # noqa: BLE001 — сеть Telegram
+        logger.warning("Документ пользователя %s не скачан из Telegram: %s", user_id, e)
+        raise DocumentUploadError("unavailable") from e
+    data = buffer.getvalue()
+    if sniff_media_mime(data) not in _DOCUMENT_IMAGE_TYPES and not data.startswith(b"%PDF-"):
+        raise DocumentUploadError("unsupported")
 
-        # Тип — по байтам, а не по расширению: media-service хранит только свой
-        # allowlist (PDF и пр. он отвергает 400 — не гоняем их по сети).
-        content_type = sniff_media_mime(file_bytes.getvalue())
-        if content_type not in MEDIA_SERVICE_ACCEPTED_TYPES:
-            logger.info(
-                "Документ пользователя %s не загружен в Media Service: формат %s не поддерживается",
-                user_telegram_id, content_type or "не распознан",
-            )
-            return None
-
-        # Определяем имя файла
-        file_extension = file.file_path.split('.')[-1] if '.' in file.file_path else 'jpg'
-        filename = f"user_{user_telegram_id}_doc.{file_extension}"
-
-        # Используем специальный request_number для документов пользователей
-        request_number = f"USER_{user_telegram_id}"
-
-        # Загружаем в Media Service с категорией archive (документы пользователей в ARCHIVE канале)
-        result = await media_client.upload_request_media(
-            request_number=request_number,
-            file_path=file_bytes,
-            filename=filename,
-            category="archive",
-            description=description or f"Документ пользователя {user_telegram_id}",
-            uploaded_by=uploaded_by_user_id,
-            uploaded_by_telegram_id=user_telegram_id,
-            content_type=content_type,
-        )
-
-        logger.info(f"Документ пользователя загружен в Media Service: {result['media_file']['id']}")
-        return result
-
-    except Exception as e:
-        logger.error(f"Ошибка загрузки документа в Media Service: {e}")
-        return None
+    document_uuid = str(uuid.uuid4())
+    key, blob = encrypt(data, document_aad(document_uuid, user_id, document_type))
+    # Один повтор: разовый таймаут медиа-сервиса → Telegram иначе теряет файл жителя.
+    # ponytail: таймаут после фактической отправки оставит в архиве осиротевший
+    # нечитаемый blob (ключа нет нигде) — безвредно.
+    for attempt in (1, 2):
+        try:
+            media_id = await client.upload_resident_document(blob, uploaded_by=user_id)
+            break
+        except Exception as e:  # noqa: BLE001 — недоступный медиа-сервис
+            logger.warning("Документ пользователя %s не загружен в Media Service (попытка %s): %s",
+                           user_id, attempt, e)
+            if attempt == 2:
+                raise DocumentUploadError("unavailable") from e
+    return EncryptedUpload(media_id=media_id, key=key, document_uuid=document_uuid)
 
 
 class MediaCleanupResult(str, Enum):

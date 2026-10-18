@@ -6,9 +6,19 @@
 """
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from uk_management_bot.constants.document_callbacks import RESUBMIT_CB, UPLOAD_DOCUMENTS_CB
 from uk_management_bot.utils.helpers import get_text
 
-UPLOAD_DOCUMENTS_CB = "docs:upload"
+__all__ = ["RESUBMIT_CB", "UPLOAD_DOCUMENTS_CB", "get_resubmit_inline", "get_upload_documents_inline"]
+
+
+def get_resubmit_inline(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text=get_text("verification_resubmit.btn", language=language),
+            callback_data=RESUBMIT_CB,
+        )
+    ]])
 
 
 def get_upload_documents_inline(language: str = "ru") -> InlineKeyboardMarkup:

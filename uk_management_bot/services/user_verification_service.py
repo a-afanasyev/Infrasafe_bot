@@ -9,19 +9,74 @@
 """
 
 import logging
-from typing import List, Dict, Any
-from datetime import datetime, timezone
-from uk_management_bot.utils.datetime_utils import utc_now
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.utils.datetime_utils import as_utc, utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification, AccessRights,
     DocumentType, VerificationStatus, AccessLevel
 )
+from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 
 logger = logging.getLogger(__name__)
+
+#: Решение принимается только по открытой проверке (как `verification_core._DECIDABLE_FROM`).
+_DECIDABLE_FROM = frozenset({"pending", "requested"})
+
+#: Документов на одну проверку — потолок объёма (житель удалить свои не может,
+#: строки чистит только решение) и защита от заливки канала.
+MAX_DOCUMENTS_PER_REVIEW = 10
+
+#: 20 МБ — предел bot.get_file (бот скачивает скан для шифрования) и getFile
+#: медиа-сервиса для blob'а; запас под формат шифротекста (v1 + nonce + tag).
+MAX_DOCUMENT_BYTES = 20 * 1024 * 1024 - 1024
+_DOCUMENT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".pdf")
+
+
+#: Не чаще одной переподачи в сутки (первая после отказа — сразу).
+RESUBMIT_COOLDOWN = timedelta(hours=24)
+_RESUBMIT_ACTION = "resident_verification_resubmitted"
+
+
+class ResubmitResult(str, Enum):
+    RESUBMITTED = "resubmitted"
+    ALREADY_PENDING = "already_pending"  # проверка и так открыта
+    COOLDOWN = "cooldown"                # предыдущая переподача моложе суток
+    DENIED = "denied"                    # не «чистый» житель / заблокирован / удалён / verified
+    NOT_FOUND = "not_found"
+
+
+@dataclass(frozen=True)
+class ResubmitOutcome:
+    result: ResubmitResult
+    purge: PurgeResult  # документы, оставшиеся от прошлого отказа — гигиена медиа после commit
+
+
+class UploadDenied(str, Enum):
+    NOT_REQUIRED = "not_required"  # нет открытой проверки / не житель / заблокирован
+    REJECTED = "rejected"          # проверка отклонена — сначала переподача
+    LIMIT = "limit"                # MAX_DOCUMENTS_PER_REVIEW исчерпан
+
+
+def _auto_approve_apartments(db: Session, user_id: int, admin_id: int, now: datetime) -> None:
+    """Одобрение pending-привязок к квартирам вместе с верификацией (без commit)."""
+    from uk_management_bot.database.models.user_apartment import UserApartment
+
+    for user_apartment in db.query(UserApartment).filter(
+        UserApartment.user_id == user_id, UserApartment.status == "pending",
+    ).all():
+        user_apartment.status = "approved"
+        user_apartment.reviewed_at = now
+        user_apartment.reviewed_by = admin_id
+        user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
 
 
 class UserVerificationService:
@@ -45,6 +100,12 @@ class UserVerificationService:
             UserVerification объект
         """
         try:
+            # Запрос документов открывает проверку (как API request-documents):
+            # иначе guard загрузки ответил бы «документы не требуются».
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user is not None and user.verification_status != "requested":
+                user.verification_status = "requested"
+
             # Проверяем, есть ли уже активная верификация
             existing_verification = self.db.query(UserVerification).filter(
                 and_(
@@ -82,235 +143,67 @@ class UserVerificationService:
             logger.error(f"Ошибка создания запроса верификации: {e}")
             self.db.rollback()
             raise
-    
-    def approve_verification_db(self, user_id: int, admin_id: int, notes: str = None):
-        """DB-фазы одобрения верификации (без сети): статусы + авто-одобрение
-        квартир. → (ok, telegram_id | None).
 
-        AUD3-07: выделено из async approve_verification, чтобы хендлеры могли
-        исполнять DB-часть в worker-потоке (run_db), а сетевую зачистку media —
-        отдельно на event loop. Семантика фаз и коммитов — 1:1 с историческим
-        телом.
+    def approve_verification_db(
+        self, user_id: int, admin_telegram_id: int, notes: Optional[str] = None,
+    ) -> Optional[PurgeResult]:
+        """Одобрить верификацию одним commit (см. `_decide_verification`)."""
+        return self._decide_verification(user_id, admin_telegram_id, approve=True, notes=notes)
+
+    def reject_verification(
+        self, user_id: int, admin_telegram_id: int, notes: str,
+    ) -> Optional[PurgeResult]:
+        """Отклонить верификацию одним commit (см. `_decide_verification`)."""
+        return self._decide_verification(user_id, admin_telegram_id, approve=False, notes=notes)
+
+    def _decide_verification(
+        self, user_id: int, admin_telegram_id: int, *, approve: bool, notes: Optional[str],
+    ) -> Optional[PurgeResult]:
+        """Решение бота — паритет с `services/residents/verification_core`.
+
+        Telegram ID менеджера → `users.id` (FK `verified_by`) → лок жителя →
+        guard pending/requested → удаление документов (ключей) ДО смены статуса →
+        решение (+ авто-одобрение квартир) → ОДИН commit. Гигиена Media Service —
+        у вызывающего после commit (`cleanup_purged_documents`).
+
+        → PurgeResult; None — менеджер/житель не найден или проверка уже закрыта.
+        Сбой БД откатывает всё и пробрасывается.
         """
+        admin = self.db.query(User).filter(User.telegram_id == admin_telegram_id).first()
+        user = self.db.query(User).filter(User.id == user_id).with_for_update().first()
+        if admin is None or user is None or user.verification_status not in _DECIDABLE_FROM:
+            self.db.rollback()
+            return None
         try:
-            # Обновляем статус пользователя
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return False, None
-
-            user.verification_status = "verified"
+            purge = purge_documents_sync(self.db, user)
+            now = datetime.now(timezone.utc)
+            user.verification_status = "verified" if approve else "rejected"
             user.verification_notes = notes
-            user.verification_date = datetime.now(timezone.utc)
-            user.verified_by = admin_id
+            user.verification_date = now
+            user.verified_by = admin.id
 
-            # Обновляем статус верификации
             verification = self.db.query(UserVerification).filter(
-                and_(
-                    UserVerification.user_id == user_id,
-                    UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED])
-                )
+                UserVerification.user_id == user_id,
+                UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED]),
             ).first()
-
             if verification:
-                verification.status = VerificationStatus.APPROVED
-                verification.verified_by = admin_id
-                verification.verified_at = datetime.now(timezone.utc)
+                verification.status = VerificationStatus.APPROVED if approve else VerificationStatus.REJECTED
+                verification.verified_by = admin.id
+                verification.verified_at = now
                 verification.admin_notes = notes
 
+            if approve:
+                _auto_approve_apartments(self.db, user_id, admin.id, now)
+
             self.db.commit()
-            logger.info(f"Верификация пользователя {user_id} одобрена администратором {admin_id}")
-
-            # Автоматически одобряем все pending квартиры пользователя
-            from uk_management_bot.database.models.user_apartment import UserApartment
-            try:
-                pending_apartments = self.db.query(UserApartment).filter(
-                    UserApartment.user_id == user_id,
-                    UserApartment.status == 'pending'
-                ).all()
-
-                approved_count = 0
-                for user_apartment in pending_apartments:
-                    user_apartment.status = 'approved'
-                    user_apartment.reviewed_at = datetime.now(timezone.utc)
-                    user_apartment.reviewed_by = admin_id
-                    user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
-                    approved_count += 1
-
-                self.db.commit()
-                logger.info(f"Автоматически одобрено {approved_count} квартир для пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"Ошибка автоматического одобрения квартир для пользователя {user_id}: {e}")
-                # Продолжаем выполнение, так как верификация уже одобрена
-
-            return True, user.telegram_id
-
-        except Exception as e:
-            logger.error(f"Ошибка одобрения верификации: {e}")
-            self.db.rollback()
-            return False, None
-
-    def purge_user_documents_db(self, user_id: int) -> None:
-        """Финальная DB-фаза одобрения: удаление записей о документах.
-
-        ВАЖНО: файлы останутся на серверах Telegram, но file_id больше не будет
-        доступен в системе. Best-effort — ошибка логируется, верификация уже
-        одобрена.
-        """
-        try:
-            documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
-            for doc in documents:
-                self.db.delete(doc)
-            self.db.commit()
-            logger.info(f"Удалено {len(documents)} записей о документах пользователя {user_id} из базы данных")
-        except Exception as e:
-            logger.error(f"Ошибка удаления записей о документах из БД для пользователя {user_id}: {e}")
-            # Продолжаем выполнение
-
-    async def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
-        """
-        Одобрить верификацию пользователя
-
-        Args:
-            user_id: ID пользователя
-            admin_id: ID администратора
-            notes: Комментарии администратора
-
-        Returns:
-            True если успешно
-        """
-        # Внешний try — byte-семантика исторического тела для вызывающих
-        # (panels.py): любое неожиданное исключение (включая недостижимые на
-        # практике углы вроде сбоя импорта в best-effort фазах) даёт
-        # rollback + False, а не проброс (находка ревью волны A2-1).
-        try:
-            ok, telegram_id = self.approve_verification_db(user_id, admin_id, notes)
-            if not ok:
-                return False
-
-            await cleanup_user_documents_media(telegram_id)
-            self.purge_user_documents_db(user_id)
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка одобрения верификации: {e}")
-            self.db.rollback()
-            return False
-
-    def reject_verification(self, user_id: int, admin_id: int, notes: str) -> bool:
-        """
-        Отклонить верификацию пользователя
-        
-        Args:
-            user_id: ID пользователя
-            admin_id: ID администратора
-            notes: Причина отклонения
-            
-        Returns:
-            True если успешно
-        """
-        try:
-            # Обновляем статус пользователя
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return False
-            
-            user.verification_status = "rejected"
-            user.verification_notes = notes
-            user.verification_date = datetime.now(timezone.utc)
-            user.verified_by = admin_id
-            
-            # Обновляем статус верификации
-            verification = self.db.query(UserVerification).filter(
-                and_(
-                    UserVerification.user_id == user_id,
-                    UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED])
-                )
-            ).first()
-            
-            if verification:
-                verification.status = VerificationStatus.REJECTED
-                verification.verified_by = admin_id
-                verification.verified_at = datetime.now(timezone.utc)
-                verification.admin_notes = notes
-            
-            self.db.commit()
-            logger.info(f"Верификация пользователя {user_id} отклонена администратором {admin_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка отклонения верификации: {e}")
-            self.db.rollback()
-            return False
-    
-    # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ ═══
-    
-    def add_document(self, user_id: int, document_type: DocumentType, file_id: str, 
-                    file_name: str = None, file_size: int = None) -> UserDocument:
-        """
-        Добавить документ пользователя
-        
-        Args:
-            user_id: ID пользователя
-            document_type: Тип документа
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            UserDocument объект
-        """
-        try:
-            document = UserDocument(
-                user_id=user_id,
-                document_type=document_type,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size
-            )
-            
-            self.db.add(document)
-            self.db.commit()
-            self.db.refresh(document)
-            
-            logger.info(f"Добавлен документ {document_type.value} для пользователя {user_id}")
-            return document
-            
-        except Exception as e:
-            logger.error(f"Ошибка добавления документа: {e}")
+        except Exception:
             self.db.rollback()
             raise
-    
-    def verify_document(self, document_id: int, admin_id: int, status: VerificationStatus, 
-                       notes: str = None) -> bool:
-        """
-        Проверить документ пользователя
-        
-        Args:
-            document_id: ID документа
-            admin_id: ID администратора
-            status: Статус проверки
-            notes: Комментарии
-            
-        Returns:
-            True если успешно
-        """
-        try:
-            document = self.db.query(UserDocument).filter(UserDocument.id == document_id).first()
-            if not document:
-                return False
-            
-            document.verification_status = status
-            document.verification_notes = notes
-            document.verified_by = admin_id
-            document.verified_at = datetime.now(timezone.utc)
-            
-            self.db.commit()
-            logger.info(f"Документ {document_id} проверен администратором {admin_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка проверки документа: {e}")
-            self.db.rollback()
-            return False
+        logger.info(
+            "Верификация пользователя %s %s менеджером %s (удалено документов: %s)",
+            user_id, "одобрена" if approve else "отклонена", admin.id, purge.count,
+        )
+        return purge
 
     # ═══ УПРАВЛЕНИЕ ПРАВАМИ ДОСТУПА ═══
     
@@ -568,44 +461,114 @@ class UserVerificationService:
 
     # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ В ОНБОРДИНГЕ ═══
     
-    def save_user_document(self, user_id: int, document_type: DocumentType, file_id: str, 
-                          file_name: str = None, file_size: int = None) -> UserDocument:
+    def resubmit_verification(self, telegram_id: int) -> "ResubmitOutcome":
+        """Переподача после отказа — одна транзакция под FOR UPDATE пользователя.
+
+        Только «чистый» житель (`PURE_APPLICANT_ROLES`: callback шлёт клиент, а
+        `verification_status` общий со стаффом — иначе отклонённый сотрудник
+        вернулся бы в свою очередь) и только из rejected. Первая переподача после
+        отказа — сразу, следующая — не раньше RESUBMIT_COOLDOWN после предыдущей
+        (по аудиту). Успех: pending, поля прошлого решения очищены, новая
+        UserVerification(PENDING), запись аудита.
         """
-        Сохранить документ пользователя в базе данных
-        
-        Args:
-            user_id: ID пользователя
-            document_type: Тип документа
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            UserDocument объект
+        from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+
+        def refused(result: ResubmitResult) -> ResubmitOutcome:
+            return ResubmitOutcome(result, PurgeResult(telegram_id))
+
+        try:
+            user = self.db.query(User).filter(User.telegram_id == telegram_id).with_for_update().first()
+            if user is None:
+                return refused(ResubmitResult.NOT_FOUND)
+            if user.verification_status in _DECIDABLE_FROM:
+                return refused(ResubmitResult.ALREADY_PENDING)
+            if (user.verification_status != "rejected" or user.deleted_at is not None
+                    or user.status == "blocked"
+                    or set(parse_roles_safe(user.roles)) - PURE_APPLICANT_ROLES):
+                return refused(ResubmitResult.DENIED)
+            last = self.db.query(AuditLog.created_at).filter(
+                AuditLog.user_id == user.id, AuditLog.action == _RESUBMIT_ACTION,
+            ).order_by(AuditLog.created_at.desc()).first()
+            if last and last[0] and as_utc(last[0]) > utc_now() - RESUBMIT_COOLDOWN:
+                return refused(ResubmitResult.COOLDOWN)
+
+            user_id = user.id
+            # Отказ до релиза документы не удалял: новая заявка не должна
+            # подхватить старый паспорт (и съесть им лимит).
+            purge = purge_documents_sync(self.db, user)
+            user.verification_status = "pending"
+            user.verification_notes = None
+            user.verification_date = None
+            user.verified_by = None
+            self.db.add(UserVerification(user_id=user_id, status=VerificationStatus.PENDING))
+            self.db.add(AuditLog(action=_RESUBMIT_ACTION, user_id=user_id, telegram_user_id=telegram_id))
+            self.db.commit()
+        finally:
+            if self.db.in_transaction():
+                self.db.rollback()  # ранний выход или сбой — снять лок
+        logger.info("Житель %s переподал заявку на верификацию", user_id)
+        return ResubmitOutcome(ResubmitResult.RESUBMITTED, purge)
+
+    def check_document_upload(
+        self, telegram_id: int, *, lock: bool = False,
+    ) -> tuple[Optional[int], Optional[UploadDenied]]:
+        """Центральный guard загрузки документа. → (users.id | None, отказ | None).
+
+        Принимаем, только пока проверка открыта, у живого незаблокированного
+        жителя и не больше MAX_DOCUMENTS_PER_REVIEW. Документы сотрудника без
+        роли жителя не принимаются: смотреть их можно только в карточке жителя
+        дашборда, которая видит лишь `applicant`. `lock=True` — под FOR UPDATE
+        строки пользователя (вставка сериализуется с решением менеджера).
+        """
+        from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+
+        query = self.db.query(User).filter(User.telegram_id == telegram_id)
+        user = (query.with_for_update() if lock else query).first()
+        if user is None or user.deleted_at is not None or user.status == "blocked":
+            return None, UploadDenied.NOT_REQUIRED
+        roles = set(parse_roles_safe(user.roles))
+        # Доменное правило о человеке-объекте, не право доступа (RBAC-снимок
+        # inline_checks): документы верификации грузит житель.
+        if "applicant" not in roles:
+            return user.id, UploadDenied.NOT_REQUIRED
+        if user.verification_status == "rejected":
+            # Переподача доступна только «чистому» жителю — остальным не предлагаем.
+            pure = not roles - PURE_APPLICANT_ROLES
+            return user.id, UploadDenied.REJECTED if pure else UploadDenied.NOT_REQUIRED
+        if user.verification_status not in _DECIDABLE_FROM:
+            return user.id, UploadDenied.NOT_REQUIRED
+        count = self.db.query(UserDocument).filter(UserDocument.user_id == user.id).count()
+        if count >= MAX_DOCUMENTS_PER_REVIEW:
+            return user.id, UploadDenied.LIMIT
+        return user.id, None
+
+    def add_encrypted_document(
+        self, telegram_id: int, document_type: DocumentType, *, media_id: int, key: bytes,
+        document_uuid: str, file_name: Optional[str], file_size: Optional[int],
+    ) -> Optional[UploadDenied]:
+        """Вставка зашифрованного документа: lock → guard → insert → commit.
+
+        → None — сохранён; отказ — строки нет (вызывающий удаляет blob по
+        media_id). Сбой БД пробрасывается (вызывающий тоже компенсирует).
         """
         try:
-            # Создаем новый документ
-            document = UserDocument(
-                user_id=user_id,
-                document_type=document_type,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size,
-                verification_status=VerificationStatus.PENDING
-            )
-            
-            self.db.add(document)
+            user_id, denial = self.check_document_upload(telegram_id, lock=True)
+            if denial is not None:
+                self.db.rollback()
+                return denial
+            self.db.add(UserDocument(
+                user_id=user_id, document_type=document_type, media_id=media_id,
+                encryption_key=key, document_uuid=document_uuid,
+                file_name=file_name, file_size=file_size,
+                verification_status=VerificationStatus.PENDING,
+            ))
             self.db.commit()
-            self.db.refresh(document)
-            
-            logger.info(f"Сохранен документ типа {document_type.value} для пользователя {user_id}")
-            return document
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения документа: {e}")
+        except Exception:
             self.db.rollback()
             raise
-    
+        logger.info("Сохранён зашифрованный документ %s пользователя %s", document_type.value, user_id)
+        return None
+
     def get_user_documents(self, user_id: int) -> List[UserDocument]:
         """
         Получить все документы пользователя
@@ -675,63 +638,16 @@ class UserVerificationService:
                 'rejected_documents': 0
             }
     
-    def validate_document_file(self, file_id: str, file_name: str = None, file_size: int = None) -> tuple[bool, str]:
+    def validate_document_file(self, file_id: str, file_name: str = None,
+                               file_size: int = None) -> tuple[bool, str]:
+        """Проверка по метаданным Telegram до скачивания. → (ok, locale-ключ ошибки).
+
+        Тип всё равно сверяется по байтам при загрузке (upload_encrypted_document).
         """
-        Валидировать загружаемый файл документа
-        
-        Args:
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            (is_valid, error_message)
-        """
-        try:
-            # Проверяем наличие file_id
-            if not file_id:
-                return False, "Отсутствует идентификатор файла"
-            
-            # Проверяем размер файла (максимум 50MB для Telegram)
-            if file_size and file_size > 50 * 1024 * 1024:
-                return False, "Размер файла превышает 50MB"
-            
-            # Проверяем расширение файла
-            if file_name:
-                allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx']
-                file_extension = file_name.lower()
-                if not any(file_extension.endswith(ext) for ext in allowed_extensions):
-                    return False, f"Неподдерживаемый тип файла. Разрешены: {', '.join(allowed_extensions)}"
-            
-            return True, ""
-            
-        except Exception as e:
-            logger.error(f"Ошибка валидации файла: {e}")
-            return False, "Ошибка валидации файла"
-
-
-async def cleanup_user_documents_media(telegram_id: int) -> None:
-    """Зачистка документов пользователя в Media Service (канал ARCHIVE).
-
-    Сеть, БЕЗ сессии БД — вызывается вне worker-потока. Best-effort: любой
-    исход логируется, исключение не пробрасывается (верификация уже одобрена).
-    """
-    from uk_management_bot.utils.media_helpers import (
-        MediaCleanupResult, delete_user_documents_from_media_service,
-    )
-    try:
-        cleanup = await delete_user_documents_from_media_service(telegram_id)
-        # Раньше здесь стояло безусловное «документы удалены» — утверждение,
-        # неверное всякий раз, когда Media Service был недоступен.
-        if cleanup is MediaCleanupResult.DELETED:
-            logger.info(f"Документы пользователя {telegram_id} удалены из Media Service")
-        elif cleanup is MediaCleanupResult.NOTHING_TO_DELETE:
-            logger.info(f"Документов пользователя {telegram_id} в Media Service не было")
-        else:
-            logger.warning(
-                "Зачистка документов пользователя %s в Media Service НЕ состоялась (%s) — "
-                "файлы остались; повторить по этому telegram_id",
-                telegram_id, cleanup.value,
-            )
-    except Exception as e:
-        logger.error(f"Ошибка удаления документов из Media Service для пользователя {telegram_id}: {e}")
+        if not file_id:
+            return False, "onboarding.documents.file_invalid"
+        if file_size and file_size > MAX_DOCUMENT_BYTES:
+            return False, "onboarding.documents.upload_too_large"
+        if file_name and not file_name.lower().endswith(_DOCUMENT_EXTENSIONS):
+            return False, "onboarding.documents.file_invalid"
+        return True, ""

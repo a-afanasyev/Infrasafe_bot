@@ -38,6 +38,8 @@ class MediaCategoryEnum(str, Enum):
     # Контроль доступа (один канал «access», различение по category)
     ACCESS_PLATE = "access_plate"
     ACCESS_OVERVIEW = "access_overview"
+    # Зашифрованные документы жителей (только /upload-resident-document)
+    RESIDENT_DOCUMENT = "resident_document"
 
 
 class MediaStatusEnum(str, Enum):

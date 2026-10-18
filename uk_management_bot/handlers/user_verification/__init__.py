@@ -23,7 +23,7 @@ handlers/user_verification.py разбит на пакет; тела перен�
 хендлеров исходника (``_units`` регистраций не несёт).
 """
 from ._router import router
-from . import panel, documents, info_requests, document_review, access_decision  # noqa: F401 — регистрация по порядку
+from . import panel, documents, info_requests, access_decision  # noqa: F401 — регистрация по порядку
 from ._units import (
     _AccessRightRow,
     _ApartmentRow,
@@ -33,22 +33,17 @@ from ._units import (
     _create_request_and_collect_notify,
     _document_row,
     _load_access_rights_card,
-    _load_document,
     _load_documents_page,
     _load_user_card,
     _load_verification_stats,
-    _purge_user_documents,
     _reject_user_db,
-    _verify_document,
 )
 from .panel import show_verification_panel, show_user_verification
 from .documents import (
     request_additional_info,
     view_user_documents,
-    download_user_document,
 )
 from .info_requests import select_info_type, process_request_comment
-from .document_review import verify_document, approve_document, reject_document
 from .access_decision import (
     manage_access_rights,
     approve_user_verification,
@@ -66,27 +61,19 @@ __all__ = [
     "_create_request_and_collect_notify",
     "_document_row",
     "_load_access_rights_card",
-    "_load_document",
     "_load_documents_page",
     "_load_user_card",
     "_load_verification_stats",
-    "_purge_user_documents",
     "_reject_user_db",
-    "_verify_document",
     # panel
     "show_verification_panel",
     "show_user_verification",
     # documents
     "request_additional_info",
     "view_user_documents",
-    "download_user_document",
     # info_requests
     "select_info_type",
     "process_request_comment",
-    # document_review
-    "verify_document",
-    "approve_document",
-    "reject_document",
     # access_decision
     "manage_access_rights",
     "approve_user_verification",

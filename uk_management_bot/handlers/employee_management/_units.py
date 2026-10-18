@@ -118,6 +118,17 @@ def _moderate_employee(db: Session, actor_tg_id: int, employee_id: int,
     return "ok" if success else "fail"
 
 
+def _delete_employee(db: Session, actor_tg_id: int, employee_id: int, comment: str):
+    """Удаление сотрудника. -> ("no_actor"|"ok"|"fail", PurgeResult для гигиены медиа)."""
+    from uk_management_bot.services.document_purge import PurgeResult
+
+    current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not current_user:
+        return "no_actor", PurgeResult(None)
+    outcome = AuthService(db).delete_user_purging_documents(employee_id, current_user.id, comment)
+    return ("ok" if outcome.ok else "fail"), outcome.purge
+
+
 def _search_employees(db: Session, raw_query: str) -> List[_EmployeeRow]:
     from uk_management_bot.utils.sql_search import (
         ci_contains_any, escape_like, is_postgres,

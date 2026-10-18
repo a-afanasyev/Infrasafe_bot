@@ -12,6 +12,7 @@ from typing import Dict
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.twa_links import resident_card_url
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.database.models.user_verification import DocumentType
 
@@ -162,41 +163,6 @@ def get_verification_request_keyboard(user_id: int, language: str = 'ru') -> Inl
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_document_verification_keyboard(document_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура проверки документа
-    
-    Args:
-        document_id: ID документа
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup с действиями
-    """
-    buttons = [
-        # Действия с документом
-        [InlineKeyboardButton(
-            text=f"✅ {get_text('verification.approve_document', language)}",
-            callback_data=f"document_approve_{document_id}"
-        )],
-        [InlineKeyboardButton(
-            text=f"❌ {get_text('verification.reject_document', language)}",
-            callback_data=f"document_reject_{document_id}"
-        )],
-        [InlineKeyboardButton(
-            text=f"📥 {get_text('user_verification.keyboards.download_document', language=language)}",
-            callback_data=f"download_document_{document_id}"
-        )],
-        
-        # Назад
-        [InlineKeyboardButton(
-            text=get_text('buttons.back', language),
-            callback_data="verification_user_documents"
-        )]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
 def get_document_management_keyboard(user_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура управления документами пользователя
@@ -214,14 +180,21 @@ def get_document_management_keyboard(user_id: int, language: str = 'ru') -> Inli
             text=f"📝 {get_text('user_verification.keyboards.request_additional_documents', language=language)}",
             callback_data=f"request_documents_{user_id}"
         )],
-        
+
         # Назад
         [InlineKeyboardButton(
             text=get_text('buttons.back', language),
             callback_data=f"user_mgmt_user_{user_id}"
         )]
     ]
-    
+    # Файлы документов в бот не пересылаются — просмотр только в дашборде.
+    dashboard_url = resident_card_url(user_id)
+    if dashboard_url:
+        buttons.insert(0, [InlineKeyboardButton(
+            text=get_text('user_mgmt.handlers.open_in_dashboard_btn', language=language),
+            url=dashboard_url,
+        )])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

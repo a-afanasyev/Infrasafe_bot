@@ -4,6 +4,7 @@ API эндпоинты для работы с медиа-файлами
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import quote
@@ -319,6 +320,63 @@ async def upload_access_media(
     except Exception as e:
         logger.error(f"Failed to upload access media (ref={ref}): {e}")
         raise HTTPException(status_code=500, detail="Ошибка загрузки файла контроля доступа")
+
+
+#: Документ жителя приходит зашифрованным ботом — тип не сниффится.
+_RESIDENT_DOCUMENT_TYPES = frozenset({"application/octet-stream"})
+
+
+@router.post("/upload-resident-document", response_model=MediaUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_resident_document(
+    file: UploadFile = File(..., description="Зашифрованный документ жителя (непрозрачный blob)"),
+    uploaded_by: Optional[int] = Form(None, ge=1, le=INT4_MAX, description="ID пользователя (INT4)"),
+    storage_service: MediaStorageService = Depends(get_storage_service)
+):
+    """
+    Узкий приём документов верификации жителя в канал ARCHIVE.
+
+    Бот шифрует скан до отправки, поэтому здесь — непрозрачные байты: тип не
+    сниффится и всегда `application/octet-stream` (уходит `send_document`, без
+    пережатия). Имя назначает сервер (`<uuid>.bin`), подпись — без описания:
+    исходное имя файла может раскрыть ФИО или тип документа. Общий `/upload`
+    и его allowlist не расширяются.
+    """
+    try:
+        if file.size and file.size > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+        file_data = await file.read()
+        if not file_data:
+            raise HTTPException(status_code=400, detail="Пустой файл")
+        if len(file_data) > settings.max_file_size:
+            raise HTTPException(status_code=400, detail=f"Размер файла превышает {settings.max_file_size} байт")
+
+        media_file = await storage_service.upload_domain_media(
+            channel_purpose=TelegramChannels.ARCHIVE,
+            category=FileCategories.RESIDENT_DOCUMENT,
+            ref="",
+            file_data=file_data,
+            filename=f"{uuid.uuid4().hex}.bin",
+            content_type="application/octet-stream",
+            uploaded_by=uploaded_by,
+            allowed_types=_RESIDENT_DOCUMENT_TYPES,
+        )
+
+        logger.info(f"Resident document uploaded: {media_file.id}")
+
+        return MediaUploadResponse(
+            media_file=MediaFileResponse.model_validate(media_file),
+            file_url=f"/api/v1/media/{media_file.id}/file",
+            message="Документ загружен"
+        )
+
+    except ChannelNotConfiguredError as e:
+        logger.error(f"Resident document upload rejected — channel not configured: {e}")
+        raise HTTPException(status_code=503, detail="archive channel not configured (CHANNEL_ARCHIVE)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload resident document: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка загрузки документа")
 
 
 @router.get("/search", response_model=MediaSearchResponse)

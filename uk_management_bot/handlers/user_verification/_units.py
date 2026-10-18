@@ -5,6 +5,7 @@ AUD5-ARCH-3 (волна 11): файл — часть пакета ``user_verific
 под-модулях. Код перенесён 1:1 из handlers/user_verification.py.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
@@ -16,6 +17,8 @@ from uk_management_bot.database.models.user_verification import (
 )
 from uk_management_bot.utils.address_helpers import apartment_address
 from uk_management_bot.utils.user_names import display_name
+
+logger = logging.getLogger(__name__)
 
 # ==========================================================================
 # DTO + sync-юниты (AUD3-07). Сессия живёт только внутри юнита.
@@ -34,7 +37,6 @@ class _DocumentRow:
     id: int
     type_value: str
     status: VerificationStatus
-    file_id: str = ""
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     created_at: Optional[datetime] = None
@@ -68,12 +70,11 @@ def _fmt_created_at(created_at: Optional[datetime]) -> str:
     return created_at.strftime('%d.%m.%Y %H:%M') if created_at else '—'
 
 
-def _document_row(doc, *, with_file: bool = False) -> _DocumentRow:
+def _document_row(doc) -> _DocumentRow:
     return _DocumentRow(
         id=doc.id,
         type_value=doc.document_type.value,
         status=doc.verification_status,
-        file_id=doc.file_id if with_file else "",
         file_name=doc.file_name,
         file_size=doc.file_size,
         created_at=doc.created_at,
@@ -150,15 +151,6 @@ def _load_documents_page(db, user_id: int):
     return (user.first_name, user.username), [_document_row(d) for d in documents]
 
 
-def _load_document(db, document_id: int, *, with_file: bool = False) -> Optional[_DocumentRow]:
-    from uk_management_bot.database.models.user_verification import UserDocument
-
-    document = db.query(UserDocument).filter(UserDocument.id == document_id).first()
-    if not document:
-        return None
-    return _document_row(document, with_file=with_file)
-
-
 def _create_request_and_collect_notify(db, user_id: int, admin_id: int, requested_info: dict):
     """Создание запроса верификации + fetch-фаза уведомления (сеть — у вызывающего)."""
     UserVerificationService(db).create_verification_request(
@@ -168,13 +160,6 @@ def _create_request_and_collect_notify(db, user_id: int, admin_id: int, requeste
     )
     return NotificationService(db).collect_verification_request_message(
         user_id, requested_info['type'], requested_info['comment']
-    )
-
-
-def _verify_document(db, document_id: int, admin_id: int, status: VerificationStatus,
-                     notes: Optional[str] = None) -> bool:
-    return UserVerificationService(db).verify_document(
-        document_id=document_id, admin_id=admin_id, status=status, notes=notes
     )
 
 
@@ -202,36 +187,50 @@ def _load_access_rights_card(db, user_id: int):
     ]
 
 
-def _approve_user_db(db, user_id: int, admin_id: int):
-    """DB-фазы одобрения + fetch уведомлений. → (ok, telegram_id, notify_pair,
-    restart_target). Сеть (media-cleanup, отправки) — у вызывающего."""
+
+
+
+def _approve_user_db(db, user_id: int, admin_telegram_id: int):
+    """Одобрение одним commit + fetch уведомлений. → (purge | None, notify_pair,
+    restart_target). Сеть (гигиена медиа, отправки) — у вызывающего.
+
+    Решение уже закоммичено к моменту fetch'а: его сбой не должен терять purge
+    (иначе media_id не дойдут до гигиены) — уведомления просто не уйдут.
+    """
     from uk_management_bot.database.models.user import User
 
-    service = UserVerificationService(db)
-    ok, telegram_id = service.approve_verification_db(user_id, admin_id)
-    if not ok:
-        return False, None, None, None
-
-    notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
-
-    restart_target = None
-    target_user = db.query(User).filter(User.id == user_id).first()
-    if target_user:
-        restart_target = (target_user.telegram_id, target_user.language or "ru")
-
-    return True, telegram_id, notify_pair, restart_target
+    purge = UserVerificationService(db).approve_verification_db(user_id, admin_telegram_id)
+    if purge is None:
+        return None, None, None
+    try:
+        notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
+        target_user = db.query(User).filter(User.id == user_id).first()
+        restart_target = (target_user.telegram_id, target_user.language or "ru") if target_user else None
+    except Exception as e:  # noqa: BLE001
+        logger.error("Уведомления об одобрении %s не собраны: %s", user_id, type(e).__name__)
+        return purge, None, None
+    return purge, notify_pair, restart_target
 
 
-def _purge_user_documents(db, user_id: int) -> None:
-    UserVerificationService(db).purge_user_documents_db(user_id)
+def _reject_user_db(db, user_id: int, admin_telegram_id: int, notes: str):
+    """Отклонение одним commit (документы удаляются) + fetch уведомления.
+    → (purge | None, notify_pair, язык жителя для кнопки переподачи | None).
 
+    Язык None — кнопку не показывать: переподача доступна только «чистому»
+    жителю (у сотрудника своя очередь, кнопка ответила бы «недоступна»).
+    """
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+    from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
-def _reject_user_db(db, user_id: int, admin_id: int, notes: str):
-    """DB-фаза отклонения + fetch уведомления. → (ok, notify_pair)."""
-    ok = UserVerificationService(db).reject_verification(
-        user_id=user_id, admin_id=admin_id, notes=notes
-    )
-    if not ok:
-        return False, None
-    return True, NotificationService(db).collect_verification_rejected_message(user_id)
-
+    purge = UserVerificationService(db).reject_verification(user_id, admin_telegram_id, notes)
+    if purge is None:
+        return None, None, None
+    try:
+        resident = db.query(User).filter(User.id == user_id).first()
+        pure = resident is not None and not set(parse_roles_safe(resident.roles)) - PURE_APPLICANT_ROLES
+        lang = ((resident.language or "ru") if pure else None)
+        return purge, NotificationService(db).collect_verification_rejected_message(user_id), lang
+    except Exception as e:  # noqa: BLE001 — решение закоммичено, purge не теряем
+        logger.error("Уведомление об отказе %s не собрано: %s", user_id, type(e).__name__)
+        return purge, None, None

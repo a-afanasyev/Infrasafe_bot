@@ -143,39 +143,6 @@ class TestGetVerificationRequestKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_document_verification_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetDocumentVerificationKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_document_verification_keyboard
-            result = get_document_verification_keyboard(document_id=10)
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_four_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_document_verification_keyboard
-            result = get_document_verification_keyboard(document_id=10)
-        assert len(_flat_texts(result)) == 4
-
-    def test_approve_and_reject_callbacks(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_document_verification_keyboard
-            result = get_document_verification_keyboard(document_id=10)
-        cbs = _flat_cbs(result)
-        assert "document_approve_10" in cbs
-        assert "document_reject_10" in cbs
-
-    def test_download_callback(self):
-        with patch(GET_TEXT_PATH, side_effect=_echo):
-            from uk_management_bot.keyboards.user_verification import get_document_verification_keyboard
-            result = get_document_verification_keyboard(document_id=10)
-        cbs = _flat_cbs(result)
-        assert "download_document_10" in cbs
-
-
-# ---------------------------------------------------------------------------
 # get_document_management_keyboard
 # ---------------------------------------------------------------------------
 

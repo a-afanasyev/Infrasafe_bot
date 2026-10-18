@@ -625,6 +625,15 @@
       "rate_limited": "Rejim tez-tez almashtirilmoqda. Iltimos, biroz kutib qayta urinib ko'ring."
     }
   },
+  "verification_resubmit": {
+    "btn": "📝 Arizani qayta topshirish",
+    "offer": "Verifikatsiya arizangiz rad etildi. Uni qayta topshirishingiz mumkin.",
+    "resubmitted": "Ariza qayta tekshiruvga yuborildi.",
+    "already_pending": "Ariza allaqachon ko'rib chiqilmoqda.",
+    "cooldown": "Arizani qayta topshirish sutkada bir martadan ko'p mumkin emas.",
+    "denied": "Qayta topshirish mumkin emas. Boshqaruv kompaniyasiga murojaat qiling.",
+    "not_found": "Foydalanuvchi topilmadi. /start ni bosing."
+  },
   "onboarding": {
     "completed": "🎉 Ro'yxatdan o'tish tugallandi! Sizning ma'lumotlaringiz:",
     "documents": {
@@ -635,7 +644,13 @@
       "description": "Tekshirish jarayonini tezlashtirish uchun siz kerakli hujjatlarni yuklashingiz mumkin:",
       "document_saved": "✅ Hujjat muvaffaqiyatli saqlandi!",
       "documents_summary": "📊 Yuklangan hujjatlarning qisqacha mazmuni:",
-      "file_invalid": "❌ Fayl formati noto'g'ri. Ruxsat etilgan: JPG, PNG, PDF, DOC, DOCX",
+      "file_invalid": "❌ Fayl formati noto'g'ri. Ruxsat etilgan: JPG, PNG, PDF",
+      "upload_unsupported": "❌ Bu format qabul qilinmaydi. Rasm yoki PDF yuboring.",
+      "upload_unavailable": "⚠️ Hujjatni saqlab bo'lmadi. Keyinroq urinib ko'ring yoki bu bosqichni o'tkazib yuboring.",
+      "upload_not_required": "Hozir hujjatlar talab qilinmaydi.",
+      "upload_rejected": "Tekshiruv rad etildi. Hujjatlarni qayta yuklash uchun arizani qayta topshiring.",
+      "upload_limit": "Hujjatlarning maksimal soni yuklandi. Menejer qarorini kuting.",
+      "upload_too_large": "❌ Fayl 20 MB dan katta. Kichikroq skan yoki rasm yuboring.",
       "no_documents": "📄 Hujjatlar yuklanmagan",
       "skip_documents": "⏭️ Hujjatni yuklashni o'tkazib yuborish",
       "title": "📄 Hujjatlar yuklanmoqda",
@@ -2037,7 +2052,7 @@
         "utility_bill": "Kommunal to'lov kvitansiyasi",
         "other": "Boshqa hujjatlar"
       },
-      "download_doc_btn": "📥 {doc_type} yuklab olish",
+      "open_in_dashboard_btn": "🖥 Hujjatlarni dashbordda ochish",
       "request_additional_docs_btn": "📝 Qo'shimcha hujjatlarni so'rash",
       "document_not_found": "Hujjat topilmadi",
       "document_sent_to_dm": "Hujjat shaxsiy xabarlarga yuborildi",
