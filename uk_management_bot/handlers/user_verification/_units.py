@@ -223,9 +223,13 @@ def _approve_user_db(db, user_id: int, admin_telegram_id: int):
 
 def _reject_user_db(db, user_id: int, admin_telegram_id: int, notes: str):
     """Отклонение одним commit (документы удаляются) + fetch уведомления.
-    → (purge | None, notify_pair)."""
+    → (purge | None, notify_pair, язык жителя для кнопки переподачи)."""
+    from uk_management_bot.database.models.user import User
+
     purge = UserVerificationService(db).reject_verification(user_id, admin_telegram_id, notes)
     if purge is None:
-        return None, None
-    return purge, NotificationService(db).collect_verification_rejected_message(user_id)
+        return None, None, "ru"
+    resident = db.query(User).filter(User.id == user_id).first()
+    lang = (resident.language if resident else None) or "ru"
+    return purge, NotificationService(db).collect_verification_rejected_message(user_id), lang
 

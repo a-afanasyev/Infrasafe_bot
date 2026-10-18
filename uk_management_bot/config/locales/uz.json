@@ -625,6 +625,15 @@
       "rate_limited": "Rejim tez-tez almashtirilmoqda. Iltimos, biroz kutib qayta urinib ko'ring."
     }
   },
+  "verification_resubmit": {
+    "btn": "📝 Arizani qayta topshirish",
+    "offer": "Verifikatsiya arizangiz rad etildi. Uni qayta topshirishingiz mumkin.",
+    "resubmitted": "Ariza qayta tekshiruvga yuborildi.",
+    "already_pending": "Ariza allaqachon ko'rib chiqilmoqda.",
+    "cooldown": "Arizani qayta topshirish sutkada bir martadan ko'p mumkin emas.",
+    "denied": "Qayta topshirish mumkin emas. Boshqaruv kompaniyasiga murojaat qiling.",
+    "not_found": "Foydalanuvchi topilmadi. /start ni bosing."
+  },
   "onboarding": {
     "completed": "🎉 Ro'yxatdan o'tish tugallandi! Sizning ma'lumotlaringiz:",
     "documents": {
@@ -639,7 +648,7 @@
       "upload_unsupported": "❌ Bu format qabul qilinmaydi. Rasm yoki PDF yuboring.",
       "upload_unavailable": "⚠️ Hujjatni saqlab bo'lmadi. Keyinroq urinib ko'ring yoki bu bosqichni o'tkazib yuboring.",
       "upload_not_required": "Hozir hujjatlar talab qilinmaydi.",
-      "upload_rejected": "Tekshiruv rad etildi — hozir hujjatlar qabul qilinmaydi.",
+      "upload_rejected": "Tekshiruv rad etildi. Hujjatlarni qayta yuklash uchun arizani qayta topshiring.",
       "upload_limit": "Hujjatlarning maksimal soni yuklandi. Menejer qarorini kuting.",
       "no_documents": "📄 Hujjatlar yuklanmagan",
       "skip_documents": "⏭️ Hujjatni yuklashni o'tkazib yuborish",

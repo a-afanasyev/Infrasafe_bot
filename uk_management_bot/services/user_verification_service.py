@@ -11,12 +11,13 @@
 import logging
 from enum import Enum
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
-from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.datetime_utils import as_utc, utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification, AccessRights,
@@ -32,6 +33,19 @@ _DECIDABLE_FROM = frozenset({"pending", "requested"})
 #: Документов на одну проверку — потолок объёма (житель удалить свои не может,
 #: строки чистит только решение) и защита от заливки канала.
 MAX_DOCUMENTS_PER_REVIEW = 10
+
+
+#: Не чаще одной переподачи в сутки (первая после отказа — сразу).
+RESUBMIT_COOLDOWN = timedelta(hours=24)
+_RESUBMIT_ACTION = "resident_verification_resubmitted"
+
+
+class ResubmitResult(str, Enum):
+    RESUBMITTED = "resubmitted"
+    ALREADY_PENDING = "already_pending"  # проверка и так открыта
+    COOLDOWN = "cooldown"                # предыдущая переподача моложе суток
+    DENIED = "denied"                    # не «чистый» житель / заблокирован / удалён / verified
+    NOT_FOUND = "not_found"
 
 
 class UploadDenied(str, Enum):
@@ -500,6 +514,48 @@ class UserVerificationService:
 
     # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ В ОНБОРДИНГЕ ═══
     
+    def resubmit_verification(self, telegram_id: int) -> ResubmitResult:
+        """Переподача после отказа — одна транзакция под FOR UPDATE пользователя.
+
+        Только «чистый» житель (`PURE_APPLICANT_ROLES`: callback шлёт клиент, а
+        `verification_status` общий со стаффом — иначе отклонённый сотрудник
+        вернулся бы в свою очередь) и только из rejected. Первая переподача после
+        отказа — сразу, следующая — не раньше RESUBMIT_COOLDOWN после предыдущей
+        (по аудиту). Успех: pending, поля прошлого решения очищены, новая
+        UserVerification(PENDING), запись аудита.
+        """
+        from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+
+        try:
+            user = self.db.query(User).filter(User.telegram_id == telegram_id).with_for_update().first()
+            if user is None:
+                return ResubmitResult.NOT_FOUND
+            if user.verification_status in _DECIDABLE_FROM:
+                return ResubmitResult.ALREADY_PENDING
+            if (user.verification_status != "rejected" or user.deleted_at is not None
+                    or user.status == "blocked"
+                    or set(parse_roles_safe(user.roles)) - PURE_APPLICANT_ROLES):
+                return ResubmitResult.DENIED
+            last = self.db.query(AuditLog.created_at).filter(
+                AuditLog.user_id == user.id, AuditLog.action == _RESUBMIT_ACTION,
+            ).order_by(AuditLog.created_at.desc()).first()
+            if last and last[0] and as_utc(last[0]) > utc_now() - RESUBMIT_COOLDOWN:
+                return ResubmitResult.COOLDOWN
+
+            user_id = user.id
+            user.verification_status = "pending"
+            user.verification_notes = None
+            user.verification_date = None
+            user.verified_by = None
+            self.db.add(UserVerification(user_id=user_id, status=VerificationStatus.PENDING))
+            self.db.add(AuditLog(action=_RESUBMIT_ACTION, user_id=user_id, telegram_user_id=telegram_id))
+            self.db.commit()
+        finally:
+            if self.db.in_transaction():
+                self.db.rollback()  # ранний выход или сбой — снять лок
+        logger.info("Житель %s переподал заявку на верификацию", user_id)
+        return ResubmitResult.RESUBMITTED
+
     def check_document_upload(
         self, telegram_id: int, *, lock: bool = False,
     ) -> tuple[Optional[int], Optional[UploadDenied]]:

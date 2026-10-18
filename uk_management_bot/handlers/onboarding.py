@@ -35,11 +35,15 @@ from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
 from uk_management_bot.integrations import get_media_client
-from uk_management_bot.services.user_verification_service import UploadDenied, UserVerificationService
+from uk_management_bot.services.user_verification_service import (
+    ResubmitResult, UploadDenied, UserVerificationService,
+)
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.media_helpers import DocumentUploadError, upload_encrypted_document
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
-from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB, get_upload_documents_inline
+from uk_management_bot.keyboards.documents_entry import (
+    RESUBMIT_CB, UPLOAD_DOCUMENTS_CB, get_resubmit_inline, get_upload_documents_inline,
+)
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
     get_document_confirmation_keyboard,
@@ -134,6 +138,11 @@ _UPLOAD_DENIAL_KEYS = {
 }
 
 
+def _denial_markup(denial: UploadDenied, lang: str):
+    """Отказ «проверка отклонена» несёт кнопку переподачи — вход и для отклонённых до релиза."""
+    return get_resubmit_inline(lang) if denial is UploadDenied.REJECTED else None
+
+
 async def _upload_denial(telegram_id: int, _db=None) -> Optional[UploadDenied]:
     """Центральный guard загрузки на входе (повторяется при вставке под локом)."""
     _user_id, denial = await run_db(
@@ -195,7 +204,8 @@ async def start_document_upload(message: Message, state: FSMContext, language: s
     """Начинает процесс загрузки документов"""
     denial = await _upload_denial(message.from_user.id)
     if denial is not None:
-        await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language))
+        await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language),
+                             reply_markup=_denial_markup(denial, language))
         return
     await _begin_document_type_step(message, state, language)
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
@@ -212,12 +222,38 @@ async def open_document_upload(callback: CallbackQuery, state: FSMContext, langu
         logger.debug(f"Не удалось снять inline-кнопку загрузки документов: {e}")
     denial = await _upload_denial(callback.from_user.id)
     if denial is not None:
-        await callback.message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language))
+        await callback.message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language),
+                                     reply_markup=_denial_markup(denial, language))
         await callback.answer()
         return
     await _begin_document_type_step(callback.message, state, language)
     await callback.answer()
     logger.info(f"Пользователь {callback.from_user.id} открыл загрузку документов по кнопке")
+
+
+@router.callback_query(F.data == RESUBMIT_CB)
+async def resubmit_verification(callback: CallbackQuery, state: FSMContext, language: str = "ru",
+                                *, _db=None):
+    """«Подать заявку заново» после отказа.
+
+    Успех — кнопка снимается, открывается выбор типа документа (документы
+    необязательны: «Пропустить» = заявка уже в очереди). Любой другой исход —
+    только всплывающий ответ: без сообщений в чат (флуд нажатиями не
+    усиливается) и без снятия кнопки (после кулдауна она пригодится).
+    """
+    result = await run_db(
+        lambda s: UserVerificationService(s).resubmit_verification(callback.from_user.id), db=_db
+    )
+    text = get_text(f"verification_resubmit.{result.value}", language=language)
+    if result is not ResubmitResult.RESUBMITTED:
+        await callback.answer(text, show_alert=True)
+        return
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
+        logger.debug(f"Не удалось снять кнопку переподачи: {e}")
+    await callback.answer(text)
+    await _begin_document_type_step(callback.message, state, language)
 
 
 @router.message(OnboardingStates.waiting_for_document_type, F.photo | F.document)
@@ -387,7 +423,8 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
             lambda s: UserVerificationService(s).check_document_upload(telegram_id), db=_db
         )
         if denial is not None:
-            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang))
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang),
+                                 reply_markup=_denial_markup(denial, lang))
             await state.clear()
             return
 
@@ -419,7 +456,8 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         if denial is not None:
             # Решение менеджера успело закрыть проверку между загрузкой и вставкой.
             await _discard_document_blob(upload.media_id)
-            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang))
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang),
+                                 reply_markup=_denial_markup(denial, lang))
             await state.clear()
             return
 

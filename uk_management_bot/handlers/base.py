@@ -43,6 +43,7 @@ from uk_management_bot.services.notification_service import (
 )
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
+from uk_management_bot.keyboards.documents_entry import get_resubmit_inline
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.filters import RoleFilter
@@ -439,6 +440,30 @@ async def cmd_start(message: Message, state: FSMContext = None, roles: list[str]
     # Если нет токена, продолжаем обычную обработку /start
     await handle_regular_start(message, roles, active_role, user_status, language=language,
                                offer_role_choice=True, _db=_db)
+    await offer_resubmit_if_rejected(message, language, _db=_db)
+
+
+def _is_rejected_resident(db, telegram_id: int) -> bool:
+    """Отклонённый «чистый» житель — ему доступна переподача (как resubmit_verification)."""
+    from uk_management_bot.services.residents.core import PURE_APPLICANT_ROLES
+
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    return bool(
+        user and user.verification_status == "rejected" and user.deleted_at is None
+        and user.status != "blocked"
+        and not set(parse_roles_safe(user.roles)) - PURE_APPLICANT_ROLES
+    )
+
+
+async def offer_resubmit_if_rejected(message: Message, language: str = "ru", *, _db=None) -> None:
+    """Точка входа в переподачу для отклонённых (в т.ч. до релиза — уведомления
+    с кнопкой они не получали). Best-effort: /start от неё не зависит."""
+    try:
+        if await run_db(lambda s: _is_rejected_resident(s, message.from_user.id), db=_db):
+            await message.answer(get_text("verification_resubmit.offer", language=language),
+                                 reply_markup=get_resubmit_inline(language))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Предложение переподачи для %s не показано: %s", message.from_user.id, e)
 
 def needs_onboarding_redraw(ctx: Optional[_MenuContext]) -> bool:
     """Гейт §3.2: экран онбординга после контакта — только pending-жителю с

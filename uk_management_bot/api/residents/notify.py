@@ -21,6 +21,7 @@ from collections.abc import Iterable
 from typing import Protocol
 
 from uk_management_bot.api import telegram_send
+from uk_management_bot.constants.document_callbacks import RESUBMIT_CB, UPLOAD_DOCUMENTS_CB
 from uk_management_bot.utils.http_errors import describe_http_error
 from uk_management_bot.database.models.user import User
 from uk_management_bot.utils.helpers import get_text
@@ -207,9 +208,12 @@ async def notify_documents_requested(
     from uk_management_bot.services.residents.verification_core import (
         format_requested_documents,
     )
+    # BUG-188 на API-пути: без кнопки житель не мог войти в загрузку.
     await _safe_send(resident, get_text(
         "web_notifications.documents_requested", language=lang,
         documents=format_requested_documents(document_types, lang), comment=comment,
+    ), reply_markup=_inline_button(
+        get_text("onboarding.documents.btn_upload_inline", language=lang), UPLOAD_DOCUMENTS_CB,
     ))
 
 
@@ -220,6 +224,11 @@ async def notify_verification_approved(resident: User) -> None:
 
 
 async def notify_verification_rejected(resident: User, notes: str) -> None:
+    lang = _lang(resident)
     await _safe_send(resident, get_text(
-        "web_notifications.verification_rejected", language=_lang(resident), notes=notes,
-    ))
+        "web_notifications.verification_rejected", language=lang, notes=notes,
+    ), reply_markup=_inline_button(get_text("verification_resubmit.btn", language=lang), RESUBMIT_CB))
+
+
+def _inline_button(text: str, callback_data: str) -> dict:
+    return {"inline_keyboard": [[{"text": text, "callback_data": callback_data}]]}
