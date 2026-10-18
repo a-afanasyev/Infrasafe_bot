@@ -2041,7 +2041,7 @@
         "utility_bill": "Квитанция ЖКХ",
         "other": "Другие документы"
       },
-      "download_doc_btn": "📥 Скачать {doc_type}",
+      "open_in_dashboard_btn": "🖥 Открыть документы в дашборде",
       "request_additional_docs_btn": "📝 Запросить дополнительные документы",
       "document_not_found": "Документ не найден",
       "document_sent_to_dm": "Документ отправлен в личные сообщения",

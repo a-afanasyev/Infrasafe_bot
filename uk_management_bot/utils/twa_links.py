@@ -20,6 +20,18 @@ EXECUTOR_TASK_PATH = "/uk/twa/exec/tasks/{number}"
 EXECUTOR_TASK_DONE_QUERY = "?action=done"
 # Список «Мои» исполнителя (простой режим фронт перенаправит на `/twa/s`).
 EXECUTOR_TASKS_PATH = "/uk/twa/exec"
+# Карточка жителя в дашборде (frontend/src/App.tsx: /dashboard → residents/:id, base /uk/).
+RESIDENT_CARD_PATH = "/uk/dashboard/residents/{id}"
+
+
+def resident_card_url(resident_id: int) -> Optional[str]:
+    """URL карточки жителя в дашборде (там — просмотр документов); None без FRONTEND_URL.
+
+    Обычная URL-кнопка, не web_app: дашборд авторизует менеджера своей сессией.
+    """
+    if not settings.FRONTEND_URL:
+        return None
+    return f"{settings.FRONTEND_URL}{RESIDENT_CARD_PATH.format(id=int(resident_id))}"
 
 
 def executor_task_url(request_number: str, *, done: bool = False) -> Optional[str]:

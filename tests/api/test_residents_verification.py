@@ -442,7 +442,8 @@ class TestDocumentProxy:
         assert r.headers["content-type"] == "image/png"
         assert r.headers["x-content-type-options"] == "nosniff"
         assert r.headers["content-disposition"].startswith("inline")
-        assert r.headers["cache-control"] == "private, max-age=300"
+        # Скан паспорта не кэшируется нигде: удаление ключа не достанет копию из кэша.
+        assert r.headers["cache-control"] == "no-store"
 
     async def test_pdf_is_forced_to_download(
         self, client: AsyncClient, db_session: AsyncSession, telegram_api,
@@ -529,3 +530,66 @@ class TestDocumentProxy:
 
         r = await client.get(f"{BASE}/{attacker.id}/documents/{doc.id}/file")
         assert r.status_code == 404
+
+
+# ═══════════════════════ Зашифрованные документы ═══════════════════════
+
+
+async def _encrypted_doc(db, resident_id, data, *, dtype=DocumentType.PASSPORT, media_id=8801):
+    from uk_management_bot.utils.document_crypto import document_aad, encrypt
+
+    doc_uuid = f"00000000-0000-4000-8000-{media_id:012d}"
+    key, blob = encrypt(data, document_aad(doc_uuid, resident_id, dtype.value))
+    d = UserDocument(user_id=resident_id, document_type=dtype, media_id=media_id,
+                     encryption_key=key, document_uuid=doc_uuid, file_name="scan")
+    db.add(d)
+    await db.commit()
+    await db.refresh(d)
+    return d, blob
+
+
+def _media(download_result):
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    client.download_media_file = AsyncMock(return_value=download_result)
+    return patch("uk_management_bot.api.residents.documents.get_media_client", return_value=client)
+
+
+class TestEncryptedDocumentProxy:
+
+    async def test_served_from_media_and_decrypted(self, client: AsyncClient, db_session: AsyncSession):
+        resident = await _resident(db_session, 6401)
+        doc, blob = await _encrypted_doc(db_session, resident.id, _PDF)
+
+        with _media((blob, "application/octet-stream")):
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+
+        assert r.status_code == 200
+        assert r.content == _PDF
+        assert r.headers["content-type"] == "application/pdf"
+        assert r.headers["cache-control"] == "no-store"
+
+    async def test_media_unavailable_is_502_without_telegram_fallback(
+        self, client: AsyncClient, db_session: AsyncSession, telegram_api,
+    ):
+        resident = await _resident(db_session, 6402)
+        doc, _ = await _encrypted_doc(db_session, resident.id, _JPEG, media_id=8802)
+
+        def _no_telegram(request):
+            raise AssertionError("новый документ не читается из Telegram")
+
+        telegram_api.handler = _no_telegram
+        with _media(None):
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        assert r.status_code == 502
+
+    async def test_blob_of_another_row_is_502(self, client: AsyncClient, db_session: AsyncSession):
+        """AAD: blob другой строки этим ключом/контекстом не расшифровывается."""
+        resident = await _resident(db_session, 6403)
+        doc, _ = await _encrypted_doc(db_session, resident.id, _JPEG, media_id=8803)
+        _, foreign_blob = await _encrypted_doc(db_session, resident.id, _JPEG, media_id=8804)
+
+        with _media((foreign_blob, "application/octet-stream")):
+            r = await client.get(f"{BASE}/{resident.id}/documents/{doc.id}/file")
+        assert r.status_code == 502

@@ -2042,7 +2042,7 @@
         "utility_bill": "Kommunal to'lov kvitansiyasi",
         "other": "Boshqa hujjatlar"
       },
-      "download_doc_btn": "📥 {doc_type} yuklab olish",
+      "open_in_dashboard_btn": "🖥 Hujjatlarni dashbordda ochish",
       "request_additional_docs_btn": "📝 Qo'shimcha hujjatlarni so'rash",
       "document_not_found": "Hujjat topilmadi",
       "document_sent_to_dm": "Hujjat shaxsiy xabarlarga yuborildi",

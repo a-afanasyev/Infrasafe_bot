@@ -25,6 +25,7 @@ from uk_management_bot.keyboards.user_management import (
 )
 from uk_management_bot.states.user_management import UserManagementStates
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.twa_links import resident_card_url
 from uk_management_bot.utils.user_names import display_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
@@ -42,21 +43,6 @@ class _DocumentsView:
     """Готовый экран документов пользователя: текст + клавиатура (или None)."""
     text: str
     keyboard: Optional[InlineKeyboardMarkup]
-
-
-@dataclass(frozen=True)
-class _DocumentPayload:
-    """Поля документа для отправки в личку.
-
-    Подпись здесь НЕ собирается: исторически её сборка жила во внутреннем
-    ``try`` хендлера, и падение (NULL-strftime, отсутствующий тип) отвечало
-    «ошибка отправки документа», а не «неизвестная ошибка». Границу ошибок
-    сохраняем: наружу выходят detached-safe значения (enum, datetime, int).
-    """
-    file_id: str
-    document_type: object
-    created_at: object
-    file_size: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -138,13 +124,13 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
 
     keyboard_buttons = []
 
-    # Добавляем кнопки для каждого документа
-    for i, doc in enumerate(documents, 1):
-        doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{doc.document_type.value}', language=lang)
-
+    # Файлы документов в Telegram не пересылаются: копия в чате менеджера
+    # пережила бы уничтожение ключа. Просмотр — только в дашборде.
+    dashboard_url = resident_card_url(target_user_id)
+    if dashboard_url:
         keyboard_buttons.append([InlineKeyboardButton(
-            text=get_text('user_mgmt.handlers.download_doc_btn', language=lang).format(doc_type=doc_type_name),
-            callback_data=f"download_document_{doc.id}"
+            text=get_text('user_mgmt.handlers.open_in_dashboard_btn', language=lang),
+            url=dashboard_url,
         )])
 
     # Добавляем кнопки управления
@@ -161,23 +147,6 @@ def _load_user_documents_view(db, target_user_id: int, lang: str) -> tuple:
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
     return ("ok", _DocumentsView(text=documents_text, keyboard=keyboard))
-
-
-def _load_document_payload(db, document_id: int) -> Optional[_DocumentPayload]:
-    """-> _DocumentPayload либо None, если документа нет."""
-    # Получаем документ
-    from uk_management_bot.database.models.user_verification import UserDocument
-    document = db.query(UserDocument).filter(UserDocument.id == document_id).first()
-
-    if not document:
-        return None
-
-    return _DocumentPayload(
-        file_id=document.file_id,
-        document_type=document.document_type,
-        created_at=document.created_at,
-        file_size=document.file_size,
-    )
 
 
 def _load_user_details_view(db, target_user_id: int, lang: str) -> Optional[_UserDetailsView]:
@@ -445,83 +414,6 @@ async def handle_view_user_documents(callback: CallbackQuery,
 
     except Exception as e:
         logger.error(f"Ошибка просмотра документов пользователя: {e}")
-        await callback.answer(
-            get_text('errors.unknown_error', language=lang),
-            show_alert=True
-        )
-
-@router.callback_query(F.data.startswith("download_document_"))
-async def handle_download_document(callback: CallbackQuery,
-                                 roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
-    """Скачать документ пользователя"""
-    lang = language
-
-    # Проверяем права доступа через утилитарную функцию
-    has_access = has_admin_access(roles=roles, user=user)
-
-    if not has_access:
-        await callback.answer(
-            get_text('errors.permission_denied', language=lang),
-            show_alert=True
-        )
-        return
-
-    try:
-        document_id = int(callback.data.split('_')[-1])
-
-        payload = await run_db(
-            lambda s: _load_document_payload(s, document_id), db=_db
-        )
-
-        if payload is None:
-            await callback.answer(
-                get_text('user_mgmt.handlers.document_not_found', language=lang),
-                show_alert=True
-            )
-            return
-
-        # Отправляем файл
-        bot = callback.bot
-
-        try:
-            # Получаем название типа документа
-            doc_type_name = get_text(f'user_mgmt.handlers.doc_type.{payload.document_type.value}', language=lang)
-
-            caption = f"📄 {doc_type_name}\n"
-            # BUG-155 п.7: created_at может быть NULL; размер 0 байт легитимен.
-            caption += get_text('user_mgmt.handlers.doc_uploaded', language=lang).format(date=payload.created_at.strftime('%d.%m.%Y %H:%M') if payload.created_at else "—") + "\n"
-
-            if payload.file_size is not None:
-                caption += get_text('user_mgmt.handlers.doc_size', language=lang).format(size=payload.file_size // 1024)
-
-            # Определяем тип файла по file_name или пробуем отправить как фото
-            try:
-                # Сначала пробуем отправить как документ
-                await bot.send_document(
-                    chat_id=callback.from_user.id,
-                    document=payload.file_id,
-                    caption=caption
-                )
-                await callback.answer(get_text('user_mgmt.handlers.document_sent_to_dm', language=lang))
-            except Exception as doc_error:
-                # Если ошибка "can't use file of type Photo", отправляем как фото
-                if "can't use file of type Photo" in str(doc_error):
-                    logger.info(f"Файл {payload.file_id} является фото, отправляем как photo")
-                    await bot.send_photo(
-                        chat_id=callback.from_user.id,
-                        photo=payload.file_id,
-                        caption=caption
-                    )
-                    await callback.answer(get_text('user_mgmt.handlers.document_sent_to_dm', language=lang))
-                else:
-                    raise  # Пробрасываем другие ошибки
-
-        except Exception as e:
-            logger.error(f"Ошибка отправки документа: {e}")
-            await callback.answer(get_text('user_mgmt.handlers.error_sending_document', language=lang), show_alert=True)
-
-    except Exception as e:
-        logger.error(f"Ошибка скачивания документа: {e}")
         await callback.answer(
             get_text('errors.unknown_error', language=lang),
             show_alert=True

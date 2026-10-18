@@ -95,17 +95,6 @@ async def test_view_user_documents_null_created_at_renders_list():
     cb.message.edit_text.assert_awaited_once()
 
 
-async def test_download_document_null_created_at_still_sends():
-    from uk_management_bot.handlers.user_verification import documents
-
-    cb = _make_callback("download_document_5")
-    db = _db_single_doc(_make_doc(created_at=None))
-
-    await documents.download_user_document(cb, roles=["manager"], language="ru", _db=db)
-
-    cb.bot.send_document.assert_awaited_once()
-
-
 # ── 2: локализация типа документа в карточке ────────────────────────────────
 
 async def test_verify_document_card_localizes_doc_type():
@@ -149,19 +138,3 @@ async def test_request_comment_redraws_menu_with_fresh_stats():
     assert kb.call_args.args[0] == stats, (
         f"меню перерисовано с пустой статистикой: {kb.call_args.args[0]!r}"
     )
-
-
-# ── 4: caption без русского хардкода ────────────────────────────────────────
-
-async def test_download_caption_localized_for_uz():
-    from uk_management_bot.handlers.user_verification import documents
-
-    cb = _make_callback("download_document_5")
-    db = _db_single_doc(_make_doc(created_at=datetime(2026, 1, 2, 9, 30)))
-
-    await documents.download_user_document(cb, roles=["manager"], language="uz", _db=db)
-
-    cb.bot.send_document.assert_awaited_once()
-    caption = cb.bot.send_document.await_args.kwargs["caption"]
-    assert "Загружен" not in caption, f"русский хардкод в uz-caption: {caption!r}"
-    assert get_text("user_verification.handlers.uploaded_date", language="uz") in caption

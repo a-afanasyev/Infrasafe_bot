@@ -44,7 +44,6 @@ from .panel import show_verification_panel, show_user_verification
 from .documents import (
     request_additional_info,
     view_user_documents,
-    download_user_document,
 )
 from .info_requests import select_info_type, process_request_comment
 from .document_review import verify_document, approve_document, reject_document
@@ -77,7 +76,6 @@ __all__ = [
     # documents
     "request_additional_info",
     "view_user_documents",
-    "download_user_document",
     # info_requests
     "select_info_type",
     "process_request_comment",
