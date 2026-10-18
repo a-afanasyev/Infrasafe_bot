@@ -1,18 +1,15 @@
 """BUG-144 — предсуществующие дефекты пакета handlers/user_verification/.
 
-  1. document.created_at.strftime без NULL-guard'а (document_review.py,
-     documents.py x2) — строка с NULL роняла хендлер в unknown_error;
-  2. карточка verify_document подставляла сырой type_value вместо
-     get_text('verification.document_types.…');
+  1. document.created_at.strftime без NULL-guard'а (documents.py) — строка с
+     NULL роняла хендлер в unknown_error;
   3. после process_request_comment меню перерисовывалось с пустой
-     статистикой {} — счётчики на кнопках обнулялись;
-  4. caption скачанного документа содержал захардкоженный русский
-     «📅 Загружен:» вместо ключа user_verification.handlers.uploaded_date.
-"""
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+     статистикой {} — счётчики на кнопках обнулялись.
 
-from uk_management_bot.utils.helpers import get_text
+Пункты 2 (карточка поштучной проверки) и 4 (caption скачанного документа)
+сняты вместе с кодом: поштучной проверки и пересылки файлов документов в
+бот больше нет — просмотр только в дашборде.
+"""
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def _make_callback(data):
@@ -70,17 +67,6 @@ def _db_documents_page(user, docs):
 
 # ── 1: NULL-guard created_at ────────────────────────────────────────────────
 
-async def test_verify_document_null_created_at_renders_card():
-    from uk_management_bot.handlers.user_verification import document_review
-
-    cb = _make_callback("document_verify_5")
-    db = _db_single_doc(_make_doc(created_at=None))
-
-    await document_review.verify_document(cb, roles=["manager"], language="ru", _db=db)
-
-    cb.message.edit_text.assert_awaited_once()
-
-
 async def test_view_user_documents_null_created_at_renders_list():
     from uk_management_bot.handlers.user_verification import documents
 
@@ -93,22 +79,6 @@ async def test_view_user_documents_null_created_at_renders_list():
     await documents.view_user_documents(cb, roles=["manager"], language="ru", _db=db)
 
     cb.message.edit_text.assert_awaited_once()
-
-
-# ── 2: локализация типа документа в карточке ────────────────────────────────
-
-async def test_verify_document_card_localizes_doc_type():
-    from uk_management_bot.handlers.user_verification import document_review
-
-    cb = _make_callback("document_verify_5")
-    db = _db_single_doc(_make_doc(created_at=datetime(2026, 1, 1, 10, 0)))
-
-    await document_review.verify_document(cb, roles=["manager"], language="ru", _db=db)
-
-    cb.message.edit_text.assert_awaited_once()
-    text = cb.message.edit_text.await_args.args[0]
-    localized = get_text("verification.document_types.passport", language="ru")
-    assert localized in text, f"в карточке нет локализованного типа: {text!r}"
 
 
 # ── 3: статистика меню пересчитывается после запроса ────────────────────────

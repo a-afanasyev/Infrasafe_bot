@@ -112,3 +112,35 @@ async def test_insert_failure_discards_blob():
     msg, _, _, discard = await _save([(USER_ID, None), RuntimeError("db down")])
     discard.assert_awaited_once_with(77)
     assert get_text("errors.unknown_error", language="ru") in _texts(msg)
+
+
+# ─── Шаг подтверждения убран ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_valid_file_is_saved_without_confirmation_step():
+    msg = _msg()
+    msg.document = MagicMock(file_id="d", file_name="scan.pdf", file_size=100)
+    msg.photo = None
+    state = _state()
+    state.update_data = AsyncMock()
+    save = AsyncMock()
+    with patch.object(onboarding, "save_document", save):
+        await onboarding.process_document_file(msg, state, "ru")
+
+    save.assert_awaited_once()
+    state.update_data.assert_awaited_once_with(
+        {"file_id": "d", "file_name": "scan.pdf", "file_size": 100})
+    assert OnboardingStates.waiting_for_document_confirmation not in [
+        c.args[0] for c in state.set_state.await_args_list]
+
+
+@pytest.mark.asyncio
+async def test_stale_confirmation_state_is_reset_with_hint():
+    """Кто застрял в старом шаге подтверждения в момент деплоя — сброс и вход заново."""
+    msg = _msg()
+    state = _state()
+    await onboarding.stale_document_confirmation(msg, state, "ru")
+    state.clear.assert_awaited_once()
+    kb = msg.answer.await_args.kwargs["reply_markup"]
+    assert kb.inline_keyboard[0][0].callback_data == "docs:upload"

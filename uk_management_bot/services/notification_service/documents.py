@@ -19,7 +19,7 @@ def _user_lang(user: User) -> str:
 
 def _document_name(document_type: str, language: str) -> str:
     """BUG-146: локализованное название типа документа из document_types.*
-    (как в send_document_approved_notification), вместо RU-хардкода."""
+    вместо RU-хардкода."""
     if not document_type:
         return get_text("document_types.other", language=language)
     return get_text(f"document_types.{document_type}", language=language)

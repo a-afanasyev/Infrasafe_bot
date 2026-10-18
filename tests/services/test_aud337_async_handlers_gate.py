@@ -51,7 +51,6 @@ CONVERTED = [
     "uk_management_bot/handlers/user_verification/panel.py",
     "uk_management_bot/handlers/user_verification/documents.py",
     "uk_management_bot/handlers/user_verification/info_requests.py",
-    "uk_management_bot/handlers/user_verification/document_review.py",
     "uk_management_bot/handlers/user_verification/access_decision.py",
     # AUD5-ARCH-3 волна 12: request_status_management.py разбит на пакет.
     # BUG-137: мёртвый FSM-флоу (status_flow/completion/confirmation/

@@ -34,7 +34,6 @@ class _DocumentRow:
     id: int
     type_value: str
     status: VerificationStatus
-    file_id: str = ""
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     created_at: Optional[datetime] = None
@@ -68,12 +67,11 @@ def _fmt_created_at(created_at: Optional[datetime]) -> str:
     return created_at.strftime('%d.%m.%Y %H:%M') if created_at else '—'
 
 
-def _document_row(doc, *, with_file: bool = False) -> _DocumentRow:
+def _document_row(doc) -> _DocumentRow:
     return _DocumentRow(
         id=doc.id,
         type_value=doc.document_type.value,
         status=doc.verification_status,
-        file_id=doc.file_id if with_file else "",
         file_name=doc.file_name,
         file_size=doc.file_size,
         created_at=doc.created_at,
@@ -150,15 +148,6 @@ def _load_documents_page(db, user_id: int):
     return (user.first_name, user.username), [_document_row(d) for d in documents]
 
 
-def _load_document(db, document_id: int, *, with_file: bool = False) -> Optional[_DocumentRow]:
-    from uk_management_bot.database.models.user_verification import UserDocument
-
-    document = db.query(UserDocument).filter(UserDocument.id == document_id).first()
-    if not document:
-        return None
-    return _document_row(document, with_file=with_file)
-
-
 def _create_request_and_collect_notify(db, user_id: int, admin_id: int, requested_info: dict):
     """Создание запроса верификации + fetch-фаза уведомления (сеть — у вызывающего)."""
     UserVerificationService(db).create_verification_request(
@@ -168,13 +157,6 @@ def _create_request_and_collect_notify(db, user_id: int, admin_id: int, requeste
     )
     return NotificationService(db).collect_verification_request_message(
         user_id, requested_info['type'], requested_info['comment']
-    )
-
-
-def _verify_document(db, document_id: int, admin_id: int, status: VerificationStatus,
-                     notes: Optional[str] = None) -> bool:
-    return UserVerificationService(db).verify_document(
-        document_id=document_id, admin_id=admin_id, status=status, notes=notes
     )
 
 

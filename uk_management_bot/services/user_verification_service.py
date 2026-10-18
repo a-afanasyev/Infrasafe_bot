@@ -187,77 +187,6 @@ class UserVerificationService:
         )
         return purge
 
-    # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ ═══
-    
-    def add_document(self, user_id: int, document_type: DocumentType, file_id: str, 
-                    file_name: str = None, file_size: int = None) -> UserDocument:
-        """
-        Добавить документ пользователя
-        
-        Args:
-            user_id: ID пользователя
-            document_type: Тип документа
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            UserDocument объект
-        """
-        try:
-            document = UserDocument(
-                user_id=user_id,
-                document_type=document_type,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size
-            )
-            
-            self.db.add(document)
-            self.db.commit()
-            self.db.refresh(document)
-            
-            logger.info(f"Добавлен документ {document_type.value} для пользователя {user_id}")
-            return document
-            
-        except Exception as e:
-            logger.error(f"Ошибка добавления документа: {e}")
-            self.db.rollback()
-            raise
-    
-    def verify_document(self, document_id: int, admin_id: int, status: VerificationStatus, 
-                       notes: str = None) -> bool:
-        """
-        Проверить документ пользователя
-        
-        Args:
-            document_id: ID документа
-            admin_id: ID администратора
-            status: Статус проверки
-            notes: Комментарии
-            
-        Returns:
-            True если успешно
-        """
-        try:
-            document = self.db.query(UserDocument).filter(UserDocument.id == document_id).first()
-            if not document:
-                return False
-            
-            document.verification_status = status
-            document.verification_notes = notes
-            document.verified_by = admin_id
-            document.verified_at = datetime.now(timezone.utc)
-            
-            self.db.commit()
-            logger.info(f"Документ {document_id} проверен администратором {admin_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка проверки документа: {e}")
-            self.db.rollback()
-            return False
-
     # ═══ УПРАВЛЕНИЕ ПРАВАМИ ДОСТУПА ═══
     
     def grant_access_rights(self, user_id: int, admin_id: int, access_level: AccessLevel,
@@ -611,44 +540,6 @@ class UserVerificationService:
         logger.info("Сохранён зашифрованный документ %s пользователя %s", document_type.value, user_id)
         return None
 
-    def save_user_document(self, user_id: int, document_type: DocumentType, file_id: str,
-                          file_name: str = None, file_size: int = None) -> UserDocument:
-        """
-        Сохранить документ пользователя в базе данных
-        
-        Args:
-            user_id: ID пользователя
-            document_type: Тип документа
-            file_id: Telegram file_id
-            file_name: Имя файла
-            file_size: Размер файла
-            
-        Returns:
-            UserDocument объект
-        """
-        try:
-            # Создаем новый документ
-            document = UserDocument(
-                user_id=user_id,
-                document_type=document_type,
-                file_id=file_id,
-                file_name=file_name,
-                file_size=file_size,
-                verification_status=VerificationStatus.PENDING
-            )
-            
-            self.db.add(document)
-            self.db.commit()
-            self.db.refresh(document)
-            
-            logger.info(f"Сохранен документ типа {document_type.value} для пользователя {user_id}")
-            return document
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения документа: {e}")
-            self.db.rollback()
-            raise
-    
     def get_user_documents(self, user_id: int) -> List[UserDocument]:
         """
         Получить все документы пользователя

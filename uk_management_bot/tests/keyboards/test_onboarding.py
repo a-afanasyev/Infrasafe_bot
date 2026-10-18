@@ -51,24 +51,6 @@ class TestGetDocumentTypeKeyboard:
 
 
 # ---------------------------------------------------------------------------
-# get_document_confirmation_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetDocumentConfirmationKeyboard:
-    def test_returns_reply_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_confirmation_keyboard
-            result = get_document_confirmation_keyboard()
-        assert isinstance(result, ReplyKeyboardMarkup)
-
-    def test_has_three_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_confirmation_keyboard
-            result = get_document_confirmation_keyboard()
-        assert len(_all_reply_texts(result)) == 3
-
-
-# ---------------------------------------------------------------------------
 # get_onboarding_completion_keyboard
 # ---------------------------------------------------------------------------
 
@@ -84,33 +66,6 @@ class TestGetOnboardingCompletionKeyboard:
             from uk_management_bot.keyboards.onboarding import get_onboarding_completion_keyboard
             result = get_onboarding_completion_keyboard()
         assert len(_all_reply_texts(result)) == 2
-
-
-# ---------------------------------------------------------------------------
-# get_document_management_keyboard
-# ---------------------------------------------------------------------------
-
-class TestGetDocumentManagementKeyboard:
-    def test_returns_inline_keyboard_markup(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_management_keyboard
-            result = get_document_management_keyboard()
-        assert isinstance(result, InlineKeyboardMarkup)
-
-    def test_has_three_buttons(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_management_keyboard
-            result = get_document_management_keyboard()
-        assert len(_all_inline_buttons(result)) == 3
-
-    def test_callbacks_present(self):
-        with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
-            from uk_management_bot.keyboards.onboarding import get_document_management_keyboard
-            result = get_document_management_keyboard()
-        callbacks = set(btn.callback_data for btn in _all_inline_buttons(result) if btn.callback_data)
-        assert "add_document" in callbacks
-        assert "complete_onboarding" in callbacks
-        assert "skip_documents" in callbacks
 
 
 # ---------------------------------------------------------------------------

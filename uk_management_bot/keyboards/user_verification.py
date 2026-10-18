@@ -162,41 +162,6 @@ def get_verification_request_keyboard(user_id: int, language: str = 'ru') -> Inl
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_document_verification_keyboard(document_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
-    """
-    Клавиатура проверки документа
-    
-    Args:
-        document_id: ID документа
-        language: Язык интерфейса
-        
-    Returns:
-        InlineKeyboardMarkup с действиями
-    """
-    buttons = [
-        # Действия с документом
-        [InlineKeyboardButton(
-            text=f"✅ {get_text('verification.approve_document', language)}",
-            callback_data=f"document_approve_{document_id}"
-        )],
-        [InlineKeyboardButton(
-            text=f"❌ {get_text('verification.reject_document', language)}",
-            callback_data=f"document_reject_{document_id}"
-        )],
-        [InlineKeyboardButton(
-            text=f"📥 {get_text('user_verification.keyboards.download_document', language=language)}",
-            callback_data=f"download_document_{document_id}"
-        )],
-        
-        # Назад
-        [InlineKeyboardButton(
-            text=get_text('buttons.back', language),
-            callback_data="verification_user_documents"
-        )]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
 def get_document_management_keyboard(user_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура управления документами пользователя

@@ -9,8 +9,8 @@ sync unit-of-work, исполняемый в worker-потоке через ``ru
 Инвентарь живости (волна 7). ЖИВЫЕ: ``start_phone_input`` (кнопку
 «📱 Указать телефон» рисует base.handle_regular_start), ``process_contact`` и
 ``process_manual_phone`` (FSM waiting_for_phone), весь кластер документов —
-``process_document_type_selection`` / ``process_document_file`` /
-``process_document_confirmation`` / ``save_document`` / ``cancel_document_upload``
+``process_document_type_selection`` / ``process_document_file`` (сохраняет сразу,
+шага подтверждения нет) / ``save_document``
 / ``skip_documents`` / ``start_document_upload`` / ``complete_onboarding_with_documents``
 / ``add_more_documents`` / ``complete_onboarding_final`` (вход даёт
 handlers/user_apartment_selection.py: ставит OnboardingStates.waiting_for_document_type
@@ -46,7 +46,6 @@ from uk_management_bot.keyboards.documents_entry import (
 )
 from uk_management_bot.keyboards.onboarding import (
     get_document_type_keyboard, 
-    get_document_confirmation_keyboard,
     get_onboarding_completion_keyboard,
     get_document_type_from_text,
     get_document_type_name
@@ -61,9 +60,6 @@ from uk_management_bot.utils.button_texts import (
     get_add_more_documents_texts,
     get_complete_onboarding_texts,
     get_skip_documents_texts,
-    get_confirm_upload_texts,
-    get_onboarding_cancel_texts,
-    get_upload_another_document_texts,
     get_profile_texts,
     get_create_request_texts,
     get_my_requests_texts,
@@ -89,9 +85,6 @@ UPLOAD_DOCUMENTS_TEXTS = get_upload_documents_texts()
 ADD_MORE_DOCUMENTS_TEXTS = get_add_more_documents_texts()
 COMPLETE_ONBOARDING_TEXTS = get_complete_onboarding_texts()
 SKIP_DOCUMENTS_TEXTS = get_skip_documents_texts()
-CONFIRM_UPLOAD_TEXTS = get_confirm_upload_texts()
-ONBOARDING_CANCEL_TEXTS = get_onboarding_cancel_texts()
-UPLOAD_ANOTHER_DOCUMENT_TEXTS = get_upload_another_document_texts()
 PROFILE_TEXTS = get_profile_texts()
 CREATE_REQUEST_TEXTS = get_create_request_texts()
 MY_REQUESTS_TEXTS = get_my_requests_texts()
@@ -185,12 +178,9 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
 
 # ═══ ОБРАБОТЧИКИ ЗАГРУЗКИ ДОКУМЕНТОВ ═══
 
-# Регистрация по UPLOAD_DOCUMENTS_TEXTS мертва (генератор кнопки — мёртвая
-# ``complete_onboarding``), но САМА функция живая: её напрямую зовёт
-# ``process_document_confirmation`` по кнопке «загрузить ещё документ».
 async def _begin_document_type_step(target: Message, state: FSMContext, lang: str) -> None:
     """Экран выбора типа документа + состояние. Общий для reply-кнопки,
-    inline-кнопки «Загрузить документы» (BUG-188) и «загрузить ещё»."""
+    inline-кнопки «Загрузить документы» (BUG-188) и переподачи."""
     await target.answer(
         get_text("onboarding.documents.title", language=lang) + "\n\n" +
         get_text("onboarding.documents.description", language=lang),
@@ -314,7 +304,7 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
     logger.info(f"Пользователь {message.from_user.id} выбрал тип документа: {document_type.value}")
 
 @router.message(OnboardingStates.waiting_for_document_file)
-async def process_document_file(message: Message, state: FSMContext, language: str = "ru"):
+async def process_document_file(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Обрабатывает загрузку файла документа"""
     lang = language
     
@@ -326,9 +316,7 @@ async def process_document_file(message: Message, state: FSMContext, language: s
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
         return
-    
-    document_type = DocumentType(document_type_value)
-    
+
     # Получаем информацию о файле
     file_id = None
     file_name = None
@@ -360,41 +348,26 @@ async def process_document_file(message: Message, state: FSMContext, language: s
         await message.answer(error_message)
         return
     
-    # Сохраняем информацию о файле в состоянии
+    # Сохраняем сразу, без шага подтверждения: ошибочный файл безвреден (после
+    # решения менеджера документы удаляются), а «Загрузить ещё / Завершить»
+    # предлагается уже после сохранения.
     await state.update_data({
         'file_id': file_id,
         'file_name': file_name,
         'file_size': file_size
     })
-    
-    # Показываем подтверждение
-    document_type_name = get_document_type_name(document_type, lang)
-    confirmation_text = (
-        f"📄 {get_text('onboarding.documents.confirm_upload', language=lang)}\n\n"
-        f"{get_text('onboarding.handlers.doc_type_field', language=lang)}: {document_type_name}\n"
-        f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}\n"
-        f"{get_text('onboarding.handlers.size_field', language=lang)}: {file_size // 1024} KB"
-    )
-    
+    await save_document(message, state, language=lang, _db=_db)
+
+
+@router.message(OnboardingStates.waiting_for_document_confirmation)
+async def stale_document_confirmation(message: Message, state: FSMContext, language: str = "ru"):
+    """Шаг подтверждения убран. Застрявшим в нём в момент деплоя — сброс
+    состояния и кнопка входа в загрузку заново."""
+    await state.clear()
     await message.answer(
-        confirmation_text,
-        reply_markup=get_document_confirmation_keyboard(lang)
+        get_text("onboarding.documents.send_after_button", language=language),
+        reply_markup=get_upload_documents_inline(language),
     )
-    await state.set_state(OnboardingStates.waiting_for_document_confirmation)
-
-@router.message(OnboardingStates.waiting_for_document_confirmation, F.text)
-async def process_document_confirmation(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
-    """Обрабатывает подтверждение загрузки документа"""
-    lang = language
-
-    if message.text in CONFIRM_UPLOAD_TEXTS:
-        await save_document(message, state, language=lang, _db=_db)
-    elif message.text in ONBOARDING_CANCEL_TEXTS:
-        await cancel_document_upload(message, state, language=lang)
-    elif message.text in UPLOAD_ANOTHER_DOCUMENT_TEXTS:
-        await start_document_upload(message, state, language=lang)
-    else:
-        await message.answer(get_text("errors.unknown_error", language=lang))
 
 async def save_document(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Сохраняет документ в базе данных.
@@ -478,16 +451,6 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         logger.error(f"Ошибка сохранения документа для {message.from_user.id}: {e}")
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
-
-async def cancel_document_upload(message: Message, state: FSMContext, language: str = "ru"):
-    """Отменяет загрузку документа"""
-    lang = language
-    
-    await message.answer(
-        get_text("onboarding.documents.upload_cancelled", language=lang),
-        reply_markup=get_onboarding_completion_keyboard(lang)
-    )
-    await state.clear()
 
 async def skip_documents(message: Message, state: FSMContext, language: str = "ru"):
     """Пропускает загрузку документов"""
