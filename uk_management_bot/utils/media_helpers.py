@@ -209,11 +209,18 @@ async def upload_encrypted_document(
 
     document_uuid = str(uuid.uuid4())
     key, blob = encrypt(data, document_aad(document_uuid, user_id, document_type))
-    try:
-        media_id = await client.upload_resident_document(blob, uploaded_by=user_id)
-    except Exception as e:  # noqa: BLE001 — недоступный медиа-сервис
-        logger.warning("Документ пользователя %s не загружен в Media Service: %s", user_id, e)
-        raise DocumentUploadError("unavailable") from e
+    # Один повтор: разовый таймаут медиа-сервиса → Telegram иначе теряет файл жителя.
+    # ponytail: таймаут после фактической отправки оставит в архиве осиротевший
+    # нечитаемый blob (ключа нет нигде) — безвредно.
+    for attempt in (1, 2):
+        try:
+            media_id = await client.upload_resident_document(blob, uploaded_by=user_id)
+            break
+        except Exception as e:  # noqa: BLE001 — недоступный медиа-сервис
+            logger.warning("Документ пользователя %s не загружен в Media Service (попытка %s): %s",
+                           user_id, attempt, e)
+            if attempt == 2:
+                raise DocumentUploadError("unavailable") from e
     return EncryptedUpload(media_id=media_id, key=key, document_uuid=document_uuid)
 
 

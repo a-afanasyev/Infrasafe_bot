@@ -304,7 +304,7 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
     # Запрашиваем файл
     document_type_name = get_document_type_name(document_type, lang)
     await message.answer(
-        f"📤 {get_text('onboarding.documents.upload_file', language=lang)}\n\n" +
+        f"{get_text('onboarding.documents.upload_file', language=lang)}\n\n" +
         get_text("onboarding.handlers.document_type_label", language=lang).format(document_type_name=document_type_name),
         reply_markup=ReplyKeyboardRemove()
     )
@@ -458,7 +458,7 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         # Показываем успешное сообщение
         document_type_name = get_document_type_name(document_type, lang)
         await message.answer(
-            f"✅ {get_text('onboarding.documents.document_saved', language=lang)}\n\n"
+            f"{get_text('onboarding.documents.document_saved', language=lang)}\n\n"
             f"{get_text('onboarding.handlers.type_short_field', language=lang)}: {document_type_name}\n"
             f"{get_text('onboarding.handlers.file_field', language=lang)}: {html.escape(str(file_name))}",
             reply_markup=get_onboarding_completion_keyboard(lang)

@@ -278,6 +278,17 @@ class TestUploadEncryptedDocument:
         with pytest.raises(DocumentUploadError) as err:
             await _upload_encrypted(client, _make_doc_bot())
         assert err.value.reason == "unavailable"
+        assert client.upload_resident_document.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_transient_media_failure_is_retried_once_with_same_blob(self):
+        client = _doc_client()
+        client.upload_resident_document.side_effect = [RuntimeError("500 timeout"), 42]
+        upload = await _upload_encrypted(client, _make_doc_bot())
+
+        assert upload.media_id == 42
+        first, second = client.upload_resident_document.await_args_list
+        assert first.args[0] == second.args[0]  # тот же blob — ключ строки его откроет
 
     @pytest.mark.asyncio
     async def test_telegram_download_failure_is_unavailable(self):
