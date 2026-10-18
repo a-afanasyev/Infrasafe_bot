@@ -9,8 +9,10 @@
 """
 
 import logging
+from enum import Enum
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.utils.datetime_utils import utc_now
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -26,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 #: Решение принимается только по открытой проверке (как `verification_core._DECIDABLE_FROM`).
 _DECIDABLE_FROM = frozenset({"pending", "requested"})
+
+#: Документов на одну проверку — потолок объёма (житель удалить свои не может,
+#: строки чистит только решение) и защита от заливки канала.
+MAX_DOCUMENTS_PER_REVIEW = 10
+
+
+class UploadDenied(str, Enum):
+    NOT_REQUIRED = "not_required"  # нет открытой проверки / не житель / заблокирован
+    REJECTED = "rejected"          # проверка отклонена — сначала переподача
+    LIMIT = "limit"                # MAX_DOCUMENTS_PER_REVIEW исчерпан
 
 
 def _auto_approve_apartments(db: Session, user_id: int, admin_id: int, now: datetime) -> None:
@@ -488,7 +500,59 @@ class UserVerificationService:
 
     # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ В ОНБОРДИНГЕ ═══
     
-    def save_user_document(self, user_id: int, document_type: DocumentType, file_id: str, 
+    def check_document_upload(
+        self, telegram_id: int, *, lock: bool = False,
+    ) -> tuple[Optional[int], Optional[UploadDenied]]:
+        """Центральный guard загрузки документа. → (users.id | None, отказ | None).
+
+        Принимаем, только пока проверка открыта, у живого незаблокированного
+        жителя (или если менеджер сам запросил документы — `requested`), и не
+        больше MAX_DOCUMENTS_PER_REVIEW. `lock=True` — под FOR UPDATE строки
+        пользователя (вставка сериализуется с решением менеджера).
+        """
+        query = self.db.query(User).filter(User.telegram_id == telegram_id)
+        user = (query.with_for_update() if lock else query).first()
+        if user is None or user.deleted_at is not None or user.status == "blocked":
+            return None, UploadDenied.NOT_REQUIRED
+        if user.verification_status == "rejected":
+            return user.id, UploadDenied.REJECTED
+        if user.verification_status not in _DECIDABLE_FROM:
+            return user.id, UploadDenied.NOT_REQUIRED
+        if user.verification_status != "requested" and "applicant" not in parse_roles_safe(user.roles):
+            return user.id, UploadDenied.NOT_REQUIRED
+        count = self.db.query(UserDocument).filter(UserDocument.user_id == user.id).count()
+        if count >= MAX_DOCUMENTS_PER_REVIEW:
+            return user.id, UploadDenied.LIMIT
+        return user.id, None
+
+    def add_encrypted_document(
+        self, telegram_id: int, document_type: DocumentType, *, media_id: int, key: bytes,
+        document_uuid: str, file_name: Optional[str], file_size: Optional[int],
+    ) -> Optional[UploadDenied]:
+        """Вставка зашифрованного документа: lock → guard → insert → commit.
+
+        → None — сохранён; отказ — строки нет (вызывающий удаляет blob по
+        media_id). Сбой БД пробрасывается (вызывающий тоже компенсирует).
+        """
+        try:
+            user_id, denial = self.check_document_upload(telegram_id, lock=True)
+            if denial is not None:
+                self.db.rollback()
+                return denial
+            self.db.add(UserDocument(
+                user_id=user_id, document_type=document_type, media_id=media_id,
+                encryption_key=key, document_uuid=document_uuid,
+                file_name=file_name, file_size=file_size,
+                verification_status=VerificationStatus.PENDING,
+            ))
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        logger.info("Сохранён зашифрованный документ %s пользователя %s", document_type.value, user_id)
+        return None
+
+    def save_user_document(self, user_id: int, document_type: DocumentType, file_id: str,
                           file_name: str = None, file_size: int = None) -> UserDocument:
         """
         Сохранить документ пользователя в базе данных
@@ -612,13 +676,13 @@ class UserVerificationService:
             if not file_id:
                 return False, "Отсутствует идентификатор файла"
             
-            # Проверяем размер файла (максимум 50MB для Telegram)
-            if file_size and file_size > 50 * 1024 * 1024:
-                return False, "Размер файла превышает 50MB"
-            
-            # Проверяем расширение файла
+            # 20 МБ — предел bot.get_file: больший файл бот не скачает для шифрования
+            if file_size and file_size > 20 * 1024 * 1024:
+                return False, "Размер файла превышает 20MB"
+
+            # Проверяем расширение файла (тип всё равно сверяется по байтам при загрузке)
             if file_name:
-                allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx']
+                allowed_extensions = ['.jpg', '.jpeg', '.png', '.pdf']
                 file_extension = file_name.lower()
                 if not any(file_extension.endswith(ext) for ext in allowed_extensions):
                     return False, f"Неподдерживаемый тип файла. Разрешены: {', '.join(allowed_extensions)}"

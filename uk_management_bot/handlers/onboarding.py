@@ -34,8 +34,10 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
-from uk_management_bot.services.user_verification_service import UserVerificationService
+from uk_management_bot.integrations import get_media_client
+from uk_management_bot.services.user_verification_service import UploadDenied, UserVerificationService
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.media_helpers import DocumentUploadError, upload_encrypted_document
 from uk_management_bot.keyboards.base import get_main_keyboard_for_role
 from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB, get_upload_documents_inline
 from uk_management_bot.keyboards.onboarding import (
@@ -124,28 +126,31 @@ def _apply_phone(db, telegram_id: int, phone_number: str) -> bool:
     return True
 
 
-def _load_document_owner_id(db, telegram_id: int) -> Optional[int]:
-    """-> user.id | None (пользователя нет в БД). Только id: ORM-строка наружу
-    из потока не выходит."""
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
-
-    if not user:
-        return None
-
-    return user.id
+#: Отказ guard'а загрузки → текст жителю.
+_UPLOAD_DENIAL_KEYS = {
+    UploadDenied.NOT_REQUIRED: "onboarding.documents.upload_not_required",
+    UploadDenied.REJECTED: "onboarding.documents.upload_rejected",
+    UploadDenied.LIMIT: "onboarding.documents.upload_limit",
+}
 
 
-def _apply_document(db, user_id: int, document_type: DocumentType,
-                    file_id: str, file_name: Optional[str], file_size: Optional[int]) -> None:
-    """Сохраняет документ пользователя (коммитит сам сервис)."""
-    verification_service = UserVerificationService(db)
-    verification_service.save_user_document(
-        user_id=user_id,
-        document_type=document_type,
-        file_id=file_id,
-        file_name=file_name,
-        file_size=file_size
+async def _upload_denial(telegram_id: int, _db=None) -> Optional[UploadDenied]:
+    """Центральный guard загрузки на входе (повторяется при вставке под локом)."""
+    _user_id, denial = await run_db(
+        lambda s: UserVerificationService(s).check_document_upload(telegram_id), db=_db
     )
+    return denial
+
+
+async def _discard_document_blob(media_id: int) -> None:
+    """Компенсация: blob загружен, а строки не будет. Без ключа он нечитаем —
+    удаление здесь гигиена, сбой только в лог."""
+    client = get_media_client()
+    try:
+        if client is None or not await client.delete_media(media_id):
+            logger.warning("Blob документа %s остался в Media Service (строки нет)", media_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Blob документа %s остался в Media Service: %s", media_id, e)
 
 
 def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
@@ -188,6 +193,10 @@ async def _begin_document_type_step(target: Message, state: FSMContext, lang: st
 @router.message(F.text.in_(UPLOAD_DOCUMENTS_TEXTS))
 async def start_document_upload(message: Message, state: FSMContext, language: str = "ru"):
     """Начинает процесс загрузки документов"""
+    denial = await _upload_denial(message.from_user.id)
+    if denial is not None:
+        await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language))
+        return
     await _begin_document_type_step(message, state, language)
     logger.info(f"Пользователь {message.from_user.id} начал загрузку документов")
 
@@ -201,6 +210,11 @@ async def open_document_upload(callback: CallbackQuery, state: FSMContext, langu
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception as e:  # noqa: BLE001 — старое/уже отредактированное сообщение
         logger.debug(f"Не удалось снять inline-кнопку загрузки документов: {e}")
+    denial = await _upload_denial(callback.from_user.id)
+    if denial is not None:
+        await callback.message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=language))
+        await callback.answer()
+        return
     await _begin_document_type_step(callback.message, state, language)
     await callback.answer()
     logger.info(f"Пользователь {callback.from_user.id} открыл загрузку документов по кнопке")
@@ -368,40 +382,46 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
             await state.clear()
             return
         
-        # Получаем пользователя
-        user_id = await run_db(
-            lambda s: _load_document_owner_id(s, message.from_user.id), db=_db
+        telegram_id = message.from_user.id
+        user_id, denial = await run_db(
+            lambda s: UserVerificationService(s).check_document_upload(telegram_id), db=_db
         )
-
-        if user_id is None:
-            await message.answer(get_text("errors.unknown_error", language=lang))
+        if denial is not None:
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang))
             await state.clear()
             return
 
-        # Загружаем документ в Media Service (в канал ARCHIVE)
-        from uk_management_bot.utils.media_helpers import upload_document_to_media_service
-        try:
-            media_result = await upload_document_to_media_service(
-                bot=message.bot,
-                file_id=file_id,
-                user_telegram_id=message.from_user.id,
-                uploaded_by_user_id=user_id,
-                description=f"Документ пользователя: {document_type_value}"
-            )
-            if media_result is not None:
-                logger.info(f"Документ пользователя {message.from_user.id} загружен в Media Service")
-            else:
-                logger.warning(f"Документ пользователя {message.from_user.id} НЕ загружен в Media Service (см. предыдущие ошибки)")
-        except Exception as e:
-            logger.error(f"Ошибка загрузки документа в Media Service: {e}")
-            # Продолжаем сохранение даже если загрузка не удалась
-
-        # Сохраняем документ в базу данных
+        # Строго: скан шифруется и ложится в медиа-сервис; нет media_id — нет строки.
         document_type = DocumentType(document_type_value)
-        await run_db(
-            lambda s: _apply_document(s, user_id, document_type, file_id, file_name, file_size),
-            db=_db,
-        )
+        try:
+            upload = await upload_encrypted_document(
+                message.bot, file_id, user_id=user_id, document_type=document_type.value,
+            )
+        except DocumentUploadError as e:
+            await message.answer(
+                get_text(f"onboarding.documents.upload_{e.reason}", language=lang),
+                reply_markup=get_document_type_keyboard(lang),
+            )
+            await state.set_state(OnboardingStates.waiting_for_document_type)
+            return
+
+        try:
+            denial = await run_db(
+                lambda s: UserVerificationService(s).add_encrypted_document(
+                    telegram_id, document_type, media_id=upload.media_id, key=upload.key,
+                    document_uuid=upload.document_uuid, file_name=file_name, file_size=file_size,
+                ),
+                db=_db,
+            )
+        except Exception:
+            await _discard_document_blob(upload.media_id)
+            raise
+        if denial is not None:
+            # Решение менеджера успело закрыть проверку между загрузкой и вставкой.
+            await _discard_document_blob(upload.media_id)
+            await message.answer(get_text(_UPLOAD_DENIAL_KEYS[denial], language=lang))
+            await state.clear()
+            return
 
         # Показываем успешное сообщение
         document_type_name = get_document_type_name(document_type, lang)
