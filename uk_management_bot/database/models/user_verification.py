@@ -7,7 +7,10 @@
 - Права доступа по уровням
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum
+from sqlalchemy import (
+    Boolean, CheckConstraint, Column, DateTime, Enum, ForeignKey, Integer, JSON,
+    LargeBinary, String, Text,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uk_management_bot.database.session import Base
@@ -46,7 +49,13 @@ class UserDocument(Base):
     
     # Информация о документе
     document_type = Column(Enum(DocumentType), nullable=False)
-    file_id = Column(String(255), nullable=False)  # Telegram file_id
+    # Хранение: либо легаси Telegram file_id, либо зашифрованная тройка в
+    # медиа-сервисе (media_id + ключ + uuid для AAD) — см. миграцию 026.
+    # Удаление строки уничтожает ключ: blob в канале становится нечитаемым.
+    file_id = Column(String(255), nullable=True)
+    media_id = Column(Integer, nullable=True, unique=True)
+    encryption_key = Column(LargeBinary, nullable=True)
+    document_uuid = Column(String(36), nullable=True)
     file_name = Column(String(255), nullable=True)
     file_size = Column(Integer, nullable=True)
     
@@ -61,7 +70,17 @@ class UserDocument(Base):
     # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
+    __table_args__ = (
+        CheckConstraint(
+            "(file_id IS NOT NULL AND file_id <> '' AND media_id IS NULL"
+            " AND encryption_key IS NULL AND document_uuid IS NULL)"
+            " OR (file_id IS NULL AND media_id IS NOT NULL"
+            " AND encryption_key IS NOT NULL AND document_uuid IS NOT NULL)",
+            name="ck_user_documents_storage_xor",
+        ),
+    )
+
     def __repr__(self):
         return f"<UserDocument(id={self.id}, type={self.document_type}, status={self.verification_status})>"
 
