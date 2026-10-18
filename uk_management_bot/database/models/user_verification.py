@@ -9,7 +9,7 @@
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, DateTime, Enum, ForeignKey, Integer, JSON,
-    LargeBinary, String, Text,
+    LargeBinary, String, Text, UniqueConstraint,
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -53,7 +53,7 @@ class UserDocument(Base):
     # медиа-сервисе (media_id + ключ + uuid для AAD) — см. миграцию 026.
     # Удаление строки уничтожает ключ: blob в канале становится нечитаемым.
     file_id = Column(String(255), nullable=True)
-    media_id = Column(Integer, nullable=True, unique=True)
+    media_id = Column(Integer, nullable=True)
     encryption_key = Column(LargeBinary, nullable=True)
     document_uuid = Column(String(36), nullable=True)
     file_name = Column(String(255), nullable=True)
@@ -72,6 +72,7 @@ class UserDocument(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     __table_args__ = (
+        UniqueConstraint("media_id", name="uq_user_documents_media_id"),
         CheckConstraint(
             "(file_id IS NOT NULL AND file_id <> '' AND media_id IS NULL"
             " AND encryption_key IS NULL AND document_uuid IS NULL)"
