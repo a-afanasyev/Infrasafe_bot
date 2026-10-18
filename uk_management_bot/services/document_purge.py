@@ -4,7 +4,9 @@
 (`verification_status` ∈ {pending, requested} и `deleted_at IS NULL`). Любой
 путь, закрывающий проверку (verified/rejected) или удаляющий пользователя,
 вызывает `purge_documents[_sync]` ДО своего commit — строки и ключи шифрования
-исчезают атомарно с решением. Страховка для забытых путей — триггер в БД
+исчезают атомарно с решением. Вызывать ДО изменения `verification_status`/
+`deleted_at`: их flush запускает триггер 026, который удалит строки раньше, и
+media_id для гигиены уже не собрать (на sqlite триггера нет — тесты этого не видят). Страховка для забытых путей — триггер в БД
 (миграция 026); он не отдаёт media_id, поэтому приложение удаляет само.
 
 После commit — `cleanup_purged_documents`: гигиена медиа-сервиса по точным
@@ -33,6 +35,7 @@ class PurgeResult:
     telegram_id: Optional[int]
     media_ids: tuple[int, ...] = ()
     has_legacy: bool = False
+    count: int = 0  # удалено строк (легаси + зашифрованные)
 
     @property
     def empty(self) -> bool:
@@ -45,6 +48,7 @@ def _result(user: User, documents: Iterable[UserDocument]) -> PurgeResult:
         telegram_id=user.telegram_id,
         media_ids=tuple(d.media_id for d in documents if d.media_id is not None),
         has_legacy=any(d.media_id is None for d in documents),
+        count=len(documents),
     )
 
 
@@ -86,4 +90,10 @@ async def cleanup_purged_documents(result: PurgeResult) -> None:
         if failed:
             logger.warning("Не удалены blob'ы документов %s (ключи удалены, blob'ы нечитаемы)", failed)
     if result.has_legacy and result.telegram_id:
-        await delete_user_documents_from_media_service(result.telegram_id)
+        try:
+            await delete_user_documents_from_media_service(result.telegram_id)
+        except Exception as e:  # noqa: BLE001 — гигиена не роняет решение
+            logger.warning(
+                "Зачистка легаси-копий документов в Media Service не состоялась (%s) — "
+                "повторить по telegram_id %s", e, result.telegram_id,
+            )

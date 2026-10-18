@@ -10,9 +10,7 @@ from aiogram import F
 from aiogram.types import CallbackQuery
 
 from uk_management_bot.database.session import run_db
-from uk_management_bot.services.user_verification_service import (
-    cleanup_user_documents_media,
-)
+from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.utils.telegram_client import SEND_TIMEOUT
 from uk_management_bot.keyboards.user_verification import (
     get_access_rights_keyboard
@@ -24,7 +22,6 @@ from ._router import router
 from ._units import (
     _approve_user_db,
     _load_access_rights_card,
-    _purge_user_documents,
     _reject_user_db,
 )
 
@@ -108,18 +105,15 @@ async def approve_user_verification(callback: CallbackQuery, roles: list = None,
         return
 
     try:
-        admin_id = callback.from_user.id
-        # DB-фазы (статусы + квартиры + fetch уведомлений) — в потоке; сеть ниже.
-        success, telegram_id, notify_pair, restart_target = await run_db(
-            lambda s: _approve_user_db(s, user_id, admin_id), db=_db
+        admin_tg = callback.from_user.id
+        # Решение одним commit (статусы + квартиры + удаление документов) — в
+        # потоке; сеть (гигиена медиа, уведомления) ниже.
+        purge, notify_pair, restart_target = await run_db(
+            lambda s: _approve_user_db(s, user_id, admin_tg), db=_db
         )
 
-        if success:
-            # Зачистка документов в Media Service (сеть, best-effort) и затем
-            # удаление записей о документах — порядок 1:1 с историческим
-            # approve_verification.
-            await cleanup_user_documents_media(telegram_id)
-            await run_db(lambda s: _purge_user_documents(s, user_id), db=_db)
+        if purge is not None:
+            await cleanup_purged_documents(purge)
 
             # Отправляем уведомление пользователю (best-effort, как в
             # send_verification_approved_notification)
@@ -184,13 +178,14 @@ async def reject_user_verification(callback: CallbackQuery, roles: list = None, 
         return
 
     try:
-        admin_id = callback.from_user.id
+        admin_tg = callback.from_user.id
         reject_notes = get_text("user_verification.handlers.verification_rejected_by_admin", language=lang)
-        success, notify_pair = await run_db(
-            lambda s: _reject_user_db(s, user_id, admin_id, reject_notes), db=_db
+        purge, notify_pair = await run_db(
+            lambda s: _reject_user_db(s, user_id, admin_tg, reject_notes), db=_db
         )
 
-        if success:
+        if purge is not None:
+            await cleanup_purged_documents(purge)
             # Отправляем уведомление пользователю (best-effort, как в
             # send_verification_rejected_notification)
             if notify_pair is not None:

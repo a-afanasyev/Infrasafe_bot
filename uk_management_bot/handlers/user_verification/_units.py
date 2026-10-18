@@ -202,15 +202,14 @@ def _load_access_rights_card(db, user_id: int):
     ]
 
 
-def _approve_user_db(db, user_id: int, admin_id: int):
-    """DB-фазы одобрения + fetch уведомлений. → (ok, telegram_id, notify_pair,
-    restart_target). Сеть (media-cleanup, отправки) — у вызывающего."""
+def _approve_user_db(db, user_id: int, admin_telegram_id: int):
+    """Одобрение одним commit + fetch уведомлений. → (purge | None, notify_pair,
+    restart_target). Сеть (гигиена медиа, отправки) — у вызывающего."""
     from uk_management_bot.database.models.user import User
 
-    service = UserVerificationService(db)
-    ok, telegram_id = service.approve_verification_db(user_id, admin_id)
-    if not ok:
-        return False, None, None, None
+    purge = UserVerificationService(db).approve_verification_db(user_id, admin_telegram_id)
+    if purge is None:
+        return None, None, None
 
     notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
 
@@ -219,19 +218,14 @@ def _approve_user_db(db, user_id: int, admin_id: int):
     if target_user:
         restart_target = (target_user.telegram_id, target_user.language or "ru")
 
-    return True, telegram_id, notify_pair, restart_target
+    return purge, notify_pair, restart_target
 
 
-def _purge_user_documents(db, user_id: int) -> None:
-    UserVerificationService(db).purge_user_documents_db(user_id)
-
-
-def _reject_user_db(db, user_id: int, admin_id: int, notes: str):
-    """DB-фаза отклонения + fetch уведомления. → (ok, notify_pair)."""
-    ok = UserVerificationService(db).reject_verification(
-        user_id=user_id, admin_id=admin_id, notes=notes
-    )
-    if not ok:
-        return False, None
-    return True, NotificationService(db).collect_verification_rejected_message(user_id)
+def _reject_user_db(db, user_id: int, admin_telegram_id: int, notes: str):
+    """Отклонение одним commit (документы удаляются) + fetch уведомления.
+    → (purge | None, notify_pair)."""
+    purge = UserVerificationService(db).reject_verification(user_id, admin_telegram_id, notes)
+    if purge is None:
+        return None, None
+    return purge, NotificationService(db).collect_verification_rejected_message(user_id)
 

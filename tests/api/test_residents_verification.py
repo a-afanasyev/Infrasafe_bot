@@ -279,7 +279,7 @@ class TestApproveVerification:
         await _doc(db_session, resident_id)
 
         with patch(
-            "uk_management_bot.utils.media_helpers.delete_user_documents_from_media_service",
+            "uk_management_bot.services.document_purge.delete_user_documents_from_media_service",
             side_effect=RuntimeError("media down"),
         ):
             r = await client.post(f"{BASE}/{resident_id}/verification/approve", json={})
@@ -298,7 +298,7 @@ class TestApproveVerification:
         await _doc(db_session, resident.id, file_id="AgACVerySecretToken")
 
         with patch(
-            "uk_management_bot.utils.media_helpers.delete_user_documents_from_media_service",
+            "uk_management_bot.services.document_purge.delete_user_documents_from_media_service",
             side_effect=RuntimeError("media down"),
         ):
             with caplog.at_level("WARNING"):
@@ -308,7 +308,7 @@ class TestApproveVerification:
         # SQL-логи SQLAlchemy, где параметры INSERT содержат file_id — это
         # свойство тестовой конфигурации логирования, а не нашего кода.
         ours = [rec for rec in caplog.records
-                if rec.name == "uk_management_bot.api.residents.verification"]
+                if rec.name == "uk_management_bot.services.document_purge"]
         assert ours, "предупреждение о сбое Media Service не записано"
         text = "\n".join(rec.getMessage() for rec in ours)
         assert "AgACVerySecretToken" not in text
@@ -347,6 +347,48 @@ class TestRejectVerification:
         resident = await _resident(db_session, 6203, verification="rejected")
         assert (await client.post(f"{BASE}/{resident.id}/verification/reject",
                                   json={"notes": "повтор"})).status_code == 409
+
+    async def test_reject_deletes_documents_and_cleans_media(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Отклонение терминально: документы (и ключи) удаляются, как при одобрении."""
+        resident = await _resident(db_session, 6204, verification="requested")
+        resident_id = resident.id
+        db_session.add(UserDocument(
+            user_id=resident_id, document_type=DocumentType.PASSPORT, media_id=7001,
+            encryption_key=b"k" * 32, document_uuid="00000000-0000-4000-8000-000000007001",
+        ))
+        await db_session.commit()
+
+        with patch("uk_management_bot.api.residents.verification.cleanup_purged_documents",
+                   new=AsyncMock()) as cleanup:
+            r = await client.post(f"{BASE}/{resident_id}/verification/reject",
+                                  json={"notes": "документ нечитаем"})
+        assert r.status_code == 200
+        assert r.json()["deleted_documents"] == 1
+        assert cleanup.await_args.args[0].media_ids == (7001,)
+
+        db_session.expire_all()
+        assert (await db_session.execute(
+            select(UserDocument).where(UserDocument.user_id == resident_id)
+        )).scalars().all() == []
+
+    async def test_approve_cleans_exact_media_ids(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        resident = await _resident(db_session, 6205, verification="requested")
+        db_session.add(UserDocument(
+            user_id=resident.id, document_type=DocumentType.PASSPORT, media_id=7002,
+            encryption_key=b"k" * 32, document_uuid="00000000-0000-4000-8000-000000007002",
+        ))
+        await db_session.commit()
+
+        with patch("uk_management_bot.api.residents.verification.cleanup_purged_documents",
+                   new=AsyncMock()) as cleanup:
+            r = await client.post(f"{BASE}/{resident.id}/verification/approve", json={})
+        assert r.status_code == 200
+        purge = cleanup.await_args.args[0]
+        assert purge.media_ids == (7002,) and purge.has_legacy is False
 
 
 # ═══════════════════════ Прокси документов ═══════════════════════

@@ -9,7 +9,7 @@
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from uk_management_bot.utils.datetime_utils import utc_now
 from sqlalchemy.orm import Session
@@ -20,8 +20,25 @@ from uk_management_bot.database.models.user_verification import (
     UserDocument, UserVerification, AccessRights,
     DocumentType, VerificationStatus, AccessLevel
 )
+from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 
 logger = logging.getLogger(__name__)
+
+#: Решение принимается только по открытой проверке (как `verification_core._DECIDABLE_FROM`).
+_DECIDABLE_FROM = frozenset({"pending", "requested"})
+
+
+def _auto_approve_apartments(db: Session, user_id: int, admin_id: int, now: datetime) -> None:
+    """Одобрение pending-привязок к квартирам вместе с верификацией (без commit)."""
+    from uk_management_bot.database.models.user_apartment import UserApartment
+
+    for user_apartment in db.query(UserApartment).filter(
+        UserApartment.user_id == user_id, UserApartment.status == "pending",
+    ).all():
+        user_apartment.status = "approved"
+        user_apartment.reviewed_at = now
+        user_apartment.reviewed_by = admin_id
+        user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
 
 
 class UserVerificationService:
@@ -82,165 +99,68 @@ class UserVerificationService:
             logger.error(f"Ошибка создания запроса верификации: {e}")
             self.db.rollback()
             raise
-    
-    def approve_verification_db(self, user_id: int, admin_id: int, notes: str = None):
-        """DB-фазы одобрения верификации (без сети): статусы + авто-одобрение
-        квартир. → (ok, telegram_id | None).
 
-        AUD3-07: выделено из async approve_verification, чтобы хендлеры могли
-        исполнять DB-часть в worker-потоке (run_db), а сетевую зачистку media —
-        отдельно на event loop. Семантика фаз и коммитов — 1:1 с историческим
-        телом.
+    def approve_verification_db(
+        self, user_id: int, admin_telegram_id: int, notes: Optional[str] = None,
+    ) -> Optional[PurgeResult]:
+        """Одобрить верификацию одним commit (см. `_decide_verification`)."""
+        return self._decide_verification(user_id, admin_telegram_id, approve=True, notes=notes)
+
+    def reject_verification(
+        self, user_id: int, admin_telegram_id: int, notes: str,
+    ) -> Optional[PurgeResult]:
+        """Отклонить верификацию одним commit (см. `_decide_verification`)."""
+        return self._decide_verification(user_id, admin_telegram_id, approve=False, notes=notes)
+
+    def _decide_verification(
+        self, user_id: int, admin_telegram_id: int, *, approve: bool, notes: Optional[str],
+    ) -> Optional[PurgeResult]:
+        """Решение бота — паритет с `services/residents/verification_core`.
+
+        Telegram ID менеджера → `users.id` (FK `verified_by`) → лок жителя →
+        guard pending/requested → удаление документов (ключей) ДО смены статуса →
+        решение (+ авто-одобрение квартир) → ОДИН commit. Гигиена Media Service —
+        у вызывающего после commit (`cleanup_purged_documents`).
+
+        → PurgeResult; None — менеджер/житель не найден или проверка уже закрыта.
+        Сбой БД откатывает всё и пробрасывается.
         """
+        admin = self.db.query(User).filter(User.telegram_id == admin_telegram_id).first()
+        user = self.db.query(User).filter(User.id == user_id).with_for_update().first()
+        if admin is None or user is None or user.verification_status not in _DECIDABLE_FROM:
+            self.db.rollback()
+            return None
         try:
-            # Обновляем статус пользователя
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return False, None
-
-            user.verification_status = "verified"
+            purge = purge_documents_sync(self.db, user)
+            now = datetime.now(timezone.utc)
+            user.verification_status = "verified" if approve else "rejected"
             user.verification_notes = notes
-            user.verification_date = datetime.now(timezone.utc)
-            user.verified_by = admin_id
+            user.verification_date = now
+            user.verified_by = admin.id
 
-            # Обновляем статус верификации
             verification = self.db.query(UserVerification).filter(
-                and_(
-                    UserVerification.user_id == user_id,
-                    UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED])
-                )
+                UserVerification.user_id == user_id,
+                UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED]),
             ).first()
-
             if verification:
-                verification.status = VerificationStatus.APPROVED
-                verification.verified_by = admin_id
-                verification.verified_at = datetime.now(timezone.utc)
+                verification.status = VerificationStatus.APPROVED if approve else VerificationStatus.REJECTED
+                verification.verified_by = admin.id
+                verification.verified_at = now
                 verification.admin_notes = notes
 
+            if approve:
+                _auto_approve_apartments(self.db, user_id, admin.id, now)
+
             self.db.commit()
-            logger.info(f"Верификация пользователя {user_id} одобрена администратором {admin_id}")
-
-            # Автоматически одобряем все pending квартиры пользователя
-            from uk_management_bot.database.models.user_apartment import UserApartment
-            try:
-                pending_apartments = self.db.query(UserApartment).filter(
-                    UserApartment.user_id == user_id,
-                    UserApartment.status == 'pending'
-                ).all()
-
-                approved_count = 0
-                for user_apartment in pending_apartments:
-                    user_apartment.status = 'approved'
-                    user_apartment.reviewed_at = datetime.now(timezone.utc)
-                    user_apartment.reviewed_by = admin_id
-                    user_apartment.admin_comment = "Автоматически одобрено при верификации пользователя"
-                    approved_count += 1
-
-                self.db.commit()
-                logger.info(f"Автоматически одобрено {approved_count} квартир для пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"Ошибка автоматического одобрения квартир для пользователя {user_id}: {e}")
-                # Продолжаем выполнение, так как верификация уже одобрена
-
-            return True, user.telegram_id
-
-        except Exception as e:
-            logger.error(f"Ошибка одобрения верификации: {e}")
+        except Exception:
             self.db.rollback()
-            return False, None
+            raise
+        logger.info(
+            "Верификация пользователя %s %s менеджером %s (удалено документов: %s)",
+            user_id, "одобрена" if approve else "отклонена", admin.id, purge.count,
+        )
+        return purge
 
-    def purge_user_documents_db(self, user_id: int) -> None:
-        """Финальная DB-фаза одобрения: удаление записей о документах.
-
-        ВАЖНО: файлы останутся на серверах Telegram, но file_id больше не будет
-        доступен в системе. Best-effort — ошибка логируется, верификация уже
-        одобрена.
-        """
-        try:
-            documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
-            for doc in documents:
-                self.db.delete(doc)
-            self.db.commit()
-            logger.info(f"Удалено {len(documents)} записей о документах пользователя {user_id} из базы данных")
-        except Exception as e:
-            logger.error(f"Ошибка удаления записей о документах из БД для пользователя {user_id}: {e}")
-            # Продолжаем выполнение
-
-    async def approve_verification(self, user_id: int, admin_id: int, notes: str = None) -> bool:
-        """
-        Одобрить верификацию пользователя
-
-        Args:
-            user_id: ID пользователя
-            admin_id: ID администратора
-            notes: Комментарии администратора
-
-        Returns:
-            True если успешно
-        """
-        # Внешний try — byte-семантика исторического тела для вызывающих
-        # (panels.py): любое неожиданное исключение (включая недостижимые на
-        # практике углы вроде сбоя импорта в best-effort фазах) даёт
-        # rollback + False, а не проброс (находка ревью волны A2-1).
-        try:
-            ok, telegram_id = self.approve_verification_db(user_id, admin_id, notes)
-            if not ok:
-                return False
-
-            await cleanup_user_documents_media(telegram_id)
-            self.purge_user_documents_db(user_id)
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка одобрения верификации: {e}")
-            self.db.rollback()
-            return False
-
-    def reject_verification(self, user_id: int, admin_id: int, notes: str) -> bool:
-        """
-        Отклонить верификацию пользователя
-        
-        Args:
-            user_id: ID пользователя
-            admin_id: ID администратора
-            notes: Причина отклонения
-            
-        Returns:
-            True если успешно
-        """
-        try:
-            # Обновляем статус пользователя
-            user = self.db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return False
-            
-            user.verification_status = "rejected"
-            user.verification_notes = notes
-            user.verification_date = datetime.now(timezone.utc)
-            user.verified_by = admin_id
-            
-            # Обновляем статус верификации
-            verification = self.db.query(UserVerification).filter(
-                and_(
-                    UserVerification.user_id == user_id,
-                    UserVerification.status.in_([VerificationStatus.PENDING, VerificationStatus.REQUESTED])
-                )
-            ).first()
-            
-            if verification:
-                verification.status = VerificationStatus.REJECTED
-                verification.verified_by = admin_id
-                verification.verified_at = datetime.now(timezone.utc)
-                verification.admin_notes = notes
-            
-            self.db.commit()
-            logger.info(f"Верификация пользователя {user_id} отклонена администратором {admin_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка отклонения верификации: {e}")
-            self.db.rollback()
-            return False
-    
     # ═══ УПРАВЛЕНИЕ ДОКУМЕНТАМИ ═══
     
     def add_document(self, user_id: int, document_type: DocumentType, file_id: str, 
@@ -708,30 +628,3 @@ class UserVerificationService:
         except Exception as e:
             logger.error(f"Ошибка валидации файла: {e}")
             return False, "Ошибка валидации файла"
-
-
-async def cleanup_user_documents_media(telegram_id: int) -> None:
-    """Зачистка документов пользователя в Media Service (канал ARCHIVE).
-
-    Сеть, БЕЗ сессии БД — вызывается вне worker-потока. Best-effort: любой
-    исход логируется, исключение не пробрасывается (верификация уже одобрена).
-    """
-    from uk_management_bot.utils.media_helpers import (
-        MediaCleanupResult, delete_user_documents_from_media_service,
-    )
-    try:
-        cleanup = await delete_user_documents_from_media_service(telegram_id)
-        # Раньше здесь стояло безусловное «документы удалены» — утверждение,
-        # неверное всякий раз, когда Media Service был недоступен.
-        if cleanup is MediaCleanupResult.DELETED:
-            logger.info(f"Документы пользователя {telegram_id} удалены из Media Service")
-        elif cleanup is MediaCleanupResult.NOTHING_TO_DELETE:
-            logger.info(f"Документов пользователя {telegram_id} в Media Service не было")
-        else:
-            logger.warning(
-                "Зачистка документов пользователя %s в Media Service НЕ состоялась (%s) — "
-                "файлы остались; повторить по этому telegram_id",
-                telegram_id, cleanup.value,
-            )
-    except Exception as e:
-        logger.error(f"Ошибка удаления документов из Media Service для пользователя {telegram_id}: {e}")

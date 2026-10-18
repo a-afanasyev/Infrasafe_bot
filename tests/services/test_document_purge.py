@@ -40,6 +40,7 @@ def test_sync_purge_deletes_rows_and_reports_ids(seeded):
 
     assert sorted(result.media_ids) == [501, 502]
     assert result.has_legacy is True
+    assert result.count == 3
     assert result.telegram_id == user.telegram_id
     assert seeded.query(UserDocument).filter_by(user_id=1).count() == 0
     assert seeded.query(UserDocument).filter_by(user_id=2).count() == 1  # чужие не тронуты
@@ -118,6 +119,18 @@ async def test_cleanup_failures_are_logged_not_raised(monkeypatch, caplog):
 
     await document_purge.cleanup_purged_documents(PurgeResult(77, (501, 502), False))
     assert "501" in caplog.text and "502" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_cleanup_legacy_failure_is_logged_not_raised(monkeypatch, caplog):
+    from uk_management_bot.services import document_purge
+    from uk_management_bot.services.document_purge import PurgeResult
+
+    monkeypatch.setattr(document_purge, "get_media_client", lambda: None)
+    monkeypatch.setattr(document_purge, "delete_user_documents_from_media_service",
+                        AsyncMock(side_effect=RuntimeError("media down")))
+    await document_purge.cleanup_purged_documents(PurgeResult(77, (), True, 1))
+    assert "77" in caplog.text
 
 
 @pytest.mark.asyncio

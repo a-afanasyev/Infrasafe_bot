@@ -37,7 +37,6 @@ from ._units import (
     _load_documents_page,
     _load_user_card,
     _load_verification_stats,
-    _purge_user_documents,
     _reject_user_db,
     _verify_document,
 )
@@ -70,7 +69,6 @@ __all__ = [
     "_load_documents_page",
     "_load_user_card",
     "_load_verification_stats",
-    "_purge_user_documents",
     "_reject_user_db",
     "_verify_document",
     # panel
