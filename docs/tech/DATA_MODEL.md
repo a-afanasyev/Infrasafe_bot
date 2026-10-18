@@ -63,6 +63,10 @@ erDiagram
         int id PK
         int user_id FK
         enum document_type "documenttype"
+        varchar file_id "legacy Telegram, NULL у новых"
+        int media_id UK "blob в media-service (026)"
+        bytea encryption_key "AES-GCM, ключ на документ"
+        varchar document_uuid "AAD"
         enum verification_status "verificationstatus"
         int verified_by FK
     }
@@ -92,6 +96,7 @@ erDiagram
 - `users.status='blocked'` блокирует доступ к API (`get_current_user`, `dependencies.py:78`); `pending` не блокируется на уровне auth, отсекается точечно через `require_approved_roles`.
 - `access_rights` (уровень подачи заявок) — **не путать с доменом access_control** (СКУД/шлагбаумы); это разные подсистемы с похожими именами.
 - Web-сессия: `refresh_tokens.token_hash` (SHA-256 значения), ротация при `/refresh`, каскадное удаление вместе с пользователем.
+- **Документы жителя** (миграция 026): новые лежат в media-service зашифрованными (AES-256-GCM, AAD = uuid:user:type), ключ — в строке `user_documents`; CHECK `ck_user_documents_storage_xor` — либо легаси `file_id`, либо полная тройка `media_id`+`encryption_key`+`document_uuid`. Документы живут, только пока проверка открыта (`verification_status` ∈ pending/requested, `deleted_at IS NULL`): любое закрытие проверки или удаление пользователя удаляет строки в той же транзакции (`services/document_purge`), страховка — триггер `trg_users_purge_closed_verification_documents`. Удаление строки = уничтожение ключа: документ недоступен в live-системе (ключ ещё живёт в WAL/бэкапах до их ротации).
 
 ---
 

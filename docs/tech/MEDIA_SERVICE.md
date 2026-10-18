@@ -62,6 +62,7 @@ curl -s -H "X-API-Key: $KEY" "$M/tags/popular" | jq
 | `POST /upload` | API-прокси (дашборд/TWA), обратная связь, бот (фото заявок, документы онбординга) |
 | `POST /upload-report` | бот и API (фотоотчёт исполнителя) |
 | `POST /upload-access` | access-api (кадры проезда) |
+| `POST /upload-resident-document` | бот (зашифрованные документы жителя: blob, `application/octet-stream`, канал ARCHIVE, имя `<uuid>.bin`) |
 | `GET /{id}`, `GET /{id}/file` | API-прокси (с проверкой доступа к заявке), бот (байты), витрина, access-api |
 | `GET /{id}/preview`, `POST /previews/warm` | публичная витрина работ |
 | `GET /request/{n}` | API-прокси, бот (фотоотчёт, отчёты работ) |
