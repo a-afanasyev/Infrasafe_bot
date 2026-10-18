@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
+from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 from uk_management_bot.config.settings import settings
+from dataclasses import dataclass
 from typing import List
 import logging
 import secrets
@@ -31,15 +33,33 @@ _STAFF_ROLES = {"executor", "manager", "inspector"}
 _CAPABILITY_ROLES = {"resource_meter_entry"}
 
 
-def _enforce_trusted_verification(user, granted_roles) -> None:
+@dataclass(frozen=True)
+class DeleteUserOutcome:
+    ok: bool
+    purge: PurgeResult
+
+
+def _enforce_trusted_verification(db, user, granted_roles) -> None:
     """Если пользователю выданы доверенные роли — помечаем verified.
 
     Делает состояние «manager/admin в pending» непредставимым: иначе такой
     пользователь застрянет — кнопка одобрения в панели сотрудников защищена
     guard'ом «нельзя менять статус менеджера/админа».
+
+    Переход закрывает проверку — документы и ключи удаляются в той же
+    транзакции (до смены статуса, см. services/document_purge). Гигиены медиа
+    здесь нет (вызывающие — разные sync-цепочки): blob'ы нечитаемы, id — в лог.
     """
-    if TRUSTED_VERIFICATION_ROLES & set(granted_roles or []):
-        user.verification_status = "verified"
+    if not TRUSTED_VERIFICATION_ROLES & set(granted_roles or []):
+        return
+    if user.verification_status != "verified":
+        purge = purge_documents_sync(db, user)
+        if purge.media_ids:
+            logger.warning(
+                "Пользователь %s получил доверенную роль: документы удалены, blob'ы %s "
+                "остались в Media Service (ключи уничтожены)", user.id, list(purge.media_ids),
+            )
+    user.verification_status = "verified"
 
 
 class AuthService:
@@ -107,7 +127,7 @@ class AuthService:
                 user.roles = json.dumps(current_roles)
             if not user.active_role or user.active_role.strip() == "":
                 user.active_role = role
-            _enforce_trusted_verification(user, [role])
+            _enforce_trusted_verification(self.db, user, [role])
             self.db.commit()
             logger.info(f"Пользователь {telegram_id} одобрен с ролью {role}")
             return True
@@ -180,7 +200,7 @@ class AuthService:
             user.roles = json.dumps(current_roles)
 
             # Менеджер/админ по инвайту — корень доверия, не держим в pending
-            _enforce_trusted_verification(user, [role])
+            _enforce_trusted_verification(self.db, user, [role])
 
             # Устанавливаем специализацию для исполнителей
             if role == "executor" and invite_data.get("specialization"):
@@ -410,7 +430,7 @@ class AuthService:
             user.roles = json.dumps(current_roles)
 
             # Назначение manager/admin — корень доверия, сразу verified
-            _enforce_trusted_verification(user, [role])
+            _enforce_trusted_verification(self.db, user, [role])
 
             # Если это первая роль или активная роль не установлена
             if not user.active_role or user.active_role not in current_roles:
@@ -568,7 +588,7 @@ class AuthService:
             # а не весь набор ролей скопом.
             user.roles = '["manager"]'
             user.active_role = "manager"
-            _enforce_trusted_verification(user, ["manager"])
+            _enforce_trusted_verification(self.db, user, ["manager"])
             # A9-P2-4: след выдачи — в audit_logs той же транзакцией, не только в лог.
             self.db.add(AuditLog(
                 action="admin_command_role_grant",
@@ -643,22 +663,34 @@ class AuthService:
         return True, None
 
     def delete_user(self, user_id: int, deleted_by: int, reason: str = "") -> bool:
+        """Удалить пользователя; True — успех (контракт для employee_management).
+
+        Медиа-гигиены здесь нет — её делают вызывающие
+        `delete_user_purging_documents` после run_db.
+        """
+        return self.delete_user_purging_documents(user_id, deleted_by, reason).ok
+
+    def delete_user_purging_documents(
+        self, user_id: int, deleted_by: int, reason: str = "",
+    ) -> "DeleteUserOutcome":
         """
         Удалить пользователя из базы данных
-        
+
+        Строка пользователя лочится (FOR UPDATE — сериализация с загрузкой
+        документа), документы и ключи удаляются в той же транзакции; наружу —
+        PurgeResult для гигиены медиа после commit.
+
         Args:
             user_id: ID пользователя для удаления
             deleted_by: ID менеджера, который удаляет
             reason: Причина удаления
-            
-        Returns:
-            True если операция успешна
         """
+        failed = DeleteUserOutcome(False, PurgeResult(None))
         try:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            user = self.db.query(User).filter(User.id == user_id).with_for_update().first()
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для удаления")
-                return False
+                return failed
             
             # Сохраняем информацию о пользователе для аудита
             user_info = {
@@ -687,13 +719,11 @@ class AuthService:
             self.db.add(audit)
             
             # Удаляем связанные записи в правильном порядке
-            from uk_management_bot.database.models.user_verification import UserDocument, UserVerification, AccessRights
-            
-            # 1. Удаляем документы пользователя
-            documents = self.db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
-            for doc in documents:
-                self.db.delete(doc)
-            logger.info(f"Удалено {len(documents)} документов пользователя {user_id}")
+            from uk_management_bot.database.models.user_verification import UserVerification, AccessRights
+
+            # 1. Удаляем документы пользователя (и ключи шифрования)
+            purge = purge_documents_sync(self.db, user)
+            logger.info(f"Удалено {purge.count} документов пользователя {user_id}")
             
             # 2. Удаляем записи верификации
             verifications = self.db.query(UserVerification).filter(UserVerification.user_id == user_id).all()
@@ -774,9 +804,9 @@ class AuthService:
             self.db.commit()
             
             logger.info(f"Пользователь {user_id} (telegram_id: {user_info['telegram_id']}) удален менеджером {deleted_by}")
-            return True
-            
+            return DeleteUserOutcome(True, purge)
+
         except Exception as e:
             logger.error(f"Ошибка удаления пользователя {user_id}: {e}")
             self.db.rollback()
-            return False
+            return failed

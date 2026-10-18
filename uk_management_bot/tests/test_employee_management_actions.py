@@ -110,7 +110,14 @@ async def test_reject_re_renders_card_with_language(monkeypatch, language):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("language", ["ru", "uz"])
 async def test_delete_renders_neutral_screen_back_to_pending(monkeypatch, language):
-    _auth, show_list, db = _patch_common(monkeypatch, auth_method="delete_user")
+    from uk_management_bot.services.auth_service import DeleteUserOutcome
+    from uk_management_bot.services.document_purge import PurgeResult
+
+    auth, show_list, db = _patch_common(monkeypatch, auth_method="delete_user_purging_documents")
+    purge = PurgeResult(5012, (901,))
+    auth.delete_user_purging_documents.return_value = DeleteUserOutcome(True, purge)
+    cleanup = AsyncMock()
+    monkeypatch.setattr(emp, "cleanup_purged_documents", cleanup)
 
     callback = _make_callback("delete_employee_12")
     await emp.delete_employee(
@@ -134,3 +141,4 @@ async def test_delete_renders_neutral_screen_back_to_pending(monkeypatch, langua
     assert buttons[0].text == expected_label
     show_list.assert_not_awaited()
     callback.answer.assert_awaited_once()
+    cleanup.assert_awaited_once_with(purge)  # удаление из «Сотрудников» тоже чистит медиа

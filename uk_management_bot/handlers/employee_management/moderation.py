@@ -19,7 +19,9 @@ from uk_management_bot.utils.auth_helpers import has_admin_access
 from uk_management_bot.database.models.user import User
 
 from ._router import router
-from ._units import _moderate_employee, _return_to_employee_info
+from uk_management_bot.services.document_purge import cleanup_purged_documents
+
+from ._units import _delete_employee, _moderate_employee, _return_to_employee_info
 
 logger = logging.getLogger(__name__)
 
@@ -278,11 +280,13 @@ async def delete_employee(callback: CallbackQuery, roles: list = None, active_ro
     try:
         employee_id = int(callback.data.split('_')[2])
 
-        outcome = await run_db(
-            lambda s: _moderate_employee(
+        outcome, purge = await run_db(
+            lambda s: _delete_employee(
                 s, callback.from_user.id, employee_id,
-                "delete_user", "Удален через панель управления сотрудниками"),
+                "Удален через панель управления сотрудниками"),
             db=_db)
+        if outcome == "ok":
+            await cleanup_purged_documents(purge)
         if outcome == "no_actor":
             await callback.answer(
                 get_text('errors.user_not_found', language=lang),
