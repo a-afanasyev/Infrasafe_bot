@@ -518,6 +518,9 @@ class UserVerificationService:
             return user.id, UploadDenied.REJECTED
         if user.verification_status not in _DECIDABLE_FROM:
             return user.id, UploadDenied.NOT_REQUIRED
+        # Доменное правило о человеке-объекте, не право доступа (RBAC-снимок
+        # inline_checks): документы верификации грузит житель; иначе — только
+        # по прямому запросу менеджера (`requested`, в т.ч. сотруднику).
         if user.verification_status != "requested" and "applicant" not in parse_roles_safe(user.roles):
             return user.id, UploadDenied.NOT_REQUIRED
         count = self.db.query(UserDocument).filter(UserDocument.user_id == user.id).count()
