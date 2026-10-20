@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isAxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { usePersonName, type PersonNameFormatter } from '../../hooks/usePersonName'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
@@ -103,7 +104,22 @@ export default function CreateShiftFromTemplateModal({
     if (templateId == null) return
     createFromTemplate.mutate(
       { template_id: templateId, date, user_ids: selected },
-      { onSuccess: () => onClose() },
+      {
+        onSuccess: () => onClose(),
+        // 409 — сервер отклоняет пакет целиком, если кто-то уже на смене в это
+        // окно (APIFE-5); в detail только id — показываем имена, чтобы было
+        // понятно, кого снять (особенно после «Выбрать всех»).
+        onError: (err) => {
+          if (!isAxiosError(err) || err.response?.status !== 409) return
+          const ids = String(err.response.data?.detail ?? '').match(/\d+/g)?.map(Number) ?? []
+          if (ids.length === 0) return
+          const names = ids.map((id) => {
+            const emp = employees.find((e) => e.id === id)
+            return emp ? employeeName(emp, fullName) : `ID ${id}`
+          })
+          setError(t('templates.overlapConflict', { names: names.join(', ') }))
+        },
+      },
     )
   }
 

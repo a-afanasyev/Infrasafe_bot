@@ -33,6 +33,20 @@ describe('CreateShiftFromTemplateModal', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(3)
   })
 
+  it('409 пересечения смен — в форме имена занятых, а не сырые id', async () => {
+    mockEmployees()
+    server.use(
+      http.post('*/api/v2/shifts/from-template', () =>
+        HttpResponse.json({ detail: 'Overlapping shifts for users: [9]' }, { status: 409 })),
+    )
+    const user = userEvent.setup()
+    render(<CreateShiftFromTemplateModal isOpen onClose={noop} templateId={5} />)
+    await screen.findByText('Иван Петров')
+    await user.click(screen.getByRole('checkbox', { name: 'Выбрать всех (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Создать смену' }))
+    expect(await screen.findByText(/Уже есть смена в это время: Олег Смирнов\./)).toBeInTheDocument()
+  })
+
   it('«Выбрать всех» отмечает видимых, повторный клик снимает; частичный выбор — indeterminate', async () => {
     mockEmployees()
     let posted: Record<string, unknown> | null = null

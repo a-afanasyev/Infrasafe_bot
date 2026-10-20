@@ -2178,6 +2178,7 @@
     "noExecutors": "Mavjud ijrochilar yoʻq",
     "selectedCount": "Tanlandi: {{count}}",
     "selectAll": "Barchasini tanlash ({{count}})",
+    "overlapConflict": "Bu vaqtda smenasi bor: {{names}}. Ularni olib tashlab, qayta urinib koʻring.",
     "executorsFilteredBySpecs": "Faqat mos mutaxassislar koʻrsatilgan: {{specs}}",
     "createShift": "Smena yaratish",
     "editTemplateTitle": "Shablonni tahrirlash",
