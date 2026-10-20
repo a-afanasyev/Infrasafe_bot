@@ -2188,6 +2188,8 @@
     "selectExecutors": "Исполнители",
     "noExecutors": "Нет доступных исполнителей",
     "selectedCount": "Выбрано: {{count}}",
+    "selectAll": "Выбрать всех ({{count}})",
+    "overlapConflict": "Уже есть смена в это время: {{names}}. Снимите их и повторите.",
     "executorsFilteredBySpecs": "Показаны только специалисты: {{specs}}",
     "createShift": "Создать смену",
     "editTemplateTitle": "Редактировать шаблон",

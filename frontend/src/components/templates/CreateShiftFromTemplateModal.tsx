@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isAxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { usePersonName, type PersonNameFormatter } from '../../hooks/usePersonName'
 import { useCreateShiftFromTemplate } from '../../hooks/useTemplates'
@@ -74,6 +75,22 @@ export default function CreateShiftFromTemplateModal({
   const toggle = (id: number) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
+  // «Выбрать всех» — только видимые (поиск/специализации); отмеченные раньше,
+  // но скрытые поиском, не трогаем.
+  const visibleIds = employees.map((e) => e.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id))
+  const someVisibleSelected = visibleIds.some((id) => selected.includes(id))
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
+  }, [someVisibleSelected, allVisibleSelected])
+  const toggleAll = () =>
+    setSelected((prev) =>
+      allVisibleSelected
+        ? prev.filter((id) => !visibleIds.includes(id))
+        : [...prev, ...visibleIds.filter((id) => !prev.includes(id))],
+    )
+
   const handleSubmit = () => {
     setError(null)
     if (!date) {
@@ -87,7 +104,22 @@ export default function CreateShiftFromTemplateModal({
     if (templateId == null) return
     createFromTemplate.mutate(
       { template_id: templateId, date, user_ids: selected },
-      { onSuccess: () => onClose() },
+      {
+        onSuccess: () => onClose(),
+        // 409 — сервер отклоняет пакет целиком, если кто-то уже на смене в это
+        // окно (APIFE-5); в detail только id — показываем имена, чтобы было
+        // понятно, кого снять (особенно после «Выбрать всех»).
+        onError: (err) => {
+          if (!isAxiosError(err) || err.response?.status !== 409) return
+          const ids = String(err.response.data?.detail ?? '').match(/\d+/g)?.map(Number) ?? []
+          if (ids.length === 0) return
+          const names = ids.map((id) => {
+            const emp = employees.find((e) => e.id === id)
+            return emp ? employeeName(emp, fullName) : `ID ${id}`
+          })
+          setError(t('templates.overlapConflict', { names: names.join(', ') }))
+        },
+      },
     )
   }
 
@@ -141,6 +173,17 @@ export default function CreateShiftFromTemplateModal({
               <p className="text-[13px] text-muted-foreground">{t('templates.noExecutors')}</p>
             ) : (
               <div className="max-h-64 overflow-y-auto border border-border-default rounded-sm divide-y divide-border-default">
+                <label className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-bg-surface transition-colors">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAll}
+                  />
+                  <span className="flex-1 min-w-0 text-[13px] font-medium text-text-primary">
+                    {t('templates.selectAll', { count: visibleIds.length })}
+                  </span>
+                </label>
                 {employees.map((e) => (
                   <label
                     key={e.id}
