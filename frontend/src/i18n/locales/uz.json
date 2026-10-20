@@ -2177,6 +2177,7 @@
     "selectExecutors": "Ijrochilar",
     "noExecutors": "Mavjud ijrochilar yoʻq",
     "selectedCount": "Tanlandi: {{count}}",
+    "selectAll": "Barchasini tanlash ({{count}})",
     "executorsFilteredBySpecs": "Faqat mos mutaxassislar koʻrsatilgan: {{specs}}",
     "createShift": "Smena yaratish",
     "editTemplateTitle": "Shablonni tahrirlash",

@@ -29,7 +29,40 @@ describe('CreateShiftFromTemplateModal', () => {
     expect(await screen.findByText('Иван Петров')).toBeInTheDocument()
     expect(screen.getByText('Олег Смирнов')).toBeInTheDocument()
     // Список — чекбоксы, а не кнопки-плитки (исходный дефект UX).
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2)
+    // 2 сотрудника + «Выбрать всех».
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3)
+  })
+
+  it('«Выбрать всех» отмечает видимых, повторный клик снимает; частичный выбор — indeterminate', async () => {
+    mockEmployees()
+    let posted: Record<string, unknown> | null = null
+    server.use(
+      http.post('*/api/v2/shifts/from-template', async ({ request }) => {
+        posted = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json([{ id: 1 }, { id: 2 }])
+      }),
+    )
+    const user = userEvent.setup()
+    render(<CreateShiftFromTemplateModal isOpen onClose={noop} templateId={5} />)
+    await screen.findByText('Иван Петров')
+    const all = screen.getByRole('checkbox', { name: 'Выбрать всех (2)' }) as HTMLInputElement
+
+    await user.click(screen.getByRole('checkbox', { name: /Иван Петров/ }))
+    expect(all.indeterminate).toBe(true)
+    expect(all.checked).toBe(false)
+
+    await user.click(all)
+    expect(all.checked).toBe(true)
+    expect(all.indeterminate).toBe(false)
+    expect(screen.getByText('Выбрано: 2')).toBeInTheDocument()
+
+    await user.click(all)
+    expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument()
+
+    await user.click(all)
+    await user.click(screen.getByRole('button', { name: 'Создать смену' }))
+    await waitFor(() => expect(posted).not.toBeNull())
+    expect((posted as unknown as { user_ids: number[] }).user_ids.sort()).toEqual([7, 9])
   })
 
   it('запрашивает сотрудников ПОД специализации шаблона (for_specializations)', async () => {
