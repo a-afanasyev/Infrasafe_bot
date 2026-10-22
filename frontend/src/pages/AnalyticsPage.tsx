@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { useCan } from '../hooks/useCan'
 import {
   useAddressStats,
   useBacklog,
@@ -45,6 +46,7 @@ function ErrorBanner({ text }: { text: string }) {
 
 export default function AnalyticsPage() {
   const { t } = useTranslation()
+  const canReport = useCan('requests.stats')
   usePageTitle(t('nav.analytics'))
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
@@ -91,7 +93,7 @@ export default function AnalyticsPage() {
   return (
     <div className="p-4 md:p-5 md:px-6 flex flex-col gap-4 min-w-0">
       <div className="flex flex-wrap items-start gap-2">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-[28rem]">
           <PeriodBar
             preset={preset}
             range={range}
@@ -109,7 +111,7 @@ export default function AnalyticsPage() {
             onGranularity={setGranularity}
           />
         </div>
-        <OfficialReportDialog range={activeRange} />
+        {canReport && <OfficialReportDialog range={activeRange} />}
       </div>
 
       <AccessTabBar

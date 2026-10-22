@@ -209,4 +209,11 @@ describe('AnalyticsPage — отчёт для проверяющих', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(JSON.parse(localStorage.getItem('uk_official_report_v1')!)).toMatchObject({ organization: 'ООО «Тест»', lang: 'uz' })
   })
+
+  it('без права requests.stats кнопки нет', async () => {
+    useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']).filter(a => a !== 'requests.stats') } })
+    render(<AnalyticsPage />)
+    await screen.findByText('Этот месяц')
+    expect(screen.queryByRole('button', { name: 'Отчёт для проверяющих' })).not.toBeInTheDocument()
+  })
 })
