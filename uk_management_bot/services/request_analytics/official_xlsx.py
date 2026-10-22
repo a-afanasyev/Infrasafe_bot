@@ -10,17 +10,21 @@
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import io
 import math
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional, get_args
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.chart import BarChart, Reference
+from openpyxl.drawing.image import Image as XlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
+from PIL import Image as PilImage
 
 from uk_management_bot.utils.address_helpers import localize_address
 from uk_management_bot.utils.business_time import fmt_date, fmt_datetime, to_business
@@ -35,6 +39,16 @@ from uk_management_bot.utils.pii import mask_phones
 from .official_report import OfficialReport, Tally
 
 LANGUAGES = ("ru", "uz")
+SheetKey = Literal["summary", "dynamics", "buildings", "register"]
+#: Канонический порядок листов; выгружаются отмеченные, в этом порядке.
+SHEETS: tuple[str, ...] = get_args(SheetKey)
+#: Логотип приходит из браузера PNG-ом в base64: лимит на строку и на картинку.
+LOGO_MAX_BYTES = 300_000
+LOGO_MAX_B64 = 400_000
+LOGO_MAX_PIXELS = 4_000_000
+#: Высота логотипа в шапке листа (px) и сколько строк под него отводится.
+LOGO_HEIGHT_PX = 48
+LOGO_ROWS = 3
 #: Длинные тексты в ячейке реестра обрезаются — полный текст в карточке заявки.
 TEXT_MAX_CHARS = 500
 #: Шапка и подписи — не больше этого (приходят из запроса).
@@ -222,6 +236,35 @@ def _put(ws: Worksheet, row: int, col: int, value, *, fmt: Optional[str] = None,
     return cell
 
 
+def decode_logo(b64: str) -> bytes:
+    """base64 → байты PNG; `ValueError`, если это не небольшой корректный PNG."""
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("не base64") from exc
+    if len(raw) > LOGO_MAX_BYTES:
+        raise ValueError("слишком большой файл")
+    try:
+        with PilImage.open(io.BytesIO(raw)) as img:
+            fmt, (width, height) = img.format, img.size
+            if fmt != "PNG":
+                raise ValueError("нужен PNG")
+            if width * height > LOGO_MAX_PIXELS:  # PNG-бомба: мало байт, огромный холст
+                raise ValueError("слишком большое изображение")
+            img.verify()
+    except ValueError:
+        raise
+    except Exception as exc:  # битый файл: Pillow бросает разные OSError/SyntaxError
+        raise ValueError("не удалось прочитать изображение") from exc
+    return raw
+
+
+def _add_logo(ws: Worksheet, logo: bytes) -> None:
+    img = XlImage(io.BytesIO(logo))
+    img.width, img.height = round(img.width * LOGO_HEIGHT_PX / img.height), LOGO_HEIGHT_PX
+    ws.add_image(img, "A1")
+
+
 def _excel_dt(value: Optional[datetime]) -> Optional[datetime]:
     """Инстант → naive-время Ташкента: Excel не знает часовых поясов."""
     return to_business(value).replace(tzinfo=None) if value is not None else None
@@ -261,9 +304,10 @@ def _tally_cells(ws: Worksheet, row: int, col: int, t: Tally, *, created: bool =
 
 
 def _title_block(ws: Worksheet, report: OfficialReport, L: dict, organization: str,
-                 center_cols: Optional[int] = None) -> int:
+                 logo: Optional[bytes], center_cols: Optional[int] = None) -> int:
     """Шапка листа; `center_cols` — центрировать по ширине таблицы, иначе
-    текст слева и свободно переливается вправо (узкие листы)."""
+    текст слева и свободно переливается вправо (узкие листы). Логотип — в
+    левом верхнем углу, текст шапки начинается под ним."""
     lines = [
         (L["title"], Font(bold=True, size=15, color=ACCENT)),
         (L["period"].format(first=fmt_date(report.first), last=fmt_date(report.last)), Font(size=12)),
@@ -271,18 +315,22 @@ def _title_block(ws: Worksheet, report: OfficialReport, L: dict, organization: s
     ]
     if organization:
         lines.insert(0, (organization, Font(bold=True, size=12)))
-    for row, (text, font) in enumerate(lines, start=1):
+    top = 1
+    if logo:
+        _add_logo(ws, logo)
+        top += LOGO_ROWS
+    for row, (text, font) in enumerate(lines, start=top):
         _put(ws, row, 1, text, font=font,
              align=Alignment(horizontal="center") if center_cols else None)
         if center_cols:
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=center_cols)
-    return len(lines) + 2
+    return top + len(lines) + 1
 
 
 def _summary(ws: Worksheet, report: OfficialReport, L: dict, lang: str,
-             organization: str, signer: str) -> None:
+             organization: str, logo: Optional[bytes], signer: str) -> None:
     _widths(ws, [52, 15, 15, 15, 16, 13, 16])
-    row = _title_block(ws, report, L, organization, center_cols=7)
+    row = _title_block(ws, report, L, organization, logo, center_cols=7)
     t = report.total
 
     _put(ws, row, 1, L["s1"], font=SECTION_FONT)
@@ -387,9 +435,10 @@ def _bucket_label(key: str, granularity: str, lang: str) -> str:
     return key
 
 
-def _dynamics(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organization: str) -> None:
+def _dynamics(ws: Worksheet, report: OfficialReport, L: dict, lang: str,
+              organization: str, logo: Optional[bytes]) -> None:
     _widths(ws, [22, 16, 16])
-    row = _title_block(ws, report, L, organization)
+    row = _title_block(ws, report, L, organization, logo)
     header = row
     _header_row(ws, row, [L["bucket"], L["col_created"], L["col_accepted"]])
     row += 1
@@ -413,14 +462,15 @@ def _dynamics(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organiz
     chart.set_categories(Reference(ws, min_col=1, min_row=header + 1, max_row=last))
     chart.height = 9
     chart.width = max(18.0, min(40.0, 0.7 * len(report.series)))
-    ws.add_chart(chart, "E5")
+    ws.add_chart(chart, f"E{header}")
     ws.freeze_panes = ws.cell(row=header + 1, column=1)
     _print_setup(ws, landscape=True)
 
 
-def _buildings(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organization: str) -> None:
+def _buildings(ws: Worksheet, report: OfficialReport, L: dict, lang: str,
+               organization: str, logo: Optional[bytes]) -> None:
     _widths(ws, [44, 28, 15, 15, 15, 16, 13, 16])
-    row = _title_block(ws, report, L, organization, center_cols=8)
+    row = _title_block(ws, report, L, organization, logo, center_cols=8)
     header = row
     _header_row(ws, row, [L["building"], L["yard"], L["col_created"], L["col_accepted"],
                           L["col_on_time"], L["col_overdue"], L["col_share"], L["col_avg"]])
@@ -441,12 +491,13 @@ def _buildings(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organi
     _print_setup(ws, landscape=True)
 
 
-def _register(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organization: str) -> None:
+def _register(ws: Worksheet, report: OfficialReport, L: dict, lang: str,
+              organization: str, logo: Optional[bytes]) -> None:
     titles = [L["no"], L["number"], L["created_at"], L["address"], L["category"],
               L["description"], L["report"], L["urgency"], L["executor"], L["executed_at"],
               L["completed_at"], L["hours"], L["sla"], L["sla_met"]]
     _widths(ws, [6, 14, 17, 34, 18, 40, 40, 14, 22, 17, 17, 10, 11, 12])
-    row = _title_block(ws, report, L, organization, center_cols=len(titles))
+    row = _title_block(ws, report, L, organization, logo, center_cols=len(titles))
     if report.register_truncated:
         _put(ws, row - 1, 1, L["truncated"].format(shown=len(report.register),
                                                     total=report.total.accepted),
@@ -485,19 +536,29 @@ def _register(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organiz
 
 
 def render_xlsx(report: OfficialReport, lang: str = "ru", organization: str = "",
-                signer: str = "") -> bytes:
+                signer: str = "", sheets: tuple[str, ...] = SHEETS,
+                logo: Optional[bytes] = None) -> bytes:
+    """`sheets` — какие листы выгрузить (порядок всегда канонический);
+    `logo` — PNG, уже прошедший `decode_logo`."""
     L = LABELS[lang if lang in LANGUAGES else "ru"]
     organization = clean_text(organization, FIELD_MAX_CHARS)
     signer = clean_text(signer, FIELD_MAX_CHARS)
     wb = Workbook()
+    wb.remove(wb.active)
     wb.properties.title = L["title"]
     wb.properties.creator = organization or "UK Management"
-    summary = wb.active
-    summary.title = L["sheet_summary"]
-    _summary(summary, report, L, lang, organization, signer)
-    _dynamics(wb.create_sheet(L["sheet_dynamics"]), report, L, lang, organization)
-    _buildings(wb.create_sheet(L["sheet_buildings"]), report, L, lang, organization)
-    _register(wb.create_sheet(L["sheet_register"]), report, L, lang, organization)
+    for key in SHEETS:
+        if key not in sheets:
+            continue
+        ws = wb.create_sheet(L[f"sheet_{key}"])
+        if key == "summary":
+            _summary(ws, report, L, lang, organization, logo, signer)
+        elif key == "dynamics":
+            _dynamics(ws, report, L, lang, organization, logo)
+        elif key == "buildings":
+            _buildings(ws, report, L, lang, organization, logo)
+        else:
+            _register(ws, report, L, lang, organization, logo)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

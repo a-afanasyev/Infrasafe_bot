@@ -137,6 +137,27 @@ export interface RequestStatsOut {
   previous: StatsKpi
 }
 
+/** Вкладка «Отчёт»: `all` — поступившие в периоде, `done` — принятые в периоде. */
+export type ReportScope = 'all' | 'done'
+
+export interface ReportRequestRow {
+  request_number: string
+  created_at: string | null
+  status: string
+  category: string
+  urgency: string
+  address: string | null
+  executor_name: string | null
+  completed_at: string | null
+  /** Только у принятых: уложились ли в норматив. */
+  on_time: boolean | null
+}
+
+export interface ReportRequestsOut {
+  rows: ReportRequestRow[]
+  truncated: boolean
+}
+
 export interface ExecutorStatsRow {
   user_id: number | null
   name: string | null

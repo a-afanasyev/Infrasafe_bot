@@ -1874,7 +1874,8 @@
       "executors": "Ijrochilar",
       "quality": "Muddat va sifat",
       "backlog": "Qoldiq va manzillar",
-      "channels": "Kanallar va xarajatlar"
+      "channels": "Kanallar va xarajatlar",
+      "report": "Hisobot"
     },
     "monthShort": {
       "jan": "yan",
@@ -2007,10 +2008,8 @@
       "amount": "Summa, so'm"
     },
     "official": {
-      "button": "Tekshiruvchilar uchun hisobot",
       "title": "Nazorat organlari uchun hisobot",
       "description": "Hokimiyat, soliq va boshqa organlar uchun Excel fayl: umumiy ko'rsatkichlar, ish turlari va uylar bo'yicha taqsimot, diagrammali dinamika va bajarilgan murojaatlar reyestri.",
-      "period": "Davr",
       "organization": "Tashkilot (hisobot sarlavhasida)",
       "organizationPlaceholder": "«Boshqaruv kompaniyasi nomi» MChJ",
       "signer": "Rahbar (imzolar blokida)",
@@ -2020,7 +2019,38 @@
       "langUz": "O'zbek tili",
       "contents": "Tanlangan davrda aholi tomonidan qabul qilingan murojaat bajarilgan hisoblanadi; muddat — kelib tushgandan ish topshirilgunga qadar. Murojaat matnlaridagi telefon raqamlari [telefon] bilan almashtiriladi.",
       "download": ".xlsx yuklab olish",
-      "preparing": "Tayyorlanmoqda…"
+      "preparing": "Tayyorlanmoqda…",
+      "organizationHint": "Vitrinadan olingan — ushbu hisobot uchun tahrirlash mumkin.",
+      "sheets": "Fayldagi varaqlar",
+      "sheet": {
+        "summary": "Umumiy — ko'rsatkichlar, ish turlari, me'yorlar, imzolar",
+        "dynamics": "Dinamika — kelib tushish va bajarilish, diagramma bilan",
+        "buildings": "Uylar bo'yicha",
+        "register": "Bajarilgan murojaatlar reyestri"
+      },
+      "logo": "Sarlavhada logotip",
+      "noSheets": "Kamida bitta varaqni belgilang"
+    },
+    "report": {
+      "title": "Davr ichidagi murojaatlar",
+      "scopeLabel": "Qaysi murojaatlarni ko'rsatish",
+      "scope": {
+        "all": "Barchasi",
+        "done": "Faqat bajarilganlar"
+      },
+      "total": "Murojaatlar: {{count}}",
+      "truncated": "dastlabki 10 000 tasi ko'rsatilgan",
+      "number": "Raqam",
+      "created": "Kelib tushgan",
+      "status": "Holat",
+      "category": "Ish turi",
+      "address": "Manzil",
+      "executor": "Ijrochi",
+      "completed": "Qabul qilingan",
+      "onTime": "Muddatida",
+      "yes": "ha",
+      "no": "yo'q",
+      "more": "Yana ko'rsatish ({{total}} tadan {{shown}} tasi ko'rsatilgan)"
     }
   },
   "shifts": {

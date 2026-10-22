@@ -18,21 +18,86 @@ from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.request import Request
+from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.utils.business_time import business_date_of, business_days_window
 from uk_management_bot.utils.categories import resolve_category_key
-from uk_management_bot.utils.constants import REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED
+from uk_management_bot.utils.constants import (
+    REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_CANCELLED,
+    URGENCY_RU_TO_KEY,
+)
 
 from . import period as P
-from .executors import AcceptedRequest, load_accepted
+from .executors import AcceptedRequest, load_accepted, person_name
 
 #: Реестр — как лимит CSV-выгрузки; итоги считаются по всем заявкам.
 REGISTER_LIMIT = 10_000
 URGENCY_ORDER = ("critical", "high", "medium", "low")
+
+
+@dataclass(frozen=True)
+class ListRow:
+    """Строка таблицы «Отчёт» в дашборде (до выгрузки)."""
+    request_number: str
+    created_at: Optional[datetime]
+    status: str
+    category: str
+    urgency: str
+    address: Optional[str]
+    executor_name: Optional[str]
+    completed_at: Optional[datetime]
+    #: Только у принятых: уложились ли в норматив (как «Срок соблюдён» в реестре).
+    on_time: Optional[bool]
+
+
+def _on_time(status: str, urgency: str, hours: Optional[float], sla_hours: dict) -> Optional[bool]:
+    limit = sla_hours.get(urgency)
+    if status != REQUEST_STATUS_APPROVED or hours is None or limit is None:
+        return None
+    return hours <= limit
+
+
+async def list_requests(
+    db: AsyncSession, first: date, last: date, scope: str, sla_hours: dict,
+) -> tuple[list[ListRow], bool]:
+    """`all` — поступившие в периоде (по `created_at`), `done` — принятые в
+    периоде (ровно строки листа «Реестр»). Не больше `REGISTER_LIMIT` строк."""
+    if scope == "done":
+        accepted = sorted(await load_accepted(db, first, last),
+                          key=lambda r: (r.completed_at, r.request_number))
+        rows = [
+            ListRow(r.request_number, r.created_at, REQUEST_STATUS_APPROVED, resolve_category_key(r.category),
+                    r.urgency, r.address, r.executor_name, r.completed_at,
+                    _on_time(REQUEST_STATUS_APPROVED, r.urgency, r.resolution_hours, sla_hours))
+            for r in accepted
+        ]
+        return rows[:REGISTER_LIMIT], len(rows) > REGISTER_LIMIT
+
+    start, end = business_days_window(first, last)
+    executor = aliased(User)
+    result = await db.execute(
+        select(Request.request_number, Request.created_at, Request.status, Request.category,
+               Request.urgency, Request.address, executor.first_name, executor.last_name,
+               Request.executed_at, Request.completed_at)
+        .outerjoin(executor, Request.executor_id == executor.id)
+        .where(Request.created_at >= start, Request.created_at < end)
+        .order_by(Request.created_at, Request.request_number)
+        .limit(REGISTER_LIMIT + 1)
+    )
+    rows = []
+    for number, created, status, category, urgency, address, first_name, last_name, executed, completed in result.all():
+        urgency_key = URGENCY_RU_TO_KEY.get(urgency, urgency)
+        hours = P.hours_between(created, executed or completed)
+        rows.append(ListRow(number, created, status, resolve_category_key(category), urgency_key, address,
+                            person_name(first_name, last_name), completed,
+                            _on_time(status, urgency_key, hours, sla_hours)))
+    return rows[:REGISTER_LIMIT], len(rows) > REGISTER_LIMIT
 
 
 @dataclass
