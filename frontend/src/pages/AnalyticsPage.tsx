@@ -20,6 +20,7 @@ import ExecutorsTab from '../components/analytics/ExecutorsTab'
 import QualityTab from '../components/analytics/QualityTab'
 import BacklogTab from '../components/analytics/BacklogTab'
 import ChannelsTab from '../components/analytics/ChannelsTab'
+import OfficialReportDialog from '../components/analytics/OfficialReportDialog'
 import { todayInDisplayTz } from '../utils/timezone'
 import {
   autoGranularity,
@@ -89,22 +90,27 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-4 md:p-5 md:px-6 flex flex-col gap-4 min-w-0">
-      <PeriodBar
-        preset={preset}
-        range={range}
-        granularity={gran}
-        effectiveGranularity={effectiveGran}
-        showGranularity={tab === 'overview' || tab === 'channels'}
-        onPreset={id => {
-          setPreset(id)
-          setRange(presetRange(id, todayInDisplayTz()))
-        }}
-        onCustom={next => {
-          setPreset('custom')
-          setRange(next)
-        }}
-        onGranularity={setGranularity}
-      />
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <PeriodBar
+            preset={preset}
+            range={range}
+            granularity={gran}
+            effectiveGranularity={effectiveGran}
+            showGranularity={tab === 'overview' || tab === 'channels'}
+            onPreset={id => {
+              setPreset(id)
+              setRange(presetRange(id, todayInDisplayTz()))
+            }}
+            onCustom={next => {
+              setPreset('custom')
+              setRange(next)
+            }}
+            onGranularity={setGranularity}
+          />
+        </div>
+        <OfficialReportDialog range={activeRange} />
+      </div>
 
       <AccessTabBar
         tabs={TABS.map(key => ({ key, label: t(`analytics.tabs.${key}`) }))}

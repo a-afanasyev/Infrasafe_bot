@@ -2005,6 +2005,22 @@
       "byBuilding": "Uylar bo'yicha materiallar",
       "none": "Davr ichida material sarfi yo'q",
       "amount": "Summa, so'm"
+    },
+    "official": {
+      "button": "Tekshiruvchilar uchun hisobot",
+      "title": "Nazorat organlari uchun hisobot",
+      "description": "Hokimiyat, soliq va boshqa organlar uchun Excel fayl: umumiy ko'rsatkichlar, ish turlari va uylar bo'yicha taqsimot, diagrammali dinamika va bajarilgan murojaatlar reyestri.",
+      "period": "Davr",
+      "organization": "Tashkilot (hisobot sarlavhasida)",
+      "organizationPlaceholder": "«Boshqaruv kompaniyasi nomi» MChJ",
+      "signer": "Rahbar (imzolar blokida)",
+      "signerPlaceholder": "Familiya I.O.",
+      "language": "Hisobot tili",
+      "langRu": "Rus tili",
+      "langUz": "O'zbek tili",
+      "contents": "Tanlangan davrda aholi tomonidan qabul qilingan murojaat bajarilgan hisoblanadi; muddat — kelib tushgandan ish topshirilgunga qadar.",
+      "download": ".xlsx yuklab olish",
+      "preparing": "Tayyorlanmoqda…"
     }
   },
   "shifts": {

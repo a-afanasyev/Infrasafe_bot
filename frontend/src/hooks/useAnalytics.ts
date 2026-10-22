@@ -121,3 +121,18 @@ export function exportExecutorsCsv(range: DateRange) {
     `executors_summary_${range.from}_${range.to}.csv`,
   )
 }
+
+export interface OfficialReportOptions {
+  lang: 'ru' | 'uz'
+  organization: string
+  signer: string
+}
+
+/** Отчёт для проверяющих органов (.xlsx): сводка, динамика, дома, реестр. */
+export function exportOfficialReport(range: DateRange, opts: OfficialReportOptions) {
+  return downloadCsv(
+    `${STATS}/report`,
+    { ...periodParams(range), lang: opts.lang, organization: opts.organization, signer: opts.signer },
+    `official_report_${range.from}_${range.to}_${opts.lang}.xlsx`,
+  )
+}

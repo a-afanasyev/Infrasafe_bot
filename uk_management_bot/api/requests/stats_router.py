@@ -11,15 +11,17 @@ from datetime import date, datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import load_config
 from uk_management_bot.services.request_analytics import csv_export
+from uk_management_bot.services.request_analytics import official_report, official_xlsx
 from uk_management_bot.services.request_analytics import operations
 from uk_management_bot.services.request_analytics import period as P
 from uk_management_bot.services.request_analytics import quality as quality_service
@@ -169,6 +171,28 @@ async def export_executors(
     rows = await executor_summaries(db, period.first, period.last, await _sla_hours(db))
     return _csv_response(csv_export.executors_csv(rows), csv_export.export_filename(
         "executors_summary", period.first, period.last))
+
+
+@router.get("/stats/report")
+async def export_official_report(
+    lang: Literal["ru", "uz"] = Query("ru", description="Язык отчёта"),
+    organization: str = Query("", max_length=official_xlsx.FIELD_MAX_CHARS,
+                              description="Наименование организации в шапке"),
+    signer: str = Query("", max_length=official_xlsx.FIELD_MAX_CHARS,
+                        description="ФИО руководителя в блоке подписей"),
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Отчёт для проверяющих органов (.xlsx): сводка, динамика, дома, реестр."""
+    report = await official_report.build_report(db, period.first, period.last, await _sla_hours(db))
+    payload = await run_in_threadpool(official_xlsx.render_xlsx, report, lang, organization, signer)
+    filename = official_xlsx.report_filename(period.first, period.last, lang)
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ---------------------------------------------------------------------------

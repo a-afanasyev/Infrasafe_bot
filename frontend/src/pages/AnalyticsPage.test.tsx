@@ -180,3 +180,33 @@ describe('AnalyticsPage', () => {
     expect(screen.getByText('Укажите корректный период (не длиннее 5 лет)')).toBeInTheDocument()
   })
 })
+
+describe('AnalyticsPage — отчёт для проверяющих', () => {
+  it('диалог отправляет период, язык, шапку и подпись; запоминает организацию', async () => {
+    const user = userEvent.setup()
+    localStorage.removeItem('uk_official_report_v1')
+    URL.createObjectURL = vi.fn(() => 'blob:report')
+    URL.revokeObjectURL = vi.fn()
+    let reportParams: URLSearchParams | null = null
+    server.use(http.get('*/api/v2/requests/stats/report', ({ request }) => {
+      reportParams = new URL(request.url).searchParams
+      return new HttpResponse(new Blob(['xlsx']), { headers: { 'Content-Type': 'application/octet-stream' } })
+    }))
+    render(<AnalyticsPage />)
+    await screen.findByText('42')
+    await user.click(screen.getByRole('button', { name: 'Отчёт для проверяющих' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Организация (в шапке отчёта)'), 'ООО «Тест»')
+    await user.type(within(dialog).getByLabelText('Руководитель (в блоке подписей)'), 'Иванов И.И.')
+    await user.selectOptions(within(dialog).getByLabelText('Язык отчёта'), 'uz')
+    await user.click(within(dialog).getByRole('button', { name: 'Скачать .xlsx' }))
+    await waitFor(() => expect(reportParams).not.toBeNull())
+    expect(reportParams!.get('date_from')).toBe('2026-10-01')
+    expect(reportParams!.get('date_to')).toBe('2026-10-12')
+    expect(reportParams!.get('lang')).toBe('uz')
+    expect(reportParams!.get('organization')).toBe('ООО «Тест»')
+    expect(reportParams!.get('signer')).toBe('Иванов И.И.')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(JSON.parse(localStorage.getItem('uk_official_report_v1')!)).toMatchObject({ organization: 'ООО «Тест»', lang: 'uz' })
+  })
+})
