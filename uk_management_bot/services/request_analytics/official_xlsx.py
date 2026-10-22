@@ -350,7 +350,7 @@ def _summary(ws: Worksheet, report: OfficialReport, L: dict, lang: str,
     for role, name in ((L["head"], signer), (L["responsible"], "")):
         _put(ws, row, 1, role, font=Font(bold=True))
         _put(ws, row, 2, L["signature"])
-        _put(ws, row, 4, f"/ {name} /" if name else "/ __________________ /")
+        _put(ws, row, 4, f"/ {name} /" if name else "/ __________________ /")  # html-raw: ячейка xlsx, не HTML-сообщение
         row += 2
     _put(ws, row, 1, L["stamp"], font=Font(bold=True))
     _print_setup(ws)

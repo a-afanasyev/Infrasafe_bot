@@ -19629,6 +19629,107 @@
         ]
       }
     },
+    "/api/v2/requests/stats/report": {
+      "get": {
+        "description": "Отчёт для проверяющих органов (.xlsx): сводка, динамика, дома, реестр.",
+        "operationId": "export_official_report_api_v2_requests_stats_report_get",
+        "parameters": [
+          {
+            "description": "Язык отчёта",
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ru",
+              "description": "Язык отчёта",
+              "enum": [
+                "ru",
+                "uz"
+              ],
+              "title": "Lang",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Наименование организации в шапке",
+            "in": "query",
+            "name": "organization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Наименование организации в шапке",
+              "maxLength": 200,
+              "title": "Organization",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ФИО руководителя в блоке подписей",
+            "in": "query",
+            "name": "signer",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "ФИО руководителя в блоке подписей",
+              "maxLength": 200,
+              "title": "Signer",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Official Report",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
     "/api/v2/requests/{request_number}": {
       "get": {
         "operationId": "get_request_api_v2_requests__request_number__get",
