@@ -5,6 +5,8 @@
 Значения — числа и даты Excel, не строки: проверяющий может сортировать и
 считать сам. Текст от людей (адрес, описание, отчёт, имена) пишется строго
 как текст: строка с «=» иначе станет формулой (AUD7-SEC-04, как у склада).
+Телефоны в описании и отчёте исполнителя маскируются: документ уходит
+третьим лицам (`utils/pii.py`).
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ from uk_management_bot.utils.categories import (
     resolve_category_key,
 )
 from uk_management_bot.utils.date_helpers import localized_month_year
+from uk_management_bot.utils.pii import mask_phones
 
 from .official_report import OfficialReport, Tally
 
@@ -104,6 +107,7 @@ LABELS = {
         "no_executor": "Не назначен",
         "truncated": "Показаны первые {shown} заявок из {total}; итоги на листе «Сводка» — по всем.",
         "empty": "За период нет выполненных заявок.",
+        "phone": "[телефон]",
     },
     "uz": {
         "title": "Aholi murojaatlarining bajarilishi to'g'risida HISOBOT",
@@ -171,6 +175,7 @@ LABELS = {
         "no_executor": "Tayinlanmagan",
         "truncated": "Jami {total} tadan dastlabki {shown} ta murojaat ko'rsatilgan; «Umumiy» varag'idagi yakunlar — barchasi bo'yicha.",
         "empty": "Davr ichida bajarilgan murojaatlar yo'q.",
+        "phone": "[telefon]",
     },
 }
 
@@ -457,8 +462,8 @@ def _register(ws: Worksheet, report: OfficialReport, L: dict, lang: str, organiz
             (i, None), (r.request_number, None), (_excel_dt(r.created_at), DATETIME_FORMAT),
             (clean_text(localize_address(r.address or "", lang)), None),
             (clean_text(get_category_display(resolve_category_key(r.category), lang)), None),
-            (clean_text(report.descriptions.get(r.request_number)), None),
-            (clean_text(r.completion_report), None),
+            (clean_text(mask_phones(report.descriptions.get(r.request_number) or "", L["phone"])), None),
+            (clean_text(mask_phones(r.completion_report or "", L["phone"])), None),
             (clean_text(get_urgency_display(r.urgency, lang)), None),
             (clean_text(r.executor_name) or L["no_executor"], None),
             (_excel_dt(r.executed_at), DATETIME_FORMAT),

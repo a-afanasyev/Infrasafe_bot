@@ -117,6 +117,20 @@ async def test_report_by_building(client, db_session):
 
 
 @pytest.mark.asyncio
+async def test_report_register_masks_phones(client, db_session):
+    req = await db_session.get(Request, "261001-001")
+    req.description = "Течёт стояк, дом 12 кв 45, звоните +998 (90) 123-45-67"
+    req.completion_report = "Заменили кран, жильца предупредили по 901234567"
+    await db_session.commit()
+
+    for lang, mark in (("ru", "[телефон]"), ("uz", "[telefon]")):
+        ws = _book(await client.get(REPORT, params=october(lang=lang))).worksheets[-1]
+        row = next(c.row for c in ws["B"] if c.value == "261001-001")
+        assert ws.cell(row=row, column=6).value == f"Течёт стояк, дом 12 кв 45, звоните {mark}"
+        assert ws.cell(row=row, column=7).value == f"Заменили кран, жильца предупредили по {mark}"
+
+
+@pytest.mark.asyncio
 async def test_report_empty_period(client):
     wb = _book(await client.get(REPORT, params={"date_from": "2025-01-01", "date_to": "2025-01-31"}))
     assert _indicator(wb["Сводка"], "Поступило заявок") == 0
