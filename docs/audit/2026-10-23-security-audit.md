@@ -232,3 +232,17 @@ Read-only аудит безопасности: код, инфраструкту�
 | INT-15 | P3 | `api/registration` | Нет теста на SEC-06 (привилегированный аккаунт не перетирается). | ⏳ |
 
 Принятые риски: 404/403 по номеру заявки (пин-тест), access-JWT до `exp` после logout (статус из БД на каждом запросе), CSRF на поддоменах `*.infrasafe.uz` при SameSite=Strict (подтвердить отсутствие стороннего контента), `description` заявки в outbox по контракту.
+
+### 8.4 Страницы profk.uz — сводка проверки защиты (2026-10-24)
+
+| Проверка | Результат | Вердикт |
+|---|---|---|
+| Маршруты SPA (`App.tsx`) | Публичные: `/home`, `/resident-board`, `/work-reports`, `/elevators`, `/register`, `/login`, `/twa/*`. Остальные под `ProtectedRoute` с действием каталога: `dashboard.use` (manager, admin), `access.events.read`, `access.registry.manage`, `rbac.view`, `materials.manage`, `elevators.read`, `elevators.manage`, `resources.launch`; без входа → `/login?next=`, без права → `/home`. | OK |
+| Заголовки страниц (`/uk/*`) | Единый SPA-shell: CSP `default-src 'self'` (+telegram.org для виджета), HSTS preload, nosniff, referrer-policy, permissions-policy, no-store; XFO намеренно нет (TWA); корень → 302 `/uk/home`. | OK |
+| 221 операция API без входа | 195 → 401; 5 auth-ручек → 422 (валидация), 2 → 429 (лимит 20/мин); `POST /auth/logout` → 200 (идемпотентно); публичные 7 отвечают по дизайну (`/public/board-config` — A10-FE-03 открыт). | OK |
+| 221 операция с невалидным Bearer | Те же статусы, ни одного 2xx у непубличных. | OK |
+| Служебные пути через edge | `api/docs`, `openapi.json`, `redoc`, `api/health/*`, `health`, `api/v1/*`, `api/v2/rbac/*` → 404; `assets/` → 403; `metrics`, `.env`, `.git/*` → SPA-shell, не файлы. | OK |
+| WebSocket `/uk/ws/v2/*` | Без cookie: 101, через 10 с только close 1008, данных нет; токен в query → 403; чужой Origin → 403. | OK |
+| JS-бандл (95 чанков) | Нет sourcemap, dev-токенов, `import.meta.env.DEV`, ключей/токенов; `api_key` — поле ответа выпуска ключа контроллера. | OK |
+
+Итог: страниц и ручек, отдающих данные без права, не найдено; анонимная поверхность совпадает с задуманной. Открытые решения — INT-10…12, A10-FE-03.
