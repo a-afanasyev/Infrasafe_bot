@@ -3,6 +3,7 @@ from sqlalchemy import func
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
+from uk_management_bot.services.users.privileged import is_privileged_target
 from uk_management_bot.config.settings import settings
 from dataclasses import dataclass
 from typing import List
@@ -288,6 +289,18 @@ class AuthService:
             self.db.rollback()
             return False
     
+    @staticmethod
+    def _refuse_privileged(user: User, action: str) -> bool:
+        """A10-INT-01: модерация привилегированной цели (manager/admin/суперадмин)
+        отказывается здесь, в общей точке бота, — API делает то же через
+        `_ensure_not_privileged`. True — отказ (вызывающий возвращает False)."""
+        if is_privileged_target(user):
+            logger.warning(
+                "Отказ: %s привилегированного пользователя id=%s", action, user.id
+            )
+            return True
+        return False
+
     def block_user(self, user_id: int, blocked_by: int, reason: str = "") -> bool:
         """
         Заблокировать пользователя (любой статус -> blocked)
@@ -305,7 +318,9 @@ class AuthService:
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для блокировки")
                 return False
-            
+            if self._refuse_privileged(user, "блокировка"):
+                return False
+
             # Проверяем текущий статус
             if user.status == 'blocked':
                 logger.info(f"Пользователь {user_id} уже заблокирован")
@@ -355,7 +370,9 @@ class AuthService:
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для разблокировки")
                 return False
-            
+            if self._refuse_privileged(user, "разблокировка"):
+                return False
+
             # Проверяем текущий статус
             if user.status != 'blocked':
                 logger.warning(f"Пользователь {user_id} не заблокирован (статус: {user.status})")
@@ -409,7 +426,9 @@ class AuthService:
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для назначения роли")
                 return False
-            
+            if self._refuse_privileged(user, "назначение роли"):
+                return False
+
             # Валидируем роль
             valid_roles = ['applicant', 'executor', 'manager', 'inspector', 'resource_meter_entry']
             if role not in valid_roles:
@@ -481,7 +500,9 @@ class AuthService:
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для удаления роли")
                 return False
-            
+            if self._refuse_privileged(user, "снятие роли"):
+                return False
+
             # Получаем текущие роли (COD-01: канонический парсер, JSON+CSV)
             current_roles = parse_roles_safe(user.roles)
             
@@ -691,7 +712,9 @@ class AuthService:
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для удаления")
                 return failed
-            
+            if self._refuse_privileged(user, "удаление"):
+                return failed
+
             # Сохраняем информацию о пользователе для аудита
             user_info = {
                 "telegram_id": user.telegram_id,

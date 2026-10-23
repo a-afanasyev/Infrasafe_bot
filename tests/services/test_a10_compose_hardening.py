@@ -64,6 +64,18 @@ def test_app_services_forbid_privilege_escalation():
     assert missing == [], missing
 
 
+def test_payment_services_never_join_shared_network():
+    """A10-INT-04: на profk `uk-network` — общая с InfraSafe (edge-nginx, asset-web);
+    платёжная БД и payment-api живут только в приватной `uk-internal`."""
+    offenders = []
+    for svc, body in _services("docker-compose.payments.yml").items():
+        nets = (body or {}).get("networks") or []
+        names = list(nets) if isinstance(nets, (list, dict)) else [nets]
+        if svc.startswith("payment") and "uk-network" in names:
+            offenders.append(svc)
+    assert offenders == [], offenders
+
+
 def test_env_example_does_not_carry_superuser_credentials():
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
     offenders = re.findall(r"^(POSTGRES_PASSWORD|DATABASE_URL)=", text, re.M)

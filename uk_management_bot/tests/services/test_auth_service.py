@@ -426,7 +426,9 @@ class TestRemoveRole:
         assert result is True
 
     def test_switches_active_role_when_active_removed(self):
-        user = _make_user(roles='["executor", "manager"]', active_role="executor")
+        # A10-INT-01: цель с ролью manager теперь защищена от модерации —
+        # сценарий переключения active_role проверяем на рядовом сотруднике.
+        user = _make_user(roles='["executor", "inspector"]', active_role="executor")
         db = self._db_with_user_roles(user)
 
         service = AuthService(db)

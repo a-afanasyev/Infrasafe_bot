@@ -208,3 +208,27 @@ Read-only аудит безопасности: код, инфраструкту�
 **Внешнее репо InfraSafe (зафиксировать в его бэклоге).** HOST-05 (PostGIS 15.x минор по digest, WireGuard без `privileged`/`label=disable` и с пином, Mosquitto пин, Alloy через socket-proxy), HOST-10 (закоммитить живой `nginx.profk.conf`, убрать `.bak`), EXT-03 (CSP asset-bot), EXT-05 (404 на dotfiles).
 
 **Процесс.** Аудит кода делать только по worktree `origin/main` (рабочее дерево отставало на 252 коммита — без этого ~10 ложных находок); проверку хостов (`reboot-required`, диск, `daemon.json`, `.env` без суперюзер-пароля) добавить в чек-лист деплоя SKILL uk-deploy.
+
+## 8. Этап 2 — ревью внутренней защиты (2026-10-24, код `37b6fc91`)
+
+Динамический пентест отменён владельцем; вместо него — защитное код-ревью по четырём зонам (владение объектами в 221 операции API, auth-потоки, бот, межсервисные границы), каждая находка перепроверена вручную по `файл:строка`. Эскалаций и IDOR через API/бота не найдено; канон `check_request_access` + `plan_transition`, роли и статус из БД на каждом запросе, `auth_middleware` fail-closed, все финалы бота через `run_command_sync` — подтверждены. На profk проверено наличие `RATE_LIMIT_TRUSTED_PROXIES`, `FORWARDED_ALLOW_IPS`, `USE_REDIS_RATE_LIMIT`, `MEDIA_API_KEY`, `ACCESS_METRICS_TOKEN`.
+
+| ID | Сер. | Где | Что исправлено / что решить | Статус |
+|---|---|---|---|---|
+| INT-01 | P2 | `services/auth_service.py`, `api/shifts/router/_helpers.py` | Единый предикат `services/users/privileged.py:is_privileged_target`; `AuthService` отказывает в block/unblock/assign_role/remove_role/delete для привилегированной цели — бот выровнен с API. | ✅ PR этапа 2 |
+| INT-02 | P2 | `config/locales/{ru,uz}.json` (`common.error_occurred`, `request_reports.handlers.error_occurred`, `request_status_mgmt.handlers.error_occurred`) | Плейсхолдер `{error}` убран — ответ бота жителю/исполнителю без текста исключения. | ✅ |
+| INT-03 | P3 | `api/ws/router.py:232` | Legacy-cookie `access_token` больше не источник токена (как HTTP после A10-API-08). | ✅ |
+| INT-04 | P2 | `docker-compose.payments.yml`; хост profk | payment-postgres/-migrate/-api только в `uk-internal` (были в общей с InfraSafe `uk-network`); ратчет в `test_a10_compose_hardening.py`. Часть A10-HOST-07. | ✅ код; хост — при раскатке |
+| INT-05 | P3 | `handlers/user_management/fsm.py` | `has_admin_access` на финалах approve/block/unblock/delete. | ✅ |
+| INT-06 | P3 | `api/auth/router.py:_set_auth_cookies` | Пин-тест атрибутов Set-Cookie. | ✅ |
+| INT-07 | P3 | `api/auth/service.py:store_otp` | `attempts` через `hsetnx` — resend не возвращает попытки. | ✅ |
+| INT-08 | P3 | `api/auth/router.py:login_password` | bcrypt против `DUMMY_PASSWORD_HASH` при неизвестном email. | ✅ |
+| INT-09 | P3 | `services/webhook_sender.py:470` | timeout в конструкторе `httpx.AsyncClient`. | ✅ |
+| INT-10 | P3 | `api/elevators/router.py:307-317,271`, `router_calendar.py:89` | `elevators.read` (executor+manager) открывает список заявок лифта с ФИО заявителей и смену статуса лифта; UI только у менеджера. Сузить до `elevators.manage` или фильтровать по назначению — меняет снимок прав. | ⏳ решение |
+| INT-11 | P3 | `api/feedback/router.py:116` | Обращения без `approved_only` — завести `feedback.create`. | ⏳ решение |
+| INT-12 | P3 | `api/routes/media_proxy.py:168-171` | `request_photo` доступен соседу по приёмке (закреплено комментарием к `requests.photos.attach`). | ⏳ решение |
+| INT-13 | P3 | `services/request_service.py:285-291` | Same-status `notes`-append без проверки актора, вызывающих нет — удалить ветку. | ⏳ |
+| INT-14 | P3 | `services/auth_service.py:214`, `handlers/admin/actions.py:373`, `assign_role("manager")` | Консистентность: pending-исполнитель по инвайту, гейт `mgr_delete_` по env мимо каталога, уведомление суперадминов при выдаче manager из бота. | ⏳ |
+| INT-15 | P3 | `api/registration` | Нет теста на SEC-06 (привилегированный аккаунт не перетирается). | ⏳ |
+
+Принятые риски: 404/403 по номеру заявки (пин-тест), access-JWT до `exp` после logout (статус из БД на каждом запросе), CSRF на поддоменах `*.infrasafe.uz` при SameSite=Strict (подтвердить отсутствие стороннего контента), `description` заявки в outbox по контракту.

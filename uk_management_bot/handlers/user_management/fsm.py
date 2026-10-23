@@ -211,9 +211,16 @@ def _load_user_card(db, target_user_id: int, lang: str):
 # ═══ ОБРАБОТКА КОММЕНТАРИЕВ ═══
 
 @router.message(UserManagementStates.waiting_for_approval_comment)
-async def process_approval_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_approval_comment(message: Message, state: FSMContext, language: str = "ru",
+                                   roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий для одобрения"""
     lang = language
+    # A10-INT-05: право перепроверяется на финальном шаге — target/manager
+    # берутся из state, а гейт на входе в FSM мог быть снят за время диалога.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()
@@ -276,9 +283,16 @@ async def process_approval_comment(message: Message, state: FSMContext, language
 
 
 @router.message(UserManagementStates.waiting_for_block_reason)
-async def process_block_reason(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_block_reason(message: Message, state: FSMContext, language: str = "ru",
+                               roles: list = None, user: User = None, *, _db=None):
     """Обработать причину блокировки"""
     lang = language
+    # A10-INT-05: право перепроверяется на финальном шаге — target/manager
+    # берутся из state, а гейт на входе в FSM мог быть снят за время диалога.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()
@@ -318,9 +332,16 @@ async def process_block_reason(message: Message, state: FSMContext, language: st
 
 
 @router.message(UserManagementStates.waiting_for_unblock_comment)
-async def process_unblock_comment(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_unblock_comment(message: Message, state: FSMContext, language: str = "ru",
+                                  roles: list = None, user: User = None, *, _db=None):
     """Обработать комментарий для разблокировки"""
     lang = language
+    # A10-INT-05: право перепроверяется на финальном шаге — target/manager
+    # берутся из state, а гейт на входе в FSM мог быть снят за время диалога.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()
@@ -360,9 +381,16 @@ async def process_unblock_comment(message: Message, state: FSMContext, language:
 
 
 @router.message(UserManagementStates.waiting_for_delete_reason)
-async def process_delete_reason(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
+async def process_delete_reason(message: Message, state: FSMContext, language: str = "ru",
+                                roles: list = None, user: User = None, *, _db=None):
     """Обработать причину удаления пользователя"""
     lang = language
+    # A10-INT-05: право перепроверяется на финальном шаге — target/manager
+    # берутся из state, а гейт на входе в FSM мог быть снят за время диалога.
+    if not has_admin_access(roles=roles, user=user):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        await state.clear()
+        return
 
     try:
         data = await state.get_data()

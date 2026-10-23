@@ -1490,7 +1490,7 @@
     "user_not_found": "Пользователь не найден в базе данных.",
     "cancel": "❌ Отмена",
     "back": "🔙 Назад",
-    "error_occurred": "❌ Произошла ошибка: {error}",
+    "error_occurred": "❌ Произошла ошибка",
     "error_short": "❌ Ошибка",
     "not_specified": "Не указано"
   },
@@ -1766,7 +1766,7 @@
     "handlers": {
       "no_access_view_report": "У вас нет прав для просмотра отчета по этой заявке",
       "no_report_yet": "Отчет о выполнении еще не создан",
-      "error_occurred": "Произошла ошибка: {error}",
+      "error_occurred": "Произошла ошибка",
       "no_access_approve": "У вас нет прав для принятия заявки",
       "request_not_found": "Заявка не найдена",
       "only_own_requests": "Вы можете принимать только свои заявки",
@@ -2002,7 +2002,7 @@
   },
   "request_status_mgmt": {
     "handlers": {
-      "error_occurred": "Произошла ошибка: {error}",
+      "error_occurred": "Произошла ошибка",
       "request_not_found": "Заявка не найдена",
       "please_enter_materials": "Пожалуйста, введите список необходимых материалов",
       "purchase_status_set": "✅ Заявка #{request_number} переведена в статус 'Закуп'\n\n",
