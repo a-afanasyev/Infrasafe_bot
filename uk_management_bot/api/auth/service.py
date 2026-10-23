@@ -156,7 +156,9 @@ def create_access_token(
 
 def verify_access_token(token: str) -> Optional[dict]:
     try:
-        payload = decode_jwt(token)
+        # A10-API-07: PyJWT проверяет `exp` только если он есть — токен без
+        # `exp` жил бы вечно (WS это компенсировал явно, HTTP — нет).
+        payload = decode_jwt(token, options={"require": ["exp", "sub"]})
     except JWTError:
         return None
     # SEC-01: purpose-scoped tokens (mfa_token from /login) are signed with the

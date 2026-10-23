@@ -373,6 +373,30 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-34 закрыт 2026-09-24 (PR #636).
     "A9-P3-39": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-28", services="media-service, api, access-api", note="media: отложенные находки ревью 2026-09-28 (права ключей, rate limit, контрактный тест, мелочи)"),
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
+    # Аудит #10 (безопасность, 2026-10-23, docs/audit/2026-10-23-security-audit.md). Кодовые P3 и
+    # A10-API-01 закрыты одним PR (A10-CODE-01); ниже — хосты, DNS, внешнее репо InfraSafe, M-пункты кода.
+    # A10-HOST-01 закрыт 2026-10-24 (оба хоста, по авторизации владельца).
+    # A10-HOST-02 закрыт 2026-10-24 (окно обслуживания: upgrade + reboot обоих хостов).
+    # A10-HOST-03 закрыт 2026-10-24 (daemon.json на 105, prune; диск 91→58 %).
+    "A10-HOST-04": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-10-24", services="хосты, Telegram", note="токен @profk_monitoring_bot был в bash_history (живой); истории очищены, HISTIGNORE; ротацию владелец решил не делать"),
+    "A10-HOST-05": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="InfraSafe compose", note="внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock"),
+    "A10-HOST-06": A(pkg="AUD10-HOST", status="decision", method="verified-host-2026-10-23", services="хост profk", note="NOPASSWD sudo, ключ в /root, PermitRootLogin yes в основном sshd_config — выровнять с 105 или принять"),
+    "A10-HOST-07": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="compose, хосты", note="uk-internal на 105; payment-* в uk-internal на profk; пересоздание в окне HOST-02/03"),
+    "A10-HOST-08": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644"),
+    "A10-HOST-09": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="fail2ban journalmatch sshd.service vs ssh.service; auditd inactive"),
+    "A10-HOST-10": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="edge", note="внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить"),
+    "A10-HOST-11": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="Doppler", note="ADMIN_PASSWORD на 105 — 16 символов (profk 64)"),
+    # A10-EXT-01 закрыт 2026-10-24 (SPF -all + DMARC reject на infrasafe.uz, MX удалён).
+    "A10-EXT-03": A(pkg="AUD10-EXT", status="deferred", method="verified-edge-2026-10-23", services="asset-web", note="assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо)"),
+    "A10-FE-01": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="frontend", note="telegram-web-app.js на всех страницах — грузить только для TWA/регистрации"),
+    "A10-FE-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut"),
+    "A10-FE-05": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="frontend", note="ветка TV-табло: t.me-ссылка через botHandle() (pre-merge)"),
+    "A10-SAT-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="media-service, provisioning", note="media под ролью-владельцем с DDL — роль uk_media_app, DDL только в media-migrate (с A9-P3-33)"),
+    "A10-SAT-04": A(pkg="AUD10-CODE", status="deferred", method="decision-2026-10-24", services="media-service, access-api, api", note="общий X-API-Key media без scope — принятый риск до A10-SAT-03"),
+    "A10-SAT-10": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="лицевой счёт в query-string — POST с телом, account не в URL страницы"),
+    "A10-INF-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose", note="cap_drop/read_only/pids_limit для прикладных контейнеров (no-new-privileges уже в A10-CODE-01)"),
+    "A10-INF-08": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose, redis", note="пароль Redis в argv (--requirepass, redis-cli -a) — конфиг-файл + REDISCLI_AUTH"),
+    "A10-INF-09": A(pkg="AUD10-HOST", status="actionable", method="found-2026-10-23", services="рабочая машина", note="env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории"),
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
     # A9-P3-30 закрыт 2026-09-23 (PR #611).

@@ -54,7 +54,9 @@ class AnprEventRequest(BaseModel):
     gate_id: int | None = None
     camera_id: int | None = None
     barrier_id: int | None = None
-    plate_number: str | None = None
+    # A10-SAT-05: потолок = колонка (`domain/events.py` String(32)); без него
+    # длинный номер падал DataError → 500 на горячем пути.
+    plate_number: str | None = Field(default=None, max_length=32)
     # Enum-валидация: невалидное direction/source → 422, не 500.
     direction: Direction = Direction.ENTRY
     source: EventSource = EventSource.CONNECTED

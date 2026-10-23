@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     preview_cache_max_requests: int = 100
     preview_max_px: int = 480
     preview_jpeg_quality: int = 72
+    # A10-SAT-01: потолок пикселей ИСХОДНИКА для превью. Лимит 50 МБ входа
+    # пиксели не ограничивает (однотонный PNG 13000×13000 < 1 МБ, а в RGB —
+    # 0,5 ГБ); дефолт Pillow ругается только с 89 Мпкс. 40 Мпкс покрывает любой
+    # телефон (12–50 Мпкс JPEG декодируется draft'ом до thumbnail).
+    preview_max_source_pixels: int = 40_000_000
     # Больше 4 одновременных скачиваний Telegram всё равно не отдаёт быстрее, а
     # очередь из них выедает пул соединений и воркеры.
     telegram_download_concurrency: int = 4

@@ -841,7 +841,9 @@ async def claim_request(
 
 
 @router.get("/{request_number}/comments", response_model=list[CommentOut])
+@limiter.limit("120/minute")
 async def get_comments(
+    request: Request,
     request_number: str,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -862,7 +864,11 @@ async def get_comments(
 
 
 @router.post("/{request_number}/comments", response_model=CommentOut, status_code=201)
+# A10-API-04: комментарий до 2000 символов без лимита — заявку можно было
+# завалить тысячами записей; порог как у PATCH карточки.
+@limiter.limit("30/minute")
 async def add_comment(
+    request: Request,
     request_number: str,
     body: CommentBody,
     db: AsyncSession = Depends(get_db),
@@ -889,7 +895,9 @@ async def add_comment(
     "/{request_number}/remind-applicant",
     dependencies=[Depends(require_action("requests.manage"))],
 )
+@limiter.limit("10/minute")
 async def remind_applicant(
+    request: Request,
     request_number: str,
     db: AsyncSession = Depends(get_db),
 ):

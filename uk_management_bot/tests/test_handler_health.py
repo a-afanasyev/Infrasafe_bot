@@ -245,7 +245,7 @@ class TestHealthCheckCommand:
         ) as mock_settings:
             mock_settings.USE_REDIS_RATE_LIMIT = False
 
-            await health_check_command(msg, db)
+            await health_check_command(msg, db, roles=["manager"])
 
         msg.answer.assert_called_once()
 
@@ -287,7 +287,7 @@ class TestHealthCheckCommand:
         ) as mock_settings:
             mock_settings.USE_REDIS_RATE_LIMIT = False
 
-            await health_check_command(msg, db)
+            await health_check_command(msg, db, roles=["manager"])
 
         msg.answer.assert_called_once()
         sent_text = msg.answer.call_args[0][0]
@@ -308,7 +308,7 @@ class TestHealthCheckCommand:
             new_callable=AsyncMock,
             side_effect=RuntimeError("unexpected error"),
         ):
-            await health_check_command(msg, db)
+            await health_check_command(msg, db, roles=["manager"])
 
         msg.answer.assert_called_once()
 

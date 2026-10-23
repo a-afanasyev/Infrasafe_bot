@@ -1,11 +1,20 @@
 # Optional overlay: docker compose -f docker-compose.yml -f docker-compose.payments.yml ...
 # Secrets are injected by Doppler. Each deployment has its own DB volume and token.
+# A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
+# daemon.json — без лимита логи переполняли диск).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   api:
     environment:
       PAYMENT_SERVICE_URL: http://payment-api.internal:8101/v1
       PAYMENT_SERVICE_TOKEN: ${PAYMENT_SERVICE_TOKEN:?Set PAYMENT_SERVICE_TOKEN in Doppler}
   payment-postgres:
+    logging: *default-logging
     # A9-P3-26: по digest тега (16.15 на 2026-09-23) — см. комментарий у postgres
     # в docker-compose.yml.
     image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
@@ -25,6 +34,8 @@ services:
       interval: 5s
       retries: 10
   payment-migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: .
       dockerfile: payment_control/Dockerfile
@@ -38,6 +49,7 @@ services:
         condition: service_healthy
     networks: [uk-network]
   payment-api:
+    logging: *default-logging
     build:
       context: .
       dockerfile: payment_control/Dockerfile

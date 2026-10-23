@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **581**
-- закрыто маркером: **566**
-- открыто маркером: **15**
+- пунктов всего (с Priority): **605**
+- закрыто маркером: **572**
+- открыто маркером: **33**
 
-  - `actionable` — **4**
-  - `decision` — **2**
+  - `actionable` — **16**
+  - `decision` — **3**
   - `no-pr` — **1**
-  - `deferred` — **8**
+  - `deferred` — **13**
 
-Из них actionable по приоритету: P2=1, P3=3.
+Из них actionable по приоритету: P2=2, P3=14.
 
 Значения `status`:
 
@@ -52,6 +52,24 @@
 | `AUD3-07` | P2 | deferred | verified-2026-09-15 | A2 | — | — | — | ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; конверсия «при касании», deferred-трекер класса |
 | `AUD5-CODE-10` | P3 | deferred | verified-2026-09-15 | A5 | — | — | — | ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); раскрой «при касании» под принуждением гейта |
 | `AUD5-ARCH-4` | P2 | deferred | gate-2026-08-09 | A7 | — | — | — | гейт границы стоит (test_aud5_arch4_domain_boundary_gate); развязка (L) — только при намерении разносить сервисы |
+| `A10-FE-01` | P2 | actionable | found-2026-10-23 | AUD10-CODE | — | frontend | — | telegram-web-app.js на всех страницах — грузить только для TWA/регистрации |
+| `A10-FE-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut |
+| `A10-FE-05` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | frontend | — | ветка TV-табло: t.me-ссылка через botHandle() (pre-merge) |
+| `A10-INF-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | compose | — | cap_drop/read_only/pids_limit для прикладных контейнеров (no-new-privileges уже в A10-CODE-01) |
+| `A10-INF-08` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | compose, redis | — | пароль Redis в argv (--requirepass, redis-cli -a) — конфиг-файл + REDISCLI_AUTH |
+| `A10-SAT-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | media-service, provisioning | — | media под ролью-владельцем с DDL — роль uk_media_app, DDL только в media-migrate (с A9-P3-33) |
+| `A10-SAT-04` | P3 | deferred | decision-2026-10-24 | AUD10-CODE | — | media-service, access-api, api | — | общий X-API-Key media без scope — принятый риск до A10-SAT-03 |
+| `A10-SAT-10` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | лицевой счёт в query-string — POST с телом, account не в URL страницы |
+| `A10-EXT-03` | P3 | deferred | verified-edge-2026-10-23 | AUD10-EXT | — | asset-web | — | assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо) |
+| `A10-HOST-05` | P2 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | InfraSafe compose | — | внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock |
+| `A10-HOST-10` | P3 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | edge | — | внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить |
+| `A10-HOST-04` | P2 | deferred | owner-decision-2026-10-24 | AUD10-HOST | — | хосты, Telegram | — | токен @profk_monitoring_bot был в bash_history (живой); истории очищены, HISTIGNORE; ротацию владелец решил не делать |
+| `A10-HOST-06` | P3 | decision | verified-host-2026-10-23 | AUD10-HOST | — | хост profk | — | NOPASSWD sudo, ключ в /root, PermitRootLogin yes в основном sshd_config — выровнять с 105 или принять |
+| `A10-HOST-07` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | compose, хосты | — | uk-internal на 105; payment-* в uk-internal на profk; пересоздание в окне HOST-02/03 |
+| `A10-HOST-08` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644 |
+| `A10-HOST-09` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | fail2ban journalmatch sshd.service vs ssh.service; auditd inactive |
+| `A10-HOST-11` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | Doppler | — | ADMIN_PASSWORD на 105 — 16 символов (profk 64) |
+| `A10-INF-09` | P3 | actionable | found-2026-10-23 | AUD10-HOST | — | рабочая машина | — | env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории |
 | `AUD7-SEC-03` | P2 | decision | verified-2026-09-15 | AUD7-S2 | — | UK API / resource API | — | нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01 |
 | `AUD8-DB-02` | P3 | deferred | verified-2026-09-19 | AUD8-C1 | — | — | — | OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк |
 | `AUD8-ENG-02` | P3 | decision | verified-2026-09-19 | AUD8-E1 | — | — | — | BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца |

@@ -121,11 +121,19 @@ async def get_system_info() -> Dict[str, Any]:
 
 
 @router.message(Command("health"))
-async def health_check_command(message: Message, db: Session):
+async def health_check_command(message: Message, db: Session, roles: list = None):
     """
-    Команда для проверки здоровья системы (доступна всем пользователям)
+    Команда для проверки здоровья системы.
+
+    A10-BOT-01: только для admin_panel.use (как /health_detailed) — ответ
+    раскрывает состояние БД/Redis, DEBUG, LOG_LEVEL и uptime; раньше его
+    получал любой Telegram-аккаунт, в т.ч. незарегистрированный.
     """
     lang = get_user_language(message.from_user.id, db)
+
+    if not roles or not has_action_roles(roles, "admin_panel.use"):
+        await message.answer(get_text('errors.permission_denied', language=lang))
+        return
 
     try:
         # Проверяем все компоненты
@@ -186,9 +194,11 @@ async def health_check_command(message: Message, db: Session):
         lang = get_user_language(message.from_user.id, db)
         error_title = get_text("health.error_title", language=lang)
         error_details = get_text("health.error_details", language=lang)
+        # A10-BOT-01: текст исключения (host/port/dbname из OperationalError,
+        # SQL из SQLAlchemy) — только в лог, не пользователю.
         await message.answer(
             f"❌ <b>{error_title}</b>\n\n"
-            f"{error_details}: {str(e)}"
+            f"{error_details}"
         )
 
 

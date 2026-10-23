@@ -99,7 +99,8 @@ class SyncEvent(BaseModel):
 
     event_id: str = Field(..., description="Исходный event_id offline-события")
     captured_at: AwareDatetime | None = None
-    plate_number: str | None = None
+    # A10-SAT-05: потолок = колонка String(32).
+    plate_number: str | None = Field(default=None, max_length=32)
     direction: Direction = Direction.ENTRY
     # Offline-решение edge (информативно; в расход пропуска не превращается, §8.4).
     decision: str | None = None

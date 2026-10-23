@@ -31,6 +31,9 @@ _REJECT_STATUS = {
     "no_match": 401,
 }
 
+#: A10-API-05: потолок тела inbound-вебхука (алерт — единицы КБ).
+MAX_WEBHOOK_BODY_BYTES = 64 * 1024
+
 
 @router.post("/infrasafe/alert", status_code=202)
 @limiter.limit("60/minute")
@@ -42,7 +45,14 @@ async def receive_infrasafe_alert(request: Request, db: AsyncSession = Depends(g
     dependency — the HMAC signature IS the authentication.
     """
     ip = client_ip_key(request)
+    # A10-API-05: тело читается в память ДО проверки подписи — ограничиваем
+    # размер (алерт InfraSafe — килобайты). Edge режет 10 МБ, внутри сети — нет.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_WEBHOOK_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="payload too large")
     raw = await request.body()
+    if len(raw) > MAX_WEBHOOK_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="payload too large")
 
     # Misconfiguration is fail-loud: without a secret we cannot verify anything.
     secrets = [s for s in (settings.UK_WEBHOOK_SECRET, settings.UK_WEBHOOK_SECRET_NEXT) if s]

@@ -3,9 +3,19 @@
 # version: '3.8'  # Устарело в новых версиях Docker Compose
 
 # Определяем сервисы (контейнеры)
+# A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
+# daemon.json — без лимита логи переполняли диск).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # Основное приложение - Telegram бот
   app:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     # Используем локальный Dockerfile для сборки образа
     build: .
     
@@ -106,6 +116,8 @@ services:
   # осознанно при включении фичи (COMPOSE_PROFILES=group-intake или
   # `--profile group-intake`).
   group-intake-bot:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build: .
     container_name: uk-group-intake-bot
     restart: unless-stopped
@@ -166,6 +178,8 @@ services:
 
   # API сервис (FastAPI + uvicorn)
   api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -272,6 +286,8 @@ services:
   # Отдельный сервис/образ (ТЗ §1), но общая инфраструктура postgres/redis.
   # Пилот (ТЗ §14.2): ingestion/decision/edge/operator API + health/latency-метрики.
   access-api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: .
       dockerfile: Dockerfile.access
@@ -374,6 +390,7 @@ services:
 
   # База данных PostgreSQL
   postgres:
+    logging: *default-logging
     # Используем официальный образ PostgreSQL
     # A9-P3-26: postgres/redis — по digest ТЕГА (multi-arch index, `docker buildx
     # imagetools inspect <tag>`), как базы Dockerfile'ов: минор stateful-образа не
@@ -445,6 +462,7 @@ services:
   # container_name: сервиса, генерирует случайное имя):
   #   docker compose run --rm --name uk-provision-roles provision-roles
   provision-roles:
+    logging: *default-logging
     image: postgres:15-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
     profiles: ["tools"]
     depends_on:
@@ -472,6 +490,8 @@ services:
   # profiles: ["tools"] — не запускается bare `up -d`. Инвокация:
   #   docker compose run --rm --name uk-migrate migrate
   migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -505,6 +525,7 @@ services:
 
   # Redis для кэширования и rate limiting
   redis:
+    logging: *default-logging
     # Используем официальный образ Redis
     image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     # Имя контейнера
@@ -538,6 +559,8 @@ services:
 
   # Frontend (React + nginx)
   frontend:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -570,6 +593,7 @@ services:
   # проксирует /uk/api/resource/ → resource-api:8100; s2s uk-management-api →
   # resource-api.internal:8100 (алиас под SSRF-гард).
   resource-postgres:
+    logging: *default-logging
     image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     container_name: uk-resource-postgres
     restart: unless-stopped
@@ -591,6 +615,7 @@ services:
   # аналог provision-roles основной БД (PR-7). Идемпотентен (повтор = ротация
   # пароля). Запуск: docker compose run --rm resource-provision-roles
   resource-provision-roles:
+    logging: *default-logging
     image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
     profiles: ["tools"]
     depends_on:
@@ -613,6 +638,8 @@ services:
   # по A9-P3-26 — в нём оставался пустой exec): runtime-роль
   # resource_app DDL не имеет. Запуск: docker compose run --rm resource-migrate
   resource-migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build: ./resource-accounting/backend
     profiles: ["tools"]
     entrypoint: ["/bin/sh", "-c", "alembic upgrade head && python -m app.seed"]
@@ -625,6 +652,8 @@ services:
       - uk-network
 
   resource-api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build: ./resource-accounting/backend
     container_name: uk-resource-api
     restart: unless-stopped
@@ -658,6 +687,8 @@ services:
       retries: 5
 
   resource-worker:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build: ./resource-accounting/backend
     container_name: uk-resource-worker
     restart: unless-stopped
