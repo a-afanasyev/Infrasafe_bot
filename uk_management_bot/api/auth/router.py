@@ -22,7 +22,9 @@ from uk_management_bot.api.auth.service import (
     revoke_refresh_token, persist_password_hash,
     _REFRESH_INVALID, _REFRESH_NOT_APPROVED,
 )
+from uk_management_bot.api.auth.audit import audit_login
 from uk_management_bot.api.dependencies import get_db, get_current_user
+from uk_management_bot.api.rate_limit_keys import client_ip_key
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.users.queries import (
     get_user_by_telegram_id, get_user_by_id, require_user_by_id,
@@ -116,6 +118,7 @@ async def login_telegram_widget(
 
     tokens = _build_token_response(user)
     await save_refresh_token(db, user.id, tokens["refresh_value"])
+    await audit_login(db, ok=True, method="telegram_widget", ip=client_ip_key(request), user=user)
     # Web flow (plan §7.2): refresh in cookie only, body carries access for clients
     # that want to keep it in memory and the existing "token in body" tests.
     _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
@@ -158,6 +161,7 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
 async def login_password(request: Request, data: PasswordLogin, db: AsyncSession = Depends(get_db)):
     user = await user_by_email(db, data.email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
+        await audit_login(db, ok=False, method="password", ip=client_ip_key(request), login=data.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if user.status != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not approved")
@@ -212,6 +216,7 @@ async def verify_login_otp(
 
     tokens = _build_token_response(user)
     await save_refresh_token(db, user.id, tokens["refresh_value"])
+    await audit_login(db, ok=True, method="password_otp", ip=client_ip_key(request), user=user)
     _set_auth_cookies(response, tokens["access_token"], tokens["refresh_value"])
     return WebTokenResponse(access_token=tokens["access_token"])
 

@@ -107,6 +107,12 @@ def _rows_from_xlsx(content: bytes) -> list[dict]:
         wb.close()
 
 
+# A10-SAT-08: потолок строк импорта (как MAX_ROWS в payment_control). Без него
+# CSV на 5 МБ ≈ 100k строк уходил в `IN (...)` на 100k номеров и в commit_token
+# на мегабайты, который затем разбирался повторно на commit.
+MAX_IMPORT_ROWS = 10_000
+
+
 def parse_file(filename: str, content: bytes) -> list[dict]:
     if filename.lower().endswith((".xlsx", ".xlsm")):
         try:
@@ -117,6 +123,8 @@ def parse_file(filename: str, content: bytes) -> list[dict]:
         raw = _rows_from_csv(content)
     else:
         raise bad_request("Поддерживаются только файлы .csv и .xlsx")
+    if len(raw) > MAX_IMPORT_ROWS:
+        raise bad_request(f"Слишком много строк: максимум {MAX_IMPORT_ROWS}")
     if raw and not all(col in raw[0] for col in REQUIRED_COLUMNS):
         raise bad_request(f"Обязательные колонки: {', '.join(REQUIRED_COLUMNS)}")
     return raw

@@ -15,11 +15,23 @@ import pytest
 from fastapi import HTTPException
 
 from uk_management_bot.api.shifts.router import employees as employees_mod
+from uk_management_bot.api.shifts.service import manager_grant as _manager_grant
 from uk_management_bot.api.shifts.schemas import CreateInviteRequest
 
 
 class _Actor:
+    id = 1
     telegram_id = 5000000001
+
+
+class _FakeDb:
+    """A10-API-01: manager-инвайт пишет AuditLog — нужен db с add/commit."""
+
+    def add(self, row):
+        pass
+
+    async def commit(self):
+        pass
 
 
 #: Маркер «внутренней подробности» в тексте исключения сервиса — проверяем, что
@@ -71,8 +83,13 @@ async def test_manager_without_specialization_still_works(monkeypatch):
     monkeypatch.setattr(session_mod, "SessionLocal", lambda: _FakeSession())
     monkeypatch.setattr(invite_mod, "InviteService", _FakeInviteService)
 
+    async def _no_notify(text):
+        return 0
+
+    monkeypatch.setattr(_manager_grant, "notify_superadmins", _no_notify)
+
     body = CreateInviteRequest(role="manager", specializations=[], hours=24)
-    resp = await employees_mod.create_invite(body=body, db=None, current_user=_Actor())
+    resp = await employees_mod.create_invite(body=body, db=_FakeDb(), current_user=_Actor())
 
     assert resp.token == "invite_v1:ok.sig"
     assert resp.bot_link == "https://t.me/profkbot"

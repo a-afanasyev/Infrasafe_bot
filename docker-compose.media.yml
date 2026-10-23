@@ -6,8 +6,18 @@
 # main stack. ARCH-106 Phase 2: секреты (bot token, SECRET_KEY, MEDIA_API_KEYS,
 # DATABASE_URL) приходят из Doppler через `doppler run --`; media_service/.env
 # держит только несекретную конфигурацию (CHANNEL_*, ALLOWED_ORIGINS, DEBUG, лимиты).
+# A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
+# daemon.json — без лимита логи переполняли диск).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   media-service:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: ./media_service
       dockerfile: Dockerfile
@@ -54,6 +64,8 @@ services:
   # profiles: ["tools"] keeps it out of `up -d`; invoke explicitly:
   #   docker compose -f docker-compose.yml -f docker-compose.media.yml run --rm media-migrate
   media-migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: ./media_service
       dockerfile: Dockerfile

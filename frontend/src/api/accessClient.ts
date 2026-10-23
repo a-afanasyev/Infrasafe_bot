@@ -43,6 +43,9 @@ const BASE_URL = import.meta.env.VITE_ACCESS_API_URL ?? defaultBaseUrl()
 
 /** dev-токен из env или sessionStorage (если задан → cookieless-путь). */
 function resolveDevToken(): string | null {
+  // A10-FE-02: cookieless dev-путь только в dev-сборке — в prod tree-shake'ится,
+  // чтобы dev-JWT из build-env не запёкся в публичный бандл.
+  if (!import.meta.env.DEV) return null
   const fromEnv = import.meta.env.VITE_ACCESS_API_DEV_TOKEN
   if (fromEnv) return fromEnv
   try {

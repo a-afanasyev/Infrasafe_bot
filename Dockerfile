@@ -45,9 +45,9 @@ ENV PIP_RETRIES=10 \
 
 # Устанавливаем Python зависимости
 # --no-cache-dir уменьшает размер образа
-# --upgrade обновляет пакеты до последних версий
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+# A10-INF-07: pip НЕ обновляем — «последний с PyPI в момент сборки» делал слой
+# недетерминированным; pip из digest-пиненной базы достаточен для hash-lock'а.
+RUN pip install --no-cache-dir -r requirements.txt && \
     if [ "$INSTALL_DEV" = "true" ]; then \
         pip install --no-cache-dir -r requirements-dev.txt; \
     fi

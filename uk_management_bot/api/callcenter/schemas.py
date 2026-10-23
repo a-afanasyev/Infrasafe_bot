@@ -1,11 +1,15 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
 
 from uk_management_bot.api.requests.schemas import (
     _ElevatorFieldsMixin,
     _validate_request_category,
 )
-from uk_management_bot.utils.constants import ACCEPTANCE_MODES, validate_canonical_urgency
+from uk_management_bot.utils.constants import (
+    ACCEPTANCE_MODES,
+    MAX_DESCRIPTION_LENGTH,
+    validate_canonical_urgency,
+)
 
 
 class ResidentSearchResult(BaseModel):
@@ -33,13 +37,15 @@ class CallCenterCreateRequest(_ElevatorFieldsMixin):
 
     category: str
     urgency: str
-    description: str
+    # A10-API-06: те же потолки, что у заявки жителя (`requests/schemas.py`):
+    # текст уходит в Telegram-уведомления (4096) и карточки.
+    description: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
     user_id: Optional[int] = None
     apartment_id: Optional[int] = None
     building_id: Optional[int] = None
-    caller_name: Optional[str] = None
-    caller_phone: Optional[str] = None
-    address: Optional[str] = None
+    caller_name: Optional[str] = Field(default=None, max_length=200)
+    caller_phone: Optional[str] = Field(default=None, max_length=32)
+    address: Optional[str] = Field(default=None, max_length=500)
     # Кто принимает результат (Р3/Р9 — ремонт лифта из карточки: приёмка
     # менеджером). None → дефолт модели ('resident', как и раньше). Канон —
     # ACCEPTANCE_MODES (CHECK ck_requests_acceptance_mode).

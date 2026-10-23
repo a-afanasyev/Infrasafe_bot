@@ -1390,6 +1390,7 @@
           "address": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -1423,6 +1424,7 @@
           "caller_name": {
             "anyOf": [
               {
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1434,6 +1436,7 @@
           "caller_phone": {
             "anyOf": [
               {
+                "maxLength": 32,
                 "type": "string"
               },
               {
@@ -1447,6 +1450,7 @@
             "type": "string"
           },
           "description": {
+            "maxLength": 2000,
             "title": "Description",
             "type": "string"
           },
@@ -22380,7 +22384,7 @@
     },
     "/api/v2/shifts/employees/{user_id}/activate": {
       "patch": {
-        "description": "Активировать pending-СТАФФ аккаунт (status='approved'). Допускает менеджеров.\n\nОтличается от `/approve` (тот ставит verification_status и запрещает\nменеджеров): здесь активируется account-гейт, который проверяет бот.\nОграничено стафф-ролями в статусе pending — жителей и уже активных\nменеджеров не трогает (НЕ применяем `_ensure_not_privileged` намеренно).",
+        "description": "Активировать pending-СТАФФ аккаунт (status='approved'). Допускает менеджеров.\n\nОтличается от `/approve` (тот ставит verification_status и запрещает\nменеджеров): здесь активируется account-гейт, который проверяет бот.\nОграничено стафф-ролями в статусе pending — жителей и уже активных\nменеджеров не трогает (НЕ применяем `_ensure_not_privileged` намеренно).\nA10-API-01: активация МЕНЕДЖЕРА — в аудит и суперадминам.",
         "operationId": "activate_staff_api_v2_shifts_employees__user_id__activate_patch",
         "parameters": [
           {

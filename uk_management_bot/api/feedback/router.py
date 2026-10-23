@@ -128,7 +128,9 @@ async def create_feedback(
     photo_bytes: Optional[bytes] = None
     photo_ct: Optional[str] = None
     if file is not None:
-        photo_bytes = await file.read()
+        # A10-API-05: читаем MAX+1, а не всё тело — класс A9-P3-4 (media_proxy):
+        # иначе лимит проверяется уже после того, как тело целиком в памяти.
+        photo_bytes = await file.read(MAX_PHOTO_BYTES + 1)
         if len(photo_bytes) > MAX_PHOTO_BYTES:
             raise HTTPException(status_code=422, detail="photo too large (max 10MB)")
         photo_ct = _sniff_image_mime(photo_bytes)

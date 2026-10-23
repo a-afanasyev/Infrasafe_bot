@@ -3,3 +3,11 @@ __pycache__
 .pytest_cache
 .ruff_cache
 tests
+# A10-SAT-09: `COPY . .` + pydantic `env_file=".env"` — локальный .env с
+# RESOURCE_SESSION_SECRET/SERVICE_TOKEN попал бы в образ при сборке не из CI;
+# build/ и *.egg-info — stale-копии кода.
+.env
+.env.*
+build/
+dist/
+*.egg-info

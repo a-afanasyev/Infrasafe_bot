@@ -33,6 +33,14 @@ from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.utils.auth_helpers import get_user_roles
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
+from uk_management_bot.api.shifts.service.manager_grant import (
+    ACTION_ACTIVATED,
+    ACTION_INVITE,
+    has_manager_role,
+    is_manager_role,
+    record_manager_grant,
+)
+
 from ._router import router
 
 
@@ -192,6 +200,20 @@ async def create_invite(
 
     expires_at = datetime.now(timezone.utc) + timedelta(hours=body.hours)
 
+    # A10-API-01: инвайт на manager — выдача привилегий; аудит + суперадмины.
+    if is_manager_role(body.role):
+        await record_manager_grant(
+            db,
+            actor=current_user,
+            action=ACTION_INVITE,
+            details={"hours": body.hours, "expires_at": expires_at.isoformat()},
+            text=(
+                "⚠️ Выпущен инвайт на роль manager\n"
+                f"Кем: user_id={current_user.id}, TG {current_user.telegram_id}\n"
+                f"Срок: {body.hours} ч"
+            ),
+        )
+
     return CreateInviteResponse(
         token=token,
         bot_link=f"https://t.me/{bot_username}",
@@ -253,14 +275,19 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     return {"message": "unblocked"}
 
 
-@router.patch("/employees/{user_id}/activate", dependencies=[Depends(require_action("staff.manage"))])
-async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
+@router.patch("/employees/{user_id}/activate")
+async def activate_staff(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_action("staff.manage")),
+):
     """Активировать pending-СТАФФ аккаунт (status='approved'). Допускает менеджеров.
 
     Отличается от `/approve` (тот ставит verification_status и запрещает
     менеджеров): здесь активируется account-гейт, который проверяет бот.
     Ограничено стафф-ролями в статусе pending — жителей и уже активных
     менеджеров не трогает (НЕ применяем `_ensure_not_privileged` намеренно).
+    A10-API-01: активация МЕНЕДЖЕРА — в аудит и суперадминам.
     """
     user = await service.get_user(db, user_id)
     if not user:
@@ -270,6 +297,18 @@ async def activate_staff(user_id: int, db: AsyncSession = Depends(get_db)):
     if user.status != "pending":
         raise HTTPException(status_code=409, detail="User is not pending activation")
     await cleanup_purged_documents(await service.activate_employee(db, user))
+    if has_manager_role(user):
+        await record_manager_grant(
+            db,
+            actor=current_user,
+            action=ACTION_ACTIVATED,
+            details={"target_user_id": user.id, "target_telegram_id": user.telegram_id},
+            text=(
+                "⚠️ Активирован аккаунт менеджера\n"
+                f"Кто: user_id={user.id}, TG {user.telegram_id}\n"
+                f"Кем: user_id={current_user.id}, TG {current_user.telegram_id}"
+            ),
+        )
     return {"id": user.id, "status": user.status, "active_role": user.active_role}
 
 
@@ -321,6 +360,9 @@ async def toggle_meter_entry(
     user = await service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # A10-API-02: только над рядовым сотрудником — как simple-mode/language.
+    # Без гарда менеджер навешивал капабилити жителю или себе.
+    _ensure_staff_target(user, action="Cannot change meter entry of a manager or admin user")
     await service.set_meter_entry_role(db, user, body.enabled)
     return {"id": user.id, "meter_entry": body.enabled}
 

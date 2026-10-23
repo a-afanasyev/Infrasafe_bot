@@ -30,8 +30,18 @@
 # Контракт имён/портов InfraSafe соблюдён: uk-management-api:8080, uk-access-api:8080,
 # uk-frontend:80, uk-postgres.
 
+# A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
+# daemon.json — без лимита логи переполняли диск).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   app:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     environment:
       # ARCH-106: REDIS_URL строится из REDIS_PASSWORD; хост — uk-redis (п.4 выше).
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
@@ -42,12 +52,16 @@ services:
   # что и у app (базовая uk-network на profk пуста — DNS до uk-postgres из
   # неё не работает; поймано на первой раскатке 2026-08-22).
   group-intake-bot:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
     networks: !override
       - uk-internal
 
   api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
       - FRONTEND_URL=https://profk.uz
@@ -56,6 +70,8 @@ services:
       - uk-internal
 
   access-api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
     networks: !override
@@ -63,12 +79,14 @@ services:
       - uk-internal
 
   postgres:
+    logging: *default-logging
     networks: !override
       - uk-internal
     # Host-порт не публикуем (п.6 выше) — !reset удаляет ports базового файла.
     ports: !reset []
 
   provision-roles:
+    logging: *default-logging
     environment:
       # Уникальный container_name вместо alias postgres (см. верхний комментарий).
       RUNTIME_DB_HOST: uk-postgres
@@ -76,15 +94,20 @@ services:
       - uk-internal
 
   migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     networks: !override
       - uk-internal
 
   redis:
+    logging: *default-logging
     networks: !override
       - uk-internal
     ports: !reset []
 
   frontend:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       args:
         # Telegram login-widget профсоюзного бота + зелёный бренд PROFK
@@ -99,6 +122,8 @@ services:
   # БД uk_media на общем uk-postgres. В базовом файле сервиса НЕТ (на 105 —
   # docker-compose.media.yml), поэтому секция здесь целиком.
   media-service:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: ./media_service
       dockerfile: Dockerfile
@@ -152,6 +177,8 @@ services:
   # держит его вне `up -d`, инвокация явная:
   #   docker compose -f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml run --rm media-migrate
   media-migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     build:
       context: ./media_service
       dockerfile: Dockerfile
@@ -179,18 +206,24 @@ services:
       - uk-internal
 
   resource-postgres:
+    logging: *default-logging
     networks: !override
       - uk-internal
 
   resource-provision-roles:
+    logging: *default-logging
     networks: !override
       - uk-internal
 
   resource-migrate:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     networks: !override
       - uk-internal
 
   resource-api:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     environment:
       - RESOURCE_CORS_ORIGINS=${RESOURCE_CORS_ORIGINS:-https://profk.uz}
       - RESOURCE_FRAME_ANCESTOR=${RESOURCE_FRAME_ANCESTOR:-https://profk.uz}
@@ -200,6 +233,8 @@ services:
       uk-internal: {}
 
   resource-worker:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
     networks: !override
       - uk-internal
 

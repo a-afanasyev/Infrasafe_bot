@@ -70,6 +70,8 @@ function defaultWsUrl(): string {
 
 /** dev-токен из env или sessionStorage (если задан → cookieless-путь). */
 function resolveDevToken(): string | null {
+  // A10-FE-02: cookieless dev-путь только в dev-сборке (см. accessClient.ts).
+  if (!import.meta.env.DEV) return null
   const fromEnv = import.meta.env.VITE_ACCESS_WS_DEV_TOKEN
   if (fromEnv) return fromEnv
   try {

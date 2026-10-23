@@ -138,9 +138,11 @@ async def auth_middleware(handler, event: Any, data: Dict[str, Any]):
                 return None
 
     except Exception as exc:
+        # A10-BOT-03: fail-closed. Раньше при сбое загрузки (БД недоступна)
+        # апдейт уходил в хендлер с user=None → roles=["applicant"], и проверка
+        # blocked/deleted выше пропускалась вместе с остальным try.
         logger.warning(f"auth_middleware: ошибка загрузки пользователя: {exc}")
-        data["user"] = None
-        data["user_status"] = None
+        return None
 
     return await handler(event, data)
 

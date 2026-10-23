@@ -52,7 +52,10 @@ class TicketCreateOut(BaseModel):
 
 
 @router.post("/tickets", response_model=dict)
-@limiter.limit(AUTH_LIMIT)
+# A10-SAT-07: s2s-ручка без IP-лимита. Единственный клиент — контейнер UK api с
+# одним IP, поэтому AUTH_LIMIT давал ОДИН глобальный бакет 10/мин на всех
+# менеджеров и контролёров (11-й → 429 → 502 в UK). Гейт — сервисный токен;
+# per-user лимит стоит на UK-стороне (`api/resource_accounting/router.py`).
 def create_ticket(
     request: Request,
     payload: TicketCreateIn,

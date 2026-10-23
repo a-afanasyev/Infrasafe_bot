@@ -260,7 +260,10 @@ def _transfer_response(db, telegram_id: int, action: str, transfer_id: int):
 
     if action == "details":
         transfer = service.get_transfer(transfer_id)
-        if not transfer:
+        # A10-BOT-02: детали — только участнику передачи (как в
+        # `_load_view_transfer`); чужой transfer_id в callback_data → тот же
+        # «не найдено», чтобы не быть оракулом существования.
+        if not transfer or current.id not in (transfer.from_executor_id, transfer.to_executor_id):
             return lang, "not_found", None
         return lang, "details", _transfer_details(transfer)
 

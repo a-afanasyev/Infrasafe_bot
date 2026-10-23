@@ -6,9 +6,14 @@ Module-level async функции `(db, *, plain-параметры) -> ORM|пр
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.user import User
+
+
+class EmailTakenError(Exception):
+    """A10-API-03: email занят другим аккаунтом (`users.email` unique)."""
 
 
 async def apply_profile_update(
@@ -18,14 +23,21 @@ async def apply_profile_update(
     language: Optional[str] = None,
     email: Optional[str] = None,
 ) -> None:
-    """Обновляет language/email пользователя (только не-None поля) и коммитит."""
+    """Обновляет language/email пользователя (только не-None поля) и коммитит.
+
+    Дубль email → `EmailTakenError` (роутер отдаёт 409), а не IntegrityError/500.
+    """
     result = await db.execute(select(User).where(User.id == user_id))
     db_user = result.scalar_one()
     if language is not None:
         db_user.language = language
     if email is not None:
         db_user.email = email
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise EmailTakenError() from exc
 
 
 async def set_active_role(db: AsyncSession, user_id: int, *, active_role: str) -> None:

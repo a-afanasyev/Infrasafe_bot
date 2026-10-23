@@ -8,6 +8,8 @@ Read-only аудит безопасности: код, инфраструкту�
 
 Предыдущие аудиты: #9 — `AUDIT_REPORT.md` (2026-09-22), #8 — `docs/audit/2026-09-19-full-review.md`, security-аудит 2026-05-29 — `docs/audit/security-audit-2026-05-29.md`. Открытые пункты бэклога (`AUD7-SEC-03`, `AUD8-ENG-02`, `PENT-F13`, `A9-P2-21`, `A9-P3-2`, `SEC-115` и др.) помечены KNOWN и повторно не заводились.
 
+**Исполнение (2026-10-24, решения владельца: ротация postgres не нужна; API-01 → аудит + уведомление; остальное на усмотрение).** Тем же PR закрыты: API-01 (аудит `staff.manager_*` + уведомление `ADMIN_USER_IDS`), API-02…08, INF-05, BOT-01…03, SAT-01/02/05/07/08/09, FE-02/04, INF-04/07 и `no-new-privileges` из INF-03 — бэклог `A10-API-01`, `A10-CODE-01`; гейт `tests/services/test_a10_compose_hardening.py`, пин-тесты `tests/api/test_a10_api_fixes.py`, `uk_management_bot/tests/test_a10_bot_fixes.py`, `media_service/test_a10_preview_bounds.py`, `access_control/tests/test_a10_plate_length.py`, `resource-accounting/backend/tests/test_a10_import_rows.py`. INF-06 (`--ignore-vuln`) на main уже отсутствовал — снят. Открытыми в бэклоге заведены `A10-HOST-01…11`, `A10-EXT-01/03`, `A10-FE-01/03/05`, `A10-SAT-03/04/10`, `A10-INF-03/08/09` (`docs/audit/2026-05-20-backlog.md`, раздел «Аудит #10»). HOST-01 требует запуска на хостах владельцем: запись по SSH из сессии аудита заблокирована политикой разрешений.
+
 ---
 
 ## 1. Executive summary

@@ -80,6 +80,18 @@ def make_preview(original: bytes) -> Optional[bytes]:
     """
     try:
         with Image.open(io.BytesIO(original), formats=PREVIEW_FORMATS) as img:
+            # A10-SAT-01: размер известен из заголовка ДО декодирования — бомба
+            # (огромный однотонный PNG) отсекается, не заняв память.
+            width, height = img.size
+            if width * height > settings.preview_max_source_pixels:
+                logger.warning(
+                    "Превью не строим: %dx%d > %d пикс.", width, height,
+                    settings.preview_max_source_pixels,
+                )
+                return None
+            # JPEG: draft() просит декодер отдать уменьшенную картинку сразу
+            # (DCT-масштабирование) — пик памяти в разы ниже полного кадра.
+            img.draft("RGB", (settings.preview_max_px, settings.preview_max_px))
             # JPEG не умеет альфу и палитру; RGB — единственный безопасный режим.
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
@@ -94,6 +106,25 @@ def make_preview(original: bytes) -> Optional[bytes]:
     except Exception as e:
         logger.warning("Не удалось построить превью: %s", e)
         return None
+
+
+async def remove(media_id: int, request_number: Optional[str]) -> None:
+    """A10-SAT-02: убрать превью удалённого/архивированного медиа с диска.
+
+    Раньше JPEG жил в томе до LRU-вытеснения (100 заявок) — байты фото
+    оставались после удаления по просьбе жителя. Отсутствие файла — не ошибка.
+    """
+    _, path = _paths(media_id, request_number)
+
+    def _unlink() -> None:
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Не удалось удалить превью %s: %s", path, e)
+
+    await asyncio.to_thread(_unlink)
 
 
 def get(media_id: int, request_number: Optional[str]) -> Optional[bytes]:

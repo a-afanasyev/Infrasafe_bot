@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
+from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.authz import ACTIONS, actions_for_roles, is_superadmin
 from uk_management_bot.api.profile import service
@@ -79,7 +80,11 @@ async def get_profile(user: User = Depends(get_current_user)):
 
 
 @router.patch("")
+# A10-API-03: email — логин парольного входа; без лимита и с 500 на дубле
+# ручка была оракулом существования адреса.
+@limiter.limit("10/minute")
 async def update_profile(
+    request: Request,
     body: UpdateProfileBody,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -89,13 +94,16 @@ async def update_profile(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"language must be one of: {sorted(ALLOWED_LANGUAGES)}",
         )
-    await service.apply_profile_update(
-        db,
-        user.id,
-        language=body.language,
-        # Валидация формата — pydantic EmailStr (422 на невалидном).
-        email=str(body.email) if body.email is not None else None,
-    )
+    try:
+        await service.apply_profile_update(
+            db,
+            user.id,
+            language=body.language,
+            # Валидация формата — pydantic EmailStr (422 на невалидном).
+            email=str(body.email) if body.email is not None else None,
+        )
+    except service.EmailTakenError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use")
     return {"ok": True}
 
 

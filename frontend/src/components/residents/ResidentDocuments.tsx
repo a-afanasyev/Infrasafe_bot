@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ResidentDocument } from '../../types/api'
 import { fetchFileAsDataUrl } from '../../api/fileDataUrl'
+import { downloadName } from '../../utils/downloadName'
 import { formatDate as fmtDate } from '../../i18n/formatters'
 import { Button } from '@/components/ui/button'
 
@@ -40,7 +41,7 @@ export default function ResidentDocuments({ residentId, documents }: Props) {
         // такие файлы с Content-Disposition: attachment.
         const link = document.createElement('a')
         link.href = loaded.dataUrl
-        link.download = doc.file_name || `document-${doc.id}`
+        link.download = downloadName(doc.id, loaded.type)
         link.click()
       }
     } catch {

@@ -23,6 +23,7 @@ from app.models.media import MediaFile, MediaChannel, MediaTag
 import html
 
 from app.utils.display_tz import display_instant_str, display_now_str
+from app.services import preview_cache
 from app.services.telegram_client import DeleteOutcome, TelegramClientService, get_telegram_client
 from app.core.config import settings, FileCategories, TelegramChannels, ErrorMessages
 from dataclasses import dataclass
@@ -501,6 +502,7 @@ class MediaStorageService:
                     self._set_status_sync, media_file_id, "archived",
                     archived_at=datetime.now(timezone.utc),
                 )
+                await preview_cache.remove(media_file_id, media_file.request_number)
                 logger.info(f"Media file {media_file_id} archived successfully")
             else:
                 # A9-P3-23: delete_message не бросает — итог категорией.
@@ -531,6 +533,8 @@ class MediaStorageService:
                 elif outcome not in (DeleteOutcome.DELETED, DeleteOutcome.ALREADY_GONE):
                     raise RuntimeError(f"Неожиданный итог delete_message: {outcome!r}")
                 await run_sync(self._set_status_sync, media_file_id, "deleted")
+                # A10-SAT-02: превью на диске не должно переживать удаление.
+                await preview_cache.remove(media_file_id, media_file.request_number)
                 logger.info(f"Media file {media_file_id} deleted successfully")
 
             return MediaRemovalOutcome.DONE
