@@ -6180,6 +6180,66 @@
         "title": "MonitoredGroupUpdate",
         "type": "object"
       },
+      "OfficialReportIn": {
+        "additionalProperties": false,
+        "properties": {
+          "lang": {
+            "default": "ru",
+            "description": "Язык отчёта",
+            "enum": [
+              "ru",
+              "uz"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "logo": {
+            "anyOf": [
+              {
+                "maxLength": 400000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Логотип для шапки: PNG в base64",
+            "title": "Logo"
+          },
+          "organization": {
+            "default": "",
+            "description": "Наименование организации в шапке",
+            "maxLength": 200,
+            "title": "Organization",
+            "type": "string"
+          },
+          "sheets": {
+            "description": "Какие листы выгрузить",
+            "items": {
+              "enum": [
+                "summary",
+                "dynamics",
+                "buildings",
+                "register"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Sheets",
+            "type": "array"
+          },
+          "signer": {
+            "default": "",
+            "description": "ФИО руководителя в блоке подписей",
+            "maxLength": 200,
+            "title": "Signer",
+            "type": "string"
+          }
+        },
+        "title": "OfficialReportIn",
+        "type": "object"
+      },
       "OpenPurchaseRequest": {
         "properties": {
           "executor_name": {
@@ -7888,6 +7948,117 @@
           "days_after"
         ],
         "title": "RepeatOut",
+        "type": "object"
+      },
+      "ReportRequestRow": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "executor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Name"
+          },
+          "on_time": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Time"
+          },
+          "request_number": {
+            "title": "Request Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_number",
+          "created_at",
+          "status",
+          "category",
+          "urgency",
+          "address",
+          "executor_name",
+          "completed_at",
+          "on_time"
+        ],
+        "title": "ReportRequestRow",
+        "type": "object"
+      },
+      "ReportRequestsOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ReportRequestRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rows",
+          "truncated"
+        ],
+        "title": "ReportRequestsOut",
         "type": "object"
       },
       "RequestAddressApartment": {
@@ -19624,6 +19795,152 @@
           }
         ],
         "summary": "Get Quality",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/report": {
+      "post": {
+        "description": "Отчёт для проверяющих органов (.xlsx): отмеченные листы из сводки, динамики, домов, реестра.",
+        "operationId": "export_official_report_api_v2_requests_stats_report_post",
+        "parameters": [
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfficialReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Official Report",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/stats/report/requests": {
+      "get": {
+        "description": "Таблица заявок периода на вкладке «Отчёт» — до выгрузки в .xlsx.",
+        "operationId": "official_report_requests_api_v2_requests_stats_report_requests_get",
+        "parameters": [
+          {
+            "description": "all — поступившие, done — принятые в периоде",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "description": "all — поступившие, done — принятые в периоде",
+              "enum": [
+                "all",
+                "done"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Первый бизнес-день периода, YYYY-MM-DD",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "Первый бизнес-день периода, YYYY-MM-DD",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Последний бизнес-день периода (включительно)",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "Последний бизнес-день периода (включительно)",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportRequestsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Official Report Requests",
         "tags": [
           "requests"
         ]

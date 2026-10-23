@@ -1,6 +1,6 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
-import { downloadCsv } from '../utils/download'
+import { downloadCsv, downloadPost } from '../utils/download'
 import type { RequestCard } from './useKanban'
 import type { DateRange } from '../utils/analyticsPeriod'
 import type {
@@ -11,6 +11,8 @@ import type {
   CostStatsOut,
   ExecutorStatsRow,
   QualityStatsOut,
+  ReportRequestsOut,
+  ReportScope,
   RequestStatsOut,
   ShiftStatsOut,
   StatsGranularity,
@@ -120,4 +122,31 @@ export function exportExecutorsCsv(range: DateRange) {
     periodParams(range),
     `executors_summary_${range.from}_${range.to}.csv`,
   )
+}
+
+export type ReportSheet = 'summary' | 'dynamics' | 'buildings' | 'register'
+export const REPORT_SHEETS: readonly ReportSheet[] = ['summary', 'dynamics', 'buildings', 'register']
+
+export interface OfficialReportOptions {
+  lang: 'ru' | 'uz'
+  organization: string
+  signer: string
+  sheets: ReportSheet[]
+  /** PNG в base64 (без `data:`-префикса) или null — без логотипа. */
+  logo: string | null
+}
+
+/** Отчёт для проверяющих органов (.xlsx): отмеченные листы, шапка с логотипом. */
+export function exportOfficialReport(range: DateRange, opts: OfficialReportOptions) {
+  return downloadPost(
+    `${STATS}/report`,
+    periodParams(range),
+    opts,
+    `official_report_${range.from}_${range.to}_${opts.lang}.xlsx`,
+  )
+}
+
+/** Таблица вкладки «Отчёт»: все поступившие или только принятые в периоде. */
+export function useReportRequests(range: DateRange | null, scope: ReportScope) {
+  return useStats<ReportRequestsOut>('/report/requests', range, { scope })
 }

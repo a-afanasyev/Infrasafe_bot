@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { usePageTitle } from '../hooks/usePageTitle'
+import { useCan } from '../hooks/useCan'
 import {
   useAddressStats,
   useBacklog,
@@ -20,6 +21,7 @@ import ExecutorsTab from '../components/analytics/ExecutorsTab'
 import QualityTab from '../components/analytics/QualityTab'
 import BacklogTab from '../components/analytics/BacklogTab'
 import ChannelsTab from '../components/analytics/ChannelsTab'
+import ReportTab from '../components/analytics/ReportTab'
 import { todayInDisplayTz } from '../utils/timezone'
 import {
   autoGranularity,
@@ -31,7 +33,7 @@ import {
   type PresetId,
 } from '../utils/analyticsPeriod'
 
-const TABS = ['overview', 'executors', 'quality', 'backlog', 'channels'] as const
+const TABS = ['overview', 'executors', 'quality', 'backlog', 'channels', 'report'] as const
 type Tab = (typeof TABS)[number]
 /** Дневной срез длиннее года не предлагается (см. PeriodBar). */
 const DAY_SLICE_MAX_DAYS = 366
@@ -44,10 +46,13 @@ function ErrorBanner({ text }: { text: string }) {
 
 export default function AnalyticsPage() {
   const { t } = useTranslation()
+  const canReport = useCan('requests.stats')
   usePageTitle(t('nav.analytics'))
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const tab: Tab = (TABS as readonly string[]).includes(tabParam ?? '') ? (tabParam as Tab) : 'overview'
+  // «Отчёт» — выгрузка для проверяющих: только с правом на статистику (иначе сервер 403).
+  const tabs = canReport ? TABS : TABS.filter(key => key !== 'report')
+  const tab: Tab = (tabs as readonly string[]).includes(tabParam ?? '') ? (tabParam as Tab) : 'overview'
 
   const [preset, setPreset] = useState<PresetId>('thisMonth')
   const [range, setRange] = useState<DateRange>(() => presetRange('thisMonth', todayInDisplayTz()))
@@ -83,6 +88,7 @@ export default function AnalyticsPage() {
     quality: [quality],
     backlog: [backlog, addresses],
     channels: [channels, costs],
+    report: [],
   }[tab]
   const loading = valid && current.some(q => q.isLoading)
   const failed = current.some(q => q.isError)
@@ -107,7 +113,7 @@ export default function AnalyticsPage() {
       />
 
       <AccessTabBar
-        tabs={TABS.map(key => ({ key, label: t(`analytics.tabs.${key}`) }))}
+        tabs={tabs.map(key => ({ key, label: t(`analytics.tabs.${key}`) }))}
         active={tab}
         onChange={onTab}
       />
@@ -127,6 +133,7 @@ export default function AnalyticsPage() {
           {tab === 'quality' && quality.data && <QualityTab data={quality.data} />}
           {tab === 'backlog' && <BacklogTab backlog={backlog.data} addresses={addresses.data} />}
           {tab === 'channels' && <ChannelsTab channels={channels.data} costs={costs.data} />}
+          {tab === 'report' && activeRange && <ReportTab range={activeRange} />}
         </>
       )}
     </div>

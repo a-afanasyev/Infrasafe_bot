@@ -52,6 +52,11 @@ email-validator>=2.0.0
 # Prometheus /metrics exposition (OPS-105: outbox observability)
 prometheus-client>=0.20.0
 
+# Отчёт для проверяющих органов (.xlsx с оформлением и диаграммами)
+openpyxl>=3.1.5
+# Логотип в шапке отчёта: openpyxl читает картинки только через Pillow
+pillow>=13.0,<14
+
 # Error Tracking
 sentry-sdk[fastapi]>=2.0.0
 

@@ -11,15 +11,17 @@ from datetime import date, datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.requests import stats_service
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import load_config
 from uk_management_bot.services.request_analytics import csv_export
+from uk_management_bot.services.request_analytics import official_report, official_xlsx
 from uk_management_bot.services.request_analytics import operations
 from uk_management_bot.services.request_analytics import period as P
 from uk_management_bot.services.request_analytics import quality as quality_service
@@ -169,6 +171,75 @@ async def export_executors(
     rows = await executor_summaries(db, period.first, period.last, await _sla_hours(db))
     return _csv_response(csv_export.executors_csv(rows), csv_export.export_filename(
         "executors_summary", period.first, period.last))
+
+
+class OfficialReportIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lang: Literal["ru", "uz"] = Field("ru", description="Язык отчёта")
+    organization: str = Field("", max_length=official_xlsx.FIELD_MAX_CHARS,
+                              description="Наименование организации в шапке")
+    signer: str = Field("", max_length=official_xlsx.FIELD_MAX_CHARS,
+                        description="ФИО руководителя в блоке подписей")
+    sheets: list[official_xlsx.SheetKey] = Field(
+        default_factory=lambda: list(official_xlsx.SHEETS), min_length=1,
+        max_length=len(official_xlsx.SHEETS), description="Какие листы выгрузить")
+    logo: Optional[str] = Field(None, max_length=official_xlsx.LOGO_MAX_B64,
+                                description="Логотип для шапки: PNG в base64")
+
+
+@router.post("/stats/report")
+async def export_official_report(
+    body: OfficialReportIn,
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Отчёт для проверяющих органов (.xlsx): отмеченные листы из сводки, динамики, домов, реестра."""
+    try:
+        logo = official_xlsx.decode_logo(body.logo) if body.logo else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Некорректный логотип: {exc}") from exc
+    report = await official_report.build_report(db, period.first, period.last, await _sla_hours(db))
+    payload = await run_in_threadpool(
+        official_xlsx.render_xlsx, report, body.lang, body.organization, body.signer,
+        tuple(body.sheets), logo)
+    filename = official_xlsx.report_filename(period.first, period.last, body.lang)
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+class ReportRequestRow(BaseModel):
+    request_number: str
+    created_at: Optional[datetime]
+    status: str
+    category: str
+    urgency: str
+    address: Optional[str]
+    executor_name: Optional[str]
+    completed_at: Optional[datetime]
+    on_time: Optional[bool]
+
+
+class ReportRequestsOut(BaseModel):
+    rows: list[ReportRequestRow]
+    truncated: bool
+
+
+@router.get("/stats/report/requests", response_model=ReportRequestsOut)
+async def official_report_requests(
+    scope: Literal["all", "done"] = Query("all", description="all — поступившие, done — принятые в периоде"),
+    period: Period = Depends(get_period),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(_STATS),
+):
+    """Таблица заявок периода на вкладке «Отчёт» — до выгрузки в .xlsx."""
+    rows, truncated = await official_report.list_requests(
+        db, period.first, period.last, scope, await _sla_hours(db))
+    return ReportRequestsOut(rows=[ReportRequestRow(**asdict(r)) for r in rows], truncated=truncated)
 
 
 # ---------------------------------------------------------------------------

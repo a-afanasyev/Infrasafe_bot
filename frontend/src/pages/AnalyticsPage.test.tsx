@@ -22,6 +22,8 @@ import { actionsFor } from '../test/authz'
 // Графики recharts в jsdom не меряются — проверяются KPI, таблицы, заглушки и
 // параметры запросов.
 
+vi.mock('../utils/logoPng', () => ({ logoToPngBase64: vi.fn(async () => 'UE5H') }))
+
 vi.mock('../utils/timezone', async (orig) => ({
   ...(await orig<typeof import('../utils/timezone')>()),
   todayInDisplayTz: () => '2026-10-12',
@@ -178,5 +180,92 @@ describe('AnalyticsPage', () => {
     const from = screen.getByLabelText('С даты')
     await user.clear(from)
     expect(screen.getByText('Укажите корректный период (не длиннее 5 лет)')).toBeInTheDocument()
+  })
+})
+
+describe('AnalyticsPage — вкладка «Отчёт»', () => {
+  const ROWS = {
+    all: [
+      { request_number: '261001-001', created_at: '2026-10-01T05:00:00Z', status: 'Принято', category: 'plumbing', urgency: 'medium',
+        address: 'ул. Садовая, 5, кв. 12', executor_name: 'Иван Петров', completed_at: '2026-10-02T05:00:00Z', on_time: true },
+      { request_number: '261002-001', created_at: '2026-10-02T05:00:00Z', status: 'Новая', category: 'electricity', urgency: 'high',
+        address: null, executor_name: null, completed_at: null, on_time: null },
+    ],
+    done: [
+      { request_number: '261001-001', created_at: '2026-10-01T05:00:00Z', status: 'Принято', category: 'plumbing', urgency: 'medium',
+        address: 'ул. Садовая, 5, кв. 12', executor_name: 'Иван Петров', completed_at: '2026-10-02T05:00:00Z', on_time: true },
+    ],
+  }
+
+  beforeEach(() => {
+    localStorage.removeItem('uk_official_report_v2')
+    server.use(
+      http.get('*/api/v2/requests/stats/report/requests', ({ request }) => {
+        const scope = new URL(request.url).searchParams.get('scope') as 'all' | 'done'
+        return HttpResponse.json({ rows: ROWS[scope], truncated: false })
+      }),
+      http.get('*/api/v2/public/board-config', () => HttpResponse.json({
+        org: { name: { ru: 'УК «Витрина»', uz: '«Vitrina» BK' }, subtitle: { ru: '', uz: '' } },
+      })),
+    )
+  })
+
+  it('сначала таблица всех заявок периода, «Только выполненные» сужает её', async () => {
+    const user = userEvent.setup()
+    render(<AnalyticsPage />)
+    await user.click(await screen.findByRole('button', { name: 'Отчёт' }))
+    expect(await screen.findByText('#261002-001')).toBeInTheDocument()
+    expect(screen.getByText('Заявок: 2')).toBeInTheDocument()
+    expect(screen.getByText('Иван Петров')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Только выполненные' }))
+    await waitFor(() => expect(screen.queryByText('#261002-001')).not.toBeInTheDocument())
+    expect(screen.getByText('Заявок: 1')).toBeInTheDocument()
+  })
+
+  it('выгрузка: название из витрины, отмеченные листы, логотип — в теле POST', async () => {
+    const user = userEvent.setup()
+    URL.createObjectURL = vi.fn(() => 'blob:report')
+    URL.revokeObjectURL = vi.fn()
+    let sent: { params: URLSearchParams; body: Record<string, unknown> } | null = null
+    server.use(http.post('*/api/v2/requests/stats/report', async ({ request }) => {
+      sent = { params: new URL(request.url).searchParams, body: (await request.json()) as Record<string, unknown> }
+      return new HttpResponse(new Blob(['xlsx']), { headers: { 'Content-Type': 'application/octet-stream' } })
+    }))
+    render(<AnalyticsPage />)
+    await user.click(await screen.findByRole('button', { name: 'Отчёт' }))
+    const org = await screen.findByLabelText('Организация (в шапке отчёта)')
+    await waitFor(() => expect(org).toHaveValue('УК «Витрина»'))
+    await user.selectOptions(screen.getByLabelText('Язык отчёта'), 'uz')
+    expect(org).toHaveValue('«Vitrina» BK')
+    await user.type(screen.getByLabelText('Руководитель (в блоке подписей)'), 'Иванов И.И.')
+    await user.click(screen.getByLabelText('Динамика — поступление и выполнение с диаграммой'))
+    await user.click(screen.getByRole('button', { name: /Скачать \.xlsx/ }))
+    await waitFor(() => expect(sent).not.toBeNull())
+    expect(sent!.params.get('date_from')).toBe('2026-10-01')
+    expect(sent!.params.get('date_to')).toBe('2026-10-12')
+    expect(sent!.body).toEqual({
+      lang: 'uz', organization: '«Vitrina» BK', signer: 'Иванов И.И.',
+      sheets: ['summary', 'buildings', 'register'], logo: 'UE5H',
+    })
+    expect(JSON.parse(localStorage.getItem('uk_official_report_v2')!)).toMatchObject({ signer: 'Иванов И.И.', organization: null })
+  })
+
+  it('без листов скачать нельзя', async () => {
+    const user = userEvent.setup()
+    render(<AnalyticsPage />)
+    await user.click(await screen.findByRole('button', { name: 'Отчёт' }))
+    for (const label of ['Сводка — показатели, виды работ, нормативы, подписи', 'Динамика — поступление и выполнение с диаграммой',
+      'По домам', 'Реестр выполненных заявок']) {
+      await user.click(await screen.findByLabelText(label))
+    }
+    expect(screen.getByRole('button', { name: /Скачать \.xlsx/ })).toBeDisabled()
+    expect(screen.getByText('Отметьте хотя бы один лист')).toBeInTheDocument()
+  })
+
+  it('без права requests.stats вкладки нет', async () => {
+    useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']).filter(a => a !== 'requests.stats') } })
+    render(<AnalyticsPage />)
+    await screen.findByText('Этот месяц')
+    expect(screen.queryByRole('button', { name: 'Отчёт' })).not.toBeInTheDocument()
   })
 })

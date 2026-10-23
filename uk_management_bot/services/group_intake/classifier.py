@@ -22,7 +22,6 @@ import asyncio
 import logging
 import math
 import random
-import re
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -30,6 +29,7 @@ from functools import lru_cache
 from typing import Awaitable, Callable, Optional
 
 from uk_management_bot.config.settings import settings
+from uk_management_bot.utils import pii
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +77,6 @@ _TOTAL_BUDGET_ATTEMPTS = _LLM_ATTEMPTS
 # такой повтор только тратит деньги и лимит.
 _MIN_ATTEMPT_SHARE = 0.25
 
-# A9-P3-5: телефон — узбекская группировка: необязательный код страны
-# (+998/998), код оператора из 2 цифр (можно в скобках), затем 3-2-2 с
-# необязательными пробелами/дефисами: +998 (90) 123-45-67, 90 123 45 67,
-# 901234567, +998901234567. Строгая группировка не трогает адрес/квартиру
-# («дом 12 кв 45»), номер заявки (250923-001), суммы (123 456 789), даты и
-# не съедает число после телефона («901234567 45»).
-_PHONE_RE = re.compile(
-    r"(?<![\w+])(?:\+?998[\s\-]?)?\(?\d{2}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}(?!\d)(?!\w)"
-)
 PHONE_PLACEHOLDER = "[PHONE]"
 
 # Пауза и часы — отдельными ссылками: тесты подменяют их без реального ожидания.
@@ -95,7 +86,7 @@ _now = time.monotonic
 
 def mask_phones(text: str) -> str:
     """Заменить телефоны на ``[PHONE]`` перед отправкой текста внешнему LLM."""
-    return _PHONE_RE.sub(PHONE_PLACEHOLDER, text)
+    return pii.mask_phones(text, PHONE_PLACEHOLDER)
 
 
 def _status_code(exc: BaseException) -> Optional[int]:
