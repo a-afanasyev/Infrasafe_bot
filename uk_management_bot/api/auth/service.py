@@ -142,6 +142,12 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
+# A10-INT-08: `/login` сравнивает пароль ВСЕГДА — с этим хэшем, когда email не
+# найден или пароля нет. Иначе существование email читалось бы по времени ответа
+# (bcrypt ~100 мс только у существующих). Хэш случайной строки, cost 12.
+DUMMY_PASSWORD_HASH = "$2b$12$TOyfdO2sCjX6eFPgHv.gDOatbM04/8AUf/runbkmTMm24RV6aLQii"
+
+
 def create_access_token(
     user_id: int,
     roles: list[str],
@@ -284,7 +290,10 @@ async def store_otp(user_id: int, code: str) -> None:
     """Store OTP in Redis with TTL and attempt counter."""
     r = await _get_redis()
     key = f"mfa:otp:{user_id}"
-    await r.hset(key, mapping={"code": code, "attempts": str(MFA_MAX_ATTEMPTS)})
+    # A10-INT-07: resend перезаписывает код, но НЕ возвращает исчерпанные попытки —
+    # иначе «resend → 3 попытки → resend» обнулял бы счётчик в рамках окна.
+    await r.hset(key, "code", code)
+    await r.hsetnx(key, "attempts", str(MFA_MAX_ATTEMPTS))
     await r.expire(key, MFA_TOKEN_EXPIRE_MINUTES * 60)
     await r.aclose()
 

@@ -6,10 +6,6 @@
   "uk_management_bot/api/registration/service.py::_is_privileged": [
    "applicant"
   ],
-  "uk_management_bot/api/shifts/router/_helpers.py::_ensure_not_privileged": [
-   "admin",
-   "manager"
-  ],
   "uk_management_bot/api/shifts/router/employees.py::toggle_simple_mode": [
    "executor"
   ],

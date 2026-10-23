@@ -205,8 +205,8 @@ async def authenticate_ws_manager(websocket: WebSocket) -> Optional[dict]:
     On success accepts the connection and returns the JWT payload; on failure
     closes the socket and returns None. Token source precedence:
       1. ``uk_access`` cookie (web SPA — preferred, validated before accept);
-      2. ``access_token`` cookie (legacy transitional alias);
-      3. first WS message (secure path for cookieless/token clients).
+      2. first WS message (secure path for cookieless/token clients).
+    The legacy ``access_token`` cookie is ignored (A10-INT-03, same as HTTP).
 
     A token-like query param (SEC-03) is rejected before accept — even
     alongside a valid cookie: presence alone means the value already hit the
@@ -229,7 +229,10 @@ async def authenticate_ws_manager(websocket: WebSocket) -> Optional[dict]:
         await _safe_close(websocket)
         return None
 
-    token = websocket.cookies.get("uk_access") or websocket.cookies.get("access_token")
+    # A10-INT-03: legacy cookie `access_token` больше не источник токена — как и
+    # в HTTP после A10-API-08 (чужая same-name cookie на общем домене затеняла бы
+    # first-message auth).
+    token = websocket.cookies.get("uk_access")
 
     accepted = False
     if token is None:

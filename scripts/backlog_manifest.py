@@ -397,6 +397,13 @@ ASSIGNMENT: dict[str, dict] = {
     "A10-INF-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose", note="cap_drop/read_only/pids_limit для прикладных контейнеров (no-new-privileges уже в A10-CODE-01)"),
     "A10-INF-08": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose, redis", note="пароль Redis в argv (--requirepass, redis-cli -a) — конфиг-файл + REDISCLI_AUTH"),
     "A10-INF-09": A(pkg="AUD10-HOST", status="actionable", method="found-2026-10-23", services="рабочая машина", note="env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории"),
+    # Этап 2 аудита #10 (2026-10-24, раздел 8 отчёта): A10-INT-01…09 закрыты одним PR.
+    "A10-INT-10": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="elevators.read открывает заявки лифта с ФИО и смену статуса лифта исполнителю — сузить до elevators.manage или фильтр по назначению"),
+    "A10-INT-11": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="POST /feedback без approved_only — действие feedback.create"),
+    "A10-INT-12": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="request_photo доступен соседу по приёмке — причина доступа owner/executor/manager"),
+    "A10-INT-13": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="bot", note="same-status notes-append без проверки актора — удалить ветку"),
+    "A10-INT-14": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="bot", note="pending-исполнитель по инвайту; mgr_delete_ по env; notify_superadmins при assign_role(manager)"),
+    "A10-INT-15": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="api", note="тест SEC-06 в регистрации"),
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
     # A9-P3-30 закрыт 2026-09-23 (PR #611).

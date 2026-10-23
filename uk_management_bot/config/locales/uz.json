@@ -1490,7 +1490,7 @@
     "user_not_found": "Foydalanuvchi ma'lumotlar bazasida topilmadi.",
     "cancel": "❌ Bekor qilish",
     "back": "🔙 Orqaga",
-    "error_occurred": "❌ Xatolik yuz berdi: {error}",
+    "error_occurred": "❌ Xatolik yuz berdi",
     "error_short": "❌ Xatolik",
     "not_specified": "Ko'rsatilmagan"
   },
@@ -1767,7 +1767,7 @@
     "handlers": {
       "no_access_view_report": "Ushbu buyurtma bo'yicha hisobotni ko'rish huquqingiz yo'q",
       "no_report_yet": "Bajarish hisoboti hali yaratilmagan",
-      "error_occurred": "Xatolik yuz berdi: {error}",
+      "error_occurred": "Xatolik yuz berdi",
       "no_access_approve": "Buyurtmani qabul qilish huquqingiz yo'q",
       "request_not_found": "Buyurtma topilmadi",
       "only_own_requests": "Faqat o'z buyurtmalaringizni qabul qilishingiz mumkin",
@@ -2003,7 +2003,7 @@
   },
   "request_status_mgmt": {
     "handlers": {
-      "error_occurred": "Xatolik yuz berdi: {error}",
+      "error_occurred": "Xatolik yuz berdi",
       "request_not_found": "Ariza topilmadi",
       "please_enter_materials": "Iltimos, zarur materiallar ro'yxatini kiriting",
       "purchase_status_set": "✅ #{request_number} ariza 'Xarid' holatiga o'tkazildi\n\n",

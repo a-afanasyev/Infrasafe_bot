@@ -1,5 +1,8 @@
 # Optional overlay: docker compose -f docker-compose.yml -f docker-compose.payments.yml ...
 # Secrets are injected by Doppler. Each deployment has its own DB volume and token.
+# A10-INT-04: payment-* живут ТОЛЬКО в приватной uk-internal (на profk uk-network —
+# общая с InfraSafe: edge-nginx, asset-web; платёжной БД там делать нечего). UK api
+# сидит в обеих сетях и достаёт payment-api.internal по uk-internal.
 # A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
 # daemon.json — без лимита логи переполняли диск).
 x-logging: &default-logging
@@ -28,7 +31,7 @@ services:
     volumes:
       - payment_pg_data:/var/lib/postgresql/data
       - ./payment_control/provision.sql:/docker-entrypoint-initdb.d/01-runtime-role.sql:ro
-    networks: [uk-network]
+    networks: [uk-internal]
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U payment_owner -d payment_control"]
       interval: 5s
@@ -47,7 +50,7 @@ services:
     depends_on:
       payment-postgres:
         condition: service_healthy
-    networks: [uk-network]
+    networks: [uk-internal]
   payment-api:
     logging: *default-logging
     build:
@@ -63,7 +66,7 @@ services:
       payment-postgres:
         condition: service_healthy
     networks:
-      uk-network:
+      uk-internal:
         aliases: [payment-api.internal]
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8101/health', timeout=3)"]
@@ -75,3 +78,7 @@ services:
 
 volumes:
   payment_pg_data:
+
+networks:
+  uk-internal:
+    driver: bridge

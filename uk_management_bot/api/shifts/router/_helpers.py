@@ -7,8 +7,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from uk_management_bot.authz.policy import has_action_roles, is_listed_superadmin
-from uk_management_bot.utils.auth_helpers import get_user_roles
+from uk_management_bot.services.users.privileged import is_privileged_target
 from uk_management_bot.api.shifts.schemas import ShiftBrief, ShiftDetail
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
@@ -125,11 +124,6 @@ def _ensure_not_privileged(user: User, *, action: str) -> None:
     дают управление сотрудниками (`staff.manage`) — в том числе выданное своей
     ролью в админке ролей.
     """
-    target_roles = set(get_user_roles(user))
-    if (
-        "manager" in target_roles
-        or "admin" in target_roles
-        or is_listed_superadmin(user)
-        or has_action_roles(sorted(target_roles), "staff.manage")
-    ):
+    # A10-INT-01: сам предикат общий с ботом — services/users/privileged.py.
+    if is_privileged_target(user):
         raise HTTPException(status_code=403, detail=action)

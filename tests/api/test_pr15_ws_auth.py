@@ -119,11 +119,12 @@ class TestCookiePath:
         assert "DEPRECATED" not in caplog.text
 
     @pytest.mark.asyncio
-    async def test_legacy_access_token_cookie_ok(self, manager_token):
+    async def test_legacy_access_token_cookie_ignored(self, manager_token):
+        """A10-INT-03: legacy cookie не аутентифицирует — как в HTTP после
+        A10-API-08; без uk_access хендлер ждёт first-message, его нет → отказ."""
         wsk = FakeWS(cookies={"access_token": "good"})
         payload = await ws.authenticate_ws_manager(wsk)
-        assert payload is not None
-        assert wsk.accepted is True
+        assert payload is None
 
     @pytest.mark.asyncio
     async def test_non_manager_cookie_rejected_pre_accept(self, manager_token):

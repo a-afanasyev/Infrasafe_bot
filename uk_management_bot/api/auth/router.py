@@ -13,7 +13,7 @@ from uk_management_bot.api.auth.schemas import (
 )
 from uk_management_bot.api.auth.service import (
     verify_telegram_widget, verify_twa_init_data,
-    verify_password, hash_password,
+    verify_password, hash_password, DUMMY_PASSWORD_HASH,
     create_access_token, create_refresh_token_value,
     ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
     TWA_REFRESH_TOKEN_EXPIRE_HOURS,
@@ -160,7 +160,11 @@ async def login_twa(request: Request, data: TWALogin, db: AsyncSession = Depends
 @limiter.limit("10/minute")
 async def login_password(request: Request, data: PasswordLogin, db: AsyncSession = Depends(get_db)):
     user = await user_by_email(db, data.email)
-    if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
+    # A10-INT-08: bcrypt выполняется и для неизвестного email — одинаковое время ответа.
+    password_ok = verify_password(
+        data.password, (user.password_hash if user else None) or DUMMY_PASSWORD_HASH
+    )
+    if not user or not user.password_hash or not password_ok:
         await audit_login(db, ok=False, method="password", ip=client_ip_key(request), login=data.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if user.status != "approved":

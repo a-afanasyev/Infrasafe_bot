@@ -467,7 +467,9 @@ async def process_outbox() -> None:
                     f"{base_url}{claim['endpoint']}", claim["payload"], secret, client
                 )
 
-        async with httpx.AsyncClient() as client:
+        # A10-INT-09: лимит и в конструкторе — будущие вызовы через этот клиент
+        # не останутся без таймаута, даже если забудут передать его в post().
+        async with httpx.AsyncClient(timeout=settings.INFRASAFE_WEBHOOK_TIMEOUT) as client:
             results = await asyncio.gather(
                 *(_deliver(c, client) for c in claims), return_exceptions=True
             )

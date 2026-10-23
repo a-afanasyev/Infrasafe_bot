@@ -18,16 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **605**
-- закрыто маркером: **572**
-- открыто маркером: **33**
+- пунктов всего (с Priority): **614**
+- закрыто маркером: **575**
+- открыто маркером: **39**
 
-  - `actionable` — **16**
-  - `decision` — **3**
+  - `actionable` — **19**
+  - `decision` — **6**
   - `no-pr` — **1**
   - `deferred` — **13**
 
-Из них actionable по приоритету: P2=2, P3=14.
+Из них actionable по приоритету: P2=2, P3=17.
 
 Значения `status`:
 
@@ -57,6 +57,12 @@
 | `A10-FE-05` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | frontend | — | ветка TV-табло: t.me-ссылка через botHandle() (pre-merge) |
 | `A10-INF-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | compose | — | cap_drop/read_only/pids_limit для прикладных контейнеров (no-new-privileges уже в A10-CODE-01) |
 | `A10-INF-08` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | compose, redis | — | пароль Redis в argv (--requirepass, redis-cli -a) — конфиг-файл + REDISCLI_AUTH |
+| `A10-INT-10` | P3 | decision | found-2026-10-24 | AUD10-CODE | — | api | — | elevators.read открывает заявки лифта с ФИО и смену статуса лифта исполнителю — сузить до elevators.manage или фильтр по назначению |
+| `A10-INT-11` | P3 | decision | found-2026-10-24 | AUD10-CODE | — | api | — | POST /feedback без approved_only — действие feedback.create |
+| `A10-INT-12` | P3 | decision | found-2026-10-24 | AUD10-CODE | — | api | — | request_photo доступен соседу по приёмке — причина доступа owner/executor/manager |
+| `A10-INT-13` | P3 | actionable | found-2026-10-24 | AUD10-CODE | — | bot | — | same-status notes-append без проверки актора — удалить ветку |
+| `A10-INT-14` | P3 | actionable | found-2026-10-24 | AUD10-CODE | — | bot | — | pending-исполнитель по инвайту; mgr_delete_ по env; notify_superadmins при assign_role(manager) |
+| `A10-INT-15` | P3 | actionable | found-2026-10-24 | AUD10-CODE | — | api | — | тест SEC-06 в регистрации |
 | `A10-SAT-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | media-service, provisioning | — | media под ролью-владельцем с DDL — роль uk_media_app, DDL только в media-migrate (с A9-P3-33) |
 | `A10-SAT-04` | P3 | deferred | decision-2026-10-24 | AUD10-CODE | — | media-service, access-api, api | — | общий X-API-Key media без scope — принятый риск до A10-SAT-03 |
 | `A10-SAT-10` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | лицевой счёт в query-string — POST с телом, account не в URL страницы |
