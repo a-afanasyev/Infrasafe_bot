@@ -72,6 +72,7 @@ async def test_process_approval_comment_notifies_in_user_language(monkeypatch):
     message.answer = AsyncMock()
     message.bot.send_message = AsyncMock()
 
-    await um.fsm.process_approval_comment(message, state, language="ru", _db=db)
+    # A10-INT-05: финал перепроверяет право — вызов от менеджера.
+    await um.fsm.process_approval_comment(message, state, language="ru", roles=["manager"], _db=db)
 
     _assert_uz(message.bot.send_message)
