@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **605**
-- закрыто маркером: **571**
-- открыто маркером: **34**
+- закрыто маркером: **572**
+- открыто маркером: **33**
 
-  - `actionable` — **17**
+  - `actionable` — **16**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **13**
 
-Из них actionable по приоритету: P2=2, P3=15.
+Из них actionable по приоритету: P2=2, P3=14.
 
 Значения `status`:
 
@@ -60,7 +60,6 @@
 | `A10-SAT-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | media-service, provisioning | — | media под ролью-владельцем с DDL — роль uk_media_app, DDL только в media-migrate (с A9-P3-33) |
 | `A10-SAT-04` | P3 | deferred | decision-2026-10-24 | AUD10-CODE | — | media-service, access-api, api | — | общий X-API-Key media без scope — принятый риск до A10-SAT-03 |
 | `A10-SAT-10` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | лицевой счёт в query-string — POST с телом, account не в URL страницы |
-| `A10-EXT-01` | P3 | actionable | verified-dns-2026-10-23 | AUD10-EXT | — | DNS | — | infrasafe.uz без SPF/DMARC, MX на сам домен — три записи у регистратора |
 | `A10-EXT-03` | P3 | deferred | verified-edge-2026-10-23 | AUD10-EXT | — | asset-web | — | assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо) |
 | `A10-HOST-05` | P2 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | InfraSafe compose | — | внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock |
 | `A10-HOST-10` | P3 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | edge | — | внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить |

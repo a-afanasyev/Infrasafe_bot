@@ -386,7 +386,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A10-HOST-09": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="fail2ban journalmatch sshd.service vs ssh.service; auditd inactive"),
     "A10-HOST-10": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="edge", note="внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить"),
     "A10-HOST-11": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="Doppler", note="ADMIN_PASSWORD на 105 — 16 символов (profk 64)"),
-    "A10-EXT-01": A(pkg="AUD10-EXT", status="actionable", method="verified-dns-2026-10-23", services="DNS", note="infrasafe.uz без SPF/DMARC, MX на сам домен — три записи у регистратора"),
+    # A10-EXT-01 закрыт 2026-10-24 (SPF -all + DMARC reject на infrasafe.uz, MX удалён).
     "A10-EXT-03": A(pkg="AUD10-EXT", status="deferred", method="verified-edge-2026-10-23", services="asset-web", note="assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо)"),
     "A10-FE-01": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="frontend", note="telegram-web-app.js на всех страницах — грузить только для TWA/регистрации"),
     "A10-FE-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut"),
