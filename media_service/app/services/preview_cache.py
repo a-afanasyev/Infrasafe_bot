@@ -32,6 +32,12 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Какие декодеры Pillow вообще вызываются для превью. Загрузка и так пропускает
+# только JPEG/PNG/GIF (сниффер по сигнатуре), но без этого списка Pillow сам
+# выбирает плагин по байтам — и обход сниффера открывал бы TIFF/PDF/EPS/…, где
+# основная масса его CVE. MPO (многокадровый JPEG) открывается JPEG-плагином.
+PREVIEW_FORMATS = ("JPEG", "PNG", "GIF")
+
 # request_number приходит из БД, но кладётся в путь на диске — санитизируем
 # по allowlist, чтобы никакой «../» не мог оказаться именем каталога.
 _SAFE_BUCKET = re.compile(r"[^A-Za-z0-9_-]")
@@ -73,7 +79,7 @@ def make_preview(original: bytes) -> Optional[bytes]:
     отсутствие.
     """
     try:
-        with Image.open(io.BytesIO(original)) as img:
+        with Image.open(io.BytesIO(original), formats=PREVIEW_FORMATS) as img:
             # JPEG не умеет альфу и палитру; RGB — единственный безопасный режим.
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")

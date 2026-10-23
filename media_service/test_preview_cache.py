@@ -343,3 +343,41 @@ def test_warm_rejects_empty_and_oversized_batches(client_with):
                        headers={"X-API-Key": "testkey"}).status_code == 422
     assert client.post("/api/v1/media/previews/warm", json={"media_ids": list(range(201))},
                        headers={"X-API-Key": "testkey"}).status_code == 422
+
+
+def _encoded(fmt: str, animated: bool = False) -> bytes:
+    buf = io.BytesIO()
+    frames = [Image.new("RGB", (900, 600), c) for c in ("red", "green")]
+    if fmt == "GIF":
+        frames = [f.convert("P") for f in frames]
+    extra = {"save_all": True, "append_images": frames[1:]} if animated else {}
+    frames[0].save(buf, format=fmt, **extra)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("fmt, animated", [
+    ("JPEG", False),
+    ("PNG", False),
+    ("PNG", True),   # APNG
+    ("GIF", True),
+    ("MPO", True),   # многокадровый JPEG с телефонов
+])
+def test_make_preview_builds_for_photo_formats(fmt, animated):
+    from app.services.preview_cache import make_preview
+
+    out = make_preview(_encoded(fmt, animated))
+    assert out is not None
+    with Image.open(io.BytesIO(out)) as im:
+        assert im.format == "JPEG"
+
+
+@pytest.mark.parametrize("fmt", ["TIFF", "BMP", "ICO", "PPM", "TGA"])
+def test_make_preview_never_decodes_other_formats(fmt):
+    """Защита в глубину: даже если байты экзотического формата обошли сниффер
+    на загрузке, они не попадают в декодер Pillow (там основная масса CVE)."""
+    from app.services.preview_cache import make_preview
+
+    data = _encoded(fmt)
+    with Image.open(io.BytesIO(data)) as im:  # сам Pillow такой формат открыть умеет
+        assert im.format == fmt
+    assert make_preview(data) is None
