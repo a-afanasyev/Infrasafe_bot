@@ -10,6 +10,16 @@ Tests cover:
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from starlette.requests import Request
+
+
+def _rl_request() -> Request:
+    """A10-API-03: `update_profile` под `@limiter.limit` — slowapi требует
+    настоящий starlette Request в kwargs даже при прямом вызове."""
+    return Request({
+        "type": "http", "method": "PATCH", "path": "/api/v2/profile",
+        "headers": [], "query_string": b"", "client": ("127.0.0.1", 1),
+    })
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -300,7 +310,7 @@ class TestUpdateProfile:
         body = UpdateProfileBody(language="fr")  # not in {"ru", "uz"}
 
         with pytest.raises(HTTPException) as exc_info:
-            await update_profile(body=body, db=mock_db, user=user)
+            await update_profile(request=_rl_request(), body=body, db=mock_db, user=user)
 
         assert exc_info.value.status_code == 400
 
@@ -328,7 +338,7 @@ class TestUpdateProfile:
         mock_db.commit = AsyncMock()
 
         body = UpdateProfileBody(language="uz")
-        result = await update_profile(body=body, db=mock_db, user=user)
+        result = await update_profile(request=_rl_request(), body=body, db=mock_db, user=user)
 
         assert result == {"ok": True}
         assert db_user.language == "uz"
@@ -346,7 +356,9 @@ class TestUpdateProfile:
         mock_db.execute = AsyncMock(return_value=mock_result)
         mock_db.commit = AsyncMock()
 
-        result = await update_profile(body=UpdateProfileBody(language="uz_cyrl"), db=mock_db, user=user)
+        result = await update_profile(
+            request=_rl_request(), body=UpdateProfileBody(language="uz_cyrl"), db=mock_db, user=user
+        )
 
         assert result == {"ok": True}
         assert db_user.language == "uz_cyrl"
@@ -370,7 +382,7 @@ class TestUpdateProfile:
         mock_db.commit = AsyncMock()
 
         body = UpdateProfileBody(email="new@example.com")
-        result = await update_profile(body=body, db=mock_db, user=user)
+        result = await update_profile(request=_rl_request(), body=body, db=mock_db, user=user)
 
         assert result == {"ok": True}
         assert db_user.email == "new@example.com"

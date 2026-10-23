@@ -181,7 +181,12 @@ class TestAuthMiddleware:
         assert data.get("_handler_called") is True
 
     @pytest.mark.asyncio
-    async def test_fail_safe_on_db_error(self):
+    async def test_fail_closed_on_db_error(self):
+        """A10-BOT-03: сбой загрузки пользователя — апдейт НЕ доходит до хендлера.
+
+        Раньше здесь был fail-open (handler вызывался с user=None → роль
+        applicant), и проверка blocked/deleted пропускалась вместе с остальным try.
+        """
         async def _boom(unit, **kw):
             raise Exception("db failure")
 
@@ -192,10 +197,9 @@ class TestAuthMiddleware:
         with patch("uk_management_bot.middlewares.auth.run_db", _boom):
             result = await auth_middleware(_noop_handler, msg, data)
 
-        # Must not raise; handler must still be called
-        assert data["user"] is None
-        assert data["user_status"] is None
-        assert result == "ok"
+        # Must not raise; handler must NOT be called
+        assert result is None
+        assert data.get("_handler_called") is not True
 
 
 # ---------------------------------------------------------------------------
