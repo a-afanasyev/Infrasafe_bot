@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **605**
-- закрыто маркером: **568**
-- открыто маркером: **37**
+- закрыто маркером: **569**
+- открыто маркером: **36**
 
-  - `actionable` — **21**
+  - `actionable` — **20**
   - `decision` — **3**
   - `no-pr` — **1**
   - `deferred` — **12**
 
-Из них actionable по приоритету: P1=1, P2=5, P3=15.
+Из них actionable по приоритету: P2=5, P3=15.
 
 Значения `status`:
 
@@ -64,7 +64,6 @@
 | `A10-EXT-03` | P3 | deferred | verified-edge-2026-10-23 | AUD10-EXT | — | asset-web | — | assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо) |
 | `A10-HOST-05` | P2 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | InfraSafe compose | — | внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock |
 | `A10-HOST-10` | P3 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | edge | — | внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить |
-| `A10-HOST-01` | P1 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты profk/105 | — | P1: POSTGRES_PASSWORD/DATABASE_URL из общего .env в env app/api/access-api — удалить строки, пересоздать контейнеры (запуск владельцем) |
 | `A10-HOST-02` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | ядро 6.1.0-54 без перезагрузки 3+ нед., docker-ce/containerd/libexpat — окно обслуживания |
 | `A10-HOST-03` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | 105: диск 91 %, нет daemon.json, ~5 ГБ docker-мусора |
 | `A10-HOST-04` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты, Telegram | — | токен бота в bash_history profk — getMe/ротация, очистка истории, HISTIGNORE |

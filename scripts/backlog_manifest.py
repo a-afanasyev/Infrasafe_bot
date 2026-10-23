@@ -375,7 +375,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
     # Аудит #10 (безопасность, 2026-10-23, docs/audit/2026-10-23-security-audit.md). Кодовые P3 и
     # A10-API-01 закрыты одним PR (A10-CODE-01); ниже — хосты, DNS, внешнее репо InfraSafe, M-пункты кода.
-    "A10-HOST-01": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты profk/105", note="P1: POSTGRES_PASSWORD/DATABASE_URL из общего .env в env app/api/access-api — удалить строки, пересоздать контейнеры (запуск владельцем)"),
+    # A10-HOST-01 закрыт 2026-10-24 (оба хоста, по авторизации владельца).
     "A10-HOST-02": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="ядро 6.1.0-54 без перезагрузки 3+ нед., docker-ce/containerd/libexpat — окно обслуживания"),
     "A10-HOST-03": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="105: диск 91 %, нет daemon.json, ~5 ГБ docker-мусора"),
     "A10-HOST-04": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты, Telegram", note="токен бота в bash_history profk — getMe/ротация, очистка истории, HISTIGNORE"),
