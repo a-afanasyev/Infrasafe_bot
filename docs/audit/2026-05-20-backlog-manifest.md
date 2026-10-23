@@ -19,15 +19,15 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **605**
-- закрыто маркером: **569**
-- открыто маркером: **36**
+- закрыто маркером: **571**
+- открыто маркером: **34**
 
-  - `actionable` — **20**
+  - `actionable` — **17**
   - `decision` — **3**
   - `no-pr` — **1**
-  - `deferred` — **12**
+  - `deferred` — **13**
 
-Из них actionable по приоритету: P2=5, P3=15.
+Из них actionable по приоритету: P2=2, P3=15.
 
 Значения `status`:
 
@@ -64,9 +64,7 @@
 | `A10-EXT-03` | P3 | deferred | verified-edge-2026-10-23 | AUD10-EXT | — | asset-web | — | assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо) |
 | `A10-HOST-05` | P2 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | InfraSafe compose | — | внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock |
 | `A10-HOST-10` | P3 | deferred | verified-host-2026-10-23 | AUD10-EXT | — | edge | — | внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить |
-| `A10-HOST-02` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | ядро 6.1.0-54 без перезагрузки 3+ нед., docker-ce/containerd/libexpat — окно обслуживания |
-| `A10-HOST-03` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | 105: диск 91 %, нет daemon.json, ~5 ГБ docker-мусора |
-| `A10-HOST-04` | P2 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты, Telegram | — | токен бота в bash_history profk — getMe/ротация, очистка истории, HISTIGNORE |
+| `A10-HOST-04` | P2 | deferred | owner-decision-2026-10-24 | AUD10-HOST | — | хосты, Telegram | — | токен @profk_monitoring_bot был в bash_history (живой); истории очищены, HISTIGNORE; ротацию владелец решил не делать |
 | `A10-HOST-06` | P3 | decision | verified-host-2026-10-23 | AUD10-HOST | — | хост profk | — | NOPASSWD sudo, ключ в /root, PermitRootLogin yes в основном sshd_config — выровнять с 105 или принять |
 | `A10-HOST-07` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | compose, хосты | — | uk-internal на 105; payment-* в uk-internal на profk; пересоздание в окне HOST-02/03 |
 | `A10-HOST-08` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644 |

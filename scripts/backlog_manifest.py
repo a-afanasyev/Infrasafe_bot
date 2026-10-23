@@ -376,9 +376,9 @@ ASSIGNMENT: dict[str, dict] = {
     # Аудит #10 (безопасность, 2026-10-23, docs/audit/2026-10-23-security-audit.md). Кодовые P3 и
     # A10-API-01 закрыты одним PR (A10-CODE-01); ниже — хосты, DNS, внешнее репо InfraSafe, M-пункты кода.
     # A10-HOST-01 закрыт 2026-10-24 (оба хоста, по авторизации владельца).
-    "A10-HOST-02": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="ядро 6.1.0-54 без перезагрузки 3+ нед., docker-ce/containerd/libexpat — окно обслуживания"),
-    "A10-HOST-03": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="105: диск 91 %, нет daemon.json, ~5 ГБ docker-мусора"),
-    "A10-HOST-04": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты, Telegram", note="токен бота в bash_history profk — getMe/ротация, очистка истории, HISTIGNORE"),
+    # A10-HOST-02 закрыт 2026-10-24 (окно обслуживания: upgrade + reboot обоих хостов).
+    # A10-HOST-03 закрыт 2026-10-24 (daemon.json на 105, prune; диск 91→58 %).
+    "A10-HOST-04": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-10-24", services="хосты, Telegram", note="токен @profk_monitoring_bot был в bash_history (живой); истории очищены, HISTIGNORE; ротацию владелец решил не делать"),
     "A10-HOST-05": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="InfraSafe compose", note="внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock"),
     "A10-HOST-06": A(pkg="AUD10-HOST", status="decision", method="verified-host-2026-10-23", services="хост profk", note="NOPASSWD sudo, ключ в /root, PermitRootLogin yes в основном sshd_config — выровнять с 105 или принять"),
     "A10-HOST-07": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="compose, хосты", note="uk-internal на 105; payment-* в uk-internal на profk; пересоздание в окне HOST-02/03"),
