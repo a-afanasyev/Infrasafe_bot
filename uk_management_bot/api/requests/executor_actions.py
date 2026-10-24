@@ -69,7 +69,7 @@ async def complete_request(
     Повтор с тем же `idempotency_key` (и повтор по уже закрытой этим же
     исполнителем заявке) — 200 с карточкой без второй загрузки.
 
-    Ответы: 200 — карточка; 403 `not_assigned` / `no_active_shift`;
+    Ответы: 200 — карточка; 403 `not_assigned` (смена не нужна);
     404; 409 `invalid_status` / `in_progress`; 413 `photo_too_large`;
     415 `unsupported_photo_type`; 422 `photo_empty` / `invalid_idempotency_key`;
     502 `media_rejected`; 503 `media_unavailable`.

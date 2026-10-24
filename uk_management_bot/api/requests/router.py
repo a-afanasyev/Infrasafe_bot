@@ -62,6 +62,7 @@ from uk_management_bot.utils.request_workflow import (
     ActionCommand,
     LegacyStatusIntent,
     PrincipalRef,
+    NoActiveShift,
     NotAuthorized,
     InvalidTransition,
     RepeatRejected,
@@ -639,6 +640,8 @@ async def update_request(
             )
         except RequestNotFound:
             raise HTTPException(status_code=404, detail="Request not found")
+        except NoActiveShift:
+            raise HTTPException(status_code=403, detail="no_active_shift")
         except NotAuthorized:
             raise HTTPException(status_code=403, detail="Not permitted for this transition")
         except (InvalidTransition, RepeatRejected, RepeatConflict,

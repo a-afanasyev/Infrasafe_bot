@@ -60,6 +60,26 @@ describe('downscaleImage', () => {
     expect(await downscaleImage(small)).toBe(small)
   })
 
+  it('мелкий HEIC/WebP всё равно перекодирует в JPEG — иначе сервер ответит 415', async () => {
+    stubCanvasPipeline({ outSize: 500_000 })
+    for (const type of ['image/heic', 'image/webp']) {
+      const out = await downscaleImage(makeFile(300_000, type))
+      expect(out.type).toBe('image/jpeg')
+      expect(out.name).toBe('IMG_5090.jpg')
+    }
+  })
+
+  it('HEIC с пустым type (Android WebView) узнаёт по расширению', async () => {
+    stubCanvasPipeline({ outSize: 200_000 })
+    const out = await downscaleImage(makeFile(300_000, ''))
+    expect(out.type).toBe('image/jpeg')
+  })
+
+  it('мелкий PNG не трогает — сервер его принимает', async () => {
+    const png = makeFile(300_000, 'image/png', 'shot.png')
+    expect(await downscaleImage(png)).toBe(png)
+  })
+
   it('не трогает видео', async () => {
     const video = makeFile(20_000_000, 'video/mp4', 'clip.mp4')
     expect(await downscaleImage(video)).toBe(video)

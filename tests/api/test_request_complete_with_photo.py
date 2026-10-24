@@ -258,7 +258,8 @@ async def test_not_my_request_is_403_without_upload(act_as, world, db_session_fa
 
 
 @pytest.mark.asyncio
-async def test_no_active_shift_is_403_without_upload(act_as, world, db_session_factory):
+async def test_completes_without_active_shift(act_as, world, db_session_factory):
+    """Смена кончилась (суточная, в 09:00), а заявка своя — закрыть можно."""
     async with db_session_factory() as s:
         req = await s.get(Request, NUMBER)
         req.executor_id = 43
@@ -267,9 +268,9 @@ async def test_no_active_shift_is_403_without_upload(act_as, world, db_session_f
         await s.commit()
     client = await act_as(43)
     r = await _post(client)
-    assert r.status_code == 403, r.text
-    assert r.json()["detail"] == "no_active_shift"
-    world["media"].upload_report_media.assert_not_awaited()
+    assert r.status_code == 200, r.text
+    assert await _status(db_session_factory) == C.REQUEST_STATUS_EXECUTED
+    world["media"].upload_report_media.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -358,3 +359,37 @@ async def test_unknown_request_is_404(act_as, world):
                           data={"idempotency_key": KEY})
     assert r.status_code == 404
     world["media"].upload_report_media.assert_not_awaited()
+
+
+# ── PATCH-путь классического TWA (профк 2026-10-24) ──
+async def _patch_as_shiftless_executor(act_as, db_session_factory, monkeypatch, status):
+    import uk_management_bot.api.requests.router as req_router
+
+    async def noop(*_a, **_k):
+        return None
+    monkeypatch.setattr(req_router, "AsyncSessionLocal", db_session_factory)
+    monkeypatch.setattr(req_router, "publish_request_event", noop)
+    monkeypatch.setattr(req_router, "dispatch_notify_intents_detached", lambda *a, **k: None)
+    async with db_session_factory() as s:
+        (await s.get(Request, NUMBER)).executor_id = 43
+        (await s.get(RequestAssignment, 1)).executor_id = 43
+        await s.commit()
+    client = await act_as(43)
+    return await client.patch(f"/api/v2/requests/{NUMBER}", json={"status": status})
+
+
+@pytest.mark.asyncio
+async def test_patch_complete_without_shift_succeeds(act_as, world, db_session_factory, monkeypatch):
+    """«Отметить выполненной» после конца суточной смены: раньше 422 «перехода нет»."""
+    r = await _patch_as_shiftless_executor(act_as, db_session_factory, monkeypatch, C.REQUEST_STATUS_EXECUTED)
+    assert r.status_code == 200, r.text
+    assert await _status(db_session_factory) == C.REQUEST_STATUS_EXECUTED
+
+
+@pytest.mark.asyncio
+async def test_patch_purchase_without_shift_is_403_no_active_shift(act_as, world, db_session_factory, monkeypatch):
+    """«Закуп» смену требует — отказ говорит об этом, а не 422 «перехода нет»."""
+    r = await _patch_as_shiftless_executor(act_as, db_session_factory, monkeypatch, C.REQUEST_STATUS_PURCHASE)
+    assert r.status_code == 403, r.text
+    assert r.json()["detail"] == "no_active_shift"
+    assert await _status(db_session_factory) == C.REQUEST_STATUS_IN_PROGRESS

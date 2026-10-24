@@ -261,7 +261,7 @@ stateDiagram-v2
 | `CLARIFY_RESOLVED` | Уточнение → В работе | менеджер | REJECT |
 | `EXECUTOR_RESUME` | Закуп/Уточнение → В работе | назначенный исполнитель на смене | REJECT |
 | `EXECUTOR_CLAIM` | Новая/В работе → В работе | исполнитель на смене, спец. совпадает | REJECT* |
-| `EXECUTOR_COMPLETE` | В работе → Выполнена | назначенный исполнитель на смене | REPEATABLE |
+| `EXECUTOR_COMPLETE` | В работе → Выполнена | назначенный исполнитель (смена не нужна с 2026-10-24) | REPEATABLE |
 | `MANAGER_COMPLETE` | В работе/Закуп/Уточнение → Выполнена | менеджер | REPEATABLE |
 | `MANAGER_CONFIRM` | Выполнена → Исполнено; при `acceptance_mode=manager` → Принято (терминально) | менеджер | NO_OP_IF_SAME |
 | `MANAGER_RETURN_TO_WORK` | Выполнена/Возвращена/Исполнено → В работе | менеджер | REJECT |

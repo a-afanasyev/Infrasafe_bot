@@ -32,6 +32,9 @@ describe('TWA getErrorMessage — сырой detail бэкенда пользо�
     expect(getErrorMessage(new Error('boom'), 'fb')).toBe('fb')
     expect(getErrorMessage(httpError(408), 'fb')).toBe('Нет связи с сервером. Проверьте интернет и повторите')
     expect(getErrorMessage(httpError(403, 'Forbidden'), 'fb')).toBe('Недостаточно прав для этого действия')
+    // своя заявка, но действие требует смены — подсказать, а не «нет прав»
+    expect(getErrorMessage(httpError(403, 'no_active_shift'), 'fb'))
+      .toBe('Смена закончилась. Начните смену, чтобы продолжить')
     expect(getErrorMessage(httpError(413), 'fb')).toBe('Файл слишком большой')
     expect(getErrorMessage(httpError(429), 'fb')).toBe('Слишком много запросов. Подождите немного и повторите')
     expect(getErrorMessage(httpError(502, 'Bad Gateway'), 'fb')).toBe('Сервер временно недоступен. Повторите позже')

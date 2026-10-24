@@ -26,6 +26,7 @@ from .guards import (
     _can_cancel,
     _executor_can_claim,
     _executor_can_work,
+    _is_assigned_executor,
     _is_manager,
     _owner_can_return,
     _system_can_promote,
@@ -123,9 +124,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
         REQUEST_STATUS_IN_PROGRESS,
         _system_can_promote, RepeatPolicy.REJECT, system_only=True),
+    # Без требования смены (решение владельца 2026-10-24): смена ограничивает
+    # взятие новой работы, а не закрытие уже своей. Суточная смена кончается в
+    # 09:00, и исполнитель, доделавший заявку утром, не мог её закрыть.
     Action.EXECUTOR_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_EXECUTED,
-        _executor_can_work, RepeatPolicy.REPEATABLE),
+        _is_assigned_executor, RepeatPolicy.REPEATABLE),
     Action.MANAGER_COMPLETE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS, REQUEST_STATUS_PURCHASE,
                    REQUEST_STATUS_CLARIFICATION}),

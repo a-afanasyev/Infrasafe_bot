@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { getI18n } from 'react-i18next'
 import axios from 'axios'
-import { apiErrorStatus } from '../../utils/errorMessage'
+import { apiErrorDetail, apiErrorStatus } from '../../utils/errorMessage'
 
 // Текст по умолчанию — на текущем языке (инстанс, зарегистрированный initReactI18next).
 function genericErrorText(): string {
@@ -15,7 +15,8 @@ function statusErrorKey(err: unknown): string | null {
   if (!axios.isAxiosError(err)) return null
   const status = apiErrorStatus(err)
   if (status === null || status === 408) return 'twa.errors.network'
-  if (status === 403) return 'twa.errors.forbidden'
+  // Своя заявка, но действие требует смены — сказать, что делать, а не «нет прав».
+  if (status === 403) return apiErrorDetail(err) === 'no_active_shift' ? 'twa.errors.noShift' : 'twa.errors.forbidden'
   if (status === 413) return 'twa.errors.tooLarge'
   if (status === 429) return 'twa.errors.tooMany'
   if (status >= 500) return 'twa.errors.server'
@@ -25,7 +26,7 @@ function statusErrorKey(err: unknown): string | null {
 /**
  * Локализованный текст ошибки для пользователя TWA.
  *
- *   1. Сеть/408, 403, 413, 429, 5xx → общий текст по статусу (twa.errors.*)
+ *   1. Сеть/408, 403 (`no_active_shift` — отдельно), 413, 429, 5xx → общий текст по статусу (twa.errors.*)
  *   2. иначе                          → fallback вызывающего (по умолчанию — twa.errors.generic)
  *
  * Сырой `detail` ответа НЕ показываем: это технический текст бэкенда, чаще

@@ -7,6 +7,7 @@ import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import PhotoUploader from '../../components/PhotoUploader'
+import { downscaleImage } from '../../utils/downscaleImage'
 import { MAX_REQUEST_TEXT_LENGTH } from '../../../constants'
 
 export default function CompletionReport() {
@@ -26,7 +27,8 @@ export default function CompletionReport() {
     const failed: number[] = []
     for (let i = 0; i < photos.length; i++) {
       const form = new FormData()
-      form.append('file', photos[i])
+      // Как при создании заявки: крупное сжать, HEIC/WebP — в JPEG (иначе 413/415).
+      form.append('file', await downscaleImage(photos[i]))
       form.append('request_number', requestNumber)
       form.append('category', 'completion_photo')
       try {

@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     # трёх попыток download_file с backoff обязан укладываться в бюджет edge:
     # 3 × connect + 0.5 + 1.5 с — см. test_download_retry.py.
     telegram_api_timeout_seconds: float = 15.0
+    # Одна попытка send_photo (их две, см. telegram_client.SEND_PHOTO_BACKOFF_SECONDS).
+    telegram_send_photo_attempt_timeout_seconds: float = 8.0
     telegram_download_connect_timeout_seconds: float = 5.0
     telegram_download_read_timeout_seconds: float = 20.0
     # AUD7-ARCH-03 (остаток BUG-189): connect-таймауты уложены в бюджет, но

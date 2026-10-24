@@ -2690,6 +2690,7 @@
       "loadFailed": "Ro'yxatni yuklab bo'lmadi",
       "network": "Server bilan aloqa yo'q. Internetni tekshirib, qaytadan urinib ko'ring",
       "forbidden": "Bu amal uchun huquqingiz yetarli emas",
+      "noShift": "Smena tugagan. Davom etish uchun smenani boshlang",
       "tooLarge": "Fayl juda katta",
       "tooMany": "So'rovlar juda ko'p. Biroz kutib, qaytadan urinib ko'ring",
       "server": "Server vaqtincha ishlamayapti. Keyinroq qaytadan urinib ko'ring"

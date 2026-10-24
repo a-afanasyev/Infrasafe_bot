@@ -309,12 +309,19 @@ class TestExecutorActions:
     def _exec(self):
         return PrincipalRef(kind="user", user_id=4, source="telegram")
 
-    def test_complete_requires_active_shift(self, factory):
-        """Канон PR0 Р2: завершение требует активную смену."""
+    def test_complete_without_shift_allowed(self, factory):
+        """2026-10-24: свою заявку закрывают и после конца смены (суточная — до 09:00)."""
+        SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS, executor_id=4)
+        out = run_command_sync(SF, "260610-001", self._exec(),
+                               ActionCommand("c", Action.EXECUTOR_COMPLETE, {}))
+        assert out.new_status == C.REQUEST_STATUS_EXECUTED
+
+    def test_purchase_requires_active_shift(self, factory):
         SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS, executor_id=4)
         with pytest.raises(NotAuthorized):
             run_command_sync(SF, "260610-001", self._exec(),
-                             ActionCommand("c", Action.EXECUTOR_COMPLETE, {}))
+                             ActionCommand("c", Action.EXECUTOR_PURCHASE,
+                                           {"requested_materials": "кран"}))
 
     def test_complete_with_shift_writes_executed(self, factory):
         SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS, executor_id=4)
