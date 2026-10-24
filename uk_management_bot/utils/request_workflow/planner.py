@@ -22,6 +22,7 @@ from uk_management_bot.utils.constants import (
 
 from .payloads import PAYLOAD_SCHEMAS
 from .projections import normalize_status, project_public_status
+from .guards import _executor_can_work, _is_assigned_executor
 from .specs import ACTION_TABLE, allowed_actions
 from .types import (
     STATUS_RETURNED,
@@ -33,6 +34,7 @@ from .types import (
     EventIntent,
     InvalidTransition,
     LegacyStatusIntent,
+    NoActiveShift,
     NotAuthorized,
     Op,
     PayloadInvalid,
@@ -492,6 +494,20 @@ _STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM,
                                      Action.MANAGER_CHANGE_CATEGORY})
 
 
+def _blocked_only_by_shift(snap: WorkflowSnapshot, actor: ActorContext,
+                           canon: str, target: str) -> bool:
+    """Переход своего исполнителя существует, но не пущен только из-за смены.
+
+    Без этого отказ выглядел как «перехода нет» (422), и TWA показывал общее
+    «не удалось» вместо «начните смену».
+    """
+    if snap.actor_has_active_shift or not _is_assigned_executor(snap, actor):
+        return False
+    return any(spec.authorize is _executor_can_work
+               and canon in spec.from_statuses and spec.to_status == target
+               for spec in ACTION_TABLE.values())
+
+
 def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
                     intent: LegacyStatusIntent) -> ActionCommand:
     """target-status + актор + состояние → ActionCommand.
@@ -517,6 +533,8 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
         candidates = [a for a in candidates if a != Action.APPLICANT_ACCEPT]
     if not candidates:
         canon = normalize_status(snap.request)
+        if _blocked_only_by_shift(snap, actor, canon, target):
+            raise NoActiveShift("no_active_shift")
         raise InvalidTransition(
             f"no action maps '{canon}' -> '{target}' for this actor")
     # приоритет: applicant/executor-действия раньше менеджерских force-вариантов

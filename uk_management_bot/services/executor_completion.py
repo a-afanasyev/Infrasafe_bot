@@ -61,7 +61,6 @@ from uk_management_bot.utils.request_workflow import (
     WorkflowError,
     normalize_status,
 )
-from uk_management_bot.utils.request_workflow.guards import _is_assigned_executor
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +111,8 @@ def validate_completion_photo(photo_bytes: bytes) -> str:
         raise CompletionRefused("photo_too_large", 413)
     mime = sniff_media_mime(photo_bytes)
     if mime not in COMPLETION_PHOTO_TYPES:
+        # Формат в лог: без него по 415 не понять, что прислал телефон.
+        logger.warning("complete: фото отклонено, формат %s (%d байт)", mime, len(photo_bytes))
         raise CompletionRefused("unsupported_photo_type", 415)
     return mime
 
@@ -137,11 +138,9 @@ def _completed_by(snapshot, executor_id: int) -> bool:
 
 
 def _refusal(error: WorkflowError, snapshot, actor) -> CompletionRefused:
+    # Смена для EXECUTOR_COMPLETE больше не нужна (2026-10-24): назначенного
+    # исполнителя предикат пускает всегда, отказ = заявка не его.
     if isinstance(error, NotAuthorized):
-        if snapshot is not None and actor is not None and _is_assigned_executor(snapshot, actor):
-            # Своя заявка, но предикат не пустил — единственная причина у
-            # EXECUTOR_COMPLETE для назначенного исполнителя: нет активной смены.
-            return CompletionRefused("no_active_shift", 403)
         return CompletionRefused("not_assigned", 403)
     if isinstance(error, (InvalidTransition, RepeatRejected, RepeatConflict)):
         return CompletionRefused("invalid_status", 409)

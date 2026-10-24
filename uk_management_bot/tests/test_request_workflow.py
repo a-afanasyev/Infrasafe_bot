@@ -195,9 +195,10 @@ class TestAllowedActions:
         assert allowed_actions(snap, EXECUTOR) == \
             {Action.EXECUTOR_PURCHASE, Action.EXECUTOR_COMPLETE}
 
-    def test_assigned_executor_without_shift_nothing(self):
+    def test_assigned_executor_without_shift_only_complete(self):
+        # 2026-10-24: закрыть свою заявку можно и после конца смены; закуп — нет.
         snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment=EXECUTOR_ID, shift=False)
-        assert allowed_actions(snap, EXECUTOR) == frozenset()
+        assert allowed_actions(snap, EXECUTOR) == {Action.EXECUTOR_COMPLETE}
 
     def test_unassigned_executor_nothing(self):
         snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment=999, shift=True)
@@ -397,8 +398,14 @@ class TestAuthorizationNegatives:
             _plan(_snap(REQUEST_STATUS_COMPLETED), Action.APPLICANT_RETURN,
                   NEIGHBOR, {"return_reason": "x"})
 
-    def test_executor_without_shift_cannot_complete(self):
+    def test_executor_without_shift_can_complete_but_not_purchase(self):
         snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment=EXECUTOR_ID, shift=False)
+        _plan(snap, Action.EXECUTOR_COMPLETE, EXECUTOR)
+        with pytest.raises(NotAuthorized):
+            _plan(snap, Action.EXECUTOR_PURCHASE, EXECUTOR, {"requested_materials": "кран"})
+
+    def test_unassigned_executor_cannot_complete(self):
+        snap = _snap(REQUEST_STATUS_IN_PROGRESS, assignment=999, shift=True)
         with pytest.raises(NotAuthorized):
             _plan(snap, Action.EXECUTOR_COMPLETE, EXECUTOR)
 

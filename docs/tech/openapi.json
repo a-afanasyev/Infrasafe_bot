@@ -20266,7 +20266,7 @@
     },
     "/api/v2/requests/{request_number}/complete": {
       "post": {
-        "description": "«Готово»: одно фото «после» → заявка «Выполнена» (EXECUTOR_COMPLETE).\n\nФото уходит в media-service ДО перехода; сбой загрузки статус не меняет.\nПовтор с тем же `idempotency_key` (и повтор по уже закрытой этим же\nисполнителем заявке) — 200 с карточкой без второй загрузки.\n\nОтветы: 200 — карточка; 403 `not_assigned` / `no_active_shift`;\n404; 409 `invalid_status` / `in_progress`; 413 `photo_too_large`;\n415 `unsupported_photo_type`; 422 `photo_empty` / `invalid_idempotency_key`;\n502 `media_rejected`; 503 `media_unavailable`.",
+        "description": "«Готово»: одно фото «после» → заявка «Выполнена» (EXECUTOR_COMPLETE).\n\nФото уходит в media-service ДО перехода; сбой загрузки статус не меняет.\nПовтор с тем же `idempotency_key` (и повтор по уже закрытой этим же\nисполнителем заявке) — 200 с карточкой без второй загрузки.\n\nОтветы: 200 — карточка; 403 `not_assigned` (смена не нужна);\n404; 409 `invalid_status` / `in_progress`; 413 `photo_too_large`;\n415 `unsupported_photo_type`; 422 `photo_empty` / `invalid_idempotency_key`;\n502 `media_rejected`; 503 `media_unavailable`.",
         "operationId": "complete_request_api_v2_requests__request_number__complete_post",
         "parameters": [
           {

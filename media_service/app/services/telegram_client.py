@@ -17,6 +17,7 @@ from aiogram.exceptions import (
     TelegramAPIError,
     TelegramBadRequest,
     TelegramForbiddenError,
+    TelegramNetworkError,
     TelegramNotFound,
 )
 
@@ -32,6 +33,12 @@ logger = logging.getLogger(__name__)
 # Паузы перед 2-й и 3-й попытками download_file (первая — сразу). Вынесены в
 # константу, чтобы тест мог посчитать худший случай против бюджета edge.
 DOWNLOAD_BACKOFF_SECONDS: Tuple[float, ...] = (0.0, 0.5, 1.5)
+# Паузы перед попытками send_photo: две попытки по
+# telegram_send_photo_attempt_timeout_seconds. Худший случай обязан уложиться
+# в read-таймаут клиента UK (executor_completion.UPLOAD_TIMEOUT, 25 с) — тест
+# считает. Профк 2026-10-24: обычная загрузка ~1 с, но Telegram изредка
+# не отвечает 15 с, и завершение заявки падало 503 с одной попытки.
+SEND_PHOTO_BACKOFF_SECONDS: Tuple[float, ...] = (0.0, 0.5)
 
 # Часы общего deadline — отдельным именем, чтобы тест худшего случая мог
 # «проматывать» время попыток без реальных 15- и 20-секундных ожиданий.
@@ -129,21 +136,35 @@ class TelegramClientService:
         parse_mode: Optional[str] = "HTML"
     ) -> Optional[Message]:
         """
-        Отправка фото в канал
-        """
-        try:
-            message = await self.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption=caption,
-                parse_mode=parse_mode
-            )
-            logger.info(f"Photo sent to {chat_id}, message_id: {message.message_id}")
-            return message
+        Отправка фото в канал.
 
-        except TelegramAPIError as e:
-            logger.error(f"Failed to send photo to {chat_id}: {e}")
-            raise
+        Сетевой сбой/таймаут повторяется один раз (байты в памяти или file_id
+        можно отправить заново). Цена: если первая попытка всё же дошла, в
+        канале будет дубль сообщения — запись в БД одна, по второй попытке.
+        Ошибки API (400/403…) не повторяются.
+        """
+        attempts = SEND_PHOTO_BACKOFF_SECONDS if isinstance(photo, (BufferedInputFile, str)) else (0.0,)
+        for attempt, delay in enumerate(attempts, start=1):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                async with asyncio.timeout(settings.telegram_send_photo_attempt_timeout_seconds):
+                    message = await self.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=photo,
+                        caption=caption,
+                        parse_mode=parse_mode
+                    )
+                logger.info(f"Photo sent to {chat_id}, message_id: {message.message_id}")
+                return message
+            except (TelegramNetworkError, TimeoutError) as e:
+                if attempt == len(attempts):
+                    logger.error(f"Failed to send photo to {chat_id}: {e or type(e).__name__}")
+                    raise
+                logger.warning(f"send_photo {chat_id}: попытка {attempt} не удалась: {type(e).__name__}")
+            except TelegramAPIError as e:
+                logger.error(f"Failed to send photo to {chat_id}: {e}")
+                raise
 
     async def send_video(
         self,

@@ -11,8 +11,10 @@
  * недоступен, экзотический формат) — возвращаем оригинал: задача утилиты
  * уменьшить типовой случай, а не стать новой точкой отказа.
  *
- * Побочная польза: canvas всегда отдаёт JPEG, поэтому HEIC с iPhone (который
- * media-service отклонил бы по `ALLOWED_FILE_TYPES`) уезжает уже как image/jpeg.
+ * Форматы кроме JPEG/PNG (HEIC, WebP, AVIF…) перекодируются в JPEG ВСЕГДА,
+ * независимо от размера: сервер принимает фото «после» только как JPEG/PNG
+ * (`executor_completion.COMPLETION_PHOTO_TYPES`), и небольшой HEIC раньше
+ * проходил мимо порога и получал 415 (profk, 2026-10-24).
  */
 
 /** Больше этого — сжимаем. Ниже порога возня с canvas не стоит потери качества. */
@@ -21,6 +23,14 @@ const COMPRESS_THRESHOLD_BYTES = 1_500_000
  *  или скол плитки, и даёт ~300–700 КБ на кадр. */
 const MAX_DIMENSION = 1600
 const JPEG_QUALITY = 0.82
+/** Что сервер принимает как есть. Остальное — только через перекодировку. */
+const SERVER_PHOTO_TYPES = new Set(['image/jpeg', 'image/png'])
+/** Android WebView отдаёт HEIC/WebP с пустым `type` — узнаём по расширению. */
+const IMAGE_EXTENSION = /\.(heic|heif|webp|avif)$/i
+
+function isImage(file: File): boolean {
+  return file.type.startsWith('image/') || (file.type === '' && IMAGE_EXTENSION.test(file.name))
+}
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -78,13 +88,14 @@ async function decode(file: File): Promise<Decoded> {
   return { source: img, width: img.width, height: img.height, release: () => undefined }
 }
 
-/** Вернуть уменьшенную копию изображения либо исходный файл, если сжатие не
- *  требуется или не удалось. Никогда не бросает. */
+/** Вернуть уменьшенную (или перекодированную в JPEG) копию изображения либо
+ *  исходный файл, если это не требуется или не удалось. Никогда не бросает. */
 export async function downscaleImage(file: File, options: DownscaleOptions = {}): Promise<File> {
   const maxDimension = options.maxDimension ?? MAX_DIMENSION
   const thresholdBytes = options.thresholdBytes ?? COMPRESS_THRESHOLD_BYTES
-  if (!file.type.startsWith('image/')) return file
-  if (file.size <= thresholdBytes) return file
+  if (!isImage(file)) return file
+  const mustConvert = !SERVER_PHOTO_TYPES.has(file.type)
+  if (!mustConvert && file.size <= thresholdBytes) return file
 
   try {
     const img = await decode(file)
@@ -106,8 +117,10 @@ export async function downscaleImage(file: File, options: DownscaleOptions = {})
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
     )
+    if (!blob) return file
     // Сжатие «в плюс» бывает на уже пережатых кадрах — тогда оригинал лучше.
-    if (!blob || blob.size >= file.size) return file
+    // Но не для HEIC/WebP: оригинал сервер не примет, JPEG крупнее — всё равно лучше.
+    if (!mustConvert && blob.size >= file.size) return file
 
     const name = file.name.replace(/\.[^.]+$/, '') + '.jpg'
     return new File([blob], name, { type: 'image/jpeg', lastModified: file.lastModified })

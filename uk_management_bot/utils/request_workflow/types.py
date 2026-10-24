@@ -65,6 +65,10 @@ class NotAuthorized(WorkflowError):
     pass
 
 
+class NoActiveShift(NotAuthorized):
+    """Своя заявка, переход исполнителя есть, но он требует активной смены."""
+
+
 class PayloadInvalid(WorkflowError):
     pass
 
