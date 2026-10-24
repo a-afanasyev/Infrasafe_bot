@@ -151,6 +151,28 @@ describe('useSyncWorkReports', () => {
 })
 
 describe('usePublishWorkReport', () => {
+  it('успех инвалидирует только списки модерации и опубликованных', async () => {
+    server.use(
+      http.post('*/api/v2/work-reports/1/publish', () =>
+        HttpResponse.json({ id: 1, status: 'published' }),
+      ),
+    )
+    const qc = makeClient()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = rawRenderHook(() => usePublishWorkReport(), { wrapper: wrapperFor(qc) })
+    result.current.mutate(1)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const filters = spy.mock.calls.map((c) => c[0] as { queryKey: unknown[]; predicate?: (q: { queryKey: unknown[] }) => boolean })
+    const wr = filters.find((f) => f.queryKey[0] === 'work-reports')
+    expect(wr?.predicate).toBeTypeOf('function')
+    const touches = (status: string[]) => wr!.predicate!({ queryKey: ['work-reports', { status, limit: 50 }] })
+    expect(touches(['pending', 'needs_media', 'publishing'])).toBe(true)
+    expect(touches(['published'])).toBe(true)
+    expect(touches(['rejected'])).toBe(false)
+    expect(touches(['needs_review'])).toBe(false)
+  })
+
   it('POST /{id}/publish, ошибка показывает detail из ответа', async () => {
     server.use(
       http.post('*/api/v2/work-reports/1/publish', () =>

@@ -181,10 +181,32 @@ export function refreshSessionQuietly(): Promise<void> {
   return refreshPromise
 }
 
+// 429 приходит от edge-nginx (120 запросов/мин на IP, общий для всего офиса за
+// NAT), а не от API: серия действий на странице с несколькими списками выбирала
+// бюджет минуты, и пользователь видел «Ошибка», хотя через секунды всё работало.
+// Повторяем сам запрос с паузой — по Retry-After, иначе 2 с × номер попытки.
+const RETRY_429_MAX = 2
+const RETRY_429_FALLBACK_MS = 2000
+
+function retryAfterMs(headerValue: unknown, attempt: number): number {
+  const seconds = Number(headerValue)
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : RETRY_429_FALLBACK_MS * attempt
+}
+
 apiClient.interceptors.response.use(
   (r) => r,
   async (error) => {
-    const originalRequest = error.config as (typeof error.config) & { _retry?: boolean }
+    const originalRequest = error.config as (typeof error.config) & {
+      _retry?: boolean
+      _retry429?: number
+    }
+    if (error.response?.status === 429 && (originalRequest._retry429 ?? 0) < RETRY_429_MAX) {
+      const attempt = (originalRequest._retry429 ?? 0) + 1
+      originalRequest._retry429 = attempt
+      const delay = retryAfterMs(error.response.headers?.['retry-after'], attempt)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      return apiClient(originalRequest)
+    }
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       try {
