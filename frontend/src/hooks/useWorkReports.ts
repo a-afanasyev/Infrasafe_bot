@@ -57,9 +57,29 @@ export function useWorkReports(
 
 // ── MUTATIONS ───────────────────────────────────────────────────────
 
+/** Статусы отчёта (WorkReport.status). */
+type ReportStatus = 'pending' | 'needs_media' | 'publishing' | 'published' | 'needs_review' | 'rejected'
+/** Группа модерации на странице + пробник needs_media (useNeedsMediaCount). */
+const MODERATION: ReportStatus[] = ['pending', 'needs_media', 'publishing']
+
+/** Инвалидация списков отчётов. Страница держит 4 списка по статусам и
+ * пробник needs_media; сброс всего ключа перезапрашивал их все на КАЖДЫЙ
+ * клик — 5 GET на действие, серия публикаций выбирала лимит edge
+ * (120/мин на IP офиса) и показывала «Ошибка». `touched` — статусы, в чьих
+ * списках строка могла появиться или исчезнуть; без аргумента — всё
+ * (sync, создание, массовые операции). */
 function useWorkReportsInvalidator() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: ['work-reports'] })
+  return (touched?: ReportStatus[]) =>
+    queryClient.invalidateQueries({
+      queryKey: ['work-reports'],
+      predicate: touched
+        ? (q) => {
+            const params = q.queryKey[1] as { status?: string[] } | undefined
+            return !params?.status || params.status.some((s) => touched.includes(s as ReportStatus))
+          }
+        : undefined,
+    })
 }
 
 export function useSyncWorkReports() {
@@ -97,7 +117,7 @@ export function useAutofillWorkReport() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.post(`${BASE}/${id}/autofill`).then((r) => r.data as WorkReport),
-    onSuccess: () => invalidate(),
+    onSuccess: () => invalidate(MODERATION),
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
   })
 }
@@ -109,7 +129,7 @@ export function usePatchWorkReport() {
     mutationFn: ({ id, ...payload }: WorkReportPatchPayload & { id: number }) =>
       apiClient.patch(`${BASE}/${id}`, payload).then((r) => r.data as WorkReport),
     onSuccess: () => {
-      invalidate()
+      invalidate([...MODERATION, 'needs_review'])
       toast.success(t('workReports.toast.updated'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
@@ -123,7 +143,7 @@ export function usePublishWorkReport() {
     mutationFn: (id: number) =>
       apiClient.post(`${BASE}/${id}/publish`).then((r) => r.data as WorkReport),
     onSuccess: () => {
-      invalidate()
+      invalidate([...MODERATION, 'published'])
       toast.success(t('workReports.toast.published'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
@@ -139,7 +159,7 @@ export function useUnpublishWorkReport() {
         .post(`${BASE}/${id}/unpublish`, { reason })
         .then((r) => r.data as WorkReport),
     onSuccess: () => {
-      invalidate()
+      invalidate([...MODERATION, 'published', 'rejected'])
       toast.success(t('workReports.toast.unpublished'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
@@ -155,7 +175,7 @@ export function useRejectWorkReport() {
         .post(`${BASE}/${id}/reject`, { reason })
         .then((r) => r.data as WorkReport),
     onSuccess: () => {
-      invalidate()
+      invalidate([...MODERATION, 'needs_review', 'rejected'])
       toast.success(t('workReports.toast.rejected'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
@@ -193,7 +213,7 @@ export function useReopenWorkReport() {
     mutationFn: (id: number) =>
       apiClient.post(`${BASE}/${id}/reopen`).then((r) => r.data as WorkReport),
     onSuccess: () => {
-      invalidate()
+      invalidate([...MODERATION, 'rejected'])
       toast.success(t('workReports.toast.reopened'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
