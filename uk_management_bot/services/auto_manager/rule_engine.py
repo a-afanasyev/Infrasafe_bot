@@ -227,6 +227,9 @@ def select_engineer(db: Session, now: datetime,
     candidates = [
         user for user in snap.approved_users
         if user.id not in exclude_user_ids
+        # Без смены инженер узнаёт о заявке только из бота: удалённый или
+        # заблокировавший бота её бы не увидел — пусть лучше узнают менеджеры.
+        and user.deleted_at is None and user.bot_blocked_at is None
         and ROLE_EXECUTOR in get_user_roles(user)
         and has_action_roles(user, "requests.engineering")
     ]

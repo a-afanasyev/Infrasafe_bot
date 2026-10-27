@@ -435,6 +435,17 @@ def test_select_engineer_needs_executor_and_approval(db):
     assert select_engineer(db, NOW) is None
 
 
+def test_select_engineer_skips_unreachable(db):
+    """Удалённый или заблокировавший бота инженер о заявке не узнает."""
+    from datetime import datetime, timezone
+
+    at = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    _executor(db, 1, 101, roles='["executor", "engineer"]').bot_blocked_at = at
+    _executor(db, 2, 102, roles='["executor", "engineer"]').deleted_at = at
+    db.commit()
+    assert select_engineer(db, NOW) is None
+
+
 def test_select_engineer_least_loaded_and_exclude(db):
     _executor(db, 1, 101, roles='["executor", "engineer"]')
     _executor(db, 2, 102, roles='["executor", "engineer"]')

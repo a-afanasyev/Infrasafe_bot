@@ -54,11 +54,13 @@ from uk_management_bot.utils.shifts import (
 )
 from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.request_workflow import (
+    Action,
     ActionCommand,
     ActorContext,
     EventIntent,
     LegacyStatusIntent,
     Op,
+    PayloadInvalid,
     PrincipalRef,
     RequestState,
     TransitionResult,
@@ -77,6 +79,54 @@ Command = Union[ActionCommand, LegacyStatusIntent]
 
 class RequestNotFound(WorkflowError):
     """Заявка с указанным номером не найдена (под локом)."""
+
+
+class AssigneeUnavailable(PayloadInvalid):
+    """Назначаемый человек не может получить заявку: удалён, не одобрен
+    (заблокирован) или без роли исполнителя."""
+
+
+#: Действия, назначающие человека из payload. Цель проверяется в каноне, а не
+#: в адаптере: менеджер (API, бот), диспетчер и авто-менеджер подбирают
+#: кандидата ВНЕ этой транзакции — его могли заблокировать между подбором и
+#: записью. Строка пользователя читается FOR SHARE: блокировка/удаление
+#: дождётся конца транзакции назначения, а не проскочит между проверкой и записью.
+_ASSIGNING_ACTIONS = frozenset({
+    Action.MANAGER_ASSIGN, Action.SYSTEM_DISPATCH_ASSIGN, Action.SYSTEM_AUTO_PROMOTE,
+})
+
+
+def _assignee_id(cmd: ActionCommand) -> Optional[int]:
+    executor_id = cmd.payload.get("executor_id") if cmd.action in _ASSIGNING_ACTIONS else None
+    # Тип/наличие уже проверила схема payload в plan_transition.
+    return executor_id if isinstance(executor_id, int) else None
+
+
+def _check_assignee(user: Optional[User], executor_id: int) -> None:
+    if user is None or user.deleted_at is not None:
+        reason = "не найден"
+    elif user.status != "approved":
+        reason = "не одобрен или заблокирован"
+    elif ROLE_EXECUTOR not in get_user_roles(user):
+        reason = "без роли исполнителя"
+    else:
+        return
+    raise AssigneeUnavailable(f"Исполнитель {executor_id} {reason}")
+
+
+def _check_assignee_sync(db: Session, cmd: ActionCommand) -> None:
+    executor_id = _assignee_id(cmd)
+    if executor_id is not None:
+        _check_assignee(db.query(User).filter(User.id == executor_id)
+                        .with_for_update(read=True).first(), executor_id)
+
+
+async def _check_assignee_async(db: AsyncSession, cmd: ActionCommand) -> None:
+    executor_id = _assignee_id(cmd)
+    if executor_id is not None:
+        _check_assignee((await db.execute(
+            select(User).where(User.id == executor_id).with_for_update(read=True)
+        )).scalar_one_or_none(), executor_id)
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +407,9 @@ def run_command_sync(session_factory, request_number: str,
         if isinstance(cmd, LegacyStatusIntent):
             cmd = resolve_command(snap, actor, cmd)
         result = _decide(snap, cmd, actor, principal, now)
+        if not result.no_op:
+            # После авторизации: иначе чужой по отказу узнавал бы статус аккаунтов.
+            _check_assignee_sync(db, cmd)
         _apply_sync(db, req, result, actor, principal, now)
         outcome = _build_outcome(req, snap, result)
         db.commit()
@@ -639,6 +692,8 @@ async def run_command_async(session_factory, request_number: str,
         if isinstance(cmd, LegacyStatusIntent):
             cmd = resolve_command(snap, actor, cmd)
         result = _decide(snap, cmd, actor, principal, now)
+        if not result.no_op:
+            await _check_assignee_async(db, cmd)
         await _apply_async(db, req, result, actor, principal, now)
         outcome = _build_outcome(req, snap, result)
         await db.commit()

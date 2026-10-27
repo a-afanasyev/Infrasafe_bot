@@ -6,7 +6,7 @@ request and records it in webhook_inbox.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,8 @@ MAX_WEBHOOK_BODY_BYTES = 64 * 1024
 
 @router.post("/infrasafe/alert", status_code=202)
 @limiter.limit("60/minute")
-async def receive_infrasafe_alert(request: Request, db: AsyncSession = Depends(get_db)):
+async def receive_infrasafe_alert(request: Request, background_tasks: BackgroundTasks,
+                                  db: AsyncSession = Depends(get_db)):
     """Accept an alert webhook from InfraSafe.
 
     202 accepted/ignored; 401 bad/missing/stale signature; 409 duplicate;
@@ -72,7 +73,9 @@ async def receive_infrasafe_alert(request: Request, db: AsyncSession = Depends(g
         logger.warning("inbound webhook rejected: invalid envelope (ip=%s): %s", ip, exc)
         raise HTTPException(status_code=422, detail="invalid payload schema")
 
-    result = await handle_infrasafe_alert(db, payload, ip)
+    # Telegram-уведомление о назначении — после ответа: медленный Telegram не
+    # должен держать 202 (партнёр по таймауту повторит доставку и получит 409).
+    result = await handle_infrasafe_alert(db, payload, ip, schedule_notify=background_tasks.add_task)
     if result.status == 202:
         return result.body
     return JSONResponse(status_code=result.status, content=result.body)

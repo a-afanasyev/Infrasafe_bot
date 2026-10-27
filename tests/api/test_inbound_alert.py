@@ -543,6 +543,21 @@ async def test_uk_category_override_ignored_on_engineer_required(
 
 
 @pytest.mark.asyncio
+async def test_override_cannot_turn_regular_alert_into_engineering(
+    webhook_client, building, db_session, monkeypatch,
+):
+    """Инженерный разбор (мимо выключателя автоназначения) — только через
+    alert.engineer_required, не override'ом обычного алерта."""
+    _set_secrets(monkeypatch)
+    raw = _alert_body("evt-override-engineering", _expected_external_id(building.id),
+                      uk_category_override="Инженерный разбор")
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.22"))
+    assert r.status_code == 202
+    req = await db_session.get(Request, r.json()["request_number"])
+    assert req.category != "Инженерный разбор"
+
+
+@pytest.mark.asyncio
 async def test_regular_alert_is_not_dispatched(webhook_client, building, monkeypatch):
     """Обычные алерты по-прежнему ждут менеджера — dispatch только для эскалации."""
     _set_secrets(monkeypatch)

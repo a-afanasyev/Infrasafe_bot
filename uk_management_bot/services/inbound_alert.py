@@ -53,7 +53,8 @@ class InboundResult:
 
 
 async def handle_infrasafe_alert(
-    db: AsyncSession, payload: InfrasafeAlertIn, source_ip: str
+    db: AsyncSession, payload: InfrasafeAlertIn, source_ip: str,
+    *, schedule_notify=None,
 ) -> InboundResult:
     """Process one inbound InfraSafe webhook. See module docstring for the flow."""
     # Redis fast-guard against simultaneous re-delivery (Phase 1 layer). The
@@ -193,11 +194,11 @@ async def handle_infrasafe_alert(
 
     logger.info("inbound alert accepted: event_id=%s → request %s (building %s)",
                 payload.event_id, request_number, building.id)
-    await _after_accept(request_number, category)
+    await _after_accept(request_number, category, schedule_notify)
     return InboundResult(202, {"status": "accepted", "request_number": request_number})
 
 
-async def _after_accept(request_number: str, category: str) -> None:
+async def _after_accept(request_number: str, category: str, schedule_notify=None) -> None:
     """После durable-commit, best-effort (ответ вебхуку не роняет): карточка в
     живой канбан и «Инженерный разбор» — сразу инженеру. Упавший здесь dispatch
     подберёт сверка `engineering_reconcile`."""
@@ -212,7 +213,8 @@ async def _after_accept(request_number: str, category: str) -> None:
         logger.warning("inbound alert: realtime %s skipped: %s", request_number, exc)
     if is_engineering_category(category):
         try:
-            await auto_dispatch_new_request_async(request_number, category)
+            await auto_dispatch_new_request_async(
+                request_number, category, schedule_notify=schedule_notify)
         except Exception as exc:  # noqa: BLE001 — страховка: сверка
             logger.warning("inbound alert: dispatch %s failed: %s", request_number, exc)
 
@@ -361,9 +363,19 @@ def _apply_category_override(derived: str, override: str | None, event_id: str) 
         return derived
     from uk_management_bot.utils.categories import (
         CANONICAL_CATEGORY_KEYS,
+        ENGINEERING_CATEGORY,
         resolve_category_key,
     )
-    if resolve_category_key(normalized) not in CANONICAL_CATEGORY_KEYS:
+    key = resolve_category_key(normalized)
+    if key == ENGINEERING_CATEGORY:
+        # «Инженерный разбор» назначается мимо выключателя автоназначения —
+        # только через alert.engineer_required, не override'ом обычного алерта.
+        logger.warning(
+            "inbound alert: uk_category_override=%r is reserved for "
+            "alert.engineer_required, falling back (event_id=%s)", normalized, event_id,
+        )
+        return derived
+    if key not in CANONICAL_CATEGORY_KEYS:
         logger.warning(
             "inbound alert: uk_category_override=%r outside category canon, "
             "falling back to derived category (event_id=%s)", normalized, event_id,

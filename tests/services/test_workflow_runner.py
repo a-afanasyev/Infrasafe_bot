@@ -1214,3 +1214,96 @@ class TestManagerChangeCategoryAsyncParity:
         assert [r.status for r in rows] == ["cancelled"]
         assert [c.comment_type for c in comments] == [C.COMMENT_TYPE_CATEGORY_CHANGE]
         assert [a.action for a in audits] == [C.AUDIT_ACTION_REQUEST_CATEGORY_CHANGED]
+
+
+# ---------------------------------------------------------------------------
+# Цель назначения проверяется в каноне (MANAGER_ASSIGN / SYSTEM_DISPATCH_ASSIGN /
+# SYSTEM_AUTO_PROMOTE): удалён / не одобрен / без executor → отказ, статус цел.
+# ---------------------------------------------------------------------------
+
+def _set_executor(SF, **fields):
+    s = SF()
+    s.query(User).filter(User.id == 4).update(fields)
+    s.commit()
+    s.close()
+
+
+def _dispatcher():
+    return PrincipalRef(kind="system", user_id=None, source="dispatcher",
+                        system_actor="dispatcher")
+
+
+@pytest.mark.parametrize("fields", [
+    {"status": "blocked"},
+    {"status": "pending"},
+    {"roles": '["applicant"]'},
+])
+@pytest.mark.parametrize("principal, action", [
+    (_mgr(), Action.MANAGER_ASSIGN),
+    (_dispatcher(), Action.SYSTEM_DISPATCH_ASSIGN),
+])
+def test_assign_refuses_unavailable_target(factory, fields, principal, action):
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, **fields)
+    with pytest.raises(AssigneeUnavailable):
+        run_command_sync(SF, "260610-001", principal,
+                         ActionCommand("c1", action, {"executor_id": 4}))
+    s = SF()
+    req = s.get(Request, "260610-001")
+    assert req.status == C.REQUEST_STATUS_NEW and req.executor_id is None
+    s.close()
+
+
+def test_assign_refuses_deleted_or_missing_target(factory):
+    from datetime import datetime, timezone
+
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, deleted_at=datetime(2026, 10, 27, tzinfo=timezone.utc))
+    for executor_id in (4, 999):
+        with pytest.raises(AssigneeUnavailable):
+            run_command_sync(SF, "260610-001", _dispatcher(), ActionCommand(
+                "c1", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": executor_id}))
+
+
+def test_unauthorized_actor_learns_nothing_about_target(factory):
+    """Авторизация раньше проверки цели: житель получает NotAuthorized,
+    а не «исполнитель заблокирован» (иначе — оракул статуса аккаунтов)."""
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, status="blocked")
+    owner = PrincipalRef(kind="user", user_id=2, source="api")
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", owner,
+                         ActionCommand("c1", Action.MANAGER_ASSIGN, {"executor_id": 4}))
+
+
+def test_assign_refuses_unavailable_target_async(factory):
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool,
+                                     connect_args={"check_same_thread": False})
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        ASF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with ASF() as s:
+            s.add_all([
+                User(id=2, telegram_id=2, roles='["applicant"]', status="approved"),
+                User(id=4, telegram_id=4, roles='["executor"]', status="blocked"),
+                Request(request_number="260610-001", user_id=2, category="c",
+                        description="d", urgency="low", status=C.REQUEST_STATUS_NEW),
+            ])
+            await s.commit()
+        try:
+            with pytest.raises(AssigneeUnavailable):
+                await run_command_async(ASF, "260610-001", _dispatcher(), ActionCommand(
+                    "c1", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 4}))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
