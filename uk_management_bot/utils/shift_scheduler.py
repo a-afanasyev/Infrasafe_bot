@@ -845,27 +845,33 @@ class ShiftScheduler:
                     logger.warning(f"Отчёты о работах: сверка локов не прошла: {e}")
                     await db.rollback()
 
+        await self._report_work_reports_tick(summary)
+        self.task_stats[task_name]['failed' if failed else 'success'] += 1
+        self.task_stats[task_name]['last_run'] = utc_now()
+
+    @staticmethod
+    async def _report_work_reports_tick(summary: Dict[str, Any]) -> None:
+        """Лог итога тика + событие для дашборда, если тик что-то изменил.
+
+        Страница «Отчёты о работах» обновляется по событию сама. Канал канбана
+        (`requests:updates`, WS /ws/v2/kanban), а не свой: новый WS-эндпоинт
+        пришлось бы заявлять в edge-allowlist, а канбан незнакомые типы событий
+        игнорирует. Сбой публикации глотается внутри — тик он не роняет.
+        """
         created = (summary.get('sync') or {}).get('created', 0)
         published = (summary.get('autopublish') or {}).get('published', 0)
         revoked = summary.get('revoked', 0)
-        if created or published or revoked:
-            logger.info(
-                "Отчёты о работах: создано %s, опубликовано %s, снято %s",
-                created, published, revoked,
-            )
-            # Страница «Отчёты о работах» обновляется по этому событию сама.
-            # Канал канбана (`requests:updates`, WS /ws/v2/kanban), а не свой:
-            # новый WS-эндпоинт пришлось бы заявлять в edge-allowlist, а канбан
-            # незнакомые типы событий игнорирует. Сбой публикации глотается
-            # внутри — тик он не роняет.
-            from uk_management_bot.services.redis_pubsub import publish_request_event
-            await publish_request_event(
-                "work_reports.updated",
-                {"created": created, "published": published, "revoked": revoked},
-            )
-
-        self.task_stats[task_name]['failed' if failed else 'success'] += 1
-        self.task_stats[task_name]['last_run'] = utc_now()
+        if not (created or published or revoked):
+            return
+        logger.info(
+            "Отчёты о работах: создано %s, опубликовано %s, снято %s",
+            created, published, revoked,
+        )
+        from uk_management_bot.services.redis_pubsub import publish_request_event
+        await publish_request_event(
+            "work_reports.updated",
+            {"created": created, "published": published, "revoked": revoked},
+        )
 
     def _elevator_reminders_sync(self) -> tuple[tuple[int, str], ...]:
         """DB-фаза напоминаний по лифтам целиком в рабочем потоке.
