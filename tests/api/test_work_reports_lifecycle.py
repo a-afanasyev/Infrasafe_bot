@@ -831,6 +831,7 @@ async def test_reject_409_wrong_status(client: AsyncClient, db_session, monkeypa
 @pytest.mark.asyncio
 async def test_reopen_happy_path(client: AsyncClient, db_session, monkeypatch):
     _enable(monkeypatch)
+    await _mk_request(db_session, "260725-370", address_type="legacy")
     report = await _mk_report(db_session, "260725-370", status="rejected", reject_reason="old")
 
     resp = await client.post(f"{BASE}/{report.id}/reopen")

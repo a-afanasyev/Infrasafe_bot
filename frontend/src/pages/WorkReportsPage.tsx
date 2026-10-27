@@ -23,6 +23,7 @@ import {
   useNeedsMediaCount,
   useReopenWorkReport,
   useUpdateWorkReportsSettings,
+  useWorkReportsWebSocket,
 } from '../hooks/useWorkReports'
 import { tCategory } from '../i18n/apiMaps'
 import { WORK_REPORT_CATEGORY_KEYS, type WorkReport } from '../types/workReports'
@@ -75,6 +76,7 @@ type ReportGroup = ReturnType<typeof useReportGroup>
 export default function WorkReportsPage() {
   const { t } = useTranslation()
   usePageTitle(t('workReports.title'))
+  useWorkReportsWebSocket()
 
   const { data: boardConfig } = useBoardConfig()
   const rawSettings = boardConfig?.work_reports

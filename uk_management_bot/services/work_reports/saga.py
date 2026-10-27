@@ -369,11 +369,25 @@ async def reject_reports_without_media(
 
 
 async def reopen_report(db: AsyncSession, report_id: int, moderator_id: int) -> WorkReport:
-    """``rejected`` → ``pending``."""
+    """``rejected`` → ``pending``.
+
+    Заявка обязана быть eligible — тот же гейт, что в `publish_report`. Иначе
+    вернувшийся в `pending` отчёт опубликовать нельзя, а автопубликация падает
+    на нём каждый тик (profk 2026-10-26, отчёт 34).
+    """
     report = await _load_report_for_update(db, report_id)
     if report.status != "rejected":
         raise WorkReportPublishError(
             f"work report {report_id} is {report.status}, expected rejected", 409
+        )
+    request = (
+        await db.execute(
+            select(Request).where(Request.request_number == report.request_number)
+        )
+    ).scalar_one_or_none()
+    if request is None or not is_report_eligible(request):
+        raise WorkReportPublishError(
+            f"request {report.request_number} no longer eligible", 409
         )
     report.status = "pending"
     report.reject_reason = None
