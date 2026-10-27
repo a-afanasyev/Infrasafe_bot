@@ -634,6 +634,7 @@ async def test_reject_409_wrong_status(db_session):
 
 @pytest.mark.asyncio
 async def test_reopen_rejected_to_pending(db_session):
+    db_session.add(_mk_request("260725-340"))
     report = _mk_report("260725-340", status="rejected")
     report.reject_reason = "old reason"
     db_session.add(report)
@@ -666,6 +667,29 @@ async def test_reopen_409_wrong_status(db_session):
     with pytest.raises(WorkReportPublishError) as exc_info:
         await reopen_report(db_session, report.id, MODERATOR_ID)
     assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("request_kwargs", [
+    {"status": "Новая"},
+    {"is_returned": True},
+    None,
+], ids=["status_not_eligible", "returned", "request_missing"])
+async def test_reopen_409_request_not_eligible(db_session, request_kwargs):
+    """Регрессия profk 2026-10-26: отчёт 34 вернули в pending при неподходящей
+    заявке — автопубликация падала на нём каждый тик «no longer eligible»."""
+    if request_kwargs is not None:
+        db_session.add(_mk_request("260725-342", **request_kwargs))
+    report = _mk_report("260725-342", status="rejected")
+    db_session.add(report)
+    await db_session.commit()
+    await db_session.refresh(report)
+
+    with pytest.raises(WorkReportPublishError) as exc_info:
+        await reopen_report(db_session, report.id, MODERATOR_ID)
+    assert exc_info.value.status_code == 409
+    assert (await _reload(db_session, report.id)).status == "rejected"
+    assert await _audit_rows(db_session, "work_report.reopen", report.id) == []
 
 
 # ===========================================================================
