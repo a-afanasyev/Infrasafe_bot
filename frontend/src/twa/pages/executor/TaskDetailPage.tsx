@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { twaClient } from '../../twaClient'
-import { tCategory, tStatus } from '../../../i18n/apiMaps'
+import { isEngineeringCategory, tCategory, tStatus } from '../../../i18n/apiMaps'
+import { hasAction } from '../../../authz/actions'
+import HandoverSheet from '../../components/HandoverSheet'
 import { toast } from 'sonner'
 import { notifyError } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
@@ -30,6 +32,9 @@ const EXECUTOR_ACTIONS: Record<string, { label: string; target: string; color: s
   // so a reopen button here would only ever 422.
 }
 
+// Передать мастеру можно, пока работа не сдана (канон MANAGER_ASSIGN: Новая/В работе).
+const HANDOVER_STATUSES = new Set(['Новая', 'В работе'])
+
 export default function TaskDetailPage() {
   const { number } = useParams()
   const { t } = useTranslation()
@@ -46,11 +51,22 @@ export default function TaskDetailPage() {
   // Закуп needs a materials list before the status flip.
   const [sheet, setSheet] = useState<'Закуп' | null>(null)
   const [sheetText, setSheetText] = useState('')
+  const [handoverOpen, setHandoverOpen] = useState(false)
+
+  // Профиль — тот же кэш, что у RoleGuard: кнопка инженера по действию, не по роли.
+  const { data: profile } = useQuery<{ actions?: string[] }>({
+    queryKey: ['twa', 'profile'],
+    queryFn: () => twaClient.get('/api/v2/profile').then((r) => r.data),
+  })
 
   useEffect(() => {
     return showBackButton(() => {
       if (sheet) {
         setSheet(null)
+        return
+      }
+      if (handoverOpen) {
+        setHandoverOpen(false)
         return
       }
       if (lightboxCloseRef.current) {
@@ -59,7 +75,7 @@ export default function TaskDetailPage() {
       }
       navigate(-1)
     })
-  }, [showBackButton, navigate, sheet])
+  }, [showBackButton, navigate, sheet, handoverOpen])
 
   const { data: request, isLoading } = useQuery({
     queryKey: ['twa', 'request', number],
@@ -116,6 +132,10 @@ export default function TaskDetailPage() {
   if (!request) return <div className="p-8 text-center text-gray-400">{t('common.error')}</div>
 
   const actions = EXECUTOR_ACTIONS[request.status] || []
+  const canHandover =
+    hasAction(profile?.actions, 'requests.engineering') &&
+    isEngineeringCategory(request.category) &&
+    HANDOVER_STATUSES.has(request.status)
   const created = new Date(request.created_at)
 
   return (
@@ -185,6 +205,19 @@ export default function TaskDetailPage() {
           />
           <CommentThread requestNumber={number} />
         </>
+      )}
+
+      {canHandover && (
+        <button
+          onClick={() => { haptic('selection'); setHandoverOpen(true) }}
+          className="w-full mb-3 py-3 rounded-xl text-[13px] font-semibold bg-white dark:bg-gray-800 border border-emerald-500 text-emerald-600"
+        >
+          {t('twa.exec.handover.button')}
+        </button>
+      )}
+
+      {handoverOpen && number && (
+        <HandoverSheet requestNumber={number} onClose={() => setHandoverOpen(false)} />
       )}
 
       {actions.length > 0 && (

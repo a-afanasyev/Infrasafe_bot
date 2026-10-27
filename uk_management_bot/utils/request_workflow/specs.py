@@ -27,6 +27,7 @@ from .guards import (
     _executor_can_claim,
     _executor_can_work,
     _is_assigned_executor,
+    _engineer_can_assign,
     _is_manager,
     _owner_can_return,
     _system_can_promote,
@@ -77,7 +78,7 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.MANAGER_ASSIGN: ActionSpec(
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
         REQUEST_STATUS_IN_PROGRESS,
-        lambda s, a: _is_manager(a), RepeatPolicy.NO_OP_IF_SAME),
+        lambda s, a: _is_manager(a) or _engineer_can_assign(s, a), RepeatPolicy.NO_OP_IF_SAME),
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
         _executor_can_work, RepeatPolicy.REJECT),
