@@ -507,30 +507,55 @@ async def test_uk_category_override_replaces_type_mapping(
 
 
 @pytest.mark.asyncio
-async def test_uk_category_override_wins_on_engineer_required(
+async def test_uk_category_override_ignored_on_engineer_required(
     webhook_client, building, db_session, monkeypatch,
 ):
-    """InfraSafe PR #56 sends `uk_category_override` even on engineer_required
-    events. UK must honor it instead of the engineer-required hardcode — keeps
-    InfraSafe in control of the chain-end taxonomy.
-
-    In practice the override matches the hardcode («Инженерный разбор») so the
-    observable category is identical; test asserts the override branch is
-    actually taken by sending an unusual value."""
+    """Эскалация всегда «Инженерный разбор» (её ведёт инженер): override
+    партнёра для engineer_required не действует (решение 2026-10-27, ранее
+    InfraSafe PR #56 перекрывал hardcode). Сразу после приёма — карточка в
+    канбан и dispatch инженеру."""
     _set_secrets(monkeypatch)
+    dispatched, published = [], []
+
+    async def _dispatch(number, category, **kw):
+        dispatched.append((number, category))
+
+    async def _publish(event, data):
+        published.append((event, data["number"]))
+
+    monkeypatch.setattr("uk_management_bot.services.dispatch.auto_dispatch_new_request_async", _dispatch)
+    monkeypatch.setattr("uk_management_bot.services.redis_pubsub.publish_request_event", _publish)
     raw = _alert_body(
         "evt-cat-override-engreq", _expected_external_id(building.id),
         event="alert.engineer_required",
         reopen_sequence=4,
-        uk_category_override="Безопасность",  # not the hardcoded value
+        uk_category_override="Безопасность",
         engineer_required_reason="max_reopens_per_24h",
     )
     r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.20"))
     assert r.status_code == 202
-    req = await db_session.get(Request, r.json()["request_number"])
-    assert req.category == "Безопасность"
-    # Urgency hardcode still applies (no urgency override sent here).
+    number = r.json()["request_number"]
+    req = await db_session.get(Request, number)
+    assert req.category == "Инженерный разбор"
     assert req.urgency == "critical"
+    assert dispatched == [(number, "Инженерный разбор")]
+    assert published == [("request.created", number)]
+
+
+@pytest.mark.asyncio
+async def test_regular_alert_is_not_dispatched(webhook_client, building, monkeypatch):
+    """Обычные алерты по-прежнему ждут менеджера — dispatch только для эскалации."""
+    _set_secrets(monkeypatch)
+    dispatched = []
+
+    async def _dispatch(number, category, **kw):
+        dispatched.append(number)
+
+    monkeypatch.setattr("uk_management_bot.services.dispatch.auto_dispatch_new_request_async", _dispatch)
+    raw = _alert_body("evt-regular-no-dispatch", _expected_external_id(building.id))
+    r = await webhook_client.post(URL, content=raw, headers=_signed(raw, "203.0.114.21"))
+    assert r.status_code == 202
+    assert dispatched == []
 
 
 @pytest.mark.asyncio

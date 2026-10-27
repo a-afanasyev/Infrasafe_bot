@@ -124,8 +124,18 @@ async def handle_infrasafe_alert(
                     "ladder, falling back to severity mapping (event_id=%s)",
                     alert.uk_urgency_override, payload.event_id,
                 )
-    category = _apply_category_override(category, alert.uk_category_override,
-                                        payload.event_id)
+    if payload.event == "alert.engineer_required":
+        # Эскалация — всегда «Инженерный разбор» (её ведёт инженер): override
+        # партнёра увёл бы её в обычную категорию к тому, чей ремонт не помог.
+        if alert.uk_category_override:
+            logger.info(
+                "inbound alert: uk_category_override=%r ignored for "
+                "alert.engineer_required (event_id=%s)",
+                alert.uk_category_override, payload.event_id,
+            )
+    else:
+        category = _apply_category_override(category, alert.uk_category_override,
+                                            payload.event_id)
     # Sprint 10 / INT-120: reopen-marker. Deployed wire sends `reopen_sequence=1`
     # for first-time alerts (per alertForwarder.js:222 `|| 1` default); we only
     # prefix when ≥ 2 — that's the actual reopen signal.
@@ -183,7 +193,28 @@ async def handle_infrasafe_alert(
 
     logger.info("inbound alert accepted: event_id=%s → request %s (building %s)",
                 payload.event_id, request_number, building.id)
+    await _after_accept(request_number, category)
     return InboundResult(202, {"status": "accepted", "request_number": request_number})
+
+
+async def _after_accept(request_number: str, category: str) -> None:
+    """После durable-commit, best-effort (ответ вебхуку не роняет): карточка в
+    живой канбан и «Инженерный разбор» — сразу инженеру. Упавший здесь dispatch
+    подберёт сверка `engineering_reconcile`."""
+    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
+    from uk_management_bot.services.redis_pubsub import publish_request_event
+    from uk_management_bot.utils.categories import is_engineering_category
+
+    try:
+        # Канбан на событие перечитывает доску — карточка в payload не нужна.
+        await publish_request_event("request.created", {"number": request_number})
+    except Exception as exc:  # noqa: BLE001 — realtime best-effort
+        logger.warning("inbound alert: realtime %s skipped: %s", request_number, exc)
+    if is_engineering_category(category):
+        try:
+            await auto_dispatch_new_request_async(request_number, category)
+        except Exception as exc:  # noqa: BLE001 — страховка: сверка
+            logger.warning("inbound alert: dispatch %s failed: %s", request_number, exc)
 
 
 async def _resolve_building(db: AsyncSession, external_id: str) -> Building | None:

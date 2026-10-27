@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Literal, Optional
 
 from uk_management_bot.constants.categories import get_specialization_for_category
+from uk_management_bot.utils.categories import is_engineering_category
 from uk_management_bot.utils.request_workflow import (
     Action,
     ActionCommand,
@@ -41,7 +42,7 @@ from uk_management_bot.utils.request_workflow import (
 
 logger = logging.getLogger(__name__)
 
-DispatchKind = Literal["no_spec", "disabled", "assigned", "grouped", "failed"]
+DispatchKind = Literal["no_spec", "disabled", "assigned", "grouped", "failed", "no_engineer"]
 
 
 @dataclass(frozen=True)
@@ -96,11 +97,30 @@ def pick_duty_executor_id(specialization: str, db=None,
     исключение, чтобы вызывающий отличил «никого нет» от «не смогли посмотреть».
     """
     from uk_management_bot.services.auto_manager.rule_engine import select_executor
+
+    return _pick_id(lambda session, now: select_executor(
+        session, specialization, now, exclude_user_ids=exclude_user_ids),
+        db, strict, specialization)
+
+
+def pick_assignee_id(category: Optional[str], db=None,
+                     exclude_user_ids: frozenset[int] = frozenset(),
+                     strict: bool = False) -> Optional[int]:
+    """Кому назначить заявку категории: «Инженерный разбор» — инженеру,
+    остальное — дежурному по специализации (`pick_duty_executor_id`)."""
+    if is_engineering_category(category):
+        from uk_management_bot.services.auto_manager.rule_engine import select_engineer
+
+        return _pick_id(lambda session, now: select_engineer(
+            session, now, exclude_user_ids=exclude_user_ids), db, strict, "engineer")
+    return pick_duty_executor_id(_specialization_for(category), db, exclude_user_ids, strict)
+
+
+def _pick_id(select, db, strict: bool, label: str) -> Optional[int]:
     from uk_management_bot.utils.datetime_utils import utc_now
 
     def _run(session) -> Optional[int]:
-        candidate = select_executor(session, specialization, utc_now(),
-                                    exclude_user_ids=exclude_user_ids)
+        candidate = select(session, utc_now())
         return candidate.id if candidate is not None else None
 
     try:
@@ -116,7 +136,7 @@ def pick_duty_executor_id(specialization: str, db=None,
         if strict:
             raise
         logger.warning("[DISPATCH] подбор дежурного под '%s' не выполнен: %s",
-                       specialization, e)
+                       label, e)
         return None
 
 
@@ -198,11 +218,13 @@ def auto_dispatch_new_request_sync(request_number: str,
     # на одной короткой сессии, закрытой ДО команды и уведомления (синхронный
     # Telegram не должен идти при idle-in-transaction). Без фабрики — как
     # раньше: каждый хелпер открывает и закрывает свою прод-сессию.
+    engineering = is_engineering_category(category)
     own_db = _db is None and session_factory is not None
     db = session_factory() if own_db else _db
     try:
-        enabled = _auto_assign_enabled_sync(db)
-        executor_id = pick_duty_executor_id(spec, db) if enabled else None
+        # «Инженерный разбор» — инженеру всегда, общий выключатель его не держит.
+        enabled = engineering or _auto_assign_enabled_sync(db)
+        executor_id = pick_assignee_id(category, db) if enabled else None
     finally:
         if own_db:
             db.close()
@@ -210,6 +232,8 @@ def auto_dispatch_new_request_sync(request_number: str,
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)
+    if engineering and executor_id is None:
+        return _no_engineer(request_number, spec)
     from uk_management_bot.services.workflow_runner import run_command_sync
 
     if session_factory is None:
@@ -253,7 +277,8 @@ async def auto_dispatch_new_request_async(request_number: str,
     spec = _specialization_for(category)
     if not spec:
         return DispatchResult("no_spec")
-    if not await _auto_assign_enabled_async(_db, session_factory=session_factory):
+    engineering = is_engineering_category(category)
+    if not engineering and not await _auto_assign_enabled_async(_db, session_factory=session_factory):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)
@@ -268,7 +293,9 @@ async def auto_dispatch_new_request_async(request_number: str,
     # Подбор дежурного — sync-код (`select_executor` ходит через Session), и
     # здесь мы в event loop'е. Отдельный поток, а не прямой вызов: блокировать
     # loop синхронными запросами к БД в этом проекте уже было дефектом (BUG-157).
-    executor_id = await asyncio.to_thread(pick_duty_executor_id, spec, None)
+    executor_id = await asyncio.to_thread(pick_assignee_id, category, None)
+    if engineering and executor_id is None:
+        return _no_engineer(request_number, spec)
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
         done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
@@ -302,6 +329,15 @@ async def auto_dispatch_new_request_async(request_number: str,
     # из-за появившейся группы.
     await _publish_updated(request_number)
     return DispatchResult("grouped", spec)
+
+
+def _no_engineer(request_number: str, spec: Optional[str]) -> DispatchResult:
+    """«Инженерный разбор» без инженера: заявка остаётся «Новая» БЕЗ группы —
+    группа `repair` отдала бы эскалацию разнорабочему, чей ремонт и не помог.
+    Менеджеров уведомляет сверка `engineering_reconcile` (одна точка, с дедупом)."""
+    logger.warning("[DISPATCH] %s: инженер не найден — заявка остаётся «Новая»",
+                   request_number)
+    return DispatchResult("no_engineer", spec)
 
 
 def _notify_assigned_sync(request_number: str, outcome) -> None:

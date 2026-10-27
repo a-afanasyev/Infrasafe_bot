@@ -674,3 +674,17 @@ async def test_run_once_splits_slots_between_main_and_residual_same_tick(env, mo
     # Ровно одно уведомление на заявку (dedup по request_number) — 6+2=8, не
     # 10+10 (остальные не должны были попасть в тик вовсе).
     assert len(fake_bot.sent) == 8
+
+
+def test_queues_skip_engineering_requests(env):
+    """«Инженерный разбор» ведёт сверка engineering_reconcile, не авто-менеджер."""
+    db, _ = env
+    _residual_request(db, "261027-001", category="Инженерный разбор")
+    _residual_request(db, "261027-002", category="engineering")
+    _residual_request(db, "261027-003")
+    _group_request(db, "261027-004", category="Инженерный разбор", specialization="repair")
+    _group_request(db, "261027-005")
+    residual = {n for (n,) in db.query(Request.request_number).filter(orch_mod._residual_queue_filter())}
+    main = {n for (n,) in db.query(Request.request_number).filter(orch_mod._main_queue_filter())}
+    assert residual == {"261027-003"}
+    assert main == {"261027-005"}

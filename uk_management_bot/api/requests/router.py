@@ -566,6 +566,7 @@ async def update_request(
     # резолвит сервер (единый источник CATEGORY_TO_SPECIALIZATION). Нет маппинга
     # категории → fallback на status-only переход (прежнее поведение «менеджер берёт»).
     duty_group_spec = None
+    duty_category = None
     if target_status == C.REQUEST_STATUS_IN_PROGRESS and updates.get("assign_to_duty"):
         # Роль проверяется ЗДЕСЬ, а не только внутри run_command: эндпоинт открыт
         # и жителю/исполнителю, а ниже стоят обращения к БД и отказ 409 «нет
@@ -576,9 +577,9 @@ async def update_request(
             raise HTTPException(
                 status_code=403, detail="Not permitted for this transition")
         from uk_management_bot.constants.categories import get_specialization_for_category
-        category = await svc.category_of(db, request_number)
-        if category:
-            duty_group_spec = get_specialization_for_category(category)
+        duty_category = await svc.category_of(db, request_number)
+        if duty_category:
+            duty_group_spec = get_specialization_for_category(duty_category)
 
     # ═══════════════════ WORKFLOW-переход → единый canonical-writer ═══════════════════
     if target_status is not None or assign_executor_id is not None:
@@ -604,20 +605,25 @@ async def update_request(
             # если никто не брал, заявка висела ничьей.
             import asyncio
 
-            from uk_management_bot.services.dispatch import pick_duty_executor_id
+            from uk_management_bot.services.dispatch import pick_assignee_id
+            from uk_management_bot.utils.categories import is_engineering_category
 
             # Исключаем ТЕКУЩЕГО исполнителя: при переназначении «дежурному»
             # подбор иначе резолвит того же человека — его туда и поставил
             # авто-диспетчер, — и кнопка не делает ничего. Паритет с бот-путём
             # (handlers/admin/reassignment._resolve_duty).
             current_executor_id = await svc.executor_id_of(db, request_number)
+            # «Инженерный разбор» — инженеру (pick_assignee_id), не разнорабочему.
             duty_executor_id = await asyncio.to_thread(
-                pick_duty_executor_id, duty_group_spec, None,
+                pick_assignee_id, duty_category, None,
                 frozenset({current_executor_id}) if current_executor_id else frozenset())
             if duty_executor_id is None:
                 raise HTTPException(
                     status_code=409,
                     detail=(
+                        "Нет инженера для «Инженерного разбора». "
+                        "Назначьте конкретного исполнителя."
+                        if is_engineering_category(duty_category) else
                         "Нет дежурного исполнителя со специализацией "
                         f"'{duty_group_spec}' на смене прямо сейчас. "
                         "Назначьте конкретного исполнителя или дождитесь смены."

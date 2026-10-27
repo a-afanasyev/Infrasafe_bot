@@ -9,6 +9,8 @@ SYSTEM_DISPATCH_ASSIGN {group} → group-назначение покрыт в te
 
 from __future__ import annotations
 
+import pytest
+
 import uk_management_bot.services.workflow_runner as wr
 from uk_management_bot.services.dispatch import (
     _specialization_for,
@@ -131,3 +133,51 @@ def test_duty_executor_found_assigns_person(monkeypatch):
     auto_dispatch_new_request_sync("260610-002", "Сантехника")
     assert captured["action"] == Action.SYSTEM_DISPATCH_ASSIGN
     assert captured["payload"] == {"executor_id": 77}
+
+
+# ── «Инженерный разбор» → инженер (роль engineer) ───────────────────────
+
+
+def _engineering_harness(monkeypatch, engineer_id):
+    from types import SimpleNamespace
+
+    import uk_management_bot.services.auto_manager.rule_engine as re_mod
+    import uk_management_bot.services.dispatch as dispatch_mod
+
+    monkeypatch.setattr(re_mod, "select_engineer",
+                        lambda *a, **k: SimpleNamespace(id=engineer_id) if engineer_id else None)
+    monkeypatch.setattr(re_mod, "select_executor",
+                        lambda *a, **k: pytest.fail("рутинный подбор для engineering"))
+    # Общий выключатель автоназначения выключен — эскалацию он не держит.
+    monkeypatch.setattr(dispatch_mod, "_auto_assign_enabled_sync", lambda *a, **k: False)
+    monkeypatch.setattr(dispatch_mod, "_notify_assigned_sync", lambda *a, **k: None)
+    calls = []
+
+    def fake(_sf, num, principal, command, *a, **k):
+        calls.append((principal.system_actor, command.action, dict(command.payload)))
+        return object()
+
+    monkeypatch.setattr(wr, "run_command_sync", fake)
+    return calls
+
+
+class _NoDb:
+    def close(self):
+        pass
+
+
+def test_engineering_goes_to_engineer_even_when_auto_assign_off(monkeypatch):
+    calls = _engineering_harness(monkeypatch, 42)
+    result = auto_dispatch_new_request_sync("261027-001", "Инженерный разбор",
+                                            session_factory=_NoDb)
+    assert result.kind == "assigned" and result.executor_id == 42
+    assert calls == [("dispatcher", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 42})]
+
+
+def test_engineering_without_engineer_stays_new_without_group(monkeypatch):
+    """Без инженера — «Новая» БЕЗ группы repair (разнорабочий уже не помог)."""
+    calls = _engineering_harness(monkeypatch, None)
+    result = auto_dispatch_new_request_sync("261027-001", "engineering", session_factory=_NoDb)
+    assert result.kind == "no_engineer"
+    assert calls == []
+

@@ -97,6 +97,17 @@ CANONICAL_CATEGORY_KEYS = list(CATEGORY_DEFINITIONS.keys())
 # выбора человеком.
 _SERVICE_CATEGORY_KEYS = frozenset({"engineering"})
 
+#: «Инженерный разбор» (эскалация InfraSafe) — его ведёт инженер, а не дежурный.
+ENGINEERING_CATEGORY = "engineering"
+#: Все значения requests.category, означающие эту категорию (ключ + legacy-лейбл).
+ENGINEERING_CATEGORY_VALUES: tuple[str, ...] = (
+    ENGINEERING_CATEGORY, *CATEGORY_DEFINITIONS[ENGINEERING_CATEGORY]["legacy_texts"])
+
+
+def is_engineering_category(raw_value) -> bool:
+    return raw_value in ENGINEERING_CATEGORY_VALUES
+
+
 # Что человек может ВЫБРАТЬ (бот-клавиатуры, TWA, колл-центр, смена категории,
 # picker в приёмке групп). Фронтовый `frontend/src/constants.ts:CATEGORIES`
 # зеркалит этот список — менять парой.
