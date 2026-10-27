@@ -1307,3 +1307,81 @@ def test_assign_refuses_unavailable_target_async(factory):
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------------
+# Инженер без смены — только по назначенной ему заявке «Инженерный разбор»
+# ---------------------------------------------------------------------------
+
+def _engineering_case(SF, *, category="Инженерный разбор", executor_id=4,
+                      roles='["executor", "engineer"]'):
+    s = SF()
+    s.query(User).filter(User.id == 4).update({"roles": roles})
+    s.query(Request).filter(Request.request_number == "260610-001").update(
+        {"category": category, "executor_id": executor_id})
+    s.commit()
+    s.close()
+
+
+def _purchase():
+    return ActionCommand("c", Action.EXECUTOR_PURCHASE, {"requested_materials": "кабель"})
+
+
+def _as_exec():
+    return PrincipalRef(kind="user", user_id=4, source="telegram")
+
+
+def test_engineer_works_own_engineering_without_shift(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    _engineering_case(SF)
+    out = run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+    assert out.new_status == C.REQUEST_STATUS_PURCHASE
+
+
+@pytest.mark.parametrize("case", [
+    {"category": "plumbing"},                    # рутина — только на смене
+    {"roles": '["executor"]'},                   # не инженер
+])
+def test_shift_still_required_outside_engineer_exemption(factory, case):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    _engineering_case(SF, **case)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+
+
+def test_engineer_cannot_work_someone_elses_engineering(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    s.add(User(id=5, telegram_id=5, roles='["executor"]', status="approved"))
+    s.commit()
+    s.close()
+    _engineering_case(SF, executor_id=5)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+
+
+def test_engineer_exemption_async(factory):
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool,
+                                     connect_args={"check_same_thread": False})
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        ASF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with ASF() as s:
+            s.add_all([
+                User(id=2, telegram_id=2, roles='["applicant"]', status="approved"),
+                User(id=4, telegram_id=4, roles='["executor", "engineer"]', status="approved"),
+                Request(request_number="260610-001", user_id=2, category="engineering",
+                        description="d", urgency="low", executor_id=4,
+                        status=C.REQUEST_STATUS_IN_PROGRESS),
+            ])
+            await s.commit()
+        try:
+            out = await run_command_async(ASF, "260610-001", _as_exec(), _purchase())
+            assert out.new_status == C.REQUEST_STATUS_PURCHASE
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())

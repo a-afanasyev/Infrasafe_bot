@@ -52,6 +52,8 @@ from uk_management_bot.utils.shifts import (
     is_on_shift_now_async,
     is_on_shift_now_sync,
 )
+from uk_management_bot.authz import has_action_roles
+from uk_management_bot.utils.categories import is_engineering_category
 from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.request_workflow import (
     Action,
@@ -102,16 +104,22 @@ def _assignee_id(cmd: ActionCommand) -> Optional[int]:
     return executor_id if isinstance(executor_id, int) else None
 
 
-def _check_assignee(user: Optional[User], executor_id: int) -> None:
+def assignee_unavailable_reason(user: Optional[User]) -> Optional[str]:
+    """Почему человеку нельзя отдать заявку, или None. Общий предикат канона
+    и обходных массовых путей (перенос заявок удаляемого сотрудника)."""
     if user is None or user.deleted_at is not None:
-        reason = "не найден"
-    elif user.status != "approved":
-        reason = "не одобрен или заблокирован"
-    elif ROLE_EXECUTOR not in get_user_roles(user):
-        reason = "без роли исполнителя"
-    else:
-        return
-    raise AssigneeUnavailable(f"Исполнитель {executor_id} {reason}")
+        return "не найден"
+    if user.status != "approved":
+        return "не одобрен или заблокирован"
+    if ROLE_EXECUTOR not in get_user_roles(user):
+        return "без роли исполнителя"
+    return None
+
+
+def _check_assignee(user: Optional[User], executor_id: int) -> None:
+    reason = assignee_unavailable_reason(user)
+    if reason:
+        raise AssigneeUnavailable(f"Исполнитель {executor_id} {reason}")
 
 
 def _check_assignee_sync(db: Session, cmd: ActionCommand) -> None:
@@ -188,6 +196,15 @@ def _new_state_from(req: Request) -> RequestState:
         acceptance_mode=req.acceptance_mode or ACCEPTANCE_MODE_RESIDENT,
         category=req.category,
     )
+
+
+def _engineer_shift_exempt(actor: ActorContext, req: Request) -> bool:
+    """Инженер работает без смены — только по назначенной ЕМУ заявке
+    «Инженерный разбор» (решение владельца). Пул, взятие и рутина — как у
+    всех: смена ограничивает взятие новой работы, а эскалацию ему назначают."""
+    return (req.executor_id == actor.user_id
+            and is_engineering_category(req.category)
+            and has_action_roles(actor.roles, "requests.engineering"))
 
 
 def _build_audit(ev: EventIntent, req: Request, actor: ActorContext) -> AuditLog:
@@ -267,7 +284,8 @@ def _build_snapshot_sync(db: Session, req: Request,
         RequestAssignment.status == "active").first()
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-        has_shift = is_on_shift_now_sync(db, actor.user_id)
+        has_shift = (_engineer_shift_exempt(actor, req)
+                     or is_on_shift_now_sync(db, actor.user_id))
     a_exec = active[0] if active else None
     a_type = active[1] if active else None
     a_group = active[2] if active else None
@@ -462,7 +480,8 @@ async def _build_snapshot_async(db: AsyncSession, req: Request,
             RequestAssignment.status == "active"))).first()
     has_shift = False
     if actor.kind == "user" and ROLE_EXECUTOR in actor.roles:
-        has_shift = await is_on_shift_now_async(db, actor.user_id)
+        has_shift = (_engineer_shift_exempt(actor, req)
+                     or await is_on_shift_now_async(db, actor.user_id))
     return _snapshot_from_facts(req, has_rating=has_rating, active=active,
                                 has_shift=has_shift)
 
