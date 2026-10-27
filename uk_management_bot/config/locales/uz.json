@@ -2913,6 +2913,6 @@
     "top": "Qabul qilinganlar bo'yicha eng yaxshi ijrochilar:"
   },
   "engineering": {
-    "unassigned": "⚠️ <b>InfraSafe eskalatsiyasi muhandissiz</b>\n#{request_number} ariza («Muhandislik tahlili») hech kimga tayinlanmagan: muhandis yo'q. Ijrochini qo'lda tayinlang yoki «Muhandis» rolini bering."
+    "unassigned": "⚠️ <b>InfraSafe eskalatsiyasi muhandissiz</b>\n#{request_number} ariza («Muhandislik tekshiruvi») hech kimga tayinlanmagan: muhandis yo'q. Ijrochini qo'lda tayinlang yoki «Muhandis» rolini bering."
   }
 }
