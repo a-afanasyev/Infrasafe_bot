@@ -224,13 +224,18 @@ async def _after_accept(request_number: str, category: str, schedule_notify=None
             logger.warning("inbound alert: dispatch %s failed: %s", request_number, exc)
 
 
+_BACKGROUND: set = set()  # сильные ссылки: иначе GC может собрать задачу до конца
+
+
 def _schedule(schedule_notify, fn, *args) -> None:
     if schedule_notify is not None:
         schedule_notify(fn, *args)
     else:  # вызов без BackgroundTasks (тесты, внутренние пути) — фоном
         import asyncio
 
-        asyncio.get_running_loop().create_task(fn(*args))
+        task = asyncio.get_running_loop().create_task(fn(*args))
+        _BACKGROUND.add(task)
+        task.add_done_callback(_BACKGROUND.discard)
 
 
 async def _notify_reopened(request_number: str, sequence: int, address: str) -> None:
