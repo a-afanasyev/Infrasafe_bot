@@ -853,6 +853,16 @@ class ShiftScheduler:
                 "Отчёты о работах: создано %s, опубликовано %s, снято %s",
                 created, published, revoked,
             )
+            # Страница «Отчёты о работах» обновляется по этому событию сама.
+            # Канал канбана (`requests:updates`, WS /ws/v2/kanban), а не свой:
+            # новый WS-эндпоинт пришлось бы заявлять в edge-allowlist, а канбан
+            # незнакомые типы событий игнорирует. Сбой публикации глотается
+            # внутри — тик он не роняет.
+            from uk_management_bot.services.redis_pubsub import publish_request_event
+            await publish_request_event(
+                "work_reports.updated",
+                {"created": created, "published": published, "revoked": revoked},
+            )
 
         self.task_stats[task_name]['failed' if failed else 'success'] += 1
         self.task_stats[task_name]['last_run'] = utc_now()

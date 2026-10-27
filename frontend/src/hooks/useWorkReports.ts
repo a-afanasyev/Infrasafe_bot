@@ -1,8 +1,10 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
+import { useWebSocket } from './useWebSocket'
 import type {
   WorkReport,
   WorkReportListOut,
@@ -53,6 +55,19 @@ export function useWorkReports(
     },
     staleTime: STALE_MS,
   })
+}
+
+/** Автообновление по тику автопубликатора: бот шлёт `work_reports.updated` в
+ * канал канбана (свой WS-эндпоинт пришлось бы заявлять в edge-allowlist).
+ * Событие приходит только когда тик что-то создал/опубликовал/снял. */
+export function useWorkReportsWebSocket(): void {
+  const queryClient = useQueryClient()
+  const onEvent = useCallback((event: { type: string; data: unknown }) => {
+    if (event.type === 'work_reports.updated') {
+      queryClient.invalidateQueries({ queryKey: ['work-reports'] })
+    }
+  }, [queryClient])
+  useWebSocket('kanban', onEvent)
 }
 
 // ── MUTATIONS ───────────────────────────────────────────────────────

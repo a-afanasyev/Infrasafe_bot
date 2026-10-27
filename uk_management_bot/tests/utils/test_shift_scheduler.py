@@ -616,7 +616,8 @@ class TestWorkReportsTick:
         factory = MagicMock(return_value=cm)
         return factory
 
-    def _patched(self, service, *, flag=True, media_client=MagicMock(), session=None):
+    def _patched(self, service, *, flag=True, media_client=MagicMock(), session=None,
+                 publish=None):
         """Подменить всё, что тик импортирует лениво внутри себя."""
         from contextlib import ExitStack
         # Тик делает `from uk_management_bot.services import work_report_service`,
@@ -634,6 +635,10 @@ class TestWorkReportsTick:
             "uk_management_bot.integrations.get_media_client", return_value=media_client
         ))
         stack.enter_context(patch("uk_management_bot.services.work_report_service", service))
+        stack.enter_context(patch(
+            "uk_management_bot.services.redis_pubsub.publish_request_event",
+            publish or AsyncMock(),
+        ))
         return stack
 
     @staticmethod
@@ -738,6 +743,32 @@ class TestWorkReportsTick:
         sched.setup_jobs()
         ids = [c.kwargs.get("id") for c in sched._mock_apscheduler.add_job.call_args_list]
         assert "work_reports_sync" in ids
+
+    def test_publishes_event_when_tick_changed_reports(self):
+        """Страница «Отчёты о работах» обновляется по этому событию сама —
+        менеджер не жмёт F5, чтобы увидеть результат автопубликации."""
+        publish = AsyncMock()
+        sched = _make_scheduler()
+        with self._patched(self._service(), publish=publish):
+            self._run(sched)
+
+        publish.assert_awaited_once_with(
+            "work_reports.updated", {"created": 2, "published": 1, "revoked": 0}
+        )
+
+    def test_no_event_when_tick_changed_nothing(self):
+        """Пустой тик раз в 10 минут не должен дёргать перезапрос у каждой
+        открытой страницы (лимит edge 120/мин на IP офиса)."""
+        publish = AsyncMock()
+        svc = self._service(
+            sync_pending_drafts=AsyncMock(return_value={"created": 0}),
+            autopublish_ready_drafts=AsyncMock(return_value={"published": 0}),
+        )
+        sched = _make_scheduler()
+        with self._patched(svc, publish=publish):
+            self._run(sched)
+
+        publish.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
