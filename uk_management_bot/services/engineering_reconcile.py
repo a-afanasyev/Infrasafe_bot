@@ -45,6 +45,15 @@ async def _claim_notify(request_number: str) -> bool:
         return True
 
 
+async def _release_notify(request_number: str) -> None:
+    from uk_management_bot.services.redis_pubsub import get_pubsub_redis
+
+    try:
+        await (await get_pubsub_redis()).delete(_notify_key(request_number))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("engineering_reconcile: дедуп %s не снят: %s", request_number, type(exc).__name__)
+
+
 async def _notify_managers(session_factory, request_number: str) -> None:
     from uk_management_bot.services.notification_service import _get_shared_bot
     from uk_management_bot.services.recipients import recipients_with_action_async
@@ -54,6 +63,7 @@ async def _notify_managers(session_factory, request_number: str) -> None:
     async with session_factory() as db:
         recipients = await recipients_with_action_async(db, "requests.manage")
     bot = _get_shared_bot()
+    delivered = 0
     for r in recipients:
         try:
             await bot.send_message(
@@ -63,9 +73,13 @@ async def _notify_managers(session_factory, request_number: str) -> None:
                 parse_mode="HTML",
                 request_timeout=SEND_TIMEOUT,
             )
+            delivered += 1
         except Exception as exc:  # noqa: BLE001 — по получателю, best-effort
             logger.warning("engineering_reconcile: менеджеру tg=%s (%s) не отправлено: %s",
                            r.telegram_id, request_number, exc)
+    if not delivered:
+        # Никто не узнал — не молчать 12 часов: следующий тик попробует снова.
+        await _release_notify(request_number)
 
 
 async def reconcile_once(session_factory=None) -> int:
@@ -83,7 +97,9 @@ async def reconcile_once(session_factory=None) -> int:
             .where(Request.category.in_(ENGINEERING_CATEGORY_VALUES),
                    Request.status == REQUEST_STATUS_NEW,
                    Request.executor_id.is_(None))
-            .order_by(Request.created_at)
+            # Свежие эскалации первыми: застрявшие старые (нет инженера) не
+            # должны занимать всю партию и заслонять новые.
+            .order_by(Request.created_at.desc())
             .limit(BATCH_LIMIT))).all()
     assigned = 0
     for number, category in rows:

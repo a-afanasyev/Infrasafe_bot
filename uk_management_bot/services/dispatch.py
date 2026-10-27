@@ -242,7 +242,8 @@ def auto_dispatch_new_request_sync(request_number: str,
 
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
-        done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
+        done = ("назначена инженеру id=%s" % executor_id if engineering
+                else "назначена дежурному id=%s ('%s')" % (executor_id, spec))
     else:
         command = _assign_group_command(request_number, spec)
         done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec
@@ -298,7 +299,8 @@ async def auto_dispatch_new_request_async(request_number: str,
         return _no_engineer(request_number, spec)
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
-        done = "назначена дежурному id=%s ('%s')" % (executor_id, spec)
+        done = ("назначена инженеру id=%s" % executor_id if engineering
+                else "назначена дежурному id=%s ('%s')" % (executor_id, spec))
     else:
         command = _assign_group_command(request_number, spec)
         done = "оставлена «Новая» для группы '%s' — дежурного нет" % spec

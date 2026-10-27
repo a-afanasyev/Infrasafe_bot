@@ -23,12 +23,18 @@ class _FakeRedis:
         self.keys.add(key)
         return True
 
+    async def delete(self, key):
+        self.keys.discard(key)
+
 
 class _FakeBot:
     def __init__(self):
         self.sent = []
+        self.down = False
 
     async def send_message(self, chat_id, text, **kw):
+        if self.down:
+            raise RuntimeError("telegram down")
         self.sent.append((chat_id, text))
 
 
@@ -82,3 +88,13 @@ async def test_no_engineer_notifies_managers_once(el_async_factory, el_seed, har
     await rec.reconcile_once(el_async_factory)  # следующий тик — без повтора
     assert [chat for chat, _ in harness.bot.sent] == [1002]
     assert "261027-001" in harness.bot.sent[0][1]
+
+
+async def test_undelivered_notification_is_retried_next_tick(el_async_factory, el_seed, harness):
+    await _seed(el_async_factory, el_seed, _request("261027-001", "Инженерный разбор"))
+    harness.kinds["261027-001"] = "no_engineer"
+    harness.bot.down = True
+    await rec.reconcile_once(el_async_factory)
+    harness.bot.down = False
+    await rec.reconcile_once(el_async_factory)
+    assert [chat for chat, _ in harness.bot.sent] == [1002]
