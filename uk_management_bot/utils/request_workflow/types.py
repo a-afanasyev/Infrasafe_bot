@@ -230,6 +230,8 @@ class RequestState:
     # Категория как в БД (канон-ключ ИЛИ legacy RU-лейбл) — нужна
     # MANAGER_CHANGE_CATEGORY для no-op и сравнения специализаций.
     category: Optional[str] = None
+    # Сколько раз работу вернули на доработку (requests.return_count).
+    return_count: int = 0
 
 
 @dataclass(frozen=True)

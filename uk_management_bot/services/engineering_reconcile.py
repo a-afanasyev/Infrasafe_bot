@@ -20,14 +20,12 @@ from sqlalchemy import select
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.categories import ENGINEERING_CATEGORY_VALUES
 from uk_management_bot.utils.constants import REQUEST_STATUS_NEW
-from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.workflow_predicates import status_in_clause
 
 logger = logging.getLogger(__name__)
 
 NOTIFY_TTL_SECONDS = 12 * 3600
 BATCH_LIMIT = 50
-SEND_TIMEOUT = 10
 
 
 def _notify_key(request_number: str) -> str:
@@ -56,28 +54,12 @@ async def _release_notify(request_number: str) -> None:
 
 
 async def _notify_managers(session_factory, request_number: str) -> None:
-    from uk_management_bot.services.notification_service import _get_shared_bot
-    from uk_management_bot.services.recipients import recipients_with_action_async
+    from uk_management_bot.services.action_notify import notify_action_holders
 
     if not await _claim_notify(request_number):
         return
-    async with session_factory() as db:
-        recipients = await recipients_with_action_async(db, "requests.manage")
-    bot = _get_shared_bot()
-    delivered = 0
-    for r in recipients:
-        try:
-            await bot.send_message(
-                chat_id=r.telegram_id,
-                text=get_text("engineering.unassigned", language=r.language).format(
-                    request_number=request_number),
-                parse_mode="HTML",
-                request_timeout=SEND_TIMEOUT,
-            )
-            delivered += 1
-        except Exception as exc:  # noqa: BLE001 — по получателю, best-effort
-            logger.warning("engineering_reconcile: менеджеру tg=%s (%s) не отправлено: %s",
-                           r.telegram_id, request_number, exc)
+    delivered = await notify_action_holders(
+        session_factory, "requests.manage", "engineering.unassigned", request_number=request_number)
     if not delivered:
         # Никто не узнал — не молчать 12 часов: следующий тик попробует снова.
         await _release_notify(request_number)

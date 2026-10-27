@@ -2488,7 +2488,9 @@
       "reassigned": "🔁 Заявка #{request_number}: работы продолжит другой исполнитель\n\n📍 {address}",
       "category_changed": "🏷 Заявка #{request_number}: категория изменена на «{category}»\n\n📍 {address}\n\nЕсли это не ваш профиль — сообщите менеджеру.",
       "returned_for_rework": "↩️ Заявку #{request_number} вернули на доработку\n\n📍 {address}",
-      "return_reason_line": "\n\n📝 Причина: {reason}"
+      "return_reason_line": "\n\n📝 Причина: {reason}",
+      "purchase_engineer": "💰 <b>Закуп по заявке #{request_number}</b>\n📂 {category}\n📍 {address}\n📦 Нужно: {materials}",
+      "repeated_return": "🔁 <b>Заявку #{request_number} вернули на доработку уже в {count}-й раз</b>\n📂 {category}\n📍 {address}\nСтоит разобраться в причине."
     },
     "executor_problem": {
       "message": "⚠️ <b>Проблема по заявке #{request_number}</b>\n\n👷 Исполнитель: {executor}\n📍 {address}\n\n❗ {problem}{details}",
@@ -2912,6 +2914,7 @@
     "top": "Топ исполнителей по принятым:"
   },
   "engineering": {
-    "unassigned": "⚠️ <b>Эскалация InfraSafe без инженера</b>\nЗаявка #{request_number} («Инженерный разбор») никому не назначена: нет инженера. Назначьте исполнителя вручную или выдайте роль «Инженер»."
+    "unassigned": "⚠️ <b>Эскалация InfraSafe без инженера</b>\nЗаявка #{request_number} («Инженерный разбор») никому не назначена: нет инженера. Назначьте исполнителя вручную или выдайте роль «Инженер».",
+    "reopened": "🔁 <b>Повторное обращение №{sequence}</b>\nАвария вернулась: заявка #{request_number}\n📍 {address}"
   }
 }

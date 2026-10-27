@@ -52,6 +52,10 @@ logger = logging.getLogger(__name__)
 # Кому адресовано уведомление.
 APPLICANT = "applicant"
 EXECUTOR = "executor"
+# Адресат «все, кому разрешено действие» (`action:<ключ>`): резолвится в
+# `_collect_*` через recipients_with_action, где есть сессия. Не роль заявки.
+ACTION_AUDIENCE_PREFIX = "action:"
+ENGINEERS = ACTION_AUDIENCE_PREFIX + "requests.engineering"
 
 # action → (получатели, i18n-ключ). Ключи лежат в config/locales/{ru,uz}.json
 # под `notifications.workflow.*` и получают request_number/category/address.
@@ -108,7 +112,14 @@ _NOTIFY_MATRIX: dict[Action, object] = {
     # житель ярлыка не видит. Интент планировщик выпускает лишь для
     # «В работе» с исполнителем при смене специализации.
     Action.MANAGER_CHANGE_CATEGORY: ((EXECUTOR,), "notifications.workflow.category_changed"),
+    # Закуп: инженерам — список материалов (этап 2 роли «Инженер»).
+    Action.EXECUTOR_PURCHASE: ((ENGINEERS,), "notifications.workflow.purchase_engineer"),
 }
+
+# Повторный возврат работы (planner кладёт `repeated_return` в notify-интент,
+# только когда return_count вырос до ≥ 2) — инженерам, в дополнение к матрице.
+_REPEATED_RETURN_KEY = "notifications.workflow.repeated_return"
+_PURCHASE_ENGINEER_KEY = "notifications.workflow.purchase_engineer"
 
 _CATEGORY_CHANGED_KEY = "notifications.workflow.category_changed"
 # Возврат жителем (статус «Возвращена»): причина — отдельной строкой, только
@@ -193,20 +204,19 @@ def _plan(
             action = Action(raw_action)
         except ValueError:
             continue
-        spec = _NOTIFY_MATRIX.get(action)
-        if spec is None:
-            # Служебный переход — молчим (см. docstring модуля).
-            continue
+        spec = _NOTIFY_MATRIX.get(action, ())
         for roles, text_key in _specs(spec):
             if reassigned and text_key == _APPLICANT_ASSIGNED_KEY:
                 text_key = _APPLICANT_REASSIGNED_KEY
             plan.append((action, roles, text_key))
+        if (intent.data or {}).get("repeated_return"):
+            plan.append((action, (ENGINEERS,), _REPEATED_RETURN_KEY))
     return plan
 
 
 def _resolve_targets(
     request: Request, plan: list[tuple[Action, tuple[str, ...], str]]
-) -> list[tuple[Action, str, set[int]]]:
+) -> list[tuple[Action, str, set[int], tuple[str, ...]]]:
     """`(действие, ключ, id получателей)` с дедупом В ПРЕДЕЛАХ ДЕЙСТВИЯ.
 
     Житель может быть назначен исполнителем собственной заявки. У действий с
@@ -215,13 +225,15 @@ def _resolve_targets(
     Дедуп именно по действию, а не глобальный: два разных перехода в одной
     пачке интентов — законный повод написать человеку дважды.
     """
-    targets: list[tuple[Action, str, set[int]]] = []
+    targets: list[tuple[Action, str, set[int], tuple[str, ...]]] = []
     seen: dict[Action, set[int]] = {}
     for action, roles, text_key in plan:
         already = seen.setdefault(action, set())
         wanted = _wanted_user_ids(request, roles) - already
         already |= wanted
-        targets.append((action, _effective_text_key(request, text_key), wanted))
+        audience = tuple(r[len(ACTION_AUDIENCE_PREFIX):] for r in roles
+                         if r.startswith(ACTION_AUDIENCE_PREFIX))
+        targets.append((action, _effective_text_key(request, text_key), wanted, audience))
     return targets
 
 
@@ -232,6 +244,27 @@ def _effective_text_key(request: Request, text_key: str) -> str:
     if getattr(request, "acceptance_mode", None) == ACCEPTANCE_MODE_MANAGER:
         return _MANAGER_ACCEPTANCE_KEYS.get(text_key, text_key)
     return text_key
+
+
+def _category_label(request: Request, language: str) -> str:
+    """Категория на языке получателя, экранированная: fallback
+    `get_category_display` для НЕИЗВЕСТНОГО ключа отдаёт сырое значение из БД."""
+    from uk_management_bot.utils.categories import get_category_display, resolve_category_key
+
+    return html.escape(get_category_display(resolve_category_key(request.category), language=language))
+
+
+def _render_engineer_text(text_key: str, language: str, request: Request) -> str:
+    """Закуп и повторный возврат — инженерам (материалы, номер цикла)."""
+    return get_text(
+        text_key,
+        language=language,
+        request_number=request.request_number,
+        category=_category_label(request, language),
+        address=html.escape(_clip(request.address, _MAX_ADDRESS)),
+        materials=html.escape(_clip(request.requested_materials, _MAX_DESCRIPTION)),
+        count=request.return_count or 0,
+    )
 
 
 def _render_text(
@@ -248,16 +281,11 @@ def _render_text(
         # из БД как есть (security-review PR #305, borderline): у legacy-заявки
         # категория с '<'/'&' роняла бы отправку Telegram-400. escape нейтрален
         # для словарных подписей и закрывает fallback.
-        from uk_management_bot.utils.categories import (
-            get_category_display, resolve_category_key,
-        )
         return get_text(
             _CLARIFY_RICH_KEY,
             language=language,
             request_number=request.request_number,
-            category=html.escape(get_category_display(
-                resolve_category_key(request.category), language=language
-            )),
+            category=_category_label(request, language),
             address=html.escape(request.address or ""),
             clarification_text=html.escape(clarification_text),
         )
@@ -270,16 +298,11 @@ def _render_text(
         # Лимиты перенесены из ручного уведомления, которое этот ключ заменил
         # (handlers/admin/assignment.py): без них длинное описание давало
         # MESSAGE_TOO_LONG, и наряд не доезжал вовсе.
-        from uk_management_bot.utils.categories import (
-            get_category_display, resolve_category_key,
-        )
         return get_text(
             text_key,
             language=language,
             request_number=request.request_number,
-            category=html.escape(get_category_display(
-                resolve_category_key(request.category), language=language
-            )),
+            category=_category_label(request, language),
             address=html.escape(_clip(request.address, _MAX_ADDRESS)),
             description=html.escape(_clip(request.description, _MAX_DESCRIPTION)),
         )
@@ -287,16 +310,11 @@ def _render_text(
         # Новая категория — уже записана в заявку к моменту post-commit сбора;
         # локализуем тем же хелпером и экранируем (fallback для неизвестного
         # ключа отдаёт сырую строку из БД).
-        from uk_management_bot.utils.categories import (
-            get_category_display, resolve_category_key,
-        )
         return get_text(
             text_key,
             language=language,
             request_number=request.request_number,
-            category=html.escape(get_category_display(
-                resolve_category_key(request.category), language=language
-            )),
+            category=_category_label(request, language),
             address=html.escape(_clip(request.address, _MAX_ADDRESS)),
         )
     if text_key == _RETURNED_FOR_REWORK_KEY:
@@ -311,6 +329,8 @@ def _render_text(
             text += get_text(_RETURN_REASON_KEY, language=language,
                              reason=html.escape(_clip(reason, _MAX_DESCRIPTION)))
         return text
+    if text_key in (_PURCHASE_ENGINEER_KEY, _REPEATED_RETURN_KEY):
+        return _render_engineer_text(text_key, language, request)
     if action is Action.MANAGER_RETURN_TO_WORK:
         # Причина обязательна на уровне ядра, но уведомление — post-commit
         # best-effort: пустая строка вместо KeyError, если запись всё же пуста
@@ -427,6 +447,32 @@ def _load_users_sync(db: Session, wanted_ids: set[int]) -> list[User]:
     return [u for u in users if u.telegram_id]
 
 
+def _with_audience(users: list, holders: Iterable) -> list:
+    """Адресные получатели + обладатели действия, без дублей по telegram_id.
+    У обоих есть `telegram_id`/`language` — рассылка их не различает."""
+    seen = {u.telegram_id for u in users}
+    extra = []
+    for r in holders:
+        if r.telegram_id not in seen:
+            seen.add(r.telegram_id)
+            extra.append(r)
+    return [*users, *extra]
+
+
+async def _recipients_async(db: AsyncSession, wanted_ids: set[int], audience) -> list:
+    from uk_management_bot.services.recipients import recipients_with_action_async
+
+    holders = [r for key in audience for r in await recipients_with_action_async(db, key)]
+    return _with_audience(await _load_users(db, wanted_ids), holders)
+
+
+def _recipients_sync(db: Session, wanted_ids: set[int], audience) -> list:
+    from uk_management_bot.services.recipients import recipients_with_action_sync
+
+    holders = [r for key in audience for r in recipients_with_action_sync(db, key)]
+    return _with_audience(_load_users_sync(db, wanted_ids), holders)
+
+
 async def _collect_async(
     db: AsyncSession, request_number: str, plan,
 ) -> tuple[Optional[Request], list[tuple[Action, str, list[User]]]]:
@@ -441,9 +487,9 @@ async def _collect_async(
     if request is None:
         return None, []
     jobs: list[tuple[Action, str, list[User]]] = []
-    for action, text_key, wanted_ids in _resolve_targets(request, plan):
+    for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
-            recipients = await _load_users(db, wanted_ids)
+            recipients = await _recipients_async(db, wanted_ids, audience)
         except Exception as e:
             logger.warning(
                 "Уведомление по действию %s для заявки %s не отправлено: %s",
@@ -566,9 +612,9 @@ async def dispatch_notify_intents_sync(
     if request is None:
         return 0
     sent = 0
-    for action, text_key, wanted_ids in _resolve_targets(request, plan):
+    for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
-            recipients = _load_users_sync(db, wanted_ids)
+            recipients = _recipients_sync(db, wanted_ids, audience)
             if not recipients:
                 continue
             sent += await _send_to_recipients(
@@ -607,9 +653,9 @@ def collect_notify_messages_sync(
     if request is None:
         return []
     messages: list[tuple[int, str]] = []
-    for action, text_key, wanted_ids in _resolve_targets(request, plan):
+    for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
-            for user in _load_users_sync(db, wanted_ids):
+            for user in _recipients_sync(db, wanted_ids, audience):
                 language = user.language or "ru"
                 messages.append(NotifyMessage(
                     user.telegram_id,

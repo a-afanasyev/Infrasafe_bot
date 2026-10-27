@@ -558,6 +558,26 @@ async def test_override_cannot_turn_regular_alert_into_engineering(
 
 
 @pytest.mark.asyncio
+async def test_reopened_alert_notifies_engineers_after_response(
+    webhook_client, building, monkeypatch,
+):
+    """Повторное обращение (reopen ≥ 2) — инженерам сообщение; первое — нет."""
+    _set_secrets(monkeypatch)
+    sent = []
+
+    async def _notify(number, sequence, address):
+        sent.append((number, sequence, address))
+
+    monkeypatch.setattr("uk_management_bot.services.inbound_alert._notify_reopened", _notify)
+    first = _alert_body("evt-reopen-1", _expected_external_id(building.id), reopen_sequence=1)
+    again = _alert_body("evt-reopen-3", _expected_external_id(building.id), reopen_sequence=3)
+    r1 = await webhook_client.post(URL, content=first, headers=_signed(first, "203.0.114.23"))
+    r3 = await webhook_client.post(URL, content=again, headers=_signed(again, "203.0.114.24"))
+    assert r1.status_code == r3.status_code == 202
+    assert sent == [(r3.json()["request_number"], 3, building.address)]
+
+
+@pytest.mark.asyncio
 async def test_regular_alert_is_not_dispatched(webhook_client, building, monkeypatch):
     """Обычные алерты по-прежнему ждут менеджера — dispatch только для эскалации."""
     _set_secrets(monkeypatch)

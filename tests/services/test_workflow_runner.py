@@ -1418,3 +1418,41 @@ def test_engineer_hands_engineering_over_but_not_routine(factory):
     with pytest.raises(NotAuthorized):
         run_command_sync(SF, "260610-001", _as_exec(),
                          ActionCommand("c2", Action.MANAGER_ASSIGN, {"executor_id": 5}))
+
+
+# ---------------------------------------------------------------------------
+# return_count: один цикл возврата = +1; повторный (≥ 2) помечает notify-интент
+# ---------------------------------------------------------------------------
+
+def _return_to_work(SF, cid):
+    return run_command_sync(SF, "260610-001", _mgr(), ActionCommand(
+        cid, Action.MANAGER_RETURN_TO_WORK, {"reason": "переделать"}))
+
+
+def _set_status(SF, status):
+    s = SF()
+    s.query(Request).update({"status": status})
+    s.commit()
+    s.close()
+
+
+def _notify_flags(outcome):
+    return [bool(ev.data.get("repeated_return")) for ev in outcome.post_commit_intents
+            if ev.kind == "notify"]
+
+
+def test_return_count_counts_cycles_and_flags_repeat(factory):
+    from uk_management_bot.utils.request_workflow.types import STATUS_RETURNED
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED, executor_id=4)
+    first = _return_to_work(SF, "r1")
+    assert first.new_state.return_count == 1 and _notify_flags(first) == [False]
+
+    _set_status(SF, C.REQUEST_STATUS_EXECUTED)
+    second = _return_to_work(SF, "r2")
+    assert second.new_state.return_count == 2 and _notify_flags(second) == [True]
+
+    # «Возвращена» → «В работе» — тот же цикл (житель уже вернул): без +1 и без флага
+    _set_status(SF, STATUS_RETURNED)
+    same_cycle = _return_to_work(SF, "r3")
+    assert same_cycle.new_state.return_count == 2 and _notify_flags(same_cycle) == [False]

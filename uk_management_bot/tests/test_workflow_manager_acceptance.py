@@ -309,15 +309,15 @@ class TestNotificationKeySubstitution:
 
     def test_manager_mode_substitutes_keys(self):
         targets = self._targets(ACCEPTANCE_MODE_MANAGER, Action.MANAGER_CONFIRM)
-        assert [k for _, k, _ in targets] == \
+        assert [k for _, k, _, _ in targets] == \
             ["notifications.workflow.accepted_by_manager"]
         targets = self._targets(ACCEPTANCE_MODE_MANAGER, Action.EXECUTOR_COMPLETE)
-        assert [k for _, k, _ in targets] == \
+        assert [k for _, k, _, _ in targets] == \
             ["notifications.workflow.executed_staff"]
 
     def test_resident_mode_keys_unchanged(self):
         targets = self._targets(ACCEPTANCE_MODE_RESIDENT, Action.MANAGER_CONFIRM)
-        assert [k for _, k, _ in targets] == \
+        assert [k for _, k, _, _ in targets] == \
             ["notifications.workflow.ready_for_acceptance"]
 
     @pytest.mark.parametrize("key", [

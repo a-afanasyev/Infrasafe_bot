@@ -195,6 +195,7 @@ def _new_state_from(req: Request) -> RequestState:
         executor_id=req.executor_id,
         acceptance_mode=req.acceptance_mode or ACCEPTANCE_MODE_RESIDENT,
         category=req.category,
+        return_count=req.return_count or 0,
     )
 
 

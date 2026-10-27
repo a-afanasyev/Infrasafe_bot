@@ -195,6 +195,11 @@ async def handle_infrasafe_alert(
     logger.info("inbound alert accepted: event_id=%s → request %s (building %s)",
                 payload.event_id, request_number, building.id)
     await _after_accept(request_number, category, schedule_notify)
+    if (alert.reopen_sequence or 0) >= 2 and payload.event != "alert.engineer_required":
+        # Авария вернулась — повод инженеру присмотреться (эскалация — сама по
+        # себе заявка ему, отдельное сообщение не нужно). После ответа партнёру.
+        _schedule(schedule_notify, _notify_reopened, request_number,
+                  alert.reopen_sequence, building.address)
     return InboundResult(202, {"status": "accepted", "request_number": request_number})
 
 
@@ -217,6 +222,31 @@ async def _after_accept(request_number: str, category: str, schedule_notify=None
                 request_number, category, schedule_notify=schedule_notify)
         except Exception as exc:  # noqa: BLE001 — страховка: сверка
             logger.warning("inbound alert: dispatch %s failed: %s", request_number, exc)
+
+
+def _schedule(schedule_notify, fn, *args) -> None:
+    if schedule_notify is not None:
+        schedule_notify(fn, *args)
+    else:  # вызов без BackgroundTasks (тесты, внутренние пути) — фоном
+        import asyncio
+
+        asyncio.get_running_loop().create_task(fn(*args))
+
+
+async def _notify_reopened(request_number: str, sequence: int, address: str) -> None:
+    import html
+
+    from uk_management_bot.database.session import AsyncSessionLocal
+    from uk_management_bot.services.action_notify import notify_action_holders
+
+    if AsyncSessionLocal is None:  # sqlite dev-режим без async-движка
+        return
+    try:
+        await notify_action_holders(
+            AsyncSessionLocal, "requests.engineering", "engineering.reopened",
+            request_number=request_number, sequence=sequence, address=html.escape(address or ""))
+    except Exception as exc:  # noqa: BLE001 — уведомление best-effort
+        logger.warning("inbound alert: reopen notice %s skipped: %s", request_number, exc)
 
 
 async def _resolve_building(db: AsyncSession, external_id: str) -> Building | None:
