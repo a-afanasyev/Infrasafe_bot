@@ -13,7 +13,7 @@ import { hasAction, type ActionKey } from './actions'
  * (resources.launch); прежде интерфейс прятал раздел, который сервер открывал.
  */
 const UI_ACTIONS: Record<string, readonly string[]> = {
-  'dashboard.use': ['admin', 'manager'], // основной /dashboard
+  'dashboard.use': ['admin', 'engineer', 'manager'], // основной /dashboard
   'access.events.read': ['manager', 'security_operator', 'system_admin'], // пост охраны
   'access.registry.manage': ['manager', 'system_admin'], // история, база, оборудование (маршрут)
   'access.equipment.manage': ['system_admin'], // камеры/шлагбаумы/контроллеры внутри
@@ -27,7 +27,7 @@ const UI_ACTIONS: Record<string, readonly string[]> = {
   'requests.manage': ['manager'], // правка карточки заявки
   'management.decide': ['manager'], // переназначение исполнителя
   'shifts.manage': ['manager'], // кнопки менеджера в сменах и передачах
-  'requests.photos.attach': ['manager', 'system_admin'], // кнопка «прикрепить фото»
+  'requests.photos.attach': ['engineer', 'manager', 'system_admin'], // кнопка «прикрепить фото»
 }
 
 describe('RBAC: действия интерфейса', () => {

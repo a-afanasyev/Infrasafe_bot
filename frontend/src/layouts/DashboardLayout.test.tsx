@@ -75,7 +75,26 @@ describe('DashboardLayout — навигация и роли', () => {
     renderLayout()
     expect(screen.queryByRole('link', { name: /жители/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /группы/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /адреса/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /заявки/i })).toBeInTheDocument()
+  })
+
+  it('инженер видит доску, но не разделы персонала, смен, адресов и модерации', () => {
+    login(['executor', 'engineer'])
+    renderLayout()
+    expect(screen.getByRole('link', { name: /заявки/i })).toBeInTheDocument()
+    for (const name of [/аналитика/i, /адреса/i, /витрин/i, /обратная связь/i]) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument()
+    }
+    // группа «Персонал» (сотрудники, смены, шаблоны) пуста — не видна вовсе
+    expect(screen.queryByText('Персонал')).not.toBeInTheDocument()
+  })
+
+  it('менеджер по-прежнему видит все свои разделы', () => {
+    renderLayout()
+    for (const name of [/аналитика/i, /адреса/i, /витрин/i, /обратная связь/i]) {
+      expect(screen.getByRole('link', { name })).toBeInTheDocument()
+    }
+    expect(screen.getByText('Персонал')).toBeInTheDocument()
   })
 
   it('«Склад» виден только ролям модуля материалов', () => {

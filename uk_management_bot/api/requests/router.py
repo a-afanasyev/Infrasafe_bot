@@ -183,7 +183,8 @@ async def get_kanban(
     executor_id: Optional[int] = Query(None),
     category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_action("requests.manage")),
+    # Смотреть доску — read_all (менеджер и инженер); менять — свои действия.
+    user: User = Depends(require_action("requests.read_all")),
 ):
     """Доска заявок для менеджера, сгруппированная по статусам.
 

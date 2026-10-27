@@ -21,6 +21,7 @@ from uk_management_bot.services.auto_manager.rule_engine import OPEN_LOAD_STATUS
 from uk_management_bot.utils.categories import is_engineering_category
 from uk_management_bot.utils.specializations import matches_required_specs, parse_specializations
 from uk_management_bot.utils.user_names import display_name
+from uk_management_bot.utils.workflow_predicates import status_in_clause
 
 router = APIRouter()
 
@@ -63,7 +64,7 @@ async def handover_candidates(
     load = dict((await db.execute(
         select(Request.executor_id, func.count())
         .where(Request.executor_id.in_([u.id for u in candidates]),
-               Request.status.in_(OPEN_LOAD_STATUSES))
+               status_in_clause(OPEN_LOAD_STATUSES))
         .group_by(Request.executor_id))).all()) if candidates else {}
     return [
         HandoverCandidate(id=u.id, name=display_name(u), open_requests=load.get(u.id, 0),

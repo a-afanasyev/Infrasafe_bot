@@ -173,6 +173,7 @@
     },
     "dashboard.live": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -182,6 +183,7 @@
     "dashboard.use": {
       "roles": [
         "admin",
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -335,6 +337,7 @@
     "requests.internal_comments": {
       "roles": [
         "admin",
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -359,6 +362,7 @@
     },
     "requests.photos.attach": {
       "roles": [
+        "engineer",
         "manager",
         "system_admin"
       ],
@@ -368,6 +372,7 @@
     },
     "requests.read_all": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,

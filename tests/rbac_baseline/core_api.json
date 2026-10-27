@@ -864,6 +864,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1038,6 +1039,12 @@
   },
   "GET /api/v2/requests/{request_number}/comments": {
    "auth": "user"
+  },
+  "GET /api/v2/requests/{request_number}/handover-candidates": {
+   "auth": "roles",
+   "allow": [
+    "executor+engineer"
+   ]
   },
   "GET /api/v2/residents": {
    "auth": "roles",

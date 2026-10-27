@@ -40,7 +40,7 @@ import { isElevatorsEnabled } from '../../utils/featureFlags'
 import { getUrgencyStyle } from './urgencyStyle'
 
 const SOURCE_ICON: Record<string, string> = {
-  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
+  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶', infrasafe: '⚡',
 }
 
 interface Props {

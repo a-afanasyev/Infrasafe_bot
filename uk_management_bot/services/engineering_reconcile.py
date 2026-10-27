@@ -21,6 +21,7 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.utils.categories import ENGINEERING_CATEGORY_VALUES
 from uk_management_bot.utils.constants import REQUEST_STATUS_NEW
 from uk_management_bot.utils.helpers import get_text
+from uk_management_bot.utils.workflow_predicates import status_in_clause
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ async def reconcile_once(session_factory=None) -> int:
         rows = (await db.execute(
             select(Request.request_number, Request.category)
             .where(Request.category.in_(ENGINEERING_CATEGORY_VALUES),
-                   Request.status == REQUEST_STATUS_NEW,
+                   status_in_clause([REQUEST_STATUS_NEW]),
                    Request.executor_id.is_(None))
             # Свежие эскалации первыми: застрявшие старые (нет инженера) не
             # должны занимать всю партию и заслонять новые.

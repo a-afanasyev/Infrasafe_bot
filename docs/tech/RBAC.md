@@ -281,8 +281,8 @@ flowchart LR
 | `auto_manager.configure` | `admin`, `manager` |  | Настройка автоматического менеджера |
 | `board.configure` | `manager` |  | Настройка табло |
 | `callcenter.use` | `manager` |  | Колл-центр: заявки по звонку |
-| `dashboard.live` | `manager` |  | Живой поток событий дашборда (WebSocket) |
-| `dashboard.use` | `admin`, `manager` |  | Вход в основной веб-дашборд управления |
+| `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
+| `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |
 | `elevators.lookup` | `applicant`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |
 | `elevators.manage` | `manager` | да | Лифты: изменение реестра и календаря |
 | `elevators.read` | `executor`, `manager` | да | Лифты: реестр, карточка, статус, ТО |
@@ -300,11 +300,11 @@ flowchart LR
 | `requests.create_inspection` | `inspector` | да | Создать заявку обхода |
 | `requests.engineering` | `engineer` |  | Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру |
 | `requests.execute` | `executor` |  | Работать с заявками как исполнитель: пул, взять, выполнить, проблема |
-| `requests.internal_comments` | `admin`, `manager` |  | Видеть и писать внутренние комментарии заявки |
+| `requests.internal_comments` | `admin`, `engineer`, `manager` |  | Видеть и писать внутренние комментарии заявки |
 | `requests.manage` | `manager` |  | Управлять заявками: смена категории, назначение дежурным, правка любой |
 | `requests.own` | `applicant` |  | Действия автора со своей заявкой: отменить новую, оценить |
-| `requests.photos.attach` | `manager`, `system_admin` |  | Дашборд: кнопка прикрепить фото к заявке |
-| `requests.read_all` | `manager` |  | Видеть любую заявку: карточка и список без ограничения «свои/назначенные» |
+| `requests.photos.attach` | `engineer`, `manager`, `system_admin` |  | Дашборд: кнопка прикрепить фото к заявке |
+| `requests.read_all` | `engineer`, `manager` |  | Видеть любую заявку: карточка и список без ограничения «свои/назначенные» |
 | `requests.stats` | `manager` |  | Статистика заявок |
 | `requests.update` | `applicant`, `executor`, `manager` |  | Редактировать заявку (бизнес-проверки внутри) |
 | `residents.manage` | `manager` |  | Жители: список, карточка, модерация, документы |

@@ -82,7 +82,7 @@ const isGroup = (e: NavEntry): e is NavGroup => 'children' in e
 // ─── Navigation structure ───────────────────────────────────────────────────────
 
 const NAV_ENTRIES: NavEntry[] = [
-  { to: '/dashboard/analytics', labelKey: 'nav.analytics', Icon: LayoutGrid },
+  { to: '/dashboard/analytics', labelKey: 'nav.analytics', Icon: LayoutGrid, action: 'requests.stats' },
   { to: '/dashboard', labelKey: 'nav.requests', Icon: ListChecks, end: true },
   // Персонал: сотрудники + смены + шаблоны смен под единым раскрываемым пунктом.
   {
@@ -90,9 +90,9 @@ const NAV_ENTRIES: NavEntry[] = [
     labelKey: 'nav.groupPersonnel',
     Icon: Users,
     children: [
-      { to: '/dashboard/employees', labelKey: 'nav.employees', Icon: Users },
-      { to: '/dashboard/shifts', labelKey: 'nav.shifts', Icon: Clock },
-      { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2 },
+      { to: '/dashboard/employees', labelKey: 'nav.employees', Icon: Users, action: 'staff.manage' },
+      { to: '/dashboard/shifts', labelKey: 'nav.shifts', Icon: Clock, action: 'shifts.manage' },
+      { to: '/dashboard/templates', labelKey: 'nav.templates', Icon: Table2, action: 'shifts.manage' },
     ],
   },
   // Контроль платежей — отдельный сервис за партнёрским edge. DARK за build-флагом
@@ -101,20 +101,20 @@ const NAV_ENTRIES: NavEntry[] = [
   ...(import.meta.env.VITE_PAYMENTS_ENABLED === 'true'
     ? [{ to: '/dashboard/payment-control', labelKey: 'paymentControl.title', Icon: Table2, action: 'payments.manage' as const }]
     : []),
-  { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin },
+  { to: '/dashboard/addresses', labelKey: 'nav.addresses', Icon: MapPin, action: 'addresses.manage' },
   // Жители: список/карточка/модерация привязок. Пункт и API раздела гейтятся
   // одним действием residents.manage — пункт не ведёт на гарантированный 403.
   { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, action: 'residents.manage' },
   // Group Intake: реестр мониторимых ТГ-групп. Как residents — пункт и API
   // гейтятся одним действием group_intake.manage.
   { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
-  { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay },
+  { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay, action: 'board.configure' },
   // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
   // пункт появляется только когда фича включена билд-аргом.
   ...(import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
-    ? [{ to: '/dashboard/work-reports', labelKey: 'nav.workReports', Icon: Camera }]
+    ? [{ to: '/dashboard/work-reports', labelKey: 'nav.workReports', Icon: Camera, action: 'work_reports.moderate' as const }]
     : []),
-  { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare },
+  { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare, action: 'feedback.manage' },
   // Контроль доступа: обзор + история проездов + база доступа + оборудование.
   {
     groupKey: 'access',
