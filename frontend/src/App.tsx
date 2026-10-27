@@ -153,17 +153,17 @@ export default function App() {
                 <Route path="employees" element={<ActionRoute action="staff.manage"><PageErrorBoundary><EmployeesPage /></PageErrorBoundary></ActionRoute>} />
                 <Route path="employees/:id" element={<ActionRoute action="staff.manage"><PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary></ActionRoute>} />
                 <Route path="templates" element={<ActionRoute action="shifts.manage"><PageErrorBoundary><TemplatesPage /></PageErrorBoundary></ActionRoute>} />
-                <Route path="payment-control" element={<PageErrorBoundary><PaymentControlPage /></PageErrorBoundary>} />
+                <Route path="payment-control" element={<ActionRoute action="payments.manage"><PageErrorBoundary><PaymentControlPage /></PageErrorBoundary></ActionRoute>} />
                 <Route path="addresses" element={<ActionRoute action="addresses.manage"><PageErrorBoundary><AddressesPage /></PageErrorBoundary></ActionRoute>} />
-                <Route path="residents" element={<PageErrorBoundary><ResidentsPage /></PageErrorBoundary>} />
-                <Route path="residents/:id" element={<PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary>} />
+                <Route path="residents" element={<ActionRoute action="residents.manage"><PageErrorBoundary><ResidentsPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="residents/:id" element={<ActionRoute action="residents.manage"><PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary></ActionRoute>} />
                 {/* Group Intake: реестр ТГ-групп (как residents — пункт меню
                     только manager, "только manager" enforced бэкендом). */}
-                <Route path="groups" element={<PageErrorBoundary><GroupsPage /></PageErrorBoundary>} />
+                <Route path="groups" element={<ActionRoute action="group_intake.manage"><PageErrorBoundary><GroupsPage /></PageErrorBoundary></ActionRoute>} />
                 <Route path="board-editor" element={<ActionRoute action="board.configure"><PageErrorBoundary><BoardEditorPage /></PageErrorBoundary></ActionRoute>} />
                 {/* Менеджерская очередь модерации визуальных отчётов «до/после».
-                    Гард — общий admin/manager группы /dashboard (как board-editor);
-                    "только manager" enforced бэкендом (действие work_reports.moderate).
+                    Гард — действие work_reports.moderate (ActionRoute), его же
+                    проверяет бэкенд.
                     DARK за VITE_WORK_REPORTS_ENABLED. */}
                 {WORK_REPORTS_ENABLED && (
                   <Route path="work-reports" element={<ActionRoute action="work_reports.moderate"><PageErrorBoundary><WorkReportsPage /></PageErrorBoundary></ActionRoute>} />

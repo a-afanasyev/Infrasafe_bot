@@ -671,3 +671,13 @@ describe('RequestDetailModal — подсказка «Лифт работает?
     expect(dialog).toHaveTextContent('Лифт #7: сейчас «Не введён». Лифт работает?')
   })
 })
+
+describe('RequestDetailModal — инженер смотрит карточку без менеджерских решений', () => {
+  it.each(['Выполнена', 'Исполнено'])('«%s»: нет подтверждения, возврата, напоминания и принудительной приёмки', async (status) => {
+    mockHasRole.mockReturnValue(false)
+    await renderModal(makeRequest({ status }))
+    for (const name of [/Подтвердить/, /Вернуть в работу/, /Напомнить/, /Принять/]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+  })
+})

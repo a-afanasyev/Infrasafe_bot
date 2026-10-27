@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -114,6 +114,9 @@ describe('KanbanPage — deep-link reader (?request=)', () => {
 })
 
 describe('KanbanPage — менеджерские кнопки по действиям', () => {
+  const initialAuth = useAuthStore.getState()
+  afterEach(() => useAuthStore.setState(initialAuth, true))
+
   it('у менеджера есть «Создать по звонку», у инженера — нет (и тумблера автоназначения)', async () => {
     mockRequestEndpoints()
     useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']) } as never })

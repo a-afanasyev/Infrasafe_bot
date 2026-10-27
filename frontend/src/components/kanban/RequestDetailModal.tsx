@@ -443,8 +443,8 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 </div>
               )}
 
-              {/* Manager actions — status: Выполнена */}
-              {request.status === 'Выполнена' && (
+              {/* Manager actions — status: Выполнена (инженер доску только смотрит) */}
+              {canManagerDecide && request.status === 'Выполнена' && (
                 <div className="border border-border-default rounded-default p-3 bg-bg-surface flex flex-col gap-2">
                   {!showConfirmSection && !showReturnSection && (
                     <div className="flex gap-2">
@@ -512,7 +512,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
               )}
 
               {/* Manager actions — status: Исполнено (remind applicant or force-accept) */}
-              {request.status === 'Исполнено' && (
+              {canManagerDecide && request.status === 'Исполнено' && (
                 <div className="border border-border-default rounded-default p-3 bg-bg-surface flex flex-col gap-2">
                   <div className="text-xs text-text-secondary font-[family-name:var(--font-body)]">
                     {t('kanban.awaitingAcceptance')}

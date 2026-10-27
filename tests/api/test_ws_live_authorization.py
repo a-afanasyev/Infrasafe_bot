@@ -231,6 +231,26 @@ async def test_identity_ok_rejects_deleted_account(monkeypatch):
     assert await ws._ws_identity_ok(7) is False
 
 
+@pytest.mark.asyncio
+async def test_engineer_gets_kanban_but_not_staff_channels(monkeypatch):
+    """Инженер видит доску (dashboard.live), но не смены, здания и привязки
+    жителей — каналы этих разделов требуют их действий."""
+    _stub_session(monkeypatch, _FakeUser('["executor", "engineer"]'))
+    assert await ws._ws_identity_ok(7) is True  # kanban — дефолт канала
+    for action in ("shifts.manage", "addresses.manage", "residents.manage"):
+        token = ws._WS_CHANNEL_ACTION.set(action)
+        try:
+            assert await ws._ws_identity_ok(7) is False, action
+        finally:
+            ws._WS_CHANNEL_ACTION.reset(token)
+    _stub_session(monkeypatch, _FakeUser('["manager"]'))
+    token = ws._WS_CHANNEL_ACTION.set("residents.manage")
+    try:
+        assert await ws._ws_identity_ok(7) is True
+    finally:
+        ws._WS_CHANNEL_ACTION.reset(token)
+
+
 # ── Стрим: перепроверка и уход клиента ───────────────────────────────────
 
 
