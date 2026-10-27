@@ -1215,7 +1215,8 @@
     "manager": "Менеджер",
     "inspector": "Обходчик",
     "system_admin": "Системный администратор",
-    "security_operator": "Оператор охраны"
+    "security_operator": "Оператор охраны",
+    "engineer": "Инженер"
   },
   "verificationStatus": {
     "verified": "Подтверждён",
@@ -3537,7 +3538,8 @@
       "admin": "Администратор бота",
       "system_admin": "Администратор охраны",
       "security_operator": "Оператор охраны",
-      "resource_meter_entry": "Контролёр показаний"
+      "resource_meter_entry": "Контролёр показаний",
+      "engineer": "Инженер"
     },
     "roleDescriptions": {
       "applicant": "Подаёт заявки, свои авто и пропуска",
@@ -3547,7 +3549,8 @@
       "admin": "Админ-панель бота наравне с менеджером",
       "system_admin": "Модуль охраны целиком, склад, учёт ресурсов",
       "security_operator": "Пост охраны: события, пропуска, фото",
-      "resource_meter_entry": "Ввод показаний счётчиков из Mini App"
+      "resource_meter_entry": "Ввод показаний счётчиков из Mini App",
+      "engineer": "Эскалации InfraSafe, работа без смены, передача мастеру"
     },
     "actionTitles": {
       "access.diagnostics": "Охрана: диагностика",
@@ -3604,8 +3607,10 @@
       "shifts.manage": "Смены: создание, шаблоны, чтение, передачи",
       "shifts.own": "Свои смены исполнителя: начать, закончить, передать",
       "staff.manage": "Сотрудники: список, приглашения, активация, роли",
-      "work_reports.moderate": "Модерация отчётов о работах"
-    }
+      "work_reports.moderate": "Модерация отчётов о работах",
+      "requests.engineering": "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"
+    },
+    "engineerNeedsExecutor": "«Инженер» выдаётся вместе с «Исполнителем»: снимите сначала «Инженера»."
   },
   "home": {
     "pageTitle": "Ваш дом сегодня",

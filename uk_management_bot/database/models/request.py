@@ -154,6 +154,9 @@ class Request(Base):
     manager_return_reason = Column(Text, nullable=True)  # Причина возврата МЕНЕДЖЕРОМ (не путать с return_reason жителя)
     returned_at = Column(DateTime(timezone=True), nullable=True)  # Время возврата
     returned_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Кто вернул
+    # Сколько раз работу вернули на доработку (житель или менеджер из
+    # «Исполнено»/«Выполнена»); один цикл возврата = +1. Пишет только planner.
+    return_count = Column(Integer, nullable=False, server_default="0", default=0)
 
     # Поля для подтверждения менеджером
     manager_confirmed = Column(Boolean, default=False, nullable=False)  # Подтверждено менеджером

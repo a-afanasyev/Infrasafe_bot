@@ -938,6 +938,7 @@
     "system_admin": "Tizim administratori",
     "security_operator": "Xavfsizlik operatori",
     "resource_meter_entry": "Ko'rsatkich kirituvchi",
+    "engineer": "Muhandis",
     "none": "Rollar tayinlanmagan"
   },
   "search": {
@@ -2163,6 +2164,7 @@
       "error_updating_phone": "Telefon yangilashda xatolik yuz berdi",
       "current_roles": "Joriy rollar: {roles}",
       "cannot_remove_last_role": "❌ Oxirgi rolni olib bo'lmaydi — foydalanuvchida kamida bitta rol qolishi kerak.",
+      "roles_change_refused": "❌ Rollar o'zgartirilmadi: «Muhandis» roli faqat veb-admin panelida beriladi va olinadi, muhandisdan «Ijrochi» rolini olib bo'lmaydi.",
       "no_roles": "Rollar yo'q",
       "no_specializations": "Ixtisosliklar yo'q",
       "specialization_stats_title": "🛠️ Xodimlar ixtisoslik statistikasi:",

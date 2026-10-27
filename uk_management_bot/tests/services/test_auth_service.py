@@ -425,6 +425,30 @@ class TestRemoveRole:
 
         assert result is True
 
+    def test_refuses_executor_removal_from_engineer(self):
+        user = _make_user(roles='["executor", "engineer", "applicant"]', active_role="executor")
+        service = AuthService(self._db_with_user_roles(user))
+
+        assert service.remove_role(1, "executor", removed_by=2) is False
+        assert json.loads(user.roles) == ["executor", "engineer", "applicant"]
+
+    def test_refuses_engineer_removal_from_bot(self):
+        """Инженера выдаёт и снимает только веб-админка ролей (rbac.manage)."""
+        user = _make_user(roles='["executor", "engineer"]', active_role="executor")
+        service = AuthService(self._db_with_user_roles(user))
+
+        assert service.remove_role(1, "engineer", removed_by=2) is False
+        assert "engineer" in json.loads(user.roles)
+
+    def test_engineer_never_becomes_active_role(self):
+        user = _make_user(roles='["manager", "engineer", "executor"]', active_role="manager")
+        user.id = 1
+        service = AuthService(self._db_with_user_roles(user))
+        with patch.object(service, "_refuse_privileged", return_value=False):
+            assert service.remove_role(1, "manager", removed_by=2) is True
+
+        assert user.active_role == "executor"
+
     def test_switches_active_role_when_active_removed(self):
         # A10-INT-01: цель с ролью manager теперь защищена от модерации —
         # сценарий переключения active_role проверяем на рядовом сотруднике.

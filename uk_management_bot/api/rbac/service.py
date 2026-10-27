@@ -16,7 +16,7 @@ from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.authz import store
-from uk_management_bot.authz.catalog import ACTIONS, SYSTEM_ROLES
+from uk_management_bot.authz.catalog import ACTIONS, SYSTEM_ROLES, is_menu_mode
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.rbac import RbacRole, RbacRolePermission, RbacState
 from uk_management_bot.database.models.user import User
@@ -158,10 +158,6 @@ def user_roles_list(user: User) -> list[str]:
     return parse_roles_safe(user.roles)
 
 
-#: Роль-капабилити: даёт кнопку ввода показаний, режимом меню не бывает.
-_NOT_A_MENU_MODE = frozenset({"resource_meter_entry"})
-
-
 def apply_user_roles(user: User, roles: list[str]) -> Optional[str]:
     """Записать роли пользователю; режим меню — только системная роль.
 
@@ -171,7 +167,7 @@ def apply_user_roles(user: User, roles: list[str]) -> Optional[str]:
     """
     unique = list(dict.fromkeys(roles))
     user.roles = json.dumps(unique)
-    modes = [r for r in unique if r in SYSTEM_ROLES and r not in _NOT_A_MENU_MODE]
+    modes = [r for r in unique if is_menu_mode(r)]
     if user.active_role not in modes:
         system = [r for r in unique if r in SYSTEM_ROLES]
         user.active_role = (modes or system or unique)[0]

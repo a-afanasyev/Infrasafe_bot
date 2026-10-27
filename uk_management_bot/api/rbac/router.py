@@ -24,6 +24,7 @@ from uk_management_bot.api.rbac.schemas import (
 )
 from uk_management_bot.authz import ACTIONS, is_superadmin
 from uk_management_bot.authz.catalog import SYSTEM_ROLES
+from uk_management_bot.authz.role_set import role_set_error
 from uk_management_bot.database.models.rbac import RbacRole
 from uk_management_bot.database.models.user import User
 
@@ -179,6 +180,9 @@ async def set_user_roles(request: Request, user_id: int, body: UserRolesUpdate,
         # оставила бы человека без меню.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             "Нужна хотя бы одна системная роль (своя роль выдаётся вместе с ней)")
+    invalid = role_set_error(body.roles)
+    if invalid:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, invalid)
     before = svc.user_roles_list(target)
     if body.expected is not None and set(body.expected) != set(before):
         raise HTTPException(status.HTTP_409_CONFLICT,

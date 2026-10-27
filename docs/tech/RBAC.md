@@ -28,7 +28,7 @@ flowchart LR
 
 | Понятие | Что это | Где живёт |
 |---|---|---|
-| **Роль** | Кто человек: `applicant`, `executor`, `manager`, `inspector`, `admin`, `system_admin`, `security_operator`, капабилити `resource_meter_entry` | `users.roles` (jsonb), канонический резолвер `utils/auth_helpers.get_user_roles` |
+| **Роль** | Кто человек: `applicant`, `executor`, `manager`, `inspector`, `admin`, `system_admin`, `security_operator`, капабилити `resource_meter_entry` и `engineer` (выдаётся только вместе с `executor`, только из веб-админки) | `users.roles` (jsonb), канонический резолвер `utils/auth_helpers.get_user_roles` |
 | **Действие** | Именованная операция + роли, которые её разрешают + требуется ли одобренный аккаунт | `authz/catalog.py` |
 | **Проверка** | «Разрешено ли этому человеку это действие» | `authz.can`, `require_action`, `ActionGate`, `useCan` |
 
@@ -298,6 +298,7 @@ flowchart LR
 | `rbac.view` | `manager` |  | Роли и права: просмотр |
 | `requests.create` | `applicant` | да | Подать заявку и получить адреса для неё |
 | `requests.create_inspection` | `inspector` | да | Создать заявку обхода |
+| `requests.engineering` | `engineer` |  | Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру |
 | `requests.execute` | `executor` |  | Работать с заявками как исполнитель: пул, взять, выполнить, проблема |
 | `requests.internal_comments` | `admin`, `manager` |  | Видеть и писать внутренние комментарии заявки |
 | `requests.manage` | `manager` |  | Управлять заявками: смена категории, назначение дежурным, правка любой |

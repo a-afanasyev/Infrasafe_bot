@@ -8,17 +8,19 @@ import RolesSection from './RolesSection'
 const BASE = '*/api/v2/shifts/employees'
 const ROLES = [
   { key: 'executor', title: 'Исполнитель', is_system: true, actions: [], customized: [], users_count: 1 },
+  { key: 'applicant', title: 'Житель', is_system: true, actions: [], customized: [], users_count: 0 },
+  { key: 'engineer', title: 'Инженер', is_system: true, actions: [], customized: [], users_count: 0 },
   { key: 'security_operator', title: 'Оператор охраны', is_system: true, actions: [], customized: [], users_count: 0 },
   { key: 'senior_exec', title: 'Старший исполнитель', is_system: false, actions: [], customized: [], users_count: 0 },
 ]
 
 let lastExpected: string[] | undefined
 
-function mockApi(canEdit: boolean, onPut?: (roles: string[]) => void) {
+function mockApi(canEdit: boolean, onPut?: (roles: string[]) => void, userRoles = ['executor']) {
   server.use(
     http.get(`${BASE}/rbac/roles`, () => HttpResponse.json({ roles: ROLES, can_edit: canEdit })),
     http.get(`${BASE}/7/roles`, () =>
-      HttpResponse.json({ user_id: 7, roles: ['executor'], active_role: 'executor', is_superadmin: false, can_edit: canEdit })),
+      HttpResponse.json({ user_id: 7, roles: userRoles, active_role: userRoles[0], is_superadmin: false, can_edit: canEdit })),
     http.put(`${BASE}/7/roles`, async ({ request }) => {
       const body = (await request.json()) as { roles: string[]; expected?: string[] }
       lastExpected = body.expected
@@ -62,5 +64,32 @@ describe('RolesSection', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Исполнитель' }))
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     await waitFor(() => expect(sent).toEqual(['executor', 'senior_exec']))
+  })
+
+  it('engineer brings executor along and locks it', async () => {
+    let sent: string[] | null = null
+    mockApi(true, (roles) => { sent = roles }, ['applicant'])
+    const user = userEvent.setup()
+    render(<RolesSection employeeId={7} />)
+    const executor = await screen.findByRole('checkbox', { name: 'Исполнитель' })
+    expect(executor).not.toBeChecked()
+    await user.click(screen.getByRole('checkbox', { name: 'Инженер' }))
+    expect(executor).toBeChecked()
+    expect(executor).toBeDisabled()
+    expect(screen.getByText(/снимите сначала «Инженера»/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(() => expect(sent).toEqual(['applicant', 'engineer', 'executor']))
+  })
+
+  it('executor unlocks once engineer is removed', async () => {
+    mockApi(true, undefined, ['executor', 'engineer'])
+    const user = userEvent.setup()
+    render(<RolesSection employeeId={7} />)
+    const executor = await screen.findByRole('checkbox', { name: 'Исполнитель' })
+    expect(executor).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: 'Инженер' }))
+    expect(executor).toBeEnabled()
+    await user.click(executor)
+    expect(executor).not.toBeChecked()
   })
 })

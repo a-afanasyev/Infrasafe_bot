@@ -21,7 +21,7 @@ from uk_management_bot.database.models.user import User
 BASE = "/api/v2/shifts/employees"
 SUPERADMIN_TG = 7001
 SYSTEM = ("applicant", "executor", "manager", "inspector", "admin", "system_admin",
-          "security_operator", "resource_meter_entry")
+          "security_operator", "resource_meter_entry", "engineer")
 
 
 def _user(uid: int, roles: list[str], tg: int | None = None, status: str = "approved", **kw) -> User:
@@ -225,6 +225,17 @@ async def test_custom_role_goes_with_a_system_role(client):
     assert alone.status_code == 422
     both = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["senior_exec", "manager"]})
     assert both.status_code == 200 and both.json()["active_role"] == "manager"
+
+
+@pytest.mark.asyncio
+async def test_engineer_goes_with_executor_and_is_not_a_menu_mode(client):
+    """Инженер — капабилити: только вместе с executor и режимом меню не становится."""
+    c = await client(SUPERADMIN)
+    alone = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["engineer", "applicant"]})
+    assert alone.status_code == 422 and "Исполнитель" in alone.json()["detail"]
+    both = await c.put(f"{BASE}/{EXECUTOR}/roles", json={"roles": ["engineer", "executor"]})
+    assert both.status_code == 200, both.text
+    assert both.json()["active_role"] == "executor"
 
 
 @pytest.mark.asyncio

@@ -28,16 +28,16 @@ describe('rbac labels', () => {
     expect(Object.keys(uz.rbac.actionTitles).sort()).toEqual(Object.keys(actions).sort())
   })
 
-  it('ru role titles are exactly the seed of migration 023', () => {
+  it('ru role titles are exactly the seed of rbac migrations', () => {
     // Роль переводится, только пока её название — как засеяно миграцией; если
     // ru-строки разойдутся с сидом, нетронутые роли перестанут переводиться.
-    // Читаем файл миграции из чекаута (в CI-образ бэкенда локали не попадают).
-    const migration = readFileSync(
-      join(__dirname, '../../../../alembic/versions/0023_rbac_admin.py'),
-      'utf8',
-    )
-    const seed = [...migration.matchAll(/\("([a-z_]+)", "([^"]+)", "([^"]+)"\)/g)]
-    expect(seed.length).toBe(8)
+    // Читаем файлы миграций из чекаута (в CI-образ бэкенда локали не попадают).
+    const seedOf = (file: string) => {
+      const migration = readFileSync(join(__dirname, '../../../../alembic/versions', file), 'utf8')
+      return [...migration.matchAll(/\("([a-z_]+)", "([^"]+)", "([^"]+)"\)/g)]
+    }
+    const seed = [...seedOf('0023_rbac_admin.py'), ...seedOf('0027_engineer_role.py')]
+    expect(seed.length).toBe(9)
     expect(ru.rbac.roleTitles).toEqual(Object.fromEntries(seed.map(([, key, title]) => [key, title])))
     expect(ru.rbac.roleDescriptions).toEqual(Object.fromEntries(seed.map(([, key, , description]) => [key, description])))
   })

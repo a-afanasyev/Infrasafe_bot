@@ -36,11 +36,26 @@ ADMIN = "admin"
 SYSTEM_ADMIN = "system_admin"
 SECURITY_OPERATOR = "security_operator"
 RESOURCE_METER_ENTRY = "resource_meter_entry"
+# Инженер: эскалации InfraSafe, работа без смены по своей заявке «Инженерный
+# разбор», передача мастеру. Выдаётся только вместе с executor (authz/role_set).
+ENGINEER = "engineer"
 
 KNOWN_ROLES: frozenset[str] = frozenset({
     APPLICANT, EXECUTOR, MANAGER, INSPECTOR, ADMIN, SYSTEM_ADMIN,
-    SECURITY_OPERATOR, RESOURCE_METER_ENTRY,
+    SECURITY_OPERATOR, RESOURCE_METER_ENTRY, ENGINEER,
 })
+
+#: Роли-капабилити: дают права, но режимом меню (active_role) не бывают.
+CAPABILITY_ROLES: frozenset[str] = frozenset({RESOURCE_METER_ENTRY, ENGINEER})
+
+
+def is_menu_mode(role: str) -> bool:
+    """Роль, в режим которой можно переключиться: системная, не капабилити.
+
+    Свои роли из админки ролей режимом меню не бывают — меню строится по
+    системным ролям, а права своей роли действуют в любом режиме.
+    """
+    return role in KNOWN_ROLES and role not in CAPABILITY_ROLES
 
 
 @dataclass(frozen=True)
@@ -97,6 +112,8 @@ _ACTIONS: tuple[Action, ...] = (
     _action("requests.read_all", {_M}, "Видеть любую заявку: карточка и список без ограничения «свои/назначенные»"),
     _action("requests.internal_comments", {_M, _A}, "Видеть и писать внутренние комментарии заявки"),
     _action("requests.stats", {_M}, "Статистика заявок"),
+    _action("requests.engineering", {ENGINEER},
+            "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"),
     _action("dashboard.use", {_A, _M}, "Вход в основной веб-дашборд управления"),
     _action("dashboard.live", {_M}, "Живой поток событий дашборда (WebSocket)"),
     # Подсказка интерфейса: кнопка «прикрепить фото» в карточке. Сервер пускает

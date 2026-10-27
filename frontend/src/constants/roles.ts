@@ -18,3 +18,4 @@ export type UserRole =
   | 'inspector'
   | 'system_admin'
   | 'security_operator'
+  | 'engineer'

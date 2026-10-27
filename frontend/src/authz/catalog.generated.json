@@ -316,6 +316,14 @@
       "superadmin_only": false,
       "title": "Создать заявку обхода"
     },
+    "requests.engineering": {
+      "roles": [
+        "engineer"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"
+    },
     "requests.execute": {
       "roles": [
         "executor"

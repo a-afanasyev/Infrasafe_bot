@@ -379,6 +379,10 @@ async def process_role_change_comment(message: Message, state: FSMContext, langu
             await message.answer(get_text("employee_mgmt.handlers.user_not_found_error", language=lang))
             await state.clear()
             return
+        if outcome == "refused":
+            await message.answer(get_text("employee_mgmt.handlers.roles_change_refused", language=language))
+            await state.clear()
+            return
         if outcome == "no_target":
             logger.error(f"Employee not found: ID {target_employee_id}")
             lang = language
