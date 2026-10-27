@@ -5211,6 +5211,37 @@
         "title": "HandleTransferBody",
         "type": "object"
       },
+      "HandoverCandidate": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_requests": {
+            "title": "Open Requests",
+            "type": "integer"
+          },
+          "specializations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Specializations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "specializations",
+          "open_requests"
+        ],
+        "title": "HandoverCandidate",
+        "type": "object"
+      },
       "HomeBlockCfg": {
         "description": "Блок страницы жителей: видимость и свой заголовок (пусто = i18n-дефолт).",
         "properties": {
@@ -20317,6 +20348,75 @@
           }
         ],
         "summary": "Complete Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/handover-candidates": {
+      "get": {
+        "description": "Одобренные исполнители со специализациями и открытой нагрузкой, кроме\nтекущего исполнителя; `?specialization=` — только покрывающие её.",
+        "operationId": "handover_candidates_api_v2_requests__request_number__handover_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Specialization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HandoverCandidate"
+                  },
+                  "title": "Response Handover Candidates Api V2 Requests  Request Number  Handover Candidates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Handover Candidates",
         "tags": [
           "requests"
         ]

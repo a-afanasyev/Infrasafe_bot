@@ -30,6 +30,7 @@ WORKFLOW_FIELDS = frozenset({
     "manager_confirmed", "manager_confirmed_by", "manager_confirmed_at",
     "manager_confirmation_notes",
     "is_returned", "returned_at", "returned_by", "return_reason", "return_media",
+    "return_count",
     "completed_at", "requested_materials", "completion_report", "completion_media",
     "executor_id", "assigned_at", "assigned_by", "assignment_type", "assigned_group",
 })

@@ -42,6 +42,7 @@ const MEDIA = [
 ]
 
 let requestState: Record<string, unknown>
+let profileState: Record<string, unknown>
 let failingFileIds: number[]
 
 function mockApi(media: unknown[] = MEDIA) {
@@ -55,7 +56,12 @@ function mockApi(media: unknown[] = MEDIA) {
         : Promise.resolve({ data: new Blob(['img'], { type: 'image/jpeg' }) })
     }
     if (url === `/api/v2/requests/${NUMBER}/comments`) return Promise.resolve({ data: [] })
-    if (url === '/api/v2/profile') return Promise.resolve({ data: { id: 1, roles: ['executor'] } })
+    if (url === '/api/v2/profile') return Promise.resolve({ data: profileState })
+    if (url === `/api/v2/requests/${NUMBER}/handover-candidates`) {
+      return Promise.resolve({ data: [
+        { id: 7, name: 'Мастер Электрик', specializations: ['electrician'], open_requests: 2 },
+      ] })
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
   mockPatch.mockImplementation((_url: string, body: { status: string }) => {
@@ -76,6 +82,7 @@ function renderPage() {
     <Routes>
       <Route path="/twa/exec/task/:number" element={<TaskDetailPage />} />
       <Route path="/twa/exec/report/:number" element={<div>REPORT PAGE</div>} />
+      <Route path="/twa/exec" element={<div>TASK LIST</div>} />
     </Routes>,
     { routerEntries: [`/twa/exec/task/${NUMBER}`] },
   )
@@ -87,6 +94,7 @@ beforeEach(() => {
   mockPatch.mockReset()
   toastMock.error.mockReset()
   requestState = request()
+  profileState = { id: 1, roles: ['executor'], actions: ['requests.execute'] }
   failingFileIds = []
   mockApi()
 })
@@ -253,5 +261,34 @@ describe('TaskDetailPage — галерея (MediaGallery)', () => {
     renderPage()
     expect(await screen.findByText('Фотоотчёт')).toBeInTheDocument()
     expect(screen.queryByText('Фото')).toBeNull()
+  })
+})
+
+describe('TaskDetailPage — инженер передаёт мастеру', () => {
+  const engineer = { id: 1, roles: ['executor', 'engineer'], actions: ['requests.execute', 'requests.engineering'] }
+
+  it('инженер на «Инженерном разборе»: кандидаты со специализацией и нагрузкой, выбор → PATCH executor_id', async () => {
+    profileState = engineer
+    requestState = request({ status: 'В работе', category: 'Инженерный разбор' })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Передать мастеру' }))
+    const candidate = await screen.findByRole('button', { name: /Мастер Электрик/ })
+    expect(candidate).toHaveTextContent('2 заявки в работе')
+    fireEvent.click(candidate)
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith(`/api/v2/requests/${NUMBER}`, { executor_id: 7 }))
+    expect(await screen.findByText('TASK LIST')).toBeInTheDocument()
+  })
+
+  it('кнопки нет у обычного исполнителя и на рутинной заявке', async () => {
+    requestState = request({ status: 'В работе', category: 'Инженерный разбор' })
+    renderPage()
+    expect(await screen.findByText(NUMBER)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Передать мастеру' })).toBeNull()
+
+    profileState = engineer
+    requestState = request({ status: 'В работе', category: 'electricity' })
+    renderPage()
+    expect((await screen.findAllByText(NUMBER)).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Передать мастеру' })).toBeNull()
   })
 })

@@ -227,6 +227,11 @@ def get_employee_actions_keyboard(employee_id: int, status: str, language: str =
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+_ROLE_EMOJI = {'executor': '🛠️', 'manager': '👨‍💼', 'inspector': '🚶', 'applicant': '👤'}
+#: Роли с кнопками редактора — только их бот и меняет (_apply_role_change).
+BOT_EDITABLE_ROLES: tuple[str, ...] = tuple(_ROLE_EMOJI)
+
+
 def get_roles_management_keyboard(selected_roles: list = None, language: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура управления ролями с галочками
@@ -245,10 +250,8 @@ def get_roles_management_keyboard(selected_roles: list = None, language: str = '
     
     # Роли с галочками
     roles = [
-        ('executor', '🛠️', get_text('employee_management.keyboards.role_executor', language=language)),
-        ('manager', '👨‍💼', get_text('employee_management.keyboards.role_manager', language=language)),
-        ('inspector', '🚶', get_text('employee_management.keyboards.role_inspector', language=language)),
-        ('applicant', '👤', get_text('employee_management.keyboards.role_applicant', language=language))
+        (key, emoji, get_text(f'employee_management.keyboards.role_{key}', language=language))
+        for key, emoji in _ROLE_EMOJI.items()
     ]
 
     for role_key, role_emoji, role_name in roles:

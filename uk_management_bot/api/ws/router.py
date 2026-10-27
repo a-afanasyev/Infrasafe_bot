@@ -45,6 +45,7 @@ import asyncio
 import json as _json
 import logging
 import time
+from contextvars import ContextVar
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -85,6 +86,12 @@ WS_ACCESS_REVOKED = 4003
 # (один короткий SELECT на соединение в минуту).
 _WS_IDENTITY_RECHECK_INTERVAL = 60.0
 
+#: Действие, которое даёт право на ЭТОТ канал. Ставится на соединение в
+#: `_serve_ws`; задачи перепроверки (`create_task`) наследуют контекст.
+#: Доску (kanban) видит и инженер — dashboard.live; смены, здания и привязки
+#: жителей — только тем, у кого есть их разделы.
+_WS_CHANNEL_ACTION: ContextVar[str] = ContextVar("ws_channel_action", default="dashboard.live")
+
 
 async def _ws_identity_ok(user_id: int) -> bool:
     """Существует ли пользователь СЕЙЧАС, не заблокирован и всё ещё имеет право
@@ -115,7 +122,7 @@ async def _ws_identity_ok(user_id: int) -> bool:
         # держал бы живой поток, хотя HTTP уже отвечает 403 «Account deleted».
         if getattr(user, "deleted_at", None) is not None:
             return False
-        return can(user, "dashboard.live")
+        return can(user, "dashboard.live") and can(user, _WS_CHANNEL_ACTION.get())
 
 
 def _payload_user_id(payload: dict) -> Optional[int]:
@@ -363,7 +370,8 @@ async def _relay(websocket: WebSocket, payload: dict, pubsub) -> None:
 _relay_until_exp = _relay
 
 
-async def _serve_ws(websocket: WebSocket, subscribe, label: str) -> None:
+async def _serve_ws(websocket: WebSocket, subscribe, label: str,
+                    action: str = "dashboard.live") -> None:
     """Общее тело всех трёх WS-эндпоинтов.
 
     Раньше это были три почти посимвольные копии (AUD5-APIFE-2), различавшиеся
@@ -371,6 +379,7 @@ async def _serve_ws(websocket: WebSocket, subscribe, label: str) -> None:
     чтения `receive()` требовала трёх одинаковых изменений и разъезжалась бы,
     как уже разъехались карты статусов на фронте.
     """
+    _WS_CHANNEL_ACTION.set(action)
     payload = await authenticate_ws_manager(websocket)
     if payload is None:
         return
@@ -406,12 +415,12 @@ async def kanban_ws(websocket: WebSocket):
 
 @router.websocket("/shifts")
 async def shifts_ws(websocket: WebSocket):
-    await _serve_ws(websocket, subscribe_to_shifts, "shifts")
+    await _serve_ws(websocket, subscribe_to_shifts, "shifts", "shifts.manage")
 
 
 @router.websocket("/buildings")
 async def buildings_ws(websocket: WebSocket):
-    await _serve_ws(websocket, subscribe_to_buildings, "buildings")
+    await _serve_ws(websocket, subscribe_to_buildings, "buildings", "addresses.manage")
 
 
 @router.websocket("/apartments")
@@ -423,4 +432,4 @@ async def apartments_ws(websocket: WebSocket):
     полагаясь на него: статусы аккаунта и верификации событий не имеют вовсе,
     поэтому polling там остаётся основным механизмом, а WS — ускорителем.
     """
-    await _serve_ws(websocket, subscribe_to_apartments, "apartments")
+    await _serve_ws(websocket, subscribe_to_apartments, "apartments", "residents.manage")

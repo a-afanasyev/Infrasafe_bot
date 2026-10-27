@@ -12,6 +12,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useKanban, type RequestCard as TCard } from '../../hooks/useKanban'
+import { useCan } from '../../hooks/useCan'
 import KanbanColumn from './KanbanColumn'
 import RequestCard from './RequestCard'
 import TransitionModal, { type TransitionData } from './TransitionModal'
@@ -73,9 +74,10 @@ export default function KanbanBoard({ onCardClick }: Props) {
     return result
   }, [columns, isUnread])
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 20 } }),
-  )
+  // Перенос между колонками — решение менеджера; инженер и admin доску только смотрят.
+  const canMove = useCan('management.decide')
+  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 20 } })
+  const sensors = useSensors(...(canMove ? [pointer] : []))
 
   const handleDragStart = (event: DragStartEvent) => {
     const requestNumber = String(event.active.id)

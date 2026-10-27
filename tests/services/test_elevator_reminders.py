@@ -229,6 +229,14 @@ class TestContract:
         assert el_db.get(Elevator, 1).contract_reminder_stage == 14
         assert _tick(el_db) == RemindersBatch()
 
+    def test_engineer_gets_manager_reminders(self, el_db, el_seed):
+        """Реестр лифтов ведёт и инженер (elevators.manage) — ему менеджерские напоминания."""
+        until = TODAY + timedelta(days=10)
+        _seed(el_db, el_seed, el_seed.user(30, 7030, roles='["executor", "engineer"]'),
+              contract_until=until)
+
+        assert _recipients(_tick(el_db)) == MANAGERS | {7030}
+
     def test_expired_weekly(self, el_db, el_seed):
         until = TODAY - timedelta(days=1)
         _seed(el_db, el_seed, contract_until=until, contract_reminder_stage=7)

@@ -47,6 +47,17 @@ def _is_manager(actor: ActorContext) -> bool:
     return _actor_may(actor, "management.decide")
 
 
+def _engineer_can_assign(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
+    """Инженер передаёт «Инженерный разбор» мастеру (любому исполнителю) —
+    только эту категорию и только свою или ещё ничью: забрать заявку у
+    другого исполнителя — решение менеджера. Рутину назначает менеджер."""
+    from uk_management_bot.utils.categories import is_engineering_category
+
+    return (_actor_may(actor, "requests.engineering")
+            and is_engineering_category(snap.request.category)
+            and snap.request.executor_id in (None, actor.user_id))
+
+
 def _is_assigned_executor(snap: WorkflowSnapshot, actor: ActorContext) -> bool:
     if not _actor_may(actor, "requests.execute"):
         return False

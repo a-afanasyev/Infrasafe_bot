@@ -68,6 +68,7 @@ PROFILES: tuple[Profile, ...] = (
     Profile("resource_meter_entry", ("resource_meter_entry",)),
     Profile("executor+inspector", ("executor", "inspector")),
     Profile("executor+resource_meter_entry", ("executor", "resource_meter_entry")),
+    Profile("executor+engineer", ("executor", "engineer")),
     Profile("applicant+manager", ("applicant", "manager")),
     Profile("executor+inspector+manager", ("executor", "inspector", "manager")),
     Profile("applicant+executor+manager", ("applicant", "executor", "manager")),

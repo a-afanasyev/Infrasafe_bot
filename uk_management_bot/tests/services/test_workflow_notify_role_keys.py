@@ -93,7 +93,7 @@ def test_targets_route_each_role_to_its_own_key(action):
     request = _request(user_id=11, executor_id=22)
     targets = _resolve_targets(request, _plan([_intent(action)]))
 
-    by_key = {key: ids for _, key, ids in targets}
+    by_key = {key: ids for _, key, ids, _aud in targets}
     assert by_key["notifications.workflow.assigned_executor"] == {22}
     assert by_key["notifications.workflow.assigned"] == {11}
 
@@ -106,7 +106,7 @@ def test_same_person_as_applicant_and_executor_gets_one_message(action):
     request = _request(user_id=7, executor_id=7)
     targets = _resolve_targets(request, _plan([_intent(action)]))
 
-    delivered = [(key, ids) for _, key, ids in targets if ids]
+    delivered = [(key, ids) for _, key, ids, _aud in targets if ids]
     assert delivered == [("notifications.workflow.assigned_executor", {7})]
 
 
@@ -116,7 +116,7 @@ def test_dedup_is_per_action_not_global():
     plan = _plan([_intent(Action.MANAGER_ASSIGN), _intent(Action.CANCEL)])
     targets = _resolve_targets(request, plan)
 
-    applicant_hits = [key for _, key, ids in targets if 11 in ids]
+    applicant_hits = [key for _, key, ids, _aud in targets if 11 in ids]
     assert sorted(applicant_hits) == [
         "notifications.workflow.assigned",
         "notifications.workflow.cancelled",
@@ -187,3 +187,31 @@ def test_applicant_key_still_renders_without_description_placeholder():
         "ru", _request(), None,
     )
     assert "течёт кран" not in text
+
+
+# ──────────────── инженеры: аудитория по действию (этап 2) ────────────────
+
+
+def test_purchase_goes_to_engineers_by_action():
+    targets = _resolve_targets(_request(), _plan([_intent(Action.EXECUTOR_PURCHASE)]))
+    assert targets == [(Action.EXECUTOR_PURCHASE, "notifications.workflow.purchase_engineer",
+                        set(), ("requests.engineering",))]
+
+
+def test_repeated_return_adds_engineers_job_only_with_flag():
+    plain = _plan([_intent(Action.APPLICANT_RETURN)])
+    flagged = _plan([SimpleNamespace(kind="notify", data={
+        "action": Action.APPLICANT_RETURN.value, "repeated_return": True})])
+    assert [key for _, _, key in plain] == ["notifications.workflow.returned_for_rework"]
+    assert [key for _, _, key in flagged] == [
+        "notifications.workflow.returned_for_rework", "notifications.workflow.repeated_return"]
+
+
+def test_engineer_texts_render_materials_and_count():
+    request = SimpleNamespace(**vars(_request()), requested_materials="кабель <10 м>", return_count=3)
+    purchase = _render_text(Action.EXECUTOR_PURCHASE, "notifications.workflow.purchase_engineer",
+                            "ru", request, None)
+    assert "260819-001" in purchase and "кабель &lt;10 м&gt;" in purchase
+    repeated = _render_text(Action.APPLICANT_RETURN, "notifications.workflow.repeated_return",
+                            "uz", request, None)
+    assert "3" in repeated and "260819-001" in repeated

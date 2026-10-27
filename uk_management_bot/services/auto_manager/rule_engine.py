@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
+from uk_management_bot.authz import has_action_roles
 from uk_management_bot.services.admin_handler_service import AdminHandlerService
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.constants import (
@@ -211,3 +212,26 @@ def select_executor(db: Session, specialization: str, now: datetime,
 
     ranked = sorted(on_duty, key=lambda user: (snap.load_by_user.get(user.id, 0), user.id))
     return ranked[0]
+
+
+def select_engineer(db: Session, now: datetime,
+                    snapshot: Optional[DutySnapshot] = None,
+                    exclude_user_ids: frozenset[int] = frozenset()) -> Optional[User]:
+    """Наименее загруженный инженер для «Инженерного разбора».
+
+    Инженер — исполнитель с действием `requests.engineering`. Без фильтра по
+    специализации и смене (решение владельца: эскалация ему всегда).
+    Ranking и тай-брейк — как у `select_executor`.
+    """
+    snap = snapshot if snapshot is not None else build_duty_snapshot(db, now)
+    candidates = [
+        user for user in snap.approved_users
+        if user.id not in exclude_user_ids
+        # Без смены инженер узнаёт о заявке только из бота: удалённый или
+        # заблокировавший бота её бы не увидел — пусть лучше узнают менеджеры.
+        and user.deleted_at is None and user.bot_blocked_at is None
+        and ROLE_EXECUTOR in get_user_roles(user)
+        and has_action_roles(user, "requests.engineering")
+    ]
+    return min(candidates, key=lambda user: (snap.load_by_user.get(user.id, 0), user.id),
+               default=None)

@@ -20,12 +20,13 @@ from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.elevator import Elevator, ElevatorStatusEvent
 from uk_management_bot.utils.address_helpers import localize_address
+from uk_management_bot.services.recipients import Recipient
 from uk_management_bot.utils.helpers import get_text
 
 from ._core import Message, StatusChange
 from ._shared import DEFAULT_LANGUAGE, new_event, now_or_utc, validate_source
 from .reads import get_elevator_async, get_elevator_sync
-from .recipients import Recipient, residents_of_entrance_async, residents_of_entrance_sync
+from .recipients import residents_of_entrance_async, residents_of_entrance_sync
 from .reminder_rules import DEFAULT_ELEVATORS_CONFIG
 from .validation import can_set_status, validate_status
 from .validation_db import validate_reason, validate_request_number

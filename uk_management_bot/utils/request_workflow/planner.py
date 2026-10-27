@@ -16,6 +16,7 @@ from uk_management_bot.utils.constants import (
     COMMENT_TYPE_CATEGORY_CHANGE,
     REQUEST_STATUS_APPROVED,
     REQUEST_STATUS_COMPLETED,
+    REQUEST_STATUS_EXECUTED,
     REQUEST_STATUS_IN_PROGRESS,
     REQUEST_STATUS_NEW,
 )
@@ -213,9 +214,24 @@ def _safe_payload(payload: Mapping[str, object]) -> dict:
     return {k: v for k, v in payload.items() if k in _SAFE_PAYLOAD_KEYS}
 
 
+def _next_return_count(action: Action, snap: WorkflowSnapshot) -> Optional[int]:
+    """Новый `return_count`, если переход начинает НОВЫЙ цикл возврата, иначе None.
+
+    Один цикл — одно +1: житель вернул (APPLICANT_RETURN) или менеджер вернул
+    сданную работу («Выполнена»/«Исполнено»). Возврат в работу из «Возвращена»
+    — продолжение того же цикла (житель уже вернул), счётчик не трогает.
+    """
+    if action is Action.APPLICANT_RETURN or (
+            action is Action.MANAGER_RETURN_TO_WORK
+            and normalize_status(snap.request) in (REQUEST_STATUS_EXECUTED, REQUEST_STATUS_COMPLETED)):
+        return snap.request.return_count + 1
+    return None
+
+
 def _build_events(action: Action, principal: PrincipalRef,
                   old: RequestState, new_canon: str,
-                  payload: Mapping[str, object]) -> tuple[EventIntent, ...]:
+                  payload: Mapping[str, object],
+                  repeated_return: bool = False) -> tuple[EventIntent, ...]:
     old_canon = normalize_status(old)
     old_public = project_public_status(old)
     # public-проекция нового состояния: Возвращена наружу = Исполнено
@@ -238,8 +254,11 @@ def _build_events(action: Action, principal: PrincipalRef,
         }))
         events.append(EventIntent("realtime", {
             "request_number": old.request_number, "status": new_public}))
-    events.append(EventIntent("notify", {
-        "action": action.value, "request_number": old.request_number}))
+    notify = {"action": action.value, "request_number": old.request_number}
+    if repeated_return:
+        # Работу возвращают не впервые — повод инженеру посмотреть (этап 2).
+        notify["repeated_return"] = True
+    events.append(EventIntent("notify", notify))
     return tuple(events)
 
 
@@ -309,10 +328,14 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
 
     to_status = _effective_to_status(action, spec.to_status, snap)
     patch = _build_patch(action, to_status, actor, command.payload)
+    return_count = _next_return_count(action, snap)
+    if return_count is not None:
+        patch += (("return_count", Op.SET, return_count),)
     _enforce_in_progress_has_executor(action, to_status, snap, patch)
     domain_ops = _build_domain_ops(action, snap, command.payload)
     events = _build_events(action, principal, snap.request,
-                           to_status, command.payload)
+                           to_status, command.payload,
+                           repeated_return=return_count is not None and return_count >= 2)
     return TransitionResult(
         old_state=snap.request, new_canon_status=to_status,
         patch=patch, domain_ops=domain_ops, events=events,

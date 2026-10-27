@@ -1215,7 +1215,8 @@
     "manager": "Menejer",
     "inspector": "Nazoratchi",
     "system_admin": "Tizim administratori",
-    "security_operator": "Xavfsizlik operatori"
+    "security_operator": "Xavfsizlik operatori",
+    "engineer": "Muhandis"
   },
   "verificationStatus": {
     "verified": "Tasdiqlangan",
@@ -2642,6 +2643,16 @@
         "submit": "Bajarilgan deb belgilash",
         "photoUploadFailed": "Ariza yakunlandi, lekin №{{numbers}} rasm(lar) yuklanmadi",
         "completeFailed": "Arizani yakunlab bo'lmadi"
+      },
+      "handover": {
+        "button": "Ustaga topshirish",
+        "title": "Arizani kimga topshirish",
+        "empty": "Mavjud ijrochilar yo'q",
+        "noSpecialization": "Mutaxassisliksiz",
+        "load_one": "Ishda {{count}} ta ariza",
+        "load_other": "Ishda {{count}} ta ariza",
+        "done": "Ariza ustaga topshirildi",
+        "failed": "Arizani topshirib bo'lmadi"
       }
     },
     "timeline": {
@@ -3522,7 +3533,8 @@
       "admin": "Bot administratori",
       "system_admin": "Kirish nazorati administratori",
       "security_operator": "Xavfsizlik operatori",
-      "resource_meter_entry": "Ko'rsatkich nazoratchisi"
+      "resource_meter_entry": "Ko'rsatkich nazoratchisi",
+      "engineer": "Muhandis"
     },
     "roleDescriptions": {
       "applicant": "Ariza beradi, o'z avtomobillari va ruxsatnomalari",
@@ -3532,7 +3544,8 @@
       "admin": "Menejer bilan teng bot admin paneli",
       "system_admin": "Kirish nazorati moduli to'liq, ombor, resurs hisobi",
       "security_operator": "Qo'riqlash posti: hodisalar, ruxsatnomalar, fotosuratlar",
-      "resource_meter_entry": "Mini App orqali hisoblagich ko'rsatkichlarini kiritish"
+      "resource_meter_entry": "Mini App orqali hisoblagich ko'rsatkichlarini kiritish",
+      "engineer": "InfraSafe eskalatsiyalari, smenasiz ishlash, ustaga topshirish"
     },
     "actionTitles": {
       "access.diagnostics": "Kirish nazorati: diagnostika",
@@ -3589,8 +3602,10 @@
       "shifts.manage": "Smenalar: yaratish, shablonlar, ko'rish, uzatishlar",
       "shifts.own": "Ijrochining o'z smenalari: boshlash, tugatish, uzatish",
       "staff.manage": "Xodimlar: ro'yxat, takliflar, faollashtirish, rollar",
-      "work_reports.moderate": "Ishlar hisobotlarini moderatsiya qilish"
-    }
+      "work_reports.moderate": "Ishlar hisobotlarini moderatsiya qilish",
+      "requests.engineering": "Muhandislik tahlili: InfraSafe eskalatsiyalari, smenasiz ishlash, ustaga topshirish"
+    },
+    "engineerNeedsExecutor": "«Muhandis» «Ijrochi» bilan birga beriladi: avval «Muhandis»ni olib tashlang."
   },
   "home": {
     "pageTitle": "Uyingiz bugun",

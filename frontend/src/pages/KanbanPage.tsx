@@ -9,6 +9,7 @@ import { useTopbar } from '../contexts/topbar'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { Button } from '@/components/ui/button'
 import AutoManagerToggle from '../components/shared/AutoManagerToggle'
+import { useCan } from '../hooks/useCan'
 
 export default function KanbanPage() {
   const { t } = useTranslation()
@@ -18,6 +19,9 @@ export default function KanbanPage() {
   const [lastDeepLink, setLastDeepLink] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const { setActions, clearActions } = useTopbar()
+  // Доску видит и инженер — менеджерские кнопки только по действиям.
+  const canAutoManager = useCan('auto_manager.configure')
+  const canCallCenter = useCan('callcenter.use')
 
   // Deep-link from InfraSafe admin panel ("Открыть в УК"): /dashboard?request=<номер>.
   // Runs only inside ProtectedRoute (admin|manager) — an unauthenticated or wrong-role
@@ -54,25 +58,27 @@ export default function KanbanPage() {
       <div className="flex items-center gap-3">
         {/* Выключатель автоназначения — здесь же, где менеджер смотрит на
             заявки: снятый тумблер оставляет новые заявки в «Новая». */}
-        <AutoManagerToggle />
-        <Button
-          onClick={() => setCallCenterOpen(true)}
-          size="sm"
-        >
-          <Phone size={14} />
-          {t('kanban.createByCall')}
-        </Button>
+        {canAutoManager && <AutoManagerToggle />}
+        {canCallCenter && (
+          <Button
+            onClick={() => setCallCenterOpen(true)}
+            size="sm"
+          >
+            <Phone size={14} />
+            {t('kanban.createByCall')}
+          </Button>
+        )}
       </div>
     )
     return clearActions
     // FE-08: include reactive deps so the button label re-renders on language
     // change (setActions/clearActions are stable useCallback refs).
-  }, [t, setActions, clearActions])
+  }, [t, setActions, clearActions, canAutoManager, canCallCenter])
 
   return (
     <div className="flex h-full min-h-0 flex-col p-6">
       <KanbanBoard onCardClick={setSelectedRequest} />
-      <CallCenterModal isOpen={callCenterOpen} onClose={() => setCallCenterOpen(false)} />
+      {canCallCenter && <CallCenterModal isOpen={callCenterOpen} onClose={() => setCallCenterOpen(false)} />}
       <RequestDetailModal
         requestNumber={selectedRequest}
         onClose={() => setSelectedRequest(null)}

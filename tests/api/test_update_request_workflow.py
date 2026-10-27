@@ -279,6 +279,39 @@ async def test_assign_to_duty_409_when_no_duty_executor(
 
 
 @pytest.mark.asyncio
+async def test_assign_to_duty_engineering_goes_to_engineer(
+    client, db_session, manager_user, applicant_user, monkeypatch
+):
+    """«Дежурному» для «Инженерного разбора» — инженер, а не разнорабочий."""
+    from types import SimpleNamespace
+
+    from sqlalchemy import update as sa_update
+
+    from uk_management_bot.database.models.request import Request as R
+    import uk_management_bot.services.auto_manager.rule_engine as re_mod
+
+    await _seed(db_session, owner_id=applicant_user.id, status="Новая")
+    await db_session.execute(
+        sa_update(R).where(R.request_number == "260101-001").values(category="Инженерный разбор"))
+    await db_session.commit()
+    mock = AsyncMock(return_value=_outcome("Новая", "В работе", "В работе"))
+    monkeypatch.setattr(req_router, "run_command_async", mock)
+    monkeypatch.setattr(re_mod, "select_engineer", lambda *a, **k: SimpleNamespace(id=77))
+    monkeypatch.setattr(re_mod, "select_executor",
+                        lambda *a, **k: pytest.fail("рутинный подбор для engineering"))
+
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "В работе", "assign_to_duty": True})
+    assert r.status_code == 200, r.text
+    assert dict(mock.await_args.args[3].payload) == {"executor_id": 77}
+
+    monkeypatch.setattr(re_mod, "select_engineer", lambda *a, **k: None)
+    r = await client.patch(PATCH_URL.format(number="260101-001"),
+                           json={"status": "В работе", "assign_to_duty": True})
+    assert r.status_code == 409 and "инженера" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("exc,code", [
     (NotAuthorized("x"), 403),
     (InvalidTransition("x"), 422),

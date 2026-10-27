@@ -41,7 +41,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from uk_management_bot.database.models.elevator import Elevator, ElevatorMaintenanceOccurrence
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.feedback_service import manager_telegram_ids_sync
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.business_time import fmt_date
 from uk_management_bot.utils.helpers import get_text
@@ -56,7 +55,7 @@ from .calendar_rules import (
     should_remind_overdue,
 )
 from .labels import elevator_label, status_label
-from .recipients import Recipient
+from uk_management_bot.services.recipients import Recipient, recipients_with_action_sync
 from .reminder_rules import DOWNTIME_STATUSES, downtime_threshold_reached
 
 LIFT_SPECIALIZATION = "elevator"
@@ -199,20 +198,16 @@ def _active_users_stmt() -> Select:
 
 
 def _load_audience(db: Session) -> _Audience:
-    """Менеджеры (по канону ``feedback_service``) и лифтёры; объединение без дублей."""
-    manager_ids = set(manager_telegram_ids_sync(db))
-    managers: Sequence[User] = ()
-    if manager_ids:
-        managers = db.execute(
-            _active_users_stmt().where(User.telegram_id.in_(manager_ids))
-        ).scalars().all()
+    """Кто ведёт реестр лифтов (действие ``elevators.manage`` — менеджер и
+    инженер) и лифтёры; объединение без дублей."""
+    managers = tuple(recipients_with_action_sync(db, "elevators.manage"))
     executors = db.execute(
         _active_users_stmt().where(legacy_role_filter("executor"))
     ).scalars().all()
     technicians = [u for u in executors if LIFT_SPECIALIZATION in parse_specializations(u)]
-    seen = {u.telegram_id for u in managers}
+    seen = {r.telegram_id for r in managers}
     extra = [u for u in technicians if u.telegram_id not in seen]
-    return _Audience(managers=_to_recipients(managers), staff=_to_recipients([*managers, *extra]))
+    return _Audience(managers=managers, staff=(*managers, *_to_recipients(extra)))
 
 
 # ---------------------------------------------------------------------------

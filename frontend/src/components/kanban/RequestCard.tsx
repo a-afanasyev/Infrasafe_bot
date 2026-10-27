@@ -6,12 +6,13 @@ import { CSS } from '@dnd-kit/utilities'
 import type { RequestCard as TCard } from '../../hooks/useKanban'
 import { tUrgency, tCategory } from '../../i18n/apiMaps'
 import { cn } from '@/lib/utils'
+import { useCan } from '../../hooks/useCan'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
 import { ElevatorStatusDot } from '../elevators/ElevatorStatusBadge'
 import { getUrgencyStyle, type UrgencyStyle } from './urgencyStyle'
 
 const SOURCE_ICON: Record<string, string> = {
-  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶',
+  bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶', infrasafe: '⚡',
 }
 
 import { FROZEN_STATUSES } from '../../constants'
@@ -28,11 +29,13 @@ interface Props {
 export default function RequestCard({ card, onClick, isOverlay, unread }: Props) {
   const urgency = getUrgencyStyle(card.urgency)
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
+  // Перенос между колонками — решение менеджера; инженер доску только смотрит.
+  const canMove = useCan('management.decide')
   const frozen = FROZEN_STATUSES.has(card.status)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.request_number,
-    disabled: frozen ? { draggable: true, droppable: true } : false,
+    disabled: frozen || !canMove ? { draggable: true, droppable: true } : false,
   })
 
   // Overlay card (floating under cursor)

@@ -4,6 +4,7 @@ from uk_management_bot.api.dependencies import get_db, get_current_user, require
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.authz import ACTIONS, actions_for_roles, is_superadmin
+from uk_management_bot.authz.catalog import is_menu_mode
 from uk_management_bot.api.profile import service
 from uk_management_bot.database.models.user import User
 from pydantic import BaseModel, EmailStr
@@ -136,6 +137,12 @@ async def switch_role(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Role '{body.active_role}' not in user roles: {roles}",
+        )
+    if not is_menu_mode(body.active_role):
+        # Капабилити (контролёр показаний, инженер) и свои роли — не режим меню.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Role is not a switchable mode",
         )
     await service.set_active_role(db, user.id, active_role=body.active_role)
     return RoleSwitchOut(active_role=body.active_role, roles=roles)

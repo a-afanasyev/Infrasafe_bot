@@ -37,7 +37,10 @@ from uk_management_bot.database.session import run_db
 from uk_management_bot.services.user_management_service import UserManagementService
 from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.specialization_service import SpecializationService
+from uk_management_bot.authz.catalog import is_menu_mode
+from uk_management_bot.authz.role_set import role_set_error
 from uk_management_bot.keyboards.employee_management import (
+    BOT_EDITABLE_ROLES,
     get_employee_actions_keyboard,
 )
 from uk_management_bot.utils.helpers import get_text
@@ -171,7 +174,7 @@ def _update_employee_phone(db: Session, target_employee_id: int, new_phone: str)
 
 def _apply_role_change(db: Session, actor_tg_id: int, target_employee_id: int,
                        current_roles: list, comment: str) -> str:
-    """Смена набора ролей + best-effort аудит. "no_actor" | "no_target" | "ok"."""
+    """Смена набора ролей + best-effort аудит. "no_actor" | "no_target" | "refused" | "ok"."""
     current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
     if not current_user:
         return "no_actor"
@@ -190,6 +193,12 @@ def _apply_role_change(db: Session, actor_tg_id: int, target_employee_id: int,
 
     logger.debug(f" Найден пользователь для обновления ролей: {user.id}")
     old_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
+    # callback_data шлёт клиент: меняться могут только роли с кнопками
+    # редактора, итоговый набор — по общему инварианту (authz/role_set).
+    changed = set(old_roles) ^ set(current_roles)
+    if changed - set(BOT_EDITABLE_ROLES) or role_set_error(current_roles):
+        logger.warning("Смена ролей %s отклонена: изменения %s", user.id, sorted(changed))
+        return "refused"
     logger.debug(f" Старые роли: {old_roles}, новые роли: {current_roles}")
 
     user.roles = json.dumps(current_roles)
@@ -198,7 +207,7 @@ def _apply_role_change(db: Session, actor_tg_id: int, target_employee_id: int,
         # Инвариант: active_role всегда ∈ roles. Если активная роль
         # больше не входит в набор (или не задана) — переводим на первую.
         if not user.active_role or user.active_role not in current_roles:
-            user.active_role = current_roles[0]
+            user.active_role = next((r for r in current_roles if is_menu_mode(r)), current_roles[0])
 
     # Создаем запись в аудит логе
     try:

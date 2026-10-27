@@ -100,6 +100,15 @@ function ProtectedRoute({ children, action }: ProtectedRouteProps) {
   return <>{children}</>
 }
 
+// Раздел дашборда по своему действию: общий гейт /dashboard — только вход
+// (dashboard.use), а инженер, например, видит доску, но не персонал и смены.
+// Без действия — на доску, а не на /home: человек в дашборде остаётся.
+function ActionRoute({ children, action }: { children: React.ReactNode; action: ActionKey }) {
+  const user = useAuthStore((s) => s.user)
+  if (!hasAction(user?.actions, action)) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
 // Root entry: anonymous visitors land on the resident home page (УК main page;
 // the lobby-screen board stays at /resident-board),
 // authenticated staff go to the dashboard, TWA users to the Mini App.
@@ -139,27 +148,27 @@ export default function App() {
 
               <Route path="/dashboard" element={<ProtectedRoute action="dashboard.use"><DashboardLayout /></ProtectedRoute>}>
                 <Route index element={<PageErrorBoundary><KanbanPage /></PageErrorBoundary>} />
-                <Route path="analytics" element={<PageErrorBoundary><AnalyticsPage /></PageErrorBoundary>} />
-                <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
-                <Route path="employees" element={<PageErrorBoundary><EmployeesPage /></PageErrorBoundary>} />
-                <Route path="employees/:id" element={<PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary>} />
-                <Route path="templates" element={<PageErrorBoundary><TemplatesPage /></PageErrorBoundary>} />
-                <Route path="payment-control" element={<PageErrorBoundary><PaymentControlPage /></PageErrorBoundary>} />
-                <Route path="addresses" element={<PageErrorBoundary><AddressesPage /></PageErrorBoundary>} />
-                <Route path="residents" element={<PageErrorBoundary><ResidentsPage /></PageErrorBoundary>} />
-                <Route path="residents/:id" element={<PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary>} />
+                <Route path="analytics" element={<ActionRoute action="requests.stats"><PageErrorBoundary><AnalyticsPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="shifts" element={<ActionRoute action="shifts.manage"><PageErrorBoundary><ShiftsPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="employees" element={<ActionRoute action="staff.manage"><PageErrorBoundary><EmployeesPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="employees/:id" element={<ActionRoute action="staff.manage"><PageErrorBoundary><EmployeeDetailPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="templates" element={<ActionRoute action="shifts.manage"><PageErrorBoundary><TemplatesPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="payment-control" element={<ActionRoute action="payments.manage"><PageErrorBoundary><PaymentControlPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="addresses" element={<ActionRoute action="addresses.manage"><PageErrorBoundary><AddressesPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="residents" element={<ActionRoute action="residents.manage"><PageErrorBoundary><ResidentsPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="residents/:id" element={<ActionRoute action="residents.manage"><PageErrorBoundary><ResidentDetailPage /></PageErrorBoundary></ActionRoute>} />
                 {/* Group Intake: реестр ТГ-групп (как residents — пункт меню
                     только manager, "только manager" enforced бэкендом). */}
-                <Route path="groups" element={<PageErrorBoundary><GroupsPage /></PageErrorBoundary>} />
-                <Route path="board-editor" element={<PageErrorBoundary><BoardEditorPage /></PageErrorBoundary>} />
+                <Route path="groups" element={<ActionRoute action="group_intake.manage"><PageErrorBoundary><GroupsPage /></PageErrorBoundary></ActionRoute>} />
+                <Route path="board-editor" element={<ActionRoute action="board.configure"><PageErrorBoundary><BoardEditorPage /></PageErrorBoundary></ActionRoute>} />
                 {/* Менеджерская очередь модерации визуальных отчётов «до/после».
-                    Гард — общий admin/manager группы /dashboard (как board-editor);
-                    "только manager" enforced бэкендом (действие work_reports.moderate).
+                    Гард — действие work_reports.moderate (ActionRoute), его же
+                    проверяет бэкенд.
                     DARK за VITE_WORK_REPORTS_ENABLED. */}
                 {WORK_REPORTS_ENABLED && (
-                  <Route path="work-reports" element={<PageErrorBoundary><WorkReportsPage /></PageErrorBoundary>} />
+                  <Route path="work-reports" element={<ActionRoute action="work_reports.moderate"><PageErrorBoundary><WorkReportsPage /></PageErrorBoundary></ActionRoute>} />
                 )}
-                <Route path="feedback" element={<PageErrorBoundary><FeedbackPage /></PageErrorBoundary>} />
+                <Route path="feedback" element={<ActionRoute action="feedback.manage"><PageErrorBoundary><FeedbackPage /></PageErrorBoundary></ActionRoute>} />
               </Route>
 
               {/* access_control §9.6: контроль доступа — отдельный route group с

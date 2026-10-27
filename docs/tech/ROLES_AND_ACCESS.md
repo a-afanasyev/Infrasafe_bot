@@ -75,6 +75,15 @@ enum UserRole` (`uk_management_bot/tests/test_roles_parity.py:23-32`) и зер�
   `users.roles` рядом с ролями): открывает ввод показаний счётчиков из
   Mini App («Учёт ресурсов»). Выдаётся/снимается менеджером в карточке
   сотрудника (`PATCH /employees/{id}/meter-entry`).
+- **`engineer`** — капабилити инженера (только вместе с `executor`, инвариант
+  `authz/role_set.py`; выдаёт только суперадмин в веб-админке ролей). Действие
+  `requests.engineering`: «Инженерный разбор» (эскалации InfraSafe) назначается
+  ему сразу (`dispatch.pick_assignee_id`), сверка `engineering_reconcile` раз в
+  2 мин; по своей такой заявке работает без смены; передаёт её мастеру
+  (`MANAGER_ASSIGN`, `GET /requests/{n}/handover-candidates`). Плюс доска и
+  живой поток канбана, лифты, аналитика; уведомления о повторных обращениях,
+  повторных возвратах (`requests.return_count` ≥ 2) и закупе. Режимом меню не
+  бывает.
 - **`staff_group`** — псевдо-роль адресного резолвера для staff-репортов
   Group Intake (в `users.roles` НЕ хранится): задаёт разрешённые уровни
   адреса (`yard`, `building`) без требования принадлежности. См.

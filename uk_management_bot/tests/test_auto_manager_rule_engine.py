@@ -15,7 +15,11 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import Base
-from uk_management_bot.services.auto_manager.rule_engine import select_executor
+from uk_management_bot.services.auto_manager.rule_engine import (
+    build_duty_snapshot,
+    select_engineer,
+    select_executor,
+)
 from uk_management_bot.utils.constants import (
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_COMPLETED,
@@ -412,4 +416,50 @@ def test_exclude_user_ids_default_empty_keeps_background_callers_intact(db):
     _shift(db, 1, ex.id)
 
     assert select_executor(db, SPECIALIZATION, NOW).id == ex.id
+
+
+# ── select_engineer ─────────────────────────────────────────────────────
+
+
+def test_select_engineer_ignores_shift_and_specialization(db):
+    """Инженеру эскалация всегда: без смены и без специализации."""
+    _executor(db, 1, 101)  # обычный исполнитель на смене — не инженер
+    _shift(db, 1, 1)
+    _executor(db, 2, 102, roles='["executor", "engineer"]', specialization=None)
+    assert select_engineer(db, NOW).id == 2
+
+
+def test_select_engineer_needs_executor_and_approval(db):
+    _executor(db, 1, 101, roles='["engineer"]')
+    _executor(db, 2, 102, roles='["executor", "engineer"]', status="pending")
+    assert select_engineer(db, NOW) is None
+
+
+def test_select_engineer_skips_unreachable(db):
+    """Удалённый или заблокировавший бота инженер о заявке не узнает."""
+    from datetime import datetime, timezone
+
+    at = datetime(2026, 10, 27, tzinfo=timezone.utc)
+    _executor(db, 1, 101, roles='["executor", "engineer"]').bot_blocked_at = at
+    _executor(db, 2, 102, roles='["executor", "engineer"]').deleted_at = at
+    db.commit()
+    assert select_engineer(db, NOW) is None
+
+
+def test_select_engineer_least_loaded_and_exclude(db):
+    _executor(db, 1, 101, roles='["executor", "engineer"]')
+    _executor(db, 2, 102, roles='["executor", "engineer"]')
+    _request(db, "261027-001", 1)
+    assert select_engineer(db, NOW).id == 2
+    assert select_engineer(db, NOW, exclude_user_ids=frozenset({2})).id == 1
+
+
+def test_select_engineer_spreads_by_snapshot_load(db):
+    """Тик со срезом: после назначения нагрузка растёт — вторая заявка другому."""
+    _executor(db, 1, 101, roles='["executor", "engineer"]')
+    _executor(db, 2, 102, roles='["executor", "engineer"]')
+    snap = build_duty_snapshot(db, NOW)
+    first = select_engineer(db, NOW, snapshot=snap)
+    snap.load_by_user[first.id] = snap.load_by_user.get(first.id, 0) + 1
+    assert select_engineer(db, NOW, snapshot=snap).id != first.id
 

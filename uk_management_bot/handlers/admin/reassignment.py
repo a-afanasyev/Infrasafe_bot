@@ -209,7 +209,8 @@ def _candidates(db: Session, request_number: str, lang: str) -> tuple:
 
 def _resolve_duty(db: Session, request_number: str, lang: str) -> Preflight:
     """Дежурный под специализацию заявки, ИСКЛЮЧАЯ текущего исполнителя."""
-    from uk_management_bot.services.dispatch import pick_duty_executor_id
+    from uk_management_bot.services.dispatch import pick_assignee_id
+    from uk_management_bot.utils.categories import is_engineering_category
 
     view = _assignment_view(db, request_number, lang)
     if view.verdict != "ok":
@@ -224,15 +225,16 @@ def _resolve_duty(db: Session, request_number: str, lang: str) -> Preflight:
         # strict=True: для интерактивного действия None означает «нет
         # дежурного» и так и печатается. Без режима авария БД показалась бы
         # менеджеру пустым результатом.
-        duty_id = pick_duty_executor_id(spec, db=db, exclude_user_ids=exclude,
-                                        strict=True)
+        duty_id = pick_assignee_id(request.category, db=db, exclude_user_ids=exclude,
+                                   strict=True)
     except Exception as e:
         logger.warning("Подбор дежурного для %s не выполнен: %s", request_number, e)
         return Preflight("duty_lookup_failed", request_number=request_number,
                          specialization=_spec_label(spec, lang))
     if duty_id is None:
-        return Preflight("no_duty", request_number=request_number,
-                         specialization=_spec_label(spec, lang))
+        label = (get_text("roles.engineer", language=lang)
+                 if is_engineering_category(request.category) else _spec_label(spec, lang))
+        return Preflight("no_duty", request_number=request_number, specialization=label)
     return _preflight(db, request_number, duty_id, lang)
 
 

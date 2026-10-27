@@ -271,7 +271,9 @@ def get_roles_management_keyboard(user_roles: List[str], language: str = 'ru') -
     """
     buttons = []
     
-    available_roles = ['applicant', 'executor', 'manager', 'inspector', 'resource_meter_entry']
+    from uk_management_bot.authz.role_set import BOT_ASSIGNABLE_ROLES
+
+    available_roles = BOT_ASSIGNABLE_ROLES
     
     # Группируем роли по 2 в ряд
     for i in range(0, len(available_roles), 2):

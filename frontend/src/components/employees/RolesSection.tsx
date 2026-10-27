@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button'
 import { useRbacRoles, useSetUserRoles, useUserRoles } from '../../hooks/useRbac'
 import { roleTitle } from '../rbac/labels'
 
+const ENGINEER = 'engineer'
+const EXECUTOR = 'executor'
+
 interface Props {
   employeeId: number
 }
@@ -39,10 +42,14 @@ export default function RolesSection({ employeeId }: Props) {
   const hasSystem = [...chosen].some((r) => systemKeys.has(r))
   const ordered = [...chosen].sort((a, b) => Number(systemKeys.has(b)) - Number(systemKeys.has(a)))
 
+  // Инженер выдаётся только вместе с исполнителем (сервер отвечает 422):
+  // включение инженера включает исполнителя, снять исполнителя у инженера нельзя.
+  const executorLocked = chosen.has(ENGINEER)
   const toggle = (key: string) => {
     const next = new Set(chosen)
     if (next.has(key)) next.delete(key)
     else next.add(key)
+    if (key === ENGINEER && next.has(ENGINEER)) next.add(EXECUTOR)
     setDraft(next)
   }
 
@@ -69,6 +76,7 @@ export default function RolesSection({ employeeId }: Props) {
       <div className="flex flex-wrap gap-2">
         {roles.data.roles.map((role) => {
           const on = chosen.has(role.key)
+          const locked = role.key === EXECUTOR && executorLocked
           return (
             <label
               key={role.key}
@@ -79,7 +87,7 @@ export default function RolesSection({ employeeId }: Props) {
               <input
                 type="checkbox"
                 checked={on}
-                disabled={!canEdit}
+                disabled={!canEdit || locked}
                 onChange={() => toggle(role.key)}
                 className="accent-[var(--accent)]"
               />
@@ -88,6 +96,9 @@ export default function RolesSection({ employeeId }: Props) {
           )
         })}
       </div>
+      {canEdit && executorLocked && (
+        <div className="text-[11px] text-text-muted">{t('rbac.engineerNeedsExecutor')}</div>
+      )}
       {canEdit && dirty && !hasSystem && (
         <div className="text-[11px] text-amber">{t('rbac.needSystemRole')}</div>
       )}

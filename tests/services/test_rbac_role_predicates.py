@@ -40,7 +40,7 @@ MANAGER_PROFILES = {
 }
 ADMIN_OR_MANAGER = MANAGER_PROFILES | {"admin"}
 EXECUTOR_PROFILES = {
-    "executor", "executor+inspector", "executor+resource_meter_entry",
+    "executor", "executor+inspector", "executor+resource_meter_entry", "executor+engineer",
     "executor+inspector+manager", "applicant+executor+manager",
     "applicant+executor+manager+system_admin", "superuser7", "executor@pending",
 }
@@ -59,8 +59,9 @@ def _user(profile):
 
 
 def test_profiles_cover_every_prod_role_combination():
-    """Набор профилей — все сочетания ролей обоих продов на 2026-09-28."""
-    assert len(PROFILES) == 19
+    """Набор профилей — все сочетания ролей обоих продов на 2026-09-28
+    + инженер (executor+engineer, роль с 2026-10-27)."""
+    assert len(PROFILES) == 20
     combos = {tuple(sorted(p.roles)) for p in PROFILES.values()}
     assert ("admin", "applicant", "executor", "inspector", "manager",
             "resource_meter_entry", "system_admin") in combos

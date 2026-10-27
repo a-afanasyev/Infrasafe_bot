@@ -173,6 +173,7 @@
     },
     "dashboard.live": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -182,6 +183,7 @@
     "dashboard.use": {
       "roles": [
         "admin",
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -191,6 +193,7 @@
     "elevators.lookup": {
       "roles": [
         "applicant",
+        "engineer",
         "executor",
         "inspector",
         "manager"
@@ -201,6 +204,7 @@
     },
     "elevators.manage": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": true,
@@ -209,6 +213,7 @@
     },
     "elevators.read": {
       "roles": [
+        "engineer",
         "executor",
         "manager"
       ],
@@ -219,6 +224,7 @@
     "elevators.technician": {
       "roles": [
         "admin",
+        "engineer",
         "executor",
         "manager"
       ],
@@ -316,6 +322,14 @@
       "superadmin_only": false,
       "title": "Создать заявку обхода"
     },
+    "requests.engineering": {
+      "roles": [
+        "engineer"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"
+    },
     "requests.execute": {
       "roles": [
         "executor"
@@ -327,6 +341,7 @@
     "requests.internal_comments": {
       "roles": [
         "admin",
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -351,6 +366,7 @@
     },
     "requests.photos.attach": {
       "roles": [
+        "engineer",
         "manager",
         "system_admin"
       ],
@@ -360,6 +376,7 @@
     },
     "requests.read_all": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,
@@ -368,6 +385,7 @@
     },
     "requests.stats": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,

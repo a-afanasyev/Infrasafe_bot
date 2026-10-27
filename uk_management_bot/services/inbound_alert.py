@@ -53,7 +53,8 @@ class InboundResult:
 
 
 async def handle_infrasafe_alert(
-    db: AsyncSession, payload: InfrasafeAlertIn, source_ip: str
+    db: AsyncSession, payload: InfrasafeAlertIn, source_ip: str,
+    *, schedule_notify=None,
 ) -> InboundResult:
     """Process one inbound InfraSafe webhook. See module docstring for the flow."""
     # Redis fast-guard against simultaneous re-delivery (Phase 1 layer). The
@@ -124,8 +125,18 @@ async def handle_infrasafe_alert(
                     "ladder, falling back to severity mapping (event_id=%s)",
                     alert.uk_urgency_override, payload.event_id,
                 )
-    category = _apply_category_override(category, alert.uk_category_override,
-                                        payload.event_id)
+    if payload.event == "alert.engineer_required":
+        # Эскалация — всегда «Инженерный разбор» (её ведёт инженер): override
+        # партнёра увёл бы её в обычную категорию к тому, чей ремонт не помог.
+        if alert.uk_category_override:
+            logger.info(
+                "inbound alert: uk_category_override=%r ignored for "
+                "alert.engineer_required (event_id=%s)",
+                alert.uk_category_override, payload.event_id,
+            )
+    else:
+        category = _apply_category_override(category, alert.uk_category_override,
+                                            payload.event_id)
     # Sprint 10 / INT-120: reopen-marker. Deployed wire sends `reopen_sequence=1`
     # for first-time alerts (per alertForwarder.js:222 `|| 1` default); we only
     # prefix when ≥ 2 — that's the actual reopen signal.
@@ -183,7 +194,64 @@ async def handle_infrasafe_alert(
 
     logger.info("inbound alert accepted: event_id=%s → request %s (building %s)",
                 payload.event_id, request_number, building.id)
+    await _after_accept(request_number, category, schedule_notify)
+    if (alert.reopen_sequence or 0) >= 2 and payload.event != "alert.engineer_required":
+        # Авария вернулась — повод инженеру присмотреться (эскалация — сама по
+        # себе заявка ему, отдельное сообщение не нужно). После ответа партнёру.
+        _schedule(schedule_notify, _notify_reopened, request_number,
+                  alert.reopen_sequence, building.address)
     return InboundResult(202, {"status": "accepted", "request_number": request_number})
+
+
+async def _after_accept(request_number: str, category: str, schedule_notify=None) -> None:
+    """После durable-commit, best-effort (ответ вебхуку не роняет): карточка в
+    живой канбан и «Инженерный разбор» — сразу инженеру. Упавший здесь dispatch
+    подберёт сверка `engineering_reconcile`."""
+    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
+    from uk_management_bot.services.redis_pubsub import publish_request_event
+    from uk_management_bot.utils.categories import is_engineering_category
+
+    try:
+        # Канбан на событие перечитывает доску — карточка в payload не нужна.
+        await publish_request_event("request.created", {"number": request_number})
+    except Exception as exc:  # noqa: BLE001 — realtime best-effort
+        logger.warning("inbound alert: realtime %s skipped: %s", request_number, exc)
+    if is_engineering_category(category):
+        try:
+            await auto_dispatch_new_request_async(
+                request_number, category, schedule_notify=schedule_notify)
+        except Exception as exc:  # noqa: BLE001 — страховка: сверка
+            logger.warning("inbound alert: dispatch %s failed: %s", request_number, exc)
+
+
+_BACKGROUND: set = set()  # сильные ссылки: иначе GC может собрать задачу до конца
+
+
+def _schedule(schedule_notify, fn, *args) -> None:
+    if schedule_notify is not None:
+        schedule_notify(fn, *args)
+    else:  # вызов без BackgroundTasks (тесты, внутренние пути) — фоном
+        import asyncio
+
+        task = asyncio.get_running_loop().create_task(fn(*args))
+        _BACKGROUND.add(task)
+        task.add_done_callback(_BACKGROUND.discard)
+
+
+async def _notify_reopened(request_number: str, sequence: int, address: str) -> None:
+    import html
+
+    from uk_management_bot.database.session import AsyncSessionLocal
+    from uk_management_bot.services.action_notify import notify_action_holders
+
+    if AsyncSessionLocal is None:  # sqlite dev-режим без async-движка
+        return
+    try:
+        await notify_action_holders(
+            AsyncSessionLocal, "requests.engineering", "engineering.reopened",
+            request_number=request_number, sequence=sequence, address=html.escape(address or ""))
+    except Exception as exc:  # noqa: BLE001 — уведомление best-effort
+        logger.warning("inbound alert: reopen notice %s skipped: %s", request_number, exc)
 
 
 async def _resolve_building(db: AsyncSession, external_id: str) -> Building | None:
@@ -330,9 +398,19 @@ def _apply_category_override(derived: str, override: str | None, event_id: str) 
         return derived
     from uk_management_bot.utils.categories import (
         CANONICAL_CATEGORY_KEYS,
+        ENGINEERING_CATEGORY,
         resolve_category_key,
     )
-    if resolve_category_key(normalized) not in CANONICAL_CATEGORY_KEYS:
+    key = resolve_category_key(normalized)
+    if key == ENGINEERING_CATEGORY:
+        # «Инженерный разбор» назначается мимо выключателя автоназначения —
+        # только через alert.engineer_required, не override'ом обычного алерта.
+        logger.warning(
+            "inbound alert: uk_category_override=%r is reserved for "
+            "alert.engineer_required, falling back (event_id=%s)", normalized, event_id,
+        )
+        return derived
+    if key not in CANONICAL_CATEGORY_KEYS:
         logger.warning(
             "inbound alert: uk_category_override=%r outside category canon, "
             "falling back to derived category (event_id=%s)", normalized, event_id,

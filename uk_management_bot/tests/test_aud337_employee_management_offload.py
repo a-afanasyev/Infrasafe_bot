@@ -139,6 +139,22 @@ def test_apply_role_change_updates_roles_active_role_and_audit(db):
     assert audit.telegram_user_id == 555
 
 
+def test_apply_role_change_refuses_roles_without_buttons(db):
+    """callback_data шлёт клиент: роли вне редактора и инвариант инженера."""
+    _user(db, db_id=9, tg_id=900, roles='["manager"]', active_role="manager")
+    _user(db, db_id=5, tg_id=555, roles='["executor", "engineer"]', active_role="executor")
+
+    assert emp._apply_role_change(db, 900, 5, ["engineer"], "c") == "refused"
+    assert emp._apply_role_change(db, 900, 5, ["executor"], "c") == "refused"
+    assert emp._apply_role_change(db, 900, 5, ["executor", "engineer", "admin"], "c") == "refused"
+    assert json.loads(db.get(User, 5).roles) == ["executor", "engineer"]
+    # роли с кнопками меняются, инженер при этом не теряется
+    assert emp._apply_role_change(db, 900, 5, ["manager", "executor", "engineer"], "c") == "ok"
+    fresh = db.get(User, 5)
+    assert json.loads(fresh.roles) == ["manager", "executor", "engineer"]
+    assert fresh.active_role == "executor"
+
+
 def test_apply_role_change_missing_actor_or_target(db):
     _user(db, db_id=9, tg_id=900)
     assert emp._apply_role_change(db, 111, 5, ["manager"], "c") == "no_actor"

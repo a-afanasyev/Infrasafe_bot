@@ -30,14 +30,10 @@ def _can(roles: list[str], action_key: str) -> bool:
 
 
 def is_menu_mode(role: str) -> bool:
-    """Роль, в режим которой можно переключиться: системная, не капабилити.
+    """Роль, в режим которой можно переключиться (канон — authz.catalog)."""
+    from uk_management_bot.authz.catalog import is_menu_mode as _is_menu_mode
 
-    Свои роли из админки ролей режимом меню не бывают — меню строится по
-    системным ролям, а права своей роли действуют в любом режиме.
-    """
-    from uk_management_bot.authz.catalog import SYSTEM_ROLES
-
-    return role in SYSTEM_ROLES and role != METER_ENTRY_ROLE
+    return _is_menu_mode(role)
 
 def get_main_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     """Главная клавиатура (вариант по умолчанию для обратной совместимости).

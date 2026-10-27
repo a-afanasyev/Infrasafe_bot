@@ -4,6 +4,8 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 from uk_management_bot.services.users.privileged import is_privileged_target
+from uk_management_bot.authz.catalog import is_menu_mode
+from uk_management_bot.authz.role_set import BOT_ASSIGNABLE_ROLES, role_set_error
 from uk_management_bot.config.settings import settings
 from dataclasses import dataclass
 from typing import List
@@ -430,8 +432,7 @@ class AuthService:
                 return False
 
             # Валидируем роль
-            valid_roles = ['applicant', 'executor', 'manager', 'inspector', 'resource_meter_entry']
-            if role not in valid_roles:
+            if role not in BOT_ASSIGNABLE_ROLES:
                 logger.warning(f"Недопустимая роль: {role}")
                 return False
             
@@ -515,6 +516,15 @@ class AuthService:
             if len(current_roles) == 1 and role in current_roles:
                 logger.warning(f"Нельзя удалить последнюю роль {role} у пользователя {user_id}")
                 return False
+            # Бот снимает только роли со своими кнопками (callback_data шлёт
+            # клиент): инженер и свои роли — из веб-админки. Итоговый набор —
+            # по общему инварианту (executor не снять, пока есть engineer).
+            invalid = ("роль меняется только в веб-админке ролей"
+                       if role not in BOT_ASSIGNABLE_ROLES
+                       else role_set_error(r for r in current_roles if r != role))
+            if invalid:
+                logger.warning(f"Снятие роли {role} у пользователя {user_id} отклонено: {invalid}")
+                return False
             
             # Удаляем роль
             old_roles = current_roles.copy()
@@ -523,7 +533,7 @@ class AuthService:
             
             # Если удаляем активную роль, назначаем другую
             if user.active_role == role:
-                user.active_role = current_roles[0] if current_roles else 'applicant'
+                user.active_role = next((r for r in current_roles if is_menu_mode(r)), current_roles[0])
             
             # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(

@@ -62,6 +62,13 @@
    ],
    "status": "approved"
   },
+  "executor+engineer": {
+   "roles": [
+    "executor",
+    "engineer"
+   ],
+   "status": "approved"
+  },
   "applicant+manager": {
    "roles": [
     "applicant",
@@ -402,6 +409,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -416,6 +424,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -435,6 +444,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -453,6 +463,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -470,6 +481,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -487,6 +499,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -504,6 +517,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -521,6 +535,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -538,6 +553,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -554,6 +570,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -567,6 +584,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -580,6 +598,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -846,6 +865,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -860,6 +880,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -871,6 +892,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -886,6 +908,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -901,6 +924,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -913,6 +937,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -928,6 +953,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -943,6 +969,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -958,6 +985,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -973,6 +1001,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -988,6 +1017,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1003,6 +1033,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1019,6 +1050,12 @@
   },
   "GET /api/v2/requests/{request_number}/comments": {
    "auth": "user"
+  },
+  "GET /api/v2/requests/{request_number}/handover-candidates": {
+   "auth": "roles",
+   "allow": [
+    "executor+engineer"
+   ]
   },
   "GET /api/v2/residents": {
    "auth": "roles",
@@ -1311,6 +1348,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1325,6 +1363,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1385,6 +1424,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1738,6 +1778,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1752,6 +1793,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1769,6 +1811,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1783,6 +1826,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1797,6 +1841,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1811,6 +1856,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1825,6 +1871,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1839,6 +1886,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1855,6 +1903,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -1868,6 +1917,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -1881,6 +1931,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -1894,6 +1945,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -2052,6 +2104,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -2069,6 +2122,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -2085,6 +2139,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -2098,6 +2153,7 @@
     "executor",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "executor+inspector+manager",
     "applicant+executor+manager",
     "applicant+executor+manager+system_admin",
@@ -2530,6 +2586,7 @@
    "auth": "roles",
    "allow": [
     "manager",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -2547,6 +2604,7 @@
     "manager",
     "executor+inspector",
     "executor+resource_meter_entry",
+    "executor+engineer",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",

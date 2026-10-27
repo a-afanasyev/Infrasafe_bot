@@ -151,6 +151,7 @@ def _main_queue_filter():
         pending_or_in_progress_clause(),
         Request.executor_id.is_(None),
         Request.assignment_type == "group",
+        _not_engineering(),
     )
 
 
@@ -159,7 +160,17 @@ def _residual_queue_filter():
         Request.status == REQUEST_STATUS_NEW,
         Request.executor_id.is_(None),
         Request.assignment_type.is_(None),
+        _not_engineering(),
     )
+
+
+def _not_engineering():
+    """«Инженерный разбор» ведёт сверка `engineering_reconcile` (круглосуточно,
+    инженеру), а не ночной авто-менеджер: иначе без группы такая заявка вечно
+    висела бы в residual-очереди, а с группой ушла бы разнорабочему."""
+    from uk_management_bot.utils.categories import ENGINEERING_CATEGORY_VALUES
+
+    return or_(Request.category.is_(None), Request.category.not_in(ENGINEERING_CATEGORY_VALUES))
 
 
 class AutoManagerOrchestrator:

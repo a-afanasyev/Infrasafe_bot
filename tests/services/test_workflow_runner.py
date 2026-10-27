@@ -1214,3 +1214,245 @@ class TestManagerChangeCategoryAsyncParity:
         assert [r.status for r in rows] == ["cancelled"]
         assert [c.comment_type for c in comments] == [C.COMMENT_TYPE_CATEGORY_CHANGE]
         assert [a.action for a in audits] == [C.AUDIT_ACTION_REQUEST_CATEGORY_CHANGED]
+
+
+# ---------------------------------------------------------------------------
+# Цель назначения проверяется в каноне (MANAGER_ASSIGN / SYSTEM_DISPATCH_ASSIGN /
+# SYSTEM_AUTO_PROMOTE): удалён / не одобрен / без executor → отказ, статус цел.
+# ---------------------------------------------------------------------------
+
+def _set_executor(SF, **fields):
+    s = SF()
+    s.query(User).filter(User.id == 4).update(fields)
+    s.commit()
+    s.close()
+
+
+def _dispatcher():
+    return PrincipalRef(kind="system", user_id=None, source="dispatcher",
+                        system_actor="dispatcher")
+
+
+@pytest.mark.parametrize("fields", [
+    {"status": "blocked"},
+    {"status": "pending"},
+    {"roles": '["applicant"]'},
+])
+@pytest.mark.parametrize("principal, action", [
+    (_mgr(), Action.MANAGER_ASSIGN),
+    (_dispatcher(), Action.SYSTEM_DISPATCH_ASSIGN),
+])
+def test_assign_refuses_unavailable_target(factory, fields, principal, action):
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, **fields)
+    with pytest.raises(AssigneeUnavailable):
+        run_command_sync(SF, "260610-001", principal,
+                         ActionCommand("c1", action, {"executor_id": 4}))
+    s = SF()
+    req = s.get(Request, "260610-001")
+    assert req.status == C.REQUEST_STATUS_NEW and req.executor_id is None
+    s.close()
+
+
+def test_assign_refuses_deleted_or_missing_target(factory):
+    from datetime import datetime, timezone
+
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, deleted_at=datetime(2026, 10, 27, tzinfo=timezone.utc))
+    for executor_id in (4, 999):
+        with pytest.raises(AssigneeUnavailable):
+            run_command_sync(SF, "260610-001", _dispatcher(), ActionCommand(
+                "c1", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": executor_id}))
+
+
+def test_unauthorized_actor_learns_nothing_about_target(factory):
+    """Авторизация раньше проверки цели: житель получает NotAuthorized,
+    а не «исполнитель заблокирован» (иначе — оракул статуса аккаунтов)."""
+    SF = _seed(factory, status=C.REQUEST_STATUS_NEW)
+    _set_executor(SF, status="blocked")
+    owner = PrincipalRef(kind="user", user_id=2, source="api")
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", owner,
+                         ActionCommand("c1", Action.MANAGER_ASSIGN, {"executor_id": 4}))
+
+
+def test_assign_refuses_unavailable_target_async(factory):
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from uk_management_bot.services.workflow_runner import AssigneeUnavailable
+
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool,
+                                     connect_args={"check_same_thread": False})
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        ASF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with ASF() as s:
+            s.add_all([
+                User(id=2, telegram_id=2, roles='["applicant"]', status="approved"),
+                User(id=4, telegram_id=4, roles='["executor"]', status="blocked"),
+                Request(request_number="260610-001", user_id=2, category="c",
+                        description="d", urgency="low", status=C.REQUEST_STATUS_NEW),
+            ])
+            await s.commit()
+        try:
+            with pytest.raises(AssigneeUnavailable):
+                await run_command_async(ASF, "260610-001", _dispatcher(), ActionCommand(
+                    "c1", Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 4}))
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------------
+# Инженер без смены — только по назначенной ему заявке «Инженерный разбор»
+# ---------------------------------------------------------------------------
+
+def _engineering_case(SF, *, category="Инженерный разбор", executor_id=4,
+                      roles='["executor", "engineer"]'):
+    s = SF()
+    s.query(User).filter(User.id == 4).update({"roles": roles})
+    s.query(Request).filter(Request.request_number == "260610-001").update(
+        {"category": category, "executor_id": executor_id})
+    s.commit()
+    s.close()
+
+
+def _purchase():
+    return ActionCommand("c", Action.EXECUTOR_PURCHASE, {"requested_materials": "кабель"})
+
+
+def _as_exec():
+    return PrincipalRef(kind="user", user_id=4, source="telegram")
+
+
+def test_engineer_works_own_engineering_without_shift(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    _engineering_case(SF)
+    out = run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+    assert out.new_status == C.REQUEST_STATUS_PURCHASE
+
+
+@pytest.mark.parametrize("case", [
+    {"category": "plumbing"},                    # рутина — только на смене
+    {"roles": '["executor"]'},                   # не инженер
+])
+def test_shift_still_required_outside_engineer_exemption(factory, case):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    _engineering_case(SF, **case)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+
+
+def test_engineer_cannot_work_someone_elses_engineering(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    s.add(User(id=5, telegram_id=5, roles='["executor"]', status="approved"))
+    s.commit()
+    s.close()
+    _engineering_case(SF, executor_id=5)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(), _purchase())
+
+
+def test_engineer_exemption_async(factory):
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool,
+                                     connect_args={"check_same_thread": False})
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        ASF = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with ASF() as s:
+            s.add_all([
+                User(id=2, telegram_id=2, roles='["applicant"]', status="approved"),
+                User(id=4, telegram_id=4, roles='["executor", "engineer"]', status="approved"),
+                Request(request_number="260610-001", user_id=2, category="engineering",
+                        description="d", urgency="low", executor_id=4,
+                        status=C.REQUEST_STATUS_IN_PROGRESS),
+            ])
+            await s.commit()
+        try:
+            out = await run_command_async(ASF, "260610-001", _as_exec(), _purchase())
+            assert out.new_status == C.REQUEST_STATUS_PURCHASE
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_engineer_cannot_take_colleagues_engineering(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    s.add(User(id=5, telegram_id=5, roles='["executor"]', status="approved"))
+    s.commit()
+    s.close()
+    _engineering_case(SF, executor_id=5)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(),
+                         ActionCommand("c1", Action.MANAGER_ASSIGN, {"executor_id": 4}))
+
+
+def test_engineer_hands_engineering_over_but_not_routine(factory):
+    """MANAGER_ASSIGN инженера — только на «Инженерный разбор»."""
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    s.add(User(id=5, telegram_id=5, roles='["executor"]', status="approved"))
+    s.commit()
+    s.close()
+    _engineering_case(SF)  # заявка у инженера id=4
+    out = run_command_sync(SF, "260610-001", _as_exec(),
+                           ActionCommand("c1", Action.MANAGER_ASSIGN, {"executor_id": 5}))
+    assert out.new_state.executor_id == 5
+
+    s = SF()
+    s.query(Request).update({"category": "plumbing", "executor_id": 4})
+    s.commit()
+    s.close()
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(),
+                         ActionCommand("c2", Action.MANAGER_ASSIGN, {"executor_id": 5}))
+
+
+# ---------------------------------------------------------------------------
+# return_count: один цикл возврата = +1; повторный (≥ 2) помечает notify-интент
+# ---------------------------------------------------------------------------
+
+def _return_to_work(SF, cid):
+    return run_command_sync(SF, "260610-001", _mgr(), ActionCommand(
+        cid, Action.MANAGER_RETURN_TO_WORK, {"reason": "переделать"}))
+
+
+def _set_status(SF, status):
+    s = SF()
+    s.query(Request).update({"status": status})
+    s.commit()
+    s.close()
+
+
+def _notify_flags(outcome):
+    return [bool(ev.data.get("repeated_return")) for ev in outcome.post_commit_intents
+            if ev.kind == "notify"]
+
+
+def test_return_count_counts_cycles_and_flags_repeat(factory):
+    from uk_management_bot.utils.request_workflow.types import STATUS_RETURNED
+
+    SF = _seed(factory, status=C.REQUEST_STATUS_EXECUTED, executor_id=4)
+    first = _return_to_work(SF, "r1")
+    assert first.new_state.return_count == 1 and _notify_flags(first) == [False]
+
+    _set_status(SF, C.REQUEST_STATUS_EXECUTED)
+    second = _return_to_work(SF, "r2")
+    assert second.new_state.return_count == 2 and _notify_flags(second) == [True]
+
+    # «Возвращена» → «В работе» — тот же цикл (житель уже вернул): без +1 и без флага
+    _set_status(SF, STATUS_RETURNED)
+    same_cycle = _return_to_work(SF, "r3")
+    assert same_cycle.new_state.return_count == 2 and _notify_flags(same_cycle) == [False]

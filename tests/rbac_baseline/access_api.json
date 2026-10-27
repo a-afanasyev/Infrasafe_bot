@@ -62,6 +62,13 @@
    ],
    "status": "approved"
   },
+  "executor+engineer": {
+   "roles": [
+    "executor",
+    "engineer"
+   ],
+   "status": "approved"
+  },
   "applicant+manager": {
    "roles": [
     "applicant",

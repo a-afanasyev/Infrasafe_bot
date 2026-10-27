@@ -91,6 +91,11 @@ export const CATEGORY_MAP = {
 
 export type ApiCategory = keyof typeof CATEGORY_MAP
 
+/** «Инженерный разбор» (ключ или legacy-лейбл из БД) — его ведёт инженер. */
+export function isEngineeringCategory(apiValue: string | null | undefined): boolean {
+  return apiValue != null && CATEGORY_MAP[apiValue as ApiCategory] === 'category.engineering'
+}
+
 export function tCategory(apiValue: string, t: TFunction): string {
   const key = CATEGORY_MAP[apiValue as ApiCategory]
   if (!key) {

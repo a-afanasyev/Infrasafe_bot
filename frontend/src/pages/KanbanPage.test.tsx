@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -8,6 +8,9 @@ import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server'
 import { testI18n } from '../test/test-utils'
 import { TopbarProvider } from '../contexts/TopbarContext'
+import { useTopbar } from '../contexts/topbar'
+import { useAuthStore } from '../stores/authStore'
+import { actionsFor } from '../test/authz'
 import KanbanPage from './KanbanPage'
 
 // The board pulls a WebSocket + kanban query we don't care about here — stub it.
@@ -29,6 +32,10 @@ vi.mock('../components/callcenter/CallCenterModal', () => ({ default: () => null
 function LocationProbe() {
   const { search } = useLocation()
   return <div data-testid="search">{search}</div>
+}
+
+function TopbarActions() {
+  return <div data-testid="topbar">{useTopbar().actions}</div>
 }
 
 function makeRequest(number: string, over: Record<string, unknown> = {}) {
@@ -68,6 +75,7 @@ function renderAt(entry: string) {
         <MemoryRouter initialEntries={[entry]}>
           <TopbarProvider>
             <LocationProbe />
+            <TopbarActions />
             <KanbanPage />
           </TopbarProvider>
         </MemoryRouter>
@@ -102,5 +110,27 @@ describe('KanbanPage — deep-link reader (?request=)', () => {
     renderAt('/dashboard')
     await userEvent.click(screen.getByText('open-card'))
     await waitFor(() => expect(screen.getByText('Срочная')).toBeInTheDocument())
+  })
+})
+
+describe('KanbanPage — менеджерские кнопки по действиям', () => {
+  const initialAuth = useAuthStore.getState()
+  afterEach(() => useAuthStore.setState(initialAuth, true))
+
+  it('у менеджера есть «Создать по звонку», у инженера — нет (и тумблера автоназначения)', async () => {
+    mockRequestEndpoints()
+    useAuthStore.setState({ user: { id: 1, roles: ['manager'], actions: actionsFor(['manager']) } as never })
+    const first = renderAt('/dashboard')
+    expect(await screen.findByText('Создать по звонку')).toBeInTheDocument()
+    first.unmount()
+
+    useAuthStore.setState({
+      user: { id: 2, roles: ['executor', 'engineer'], actions: actionsFor(['executor', 'engineer']) } as never,
+    })
+    renderAt('/dashboard')
+    expect(screen.getByText('open-card')).toBeInTheDocument()
+    expect(screen.queryByText('Создать по звонку')).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('topbar')).queryAllByRole('button')).toHaveLength(0)
+    expect(within(screen.getByTestId('topbar')).queryAllByRole('switch')).toHaveLength(0)
   })
 })

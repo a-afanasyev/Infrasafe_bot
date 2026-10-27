@@ -263,7 +263,7 @@ def test_dispatch_assigns_duty_executor_when_found(monkeypatch):
     from uk_management_bot.services import dispatch as mod
 
     monkeypatch.setattr(mod, "_auto_assign_enabled_sync", lambda db=None: True)
-    monkeypatch.setattr(mod, "pick_duty_executor_id", lambda spec, db=None: 42)
+    monkeypatch.setattr(mod, "pick_duty_executor_id", lambda spec, db=None, *a, **k: 42)
     captured = {}
     import uk_management_bot.services.workflow_runner as runner
     monkeypatch.setattr(runner, "run_command_sync",
@@ -328,7 +328,7 @@ def test_dispatch_falls_back_to_group_without_moving_status(monkeypatch):
     from uk_management_bot.services import dispatch as mod
 
     monkeypatch.setattr(mod, "_auto_assign_enabled_sync", lambda db=None: True)
-    monkeypatch.setattr(mod, "pick_duty_executor_id", lambda spec, db=None: None)
+    monkeypatch.setattr(mod, "pick_duty_executor_id", lambda spec, db=None, *a, **k: None)
     captured = {}
     import uk_management_bot.services.workflow_runner as runner
     monkeypatch.setattr(runner, "run_command_sync",

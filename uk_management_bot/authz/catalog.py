@@ -36,11 +36,26 @@ ADMIN = "admin"
 SYSTEM_ADMIN = "system_admin"
 SECURITY_OPERATOR = "security_operator"
 RESOURCE_METER_ENTRY = "resource_meter_entry"
+# Инженер: эскалации InfraSafe, работа без смены по своей заявке «Инженерный
+# разбор», передача мастеру. Выдаётся только вместе с executor (authz/role_set).
+ENGINEER = "engineer"
 
 KNOWN_ROLES: frozenset[str] = frozenset({
     APPLICANT, EXECUTOR, MANAGER, INSPECTOR, ADMIN, SYSTEM_ADMIN,
-    SECURITY_OPERATOR, RESOURCE_METER_ENTRY,
+    SECURITY_OPERATOR, RESOURCE_METER_ENTRY, ENGINEER,
 })
+
+#: Роли-капабилити: дают права, но режимом меню (active_role) не бывают.
+CAPABILITY_ROLES: frozenset[str] = frozenset({RESOURCE_METER_ENTRY, ENGINEER})
+
+
+def is_menu_mode(role: str) -> bool:
+    """Роль, в режим которой можно переключиться: системная, не капабилити.
+
+    Свои роли из админки ролей режимом меню не бывают — меню строится по
+    системным ролям, а права своей роли действуют в любом режиме.
+    """
+    return role in KNOWN_ROLES and role not in CAPABILITY_ROLES
 
 
 @dataclass(frozen=True)
@@ -94,14 +109,19 @@ _ACTIONS: tuple[Action, ...] = (
     _action("requests.execute", {_E}, "Работать с заявками как исполнитель: пул, взять, выполнить, проблема"),
     _action("requests.own", {_AP}, "Действия автора со своей заявкой: отменить новую, оценить"),
     _action("requests.manage", {_M}, "Управлять заявками: смена категории, назначение дежурным, правка любой"),
-    _action("requests.read_all", {_M}, "Видеть любую заявку: карточка и список без ограничения «свои/назначенные»"),
-    _action("requests.internal_comments", {_M, _A}, "Видеть и писать внутренние комментарии заявки"),
-    _action("requests.stats", {_M}, "Статистика заявок"),
-    _action("dashboard.use", {_A, _M}, "Вход в основной веб-дашборд управления"),
-    _action("dashboard.live", {_M}, "Живой поток событий дашборда (WebSocket)"),
+    _action("requests.read_all", {_M, ENGINEER},
+            "Видеть любую заявку: карточка и список без ограничения «свои/назначенные»"),
+    _action("requests.internal_comments", {_M, _A, ENGINEER}, "Видеть и писать внутренние комментарии заявки"),
+    _action("requests.stats", {_M, ENGINEER}, "Статистика заявок"),
+    _action("requests.engineering", {ENGINEER},
+            "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"),
+    # Инженер: доска заявок и живой поток (смотреть и передавать эскалации);
+    # разделы персонала/смен/адресов — по своим действиям, ему не выданы.
+    _action("dashboard.use", {_A, _M, ENGINEER}, "Вход в основной веб-дашборд управления"),
+    _action("dashboard.live", {_M, ENGINEER}, "Живой поток событий дашборда (WebSocket)"),
     # Подсказка интерфейса: кнопка «прикрепить фото» в карточке. Сервер пускает
     # загрузку всем, у кого есть доступ к заявке (check_request_access).
-    _action("requests.photos.attach", {_M, _SA}, "Дашборд: кнопка прикрепить фото к заявке"),
+    _action("requests.photos.attach", {_M, _SA, ENGINEER}, "Дашборд: кнопка прикрепить фото к заявке"),
     _action("callcenter.use", {_M}, "Колл-центр: заявки по звонку"),
     _action("feedback.manage", {_M}, "Обратная связь жителей"),
     _action("group_intake.manage", {_M}, "Group Intake: группы и заявки из чатов"),
@@ -124,9 +144,9 @@ _ACTIONS: tuple[Action, ...] = (
     _action("resources.meter_entry", {RESOURCE_METER_ENTRY}, "Ввод показаний счётчиков из Mini App",
             approved_only=True),
     _action("materials.manage", {_M, _SA}, "Склад материалов", approved_only=True),
-    _action("elevators.lookup", {_AP, _E, _I, _M}, "Лифты дома при подаче заявки", approved_only=True),
-    _action("elevators.read", {_E, _M}, "Лифты: реестр, карточка, статус, ТО", approved_only=True),
-    _action("elevators.manage", {_M}, "Лифты: изменение реестра и календаря", approved_only=True),
+    _action("elevators.lookup", {_AP, _E, _I, _M, ENGINEER}, "Лифты дома при подаче заявки", approved_only=True),
+    _action("elevators.read", {_E, _M, ENGINEER}, "Лифты: реестр, карточка, статус, ТО", approved_only=True),
+    _action("elevators.manage", {_M, ENGINEER}, "Лифты: изменение реестра и календаря", approved_only=True),
     # ---------------------------------------------------------- охрана (access-api)
     _action("access.events.read", {_SO, _M, _SA}, "Охрана: события и пропуска", approved_only=True),
     _action("access.photos.read", {_SO, _M, _SA}, "Охрана: фото проездов", approved_only=True),
@@ -150,7 +170,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("shift_transfers.approve", {_M}, "Бот: одобрение передачи смены"),
     _action("shift_transfers.respond", {_E, _M}, "Бот: ответ на передачу смены"),
     _action("shifts.history", {_A, _M, _E}, "Бот: история и просмотр смен"),
-    _action("elevators.technician", {_E, _M, _A}, "Бот: раздел лифтов"),
+    _action("elevators.technician", {_E, _M, _A, ENGINEER}, "Бот: раздел лифтов"),
     # ---------------------------------------------------------- роли и права
     # Просмотр страницы «Роли и права» и ролей сотрудников. Суперадмин видит
     # её всегда; остальным — по ролям (по умолчанию менеджер, только чтение).

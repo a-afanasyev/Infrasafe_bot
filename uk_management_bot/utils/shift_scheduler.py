@@ -227,6 +227,18 @@ class ShiftScheduler:
             coalesce=True
         )
 
+        # 10а. «Инженерный разбор» — у инженера всегда (каждые 2 минуты, не
+        #      зависит от настроек авто-менеджера): страховка вебхука и
+        #      уведомление менеджеров, если инженера нет.
+        self.scheduler.add_job(
+            self._engineering_reconcile_tick,
+            IntervalTrigger(minutes=2),
+            id='engineering_reconcile',
+            name='Инженерный разбор — назначение инженеру',
+            max_instances=1,
+            coalesce=True
+        )
+
         # 11. Визуальные отчёты «до/после» — автопост/автопубликация/отзыв
         #     (каждые 10 минут). Без этой задачи тумблер «Автопост» ничего
         #     не автоматизировал: черновики создавались только когда
@@ -760,6 +772,14 @@ class ShiftScheduler:
             await self._auto_manager.run_once()
         except Exception as e:
             logger.error(f"Ошибка тика автоматического менеджера: {e}")
+
+    async def _engineering_reconcile_tick(self):
+        """Сверка «Инженерного разбора» (services/engineering_reconcile)."""
+        from uk_management_bot.services.engineering_reconcile import reconcile_once
+        try:
+            await reconcile_once()
+        except Exception as e:
+            logger.error(f"Ошибка сверки инженерного разбора: {e}")
 
     async def _work_reports_tick(self):
         """Тик визуальных отчётов «до/после».

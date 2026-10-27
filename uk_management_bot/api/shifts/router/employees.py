@@ -483,6 +483,12 @@ async def delete_employee(
             raise HTTPException(status_code=404, detail="Target employee not found")
         if target_user.deleted_at is not None:
             raise HTTPException(status_code=422, detail="Cannot reassign to a deleted employee")
+        # Массовый перенос идёт мимо канона — тот же предикат цели, что у назначения.
+        from uk_management_bot.services.workflow_runner import assignee_unavailable_reason
+
+        if assignee_unavailable_reason(target_user):
+            raise HTTPException(status_code=422,
+                                detail="Target employee is not an approved executor")
 
     purge = await service.soft_delete_employee(
         db,
