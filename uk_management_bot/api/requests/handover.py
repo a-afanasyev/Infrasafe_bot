@@ -44,10 +44,9 @@ async def handover_candidates(
     req = (await db.execute(
         select(Request.category, Request.executor_id)
         .where(Request.request_number == request_number))).first()
-    if req is None:
+    # Один ответ на «нет» и «не инженерная» — код не выдаёт категорию чужой заявки.
+    if req is None or not is_engineering_category(req.category):
         raise HTTPException(status_code=404, detail="Request not found")
-    if not is_engineering_category(req.category):
-        raise HTTPException(status_code=422, detail="Передача мастеру — только для «Инженерного разбора»")
 
     users = (await db.execute(
         select(User).where(

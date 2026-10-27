@@ -73,5 +73,5 @@ async def test_specialization_filter(call):
 @pytest.mark.asyncio
 async def test_only_engineers_and_only_engineering(call):
     assert (await call(2, "261027-001")).status_code == 403
-    assert (await call(1, "261027-002")).status_code == 422
+    assert (await call(1, "261027-002")).status_code == 404
     assert (await call(1, "261027-999")).status_code == 404

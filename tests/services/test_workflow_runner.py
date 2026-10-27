@@ -1387,6 +1387,18 @@ def test_engineer_exemption_async(factory):
     asyncio.run(scenario())
 
 
+def test_engineer_cannot_take_colleagues_engineering(factory):
+    SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)
+    s = SF()
+    s.add(User(id=5, telegram_id=5, roles='["executor"]', status="approved"))
+    s.commit()
+    s.close()
+    _engineering_case(SF, executor_id=5)
+    with pytest.raises(NotAuthorized):
+        run_command_sync(SF, "260610-001", _as_exec(),
+                         ActionCommand("c1", Action.MANAGER_ASSIGN, {"executor_id": 4}))
+
+
 def test_engineer_hands_engineering_over_but_not_routine(factory):
     """MANAGER_ASSIGN инженера — только на «Инженерный разбор»."""
     SF = _seed(factory, status=C.REQUEST_STATUS_IN_PROGRESS)

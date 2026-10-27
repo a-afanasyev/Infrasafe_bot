@@ -43,6 +43,8 @@ export default function HandoverSheet({ requestNumber, onClose }: Props) {
     onSuccess: () => {
       haptic('notification')
       toast.success(t('twa.exec.handover.done'))
+      // Заявка больше не наша — карточку не перечитывать (был бы 403).
+      queryClient.removeQueries({ queryKey: ['twa', 'request', requestNumber] })
       queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
       navigate('/twa/exec', { replace: true })
     },
