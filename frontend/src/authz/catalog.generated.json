@@ -193,6 +193,7 @@
     "elevators.lookup": {
       "roles": [
         "applicant",
+        "engineer",
         "executor",
         "inspector",
         "manager"
@@ -203,6 +204,7 @@
     },
     "elevators.manage": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": true,
@@ -211,6 +213,7 @@
     },
     "elevators.read": {
       "roles": [
+        "engineer",
         "executor",
         "manager"
       ],
@@ -221,6 +224,7 @@
     "elevators.technician": {
       "roles": [
         "admin",
+        "engineer",
         "executor",
         "manager"
       ],
@@ -381,6 +385,7 @@
     },
     "requests.stats": {
       "roles": [
+        "engineer",
         "manager"
       ],
       "approved_only": false,

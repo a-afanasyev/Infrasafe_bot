@@ -112,7 +112,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("requests.read_all", {_M, ENGINEER},
             "Видеть любую заявку: карточка и список без ограничения «свои/назначенные»"),
     _action("requests.internal_comments", {_M, _A, ENGINEER}, "Видеть и писать внутренние комментарии заявки"),
-    _action("requests.stats", {_M}, "Статистика заявок"),
+    _action("requests.stats", {_M, ENGINEER}, "Статистика заявок"),
     _action("requests.engineering", {ENGINEER},
             "Инженерный разбор: эскалации InfraSafe, работа без смены, передача мастеру"),
     # Инженер: доска заявок и живой поток (смотреть и передавать эскалации);
@@ -144,9 +144,9 @@ _ACTIONS: tuple[Action, ...] = (
     _action("resources.meter_entry", {RESOURCE_METER_ENTRY}, "Ввод показаний счётчиков из Mini App",
             approved_only=True),
     _action("materials.manage", {_M, _SA}, "Склад материалов", approved_only=True),
-    _action("elevators.lookup", {_AP, _E, _I, _M}, "Лифты дома при подаче заявки", approved_only=True),
-    _action("elevators.read", {_E, _M}, "Лифты: реестр, карточка, статус, ТО", approved_only=True),
-    _action("elevators.manage", {_M}, "Лифты: изменение реестра и календаря", approved_only=True),
+    _action("elevators.lookup", {_AP, _E, _I, _M, ENGINEER}, "Лифты дома при подаче заявки", approved_only=True),
+    _action("elevators.read", {_E, _M, ENGINEER}, "Лифты: реестр, карточка, статус, ТО", approved_only=True),
+    _action("elevators.manage", {_M, ENGINEER}, "Лифты: изменение реестра и календаря", approved_only=True),
     # ---------------------------------------------------------- охрана (access-api)
     _action("access.events.read", {_SO, _M, _SA}, "Охрана: события и пропуска", approved_only=True),
     _action("access.photos.read", {_SO, _M, _SA}, "Охрана: фото проездов", approved_only=True),
@@ -170,7 +170,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("shift_transfers.approve", {_M}, "Бот: одобрение передачи смены"),
     _action("shift_transfers.respond", {_E, _M}, "Бот: ответ на передачу смены"),
     _action("shifts.history", {_A, _M, _E}, "Бот: история и просмотр смен"),
-    _action("elevators.technician", {_E, _M, _A}, "Бот: раздел лифтов"),
+    _action("elevators.technician", {_E, _M, _A, ENGINEER}, "Бот: раздел лифтов"),
     # ---------------------------------------------------------- роли и права
     # Просмотр страницы «Роли и права» и ролей сотрудников. Суперадмин видит
     # её всегда; остальным — по ролям (по умолчанию менеджер, только чтение).

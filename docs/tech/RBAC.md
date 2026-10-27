@@ -283,10 +283,10 @@ flowchart LR
 | `callcenter.use` | `manager` |  | Колл-центр: заявки по звонку |
 | `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
 | `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |
-| `elevators.lookup` | `applicant`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |
-| `elevators.manage` | `manager` | да | Лифты: изменение реестра и календаря |
-| `elevators.read` | `executor`, `manager` | да | Лифты: реестр, карточка, статус, ТО |
-| `elevators.technician` | `admin`, `executor`, `manager` |  | Бот: раздел лифтов |
+| `elevators.lookup` | `applicant`, `engineer`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |
+| `elevators.manage` | `engineer`, `manager` | да | Лифты: изменение реестра и календаря |
+| `elevators.read` | `engineer`, `executor`, `manager` | да | Лифты: реестр, карточка, статус, ТО |
+| `elevators.technician` | `admin`, `engineer`, `executor`, `manager` |  | Бот: раздел лифтов |
 | `execution.view` | `admin`, `executor`, `manager` |  | Бот: просмотр исполнительских разделов |
 | `execution.work` | `executor` |  | Бот: экраны и команды исполнителя |
 | `feedback.manage` | `manager` |  | Обратная связь жителей |
@@ -305,7 +305,7 @@ flowchart LR
 | `requests.own` | `applicant` |  | Действия автора со своей заявкой: отменить новую, оценить |
 | `requests.photos.attach` | `engineer`, `manager`, `system_admin` |  | Дашборд: кнопка прикрепить фото к заявке |
 | `requests.read_all` | `engineer`, `manager` |  | Видеть любую заявку: карточка и список без ограничения «свои/назначенные» |
-| `requests.stats` | `manager` |  | Статистика заявок |
+| `requests.stats` | `engineer`, `manager` |  | Статистика заявок |
 | `requests.update` | `applicant`, `executor`, `manager` |  | Редактировать заявку (бизнес-проверки внутри) |
 | `residents.manage` | `manager` |  | Жители: список, карточка, модерация, документы |
 | `resources.admin` | `admin`, `system_admin` |  | Учёт ресурсов: роль администратора у сервиса (иначе — оператор) |

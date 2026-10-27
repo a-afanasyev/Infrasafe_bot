@@ -18,8 +18,8 @@ const UI_ACTIONS: Record<string, readonly string[]> = {
   'access.registry.manage': ['manager', 'system_admin'], // история, база, оборудование (маршрут)
   'access.equipment.manage': ['system_admin'], // камеры/шлагбаумы/контроллеры внутри
   'materials.manage': ['manager', 'system_admin'], // склад + блок материалов в карточке
-  'elevators.read': ['executor', 'manager'], // реестр лифтов
-  'elevators.manage': ['manager'], // правки лифтов, конфиг
+  'elevators.read': ['engineer', 'executor', 'manager'], // реестр лифтов
+  'elevators.manage': ['engineer', 'manager'], // правки лифтов, конфиг
   'resources.launch': ['admin', 'manager', 'system_admin'], // учёт ресурсов (см. шапку)
   'payments.manage': ['admin', 'manager'], // контроль платежей
   'residents.manage': ['manager'], // жители
