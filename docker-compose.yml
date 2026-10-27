@@ -222,7 +222,9 @@ services:
       # a separate Redis instance for pubsub.
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
-      - FRONTEND_URL=http://localhost:3002
+      # Значение хоста из .env (на 105 — https://infrasafe.uz): жёсткий localhost
+      # давал web_app-кнопки, которые Telegram отвергает (только HTTPS).
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3002}
       - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
       - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
       - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}

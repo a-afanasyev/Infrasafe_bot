@@ -177,3 +177,49 @@ class TestHttp503Retryable:
             f"after attempts={rec.attempts} >= MAX_RETRIES={max_retries} "
             f"record must be `failed`, got {rec.status!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Порядок событий одной заявки (совместная проверка с InfraSafe 2026-10-27:
+# status_changed эскалации пришёл раньше request.created — пачка уходила gather'ом)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_events_of_one_request_go_in_order_others_in_parallel(
+    sqlite_session_factory, webhook_settings, monkeypatch,
+):
+    import asyncio
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    base = datetime.now(timezone.utc) - timedelta(minutes=1)
+    rows = [("request.created", "R1"), ("request.status_changed", "R1"), ("request.created", "R2")]
+    async with sqlite_session_factory() as db:
+        for i, (event, number) in enumerate(rows):
+            db.add(WebhookOutbox(
+                event_id=str(uuid.uuid4()), event=event, endpoint=f"/{event}",
+                payload={"event": event, "request_number": number},
+                status="pending", attempts=0, created_at=base + timedelta(seconds=i),
+            ))
+        await db.commit()
+
+    log: list[str] = []
+
+    async def fake_post(self, url, **kwargs):  # noqa: ARG001
+        body = json.loads(kwargs["content"])
+        tag = f"{body['request_number']}:{body['event']}"
+        log.append(f"start {tag}")
+        # Первое событие R1 медленное: без порядка status_changed его обгонит.
+        await asyncio.sleep(0.05 if tag == "R1:request.created" else 0)
+        log.append(f"end {tag}")
+        return _FakeResponse(status_code=200)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    await webhook_sender.process_outbox()
+
+    assert log.index("start R1:request.status_changed") > log.index("end R1:request.created")
+    # R2 не ждёт R1 — параллельность между заявками сохранена.
+    assert log.index("end R2:request.created") < log.index("end R1:request.created")
+    async with sqlite_session_factory() as db:
+        statuses = (await db.execute(select(WebhookOutbox.status))).scalars().all()
+    assert statuses == ["sent"] * 3

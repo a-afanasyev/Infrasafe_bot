@@ -467,12 +467,29 @@ async def process_outbox() -> None:
                     f"{base_url}{claim['endpoint']}", claim["payload"], secret, client
                 )
 
+        # События одной заявки — строго по очереди (created_at), иначе
+        # «создано» и «в работе» эскалации обгоняют друг друга у партнёра.
+        # Разные заявки — параллельно, как раньше.
+        # ponytail: порядок только внутри батча; упавшее раньше событие уйдёт
+        # ретраем позже следующего — партнёр это переживает (идемпотентен).
+        groups: dict = {}
+        for c in claims:
+            number = c["payload"].get("request_number") if isinstance(c["payload"], dict) else None
+            groups.setdefault(("request", number) if number else ("id", c["id"]), []).append(c)
+        outcomes: dict = {}
+
+        async def _deliver_in_order(group: list[dict], client: httpx.AsyncClient) -> None:
+            for claim in group:
+                try:
+                    outcomes[claim["id"]] = await _deliver(claim, client)
+                except Exception as exc:  # noqa: BLE001 — как return_exceptions у gather
+                    outcomes[claim["id"]] = exc
+
         # A10-INT-09: лимит и в конструкторе — будущие вызовы через этот клиент
         # не останутся без таймаута, даже если забудут передать его в post().
         async with httpx.AsyncClient(timeout=settings.INFRASAFE_WEBHOOK_TIMEOUT) as client:
-            results = await asyncio.gather(
-                *(_deliver(c, client) for c in claims), return_exceptions=True
-            )
+            await asyncio.gather(*(_deliver_in_order(g, client) for g in groups.values()))
+        results = [outcomes[c["id"]] for c in claims]
 
         # ── Фаза 3: финализация новой транзакцией, CAS по claim_token ──
         async with AsyncSessionLocal() as db:
