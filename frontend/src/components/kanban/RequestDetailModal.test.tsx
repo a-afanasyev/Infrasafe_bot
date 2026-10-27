@@ -680,4 +680,11 @@ describe('RequestDetailModal — инженер смотрит карточку 
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
   })
+
+  it('статус — бейдж, без выпадающего списка переходов', async () => {
+    mockHasRole.mockReturnValue(false)
+    await renderModal(makeRequest({ status: 'В работе' }))
+    expect(screen.queryByRole('button', { name: /В работе/ })).not.toBeInTheDocument()
+    expect(screen.getAllByText('В работе').length).toBeGreaterThan(0)
+  })
 })

@@ -248,6 +248,7 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                 <StatusDropdown
                   status={request.status}
                   statusStyle={statusStyle}
+                  readOnly={!canManagerDecide}
                   onSelect={(targetStatus) => {
                     if (MODAL_STATUSES.has(targetStatus)) {
                       // 'В работе': модалка выбора исполнителя нужна только при

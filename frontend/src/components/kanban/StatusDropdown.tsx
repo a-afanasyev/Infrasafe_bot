@@ -16,18 +16,21 @@ export default function StatusDropdown({
   status,
   statusStyle,
   onSelect,
+  readOnly = false,
 }: {
   status: string
   statusStyle: { bg: string; text: string }
   onSelect: (targetStatus: string) => void
+  /** Переходы — решение менеджера; остальным статус показывается бейджем. */
+  readOnly?: boolean
 }) {
   const { t } = useTranslation()
   const frozen = FROZEN_STATUSES.has(status)
   const transitions = VALID_TRANSITIONS[status]
   const hasTransitions = transitions && transitions.size > 0
 
-  // Frozen or no transitions — static badge
-  if (frozen || !hasTransitions) {
+  // Frozen, no transitions or no right to move — static badge
+  if (frozen || !hasTransitions || readOnly) {
     return (
       <span className={cn(
         'text-xs font-semibold px-2.5 py-1 rounded-full font-[family-name:var(--font-display)]',
