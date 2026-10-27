@@ -142,7 +142,7 @@ async def switch_role(
         # Капабилити (контролёр показаний, инженер) и свои роли — не режим меню.
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Role '{body.active_role}' is not a switchable mode",
+            detail="Role is not a switchable mode",
         )
     await service.set_active_role(db, user.id, active_role=body.active_role)
     return RoleSwitchOut(active_role=body.active_role, roles=roles)

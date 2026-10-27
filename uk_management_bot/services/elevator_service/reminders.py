@@ -56,7 +56,7 @@ from .calendar_rules import (
     should_remind_overdue,
 )
 from .labels import elevator_label, status_label
-from .recipients import Recipient
+from uk_management_bot.services.recipients import Recipient
 from .reminder_rules import DOWNTIME_STATUSES, downtime_threshold_reached
 
 LIFT_SPECIALIZATION = "elevator"

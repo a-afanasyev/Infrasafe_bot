@@ -9,8 +9,10 @@ from typing import Iterable, Optional
 
 from uk_management_bot.authz.catalog import ENGINEER, EXECUTOR
 
-#: Роли, которые выдаются и снимаются только в веб-админке ролей (rbac.manage).
-WEB_ONLY_ROLES: frozenset[str] = frozenset({ENGINEER})
+#: Роли, которые выдаёт и снимает бот-редактор ролей (AuthService.assign_role /
+#: remove_role, кнопки keyboards/user_management). Остальные — веб-админка.
+BOT_ASSIGNABLE_ROLES: tuple[str, ...] = ("applicant", "executor", "manager", "inspector",
+                                         "resource_meter_entry")
 
 
 def role_set_error(roles: Iterable[str]) -> Optional[str]:

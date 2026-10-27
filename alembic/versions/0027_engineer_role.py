@@ -28,15 +28,16 @@ SYSTEM_ROLES = (
 
 
 def upgrade() -> None:
-    roles = sa.table(
-        "rbac_roles",
-        sa.column("key", sa.String), sa.column("title", sa.String),
-        sa.column("description", sa.Text), sa.column("is_system", sa.Boolean),
-    )
-    op.bulk_insert(roles, [
-        {"key": key, "title": title, "description": description, "is_system": True}
-        for key, title, description in SYSTEM_ROLES
-    ])
+    # ON CONFLICT: суперадмин мог уже завести свою роль с ключом engineer —
+    # она становится системной (права и выданные роли сохраняются).
+    for key, title, description in SYSTEM_ROLES:
+        op.execute(
+            sa.text(
+                "INSERT INTO rbac_roles (key, title, description, is_system) "
+                "VALUES (:key, :title, :description, true) "
+                "ON CONFLICT (key) DO UPDATE SET is_system = true"
+            ).bindparams(key=key, title=title, description=description)
+        )
     op.add_column(
         "requests",
         sa.Column("return_count", sa.Integer(), nullable=False, server_default="0"),

@@ -95,8 +95,8 @@ from .public import (
     list_public_elevators_async,
     list_public_elevators_sync,
 )
+from uk_management_bot.services.recipients import Recipient
 from .recipients import (
-    Recipient,
     residents_of_entrance_async,
     residents_of_entrance_sync,
 )

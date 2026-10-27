@@ -6,11 +6,7 @@ EXISTS вместо JOIN (образец ``services/residents/queries.py:_belong
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from collections.abc import Iterable
-
-from sqlalchemy import Row, Select, exists, select
+from sqlalchemy import Select, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -21,19 +17,10 @@ from uk_management_bot.database.models.user_apartment import (
     UserApartmentStatus,
 )
 
-from ._shared import DEFAULT_LANGUAGE
+from uk_management_bot.services.recipients import Recipient, to_recipients
 
 # Статус пользователя, при котором уведомления не шлём
 USER_STATUS_BLOCKED = "blocked"
-
-
-@dataclass(frozen=True)
-class Recipient:
-    """Кому слать: id пользователя, его Telegram-id и язык интерфейса."""
-
-    user_id: int
-    telegram_id: int
-    language: str
 
 
 def _residents_stmt(building_id: int, entrance_number: int) -> Select:
@@ -61,16 +48,9 @@ def _residents_stmt(building_id: int, entrance_number: int) -> Select:
     )
 
 
-def _to_recipients(rows: Iterable[Row]) -> list[Recipient]:
-    return [
-        Recipient(user_id=user_id, telegram_id=telegram_id, language=language or DEFAULT_LANGUAGE)
-        for user_id, telegram_id, language in rows
-    ]
-
-
 def residents_of_entrance_sync(db: Session, building_id: int, entrance_number: int) -> list[Recipient]:
     """Одобренные жители подъезда, не удалённые, не заблокированные, с живым ботом."""
-    return _to_recipients(db.execute(_residents_stmt(building_id, entrance_number)).all())
+    return to_recipients(db.execute(_residents_stmt(building_id, entrance_number)).all())
 
 
 async def residents_of_entrance_async(
@@ -78,4 +58,4 @@ async def residents_of_entrance_async(
 ) -> list[Recipient]:
     """Async-зеркало ``residents_of_entrance_sync``."""
     rows = (await db.execute(_residents_stmt(building_id, entrance_number))).all()
-    return _to_recipients(rows)
+    return to_recipients(rows)

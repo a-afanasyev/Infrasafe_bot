@@ -5,7 +5,7 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 from uk_management_bot.services.users.privileged import is_privileged_target
 from uk_management_bot.authz.catalog import is_menu_mode
-from uk_management_bot.authz.role_set import WEB_ONLY_ROLES, role_set_error
+from uk_management_bot.authz.role_set import BOT_ASSIGNABLE_ROLES, role_set_error
 from uk_management_bot.config.settings import settings
 from dataclasses import dataclass
 from typing import List
@@ -432,8 +432,7 @@ class AuthService:
                 return False
 
             # Валидируем роль
-            valid_roles = ['applicant', 'executor', 'manager', 'inspector', 'resource_meter_entry']
-            if role not in valid_roles:
+            if role not in BOT_ASSIGNABLE_ROLES:
                 logger.warning(f"Недопустимая роль: {role}")
                 return False
             
@@ -517,10 +516,11 @@ class AuthService:
             if len(current_roles) == 1 and role in current_roles:
                 logger.warning(f"Нельзя удалить последнюю роль {role} у пользователя {user_id}")
                 return False
-            # Роли веб-админки (инженер) бот не снимает; итоговый набор — по
-            # общему инварианту (executor не снять, пока есть engineer).
-            invalid = ("роль выдаётся и снимается только в веб-админке ролей"
-                       if role in WEB_ONLY_ROLES
+            # Бот снимает только роли со своими кнопками (callback_data шлёт
+            # клиент): инженер и свои роли — из веб-админки. Итоговый набор —
+            # по общему инварианту (executor не снять, пока есть engineer).
+            invalid = ("роль меняется только в веб-админке ролей"
+                       if role not in BOT_ASSIGNABLE_ROLES
                        else role_set_error(r for r in current_roles if r != role))
             if invalid:
                 logger.warning(f"Снятие роли {role} у пользователя {user_id} отклонено: {invalid}")

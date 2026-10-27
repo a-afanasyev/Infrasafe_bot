@@ -440,6 +440,14 @@ class TestRemoveRole:
         assert service.remove_role(1, "engineer", removed_by=2) is False
         assert "engineer" in json.loads(user.roles)
 
+    def test_refuses_roles_without_bot_buttons(self):
+        """callback_data шлёт клиент: свою роль из веб-админки бот не снимает."""
+        user = _make_user(roles='["executor", "senior_exec"]', active_role="executor")
+        service = AuthService(self._db_with_user_roles(user))
+
+        assert service.remove_role(1, "senior_exec", removed_by=2) is False
+        assert "senior_exec" in json.loads(user.roles)
+
     def test_engineer_never_becomes_active_role(self):
         user = _make_user(roles='["manager", "engineer", "executor"]', active_role="manager")
         user.id = 1
