@@ -78,11 +78,12 @@ describe('DashboardLayout — навигация и роли', () => {
     expect(screen.getByRole('link', { name: /заявки/i })).toBeInTheDocument()
   })
 
-  it('инженер видит доску, но не разделы персонала, смен, адресов и модерации', () => {
+  it('инженер видит доску и аналитику, но не разделы персонала, смен, адресов и модерации', () => {
     login(['executor', 'engineer'])
     renderLayout()
     expect(screen.getByRole('link', { name: /заявки/i })).toBeInTheDocument()
-    for (const name of [/аналитика/i, /адреса/i, /витрин/i, /обратная связь/i]) {
+    expect(screen.getByRole('link', { name: /аналитика/i })).toBeInTheDocument()
+    for (const name of [/адреса/i, /витрин/i, /обратная связь/i]) {
       expect(screen.queryByRole('link', { name })).not.toBeInTheDocument()
     }
     // группа «Персонал» (сотрудники, смены, шаблоны) пуста — не видна вовсе
