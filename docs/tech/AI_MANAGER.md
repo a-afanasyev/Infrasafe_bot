@@ -45,8 +45,18 @@
 `auto_manager_config.data.ai` (вложенный merge поверх дефолтов, валидация в `services/auto_manager/config.py::_validate_ai`):
 
 ```json
-{"min_confidence": 0.7, "clarify_enabled": true, "dedup_enabled": true}
+{"min_confidence": 0.7, "clarify_enabled": true, "dedup_enabled": true,
+ "triage_instructions": "", "news_instructions": "",
+ "extra_emergency_keywords": [], "templates": {}}
 ```
+
+- `triage_instructions` / `news_instructions` (≤ 2000 символов) — правила УК свободным текстом, блок «Правила управляющей компании» в конце системного промпта триажа заявок / анализа новостей об отключениях. Пусто — промпт без блока.
+- `extra_emergency_keywords` — дополнительные аварийные маркеры (strip+lower, ≤ 100 слов по ≤ 50 символов); базовые `EMERGENCY_KEYWORDS` из `triage.py` действуют всегда и не отключаются.
+- `templates` — переопределения текстов пингов `{"sla.executor_overdue": {"ru": …, "uz": …}}` (12 ключей = `ai_manager.sla.*` и `ai_manager.public.*` локалей). Контракт `services/ai_manager/templates.py`: только простые подстановки `{имя}` из набора стандартного текста (без format-spec/конверсий; подстановка через `re.sub`, не `str.format`), HTML — только теги Telegram и сбалансированные, `<`/`>` вне тегов запрещены; шаблон ≤ 1000 символов, результат после подстановки ≤ 3500, иначе — стандартный текст локали. Наборы плейсхолдеров RU и UZ стандартных текстов обязаны совпадать (гейт `tests/services/test_ai_templates.py`).
+
+Блок `sla` дополнен `ladder_enabled` (четыре bool по ступеням `executor`-трека; выключенная ступень считается пройденной — пинг не уходит, `result="disabled"`, следующая срабатывает по своему смещению) и `public_status` (`enabled`, `min_urgency ∈ {critical, high}`).
+
+**Страница «Правила ИИ»** (`/dashboard/ai-manager`, право `auto_manager.configure`) редактирует всё перечисленное через тот же `GET/PUT /api/v2/auto-manager-config`. Модели API разделены: `AutoManagerConfigData` — тело PUT (только хранимые поля, лишние отбрасываются), `AutoManagerConfigOut` — ответ с read-only `ai_available`, `ai_status` (предохранитель: `open`, `open_ttl`, `failures`; `null` без флага или без Redis), `template_defaults`, `base_emergency_keywords`. `POST /api/v2/auto-manager-config/ai-breaker/reset` снимает предохранитель досрочно и пишет `audit_logs` `ai_breaker_reset` (`user_id`, `details.before`, `details.at`); Redis недоступен — 503.
 
 Env: `AI_MANAGER_MODEL=claude-sonnet-5-5`, `AI_MANAGER_EFFORT=low`, `AI_MANAGER_LLM_TIMEOUT=8`, общий `ANTHROPIC_API_KEY` с Group Intake (Doppler). Haiku 5.5 — переключение через `AI_MANAGER_MODEL`, промпт и схема те же.
 
@@ -64,11 +74,11 @@ Job `ai_sla_tick` каждые 10 мин — регистрируется тол
 
 `0` в любом нормативе выключает трек/ступень. Состояние — строки `audit_logs` `ai_sla_step` с `{track, step, step_index, status_version, phase_started_at, result}`; шаг относится к текущей фазе только при совпадении `(track, status_version, phase_started_at)` — переназначение, возврат в работу, смена статуса начинают лестницу заново. Чтение — один запрос по кандидатам за 30 дней (`# ponytail`: отдельная таблица, если тик > 1 с).
 
-Каналы — `services/ai_manager/channels.py` (DM / staff-группа / менеджеры / группа жителей); SMS и звонок добавляются там как новый `kind`. Шаблоны — `ai_manager.sla.*` в локалях бота. Настройки — блок `sla` на карточке автоменеджера дашборда (только при `ai_available`).
+Каналы — `services/ai_manager/channels.py` (DM / staff-группа / менеджеры / группа жителей); SMS и звонок добавляются там как новый `kind`. Шаблоны — `ai_manager.sla.*` в локалях бота, переопределяются из `ai.templates` (см. «Конфиг»). Настройки — страница «Правила ИИ» и блок `sla` на карточке автоменеджера (только при `ai_available`).
 
 Выключение режима (бот или дашборд, `ai → rule`): менеджерам одно сообщение с числом открытых заявок, у которых были шаги лестницы за 30 дней (`services/ai_manager/switch_off.py`).
 
-Публичный статус (`public_status.py`): для **критических** заявок из группы жителей (`source_chat_id` = активная residents-группа) при назначении/выполнении — шаблон RU+UZ без ФИО и квартиры в тот же чат; хук в диспетчерах `workflow_notifications`.
+Публичный статус (`public_status.py`): при `sla.public_status.enabled` для заявок не ниже `min_urgency` (дефолт — только критические) из группы жителей (`source_chat_id` = активная residents-группа) при назначении/выполнении — шаблон RU+UZ без ФИО и квартиры в тот же чат; хук в диспетчерах `workflow_notifications`.
 
 Новые действия workflow: `SYSTEM_REASSIGN` («В работе» → «В работе», system-only, capability только `ai_manager`); `MANAGER_FORCE_ACCEPT` открыт системному актору `ai_manager`.
 
