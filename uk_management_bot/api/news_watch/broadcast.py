@@ -35,6 +35,7 @@ from uk_management_bot.database.models.news_item import (
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.services.news_watch.config import load_config
+from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +112,6 @@ async def _recipients(db: AsyncSession, after_id: int) -> list[tuple[int, int]]:
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 async def _set(db: AsyncSession, item_id: int, **values) -> None:
     await db.execute(update(NewsItem).where(NewsItem.id == item_id).values(**values))
     await db.commit()
@@ -124,7 +121,7 @@ async def _progress(db: AsyncSession, item_id: int, **values) -> None:
     """Сдвиг курсора/счётчиков + heartbeat: ``broadcast_started_at`` = последний
     прогресс, иначе рассылка длиннее STALE выглядит «протухшей» для второго
     воркера и уходит жителям второй раз."""
-    await _set(db, item_id, broadcast_started_at=_utcnow(), **values)
+    await _set(db, item_id, broadcast_started_at=utc_now(), **values)
 
 
 async def _send_once(send: Sender, sleep, chat_id: int, text: str) -> telegram_send.TelegramResult:

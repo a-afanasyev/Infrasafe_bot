@@ -343,7 +343,7 @@ def resume_after_answer_sync(request_number: str, reply_text: str, ai_cfg: dict,
             user = db.get(User, req.user_id) if req.user_id else None
             ctx = _Context(
                 request_number=request_number,
-                text=f"{req.description or ''}\n\nОтвет жителя на уточнение:\n{reply_text}",
+                text=f"{req.description or ''}\n\nОтвет жителя на уточнение:\n{reply_text}",  # html-raw: промпт LLM, не Telegram
                 category=req.category,
                 urgency=req.urgency,
                 lang=(getattr(user, "language", None) or "ru"),
