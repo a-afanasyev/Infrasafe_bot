@@ -215,12 +215,12 @@ def parse_llm_triage(payload: Mapping[str, object], *, min_confidence: float,
     )
 
 
-def llm_triage_sync(text: str, *, category: Optional[str], lang: str,
-                    open_same_address: Sequence[OpenRequest],
-                    min_confidence: float) -> Optional[LlmTriage]:
-    """Один вызов модели; любой сбой → None. Никогда не бросает."""
+def llm_payload_sync(text: str, *, category: Optional[str], lang: str,
+                     open_same_address: Sequence[OpenRequest]) -> Optional[dict]:
+    """Сырой ответ модели; None = сбой вызова (таймаут, сеть, refusal, битый
+    JSON) — именно это считает предохранитель. Никогда не бросает."""
     try:
-        payload = llm_json_sync(
+        return llm_json_sync(
             system=_system_prompt(),
             user=_user_content(text, category, lang, open_same_address),
             schema=_schema(),
@@ -233,6 +233,14 @@ def llm_triage_sync(text: str, *, category: Optional[str], lang: str,
     except Exception as e:  # pragma: no cover — клиент не бросает; страховка
         logger.warning("ai_manager.triage: unexpected %s", type(e).__name__)
         return None
+
+
+def llm_triage_sync(text: str, *, category: Optional[str], lang: str,
+                    open_same_address: Sequence[OpenRequest],
+                    min_confidence: float) -> Optional[LlmTriage]:
+    """Вызов + разбор; любой сбой или низкая уверенность → None."""
+    payload = llm_payload_sync(text, category=category, lang=lang,
+                               open_same_address=open_same_address)
     if payload is None:
         return None
     return parse_llm_triage(

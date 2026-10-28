@@ -2917,5 +2917,12 @@
   "engineering": {
     "unassigned": "⚠️ <b>InfraSafe eskalatsiyasi muhandissiz</b>\n#{request_number} ariza («Muhandislik tekshiruvi») hech kimga tayinlanmagan: muhandis yo'q. Ijrochini qo'lda tayinlang yoki «Muhandis» rolini bering.",
     "reopened": "🔁 <b>Takroriy murojaat №{sequence}</b>\nAvariya qaytdi: #{request_number} ariza\n📍 {address}"
+  },
+  "ai_manager": {
+    "note_author": "🤖 AI-menejer",
+    "duplicate_title": "🤖 <b>AI-menejer: takroriy ariza bo'lishi mumkin</b>",
+    "duplicate_body": "№{request_number} arizasi xuddi shu manzil bo'yicha ochiq №{duplicate_of} arizaga o'xshaydi. Tekshiring va kerak bo'lsa birini bekor qiling.",
+    "breaker_title": "🤖 <b>AI-menejer vaqtincha qoida rejimida</b>",
+    "breaker_body": "Modelga murojaatda ketma-ket bir necha xatolik — arizalar triaji 10 daqiqaga o'chirildi, tayinlash qoida bo'yicha ketmoqda. Aralashuv talab qilinmaydi."
   }
 }
