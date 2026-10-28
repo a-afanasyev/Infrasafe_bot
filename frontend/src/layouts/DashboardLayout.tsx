@@ -48,6 +48,7 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
+  Radio,
   UserCog,
 } from 'lucide-react'
 
@@ -139,6 +140,10 @@ const NAV_ENTRIES: NavEntry[] = [
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
     ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, action: 'elevators.read' as const }]
+    : []),
+  // Мониторинг отключений: очередь новостей + настройки. DARK за VITE_NEWS_WATCH_ENABLED.
+  ...(import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
+    ? [{ to: '/dashboard/news-watch', labelKey: 'nav.newsWatch', Icon: Radio, action: 'board.configure' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.

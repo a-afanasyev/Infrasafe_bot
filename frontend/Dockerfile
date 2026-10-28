@@ -33,6 +33,11 @@ ENV VITE_WORK_REPORTS_ENABLED=$VITE_WORK_REPORTS_ENABLED
 ARG VITE_ELEVATORS_ENABLED=
 ENV VITE_ELEVATORS_ENABLED=$VITE_ELEVATORS_ENABLED
 
+# DARK-гейт раздела «Отключения» (мониторинг новостей): пусто = OFF.
+# Включение: --build-arg VITE_NEWS_WATCH_ENABLED=true (согласованно с backend NEWS_WATCH_ENABLED).
+ARG VITE_NEWS_WATCH_ENABLED=
+ENV VITE_NEWS_WATCH_ENABLED=$VITE_NEWS_WATCH_ENABLED
+
 # DARK-гейт раздела «Контроль платежей»: пусто = OFF (пункт меню не монтируется).
 # Включение: --build-arg VITE_PAYMENTS_ENABLED=true — только там, где поднят
 # overlay docker-compose.payments.yml и заявлен edge-префикс /api/v2/payment-control.

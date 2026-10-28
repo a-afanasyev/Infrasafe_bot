@@ -138,7 +138,8 @@
     "residents": "Aholi",
     "groups": "Guruhlar",
     "elevators": "Liftlar",
-    "residentHome": "Aholi sahifasi"
+    "residentHome": "Aholi sahifasi",
+    "newsWatch": "O'chirishlar"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -3727,6 +3728,57 @@
       "sub": "Qanday edi va qanday bo'ldi",
       "viewAll": "Barcha hisobotlar",
       "empty": "E'lon qilingan hisobotlar hozircha yo'q"
+    }
+  },
+  "newsWatch": {
+    "title": "O'chirishlar",
+    "confidence": "ishonch",
+    "noVerdict": "AI xulosasisiz",
+    "showRaw": "Asl matnni ko'rsatish",
+    "hideRaw": "Asl matnni yashirish",
+    "publish": "Chop etish",
+    "reject": "Rad etish",
+    "retryBroadcast": "Tarqatishni takrorlash",
+    "broadcast": "Tarqatish",
+    "empty": "Bo'sh",
+    "status": {
+      "pending": "Qaror kutmoqda",
+      "published": "Chop etilgan",
+      "rejected": "Rad etilgan",
+      "ignored": "Saralangan"
+    },
+    "broadcastStatus": {
+      "none": "kerak emas",
+      "pending": "navbatda",
+      "running": "ketmoqda",
+      "done": "yetkazildi",
+      "failed": "xato"
+    },
+    "kind": {
+      "power": "Elektr",
+      "water": "Suv",
+      "gas": "Gaz",
+      "heating": "Isitish",
+      "internet": "Internet",
+      "other": "E'lon"
+    },
+    "config": {
+      "title": "Monitoring sozlamalari",
+      "sources": "Manbalar (har qatorda: @kanal Nomi)",
+      "context": "AI uchun majmua tavsifi",
+      "contextHint": "Majmua, ko'chalar, tuman, mahalla, mo'ljallar — yangilik biz haqimizda ekanini nimadan bilish",
+      "keywords": "Oldindan filtr kalit so'zlari (vergul bilan)",
+      "autoPublish": "Yuqori ishonchda avtomatik chop etish",
+      "minConfidence": "Ishonch chegarasi",
+      "broadcastDm": "Yashovchilarga shaxsiy xabar",
+      "broadcastGroups": "Uy chatlariga tarqatish",
+      "save": "Sozlamalarni saqlash"
+    },
+    "toast": {
+      "configSaved": "Monitoring sozlamalari saqlandi",
+      "publish": "Yangilik chop etildi",
+      "reject": "Yangilik rad etildi",
+      "retried": "Tarqatish navbatga qo'yildi"
     }
   }
 }

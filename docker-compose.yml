@@ -573,6 +573,8 @@ services:
         VITE_WORK_REPORTS_ENABLED: "${VITE_WORK_REPORTS_ENABLED:-}"
         # DARK-гейт модуля «Лифты»: пусто = OFF (dev/CI), прод .env ставит true вместе с ELEVATORS_ENABLED.
         VITE_ELEVATORS_ENABLED: "${VITE_ELEVATORS_ENABLED:-}"
+        # DARK-гейт раздела «Отключения»: пусто = OFF, прод ставит true вместе с NEWS_WATCH_ENABLED.
+        VITE_NEWS_WATCH_ENABLED: "${VITE_NEWS_WATCH_ENABLED:-}"
         # DARK-гейт раздела «Контроль платежей»: пусто = OFF. Включать только там,
         # где поднят overlay docker-compose.payments.yml и заявлен edge-префикс.
         VITE_PAYMENTS_ENABLED: "${VITE_PAYMENTS_ENABLED:-}"
@@ -726,7 +728,38 @@ services:
       start_period: 30s
 
 # Определяем тома для хранения данных
+  # Мониторинг отключений — юзербот (Telethon, ОТДЕЛЬНЫЙ образ и аккаунт):
+  # читает публичные каналы/группы служб из списка источников API и отдаёт
+  # новые сообщения в POST /api/v2/news-watch/inbox. Только чтение. За
+  # профилем: поднимается осознанно (COMPOSE_PROFILES=news-watch) вместе с
+  # NEWS_WATCH_ENABLED=true у api. Секреты — ТОЛЬКО Doppler.
+  news-watcher:
+    logging: *default-logging
+    security_opt: [no-new-privileges:true]
+    build:
+      context: .
+      dockerfile: news_watcher/Dockerfile
+    container_name: uk-news-watcher
+    restart: unless-stopped
+    profiles: ["news-watch"]
+    depends_on:
+      - api
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    volumes:
+      - news_watcher_data:/data
+    environment:
+      - NEWS_WATCH_API_URL=${NEWS_WATCH_API_URL:-http://api:8000}
+      - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:?NEWS_WATCH_SERVICE_TOKEN is required — set it in Doppler (project uk-management)}
+      - TG_API_ID=${TG_API_ID:?TG_API_ID is required — set it in Doppler (project uk-management)}
+      - TG_API_HASH=${TG_API_HASH:?TG_API_HASH is required — set it in Doppler (project uk-management)}
+      - NEWS_WATCH_TG_SESSION=${NEWS_WATCH_TG_SESSION:?NEWS_WATCH_TG_SESSION is required — set it in Doppler (project uk-management)}
+      - NEWS_WATCH_REFRESH_SECONDS=${NEWS_WATCH_REFRESH_SECONDS:-300}
+      - NEWS_WATCH_OFFSETS_PATH=/data/offsets.json
+
 volumes:
+  news_watcher_data:
   # Том для данных PostgreSQL
   postgres_data:
     driver: local

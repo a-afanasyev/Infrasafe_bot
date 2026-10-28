@@ -76,6 +76,11 @@ const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfig
 const ResidentElevatorsPage = lazy(() => import('./pages/ResidentElevatorsPage'))
 const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
+// Мониторинг отключений (очередь новостей + настройки). DARK за
+// VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
+const NewsWatchPage = lazy(() => import('./pages/NewsWatchPage'))
+const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
+
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -226,6 +231,11 @@ export default function App() {
               {ELEVATORS_ENABLED && (
                 <Route path="/dashboard/elevators/config" element={<ProtectedRoute action="elevators.manage"><DashboardLayout /></ProtectedRoute>}>
                   <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
+                </Route>
+              )}
+              {NEWS_WATCH_ENABLED && (
+                <Route path="/dashboard/news-watch" element={<ProtectedRoute action="board.configure"><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><NewsWatchPage /></PageErrorBoundary>} />
                 </Route>
               )}
 
