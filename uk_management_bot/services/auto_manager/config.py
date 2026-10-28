@@ -47,7 +47,19 @@ DEFAULT_CONFIG: dict = {
     # Режим «ИИ-менеджер» (mode="ai"): порог уверенности LLM-триажа, ниже
     # которого подсказки не применяются (rule-путь); разрешение задавать
     # жителю уточняющий вопрос; поиск дублей по открытым заявкам адреса.
-    "ai": {"min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True},
+    "ai": {
+        "min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True,
+        # Правила УК свободным текстом — в системный промпт триажа заявок /
+        # анализа новостей об отключениях (страница «Правила ИИ»).
+        "triage_instructions": "",
+        "news_instructions": "",
+        # Дополнительно к базовым EMERGENCY_KEYWORDS (ai_manager/triage.py —
+        # неотключаемы): подстроки в нижнем регистре, совпадение → critical.
+        "extra_emergency_keywords": [],
+        # Переопределения текстов пингов: {"sla.executor_overdue": {"ru": …,
+        # "uz": …}} — контракт в ai_manager/templates.py.
+        "templates": {},
+    },
     # SLA-лестница ИИ-менеджера (фаза 2, только при mode="ai"). Часы, int;
     # 0 = ступень/трек выключены. `ladder` — смещения в часах от момента
     # просрочки «В работе»: DM исполнителю → staff-группа → менеджер →
@@ -59,8 +71,18 @@ DEFAULT_CONFIG: dict = {
         "completed_unaccepted_days": 3,
         "critical_unassigned_minutes": 30,
         "ladder": {"remind_executor": 0, "staff_group": 2, "manager": 4, "reassign": 8},
+        # Выключенная ступень считается пройденной: пинг не уходит, следующая
+        # срабатывает по своему смещению.
+        "ladder_enabled": {"remind_executor": True, "staff_group": True, "manager": True, "reassign": True},
+        # Публичные статусы в чат дома: выключатель и минимальная срочность.
+        "public_status": {"enabled": True, "min_urgency": "critical"},
     },
 }
+
+_INSTRUCTIONS_MAX = 2000
+_KEYWORD_MAX = 50
+_KEYWORDS_MAX = 100
+_PUBLIC_URGENCIES = ("critical", "high")
 
 #: Норматив в часах: от часа до года — защита от опечаток вида 0 или 99999.
 SLA_HOURS_MAX = 8784
@@ -121,7 +143,39 @@ def _validate_ai(raw: object) -> dict:
     for key in ("clarify_enabled", "dedup_enabled"):
         if not isinstance(merged[key], bool):
             raise ValueError(f"ai.{key}: ожидается bool, получено {merged[key]!r}")
-    return {**merged, "min_confidence": float(threshold)}
+    # Локальный импорт: ai_manager импортирует этот модуль (load_config_sync).
+    from uk_management_bot.services.ai_manager.templates import validate_overrides
+
+    return {
+        **merged, "min_confidence": float(threshold),
+        "triage_instructions": _validate_instructions(merged["triage_instructions"], "ai.triage_instructions"),
+        "news_instructions": _validate_instructions(merged["news_instructions"], "ai.news_instructions"),
+        "extra_emergency_keywords": _validate_keywords(merged["extra_emergency_keywords"]),
+        "templates": validate_overrides(merged["templates"]),
+    }
+
+
+def _validate_instructions(value: object, field_name: str) -> str:
+    if not isinstance(value, str) or len(value.strip()) > _INSTRUCTIONS_MAX:
+        raise ValueError(f"{field_name}: ожидается строка до {_INSTRUCTIONS_MAX} символов")
+    return value.strip()
+
+
+def _validate_keywords(raw: object) -> list[str]:
+    """strip+lower, дедуп, без базовых слов (они неотключаемы и уже действуют)."""
+    from uk_management_bot.services.ai_manager.triage import EMERGENCY_KEYWORDS
+
+    if not isinstance(raw, list) or any(not isinstance(k, str) for k in raw):
+        raise ValueError("ai.extra_emergency_keywords: ожидается список строк")
+    seen: list[str] = []
+    for word in (k.strip().lower() for k in raw):
+        if len(word) > _KEYWORD_MAX:
+            raise ValueError(f"ai.extra_emergency_keywords: слово длиннее {_KEYWORD_MAX} символов")
+        if word and word not in seen and word not in EMERGENCY_KEYWORDS:
+            seen.append(word)
+    if len(seen) > _KEYWORDS_MAX:
+        raise ValueError(f"ai.extra_emergency_keywords: не более {_KEYWORDS_MAX} слов")
+    return seen
 
 
 def _non_negative_int(value: object, field_name: str) -> int:
@@ -130,8 +184,8 @@ def _non_negative_int(value: object, field_name: str) -> int:
     return value
 
 
-def _merge_int_block(raw: object, defaults: dict, field_name: str) -> dict:
-    """Частичный dict целых ≥ 0 поверх дефолтов; неизвестные ключи — ошибка."""
+def _merge_block(raw: object, defaults: dict, field_name: str) -> dict:
+    """Частичный dict поверх дефолтов; неизвестные ключи — ошибка."""
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
@@ -139,8 +193,30 @@ def _merge_int_block(raw: object, defaults: dict, field_name: str) -> dict:
     unknown = sorted(set(raw) - set(defaults))
     if unknown:
         raise ValueError(f"{field_name}: неизвестные ключи {unknown}")
-    merged = {**defaults, **raw}
+    return {**defaults, **raw}
+
+
+def _merge_int_block(raw: object, defaults: dict, field_name: str) -> dict:
+    """Частичный dict целых ≥ 0 поверх дефолтов."""
+    merged = _merge_block(raw, defaults, field_name)
     return {k: _non_negative_int(v, f"{field_name}.{k}") for k, v in merged.items()}
+
+
+def _merge_bool_block(raw: object, defaults: dict, field_name: str) -> dict:
+    merged = _merge_block(raw, defaults, field_name)
+    for k, v in merged.items():
+        if not isinstance(v, bool):
+            raise ValueError(f"{field_name}.{k}: ожидается bool, получено {v!r}")
+    return merged
+
+
+def _validate_public_status(raw: object) -> dict:
+    merged = _merge_block(raw, DEFAULT_CONFIG["sla"]["public_status"], "sla.public_status")
+    if not isinstance(merged["enabled"], bool):
+        raise ValueError(f"sla.public_status.enabled: ожидается bool, получено {merged['enabled']!r}")
+    if merged["min_urgency"] not in _PUBLIC_URGENCIES:
+        raise ValueError(f"sla.public_status.min_urgency: ожидается одно из {_PUBLIC_URGENCIES}")
+    return merged
 
 
 def _validate_sla(raw: object) -> dict:
@@ -161,6 +237,8 @@ def _validate_sla(raw: object) -> dict:
         "in_progress_max": _merge_int_block(
             raw.get("in_progress_max"), defaults["in_progress_max"], "sla.in_progress_max"),
         "ladder": _merge_int_block(raw.get("ladder"), defaults["ladder"], "sla.ladder"),
+        "ladder_enabled": _merge_bool_block(raw.get("ladder_enabled"), defaults["ladder_enabled"], "sla.ladder_enabled"),
+        "public_status": _validate_public_status(raw.get("public_status")),
     }
 
 

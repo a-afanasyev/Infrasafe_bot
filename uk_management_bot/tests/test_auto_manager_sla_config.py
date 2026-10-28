@@ -14,6 +14,8 @@ DEFAULT_SLA = {
     "completed_unaccepted_days": 3,
     "critical_unassigned_minutes": 30,
     "ladder": {"remind_executor": 0, "staff_group": 2, "manager": 4, "reassign": 8},
+    "ladder_enabled": {"remind_executor": True, "staff_group": True, "manager": True, "reassign": True},
+    "public_status": {"enabled": True, "min_urgency": "critical"},
 }
 
 
@@ -59,3 +61,24 @@ def test_sla_validate_does_not_mutate_defaults():
     validate_config({"sla": {"in_progress_max": {"low": 1}, "ladder": {"manager": 99}}})
     assert DEFAULT_CONFIG["sla"]["in_progress_max"]["low"] == 72
     assert DEFAULT_CONFIG["sla"]["ladder"]["manager"] == 4
+
+
+def test_sla_new_blocks_defaults_and_merge():
+    sla = validate_config({})["sla"]
+    assert sla["ladder_enabled"] == {"remind_executor": True, "staff_group": True, "manager": True, "reassign": True}
+    assert sla["public_status"] == {"enabled": True, "min_urgency": "critical"}
+    sla = validate_config({"sla": {"ladder_enabled": {"staff_group": False},
+                                   "public_status": {"min_urgency": "high"}}})["sla"]
+    assert sla["ladder_enabled"]["staff_group"] is False and sla["ladder_enabled"]["manager"] is True
+    assert sla["public_status"] == {"enabled": True, "min_urgency": "high"}
+
+
+@pytest.mark.parametrize("bad", [
+    {"ladder_enabled": {"manager": 1}},
+    {"ladder_enabled": {"nope": True}},
+    {"public_status": {"enabled": "yes"}},
+    {"public_status": {"min_urgency": "medium"}},
+])
+def test_sla_rejects_bad_new_blocks(bad):
+    with pytest.raises(ValueError):
+        validate_config({"sla": bad})
