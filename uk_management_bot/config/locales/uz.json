@@ -2948,5 +2948,18 @@
       "assigned": "🚨 №{request_number} avariya arizasi ({category}) bo'yicha ijrochi yo'lga chiqdi.",
       "executed": "✅ №{request_number} avariya arizasi ({category}) bajarildi."
     }
+  },
+  "news_watch": {
+    "kind": {
+      "power": "Elektr o'chirilishi",
+      "water": "Suv o'chirilishi",
+      "gas": "Gaz o'chirilishi",
+      "heating": "Isitish o'chirilishi",
+      "internet": "Internet o'chirilishi",
+      "other": "E'lon"
+    },
+    "pending_title": "📰 <b>O'chirish haqidagi yangilik tasdiqlashni kutmoqda</b>",
+    "pending_body": "{kind}: {summary}\nManba: {source}. Chop etish — dashboardda, «O'chirishlar» bo'limi.",
+    "broadcast": "📢 <b>{title}</b>\n{text}"
   }
 }
