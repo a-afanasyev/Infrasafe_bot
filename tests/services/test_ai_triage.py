@@ -83,8 +83,19 @@ def test_parse_happy_path():
     assert res.confidence == 0.92
 
 
-def test_parse_below_threshold_is_none():
-    assert parse_llm_triage(_payload(confidence=0.5), min_confidence=0.7, candidates=()) is None
+def test_parse_below_threshold_keeps_only_clarification():
+    """Низкая уверенность = расплывчатый текст: категория/срочность/дубль в топку, вопрос — остаётся."""
+    res = parse_llm_triage(_payload(confidence=0.5, needs_clarification=True,
+                                    clarification_question_ru="Что именно не работает?",
+                                    clarification_question_uz="Aynan nima ishlamayapti?",
+                                    duplicate_of="261028-001"),
+                           min_confidence=0.7, candidates=("261028-001",))
+    assert res is not None
+    assert res.category is None and res.urgency is None and res.duplicate_of is None
+    assert res.needs_clarification and res.clarification_question["ru"] == "Что именно не работает?"
+    assert res.confidence == 0.5
+    quiet = parse_llm_triage(_payload(confidence=0.5), min_confidence=0.7, candidates=())
+    assert quiet is not None and not quiet.needs_clarification and quiet.category is None
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), -0.1, 1.5, "0.9"])

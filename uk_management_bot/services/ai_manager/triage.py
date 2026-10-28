@@ -169,9 +169,11 @@ def parse_llm_triage(payload: Mapping[str, object], *, min_confidence: float,
                      candidates: Sequence[str]) -> Optional[LlmTriage]:
     """Валидация ответа модели в Python: диапазоны, словари, кандидаты дублей.
 
-    Битый payload или уверенность ниже порога → None (всё решение
-    отбрасывается). Незнакомая категория/срочность → «не менять» (None в поле),
-    а не отказ: остальные подсказки всё ещё полезны.
+    Битый payload → None. Уверенность ниже порога → категория/срочность/дубль
+    отбрасываются, но просьба уточнить с вопросом ОСТАЁТСЯ: расплывчатый текст
+    — ровно тот случай, когда модель не уверена и уточнение нужно (локальная
+    проверка 2026-10-28: «что-то не работает» давало 0.5 и терялось целиком).
+    Незнакомая категория/срочность → «не менять» (None в поле), а не отказ.
     """
     from uk_management_bot.utils.categories import SELECTABLE_CATEGORY_KEYS, resolve_category_key
 
@@ -192,18 +194,20 @@ def parse_llm_triage(payload: Mapping[str, object], *, min_confidence: float,
     ):
         logger.warning("ai_manager.triage: confidence out of range")
         return None
-    if confidence < min_confidence:
-        logger.info("ai_manager.triage: confidence %.2f below %.2f", confidence, min_confidence)
-        return None
+    confident = confidence >= min_confidence
+    if not confident:
+        logger.info("ai_manager.triage: confidence %.2f below %.2f — only clarification kept",
+                    confidence, min_confidence)
 
-    category = resolve_category_key(raw_category)
+    category = resolve_category_key(raw_category) if confident else None
     if category not in SELECTABLE_CATEGORY_KEYS:
         category = None
-    urgency = normalize_urgency(raw_urgency)
+    urgency = normalize_urgency(raw_urgency) if confident else None
     question = {}
     if needs_clarification and question_ru and question_uz:
         question = {"ru": question_ru[:_QUESTION_LIMIT], "uz": question_uz[:_QUESTION_LIMIT]}
-    duplicate_of = raw_duplicate if isinstance(raw_duplicate, str) and raw_duplicate in candidates else None
+    duplicate_of = (raw_duplicate if confident and isinstance(raw_duplicate, str) and raw_duplicate in candidates
+                    else None)
     return LlmTriage(
         category=category,
         urgency=urgency,
