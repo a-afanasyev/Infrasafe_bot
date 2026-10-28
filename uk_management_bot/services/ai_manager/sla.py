@@ -90,6 +90,40 @@ class _Phase:
 class _Plan:
     messages: list[Outgoing] = field(default_factory=list)
     refreshes: list[str] = field(default_factory=list)
+    # Менеджерские ступени копятся строками и уходят ОДНИМ сообщением на
+    # менеджера в конце тика (дайджест): при первом включении режима на проде
+    # все уже просроченные заявки срабатывают разом — залп по одному DM на
+    # заявку недопустим.
+    manager_lines: list[str] = field(default_factory=list)
+    manager_ids: Optional[list[int]] = None
+
+
+_DIGEST_CHUNK = 3500  # лимит Telegram 4096 с запасом на HTML
+
+
+def _age(minutes: int, lang: str = "ru") -> str:
+    """«57897 мин» → «40 дн»: минуты до 2 ч, часы до 2 сут, дальше дни."""
+    units = {"ru": ("мин", "ч", "дн"), "uz": ("daqiqa", "soat", "kun")}.get(lang, ("мин", "ч", "дн"))
+    if minutes < 120:
+        return f"{minutes} {units[0]}"
+    if minutes < 48 * 60:
+        return f"{minutes // 60} {units[1]}"
+    return f"{minutes // (24 * 60)} {units[2]}"
+
+
+def _flush_manager_digest(plan: _Plan) -> None:
+    if not plan.manager_lines or not plan.manager_ids:
+        return
+    chunks, cur = [], ""
+    for line in plan.manager_lines:
+        if cur and len(cur) + len(line) + 2 > _DIGEST_CHUNK:
+            chunks.append(cur)
+            cur = ""
+        cur = f"{cur}\n\n{line}" if cur else line
+    chunks.append(cur)
+    for tg_id in plan.manager_ids:
+        for chunk in chunks:
+            plan.messages.append(Outgoing(tg_id, chunk, "manager"))
 
 
 class AiSlaWatchdog:
@@ -164,6 +198,7 @@ class AiSlaWatchdog:
                 logger.info("ai_manager.sla: %s %s/%s → %s", item.phase.number,
                             item.phase.track, item.step, result)
             db.commit()
+            _flush_manager_digest(plan)
             return plan
         finally:
             db.close()
@@ -301,10 +336,15 @@ def _user_target(db: Session, user_id: Optional[int]) -> Optional[tuple[int, str
 
 
 def _managers(db: Session, plan: _Plan, key: str, **fmt) -> str:
-    ids = channels.resolve_managers(db)
-    for tg_id in ids:
-        plan.messages.append(Outgoing(tg_id, _text(key, "ru", **fmt), "manager"))
-    return f"managers:{len(ids)}"
+    """Строка в дайджест менеджерам (см. _Plan.manager_lines); менеджеры — ru."""
+    if plan.manager_ids is None:
+        plan.manager_ids = channels.resolve_managers(db)
+    if "minutes" in fmt:
+        fmt["age"] = _age(int(fmt["minutes"]))
+    elif "hours" in fmt:
+        fmt["age"] = _age(int(fmt["hours"]) * 60)
+    plan.manager_lines.append(_text(key, "ru", **fmt))
+    return f"managers:{len(plan.manager_ids)}"
 
 
 def _ExecutorStep(number: str, step: str, limit: int, anchor: datetime, now: datetime):

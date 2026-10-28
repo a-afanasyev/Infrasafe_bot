@@ -258,3 +258,24 @@ def test_bot_failure_does_not_raise_and_step_is_recorded(SF):
     AiSlaWatchdog(bot=BrokenBot(), session_factory=SF)
     asyncio.run(AiSlaWatchdog(bot=BrokenBot(), session_factory=SF).run_once(now=NOW))
     assert [s["step"] for s in _steps(SF)] == ["remind_executor"]
+
+
+def test_manager_steps_are_digested_into_one_message_per_tick(SF):
+    """Залп при первом включении: две просроченные заявки → менеджеру ОДНО сообщение с обеими."""
+    _seed(SF, "261028-101", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=30),
+          updated_at=NOW - timedelta(hours=30))
+    _seed(SF, "261028-102", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=40),
+          updated_at=NOW - timedelta(hours=40))
+    sent = _tick(SF, FakeBot(), NOW)
+    to_manager = [t for c, t in sent if c == 30]
+    assert len(to_manager) == 1, sent
+    assert "261028-101" in to_manager[0] and "261028-102" in to_manager[0]
+    assert "30 ч" in to_manager[0] and "40 ч" in to_manager[0]
+
+
+def test_age_formatting():
+    assert sla._age(45) == "45 мин"
+    assert sla._age(13 * 60) == "13 ч"
+    assert sla._age(781 * 60) == "32 дн"
+    assert sla._age(57897) == "40 дн"
+    assert sla._age(3 * 60, "uz") == "3 soat"
