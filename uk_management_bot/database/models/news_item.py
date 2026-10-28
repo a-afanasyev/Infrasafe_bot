@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from uk_management_bot.database.session import Base
@@ -85,7 +86,8 @@ class NewsWatchConfig(Base):
     __tablename__ = "news_watch_config"
 
     id = Column(Integer, primary_key=True)
-    data = Column(JSON, nullable=False)
+    # with_variant → postgresql=JSONB, sqlite=JSON (как auto_manager_config). ORM==БД.
+    data = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
