@@ -40,7 +40,9 @@ CORE_REQUIRED = (
 )
 
 EXPECTED = {
-    "app": CORE_REQUIRED,
+    # ИИ-менеджер: ключ Anthropic опционален на уровне compose (:-) — «флаг
+    # включён без ключа» переводит режим в off eager-валидацией settings.py.
+    "app": CORE_REQUIRED + ("ANTHROPIC_API_KEY",),
     # Group Intake — выделенный бот (свой polling-процесс за compose-профилем).
     # Секреты фичи опциональны на уровне compose (:-) — «флаг включён без
     # токена/ключа» ловит eager-валидация settings.py; сам сервис без флага
@@ -61,6 +63,9 @@ EXPECTED = {
         "UK_WEBHOOK_SECRET_NEXT",
         # ARCH-107: dual-key ротация JWT — подписант токенов в api.
         "JWT_SECRET_NEXT",
+        # ИИ-менеджер (триаж через API-путь dispatch) и news-watch (LLM + inbox-токен).
+        "ANTHROPIC_API_KEY",
+        "NEWS_WATCH_SERVICE_TOKEN",
     ),
     "access-api": CORE_REQUIRED + (
         "ACCESS_CODE_SECRET",
