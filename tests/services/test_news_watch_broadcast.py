@@ -206,3 +206,17 @@ async def test_flag_off_does_nothing(ctx, monkeypatch):
     sender = Sender()
     result, _ = await _run(factory, sender)
     assert result["processed"] == 0 and sender.sent == []
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_moves_started_at_while_delivering(ctx):
+    """Два uvicorn-воркера: started_at = последний прогресс, а не момент захвата,
+    иначе рассылка длиннее STALE перехватывается соседом и уходит дважды."""
+    factory = ctx
+    item_id = await _item(factory)
+    await _run(factory, Sender(), now=NOW)
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_DONE
+    started = row.broadcast_started_at
+    started = started if started.tzinfo else started.replace(tzinfo=timezone.utc)
+    assert started > NOW  # захват пишет NOW (фикс. часы теста), heartbeat — реальное время

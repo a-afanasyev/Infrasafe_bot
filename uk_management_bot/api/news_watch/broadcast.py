@@ -89,6 +89,10 @@ async def _claim(db: AsyncSession, now: datetime) -> Optional[int]:
                NewsItem.broadcast_attempts < MAX_ATTEMPTS,
                or_(NewsItem.broadcast_next_at.is_(None), NewsItem.broadcast_next_at <= now))
         .order_by(NewsItem.id).limit(1)
+        # API — несколько uvicorn-воркеров, цикл в каждом: без SKIP LOCKED два
+        # воркера берут один pending и шлют дважды (как у webhook_sender).
+        # sqlite (тесты) FOR UPDATE игнорирует — гарантия только на PostgreSQL.
+        .with_for_update(skip_locked=True)
     )).scalar_one_or_none()
     if item is None:
         return None
@@ -107,9 +111,20 @@ async def _recipients(db: AsyncSession, after_id: int) -> list[tuple[int, int]]:
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 async def _set(db: AsyncSession, item_id: int, **values) -> None:
     await db.execute(update(NewsItem).where(NewsItem.id == item_id).values(**values))
     await db.commit()
+
+
+async def _progress(db: AsyncSession, item_id: int, **values) -> None:
+    """Сдвиг курсора/счётчиков + heartbeat: ``broadcast_started_at`` = последний
+    прогресс, иначе рассылка длиннее STALE выглядит «протухшей» для второго
+    воркера и уходит жителям второй раз."""
+    await _set(db, item_id, broadcast_started_at=_utcnow(), **values)
 
 
 async def _send_once(send: Sender, sleep, chat_id: int, text: str) -> telegram_send.TelegramResult:
@@ -149,12 +164,12 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
                 cursor, since_flush = uid, since_flush + 1
                 if since_flush >= CURSOR_EVERY:
                     async with factory() as db:
-                        await _set(db, item_id, broadcast_cursor=cursor,
+                        await _progress(db, item_id, broadcast_cursor=cursor,
                                    broadcast_details={**counters, "groups": groups_done})
                     since_flush = 0
                 await sleep(PAUSE_SECONDS)
             async with factory() as db:
-                await _set(db, item_id, broadcast_cursor=cursor,
+                await _progress(db, item_id, broadcast_cursor=cursor,
                            broadcast_details={**counters, "groups": groups_done})
 
     if cfg["broadcast"]["residents_groups"]:
@@ -173,7 +188,7 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
             else:
                 counters["errors"] += 1
             async with factory() as db:
-                await _set(db, item_id, broadcast_details={**counters, "groups": groups_done})
+                await _progress(db, item_id, broadcast_details={**counters, "groups": groups_done})
             await sleep(PAUSE_SECONDS)
     return {**counters, "groups": groups_done}
 
