@@ -279,3 +279,36 @@ def test_age_formatting():
     assert sla._age(781 * 60) == "32 дн"
     assert sla._age(57897) == "40 дн"
     assert sla._age(3 * 60, "uz") == "3 soat"
+
+
+# ───────────── правила со страницы «Правила ИИ»: шаблоны, ступени вкл/выкл ─────────────
+
+
+def _patch_cfg(SF, **blocks):
+    from uk_management_bot.services.auto_manager.config import load_config_sync
+
+    s = SF()
+    try:
+        cfg = load_config_sync(s)
+        save_config_sync(s, {**cfg, **{k: {**cfg[k], **v} for k, v in blocks.items()}})
+    finally:
+        s.close()
+
+
+def test_template_override_is_used_for_executor_reminder(SF):
+    _seed(SF, assigned_at=NOW - timedelta(hours=3))
+    _patch_cfg(SF, ai={"templates": {"sla.executor_overdue": {"ru": "СВОЙ ТЕКСТ №{request_number}"}}})
+    sent = _tick(SF, FakeBot(), NOW)
+    assert [(c, t) for c, t in sent] == [(40, "СВОЙ ТЕКСТ №261028-001")]
+
+
+def test_disabled_ladder_step_is_skipped_but_ladder_advances(SF):
+    assigned = NOW - timedelta(hours=3)
+    _seed(SF, assigned_at=assigned)
+    _patch_cfg(SF, sla={"ladder_enabled": {"remind_executor": False, "staff_group": True,
+                                           "manager": True, "reassign": True}})
+    assert _tick(SF, FakeBot(), NOW) == []   # ступень 0 выключена: пинга нет
+    assert [(s["step"], s["result"]) for s in _steps(SF)] == [("remind_executor", "disabled")]
+    sent = _tick(SF, FakeBot(), assigned + timedelta(hours=2 + 2))   # ступень 1 — по своему смещению
+    assert [c for c, _ in sent] == [STAFF_CHAT]
+    assert [s["step"] for s in _steps(SF)] == ["remind_executor", "staff_group"]

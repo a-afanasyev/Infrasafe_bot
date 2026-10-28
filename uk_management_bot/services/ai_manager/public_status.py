@@ -1,6 +1,6 @@
 """Публичный статус в чат дома (режим ИИ): «исполнитель выехал» / «выполнена».
 
-Только для КРИТИЧЕСКИХ заявок, пришедших из группы жителей (``source_chat_id``
+Только для заявок не ниже ``sla.public_status.min_urgency`` (дефолт — критические), пришедших из группы жителей (``source_chat_id``
 = активная residents-группа Group Intake), и только шаблоном без ФИО и
 квартиры: категория + номер, RU и UZ одним сообщением. Это не LLM — текст
 детерминированный, персональные данные в чат попасть не могут.
@@ -22,9 +22,10 @@ from sqlalchemy.orm import Session
 
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.request import Request
-from uk_management_bot.services.ai_manager import channels
+from uk_management_bot.services.ai_manager import channels, templates
 from uk_management_bot.services.ai_manager.channels import Outgoing
 from uk_management_bot.services.auto_manager.config import load_config_sync
+from uk_management_bot.utils.constants import URGENCY_ORDER
 from uk_management_bot.utils.request_workflow import Action
 
 logger = logging.getLogger(__name__)
@@ -54,24 +55,29 @@ def outgoing_for_sync(db: Session, request_number: str, actions: Iterable[Action
     if kind is None:
         return None
     req = db.execute(select(Request).where(Request.request_number == request_number)).scalar_one_or_none()
-    if req is None or req.urgency != "critical" or not req.source_chat_id:
+    if req is None or not req.source_chat_id:
         return None
-    if load_config_sync(db).get("mode") != "ai":
+    cfg = load_config_sync(db)
+    public = cfg["sla"]["public_status"]
+    if cfg.get("mode") != "ai" or not public["enabled"]:
+        return None
+    if URGENCY_ORDER.get(req.urgency or "low", 1) < URGENCY_ORDER[public["min_urgency"]]:
         return None
     chat_id = channels.resolve_residents_group(db, int(req.source_chat_id))
     if chat_id is None:
         return None
-    return Outgoing(chat_id, _render(kind, request_number, req.category), "residents_group")
+    with templates.overrides(cfg["ai"].get("templates")):
+        text = _render(kind, request_number, req.category)
+    return Outgoing(chat_id, text, "residents_group")
 
 
 def _render(kind: str, request_number: str, category: Optional[str]) -> str:
     from uk_management_bot.utils.categories import get_category_display, resolve_category_key
-    from uk_management_bot.utils.helpers import get_text
 
     key = resolve_category_key(category or "")
     parts = [
-        get_text(f"ai_manager.public.{kind}", language=lang, request_number=request_number,
-                 category=html.escape(get_category_display(key, lang)))
+        templates.render(f"public.{kind}", lang, request_number=request_number,
+                         category=html.escape(get_category_display(key, lang)))
         for lang in ("ru", "uz")
     ]
     return "\n\n".join(parts)

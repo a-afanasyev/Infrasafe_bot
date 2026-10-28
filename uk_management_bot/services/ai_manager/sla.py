@@ -33,7 +33,7 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.ai_manager import channels
+from uk_management_bot.services.ai_manager import channels, templates
 from uk_management_bot.services.ai_manager.apply import AI_PRINCIPAL
 from uk_management_bot.services.ai_manager.channels import Outgoing
 from uk_management_bot.services.auto_manager.config import load_config_sync
@@ -179,24 +179,9 @@ class AiSlaWatchdog:
             if not due:
                 return plan
             last = _last_steps(db, now, sorted({d.phase.number for d in due}))
-            for item in due:
-                done = _done_step(last, item.phase)
-                if item.step_index != done + 1:
-                    continue
-                try:
-                    result = item.perform(db, SF, plan)
-                except Exception as e:  # один сбой не должен ронять весь тик
-                    logger.warning("ai_manager.sla: %s/%s failed: %s",
-                                   item.phase.number, item.step, type(e).__name__)
-                    continue
-                db.add(AuditLog(user_id=None, action=AUDIT_STEP, details={
-                    "request_number": item.phase.number, "actor": "ai_manager",
-                    "track": item.phase.track, "step": item.step, "step_index": item.step_index,
-                    "status_version": item.phase.version, "phase_started_at": item.phase.anchor,
-                    "result": result,
-                }))
-                logger.info("ai_manager.sla: %s %s/%s → %s", item.phase.number,
-                            item.phase.track, item.step, result)
+            # Тексты пингов — с переопределениями со страницы «Правила ИИ».
+            with templates.overrides(cfg["ai"].get("templates")):
+                _perform_due(db, SF, plan, due, last)
             db.commit()
             _flush_manager_digest(plan)
             return plan
@@ -208,7 +193,7 @@ class AiSlaWatchdog:
     # ------------------------------------------------------------------ #
 
     def _executor_candidates(self, db, now, sla) -> list["_Due"]:
-        maxes, ladder = sla["in_progress_max"], sla["ladder"]
+        maxes, ladder, enabled = sla["in_progress_max"], sla["ladder"], sla["ladder_enabled"]
         out = []
         for req in db.execute(
             select(Request).where(status_in_clause((REQUEST_STATUS_IN_PROGRESS,)))
@@ -223,7 +208,8 @@ class AiSlaWatchdog:
             phase = _Phase(req.request_number, TRACK_EXECUTOR, req.status_version or 0, anchor.isoformat())
             for index, step in enumerate(LADDER):
                 if now >= overdue_at + timedelta(hours=int(ladder[step])):
-                    out.append(_Due(phase, step, index, _ExecutorStep(req.request_number, step, limit, anchor, now)))
+                    out.append(_Due(phase, step, index, _ExecutorStep(
+                        req.request_number, step, limit, anchor, now, enabled=bool(enabled.get(step, True)))))
         return out
 
     def _clarification_candidates(self, db, now, sla) -> list["_Due"]:
@@ -238,7 +224,9 @@ class AiSlaWatchdog:
             phase = _Phase(req.request_number, TRACK_CLARIFICATION, req.status_version or 0, anchor.isoformat())
             for index, step in enumerate(_CLARIFY_STEPS):
                 if now >= anchor + timedelta(hours=limit * (index + 1)):
-                    out.append(_Due(phase, step, index, _ClarificationStep(req.request_number, step, anchor, now)))
+                    out.append(_Due(phase, step, index, _ClarificationStep(
+                        req.request_number, step, anchor, now,
+                        manager_enabled=bool(sla["ladder_enabled"].get(_STEP_MANAGER, True)))))
         return out
 
     def _executed_candidates(self, db, now, sla) -> list["_Due"]:
@@ -304,10 +292,31 @@ class _Due:
         return self._perform(db, SF, plan)
 
 
-def _text(key: str, lang: str = "ru", **fmt) -> str:
-    from uk_management_bot.utils.helpers import get_text
+def _perform_due(db: Session, SF, plan: _Plan, due: list["_Due"], last: dict) -> None:
+    """Выполнить ровно следующую ступень каждой фазы; каждая — строка ai_sla_step."""
+    for item in due:
+        done = _done_step(last, item.phase)
+        if item.step_index != done + 1:
+            continue
+        try:
+            result = item.perform(db, SF, plan)
+        except Exception as e:  # один сбой не должен ронять весь тик
+            logger.warning("ai_manager.sla: %s/%s failed: %s",
+                           item.phase.number, item.step, type(e).__name__)
+            continue
+        db.add(AuditLog(user_id=None, action=AUDIT_STEP, details={
+            "request_number": item.phase.number, "actor": "ai_manager",
+            "track": item.phase.track, "step": item.step, "step_index": item.step_index,
+            "status_version": item.phase.version, "phase_started_at": item.phase.anchor,
+            "result": result,
+        }))
+        logger.info("ai_manager.sla: %s %s/%s → %s", item.phase.number,
+                    item.phase.track, item.step, result)
 
-    return get_text(key, language=lang, **fmt)
+
+def _text(key: str, lang: str = "ru", **fmt) -> str:
+    """Текст пинга: переопределение со страницы «Правила ИИ» или локаль."""
+    return templates.render(key.removeprefix("ai_manager."), lang, **fmt)
 
 
 def _request_ctx(db: Session, number: str) -> dict:
@@ -347,8 +356,10 @@ def _managers(db: Session, plan: _Plan, key: str, **fmt) -> str:
     return f"managers:{len(plan.manager_ids)}"
 
 
-def _ExecutorStep(number: str, step: str, limit: int, anchor: datetime, now: datetime):
+def _ExecutorStep(number: str, step: str, limit: int, anchor: datetime, now: datetime, *, enabled: bool = True):
     def perform(db: Session, SF, plan: _Plan) -> str:
+        if not enabled:
+            return "disabled"  # ступень считается пройденной, пинга нет
         req = db.execute(select(Request).where(Request.request_number == number)).scalar_one()
         ctx = {**_request_ctx(db, number), "hours": _hours(anchor, now)}
         if step == _STEP_REMIND:
@@ -391,8 +402,10 @@ def _ExecutorStep(number: str, step: str, limit: int, anchor: datetime, now: dat
     return perform
 
 
-def _ClarificationStep(number: str, step: str, anchor: datetime, now: datetime):
+def _ClarificationStep(number: str, step: str, anchor: datetime, now: datetime, *, manager_enabled: bool = True):
     def perform(db: Session, SF, plan: _Plan) -> str:
+        if step == _STEP_MANAGER and not manager_enabled:
+            return "disabled"
         req = db.execute(select(Request).where(Request.request_number == number)).scalar_one()
         ctx = {"request_number": number, "hours": _hours(anchor, now)}
         if step == "remind_applicant":

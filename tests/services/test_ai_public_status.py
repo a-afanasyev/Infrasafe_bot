@@ -44,10 +44,10 @@ def db(monkeypatch):
     engine.dispose()
 
 
-def _req(db, *, urgency="critical", source_chat_id=CHAT, number="261028-001"):
+def _req(db, *, urgency="critical", source_chat_id=CHAT, number="261028-001", message_id=1):
     db.add(Request(request_number=number, user_id=2, category="electricity", description="нет света",
                    address="ул. Тестовая 1, кв. 45", urgency=urgency, status=C.REQUEST_STATUS_IN_PROGRESS,
-                   source_chat_id=source_chat_id, source_message_id=1 if source_chat_id else None,
+                   source_chat_id=source_chat_id, source_message_id=message_id if source_chat_id else None,
                    created_at=datetime.now(timezone.utc)))
     db.commit()
 
@@ -122,3 +122,34 @@ def test_sync_dispatcher_delivers_group_message(db, monkeypatch):
     import asyncio
     asyncio.run(dispatch_notify_intents_sync(db, "261028-001", intents, bot=bot))
     assert CHAT in [c for c, _ in bot.sent]
+
+
+# ───────────── правила со страницы «Правила ИИ» ─────────────
+
+
+def _patch_cfg(db, **blocks):
+    from uk_management_bot.services.auto_manager.config import load_config_sync
+
+    cfg = load_config_sync(db)
+    save_config_sync(db, {**cfg, **{k: {**cfg[k], **v} for k, v in blocks.items()}})
+
+
+def test_high_urgency_announced_when_min_urgency_high(db):
+    _patch_cfg(db, sla={"public_status": {"enabled": True, "min_urgency": "high"}})
+    _req(db, urgency="high")
+    assert public_status.outgoing_for_sync(db, "261028-001", {Action.SYSTEM_DISPATCH_ASSIGN}) is not None
+    _req(db, urgency="medium", number="261028-002", message_id=2)
+    assert public_status.outgoing_for_sync(db, "261028-002", {Action.SYSTEM_DISPATCH_ASSIGN}) is None
+
+
+def test_public_status_disabled(db):
+    _patch_cfg(db, sla={"public_status": {"enabled": False, "min_urgency": "critical"}})
+    _req(db)
+    assert public_status.outgoing_for_sync(db, "261028-001", {Action.SYSTEM_DISPATCH_ASSIGN}) is None
+
+
+def test_public_template_override(db):
+    _patch_cfg(db, ai={"templates": {"public.assigned": {"ru": "Выехали по №{request_number}"}}})
+    _req(db)
+    out = public_status.outgoing_for_sync(db, "261028-001", {Action.SYSTEM_DISPATCH_ASSIGN})
+    assert out is not None and out.text.startswith("Выехали по №261028-001")
