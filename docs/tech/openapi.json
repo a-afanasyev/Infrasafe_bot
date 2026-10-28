@@ -675,6 +675,22 @@
       },
       "AutoManagerConfigData": {
         "properties": {
+          "ai": {
+            "additionalProperties": true,
+            "title": "Ai",
+            "type": "object"
+          },
+          "ai_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Available"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -684,9 +700,17 @@
             "type": "integer"
           },
           "mode": {
-            "const": "rule",
+            "enum": [
+              "rule",
+              "ai"
+            ],
             "title": "Mode",
             "type": "string"
+          },
+          "sla": {
+            "additionalProperties": true,
+            "title": "Sla",
+            "type": "object"
           },
           "sla_hours": {
             "$ref": "#/components/schemas/SlaHours"
@@ -5347,6 +5371,79 @@
         "title": "HomeCfgIn",
         "type": "object"
       },
+      "InboxIn": {
+        "description": "Сырое сообщение от юзербота (service-token).",
+        "properties": {
+          "chat_title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Title"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "source_chat_id": {
+            "title": "Source Chat Id",
+            "type": "integer"
+          },
+          "source_message_id": {
+            "title": "Source Message Id",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_chat_id",
+          "source_message_id",
+          "text"
+        ],
+        "title": "InboxIn",
+        "type": "object"
+      },
+      "InboxOut": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created"
+        ],
+        "title": "InboxOut",
+        "type": "object"
+      },
       "IssueCard": {
         "properties": {
           "created_at": {
@@ -6213,6 +6310,277 @@
           }
         },
         "title": "MonitoredGroupUpdate",
+        "type": "object"
+      },
+      "NewsItemOut": {
+        "properties": {
+          "broadcast_attempts": {
+            "title": "Broadcast Attempts",
+            "type": "integer"
+          },
+          "broadcast_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Details"
+          },
+          "broadcast_status": {
+            "title": "Broadcast Status",
+            "type": "string"
+          },
+          "chat_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Title"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "raw_text": {
+            "title": "Raw Text",
+            "type": "string"
+          },
+          "relevant": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevant"
+          },
+          "source_chat_id": {
+            "title": "Source Chat Id",
+            "type": "integer"
+          },
+          "source_message_id": {
+            "title": "Source Message Id",
+            "type": "integer"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary_ru": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Ru"
+          },
+          "summary_uz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Uz"
+          }
+        },
+        "required": [
+          "id",
+          "source_chat_id",
+          "source_message_id",
+          "raw_text",
+          "status",
+          "broadcast_status",
+          "broadcast_attempts"
+        ],
+        "title": "NewsItemOut",
+        "type": "object"
+      },
+      "NewsItemsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NewsItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "NewsItemsOut",
+        "type": "object"
+      },
+      "NewsSource": {
+        "properties": {
+          "chat": {
+            "title": "Chat",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat"
+        ],
+        "title": "NewsSource",
+        "type": "object"
+      },
+      "NewsWatchConfigData": {
+        "properties": {
+          "auto_publish": {
+            "default": false,
+            "title": "Auto Publish",
+            "type": "boolean"
+          },
+          "broadcast": {
+            "additionalProperties": true,
+            "title": "Broadcast",
+            "type": "object"
+          },
+          "complex_context": {
+            "default": "",
+            "title": "Complex Context",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "min_confidence": {
+            "default": 0.8,
+            "title": "Min Confidence",
+            "type": "number"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NewsSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "title": "NewsWatchConfigData",
         "type": "object"
       },
       "OfficialReportIn": {
@@ -10339,6 +10707,22 @@
           "low"
         ],
         "title": "SlaHours",
+        "type": "object"
+      },
+      "SourcesOut": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NewsSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "SourcesOut",
         "type": "object"
       },
       "StartIn": {
@@ -17683,6 +18067,385 @@
         "summary": "Update Group",
         "tags": [
           "group-intake"
+        ]
+      }
+    },
+    "/api/v2/news-watch/config": {
+      "get": {
+        "operationId": "get_config_api_v2_news_watch_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsWatchConfigData"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config",
+        "tags": [
+          "news-watch"
+        ]
+      },
+      "put": {
+        "operationId": "put_config_api_v2_news_watch_config_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsWatchConfigData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsWatchConfigData"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Config",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/inbox": {
+      "post": {
+        "operationId": "inbox_api_v2_news_watch_inbox_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-service-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inbox",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/items": {
+      "get": {
+        "operationId": "list_items_api_v2_news_watch_items_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "pending",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsItemsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Items",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/items/{item_id}/publish": {
+      "post": {
+        "operationId": "publish_item_api_v2_news_watch_items__item_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsItemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Item",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/items/{item_id}/reject": {
+      "post": {
+        "operationId": "reject_item_api_v2_news_watch_items__item_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsItemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Item",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/items/{item_id}/retry-broadcast": {
+      "post": {
+        "operationId": "retry_item_broadcast_api_v2_news_watch_items__item_id__retry_broadcast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsItemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Item Broadcast",
+        "tags": [
+          "news-watch"
+        ]
+      }
+    },
+    "/api/v2/news-watch/sources": {
+      "get": {
+        "operationId": "sources_api_v2_news_watch_sources_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-service-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sources",
+        "tags": [
+          "news-watch"
         ]
       }
     },
