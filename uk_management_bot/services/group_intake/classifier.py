@@ -1,6 +1,7 @@
 """LLM-классификатор Group Intake: «заявка ли это сообщение из ТГ-группы».
 
-Anthropic API, structured outputs (output_config.format c json_schema).
+Вызов провайдера — общий клиент ``services/llm/client.py`` (structured
+outputs, ретрай транзиентного сбоя, общий дедлайн, гейт ``retry_allowed``).
 Правила модуля:
 - вызывается СТРОГО из async-слоя, вне БД-транзакций;
 - best-effort: любая ошибка (таймаут, refusal, max_tokens, битый JSON,
@@ -8,27 +9,20 @@ Anthropic API, structured outputs (output_config.format c json_schema).
   различаются в логах/метриках. Реакция в группе — у вызывающего: без тега
   молчим (закреплённое сообщение группы объясняет «нет номера — нет заявки»),
   в тег-режиме автор получает просьбу повторить (BUG-192);
-- разовый транзиентный сбой (таймаут, сеть, 5xx/429) повторяется ОДИН раз:
-  после jitter-паузы, на 429 — после ``retry-after``, и только если повтор
-  пропустил лимитер группы (``retry_allowed``) — повтор тоже платный вызов;
-  весь вызов (попытка + пауза + попытка) укладывается в общий дедлайн
-  2 × ``GROUP_INTAKE_LLM_TIMEOUT``: пауза и вторая попытка берутся из остатка;
 - телефоны в тексте маскируются до отправки провайдеру (``[PHONE]``,
   решение владельца 2026-09-23, A9-P3-5): адрес/квартира остаются — они
   нужны для извлечения ``address_hint``;
 - ключ и тексты сообщений в логи не пишутся.
 """
-import asyncio
 import logging
 import math
-import random
-import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-from typing import Awaitable, Callable, Optional
+from typing import Optional
 
 from uk_management_bot.config.settings import settings
+from uk_management_bot.services.llm.client import RetryGate, llm_json_async
 from uk_management_bot.utils import pii
 
 logger = logging.getLogger(__name__)
@@ -63,98 +57,12 @@ class ClassificationResult:
 _NOT_REQUEST = ClassificationResult(outcome=Outcome.NOT_REQUEST)
 _ERROR = ClassificationResult(outcome=Outcome.PROCESSING_ERROR)
 
-# Попыток вызова LLM на одно сообщение: первая + один повтор при разовом сбое.
-_LLM_ATTEMPTS = 2
-# Пауза перед повтором: база × jitter [0.5, 1.5] — разводит одновременные
-# повторы нескольких сообщений, не долбит провайдера в ту же секунду.
-_BACKOFF_BASE = 1.0
-# Общий дедлайн classify_message — по полному таймауту на каждую из
-# _LLM_ATTEMPTS попыток: без повтора поведение прежнее (одна попытка ≤ таймаут),
-# а повтор с паузой не растягивает ответ автору сверх двух таймаутов
-# (было до ~3×: попытка + retry-after ≤ таймаут + попытка).
-_TOTAL_BUDGET_ATTEMPTS = _LLM_ATTEMPTS
-# Вторая попытка короче четверти обычного таймаута почти наверняка не успеет —
-# такой повтор только тратит деньги и лимит.
-_MIN_ATTEMPT_SHARE = 0.25
-
 PHONE_PLACEHOLDER = "[PHONE]"
-
-# Пауза и часы — отдельными ссылками: тесты подменяют их без реального ожидания.
-_sleep = asyncio.sleep
-_now = time.monotonic
 
 
 def mask_phones(text: str) -> str:
     """Заменить телефоны на ``[PHONE]`` перед отправкой текста внешнему LLM."""
     return pii.mask_phones(text, PHONE_PLACEHOLDER)
-
-
-def _status_code(exc: BaseException) -> Optional[int]:
-    status = getattr(exc, "status_code", None)
-    return status if isinstance(status, int) and not isinstance(status, bool) else None
-
-
-def _is_transient(exc: BaseException) -> bool:
-    """Сбой, который имеет смысл повторить: таймаут, обрыв соединения, 5xx/429.
-
-    Логическая ошибка запроса (4xx кроме 429, невалидные данные) повтора не
-    заслуживает — тот же запрос упадёт так же и стоит денег. HTTP-статус
-    читается утиной типизацией (``status_code`` у ``anthropic.APIStatusError``).
-    """
-    if isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError, OSError)):
-        return True
-    status = _status_code(exc)
-    if status is not None:
-        return status == 429 or status >= 500
-    try:
-        import anthropic
-    except ImportError:  # pragma: no cover — в тестах SDK может отсутствовать
-        return False
-    return isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError))
-
-
-def _retry_after(exc: BaseException) -> Optional[float]:
-    """Секунды из ``retry-after-ms``/``retry-after`` ответа 429 (HTTP-дата — нет)."""
-    headers = getattr(getattr(exc, "response", None), "headers", None)
-    if headers is None:
-        return None
-    for name, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
-        raw = headers.get(name)
-        if raw is None:
-            continue
-        try:
-            value = float(raw) * scale
-        except (TypeError, ValueError):
-            continue
-        if math.isfinite(value) and value >= 0:
-            return value
-    return None
-
-
-def _retry_delay(exc: BaseException) -> float:
-    """Пауза перед повтором: ``retry-after`` на 429, иначе jitter-backoff."""
-    if _status_code(exc) == 429:
-        server_delay = _retry_after(exc)
-        if server_delay is not None:
-            return server_delay
-    return _BACKOFF_BASE * random.uniform(0.5, 1.5)
-
-# Ленивая инициализация: модуль импортируется и в окружениях без ключа
-# (тесты, выключенный флаг) — клиент создаётся при первом вызове.
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        from anthropic import AsyncAnthropic
-
-        _client = AsyncAnthropic(
-            api_key=settings.ANTHROPIC_API_KEY,
-            timeout=settings.GROUP_INTAKE_LLM_TIMEOUT,
-            max_retries=0,
-        )
-    return _client
 
 
 def _schema() -> dict:
@@ -306,41 +214,16 @@ def _parse_response(
     )
 
 
-async def _may_retry(exc: BaseException, attempt: int, deadline: float,
-                     retry_allowed: Optional[Callable[[], Awaitable[bool]]]) -> bool:
-    """Решение о повторе + пауза перед ним. False — повтора не будет."""
-    if attempt >= _LLM_ATTEMPTS or not _is_transient(exc):
-        return False
-    delay = _retry_delay(exc)
-    min_attempt = settings.GROUP_INTAKE_LLM_TIMEOUT * _MIN_ATTEMPT_SHARE
-    if deadline - _now() - delay < min_attempt:
-        # Пауза (jitter или retry-after провайдера) съедает остаток общего
-        # дедлайна — автор получит ответ раньше (тег-режим: «повторите»).
-        logger.warning("group_intake.llm_retry_skipped: delay=%.1fs over budget", delay)
-        return False
-    if retry_allowed is not None and not await retry_allowed():
-        logger.warning("group_intake.llm_retry_skipped: rate_limited")
-        return False
-    logger.warning(
-        "group_intake.llm_retry: attempt=%s failed: %s status=%s delay=%.2fs",
-        attempt, type(exc).__name__, _status_code(exc), delay,
-    )
-    await _sleep(delay)
-    return True
-
-
 async def classify_message(
     text: str,
     *,
-    retry_allowed: Optional[Callable[[], Awaitable[bool]]] = None,
+    retry_allowed: Optional[RetryGate] = None,
 ) -> ClassificationResult:
     """Классифицировать текст сообщения. Никогда не бросает исключений.
 
     ``retry_allowed`` — гейт повтора (лимитер группы у вызывающего): повтор —
     второй платный вызов и должен считаться наравне с первым.
     """
-    import json
-
     from uk_management_bot.services.group_intake.category_keywords import guess_category
 
     # Подсказка — в user-сообщение, не в system: system стабилен и кэшируется.
@@ -351,44 +234,16 @@ async def classify_message(
     if keyword_category:
         content += _KEYWORD_HINT.format(kw=keyword_category)
 
-    response = None
-    deadline = _now() + settings.GROUP_INTAKE_LLM_TIMEOUT * _TOTAL_BUDGET_ATTEMPTS
-    for attempt in range(1, _LLM_ATTEMPTS + 1):
-        attempt_budget = min(settings.GROUP_INTAKE_LLM_TIMEOUT, deadline - _now())
-        try:
-            async with asyncio.timeout(attempt_budget):
-                response = await _get_client().messages.create(
-                    model=settings.GROUP_INTAKE_MODEL,
-                    max_tokens=_MAX_TOKENS,
-                    system=_system_prompt(),
-                    messages=[{"role": "user", "content": content}],
-                    output_config={"format": {"type": "json_schema", "schema": _schema()}},
-                )
-            break
-        except Exception as e:  # таймаут, сеть, 4xx/5xx, что угодно — best-effort
-            # Разовый обрыв сети/таймаут/429 (инцидент profk 2026-09-22) — один
-            # повтор с паузой; логическая ошибка (4xx, невалидный запрос) — нет.
-            if await _may_retry(e, attempt, deadline, retry_allowed):
-                continue
-            logger.warning("group_intake.processing_error: llm call failed: %s", type(e).__name__)
-            return _ERROR
-
-    if getattr(response, "stop_reason", None) in ("refusal", "max_tokens"):
-        logger.warning(
-            "group_intake.processing_error: stop_reason=%s", response.stop_reason
-        )
+    payload = await llm_json_async(
+        system=_system_prompt(),
+        user=content,
+        schema=_schema(),
+        model=settings.GROUP_INTAKE_MODEL,
+        timeout=settings.GROUP_INTAKE_LLM_TIMEOUT,
+        max_tokens=_MAX_TOKENS,
+        retry_allowed=retry_allowed,
+        tag="group_intake",
+    )
+    if payload is None:
         return _ERROR
-
-    blocks = getattr(response, "content", None) or []
-    text_block = next((b for b in blocks if getattr(b, "type", "") == "text"), None)
-    if text_block is None or not getattr(text_block, "text", ""):
-        logger.warning("group_intake.processing_error: empty content")
-        return _ERROR
-
-    try:
-        payload = json.loads(text_block.text)
-    except (json.JSONDecodeError, TypeError):
-        logger.warning("group_intake.processing_error: invalid json")
-        return _ERROR
-
     return _parse_response(payload, keyword_category=keyword_category)

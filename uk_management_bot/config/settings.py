@@ -15,6 +15,7 @@ BOT_USERNAME — инстансная) достигаются конструкт
 """
 import os
 import ipaddress
+import logging
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from pathlib import Path
@@ -317,6 +318,21 @@ class Settings:
         self.GROUP_INTAKE_LLM_TIMEOUT = float(os.getenv("GROUP_INTAKE_LLM_TIMEOUT", "8.0"))
         self.GROUP_INTAKE_MIN_CONFIDENCE = float(os.getenv("GROUP_INTAKE_MIN_CONFIDENCE", "0.6"))
         self.GROUP_INTAKE_LLM_PER_MINUTE = int(os.getenv("GROUP_INTAKE_LLM_PER_MINUTE", "6"))
+
+        # ── ИИ-менеджер заявок (режим mode="ai" автоменеджера) ───────────
+        # DARK-гейт: без флага режим "ai" не принимается API/ботом, job SLA не
+        # регистрируется. Общий ANTHROPIC_API_KEY с Group Intake (Doppler).
+        # Фича опциональная: флаг без ключа — предупреждение и принудительное
+        # выключение, НЕ падение старта (в отличие от GROUP_INTAKE_ENABLED).
+        self.AI_MANAGER_ENABLED = os.getenv("AI_MANAGER_ENABLED", "false").lower() == "true"
+        self.AI_MANAGER_MODEL = os.getenv("AI_MANAGER_MODEL", "claude-sonnet-5-5")
+        self.AI_MANAGER_EFFORT = os.getenv("AI_MANAGER_EFFORT", "low")
+        self.AI_MANAGER_LLM_TIMEOUT = float(os.getenv("AI_MANAGER_LLM_TIMEOUT", "8.0"))
+        if self.AI_MANAGER_ENABLED and not self.ANTHROPIC_API_KEY:
+            logging.getLogger(__name__).warning(
+                "AI_MANAGER_ENABLED without ANTHROPIC_API_KEY — AI manager forced off"
+            )
+            self.AI_MANAGER_ENABLED = False
 
     def _validate_production(self) -> None:
         """Прод-гейты (DEBUG=False). Порядок и тексты — контракт: на них

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from uk_management_bot.services.group_intake import classifier
+from uk_management_bot.services.llm import client as llm
 from uk_management_bot.services.group_intake.classifier import (
     Outcome,
     classify_message,
@@ -31,7 +32,7 @@ class FakeMessages:
 def _fake_client(monkeypatch, *, response=None, exc=None):
     messages = FakeMessages(response=response, exc=exc)
     monkeypatch.setattr(
-        classifier, "_get_client", lambda: SimpleNamespace(messages=messages)
+        llm, "_get_async_client", lambda: SimpleNamespace(messages=messages)
     )
     return messages
 
@@ -161,8 +162,8 @@ async def test_timeout_is_processing_error(monkeypatch):
 
     monkeypatch.setattr(classifier.settings, "GROUP_INTAKE_LLM_TIMEOUT", 0.05)
     monkeypatch.setattr(
-        classifier,
-        "_get_client",
+        llm,
+        "_get_async_client",
         lambda: SimpleNamespace(messages=SimpleNamespace(create=slow_create)),
     )
     result = await classify_message("x" * 30)

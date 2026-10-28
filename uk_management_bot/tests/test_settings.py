@@ -229,3 +229,44 @@ def test_admin_command_enabled_flag(
     else:
         monkeypatch.setenv("ADMIN_COMMAND_ENABLED", raw)
     assert Settings().ADMIN_COMMAND_ENABLED is expected
+
+
+# ───────────── ИИ-менеджер: флаг опциональный, без ключа — форс-выключение ─────────────
+
+
+@pytest.mark.unit
+def test_ai_manager_defaults_are_dark(monkeypatch: pytest.MonkeyPatch) -> None:
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    for key in ("AI_MANAGER_ENABLED", "AI_MANAGER_MODEL", "AI_MANAGER_EFFORT", "AI_MANAGER_LLM_TIMEOUT"):
+        monkeypatch.delenv(key, raising=False)
+    s = Settings()
+    assert s.AI_MANAGER_ENABLED is False
+    assert s.AI_MANAGER_MODEL == "claude-sonnet-5-5"
+    assert s.AI_MANAGER_EFFORT == "low"
+    assert s.AI_MANAGER_LLM_TIMEOUT == 8.0
+
+
+@pytest.mark.unit
+def test_ai_manager_enabled_without_key_is_forced_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Фича опциональная: нет ключа — предупреждение и выключение, не падение."""
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    monkeypatch.setenv("AI_MANAGER_ENABLED", "true")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert Settings().AI_MANAGER_ENABLED is False
+
+
+@pytest.mark.unit
+def test_ai_manager_enabled_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from uk_management_bot.config.settings import Settings
+
+    monkeypatch.setenv("DEBUG", "True")
+    monkeypatch.setenv("AI_MANAGER_ENABLED", "true")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("AI_MANAGER_MODEL", "claude-haiku-5-5")
+    s = Settings()
+    assert s.AI_MANAGER_ENABLED is True
+    assert s.AI_MANAGER_MODEL == "claude-haiku-5-5"
