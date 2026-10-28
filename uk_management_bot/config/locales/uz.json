@@ -2929,6 +2929,19 @@
     "duplicate_title": "🤖 <b>AI-menejer: takroriy ariza bo'lishi mumkin</b>",
     "duplicate_body": "№{request_number} arizasi xuddi shu manzil bo'yicha ochiq №{duplicate_of} arizaga o'xshaydi. Tekshiring va kerak bo'lsa birini bekor qiling.",
     "breaker_title": "🤖 <b>AI-menejer vaqtincha qoida rejimida</b>",
-    "breaker_body": "Modelga murojaatda ketma-ket bir necha xatolik — arizalar triaji 10 daqiqaga o'chirildi, tayinlash qoida bo'yicha ketmoqda. Aralashuv talab qilinmaydi."
+    "breaker_body": "Modelga murojaatda ketma-ket bir necha xatolik — arizalar triaji 10 daqiqaga o'chirildi, tayinlash qoida bo'yicha ketmoqda. Aralashuv talab qilinmaydi.",
+    "sla": {
+      "executor_overdue": "⏰ №{request_number} ariza ({category}, {address}) me'yordan uzoq bajarilmoqda — {hours} soat. Uni yakunlang yoki muammo haqida menejerga xabar bering.",
+      "staff_group": "⏰ №{request_number} ariza muddati o'tdi ({category}, {address}): ijrochi {executor}, {hours} soat ishda. Kim yordam bera oladi?",
+      "manager_overdue": "⏰ <b>№{request_number} ariza muddati o'tdi</b>\n{category}, {address}\nIjrochi: {executor}, {hours} soat ishda. Ijrochi va navbatchilar xabardor qilingan.",
+      "reassigned_old": "🔁 №{request_number} ariza SLA me'yori bo'yicha boshqa ijrochiga o'tkazildi.",
+      "reassign_failed": "⏰ <b>№{request_number} ariza muddati o'tdi</b>, qayta tayinlash uchun bo'sh navbatchi yo'q — sizning qaroringiz kerak.",
+      "clarification_reminder": "❓ №{request_number} ariza bo'yicha aniqlashtirishga javobingizni kutyapmiz. Usta chiqa olishi uchun botda javob bering.",
+      "clarification_manager": "❓ №{request_number} ariza «Aniqlashtirish»da, yashovchi {hours} soat javob bermadi.",
+      "executed_unconfirmed": "✅ №{request_number} ariza bajarildi va {hours} soatdan beri tekshiruvingizni kutmoqda.",
+      "auto_accepted": "✅ №{request_number} ariza avtomatik qabul qilindi: {days} kun tasdiq bo'lmadi. Ish bajarilmagan bo'lsa — yangi ariza yarating.",
+      "critical_unassigned": "🚨 <b>№{request_number} kritik ariza ijrochisiz</b> {minutes} daqiqadan beri.\n{category}, {address}"
+    },
+    "unknown_executor": "—"
   }
 }
