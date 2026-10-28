@@ -3,11 +3,16 @@ import { toast } from 'sonner'
 import i18n from '../i18n'
 import { apiClient } from '../api/client'
 import { safeErrorMessage } from '@/utils/errorMessage'
-import type { AutoManagerConfigData } from '../types/autoManagerConfig'
+import {
+  AUTO_MANAGER_READ_ONLY_FIELDS,
+  type AiBreakerStatus,
+  type AutoManagerConfigData,
+  type AutoManagerConfigOut,
+} from '../types/autoManagerConfig'
 
 const AUTO_MANAGER_CONFIG_QUERY_KEY = ['auto-manager-config'] as const
 
-function fetchAutoManagerConfig(): Promise<AutoManagerConfigData> {
+function fetchAutoManagerConfig(): Promise<AutoManagerConfigOut> {
   return apiClient.get('/api/v2/auto-manager-config').then((r) => r.data)
 }
 
@@ -17,7 +22,7 @@ function fetchAutoManagerConfig(): Promise<AutoManagerConfigData> {
 // и ботом, и дашбордом — без активного polling'а состояние карточки могло бы
 // разойтись с ботом на неограниченное время (acceptance: ≤30с или на фокус окна).
 export function useAutoManagerConfig() {
-  return useQuery<AutoManagerConfigData>({
+  return useQuery<AutoManagerConfigOut>({
     queryKey: AUTO_MANAGER_CONFIG_QUERY_KEY,
     queryFn: fetchAutoManagerConfig,
     refetchInterval: 30_000,
@@ -40,6 +45,12 @@ export function useAutoManagerConfig() {
 // optimistic-locking/версии на бэкенде — TOCTOU между fetch и PUT остаётся
 // теоретически возможным), но это соразмерный фикс для одного
 // админ-тумблера, а не полноценный concurrency-control слой.
+function stripReadOnly(out: AutoManagerConfigOut): AutoManagerConfigData {
+  const stored = { ...out } as Partial<AutoManagerConfigOut>
+  for (const key of AUTO_MANAGER_READ_ONLY_FIELDS) delete stored[key]
+  return stored as AutoManagerConfigData
+}
+
 export function useUpdateAutoManagerConfig() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -48,8 +59,10 @@ export function useUpdateAutoManagerConfig() {
         queryKey: AUTO_MANAGER_CONFIG_QUERY_KEY,
         queryFn: fetchAutoManagerConfig,
       })
-      const full: AutoManagerConfigData = { ...fresh, ...patch }
-      return apiClient.put('/api/v2/auto-manager-config', full).then((r) => r.data)
+      // Read-only поля ответа (ai_available, ai_status, template_defaults,
+      // base_emergency_keywords) в тело PUT не входят — только хранимый конфиг.
+      const full = { ...stripReadOnly(fresh), ...patch }
+      return apiClient.put('/api/v2/auto-manager-config', full).then((r) => r.data as AutoManagerConfigOut)
     },
     onSuccess: () => {
       toast.success(i18n.t('autoManager.saved'))
@@ -58,6 +71,26 @@ export function useUpdateAutoManagerConfig() {
     onError: (error: unknown) => {
       console.error('Auto-manager config save failed:', error)
       toast.error(i18n.t('autoManager.saveFailed'), {
+        description: safeErrorMessage(error, 'An error occurred'),
+      })
+    },
+  })
+}
+
+// Снять предохранитель ИИ-триажа досрочно (страница «Правила ИИ»). Бэкенд пишет
+// факт сброса в audit_logs; после успеха перечитываем конфиг — там ai_status.
+export function useResetAiBreaker() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post('/api/v2/auto-manager-config/ai-breaker/reset').then((r) => r.data as AiBreakerStatus),
+    onSuccess: () => {
+      toast.success(i18n.t('aiManager.breaker.resetDone'))
+      queryClient.invalidateQueries({ queryKey: AUTO_MANAGER_CONFIG_QUERY_KEY })
+    },
+    onError: (error: unknown) => {
+      console.error('AI breaker reset failed:', error)
+      toast.error(i18n.t('aiManager.breaker.resetFailed'), {
         description: safeErrorMessage(error, 'An error occurred'),
       })
     },

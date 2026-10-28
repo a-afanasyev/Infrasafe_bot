@@ -139,7 +139,9 @@
     "groups": "Guruhlar",
     "elevators": "Liftlar",
     "residentHome": "Aholi sahifasi",
-    "newsWatch": "O'chirishlar"
+    "newsWatch": "O'chirishlar",
+    "aiManager": "AI qoidalari",
+    "groupSettings": "Sozlamalar"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -3780,5 +3782,73 @@
       "reject": "Yangilik rad etildi",
       "retried": "Tarqatish navbatga qo'yildi"
     }
+  },
+  "aiManager": {
+    "title": "AI-menejer qoidalari",
+    "subtitle": "Rejim, arizalar triaji, SLA zinasi va bildirishnoma matnlari",
+    "unavailable": "AI-rejim bu maydonchada mavjud emas: model kaliti yo'q. Sozlamalar saqlanadi, lekin qo'llanilmaydi.",
+    "mode": {
+      "title": "Taqsimlash rejimi",
+      "off": "O'chirilgan",
+      "rule": "📐 Qoida bo'yicha",
+      "ai": "🤖 AI"
+    },
+    "breaker": {
+      "open": "AI vaqtincha qoida rejimida, yana {{minutes}} daqiqa (model xatolari: {{failures}})",
+      "closed": "Saqlagich yopiq, oynadagi xatolar: {{failures}}",
+      "unknown": "Saqlagich holati noma'lum (Redis mavjud emas)",
+      "reset": "Saqlagichni tiklash",
+      "resetDone": "Saqlagich tiklandi",
+      "resetFailed": "Saqlagichni tiklab bo'lmadi"
+    },
+    "triage": {
+      "title": "Arizalar triaji",
+      "minConfidence": "Model ishonch chegarasi (0–1)",
+      "clarify": "Yashovchiga aniqlashtiruvchi savol berish",
+      "dedup": "Manzil bo'yicha takrorlarni qidirish",
+      "keywordsBase": "Asosiy avariya so'zlari (doim amal qiladi): {{list}}",
+      "keywordsExtra": "Qo'shimcha avariya so'zlari (vergul bilan; mos kelsa = AIsiz kritik shoshilinchlik)",
+      "triageInstructions": "Arizalar triaji uchun ko'rsatmalar",
+      "triageInstructionsHint": "Masalan: «Qo'shnilar shovqini — avariya emas. Avtoturargoh va shlagbaum — „Boshqa“ toifasi, past shoshilinchlik.»",
+      "newsInstructions": "O'chirishlar yangiliklarini tahlil qilish uchun ko'rsatmalar",
+      "newsInstructionsHint": "Masalan: «Bizning uy — 7-korpus, Qo'shni ko'chadagi o'chirishlar bizga tegishli emas.»",
+      "count": "{{n}} / 2000"
+    },
+    "ladder": {
+      "enabled": "Bosqich yoqilgan",
+      "disabledHint": "O'chirilgan bosqich o'tilgan hisoblanadi: bildirishnoma yuborilmaydi, keyingi bosqich o'z siljishi bo'yicha ishlaydi.",
+      "publicTitle": "Uy chatidagi ommaviy holatlar",
+      "publicEnabled": "Guruhdan kelgan arizalar haqida yashovchilar chatiga yozish",
+      "publicMin": "Minimal shoshilinchlik",
+      "publicCritical": "Faqat kritik",
+      "publicHigh": "Shoshilinch va kritik"
+    },
+    "templates": {
+      "title": "Bildirishnoma matnlari",
+      "hint": "Bo'sh = standart matn. O'rniga qo'yishlar: {{placeholders}}. Telegram teglari ruxsat etilgan (<b>, <i>, <code>, <a href>), {…} ichida formatlash yo'q.",
+      "reset": "Standartni qaytarish",
+      "ru": "RU",
+      "uz": "UZ",
+      "keys": {
+        "sla": {
+          "executor_overdue": "Ijrochiga: ariza muddati o'tdi",
+          "staff_group": "Xodimlar guruhiga: ariza muddati o'tdi",
+          "manager_overdue": "Menejerga: ariza muddati o'tdi",
+          "reassign_failed": "Menejerga: qayta tayinlash uchun hech kim yo'q",
+          "reassigned_old": "Avvalgi ijrochiga: ariza boshqaga o'tkazildi",
+          "clarification_reminder": "Yashovchiga: aniqlashtirishga javob kutilmoqda",
+          "clarification_manager": "Menejerga: yashovchi javob bermayapti",
+          "executed_unconfirmed": "Menejerga: bajarildi, tekshiruv yo'q",
+          "auto_accepted": "Yashovchiga: ariza avtomatik qabul qilindi",
+          "critical_unassigned": "Menejerga: ijrochisiz kritik ariza"
+        },
+        "public": {
+          "assigned": "Uy chatiga: ijrochi yo'lga chiqdi",
+          "executed": "Uy chatiga: bajarildi"
+        }
+      }
+    },
+    "save": "Qoidalarni saqlash",
+    "openPage": "AI qoidalari →"
   }
 }
