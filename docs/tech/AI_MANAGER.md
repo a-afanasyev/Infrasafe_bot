@@ -1,6 +1,6 @@
 # ИИ-менеджер заявок (режим `mode="ai"` автоменеджера)
 
-> _Последнее редактирование: 2026-10-28_ · фазы 0–1 (общий LLM-клиент, триаж). SLA-лестница и мониторинг отключений — следующие PR.
+> _Последнее редактирование: 2026-10-28_ · фазы 0–2 (общий LLM-клиент, триаж, SLA-лестница). Мониторинг отключений — следующий PR.
 
 ## Идея
 
@@ -50,13 +50,35 @@
 
 Env: `AI_MANAGER_MODEL=claude-sonnet-5-5`, `AI_MANAGER_EFFORT=low`, `AI_MANAGER_LLM_TIMEOUT=8`, общий `ANTHROPIC_API_KEY` с Group Intake (Doppler). Haiku 5.5 — переключение через `AI_MANAGER_MODEL`, промпт и схема те же.
 
+## SLA-лестница (`services/ai_manager/sla.py`, без LLM)
+
+Job `ai_sla_tick` каждые 10 мин — регистрируется только при `AI_MANAGER_ENABLED`, внутри пуст при `mode != "ai"`. Один следующий шаг на заявку за тик; при простое тика лестница **не** догоняется целиком.
+
+| Трек | Условие | Якорь фазы | Шаги |
+|---|---|---|---|
+| `executor` | «В работе» с исполнителем дольше `sla.in_progress_max[urgency]` ч | `assigned_at` | DM исполнителю → staff-группа (`monitored_groups.kind=staff`) → менеджеры → `SYSTEM_REASSIGN` дежурному (кроме текущего; нет кандидата → менеджер) — смещения `sla.ladder` в часах от момента просрочки |
+| `clarification` | «Уточнение» дольше `clarification_max` ч | `updated_at` | напоминание жителю (его язык) → менеджеры (ещё через столько же) |
+| `executed` | «Исполнено» без проверки дольше `executed_unconfirmed_max` ч | `executed_at` | менеджеры |
+| `completed` | «Выполнена» без принятия дольше `completed_unaccepted_days` дн | `completed_at` | `MANAGER_FORCE_ACCEPT` + DM жителю |
+| `critical_unassigned` | критическая «Новая» без исполнителя дольше `critical_unassigned_minutes` | `created_at` | менеджеры |
+
+`0` в любом нормативе выключает трек/ступень. Состояние — строки `audit_logs` `ai_sla_step` с `{track, step, step_index, status_version, phase_started_at, result}`; шаг относится к текущей фазе только при совпадении `(track, status_version, phase_started_at)` — переназначение, возврат в работу, смена статуса начинают лестницу заново. Чтение — один запрос по кандидатам за 30 дней (`# ponytail`: отдельная таблица, если тик > 1 с).
+
+Каналы — `services/ai_manager/channels.py` (DM / staff-группа / менеджеры / группа жителей); SMS и звонок добавляются там как новый `kind`. Шаблоны — `ai_manager.sla.*` в локалях бота. Настройки — блок `sla` на карточке автоменеджера дашборда (только при `ai_available`).
+
+Выключение режима (бот или дашборд, `ai → rule`): менеджерам одно сообщение с числом открытых заявок, у которых были шаги лестницы за 30 дней (`services/ai_manager/switch_off.py`).
+
+Публичный статус (`public_status.py`): для **критических** заявок из группы жителей (`source_chat_id` = активная residents-группа) при назначении/выполнении — шаблон RU+UZ без ФИО и квартиры в тот же чат; хук в диспетчерах `workflow_notifications`.
+
+Новые действия workflow: `SYSTEM_REASSIGN` («В работе» → «В работе», system-only, capability только `ai_manager`); `MANAGER_FORCE_ACCEPT` открыт системному актору `ai_manager`.
+
 ## Общий LLM-клиент (`services/llm/client.py`)
 
 Один цикл для Group Intake и ИИ-менеджера: structured output (`output_config.format`), один повтор транзиентного сбоя (jitter / `retry-after` на 429), общий дедлайн `attempts × timeout`, гейт `retry_allowed`, `None` на любой отказ. Модуль импортирует только `settings` + `anthropic` — его тянет и отдельный процесс Group Intake. Схемы — плоские (без `enum/minimum/maximum/maxLength`): словари и диапазоны проверяет вызывающий.
 
 ## Тесты
 
-- `tests/services/test_llm_client.py`, `test_ai_triage.py`, `test_ai_breaker.py`, `test_ai_apply.py` (sqlite, реальный `run_command_sync`), `test_dispatch.py` (golden: rule-режим не трогает пакет).
+- `tests/services/test_llm_client.py`, `test_ai_triage.py`, `test_ai_breaker.py`, `test_ai_apply.py` (sqlite, реальный `run_command_sync`), `test_dispatch.py` (golden: rule-режим не трогает пакет), `test_ai_sla.py` (лестница по фазам), `test_ai_switch_off.py`, `test_ai_public_status.py`.
 - `uk_management_bot/tests/test_auto_manager_ai_config.py`, `test_request_workflow.py` (capability `ai_manager`), `test_auto_manager_handler.py` (переключатель), `test_settings.py` (форс-выключение без ключа).
 - `tests/api/test_auto_manager_config.py` (`ai_available`, `mode="ai"` под флагом).
 - Фронт: `AutoManagerCard.test.tsx`.
