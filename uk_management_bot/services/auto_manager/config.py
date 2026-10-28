@@ -44,6 +44,10 @@ DEFAULT_CONFIG: dict = {
     # срочности. Не про авто-менеджер, но это единственный настраиваемый
     # singleton-конфиг заявок: отдельная таблица ради четырёх чисел не нужна.
     "sla_hours": {"critical": 4, "high": 24, "medium": 72, "low": 168},
+    # Режим «ИИ-менеджер» (mode="ai"): порог уверенности LLM-триажа, ниже
+    # которого подсказки не применяются (rule-путь); разрешение задавать
+    # жителю уточняющий вопрос; поиск дублей по открытым заявкам адреса.
+    "ai": {"min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True},
 }
 
 #: Норматив в часах: от часа до года — защита от опечаток вида 0 или 99999.
@@ -88,6 +92,26 @@ def _validate_sla_hours(raw: object) -> dict:
     return merged
 
 
+def _validate_ai(raw: object) -> dict:
+    """Частичный dict поверх дефолта ``ai``: порог 0..1, флаги — bool."""
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"ai: ожидается dict, получено {raw!r}")
+    defaults = DEFAULT_CONFIG["ai"]
+    unknown = sorted(set(raw) - set(defaults))
+    if unknown:
+        raise ValueError(f"ai: неизвестные ключи {unknown}")
+    merged = {**defaults, **raw}
+    threshold = merged["min_confidence"]
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"ai.min_confidence: ожидается число 0..1, получено {threshold!r}")
+    for key in ("clarify_enabled", "dedup_enabled"):
+        if not isinstance(merged[key], bool):
+            raise ValueError(f"ai.{key}: ожидается bool, получено {merged[key]!r}")
+    return {**merged, "min_confidence": float(threshold)}
+
+
 def validate_config(raw: dict) -> dict:
     """Чистая валидация + нормализация конфига авто-менеджера.
 
@@ -101,8 +125,11 @@ def validate_config(raw: dict) -> dict:
     if not isinstance(raw, dict):
         raise ValueError(f"config: ожидается dict, получено {type(raw).__name__}")
 
+    # Верхний уровень мёржится shallow — вложенные блоки мёржатся каждый
+    # поверх своих дефолтов, иначе частичный dict затирал бы их целиком.
     cfg = {**DEFAULT_CONFIG, **raw}
     cfg["sla_hours"] = _validate_sla_hours(raw.get("sla_hours"))
+    cfg["ai"] = _validate_ai(raw.get("ai"))
 
     if not isinstance(cfg["enabled"], bool):
         raise ValueError(f"enabled: ожидается bool, получено {cfg['enabled']!r}")

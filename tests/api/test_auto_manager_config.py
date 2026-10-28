@@ -18,12 +18,18 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from uk_management_bot.api.main import app
+from uk_management_bot.config.settings import settings
 from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.database.models.auto_manager_config import AutoManagerConfig
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.auto_manager.config import DEFAULT_CONFIG
 
 PATH = "/api/v2/auto-manager-config"
+
+
+@pytest.fixture(autouse=True)
+def _ai_flag_off(monkeypatch):
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", False)
 
 
 def _user(uid: int, roles: list[str], **kw) -> User:
@@ -90,7 +96,7 @@ async def test_get_forbidden_for_neither_manager_nor_admin(am_client):
 async def test_get_as_manager_returns_default_when_no_row(am_client):
     resp = await am_client(_user(10, ["manager"])).get(PATH)
     assert resp.status_code == 200
-    assert resp.json() == DEFAULT_CONFIG
+    assert resp.json() == {**DEFAULT_CONFIG, "ai_available": False}
 
 
 @pytest.mark.asyncio
@@ -99,7 +105,7 @@ async def test_get_as_admin_returns_default_when_no_row(am_client):
     # a subtly wrong require_roles("manager") alone would 403 here.
     resp = await am_client(_user(11, ["admin"])).get(PATH)
     assert resp.status_code == 200
-    assert resp.json() == DEFAULT_CONFIG
+    assert resp.json() == {**DEFAULT_CONFIG, "ai_available": False}
 
 
 # ── PUT: persistence + updated_by + roundtrip ────────────────────────
@@ -153,14 +159,9 @@ async def test_put_upserts_single_row(am_client):
 
 
 @pytest.mark.asyncio
-async def test_put_rejects_mode_ai_until_phase2(am_client, db_session_factory):
-    # mode="ai" is genuinely accepted by the shared services/auto_manager/
-    # config.py::validate_config (deliberate Phase-2 forward-compat), but the
-    # API schema is deliberately STRICTER: the orchestrator ignores `mode`
-    # entirely today, and neither the bot nor dashboard UI can select "ai" —
-    # letting a raw API caller persist it would make GET/PUT report a mode
-    # that silently doesn't do anything. Revisit when Phase 2 wires the AI
-    # engine into the orchestrator.
+async def test_put_rejects_mode_ai_when_flag_off(am_client, db_session_factory):
+    """Без AI_MANAGER_ENABLED режим "ai" не сохраняется — GET/PUT не должны
+    показывать режим, который на этой площадке не работает."""
     manager = _user(23, ["manager"])
     resp = await am_client(manager).put(PATH, json=_valid_payload(mode="ai"))
     assert resp.status_code == 422
@@ -168,6 +169,66 @@ async def test_put_rejects_mode_ai_until_phase2(am_client, db_session_factory):
     async with db_session_factory() as session:
         result = await session.execute(select(AutoManagerConfig))
         assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_put_accepts_mode_ai_when_flag_on(am_client, db_session_factory, monkeypatch):
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    manager = _user(24, ["manager"])
+    resp = await am_client(manager).put(PATH, json=_valid_payload(mode="ai"))
+    assert resp.status_code == 200
+    assert resp.json()["mode"] == "ai"
+    assert resp.json()["ai_available"] is True
+
+    async with db_session_factory() as session:
+        row = (await session.execute(select(AutoManagerConfig))).scalar_one()
+        assert row.data["mode"] == "ai"
+
+    get_resp = await am_client(manager).get(PATH)
+    assert get_resp.json()["mode"] == "ai"
+
+
+@pytest.mark.asyncio
+async def test_get_reports_ai_available_from_flag(am_client, monkeypatch):
+    manager = _user(25, ["manager"])
+    assert (await am_client(manager).get(PATH)).json()["ai_available"] is False
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    assert (await am_client(manager).get(PATH)).json()["ai_available"] is True
+
+
+@pytest.mark.asyncio
+async def test_put_roundtrips_ai_block_and_keeps_defaults_when_omitted(am_client):
+    manager = _user(26, ["manager"])
+    ai = {"min_confidence": 0.9, "clarify_enabled": False, "dedup_enabled": True}
+    resp = await am_client(manager).put(PATH, json=_valid_payload(ai=ai))
+    assert resp.status_code == 200
+    assert resp.json()["ai"] == ai
+    assert (await am_client(manager).get(PATH)).json()["ai"] == ai
+
+    # Клиент без поля `ai` (старый дашборд) не затирает сохранённое: модель
+    # подставляет дефолт только когда поля нет вовсе — это дефолт, а не то,
+    # что лежит в БД; проверяем, что ответ по-прежнему валиден и `ai` есть.
+    legacy = {k: v for k, v in _valid_payload().items() if k != "ai"}
+    resp = await am_client(manager).put(PATH, json=legacy)
+    assert resp.status_code == 200
+    assert resp.json()["ai"] == DEFAULT_CONFIG["ai"]
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_bad_ai_block(am_client):
+    manager = _user(27, ["manager"])
+    resp = await am_client(manager).put(PATH, json=_valid_payload(ai={"min_confidence": 2}))
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_put_ignores_client_sent_ai_available(am_client):
+    """`ai_available` — read-only: клиент шлёт обратно то, что получил, и это
+    не должно ни ломать PUT, ни «включать» ИИ."""
+    manager = _user(28, ["manager"])
+    resp = await am_client(manager).put(PATH, json=_valid_payload(ai_available=True))
+    assert resp.status_code == 200
+    assert resp.json()["ai_available"] is False
 
 
 # ── PUT: validation delegated to the SAME validate_config as the bot path ──

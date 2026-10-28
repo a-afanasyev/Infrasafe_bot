@@ -91,10 +91,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_REQUEST: ActionSpec(
         # +Закуп (PR2b): дашборд предлагал менеджеру drag Закуп→Уточнение.
+        # +system: ИИ-триаж (capability `ai_manager` в guards.py — другие
+        # системные акторы по-прежнему отсекаются allowlist'ом по имени).
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS,
                    REQUEST_STATUS_PURCHASE}),
         REQUEST_STATUS_CLARIFICATION,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_RESOLVED: ActionSpec(
         frozenset({REQUEST_STATUS_CLARIFICATION}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
@@ -166,10 +168,11 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     # Смена категории: из любого нетерминального статуса, статус не меняется
     # (SAME_STATUS никогда не равен канону → check_repeat всегда None,
     # resolve_command никогда не выберет). REJECT — формальный дефолт.
+    # +system: ИИ-триаж поправляет категорию по тексту (capability `ai_manager`).
     Action.MANAGER_CHANGE_CATEGORY: ActionSpec(
         frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
         SAME_STATUS,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
 }
 
 

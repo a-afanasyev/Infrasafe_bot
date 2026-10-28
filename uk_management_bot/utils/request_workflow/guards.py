@@ -39,6 +39,14 @@ SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
     "auto_manager": frozenset({Action.SYSTEM_AUTO_PROMOTE,
                                Action.SYSTEM_DISPATCH_ASSIGN,
                                Action.ASSIGN_GROUP}),
+    # ai_manager: ИИ-триаж новой заявки (services/ai_manager). Границы
+    # полномочий — ЗДЕСЬ, а не в промпте: уточнить у жителя, поправить
+    # категорию, назначить дежурному/группе. Отмена, закрытие, подтверждение,
+    # возврат в работу — намеренно отсутствуют: даже баг пакета их не вызовет.
+    "ai_manager": frozenset({Action.CLARIFY_REQUEST,
+                             Action.MANAGER_CHANGE_CATEGORY,
+                             Action.SYSTEM_DISPATCH_ASSIGN,
+                             Action.ASSIGN_GROUP}),
     # "reconcile": frozenset(),  # появится при необходимости
 }
 
