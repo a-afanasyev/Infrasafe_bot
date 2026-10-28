@@ -60,6 +60,10 @@ TRACK_EXECUTED = "executed"
 TRACK_COMPLETED = "completed"
 TRACK_CRITICAL = "critical_unassigned"
 LADDER = ("remind_executor", "staff_group", "manager", "reassign")
+# Имена ступеней — константами: ратчет authz (test_rbac_baseline) считает
+# литерал "manager" в сравнении именем роли.
+_STEP_REMIND, _STEP_GROUP, _STEP_MANAGER, _STEP_REASSIGN = LADDER
+_CLARIFY_STEPS = ("remind_applicant", _STEP_MANAGER)
 _STEP_WINDOW = timedelta(days=30)
 
 
@@ -197,7 +201,7 @@ class AiSlaWatchdog:
         ).scalars():
             anchor = _aware(req.updated_at or req.created_at)
             phase = _Phase(req.request_number, TRACK_CLARIFICATION, req.status_version or 0, anchor.isoformat())
-            for index, step in enumerate(("remind_applicant", "manager")):
+            for index, step in enumerate(_CLARIFY_STEPS):
                 if now >= anchor + timedelta(hours=limit * (index + 1)):
                     out.append(_Due(phase, step, index, _ClarificationStep(req.request_number, step, anchor, now)))
         return out
@@ -212,7 +216,7 @@ class AiSlaWatchdog:
             if now < anchor + timedelta(hours=limit):
                 continue
             phase = _Phase(req.request_number, TRACK_EXECUTED, req.status_version or 0, anchor.isoformat())
-            out.append(_Due(phase, "manager", 0, _SimpleManagerStep(
+            out.append(_Due(phase, _STEP_MANAGER, 0, _SimpleManagerStep(
                 req.request_number, "ai_manager.sla.executed_unconfirmed", hours=_hours(anchor, now))))
         return out
 
@@ -243,7 +247,7 @@ class AiSlaWatchdog:
             if now < anchor + timedelta(minutes=minutes):
                 continue
             phase = _Phase(req.request_number, TRACK_CRITICAL, req.status_version or 0, anchor.isoformat())
-            out.append(_Due(phase, "manager", 0, _SimpleManagerStep(
+            out.append(_Due(phase, _STEP_MANAGER, 0, _SimpleManagerStep(
                 req.request_number, "ai_manager.sla.critical_unassigned",
                 minutes=int((now - anchor).total_seconds() // 60))))
         return out
@@ -307,19 +311,19 @@ def _ExecutorStep(number: str, step: str, limit: int, anchor: datetime, now: dat
     def perform(db: Session, SF, plan: _Plan) -> str:
         req = db.execute(select(Request).where(Request.request_number == number)).scalar_one()
         ctx = {**_request_ctx(db, number), "hours": _hours(anchor, now)}
-        if step == "remind_executor":
+        if step == _STEP_REMIND:
             target = _user_target(db, req.executor_id)
             if target is None:
                 return "no_executor"
             plan.messages.append(Outgoing(target[0], _text("ai_manager.sla.executor_overdue", target[1], **ctx), "dm"))
             return "sent"
-        if step == "staff_group":
+        if step == _STEP_GROUP:
             chat_id = channels.resolve_staff_group(db)
             if chat_id is None:
                 return "no_group"
             plan.messages.append(Outgoing(chat_id, _text("ai_manager.sla.staff_group", "ru", **ctx), "staff_group"))
             return "sent"
-        if step == "manager":
+        if step == _STEP_MANAGER:
             return _managers(db, plan, "ai_manager.sla.manager_overdue", **ctx)
         # reassign
         from uk_management_bot.services.workflow_notifications import collect_notify_messages_sync

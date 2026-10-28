@@ -48,6 +48,19 @@ async def lifespan(app: FastAPI):
                 _logger.exception("Outbox processor error")
             await asyncio.sleep(10)
 
+    async def _news_broadcast_loop():
+        # Мониторинг отключений: outbox-рассылка опубликованных новостей
+        # (services/news_watch/broadcast). Цикл сам выходит без NEWS_WATCH_ENABLED.
+        from uk_management_bot.services.news_watch.broadcast import run_broadcast_cycle
+        while True:
+            try:
+                stats = await run_broadcast_cycle()
+                if stats.get("processed"):
+                    _logger.info("news_watch broadcast cycle: %s", stats)
+            except Exception:
+                _logger.exception("news_watch broadcast error")
+            await asyncio.sleep(30)
+
     async def _reconciliation_loop():
         # Run reconciliation hourly. Sleep first so we don't slam startup.
         await asyncio.sleep(300)  # 5 min warmup
@@ -121,6 +134,10 @@ async def lifespan(app: FastAPI):
     task = None
     reconcile_task = None
     retention_task = None
+    news_task = None
+    if settings.NEWS_WATCH_ENABLED:
+        news_task = asyncio.create_task(_news_broadcast_loop())
+        _logger.info("News-watch broadcast loop started (30s interval)")
     if settings.INFRASAFE_WEBHOOK_ENABLED:
         task = asyncio.create_task(_outbox_loop())
         _logger.info("Webhook outbox processor started (10s interval)")
@@ -130,7 +147,7 @@ async def lifespan(app: FastAPI):
         _logger.info("Outbox retention loop started (24h interval, 30-day window)")
     yield
     # shutdown
-    for bg_task in (task, reconcile_task, retention_task):
+    for bg_task in (task, reconcile_task, retention_task, news_task):
         if bg_task:
             bg_task.cancel()
             try:

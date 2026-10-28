@@ -127,4 +127,6 @@ def test_core_api_has_no_unexplained_public_routes():
     entries = json.loads(rbac_baseline.baseline_path("core_api").read_text())["entries"]
     public = sorted(k for k, v in entries.items() if v["auth"] == "public")
     # Число зафиксировано снимком; рост — повод проверить, что публичность задумана.
-    assert len(public) == 31, public
+    # 33: +2 маршрута news-watch для юзербота (POST /inbox, GET /sources) — без
+    # user-auth, гейт — X-Service-Token (NEWS_WATCH_SERVICE_TOKEN, fail-closed).
+    assert len(public) == 33, public
