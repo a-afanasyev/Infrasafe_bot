@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useAutoManagerConfig, useUpdateAutoManagerConfig } from '../../hooks/useAutoManagerConfig'
 import { safeErrorMessage } from '@/utils/errorMessage'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import AutoManagerToggle from '../shared/AutoManagerToggle'
 import { cn } from '@/lib/utils'
+import { useCan } from '../../hooks/useCan'
 import type { AutoManagerConfigData, AutoManagerSlaConfig } from '../../types/autoManagerConfig'
 import { readStorage, writeStorage } from '../../utils/safeStorage'
 import SlaEditor from './AutoManagerSlaEditor'
@@ -33,6 +35,7 @@ export default function AutoManagerCard() {
   const { t } = useTranslation()
   const { data, isLoading, isError, error } = useAutoManagerConfig()
   const updateConfig = useUpdateAutoManagerConfig()
+  const canConfigureRules = useCan('auto_manager.configure')
 
   // Свёрнут по умолчанию (решение владельца 2026-08-27: карточка съедала
   // много места над расписанием). Выбор запоминается в localStorage.
@@ -140,6 +143,11 @@ export default function AutoManagerCard() {
         {/* В свёрнутом виде показываем окно работы одной строкой — главный
             факт, который менеджер проверяет чаще всего. */}
         <div className="flex items-center gap-4 min-w-0">
+          {canConfigureRules && (
+            <Link to="/dashboard/ai-manager" className="text-[11px] text-accent underline whitespace-nowrap">
+              {t('aiManager.openPage')}
+            </Link>
+          )}
           {collapsed && (
             <span className="text-[11px] text-text-muted whitespace-nowrap truncate">
               {t('autoManager.window')}: <span className="text-text-primary font-[var(--font-mono)]">{data.window_start}–{data.window_end}</span>

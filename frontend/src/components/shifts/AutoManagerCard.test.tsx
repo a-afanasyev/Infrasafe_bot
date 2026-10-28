@@ -7,6 +7,8 @@ import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { render, testI18n } from '../../test/test-utils'
+import { useAuthStore } from '../../stores/authStore'
+import { actionsFor } from '../../test/authz'
 import { server } from '../../test/msw/server'
 import AutoManagerCard from './AutoManagerCard'
 
@@ -68,6 +70,28 @@ describe('AutoManagerCard', () => {
 
     await waitFor(() => expect(body).not.toBeNull())
     expect(body).toEqual({ ...CONFIG, enabled: false })
+  })
+
+  it('read-only fields of the GET response (ai_available, ai_status, template_defaults, base_emergency_keywords) never reach the PUT body', async () => {
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json({
+        ...CONFIG, ai_available: true, ai_status: { open: true, open_ttl: 300, failures: 3 },
+        template_defaults: { 'public.assigned': { ru: 'x', uz: 'y', placeholders: ['request_number'] } },
+        base_emergency_keywords: ['газ'],
+      })),
+    )
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(body)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    await user.click(await screen.findByLabelText('Включить/выключить автоменеджер'))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(Object.keys(body!).sort()).toEqual([...Object.keys(CONFIG)].sort())
   })
 
   it('without ai_available the AI button only shows a hint and never writes to the config', async () => {
@@ -230,6 +254,28 @@ describe('AutoManagerCard', () => {
   })
 })
 
+describe('AutoManagerCard — ссылка на «Правила ИИ»', () => {
+  function login(roles: string[]) {
+    useAuthStore.setState({
+      user: { id: 1, first_name: 'Мария', roles, actions: actionsFor(roles) } as never,
+      isAuthenticated: true,
+    })
+  }
+
+  it('менеджер видит ссылку на страницу правил', async () => {
+    login(['manager'])
+    render(<AutoManagerCard />)
+    expect(await screen.findByRole('link', { name: 'Правила ИИ →' })).toHaveAttribute('href', '/dashboard/ai-manager')
+  })
+
+  it('без auto_manager.configure ссылки нет', async () => {
+    login(['executor'])
+    render(<AutoManagerCard />)
+    await screen.findByText('🤖 Автоматический менеджер')
+    expect(screen.queryByRole('link', { name: 'Правила ИИ →' })).not.toBeInTheDocument()
+  })
+})
+
 describe('AutoManagerCard — SLA', () => {
   const SLA = {
     in_progress_max: { critical: 2, high: 12, medium: 48, low: 72 },
@@ -238,6 +284,8 @@ describe('AutoManagerCard — SLA', () => {
     completed_unaccepted_days: 3,
     critical_unassigned_minutes: 30,
     ladder: { remind_executor: 0, staff_group: 2, manager: 4, reassign: 8 },
+    ladder_enabled: { remind_executor: true, staff_group: true, manager: true, reassign: true },
+    public_status: { enabled: true, min_urgency: 'critical' },
   }
 
   it('hides the SLA block when AI is unavailable', async () => {
