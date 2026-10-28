@@ -41,7 +41,8 @@ def _no_telegram(monkeypatch):
         sent.append((chat_id, text))
         return True
 
-    monkeypatch.setattr(pipeline.telegram_send, "send_message", fake)
+    from uk_management_bot.api.news_watch import notify
+    monkeypatch.setattr(notify.telegram_send, "send_message", fake)
     return sent
 
 

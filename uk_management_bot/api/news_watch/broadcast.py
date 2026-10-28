@@ -1,6 +1,7 @@
 """Воркер рассылки опубликованных новостей — outbox, а не fire-and-forget.
 
-Цикл (``api/lifecycle.py``, раз в 30 с): переставить застрявшие ``running``
+Живёт в ``api/`` (шлёт через httpx-sender API; домен ``services`` HTTP-пакет не
+импортирует). Цикл (``api/lifecycle.py``, раз в 30 с): переставить застрявшие ``running``
 (старше STALE) в ``failed`` с бэкоффом → взять ОДНУ новость ``pending|failed``
 с ``next_at <= now`` и ``attempts < MAX`` → ``running`` → жители
 (``users.id > cursor``, applicant, approved, не удалён, бот не заблокирован)
@@ -53,11 +54,11 @@ def _backoff(attempts: int) -> timedelta:
 
 
 def _render(item: NewsItem) -> str:
-    from uk_management_bot.services.news_watch.pipeline import _kind_title
+    from uk_management_bot.services.news_watch.pipeline import kind_title
     from uk_management_bot.utils.helpers import get_text
 
     parts = [
-        get_text("news_watch.broadcast", language=lang, title=_kind_title(item.kind, lang),
+        get_text("news_watch.broadcast", language=lang, title=kind_title(item.kind, lang),
                  text=(item.summary_ru if lang == "ru" else item.summary_uz) or item.raw_text[:500])
         for lang in ("ru", "uz")
     ]

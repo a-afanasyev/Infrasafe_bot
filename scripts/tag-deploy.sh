@@ -64,7 +64,7 @@ BODY=$(git log --no-merges --format='  %h %s' "$RANGE" 2>/dev/null || echo "  (�
 # «что было в проде». Работает только при заданном UK_IMAGE_SHA, без него
 # поведение прежнее. Список образов = IMAGES job'а images-promote в ci.yml
 # (сверяет гейт tests/services/test_registry_images_ssot.py).
-UK_IMAGES_DEFAULT="uk-bot uk-api uk-access-api uk-media-service uk-resource-api uk-frontend-profk uk-frontend-infrasafe uk-payment-control"
+UK_IMAGES_DEFAULT="uk-bot uk-api uk-access-api uk-media-service uk-resource-api uk-frontend-profk uk-frontend-infrasafe uk-payment-control uk-news-watcher"
 DIGESTS=()
 if [[ -n "${UK_IMAGE_SHA:-}" ]]; then
     if [[ "$UK_IMAGE_SHA" != "$SHA" ]]; then

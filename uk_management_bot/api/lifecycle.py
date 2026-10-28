@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     async def _news_broadcast_loop():
         # Мониторинг отключений: outbox-рассылка опубликованных новостей
         # (services/news_watch/broadcast). Цикл сам выходит без NEWS_WATCH_ENABLED.
-        from uk_management_bot.services.news_watch.broadcast import run_broadcast_cycle
+        from uk_management_bot.api.news_watch.broadcast import run_broadcast_cycle
         while True:
             try:
                 stats = await run_broadcast_cycle()

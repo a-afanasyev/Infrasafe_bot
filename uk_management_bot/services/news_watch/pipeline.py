@@ -24,7 +24,6 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.api import telegram_send
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.news_item import (
     BROADCAST_DONE,
@@ -150,7 +149,7 @@ def _parse_verdict(payload: dict) -> Optional[dict]:
 async def classify_async(text: str, complex_context: str) -> Optional[dict]:
     payload = await llm_json_async(
         system=_system_prompt(complex_context),
-        user=f"Сообщение:\n{text[:_TEXT_LIMIT]}",
+        user=f"Сообщение:\n{text[:_TEXT_LIMIT]}",  # html-raw: промпт LLM, не Telegram
         schema=_schema(),
         model=settings.NEWS_WATCH_MODEL,
         timeout=settings.NEWS_WATCH_LLM_TIMEOUT,
@@ -200,8 +199,6 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
     await db.commit()
     await db.refresh(item)
 
-    if item.status == NEWS_STATUS_PENDING:
-        await _notify_managers_pending(db, item)
     logger.info("news_watch: item %s from %s → %s (kind=%s conf=%s)",
                 item.id, inbound.source_chat_id, item.status, item.kind, item.confidence)
     return item, True
@@ -210,7 +207,7 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
 # ───────────── публикация ─────────────
 
 
-def _kind_title(kind: Optional[str], lang: str) -> str:
+def kind_title(kind: Optional[str], lang: str) -> str:
     from uk_management_bot.utils.helpers import get_text
 
     return get_text(f"news_watch.kind.{kind if kind in NEWS_KINDS else 'other'}", language=lang)
@@ -223,7 +220,7 @@ def announcement_from(item: NewsItem) -> dict:
         "id": f"news-{item.id}",
         "icon": _ICONS.get(item.kind or "other", "📢"),
         "important": True,
-        "title": {"ru": _kind_title(item.kind, "ru"), "uz": _kind_title(item.kind, "uz")},
+        "title": {"ru": kind_title(item.kind, "ru"), "uz": kind_title(item.kind, "uz")},
         "text": {"ru": item.summary_ru or item.raw_text[:_SUMMARY_LIMIT],
                  "uz": item.summary_uz or item.raw_text[:_SUMMARY_LIMIT]},
         "published_at": published.replace(tzinfo=None).isoformat(timespec="seconds"),
@@ -278,23 +275,3 @@ async def retry_broadcast(db: AsyncSession, item_id: int) -> NewsItem:
     await db.commit()
     await db.refresh(item)
     return item
-
-
-# ───────────── уведомление менеджерам (API-процесс → httpx-sender) ─────────────
-
-
-async def _notify_managers_pending(db: AsyncSession, item: NewsItem) -> None:
-    from uk_management_bot.services.feedback_service import manager_telegram_ids_async
-    from uk_management_bot.utils.helpers import get_text
-
-    try:
-        ids = await manager_telegram_ids_async(db)
-        summary = item.summary_ru or item.raw_text[:300]
-        text = get_text("news_watch.pending_title", language="ru") + "\n" + get_text(
-            "news_watch.pending_body", language="ru",
-            kind=_kind_title(item.kind, "ru"), summary=summary, source=item.chat_title or item.source_chat_id,
-        )
-        for tg_id in ids:
-            await telegram_send.send_message(tg_id, text, parse_mode="HTML")
-    except Exception as e:  # уведомление не вправе ронять приём новости
-        logger.warning("news_watch: manager notification skipped: %s", type(e).__name__)

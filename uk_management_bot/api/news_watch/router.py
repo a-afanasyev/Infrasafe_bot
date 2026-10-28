@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
+from uk_management_bot.api.news_watch.notify import notify_managers_pending
 from uk_management_bot.api.news_watch.schemas import (
     InboxIn,
     InboxOut,
@@ -131,6 +132,8 @@ async def inbox(request: Request, payload: InboxIn, db: AsyncSession = Depends(g
         ))
     except pipeline.NewsWatchError as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
+    if created:
+        await notify_managers_pending(db, item)
     return InboxOut(id=item.id, status=item.status, created=created)
 
 

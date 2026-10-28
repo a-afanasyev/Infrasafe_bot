@@ -1,4 +1,4 @@
-"""Воркер рассылки новостей (services/news_watch/broadcast.py): outbox-семантика.
+"""Воркер рассылки новостей (api/news_watch/broadcast.py): outbox-семантика.
 
 Курсор по users.id — продолжение после падения без дублей; 429 — повтор того же
 получателя после retry_after; 5 неудачных попыток → failed; «running» старше
@@ -23,7 +23,7 @@ from uk_management_bot.database.models.news_item import (
     NewsItem,
 )
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.news_watch import broadcast
+from uk_management_bot.api.news_watch import broadcast
 from uk_management_bot.services.news_watch.config import DEFAULT_CONFIG, save_config
 
 NOW = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)

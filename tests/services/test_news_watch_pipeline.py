@@ -55,9 +55,8 @@ async def ctx(el_async_factory, monkeypatch):
         ])
         await db.commit()
         await save_config(db, {**DEFAULT_CONFIG, "complex_context": "ЖК Тест, ул. Тестовая 1-20"})
-    notify = AsyncMock(return_value=True)
-    monkeypatch.setattr(pipeline.telegram_send, "send_message", notify)
-    return el_async_factory, notify
+    # Уведомление менеджерам — у роутера (api/news_watch/notify), конвейер Telegram не трогает.
+    return el_async_factory, AsyncMock(return_value=True)
 
 
 def _llm(monkeypatch, verdict):
@@ -93,11 +92,11 @@ async def test_prefilter_miss_is_ignored_without_llm(ctx, monkeypatch):
     async with factory() as db:
         item, created = await pipeline.ingest(db, _inbound(text="Поздравляем всех с праздником!"))
     assert created is True and item.status == NEWS_STATUS_IGNORED and item.relevant is None
-    assert calls == [] and notify.await_count == 0
+    assert calls == []
 
 
 @pytest.mark.asyncio
-async def test_relevant_news_becomes_pending_and_notifies_managers(ctx, monkeypatch):
+async def test_relevant_news_becomes_pending(ctx, monkeypatch):
     factory, notify = ctx
     calls = _llm(monkeypatch, _verdict())
     async with factory() as db:
@@ -107,8 +106,6 @@ async def test_relevant_news_becomes_pending_and_notifies_managers(ctx, monkeypa
     assert item.summary_ru.startswith("29.10") and item.starts_at is not None
     assert "ЖК Тест" in calls[0]["system"] and "Тестовая 1-15" in calls[0]["user"]
     assert calls[0]["model"] == settings.NEWS_WATCH_MODEL
-    notify.assert_awaited_once()
-    assert notify.await_args.args[0] == 30 and "нет света" in notify.await_args.args[1]
 
 
 @pytest.mark.asyncio
@@ -118,7 +115,6 @@ async def test_irrelevant_news_is_ignored(ctx, monkeypatch):
     async with factory() as db:
         item, _ = await pipeline.ingest(db, _inbound())
     assert item.status == NEWS_STATUS_IGNORED and item.relevant is False
-    notify.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -129,7 +125,6 @@ async def test_llm_failure_keeps_pending_for_manager(ctx, monkeypatch):
     async with factory() as db:
         item, _ = await pipeline.ingest(db, _inbound())
     assert item.status == NEWS_STATUS_PENDING and item.relevant is None and item.kind is None
-    notify.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -149,7 +144,7 @@ async def test_dedup_by_source(ctx, monkeypatch):
         first, created1 = await pipeline.ingest(db, _inbound())
         second, created2 = await pipeline.ingest(db, _inbound(text="другой текст"))
     assert created1 and not created2 and first.id == second.id
-    assert len(calls) == 1 and notify.await_count == 1
+    assert len(calls) == 1
 
 
 # ───────────── публикация ─────────────
@@ -164,7 +159,6 @@ async def test_auto_publish_appends_announcement_and_queues_broadcast(ctx, monke
         item, _ = await pipeline.ingest(db, _inbound())
     assert item.status == NEWS_STATUS_PUBLISHED and item.published_at is not None
     assert item.broadcast_status == BROADCAST_PENDING
-    notify.assert_not_awaited()  # одобрять нечего
     async with factory() as db:
         board = (await db.execute(select(BoardConfig))).scalar_one()
         ann = board.data["announcements"]
