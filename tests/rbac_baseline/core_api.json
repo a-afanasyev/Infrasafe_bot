@@ -1799,6 +1799,19 @@
     "auth_ratelimit_guard"
    ]
   },
+  "POST /api/v2/auto-manager-config/ai-breaker/reset": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "POST /api/v2/callcenter/requests": {
    "auth": "roles",
    "allow": [

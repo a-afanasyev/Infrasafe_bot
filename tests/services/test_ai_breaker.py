@@ -38,10 +38,14 @@ class FakeRedis:
             self.ttl_store[key] = ex
         return True
 
-    def delete(self, key):
-        self.store.pop(key, None)
-        self.ttl_store.pop(key, None)
-        return 1
+    def get(self, key):
+        return self.store.get(key)
+
+    def delete(self, *keys):
+        for key in keys:
+            self.store.pop(key, None)
+            self.ttl_store.pop(key, None)
+        return len(keys)
 
 
 class BrokenRedis:
@@ -92,3 +96,26 @@ def test_redis_down_means_closed_and_silent(monkeypatch):
     assert breaker.is_open() is False
     assert breaker.record_failure() is False
     breaker.record_success()  # не бросает
+
+
+# ───────────── статус и сброс (страница «Правила ИИ») ─────────────
+
+
+def test_status_reports_open_ttl_and_failures(fake):
+    assert breaker.status() == {"open": False, "open_ttl": 0, "failures": 0}
+    for _ in range(3):
+        breaker.record_failure()
+    assert breaker.status() == {"open": True, "open_ttl": breaker.OPEN_TTL, "failures": 3}
+
+
+def test_reset_clears_everything(fake):
+    for _ in range(3):
+        breaker.record_failure()
+    assert breaker.reset() is True
+    assert breaker.is_open() is False and breaker.status() == {"open": False, "open_ttl": 0, "failures": 0}
+    assert breaker.NOTIFIED_KEY not in fake.store
+
+
+def test_status_and_reset_when_redis_down(monkeypatch):
+    monkeypatch.setattr(breaker, "_get_client", lambda: BrokenRedis())
+    assert breaker.status() is None and breaker.reset() is False

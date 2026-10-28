@@ -72,3 +72,28 @@ def record_success() -> None:
         _get_client().delete(FAIL_KEY)
     except Exception as e:
         logger.warning("ai_manager.breaker: redis unavailable (%s)", type(e).__name__)
+
+
+def status() -> Optional[dict]:
+    """Состояние для дашборда: открыт ли, сколько секунд до закрытия, сбоев
+    в окне. None — Redis недоступен."""
+    try:
+        client = _get_client()
+        return {
+            "open": client.exists(OPEN_KEY) == 1,
+            "open_ttl": max(int(client.ttl(OPEN_KEY)), 0),
+            "failures": int(client.get(FAIL_KEY) or 0),
+        }
+    except Exception as e:
+        logger.warning("ai_manager.breaker: redis unavailable (%s), status unknown", type(e).__name__)
+        return None
+
+
+def reset() -> bool:
+    """Снять предохранитель досрочно (страница «Правила ИИ»). False — Redis недоступен."""
+    try:
+        _get_client().delete(FAIL_KEY, OPEN_KEY, NOTIFIED_KEY)
+        return True
+    except Exception as e:
+        logger.warning("ai_manager.breaker: reset failed (%s)", type(e).__name__)
+        return False

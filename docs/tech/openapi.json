@@ -263,6 +263,57 @@
         "title": "AdjustmentOut",
         "type": "object"
       },
+      "AiBreakerStatus": {
+        "description": "Предохранитель ИИ-триажа (services/ai_manager/breaker.py::status).",
+        "properties": {
+          "failures": {
+            "title": "Failures",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "open_ttl": {
+            "title": "Open Ttl",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open",
+          "open_ttl",
+          "failures"
+        ],
+        "title": "AiBreakerStatus",
+        "type": "object"
+      },
+      "AiTemplateDefault": {
+        "description": "Стандартный текст пинга и допустимые подстановки (ai_manager/templates.py).",
+        "properties": {
+          "placeholders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Placeholders",
+            "type": "array"
+          },
+          "ru": {
+            "title": "Ru",
+            "type": "string"
+          },
+          "uz": {
+            "title": "Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ru",
+          "uz",
+          "placeholders"
+        ],
+        "title": "AiTemplateDefault",
+        "type": "object"
+      },
       "AnnouncementCfg": {
         "properties": {
           "icon": {
@@ -674,22 +725,12 @@
         "type": "object"
       },
       "AutoManagerConfigData": {
+        "description": "Тело PUT: только хранимые поля конфига.",
         "properties": {
           "ai": {
             "additionalProperties": true,
             "title": "Ai",
             "type": "object"
-          },
-          "ai_available": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Available"
           },
           "enabled": {
             "title": "Enabled",
@@ -737,6 +778,93 @@
           "max_requests_per_run"
         ],
         "title": "AutoManagerConfigData",
+        "type": "object"
+      },
+      "AutoManagerConfigOut": {
+        "description": "Ответ GET/PUT: конфиг + read-only состояние площадки (заполняет роутер).",
+        "properties": {
+          "ai": {
+            "additionalProperties": true,
+            "title": "Ai",
+            "type": "object"
+          },
+          "ai_available": {
+            "title": "Ai Available",
+            "type": "boolean"
+          },
+          "ai_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiBreakerStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "base_emergency_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Base Emergency Keywords",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_requests_per_run": {
+            "title": "Max Requests Per Run",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "rule",
+              "ai"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "sla": {
+            "additionalProperties": true,
+            "title": "Sla",
+            "type": "object"
+          },
+          "sla_hours": {
+            "$ref": "#/components/schemas/SlaHours"
+          },
+          "template_defaults": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AiTemplateDefault"
+            },
+            "title": "Template Defaults",
+            "type": "object"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "window_end": {
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "mode",
+          "window_start",
+          "window_end",
+          "timezone",
+          "max_requests_per_run",
+          "ai_available",
+          "template_defaults",
+          "base_emergency_keywords"
+        ],
+        "title": "AutoManagerConfigOut",
         "type": "object"
       },
       "BacklogOut": {
@@ -14615,7 +14743,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AutoManagerConfigData"
+                  "$ref": "#/components/schemas/AutoManagerConfigOut"
                 }
               }
             },
@@ -14650,7 +14778,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AutoManagerConfigData"
+                  "$ref": "#/components/schemas/AutoManagerConfigOut"
                 }
               }
             },
@@ -14673,6 +14801,33 @@
           }
         ],
         "summary": "Update Auto Manager Config",
+        "tags": [
+          "auto-manager"
+        ]
+      }
+    },
+    "/api/v2/auto-manager-config/ai-breaker/reset": {
+      "post": {
+        "description": "Снять предохранитель ИИ-триажа досрочно (manager ИЛИ admin).\n\nФакт сброса — строка `audit_logs` (`ai_breaker_reset`: кто, когда, прежнее\nсостояние). Redis недоступен — 503, ничего не записано.",
+        "operationId": "reset_ai_breaker_api_v2_auto_manager_config_ai_breaker_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBreakerStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset Ai Breaker",
         "tags": [
           "auto-manager"
         ]

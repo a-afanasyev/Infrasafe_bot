@@ -20,8 +20,10 @@ from sqlalchemy import select
 from uk_management_bot.api.main import app
 from uk_management_bot.config.settings import settings
 from uk_management_bot.api.dependencies import get_current_user, get_db
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.auto_manager_config import AutoManagerConfig
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.ai_manager import breaker
 from uk_management_bot.services.auto_manager.config import DEFAULT_CONFIG
 
 PATH = "/api/v2/auto-manager-config"
@@ -41,6 +43,11 @@ def _user(uid: int, roles: list[str], **kw) -> User:
         status="approved",
         **kw,
     )
+
+
+def _stored(body: dict) -> dict:
+    """Хранимая часть ответа — без read-only полей (`AutoManagerConfigOut`)."""
+    return {k: body[k] for k in DEFAULT_CONFIG}
 
 
 def _valid_payload(**overrides) -> dict:
@@ -96,7 +103,7 @@ async def test_get_forbidden_for_neither_manager_nor_admin(am_client):
 async def test_get_as_manager_returns_default_when_no_row(am_client):
     resp = await am_client(_user(10, ["manager"])).get(PATH)
     assert resp.status_code == 200
-    assert resp.json() == {**DEFAULT_CONFIG, "ai_available": False}
+    assert _stored(resp.json()) == DEFAULT_CONFIG and resp.json()["ai_available"] is False
 
 
 @pytest.mark.asyncio
@@ -105,7 +112,7 @@ async def test_get_as_admin_returns_default_when_no_row(am_client):
     # a subtly wrong require_roles("manager") alone would 403 here.
     resp = await am_client(_user(11, ["admin"])).get(PATH)
     assert resp.status_code == 200
-    assert resp.json() == {**DEFAULT_CONFIG, "ai_available": False}
+    assert _stored(resp.json()) == DEFAULT_CONFIG and resp.json()["ai_available"] is False
 
 
 # ── PUT: persistence + updated_by + roundtrip ────────────────────────
@@ -199,7 +206,7 @@ async def test_get_reports_ai_available_from_flag(am_client, monkeypatch):
 @pytest.mark.asyncio
 async def test_put_roundtrips_ai_block_and_keeps_defaults_when_omitted(am_client):
     manager = _user(26, ["manager"])
-    ai = {"min_confidence": 0.9, "clarify_enabled": False, "dedup_enabled": True}
+    ai = {**DEFAULT_CONFIG["ai"], "min_confidence": 0.9, "clarify_enabled": False, "dedup_enabled": True}
     resp = await am_client(manager).put(PATH, json=_valid_payload(ai=ai))
     assert resp.status_code == 200
     assert resp.json()["ai"] == ai
@@ -338,3 +345,115 @@ async def test_put_switching_ai_off_notifies_managers(am_client, monkeypatch):
     resp = await am_client(manager).put(PATH, json=_valid_payload(mode="rule"))
     assert resp.status_code == 200
     assert sent == [(777, "ai->rule")]
+
+
+# ── страница «Правила ИИ»: read-only состояние, новые поля, сброс предохранителя ──
+
+
+class _FakeRedis:
+    """dict-двойник redis: ровно то, что зовёт breaker (exists/incr/ttl/expire/set/get/delete)."""
+
+    def __init__(self):
+        self.store, self.ttl_store = {}, {}
+
+    def exists(self, key):
+        return 1 if key in self.store else 0
+
+    def incr(self, key):
+        self.store[key] = str(int(self.store.get(key, "0")) + 1)
+        return int(self.store[key])
+
+    def ttl(self, key):
+        return self.ttl_store.get(key, -1)
+
+    def expire(self, key, seconds):
+        self.ttl_store[key] = seconds
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.store:
+            return None
+        self.store[key] = str(value)
+        if ex is not None:
+            self.ttl_store[key] = ex
+        return True
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def delete(self, *keys):
+        for key in keys:
+            self.store.pop(key, None)
+            self.ttl_store.pop(key, None)
+
+
+@pytest.fixture
+def fake_redis(monkeypatch):
+    client = _FakeRedis()
+    monkeypatch.setattr(breaker, "_get_client", lambda: client)
+    return client
+
+
+RESET = f"{PATH}/ai-breaker/reset"
+
+
+@pytest.mark.asyncio
+async def test_get_exposes_typed_ai_status_and_template_defaults(am_client, monkeypatch, fake_redis):
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    body = (await am_client(_user(40, ["manager"])).get(PATH)).json()
+    assert body["ai_status"] == {"open": False, "open_ttl": 0, "failures": 0}
+    assert body["template_defaults"]["sla.executor_overdue"]["placeholders"] == sorted(
+        ["request_number", "category", "address", "hours"])
+    assert "{request_number}" in body["template_defaults"]["public.assigned"]["uz"]
+    assert "газ" in body["base_emergency_keywords"]
+    assert body["ai"]["triage_instructions"] == "" and body["ai"]["extra_emergency_keywords"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_ai_status_is_null_without_flag(am_client, fake_redis):
+    body = (await am_client(_user(41, ["manager"])).get(PATH)).json()
+    assert body["ai_available"] is False and body["ai_status"] is None
+
+
+@pytest.mark.asyncio
+async def test_put_ignores_read_only_fields_and_roundtrips_new_ones(am_client, monkeypatch):
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    manager = _user(42, ["manager"])
+    ai = {**DEFAULT_CONFIG["ai"], "triage_instructions": "Правило", "news_instructions": "Новости",
+          "extra_emergency_keywords": ["шлагбаум"],
+          "templates": {"public.assigned": {"ru": "Выехали №{request_number}"}}}
+    payload = _valid_payload(ai=ai, ai_status={"open": True, "open_ttl": 1, "failures": 9},
+                             template_defaults={}, base_emergency_keywords=["x"], ai_available=False)
+    resp = await am_client(manager).put(PATH, json=payload)
+    assert resp.status_code == 200, resp.text   # read-only поля молча отброшены
+    assert resp.json()["ai"] == ai and resp.json()["ai_available"] is True
+    assert (await am_client(manager).get(PATH)).json()["ai"] == ai
+    bad = _valid_payload(ai={**DEFAULT_CONFIG["ai"], "templates": {"public.assigned": {"ru": "{кто}"}}})
+    resp = await am_client(manager).put(PATH, json=bad)
+    assert resp.status_code == 422 and "ai.templates.public.assigned.ru" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_reset_breaker_access_and_audit(am_client, db_session_factory, fake_redis):
+    for _ in range(3):
+        breaker.record_failure()
+    assert (await am_client(None).post(RESET)).status_code == 401
+    assert (await am_client(_user(43, ["executor"])).post(RESET)).status_code == 403
+    assert breaker.is_open() is True   # запрещённые вызовы ничего не сбросили
+    resp = await am_client(_user(44, ["manager"])).post(RESET)
+    assert resp.status_code == 200 and resp.json() == {"open": False, "open_ttl": 0, "failures": 0}
+    async with db_session_factory() as s:
+        row = (await s.execute(select(AuditLog).where(AuditLog.action == "ai_breaker_reset"))).scalar_one()
+    assert row.user_id == 44
+    assert row.details["before"] == {"open": True, "open_ttl": breaker.OPEN_TTL, "failures": 3}
+    assert row.details["at"]
+
+
+@pytest.mark.asyncio
+async def test_reset_breaker_503_when_redis_down(am_client, monkeypatch):
+    class _Down:
+        def __getattr__(self, name):
+            def _boom(*a, **k):
+                raise ConnectionError("redis down")
+            return _boom
+    monkeypatch.setattr(breaker, "_get_client", lambda: _Down())
+    assert (await am_client(_user(45, ["manager"])).post(RESET)).status_code == 503

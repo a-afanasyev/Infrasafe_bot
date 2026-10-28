@@ -14,9 +14,13 @@ board_config, где PUT ожидает целиком заполненную м
 
 ⚠️ `mode="ai"`: общий `validate_config` принимает его всегда, API — только
 при `settings.AI_MANAGER_ENABLED` (деплой-флаг площадки, см. settings.py):
-без флага GET/PUT показывали бы режим, который здесь не работает. Клиенту
-доступность сообщается read-only полем `ai_available`; обратно присланное
-значение игнорируется.
+без флага PUT принимал бы режим, который здесь не работает.
+
+Две модели: `AutoManagerConfigData` — тело PUT (только хранимые поля; pydantic
+`extra="ignore"` молча отбрасывает read-only поля ответа, которые клиент шлёт
+обратно) и `AutoManagerConfigOut` — ответ GET/PUT (конфиг + read-only
+состояние площадки: `ai_available`, `ai_status`, `template_defaults`,
+`base_emergency_keywords`).
 """
 from copy import deepcopy
 from typing import Literal, Optional
@@ -36,7 +40,25 @@ class SlaHours(BaseModel):
     low: int
 
 
+class AiBreakerStatus(BaseModel):
+    """Предохранитель ИИ-триажа (services/ai_manager/breaker.py::status)."""
+
+    open: bool
+    open_ttl: int
+    failures: int
+
+
+class AiTemplateDefault(BaseModel):
+    """Стандартный текст пинга и допустимые подстановки (ai_manager/templates.py)."""
+
+    ru: str
+    uz: str
+    placeholders: list[str]
+
+
 class AutoManagerConfigData(BaseModel):
+    """Тело PUT: только хранимые поля конфига."""
+
     enabled: bool
     mode: Literal["rule", "ai"]
     window_start: str
@@ -53,13 +75,10 @@ class AutoManagerConfigData(BaseModel):
     # Вложенная валидация — в `validate_config` (единый источник правил).
     ai: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["ai"]))
     sla: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["sla"]))
-    # Read-only: доступен ли режим "ai" на площадке (деплой-флаг). Заполняет
-    # роутер; присланное клиентом значение не учитывается.
-    ai_available: Optional[bool] = None
 
     def config_dict(self) -> dict:
-        """Конфиг для `save_config` — без read-only полей."""
-        return self.model_dump(exclude={"ai_available"})
+        """Конфиг для `save_config` — только хранимые поля (read-only полей в модели нет)."""
+        return self.model_dump(exclude=_READ_ONLY)
 
     @model_validator(mode="after")
     def _validate_via_shared_rules(self) -> "AutoManagerConfigData":
@@ -77,6 +96,20 @@ class AutoManagerConfigData(BaseModel):
         компромисс: единый источник правды важнее точной адресации ошибки.
         """
         validate_config(self.config_dict())
-        if self.mode == "ai" and not settings.AI_MANAGER_ENABLED:
+        # Только для входа: сохранённый конфиг может остаться mode="ai" после
+        # выключения флага — ответ GET обязан его показать, а не упасть 500.
+        if type(self) is AutoManagerConfigData and self.mode == "ai" and not settings.AI_MANAGER_ENABLED:
             raise ValueError("mode: режим 'ai' недоступен на этой площадке (AI_MANAGER_ENABLED)")
         return self
+
+
+_READ_ONLY = frozenset({"ai_available", "ai_status", "template_defaults", "base_emergency_keywords"})
+
+
+class AutoManagerConfigOut(AutoManagerConfigData):
+    """Ответ GET/PUT: конфиг + read-only состояние площадки (заполняет роутер)."""
+
+    ai_available: bool
+    ai_status: Optional[AiBreakerStatus] = None
+    template_defaults: dict[str, AiTemplateDefault]
+    base_emergency_keywords: list[str]
