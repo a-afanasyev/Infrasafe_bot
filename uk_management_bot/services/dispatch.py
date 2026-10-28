@@ -42,7 +42,8 @@ from uk_management_bot.utils.request_workflow import (
 
 logger = logging.getLogger(__name__)
 
-DispatchKind = Literal["no_spec", "disabled", "assigned", "grouped", "failed", "no_engineer"]
+DispatchKind = Literal["no_spec", "disabled", "assigned", "grouped", "failed", "no_engineer",
+                       "clarified"]
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,46 @@ def _auto_assign_enabled_sync(db=None) -> bool:
         return False
 
 
+def _ai_config_sync(db=None) -> Optional[dict]:
+    """Блок ``ai`` конфига, если ИИ-режим включён И на площадке (деплой-флаг
+    ``AI_MANAGER_ENABLED``), И в конфиге (``mode="ai"``); иначе None.
+
+    Best-effort в ту же сторону, что и флаг автоназначения: не прочитали —
+    считаем режим правил. Читается ПОСЛЕ ``_auto_assign_enabled_sync`` и
+    только когда автоназначение включено: ИИ — надстройка над ним.
+    """
+    from uk_management_bot.config.settings import settings
+    if not settings.AI_MANAGER_ENABLED:
+        return None
+    from uk_management_bot.services.auto_manager.config import load_config_sync
+    try:
+        if db is not None:
+            cfg = load_config_sync(db)
+        else:
+            from uk_management_bot.database.session import SessionLocal
+            session = SessionLocal()
+            try:
+                cfg = load_config_sync(session)
+            finally:
+                session.close()
+    except Exception as e:
+        logger.warning("[DISPATCH] конфиг ИИ-режима недоступен, считаю режим правил: %s", e)
+        return None
+    return cfg["ai"] if cfg.get("mode") == "ai" else None
+
+
+def _ai_triage(request_number: str, ai_cfg: dict, session_factory):
+    """Триаж ИИ-менеджера (``services/ai_manager/apply``). По контракту не
+    бросает; вторая страховка здесь — dispatch обязан дойти до назначения."""
+    from uk_management_bot.services.ai_manager import apply as ai_apply
+    try:
+        return ai_apply.apply_triage_sync(request_number, ai_cfg, session_factory)
+    except Exception as e:
+        logger.warning("[DISPATCH] ИИ-триаж %s не выполнен, режим правил: %s",
+                       request_number, e)
+        return ai_apply.TriageOutcome()
+
+
 async def _auto_assign_enabled_async(db=None, session_factory=None) -> bool:
     """Асинхронный аналог — то же fail-safe направление.
 
@@ -224,7 +265,11 @@ def auto_dispatch_new_request_sync(request_number: str,
     try:
         # «Инженерный разбор» — инженеру всегда, общий выключатель его не держит.
         enabled = engineering or _auto_assign_enabled_sync(db)
-        executor_id = pick_assignee_id(category, db) if enabled else None
+        # ИИ-режим — надстройка над автоназначением (не над инженерной
+        # эскалацией): при нём подбор откладывается до триажа — категория
+        # может измениться.
+        ai_cfg = _ai_config_sync(db) if (enabled and not engineering) else None
+        executor_id = pick_assignee_id(category, db) if (enabled and ai_cfg is None) else None
     finally:
         if own_db:
             db.close()
@@ -239,6 +284,16 @@ def auto_dispatch_new_request_sync(request_number: str,
     if session_factory is None:
         from uk_management_bot.database.session import SessionLocal
         session_factory = SessionLocal
+
+    if ai_cfg is not None:
+        triaged = _ai_triage(request_number, ai_cfg, session_factory)
+        if triaged.clarified:
+            logger.info("[DISPATCH] %s ушла в «Уточнение» по триажу ИИ — назначение отложено",
+                        request_number)
+            return DispatchResult("clarified", spec)
+        if triaged.category:
+            category, spec = triaged.category, _specialization_for(triaged.category)
+        executor_id = pick_assignee_id(category, _db)
 
     if executor_id is not None:
         command = _assign_executor_command(request_number, executor_id)
@@ -290,6 +345,19 @@ async def auto_dispatch_new_request_async(request_number: str,
     if session_factory is None:
         from uk_management_bot.database.session import AsyncSessionLocal
         session_factory = AsyncSessionLocal
+
+    # ИИ-режим: триаж (sync-код, своя SessionLocal внутри) в потоке — ДО
+    # подбора, категория может измениться; «Уточнение» — назначение отложено.
+    ai_cfg = None if engineering else await asyncio.to_thread(_ai_config_sync, None)
+    if ai_cfg is not None:
+        triaged = await asyncio.to_thread(_ai_triage, request_number, ai_cfg, None)
+        if triaged.clarified:
+            logger.info("[DISPATCH] %s ушла в «Уточнение» по триажу ИИ — назначение отложено",
+                        request_number)
+            await _publish_updated(request_number)
+            return DispatchResult("clarified", spec)
+        if triaged.category:
+            category, spec = triaged.category, _specialization_for(triaged.category)
 
     # Подбор дежурного — sync-код (`select_executor` ходит через Session), и
     # здесь мы в event loop'е. Отдельный поток, а не прямой вызов: блокировать
