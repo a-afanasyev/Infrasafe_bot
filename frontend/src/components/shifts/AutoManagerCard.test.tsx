@@ -50,7 +50,7 @@ describe('AutoManagerCard', () => {
     expect(screen.getByText('Asia/Tashkent')).toBeInTheDocument()
     expect(screen.getByText('10')).toBeInTheDocument()
     expect(screen.getByText('📐 По правилу')).toBeInTheDocument()
-    expect(screen.getByText('🤖 ИИ (скоро)')).toBeInTheDocument()
+    expect(screen.getByText('🤖 ИИ')).toBeInTheDocument()
   })
 
   it('toggling enabled fires the mutation with a COMPLETE config (all 6 fields, just enabled flipped)', async () => {
@@ -70,10 +70,7 @@ describe('AutoManagerCard', () => {
     expect(body).toEqual({ ...CONFIG, enabled: false })
   })
 
-  it('the AI mode button is clickable and shows a hint, but never writes to the config', async () => {
-    // Changed from HTML-disabled to an interactive click-shows-hint button
-    // (per explicit follow-up request) — must still NEVER persist mode="ai"
-    // in Phase 1, no matter how many times it's clicked.
+  it('without ai_available the AI button only shows a hint and never writes to the config', async () => {
     let putCalled = false
     server.use(
       http.put('*/api/v2/auto-manager-config', () => {
@@ -84,17 +81,41 @@ describe('AutoManagerCard', () => {
     const infoSpy = vi.spyOn(toast, 'info')
     const user = userEvent.setup()
     render(<AutoManagerCard />)
-    const aiButton = await screen.findByText('🤖 ИИ (скоро)')
+    const aiButton = await screen.findByText('🤖 ИИ')
     expect(aiButton).not.toBeDisabled()
 
     await user.click(aiButton)
     await user.click(aiButton)
 
     expect(infoSpy).toHaveBeenCalledTimes(2)
-    expect(infoSpy).toHaveBeenCalledWith('ИИ-режим появится позже, работает режим по правилу')
+    expect(infoSpy).toHaveBeenCalledWith('ИИ-режим недоступен на этой площадке (AI_MANAGER_ENABLED)')
     expect(putCalled).toBe(false)
-    expect(screen.getByText('📐 По правилу')).toBeInTheDocument()
-    expect(screen.getByText('🟢 Включён')).toBeInTheDocument()
+    expect(screen.getByText('📐 По правилу')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('with ai_available the AI button writes mode="ai" and the rule button switches back', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    let current = { ...CONFIG, ai_available: true }
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json(current)),
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        bodies.push(body)
+        current = { ...current, ...body } as typeof current
+        return HttpResponse.json(current)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    const aiButton = await screen.findByText('🤖 ИИ')
+    await user.click(aiButton)
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toMatchObject({ ...CONFIG, mode: 'ai' })
+    await waitFor(() => expect(screen.getByText('🤖 ИИ')).toHaveAttribute('aria-pressed', 'true'))
+
+    await user.click(screen.getByText('📐 По правилу'))
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[1]).toMatchObject({ mode: 'rule' })
   })
 
   it('saving a malformed window is caught client-side (no PUT fires)', async () => {

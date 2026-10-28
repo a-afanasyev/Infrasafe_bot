@@ -6,13 +6,15 @@
 // поэтому здесь намеренно НЕТ defaultAutoManagerConfig-фолбэка: карточка
 // просто показывает loading/error state, пока/если сервер не ответил.
 
-// Backend API-схема (schemas.py) намеренно ýже общего валидатора бота
-// (services/auto_manager/config.py::validate_config, который принимает и
-// "ai" — forward-compat под Phase 2): пока оркестратор не читает `mode`
-// вообще и ни бот, ни дашборд не могут выбрать "ai", API отдаёт/принимает
-// только "rule". Расширить до 'rule' | 'ai' — когда Phase 2 подключит
-// ИИ-движок к оркестратору, не раньше.
-export type AutoManagerMode = 'rule'
+// "ai" принимается бэкендом только при деплой-флаге площадки
+// (AI_MANAGER_ENABLED) — доступность приходит read-only полем `ai_available`.
+export type AutoManagerMode = 'rule' | 'ai'
+
+export interface AutoManagerAiConfig {
+  min_confidence: number
+  clarify_enabled: boolean
+  dedup_enabled: boolean
+}
 
 export interface AutoManagerConfigData {
   enabled: boolean
@@ -23,6 +25,10 @@ export interface AutoManagerConfigData {
   max_requests_per_run: number
   /** Нормативы сроков аналитики, часы от создания до сдачи работы. */
   sla_hours: SlaHours
+  /** Блок ИИ-режима; бэкенд подставляет дефолт, если поля нет. */
+  ai?: AutoManagerAiConfig
+  /** Read-only: доступен ли режим "ai" на этой площадке. */
+  ai_available?: boolean
 }
 
 export interface SlaHours {

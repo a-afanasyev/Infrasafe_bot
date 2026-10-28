@@ -2679,21 +2679,27 @@
       "toggle_off": "⏸ O'chirish",
       "mode_ai_blocked": "🤖 AI (tez orada)",
       "change_window": "🕐 Oynani o'zgartirish",
-      "back": "◀️ Orqaga"
+      "back": "◀️ Orqaga",
+      "mode_ai": "🤖 Rejim: AI",
+      "mode_rule": "📐 Rejim: qoida bo'yicha"
     },
     "status": {
       "title": "🤖 <b>Avtomatik menejer</b>",
       "enabled_on": "🟢 Yoqilgan",
       "enabled_off": "🔴 O'chirilgan",
       "mode_rule": "📐 Qoida bo'yicha (mutaxassislik bo'yicha navbatchi)",
-      "body": "Holat: {enabled}\nRejim: {mode}\nIsh oynasi: {window_start}–{window_end}\nVaqt zonasi: {timezone}\nBir marta bajarishdagi arizalar chegarasi: {max_requests}\n\nAI-rejim keyinroq qo'shiladi, hozircha profil bo'yicha rejim ishlaydi."
+      "body": "Holat: {enabled}\nRejim: {mode}\nIsh oynasi: {window_start}–{window_end}\nVaqt zonasi: {timezone}\nBir marta bajarishdagi arizalar chegarasi: {max_requests}",
+      "mode_ai": "🤖 AI-menejer (matn triaji + mutaxassislik bo'yicha navbatchi)"
     },
     "window_input": {
       "prompt": "Yangi ish oynasini <code>SS:DD-SS:DD</code> formatida kiriting (masalan, 20:00-08:00):",
       "invalid_format": "⚠️ Format noto'g'ri. Vaqtni <code>SS:DD-SS:DD</code> formatida kiriting, masalan 20:00-08:00.",
       "validation_error": "⚠️ Saqlab bo'lmadi: {error}\n\nSS:DD-SS:DD formatida qayta urinib ko'ring.",
       "success": "✅ Oyna yangilandi: {window_start}–{window_end}"
-    }
+    },
+    "ai_mode_unavailable": "AI-rejim bu maydonchada mavjud emas (AI_MANAGER_ENABLED).",
+    "mode_switched_ai": "AI-menejer rejimi yoqildi",
+    "mode_switched_rule": "Qoida bo'yicha rejim yoqildi"
   },
   "web_notifications": {
     "apartment_attached": "Menejer sizni xonadonga biriktirdi: {address}. Endi shu manzil bo‘yicha ariza yuborishingiz mumkin.",
