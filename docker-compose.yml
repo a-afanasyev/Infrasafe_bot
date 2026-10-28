@@ -56,6 +56,14 @@ services:
       # Подключение к Redis (ARCH-106: REDIS_URL строится из REDIS_PASSWORD, не берётся
       # целиком из .env — иначе Doppler-cutover REDIS_PASSWORD не давал бы эффекта здесь)
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0
+      # ИИ-менеджер (dark без AI_MANAGER_ENABLED): ключ и флаги — из Doppler, как у
+      # group-intake-bot; без явного проброса контейнер их не видит (env_file .env
+      # на проде пуст от секретов — ARCH-106).
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MANAGER_ENABLED=${AI_MANAGER_ENABLED:-false}
+      - AI_MANAGER_MODEL=${AI_MANAGER_MODEL:-claude-sonnet-5-5}
+      - AI_MANAGER_EFFORT=${AI_MANAGER_EFFORT:-low}
+      - AI_MANAGER_LLM_TIMEOUT=${AI_MANAGER_LLM_TIMEOUT:-8}
 
       # Настройки логирования
       - LOG_LEVEL=INFO
@@ -228,6 +236,20 @@ services:
       - INFRASAFE_WEBHOOK_ENABLED=${INFRASAFE_WEBHOOK_ENABLED:-false}
       - INFRASAFE_WEBHOOK_URL=${INFRASAFE_WEBHOOK_URL:-}
       - INFRASAFE_WEBHOOK_SECRET=${INFRASAFE_WEBHOOK_SECRET:-}
+      # ИИ-менеджер (dark без AI_MANAGER_ENABLED): ключ и флаги — из Doppler, как у
+      # group-intake-bot; без явного проброса контейнер их не видит (env_file .env
+      # на проде пуст от секретов — ARCH-106).
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MANAGER_ENABLED=${AI_MANAGER_ENABLED:-false}
+      - AI_MANAGER_MODEL=${AI_MANAGER_MODEL:-claude-sonnet-5-5}
+      - AI_MANAGER_EFFORT=${AI_MANAGER_EFFORT:-low}
+      - AI_MANAGER_LLM_TIMEOUT=${AI_MANAGER_LLM_TIMEOUT:-8}
+      # Мониторинг отключений (dark без NEWS_WATCH_ENABLED): конвейер и LLM живут в api,
+      # сервисный токен — для inbox юзербота.
+      - NEWS_WATCH_ENABLED=${NEWS_WATCH_ENABLED:-false}
+      - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:-}
+      - NEWS_WATCH_MODEL=${NEWS_WATCH_MODEL:-claude-sonnet-5-5}
+      - NEWS_WATCH_LLM_TIMEOUT=${NEWS_WATCH_LLM_TIMEOUT:-8}
       # DARK-гейт визуального модуля «Отчёты о работах»: гейтит manager+public API
       # (/api/v2/work-reports/, /api/v2/public/work-reports) и модуль board_config
       # `workreports`. Зеркалит фронтовый VITE_WORK_REPORTS_ENABLED — синхронизация
@@ -751,13 +773,16 @@ services:
       - net.ipv6.conf.default.disable_ipv6=1
     volumes:
       - news_watcher_data:/data
+    # Секреты с :- (не :?): compose интерполирует даже выключенный профиль, и :?
+    # ломал бы деплой на площадке без news-watch. «Профиль включён без значений»
+    # ловит fail-fast news_watcher.watcher.Settings.
     environment:
       # uvicorn api слушает 8080 внутри сети compose (host-порт 8085 — только для localhost).
       - NEWS_WATCH_API_URL=${NEWS_WATCH_API_URL:-http://api:8080}
-      - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:?NEWS_WATCH_SERVICE_TOKEN is required — set it in Doppler (project uk-management)}
-      - TG_API_ID=${TG_API_ID:?TG_API_ID is required — set it in Doppler (project uk-management)}
-      - TG_API_HASH=${TG_API_HASH:?TG_API_HASH is required — set it in Doppler (project uk-management)}
-      - NEWS_WATCH_TG_SESSION=${NEWS_WATCH_TG_SESSION:?NEWS_WATCH_TG_SESSION is required — set it in Doppler (project uk-management)}
+      - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:-}
+      - TG_API_ID=${TG_API_ID:-}
+      - TG_API_HASH=${TG_API_HASH:-}
+      - NEWS_WATCH_TG_SESSION=${NEWS_WATCH_TG_SESSION:-}
       - NEWS_WATCH_REFRESH_SECONDS=${NEWS_WATCH_REFRESH_SECONDS:-300}
       - NEWS_WATCH_OFFSETS_PATH=/data/offsets.json
 
