@@ -50,6 +50,8 @@ import {
   ArrowUpDown,
   Radio,
   UserCog,
+  Bot,
+  Settings,
 } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -106,16 +108,34 @@ const NAV_ENTRIES: NavEntry[] = [
   // Жители: список/карточка/модерация привязок. Пункт и API раздела гейтятся
   // одним действием residents.manage — пункт не ведёт на гарантированный 403.
   { to: '/dashboard/residents', labelKey: 'nav.residents', Icon: Users, action: 'residents.manage' },
-  // Group Intake: реестр мониторимых ТГ-групп. Как residents — пункт и API
-  // гейтятся одним действием group_intake.manage.
-  { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
-  { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay, action: 'board.configure' },
   // Модерация визуальных отчётов «до/после». DARK за VITE_WORK_REPORTS_ENABLED:
   // пункт появляется только когда фича включена билд-аргом.
   ...(import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'
     ? [{ to: '/dashboard/work-reports', labelKey: 'nav.workReports', Icon: Camera, action: 'work_reports.moderate' as const }]
     : []),
   { to: '/dashboard/feedback', labelKey: 'nav.feedback', Icon: MessageSquare, action: 'feedback.manage' },
+  // Настройки: витрина, роли и права, ТГ-группы, отключения, правила ИИ —
+  // под одним раскрываемым пунктом (решение владельца 2026-10-28). Группа
+  // видна, если после role-фильтра остался хотя бы один дочерний пункт.
+  {
+    groupKey: 'settings',
+    labelKey: 'nav.groupSettings',
+    Icon: Settings,
+    children: [
+      { to: '/dashboard/board-editor', labelKey: 'nav.boardEditor', Icon: MonitorPlay, action: 'board.configure' },
+      // Роли и права: просмотр — rbac.view (менеджер), правка — суперадмин из ADMIN_USER_IDS.
+      { to: '/dashboard/roles', labelKey: 'nav.roles', Icon: UserCog, action: 'rbac.view' },
+      // Group Intake: реестр мониторимых ТГ-групп; пункт и API гейтятся одним
+      // действием group_intake.manage.
+      { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
+      // Мониторинг отключений: очередь новостей + настройки. DARK за VITE_NEWS_WATCH_ENABLED.
+      ...(import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
+        ? [{ to: '/dashboard/news-watch', labelKey: 'nav.newsWatch', Icon: Radio, action: 'board.configure' as const }]
+        : []),
+      // Правила ИИ-менеджера: режим, триаж, SLA-лестница, тексты уведомлений.
+      { to: '/dashboard/ai-manager', labelKey: 'nav.aiManager', Icon: Bot, action: 'auto_manager.configure' },
+    ],
+  },
   // Контроль доступа: обзор + история проездов + база доступа + оборудование.
   {
     groupKey: 'access',
@@ -134,16 +154,10 @@ const NAV_ENTRIES: NavEntry[] = [
   },
   // Складской учёт материалов (manager/system_admin)
   { to: '/dashboard/materials', labelKey: 'nav.materials', Icon: Package, action: 'materials.manage' },
-  // Роли и права: просмотр — rbac.view (менеджер), правка — суперадмин из ADMIN_USER_IDS.
-  { to: '/dashboard/roles', labelKey: 'nav.roles', Icon: UserCog, action: 'rbac.view' },
   // Лифты: реестр/карточка/календарь/конфиг. DARK за VITE_ELEVATORS_ENABLED;
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
     ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, action: 'elevators.read' as const }]
-    : []),
-  // Мониторинг отключений: очередь новостей + настройки. DARK за VITE_NEWS_WATCH_ENABLED.
-  ...(import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
-    ? [{ to: '/dashboard/news-watch', labelKey: 'nav.newsWatch', Icon: Radio, action: 'board.configure' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.
