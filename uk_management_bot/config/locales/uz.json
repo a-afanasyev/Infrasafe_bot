@@ -2943,6 +2943,10 @@
       "critical_unassigned": "🚨 <b>№{request_number} kritik ariza ijrochisiz</b> {minutes} daqiqadan beri.\n{category}, {address}"
     },
     "unknown_executor": "—",
-    "switched_off": "🤖 AI-menejer rejimi o'chirildi. SLA-eskalatsiya ketayotgan ochiq arizalar: {count} — endi ular avtomatik nazoratsiz."
+    "switched_off": "🤖 AI-menejer rejimi o'chirildi. SLA-eskalatsiya ketayotgan ochiq arizalar: {count} — endi ular avtomatik nazoratsiz.",
+    "public": {
+      "assigned": "🚨 №{request_number} avariya arizasi ({category}) bo'yicha ijrochi yo'lga chiqdi.",
+      "executed": "✅ №{request_number} avariya arizasi ({category}) bajarildi."
+    }
   }
 }

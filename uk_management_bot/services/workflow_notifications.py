@@ -508,6 +508,24 @@ async def _collect_async(
     return request, jobs
 
 
+def _public_status_sync(db, request_number: str, plan):
+    """Режим ИИ: публичный статус критической заявки в чат дома (без флага —
+    None без запросов). См. services/ai_manager/public_status."""
+    from uk_management_bot.services.ai_manager import public_status
+
+    try:
+        return public_status.outgoing_for_sync(db, request_number, {a for a, _, _ in plan})
+    except Exception as e:  # публичный статус не вправе ронять рассылку
+        logger.warning("public_status для %s пропущен: %s", request_number, type(e).__name__)
+        return None
+
+
+async def _public_status_async(request_number: str, plan) -> None:
+    from uk_management_bot.services.ai_manager import public_status
+
+    await public_status.announce(request_number, {a for a, _, _ in plan})
+
+
 async def _send_jobs(
     request: Request, jobs, clarification_text: Optional[str],
 ) -> int:
@@ -550,7 +568,9 @@ async def dispatch_notify_intents(
     request, jobs = await _collect_async(db, request_number, plan)
     if request is None:
         return 0
-    return await _send_jobs(request, jobs, clarification_text)
+    sent = await _send_jobs(request, jobs, clarification_text)
+    await _public_status_async(request_number, plan)
+    return sent
 
 
 async def dispatch_notify_intents_detached(
@@ -592,7 +612,9 @@ async def dispatch_notify_intents_detached(
     # Сессия закрыта (close = expunge, объекты не экспайрятся) — дальше только сеть.
     if request is None:
         return 0
-    return await _send_jobs(request, jobs, clarification_text)
+    sent = await _send_jobs(request, jobs, clarification_text)
+    await _public_status_async(request_number, plan)
+    return sent
 
 
 async def dispatch_notify_intents_sync(
@@ -633,6 +655,10 @@ async def dispatch_notify_intents_sync(
                 "Уведомление по действию %s для заявки %s не отправлено: %s",
                 action.value, request_number, e,
             )
+    public = _public_status_sync(db, request_number, plan)
+    if public is not None:
+        from uk_management_bot.services.ai_manager import channels as _ai_channels
+        sent += int(await _ai_channels.deliver(bot or _get_shared_bot(), public))
     return sent
 
 
@@ -675,6 +701,9 @@ def collect_notify_messages_sync(
                 "Уведомление по действию %s для заявки %s не собрано: %s",
                 action.value, request_number, e,
             )
+    public = _public_status_sync(db, request_number, plan)
+    if public is not None:
+        messages.append(NotifyMessage(public.chat_id, public.text, None))
     return messages
 
 
