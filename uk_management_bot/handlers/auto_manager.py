@@ -21,7 +21,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db, session_scope
 from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.services.auto_manager.config import (
     load_config_sync,
@@ -55,11 +55,10 @@ def _status_text(cfg: dict, lang: str) -> str:
         "auto_manager.status.enabled_on" if cfg["enabled"] else "auto_manager.status.enabled_off",
         language=lang,
     )
-    # Phase-1 упрощение: строка всегда показывает «по правилу», не читая
-    # cfg["mode"] — сегодня это безвредно (ни бот, ни дашборд не умеют
-    # писать mode="ai"), но raw PUT в API Task 7 технически может это
-    # сохранить. Phase 2 сделает эту строку mode-aware (AI-доступность).
-    mode_label = get_text("auto_manager.status.mode_rule", language=lang)
+    mode_label = get_text(
+        "auto_manager.status.mode_ai" if cfg.get("mode") == "ai" else "auto_manager.status.mode_rule",
+        language=lang,
+    )
 
     title = get_text("auto_manager.status.title", language=lang)
     body = get_text(
@@ -75,6 +74,22 @@ def _status_text(cfg: dict, lang: str) -> str:
     return f"{title}\n\n{body}"
 
 
+def _ai_available() -> bool:
+    """Деплой-флаг площадки (см. settings.AI_MANAGER_ENABLED) — тот же гейт,
+    что у API-схемы: без него кнопка остаётся «ИИ (скоро)» и ничего не пишет."""
+    from uk_management_bot.config.settings import settings
+
+    return bool(settings.AI_MANAGER_ENABLED)
+
+
+def _mode_button_label(cfg: dict, lang: str) -> str:
+    if not _ai_available():
+        return get_text("auto_manager.keyboards.mode_ai_blocked", language=lang)
+    # Кнопка показывает ТЕКУЩИЙ режим, тап переключает на другой.
+    key = "mode_ai" if cfg.get("mode") == "ai" else "mode_rule"
+    return get_text(f"auto_manager.keyboards.{key}", language=lang)
+
+
 def _status_keyboard(cfg: dict, lang: str) -> InlineKeyboardMarkup:
     toggle_label = get_text(
         "auto_manager.keyboards.toggle_off" if cfg["enabled"] else "auto_manager.keyboards.toggle_on",
@@ -83,7 +98,7 @@ def _status_keyboard(cfg: dict, lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=toggle_label, callback_data="auto_manager_toggle")],
         [InlineKeyboardButton(
-            text=get_text("auto_manager.keyboards.mode_ai_blocked", language=lang),
+            text=_mode_button_label(cfg, lang),
             callback_data="auto_manager_mode_ai",
         )],
         [InlineKeyboardButton(
@@ -171,18 +186,59 @@ async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext,
 
 @router.callback_query(F.data == "auto_manager_mode_ai")
 @require_action("admin_panel.use")
-async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
-    """«ИИ (скоро)» — Фаза 1: заблокирован. Никогда не пишет mode="ai" в БД,
-    даже при повторном/двойном тапе или доставке протухшей клавиатуры —
-    единственное действие здесь — показать hint-тост, конфиг не читается и
-    не сохраняется.
+async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
+    """Переключатель режима rule ↔ ai.
+
+    Без деплой-флага ``AI_MANAGER_ENABLED`` — прежнее поведение: только
+    hint-тост, конфиг не читается и не пишется (протухшая клавиатура или
+    двойной тап не включат режим, который на площадке не работает).
+
+    AUD3-37: единственный хендлер файла без DI-параметра ``db`` — DB-фаза
+    идёт цельным sync-юнитом в worker-потоке (``run_db``), ``_db`` — тестовый
+    seam (как в handlers/group_intake.py). Роли/пользователь — из DI.
     """
+    telegram_id = callback.from_user.id
+    if not _ai_available():
+        try:
+            lang = await run_db(lambda s: get_user_language(telegram_id, s), db=_db)
+            await callback.answer(get_text("auto_manager.ai_mode_hint", language=lang), show_alert=False)
+        except Exception as e:
+            logger.error(f"Ошибка hint'а ИИ-режима: {e}")
+            await callback.answer()
+        return
+    lang = "ru"
+    updated_by = user.id if user else None
     try:
-        lang = get_user_language(callback.from_user.id, db) if db else "ru"
-        await callback.answer(get_text("auto_manager.ai_mode_hint", language=lang), show_alert=False)
+        lang, saved, notices = await run_db(
+            lambda s: _toggle_mode_sync(s, telegram_id, updated_by), db=_db,
+        )
+        await callback.message.edit_text(
+            _status_text(saved, lang),
+            reply_markup=_status_keyboard(saved, lang),
+            parse_mode="HTML",
+        )
+        toast_key = ("auto_manager.mode_switched_ai" if saved["mode"] == "ai"
+                     else "auto_manager.mode_switched_rule")
+        await callback.answer(get_text(toast_key, language=lang))
+        if notices:
+            # ai → rule: менеджерам — сколько открытых заявок было на SLA-эскалации.
+            from uk_management_bot.services.workflow_notifications import send_notify_messages
+            await send_notify_messages(callback.bot, notices)
     except Exception as e:
-        logger.error(f"Ошибка hint'а ИИ-режима: {e}")
-        await callback.answer()
+        logger.error(f"Ошибка переключения режима автоменеджера: {e}")
+        await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
+
+
+def _toggle_mode_sync(session, telegram_id: int, updated_by: int | None) -> tuple[str, dict, list]:
+    """rule ↔ ai; остальные поля конфига сохраняются как есть.
+    Третий элемент — (telegram_id, text) менеджерам при выключении ИИ."""
+    from uk_management_bot.services.ai_manager.switch_off import manager_notices_sync
+
+    lang = get_user_language(telegram_id, session)
+    cfg = load_config_sync(session)
+    new_mode = "rule" if cfg.get("mode") == "ai" else "ai"
+    saved = save_config_sync(session, {**cfg, "mode": new_mode}, updated_by=updated_by)
+    return lang, saved, manager_notices_sync(session, cfg.get("mode", "rule"), new_mode)
 
 
 @router.callback_query(F.data == "auto_manager_change_window")

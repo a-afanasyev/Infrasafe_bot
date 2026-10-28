@@ -326,14 +326,15 @@ def _apply_sync(db: Session, req: Request, result: TransitionResult,
                 identity=EventIdentity(version=req.status_version))
 
 
-def _comment_row(req: Request, dop, actor: ActorContext) -> RequestComment:
-    """`add_comment` → строка истории заявки. Автор — актор-человек
-    (единственный эмитент — MANAGER_CHANGE_CATEGORY, authorize=_is_manager)."""
-    if actor.kind != "user" or actor.user_id is None:
-        raise WorkflowError("add_comment: требуется актор-пользователь")
+def _comment_row(req: Request, dop, author_id: Optional[int]) -> RequestComment:
+    """`add_comment` → строка истории заявки. Автор — человек-актор либо
+    seeded system-user для системного актора (ИИ-триаж меняет категорию через
+    тот же MANAGER_CHANGE_CATEGORY; «кто» фиксируется принципалом в audit)."""
+    if author_id is None:
+        raise WorkflowError("add_comment: не определён автор комментария")
     return RequestComment(
         request_number=req.request_number,
-        user_id=actor.user_id,
+        user_id=author_id,
         comment_text=dop.data["text"],
         comment_type=dop.data["comment_type"],
         # Внутренняя запись: заявителю смена категории в /comments не отдаётся
@@ -347,7 +348,12 @@ def _apply_domain_op_sync(db: Session, req: Request, dop, actor: ActorContext) -
         db.add(Rating(request_number=req.request_number,
                       user_id=actor.user_id, rating=dop.data["rating"]))
     elif dop.kind == "add_comment":
-        db.add(_comment_row(req, dop, actor))
+        if actor.kind == "user":
+            author_id = actor.user_id
+        else:
+            from uk_management_bot.utils.system_user import get_system_user_id_sync
+            author_id = get_system_user_id_sync(db)
+        db.add(_comment_row(req, dop, author_id))
     elif dop.kind == "cancel_active_assignments":
         db.query(RequestAssignment).filter(
             RequestAssignment.request_number == req.request_number,
@@ -537,7 +543,12 @@ async def _apply_domain_op_async(db: AsyncSession, req: Request, dop,
         db.add(Rating(request_number=req.request_number,
                       user_id=actor.user_id, rating=dop.data["rating"]))
     elif dop.kind == "add_comment":
-        db.add(_comment_row(req, dop, actor))
+        if actor.kind == "user":
+            author_id = actor.user_id
+        else:
+            from uk_management_bot.utils.system_user import get_system_user_id_async
+            author_id = await get_system_user_id_async(db)
+        db.add(_comment_row(req, dop, author_id))
     elif dop.kind == "cancel_active_assignments":
         await db.execute(sa_update(RequestAssignment).where(
             RequestAssignment.request_number == req.request_number,

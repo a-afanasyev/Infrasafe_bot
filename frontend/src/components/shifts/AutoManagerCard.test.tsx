@@ -7,6 +7,8 @@ import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router'
 import { render, testI18n } from '../../test/test-utils'
+import { useAuthStore } from '../../stores/authStore'
+import { actionsFor } from '../../test/authz'
 import { server } from '../../test/msw/server'
 import AutoManagerCard from './AutoManagerCard'
 
@@ -50,7 +52,7 @@ describe('AutoManagerCard', () => {
     expect(screen.getByText('Asia/Tashkent')).toBeInTheDocument()
     expect(screen.getByText('10')).toBeInTheDocument()
     expect(screen.getByText('📐 По правилу')).toBeInTheDocument()
-    expect(screen.getByText('🤖 ИИ (скоро)')).toBeInTheDocument()
+    expect(screen.getByText('🤖 ИИ')).toBeInTheDocument()
   })
 
   it('toggling enabled fires the mutation with a COMPLETE config (all 6 fields, just enabled flipped)', async () => {
@@ -70,10 +72,29 @@ describe('AutoManagerCard', () => {
     expect(body).toEqual({ ...CONFIG, enabled: false })
   })
 
-  it('the AI mode button is clickable and shows a hint, but never writes to the config', async () => {
-    // Changed from HTML-disabled to an interactive click-shows-hint button
-    // (per explicit follow-up request) — must still NEVER persist mode="ai"
-    // in Phase 1, no matter how many times it's clicked.
+  it('read-only fields of the GET response (ai_available, ai_status, template_defaults, base_emergency_keywords) never reach the PUT body', async () => {
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json({
+        ...CONFIG, ai_available: true, ai_status: { open: true, open_ttl: 300, failures: 3 },
+        template_defaults: { 'public.assigned': { ru: 'x', uz: 'y', placeholders: ['request_number'] } },
+        base_emergency_keywords: ['газ'],
+      })),
+    )
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(body)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    await user.click(await screen.findByLabelText('Включить/выключить автоменеджер'))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(Object.keys(body!).sort()).toEqual([...Object.keys(CONFIG)].sort())
+  })
+
+  it('without ai_available the AI button only shows a hint and never writes to the config', async () => {
     let putCalled = false
     server.use(
       http.put('*/api/v2/auto-manager-config', () => {
@@ -84,17 +105,41 @@ describe('AutoManagerCard', () => {
     const infoSpy = vi.spyOn(toast, 'info')
     const user = userEvent.setup()
     render(<AutoManagerCard />)
-    const aiButton = await screen.findByText('🤖 ИИ (скоро)')
+    const aiButton = await screen.findByText('🤖 ИИ')
     expect(aiButton).not.toBeDisabled()
 
     await user.click(aiButton)
     await user.click(aiButton)
 
     expect(infoSpy).toHaveBeenCalledTimes(2)
-    expect(infoSpy).toHaveBeenCalledWith('ИИ-режим появится позже, работает режим по правилу')
+    expect(infoSpy).toHaveBeenCalledWith('ИИ-режим недоступен на этой площадке (AI_MANAGER_ENABLED)')
     expect(putCalled).toBe(false)
-    expect(screen.getByText('📐 По правилу')).toBeInTheDocument()
-    expect(screen.getByText('🟢 Включён')).toBeInTheDocument()
+    expect(screen.getByText('📐 По правилу')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('with ai_available the AI button writes mode="ai" and the rule button switches back', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    let current = { ...CONFIG, ai_available: true }
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json(current)),
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        bodies.push(body)
+        current = { ...current, ...body } as typeof current
+        return HttpResponse.json(current)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    const aiButton = await screen.findByText('🤖 ИИ')
+    await user.click(aiButton)
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toMatchObject({ ...CONFIG, mode: 'ai' })
+    await waitFor(() => expect(screen.getByText('🤖 ИИ')).toHaveAttribute('aria-pressed', 'true'))
+
+    await user.click(screen.getByText('📐 По правилу'))
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[1]).toMatchObject({ mode: 'rule' })
   })
 
   it('saving a malformed window is caught client-side (no PUT fires)', async () => {
@@ -206,5 +251,76 @@ describe('AutoManagerCard', () => {
     expect(await screen.findByLabelText('С')).toBeInTheDocument()
     // Выбор запомнен.
     expect(localStorage.getItem('uk.shifts.autoManagerCollapsed')).toBe('0')
+  })
+})
+
+describe('AutoManagerCard — ссылка на «Правила ИИ»', () => {
+  function login(roles: string[]) {
+    useAuthStore.setState({
+      user: { id: 1, first_name: 'Мария', roles, actions: actionsFor(roles) } as never,
+      isAuthenticated: true,
+    })
+  }
+
+  it('менеджер видит ссылку на страницу правил', async () => {
+    login(['manager'])
+    render(<AutoManagerCard />)
+    expect(await screen.findByRole('link', { name: 'Правила ИИ →' })).toHaveAttribute('href', '/dashboard/ai-manager')
+  })
+
+  it('без auto_manager.configure ссылки нет', async () => {
+    login(['executor'])
+    render(<AutoManagerCard />)
+    await screen.findByText('🤖 Автоматический менеджер')
+    expect(screen.queryByRole('link', { name: 'Правила ИИ →' })).not.toBeInTheDocument()
+  })
+})
+
+describe('AutoManagerCard — SLA', () => {
+  const SLA = {
+    in_progress_max: { critical: 2, high: 12, medium: 48, low: 72 },
+    clarification_max: 48,
+    executed_unconfirmed_max: 24,
+    completed_unaccepted_days: 3,
+    critical_unassigned_minutes: 30,
+    ladder: { remind_executor: 0, staff_group: 2, manager: 4, reassign: 8 },
+    ladder_enabled: { remind_executor: true, staff_group: true, manager: true, reassign: true },
+    public_status: { enabled: true, min_urgency: 'critical' },
+  }
+
+  it('hides the SLA block when AI is unavailable', async () => {
+    server.use(http.get('*/api/v2/auto-manager-config', () => HttpResponse.json({ ...CONFIG, sla: SLA })))
+    render(<AutoManagerCard />)
+    await screen.findByText('🤖 Автоматический менеджер')
+    expect(screen.queryByText('Сохранить SLA')).not.toBeInTheDocument()
+  })
+
+  it('edits one SLA value and PUTs the whole sla block', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    let current = { ...CONFIG, ai_available: true, sla: SLA }
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json(current)),
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        bodies.push(body)
+        current = { ...current, ...body } as typeof current
+        return HttpResponse.json(current)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    const critical = await screen.findByLabelText('Критическая')
+    expect(critical).toHaveValue(2)
+    const save = screen.getByText('Сохранить SLA')
+    expect(save).toBeDisabled()
+
+    await user.clear(critical)
+    await user.type(critical, '1')
+    expect(save).not.toBeDisabled()
+    await user.click(save)
+
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0].sla).toEqual({ ...SLA, in_progress_max: { ...SLA.in_progress_max, critical: 1 } })
+    expect(bodies[0].mode).toBe('rule')
   })
 })

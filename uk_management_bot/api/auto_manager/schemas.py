@@ -12,20 +12,22 @@ PUT-payload — как у `board_config.schemas.BoardConfigData`: требует
 хендлер); API-путь всегда шлёт/получает уже полный конфиг — так же, как
 board_config, где PUT ожидает целиком заполненную модель.
 
-⚠️ `mode`: API-схема ЖЁСТЧЕ общего `validate_config` (который принимает и
-"rule", и "ai" — так исторически решили для forward-compat с Phase 2). Здесь
-`Literal["rule"]` намеренно ýже: до появления реального ИИ-движка (Phase 2,
-`services/auto_manager/ai_engine.py`, требует ANTHROPIC_API_KEY) оркестратор
-всё равно ИГНОРИРУЕТ `mode` и всегда работает по правилу — разрешать API
-сохранять "ai" уже сейчас означало бы, что GET/PUT показывают режим, который
-фактически не работает (ни бот, ни дашборд и так не могут выбрать "ai" —
-обе UI кнопки заблокированы/no-op). Разрешить "ai" здесь тоже нужно будет
-РОВНО когда Phase 2 реально подключит движок к оркестратору, не раньше.
+⚠️ `mode="ai"`: общий `validate_config` принимает его всегда, API — только
+при `settings.AI_MANAGER_ENABLED` (деплой-флаг площадки, см. settings.py):
+без флага PUT принимал бы режим, который здесь не работает.
+
+Две модели: `AutoManagerConfigData` — тело PUT (только хранимые поля; pydantic
+`extra="ignore"` молча отбрасывает read-only поля ответа, которые клиент шлёт
+обратно) и `AutoManagerConfigOut` — ответ GET/PUT (конфиг + read-only
+состояние площадки: `ai_available`, `ai_status`, `template_defaults`,
+`base_emergency_keywords`).
 """
-from typing import Literal
+from copy import deepcopy
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from uk_management_bot.config.settings import settings
 from uk_management_bot.services.auto_manager.config import DEFAULT_CONFIG, validate_config
 
 
@@ -38,9 +40,27 @@ class SlaHours(BaseModel):
     low: int
 
 
+class AiBreakerStatus(BaseModel):
+    """Предохранитель ИИ-триажа (services/ai_manager/breaker.py::status)."""
+
+    open: bool
+    open_ttl: int
+    failures: int
+
+
+class AiTemplateDefault(BaseModel):
+    """Стандартный текст пинга и допустимые подстановки (ai_manager/templates.py)."""
+
+    ru: str
+    uz: str
+    placeholders: list[str]
+
+
 class AutoManagerConfigData(BaseModel):
+    """Тело PUT: только хранимые поля конфига."""
+
     enabled: bool
-    mode: Literal["rule"]
+    mode: Literal["rule", "ai"]
     window_start: str
     window_end: str
     timezone: str
@@ -50,6 +70,15 @@ class AutoManagerConfigData(BaseModel):
     sla_hours: SlaHours = Field(
         default_factory=lambda: SlaHours(**DEFAULT_CONFIG["sla_hours"])
     )
+    # Блок ИИ-режима: явное поле обязательно — у модели `extra="ignore"`, и без
+    # него каждый PUT полного конфига с дашборда сбрасывал бы `ai` в дефолт.
+    # Вложенная валидация — в `validate_config` (единый источник правил).
+    ai: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["ai"]))
+    sla: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["sla"]))
+
+    def config_dict(self) -> dict:
+        """Конфиг для `save_config` — только хранимые поля (read-only полей в модели нет)."""
+        return self.model_dump(exclude=_READ_ONLY)
 
     @model_validator(mode="after")
     def _validate_via_shared_rules(self) -> "AutoManagerConfigData":
@@ -66,5 +95,21 @@ class AutoManagerConfigData(BaseModel):
         field-specific). Имя поля всё равно есть в тексте `msg`. Осознанный
         компромисс: единый источник правды важнее точной адресации ошибки.
         """
-        validate_config(self.model_dump())
+        validate_config(self.config_dict())
+        # Только для входа: сохранённый конфиг может остаться mode="ai" после
+        # выключения флага — ответ GET обязан его показать, а не упасть 500.
+        if type(self) is AutoManagerConfigData and self.mode == "ai" and not settings.AI_MANAGER_ENABLED:
+            raise ValueError("mode: режим 'ai' недоступен на этой площадке (AI_MANAGER_ENABLED)")
         return self
+
+
+_READ_ONLY = frozenset({"ai_available", "ai_status", "template_defaults", "base_emergency_keywords"})
+
+
+class AutoManagerConfigOut(AutoManagerConfigData):
+    """Ответ GET/PUT: конфиг + read-only состояние площадки (заполняет роутер)."""
+
+    ai_available: bool
+    ai_status: Optional[AiBreakerStatus] = None
+    template_defaults: dict[str, AiTemplateDefault]
+    base_emergency_keywords: list[str]

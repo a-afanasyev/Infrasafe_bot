@@ -67,6 +67,11 @@ services:
     image: ghcr.io/a-afanasyev/uk-media-service:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
     build: !reset null
 
+  # Юзербот мониторинга отключений (свой образ news_watcher/Dockerfile; профиль news-watch).
+  news-watcher:
+    image: ghcr.io/a-afanasyev/uk-news-watcher:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
+    build: !reset null
+
   media-migrate:
     image: ghcr.io/a-afanasyev/uk-media-service:sha-${UK_IMAGE_SHA:?UK_IMAGE_SHA — полный SHA коммита, см. SKILL uk-deploy}
     build: !reset null

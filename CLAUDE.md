@@ -17,7 +17,7 @@
 ## Core Rules
 
 - **Язык общения**: русский, если не указано иное.
-- **Контейнеры**: бот = `uk-management-bot`, API = `uk-management-api`, фронт = `uk-frontend`, БД = `uk-postgres`, кэш = `uk-redis`.
+- **Контейнеры**: бот = `uk-management-bot`, API = `uk-management-api`, фронт = `uk-frontend`, БД = `uk-postgres`, кэш = `uk-redis`, юзербот новостей = `uk-news-watcher` (профиль `news-watch`).
 - **Тесты бота**: два набора (оба в CI): unit/handlers/services — `pytest -q` (testpaths=`uk_management_bot/`); API + интеграция/SSOT-гейты — `pytest -q tests/api tests/services` (sqlite-conftest'ы, второй набор гоняется с `INFRASAFE_WEBHOOK_ENABLED=true`). Корневой top-level `tests/*.py` удалён (был заброшенный legacy).
   - **Эталон перед мержем — `make test-ci`**: свежая сборка образа + одноразовые postgres/redis + оба набора раздельно, один-в-один с CI-джобой `backend-tests` (`scripts/test-ci-local.sh`).
   - `make test` / `docker exec uk-management-bot pytest` — быстрая петля, НЕ эталон: образ печётся (код = момент сборки), в живой контейнер во время отладки попадают файлы через `docker cp`, и в образе нет `docker-compose*.yml` — SSOT-гейт `test_compose_secret_env_ssot.py` там падает тремя FileNotFoundError при зелёном CI. Прод-образ бота собирается БЕЗ pytest (`INSTALL_DEV=false` по умолчанию, A9-P2-19) — для этой петли собирать `make build-bot` (передаёт `--build-arg INSTALL_DEV=true`).
@@ -32,6 +32,8 @@
 - **Секреты (ARCH-106 закрыт целиком 2026-07-21)**: `app`/`api`/`access-api`/`migrate`/`resource-api`/`resource-worker` **и `media-service`** получают секреты из Doppler (`doppler run --project uk-management --config <profk|infrasafe> -- docker compose ...`), НЕ из `.env`. media подключается к БД `uk_media` под выделенной ролью `uk_media_owner` (пароль в Doppler). Carve-out (осознанно вне Doppler): PR-7 role-файлы (`.env.postgres`, `.secrets/roles/`), несекретная конфигурация. Детали → `.claude/skills/uk-deploy/SKILL.md`.
 - **Аналитика заявок** (`/api/v2/requests/stats*`, `services/request_analytics/`, alembic 025 `executed_at`): «принято» = completed_at, «выполнено» = executed_at, возврат — только `returned_at`/`manager_return_reason` (не `is_returned`); автоотчёт менеджерам 1-го числа; отчёт для проверяющих органов — `.xlsx` через `/stats/report`. Детали → `docs/tech/ANALYTICS.md`.
 - **Модуль «Лифты»** (`/api/v2/elevators`, миграции 017/018): DARK за `ELEVATORS_ENABLED` (бот+API, одинаково для обоих сервисов) и `VITE_ELEVATORS_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/ELEVATORS_MODULE.md`.
+- **ИИ-менеджер** (`mode="ai"` автоменеджера): DARK за `AI_MANAGER_ENABLED` (бот+API), общий `ANTHROPIC_API_KEY`; LLM только триаж текста, исполнитель — rule-engine; общий LLM-клиент `services/llm/`. Детали → `docs/tech/AI_MANAGER.md`.
+- **Мониторинг отключений** (`/api/v2/news-watch`, миграция 028, контейнер `uk-news-watcher` = Telethon-юзербот за профилем `news-watch`): DARK за `NEWS_WATCH_ENABLED` (api) и `VITE_NEWS_WATCH_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/tech/NEWS_WATCH.md`.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи, Doppler-токены) — никогда не коммитить, не выводить.

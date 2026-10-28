@@ -16,6 +16,8 @@ function renderLayout(route = '/dashboard') {
     <Routes>
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<div data-testid="page-body">outlet-контент</div>} />
+        {/* любой вложенный маршрут — чтобы проверять авто-раскрытие групп по активному пути */}
+        <Route path="*" element={<div data-testid="page-body">outlet-контент</div>} />
       </Route>
     </Routes>,
     { routerEntries: [route] },
@@ -57,6 +59,12 @@ function userMenuTrigger() {
   return trigger!
 }
 
+// Группа «Настройки» (витрина, роли, группы, отключения, правила ИИ) свёрнута,
+// пока активный маршрут не внутри неё — раскрываем кликом по заголовку.
+async function openSettings() {
+  await userEvent.click(screen.getByRole('button', { name: /настройки/i }))
+}
+
 describe('DashboardLayout — навигация и роли', () => {
   it('рендерит каркас и контент вложенного маршрута', () => {
     renderLayout()
@@ -64,10 +72,33 @@ describe('DashboardLayout — навигация и роли', () => {
     expect(screen.getByRole('link', { name: /заявки/i })).toBeInTheDocument()
   })
 
-  it('менеджер видит «Жители» и «Группы»', () => {
+  it('менеджер видит «Жители», а «Группы» — внутри группы «Настройки»', async () => {
     renderLayout()
     expect(screen.getByRole('link', { name: /жители/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /группы/i })).not.toBeInTheDocument()   // свёрнуто
+    await openSettings()
     expect(screen.getByRole('link', { name: /группы/i })).toBeInTheDocument()
+  })
+
+  it('«Настройки» раскрываются и содержат витрину, роли, группы и правила ИИ', async () => {
+    renderLayout()
+    await openSettings()
+    expect(screen.getByRole('link', { name: /витрин/i })).toHaveAttribute('href', '/dashboard/board-editor')
+    expect(screen.getByRole('link', { name: /роли и права/i })).toHaveAttribute('href', '/dashboard/roles')
+    expect(screen.getByRole('link', { name: /группы/i })).toHaveAttribute('href', '/dashboard/groups')
+    expect(screen.getByRole('link', { name: /правила ии/i })).toHaveAttribute('href', '/dashboard/ai-manager')
+  })
+
+  it('группа «Настройки» раскрыта, когда активен её маршрут', () => {
+    renderLayout('/dashboard/ai-manager')
+    expect(screen.getByRole('link', { name: /правила ии/i })).toBeInTheDocument()
+  })
+
+  it('без прав на разделы настроек группы «Настройки» нет вовсе', () => {
+    login(['executor'])
+    renderLayout()
+    expect(screen.queryByRole('button', { name: /настройки/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /правила ии/i })).not.toBeInTheDocument()
   })
 
   it('без роли manager «Жители» и «Группы» скрыты, общие пункты остаются', () => {
@@ -90,12 +121,14 @@ describe('DashboardLayout — навигация и роли', () => {
     expect(screen.queryByText('Персонал')).not.toBeInTheDocument()
   })
 
-  it('менеджер по-прежнему видит все свои разделы', () => {
+  it('менеджер по-прежнему видит все свои разделы', async () => {
     renderLayout()
-    for (const name of [/аналитика/i, /адреса/i, /витрин/i, /обратная связь/i]) {
+    for (const name of [/аналитика/i, /адреса/i, /обратная связь/i]) {
       expect(screen.getByRole('link', { name })).toBeInTheDocument()
     }
     expect(screen.getByText('Персонал')).toBeInTheDocument()
+    await openSettings()
+    expect(screen.getByRole('link', { name: /витрин/i })).toBeInTheDocument()
   })
 
   it('«Склад» виден только ролям модуля материалов', () => {

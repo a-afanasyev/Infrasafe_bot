@@ -62,6 +62,13 @@ COPY uk_management_bot/ ./uk_management_bot/
 # без fastapi) — в том же общем repo.
 COPY access_control ./access_control
 
+# Юзербот мониторинга отключений (news_watcher/): свой образ (news_watcher/Dockerfile),
+# но его юниты (tests/services/test_news_watcher_unit.py) гоняются набором 2 в этом
+# образе — без пакета `pytest tests/services` падает на сборе (CI-раннер видит его
+# через PYTHONPATH=workspace, образ — только то, что скопировано). Telethon не нужен:
+# watcher.py импортирует только httpx/stdlib, telethon — лениво в main.py.
+COPY news_watcher/ ./news_watcher/
+
 # Копируем тесты
 COPY tests/ ./tests/
 

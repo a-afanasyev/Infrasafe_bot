@@ -79,6 +79,19 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
         REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a) or _engineer_can_assign(s, a), RepeatPolicy.NO_OP_IF_SAME),
+    # ИИ-менеджер (SLA-лестница): переназначение просроченной «В работе»
+    # другому дежурному. system_only + capability `ai_manager` (guards.py);
+    # SYSTEM_DISPATCH_ASSIGN намеренно остаётся «только из Новой».
+    Action.SYSTEM_REASSIGN: ActionSpec(
+        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        lambda s, a: a.kind == "system", RepeatPolicy.NO_OP_IF_SAME,
+        system_only=True),
+    # ИИ-менеджер: ответ жителя на вопрос ИИ возвращает заявку в очередь
+    # («Новая»), а не «В работе» как CLARIFY_RESOLVED — исполнителя могло не быть.
+    Action.SYSTEM_CLARIFY_RESUME: ActionSpec(
+        frozenset({REQUEST_STATUS_CLARIFICATION}), REQUEST_STATUS_NEW,
+        lambda s, a: a.kind == "system", RepeatPolicy.REJECT,
+        system_only=True),
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
         _executor_can_work, RepeatPolicy.REJECT),
@@ -91,10 +104,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_REQUEST: ActionSpec(
         # +Закуп (PR2b): дашборд предлагал менеджеру drag Закуп→Уточнение.
+        # +system: ИИ-триаж (capability `ai_manager` в guards.py — другие
+        # системные акторы по-прежнему отсекаются allowlist'ом по имени).
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS,
                    REQUEST_STATUS_PURCHASE}),
         REQUEST_STATUS_CLARIFICATION,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
     Action.CLARIFY_RESOLVED: ActionSpec(
         frozenset({REQUEST_STATUS_CLARIFICATION}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
@@ -155,10 +170,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.APPLICANT_RETURN: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED}), STATUS_RETURNED,
         _owner_can_return, RepeatPolicy.REJECT),
+    # +system: ИИ-менеджер принимает «Выполнена» по таймауту жителя
+    # (capability `ai_manager`, конфиг sla.completed_unaccepted_days).
     Action.MANAGER_FORCE_ACCEPT: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED, STATUS_RETURNED}),
         REQUEST_STATUS_APPROVED,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
     Action.CANCEL: ActionSpec(
         frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
         REQUEST_STATUS_CANCELLED,
@@ -166,10 +183,11 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     # Смена категории: из любого нетерминального статуса, статус не меняется
     # (SAME_STATUS никогда не равен канону → check_repeat всегда None,
     # resolve_command никогда не выберет). REJECT — формальный дефолт.
+    # +system: ИИ-триаж поправляет категорию по тексту (capability `ai_manager`).
     Action.MANAGER_CHANGE_CATEGORY: ActionSpec(
         frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
         SAME_STATUS,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
 }
 
 

@@ -356,3 +356,8 @@ docker compose run --rm --name uk-provision-roles provision-roles
 Требует `DEPLOY_UID`/`DEPLOY_GID` в env и коннект от суперюзера — `uk_bot`/`profk_bot` уже без `CREATEROLE`, использовать `uk_admin` через `docker exec uk-postgres psql -U uk_admin` при ручном перезапуске.
 
 Post-rollout verifier-log: `docs/audit/2026-07-15-pr7-rollout.md`.
+
+## ИИ-менеджер и мониторинг отключений (2026-10-28, в репо, не раскатаны)
+
+- Doppler-ключи: `AI_MANAGER_ENABLED`, `AI_MANAGER_MODEL` (деф. `claude-sonnet-5-5`), `AI_MANAGER_EFFORT`, `AI_MANAGER_LLM_TIMEOUT` — сервисам `app` и `api`; общий `ANTHROPIC_API_KEY` с Group Intake. Миграций нет.
+- news-watch: `NEWS_WATCH_ENABLED`, `NEWS_WATCH_SERVICE_TOKEN` (api + news-watcher), `TG_API_ID`, `TG_API_HASH`, `NEWS_WATCH_TG_SESSION`; миграция 028 через `migrate` ДО `api`; фронт — build-arg `VITE_NEWS_WATCH_ENABLED`; юзербот — `COMPOSE_PROFILES=news-watch`. Edge-allowlist `/api/v2/news-watch` на обеих площадках ДО включения. Детали → `docs/tech/AI_MANAGER.md`, `docs/tech/NEWS_WATCH.md`.

@@ -100,6 +100,47 @@ def _load_reply_gate(db, request_number: str, telegram_id: int) -> str:
     return "ok"
 
 
+async def _ai_resume_after_reply(request_number: str, reply_text: str, _db) -> None:
+    """Режим ИИ: если вопрос задавал ИИ-менеджер — повторный триаж по ответу,
+    «Уточнение»→«Новая» и штатная диспетчеризация; иначе заявку ждёт менеджер.
+    Best-effort: ответ уже сохранён, сбой ИИ его не отменяет."""
+    try:
+        await run_db(lambda s: _ai_resume_sync(s, request_number, reply_text), db=_db)
+    except Exception as e:
+        logger.warning(f"ИИ-возобновление {request_number} пропущено: {type(e).__name__}")
+
+
+async def _notify_managers_about_reply(bot, manager_notices, request_number: str) -> None:
+    """B3: сеть вне сессии, best-effort — сбой отдельного получателя не должен
+    ронять ответ заявителю."""
+    from uk_management_bot.services.notification_service import send_to_user
+
+    for notice in manager_notices:
+        try:
+            await send_to_user(bot, notice.telegram_id, notice.text)
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления менеджеру {notice.telegram_id}: {e}")
+    logger.info(
+        f"Уведомления об ответе по заявке {request_number} отправлены менеджерам: {len(manager_notices)}"
+    )
+
+
+def _ai_resume_sync(db, request_number: str, reply_text: str) -> None:
+    """Режим ИИ (mode=ai): ответ на вопрос ИИ → повторный триаж → «Новая» → dispatch."""
+    from sqlalchemy.orm import sessionmaker
+
+    from uk_management_bot.services.ai_manager.apply import resume_after_answer_sync
+    from uk_management_bot.services.dispatch import _ai_config_sync, auto_dispatch_new_request_sync
+
+    ai_cfg = _ai_config_sync(db)
+    if ai_cfg is None:
+        return
+    factory = sessionmaker(bind=db.get_bind(), autoflush=False)
+    category = resume_after_answer_sync(request_number, reply_text, ai_cfg, factory)
+    if category:
+        auto_dispatch_new_request_sync(request_number, category, session_factory=factory)
+
+
 def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lang: str) -> tuple:
     """-> ('request_not_found'|'no_permission', []) | ('ok', [_ManagerNotice, ...]).
 
@@ -280,6 +321,8 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
             await state.clear()
             return
 
+        await _ai_resume_after_reply(request_number, reply_text, _db)
+
         # Открытая доска узнаёт об ответе только через WS: у канбана нет иного
         # пути обновления, поэтому без этой публикации менеджер не увидел бы ни
         # свежих примечаний, ни индикатора непрочитанного. Тип события фронт уже
@@ -293,19 +336,7 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
         except Exception as e:
             logger.debug(f"realtime publish для {request_number} пропущен: {e}")
 
-        # Уведомляем менеджеров (B3: сеть вне сессии, best-effort — сбой
-        # отдельного получателя не должен ронять ответ заявителю).
-        from uk_management_bot.services.notification_service import send_to_user
-
-        for notice in manager_notices:
-            try:
-                await send_to_user(message.bot, notice.telegram_id, notice.text)
-            except Exception as e:
-                logger.error(f"Ошибка отправки уведомления менеджеру {notice.telegram_id}: {e}")
-
-        logger.info(
-            f"Уведомления об ответе по заявке {request_number} отправлены менеджерам: {len(manager_notices)}"
-        )
+        await _notify_managers_about_reply(message.bot, manager_notices, request_number)
 
         # Подтверждаем заявителю
         reply_preview = html.escape(reply_text[:100]) + ('...' if len(reply_text) > 100 else '')

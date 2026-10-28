@@ -15,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from uk_management_bot.database.session import SessionLocal
 from uk_management_bot.services.auto_manager.orchestrator import AutoManagerOrchestrator
+from uk_management_bot.services.ai_manager.sla import AiSlaWatchdog
 from uk_management_bot.services.shift_planning_service import ShiftPlanningService
 from uk_management_bot.services.shift_assignment_service import ShiftAssignmentService
 from uk_management_bot.services.shift_transfer_service import ShiftTransferService
@@ -57,6 +58,10 @@ class ShiftScheduler:
         # Единственный экземпляр на процесс — держит между tick-ами
         # анти-starvation курсоры/cooldown/дедуп уведомлений (Task 6).
         self._auto_manager = AutoManagerOrchestrator(bot=bot, notification_service=notification_service)
+        # ИИ-менеджер: SLA-лестница (services/ai_manager/sla). Job регистрируется
+        # только при AI_MANAGER_ENABLED (см. setup_jobs); внутри тик сам
+        # выходит, если mode != "ai".
+        self._ai_sla = AiSlaWatchdog(bot=bot, notification_service=notification_service)
 
         # Статистика выполнения задач
         self.task_stats = {
@@ -226,6 +231,19 @@ class ShiftScheduler:
             max_instances=1,
             coalesce=True
         )
+
+        # 10б. ИИ-менеджер — SLA-лестница (каждые 10 минут). DARK: без деплой-
+        #      флага job не существует; с флагом тик пуст при mode != "ai".
+        from uk_management_bot.config.settings import settings as _settings
+        if _settings.AI_MANAGER_ENABLED:
+            self.scheduler.add_job(
+                self._ai_sla_tick,
+                IntervalTrigger(minutes=10),
+                id='ai_sla_tick',
+                name='ИИ-менеджер — SLA-лестница',
+                max_instances=1,
+                coalesce=True
+            )
 
         # 10а. «Инженерный разбор» — у инженера всегда (каждые 2 минуты, не
         #      зависит от настроек авто-менеджера): страховка вебхука и
@@ -772,6 +790,13 @@ class ShiftScheduler:
             await self._auto_manager.run_once()
         except Exception as e:
             logger.error(f"Ошибка тика автоматического менеджера: {e}")
+
+    async def _ai_sla_tick(self):
+        """Тик SLA-лестницы ИИ-менеджера (services/ai_manager/sla)."""
+        try:
+            await self._ai_sla.run_once()
+        except Exception as e:
+            logger.error(f"Ошибка тика SLA ИИ-менеджера: {e}")
 
     async def _engineering_reconcile_tick(self):
         """Сверка «Инженерного разбора» (services/engineering_reconcile)."""

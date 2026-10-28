@@ -141,6 +141,15 @@ class Action(str, Enum):
     # не из actor.user_id). Достижимо ТОЛЬКО явным ActionCommand system-актора
     # "auto_manager" (см. SYSTEM_CAPABILITIES, _STATUS_RESOLVE_EXCLUDE).
     SYSTEM_AUTO_PROMOTE = "system_auto_promote"
+    # ИИ-менеджер (SLA-лестница, system-актор "ai_manager") переназначает
+    # просроченную заявку «В работе» другому дежурному (В работе → В работе,
+    # patch как у MANAGER_ASSIGN из «В работе»). Достижимо ТОЛЬКО явным
+    # ActionCommand; SYSTEM_DISPATCH_ASSIGN намеренно остаётся «только из
+    # Новой», а его capability у dispatcher/auto_manager не расширяется.
+    SYSTEM_REASSIGN = "system_reassign"
+    # ИИ-менеджер: житель ответил на вопрос ИИ → «Уточнение»→«Новая» (повторный
+    # триаж по ответу, затем штатная диспетчеризация). system_only.
+    SYSTEM_CLARIFY_RESUME = "system_clarify_resume"
     EXECUTOR_COMPLETE = "executor_complete"
     # Менеджер завершает работу за исполнителя (В работе/Закуп/Уточнение →
     # Выполнена). Продуктовое решение 2026-06-10: менеджерский shortcut-аналог

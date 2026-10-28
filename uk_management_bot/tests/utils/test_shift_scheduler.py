@@ -118,6 +118,28 @@ class TestSetupJobs:
         assert call.kwargs.get("max_instances") == 1
         assert call.kwargs.get("coalesce") is True
 
+    def test_ai_sla_tick_registered_only_with_flag(self, monkeypatch):
+        from datetime import timedelta
+        from apscheduler.triggers.interval import IntervalTrigger
+        from uk_management_bot.config.settings import settings
+
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", False)
+        sched = _make_scheduler()
+        sched.setup_jobs()
+        assert not [c for c in sched._mock_apscheduler.add_job.call_args_list
+                    if c.kwargs.get("id") == "ai_sla_tick"]
+
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+        sched = _make_scheduler()
+        sched.setup_jobs()
+        calls = [c for c in sched._mock_apscheduler.add_job.call_args_list
+                 if c.kwargs.get("id") == "ai_sla_tick"]
+        assert len(calls) == 1
+        assert calls[0].args[0] == sched._ai_sla_tick
+        assert isinstance(calls[0].args[1], IntervalTrigger)
+        assert calls[0].args[1].interval == timedelta(minutes=10)
+        assert calls[0].kwargs.get("max_instances") == 1
+
     def test_notify_upcoming_runs_around_the_clock(self):
         """SHIFTS.md находка №2: cron-окно 08–20 в UTC планировщика означало
         13:00–01:30 по Ташкенту — а типовые смены начинаются 08:00–09:00

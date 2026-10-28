@@ -138,7 +138,10 @@
     "residents": "Aholi",
     "groups": "Guruhlar",
     "elevators": "Liftlar",
-    "residentHome": "Aholi sahifasi"
+    "residentHome": "Aholi sahifasi",
+    "newsWatch": "O'chirishlar",
+    "aiManager": "AI qoidalari",
+    "groupSettings": "Sozlamalar"
   },
   "resourceAccounting": {
     "unavailable": "Resurs hisobi bo'limi vaqtincha mavjud emas. Keyinroq urinib ko'ring yoki administratorga murojaat qiling.",
@@ -2156,8 +2159,8 @@
     "toggleLabel": "Avtomenejerni yoqish/o'chirish",
     "mode": "Rejim",
     "modeRule": "📐 Qoida bo'yicha",
-    "modeAi": "🤖 AI (tez orada)",
-    "modeAiHint": "AI rejimi keyinroq paydo bo'ladi, hozircha qoida bo'yicha rejim ishlaydi",
+    "modeAi": "🤖 AI",
+    "modeAiHint": "AI-rejim bu maydonchada mavjud emas (AI_MANAGER_ENABLED)",
     "window": "Ish oynasi",
     "windowFrom": "Dan",
     "windowTo": "Gacha",
@@ -2167,7 +2170,33 @@
     "maxRequests": "Bir marta uchun so'rovlar limiti",
     "saved": "Avtomenejer konfiguratsiyasi saqlandi",
     "saveFailed": "Avtomenejer konfiguratsiyasini saqlab bo'lmadi",
-    "loadFailed": "Avtomenejer konfiguratsiyasini yuklab bo'lmadi"
+    "loadFailed": "Avtomenejer konfiguratsiyasini yuklab bo'lmadi",
+    "modeAiTitle": "Ariza matnining LLM-triaji: toifa, shoshilinchlik, aniqlashtirish, takrorlar; ijrochi — qoida bo'yicha",
+    "sla": {
+      "title": "AI-menejer SLA zinasi (0 = o'chirilgan)",
+      "inProgress": "«Ishda» uzoqroq, soat",
+      "ladder": "Eskalatsiya zinasi, muddat o'tgandan soat",
+      "urgency": {
+        "critical": "Kritik",
+        "high": "Shoshilinch",
+        "medium": "O'rta",
+        "low": "Oddiy"
+      },
+      "step": {
+        "remind_executor": "Ijrochiga eslatish",
+        "staff_group": "Ijrochilar guruhi",
+        "manager": "Menejer",
+        "reassign": "Qayta tayinlash"
+      },
+      "clarification_max": "«Aniqlashtirish» javobsiz",
+      "executed_unconfirmed_max": "«Bajarildi» tekshiruvsiz",
+      "completed_unaccepted_days": "«Yakunlandi» qabulsiz",
+      "critical_unassigned_minutes": "Kritik ariza ijrochisiz",
+      "h": "soat",
+      "d": "kun",
+      "min": "daq",
+      "save": "SLA saqlash"
+    }
   },
   "templates": {
     "title": "Shablonlar",
@@ -3702,5 +3731,124 @@
       "viewAll": "Barcha hisobotlar",
       "empty": "E'lon qilingan hisobotlar hozircha yo'q"
     }
+  },
+  "newsWatch": {
+    "title": "O'chirishlar",
+    "confidence": "ishonch",
+    "noVerdict": "AI xulosasisiz",
+    "showRaw": "Asl matnni ko'rsatish",
+    "hideRaw": "Asl matnni yashirish",
+    "publish": "Chop etish",
+    "reject": "Rad etish",
+    "retryBroadcast": "Tarqatishni takrorlash",
+    "broadcast": "Tarqatish",
+    "empty": "Bo'sh",
+    "status": {
+      "pending": "Qaror kutmoqda",
+      "published": "Chop etilgan",
+      "rejected": "Rad etilgan",
+      "ignored": "Saralangan"
+    },
+    "broadcastStatus": {
+      "none": "kerak emas",
+      "pending": "navbatda",
+      "running": "ketmoqda",
+      "done": "yetkazildi",
+      "failed": "xato"
+    },
+    "kind": {
+      "power": "Elektr",
+      "water": "Suv",
+      "gas": "Gaz",
+      "heating": "Isitish",
+      "internet": "Internet",
+      "other": "E'lon"
+    },
+    "config": {
+      "title": "Monitoring sozlamalari",
+      "sources": "Manbalar (har qatorda: @kanal Nomi)",
+      "context": "AI uchun majmua tavsifi",
+      "contextHint": "Majmua, ko'chalar, tuman, mahalla, mo'ljallar — yangilik biz haqimizda ekanini nimadan bilish",
+      "keywords": "Oldindan filtr kalit so'zlari (vergul bilan)",
+      "autoPublish": "Yuqori ishonchda avtomatik chop etish",
+      "minConfidence": "Ishonch chegarasi",
+      "broadcastDm": "Yashovchilarga shaxsiy xabar",
+      "broadcastGroups": "Uy chatlariga tarqatish",
+      "save": "Sozlamalarni saqlash"
+    },
+    "toast": {
+      "configSaved": "Monitoring sozlamalari saqlandi",
+      "publish": "Yangilik chop etildi",
+      "reject": "Yangilik rad etildi",
+      "retried": "Tarqatish navbatga qo'yildi"
+    }
+  },
+  "aiManager": {
+    "title": "AI-menejer qoidalari",
+    "subtitle": "Rejim, arizalar triaji, SLA zinasi va bildirishnoma matnlari",
+    "unavailable": "AI-rejim bu maydonchada mavjud emas: model kaliti yo'q. Sozlamalar saqlanadi, lekin qo'llanilmaydi.",
+    "mode": {
+      "title": "Taqsimlash rejimi",
+      "off": "O'chirilgan",
+      "rule": "📐 Qoida bo'yicha",
+      "ai": "🤖 AI"
+    },
+    "breaker": {
+      "open": "AI vaqtincha qoida rejimida, yana {{minutes}} daqiqa (model xatolari: {{failures}})",
+      "closed": "Saqlagich yopiq, oynadagi xatolar: {{failures}}",
+      "unknown": "Saqlagich holati noma'lum (Redis mavjud emas)",
+      "reset": "Saqlagichni tiklash",
+      "resetDone": "Saqlagich tiklandi",
+      "resetFailed": "Saqlagichni tiklab bo'lmadi"
+    },
+    "triage": {
+      "title": "Arizalar triaji",
+      "minConfidence": "Model ishonch chegarasi (0–1)",
+      "clarify": "Yashovchiga aniqlashtiruvchi savol berish",
+      "dedup": "Manzil bo'yicha takrorlarni qidirish",
+      "keywordsBase": "Asosiy avariya so'zlari (doim amal qiladi): {{list}}",
+      "keywordsExtra": "Qo'shimcha avariya so'zlari (vergul bilan; mos kelsa = AIsiz kritik shoshilinchlik)",
+      "triageInstructions": "Arizalar triaji uchun ko'rsatmalar",
+      "triageInstructionsHint": "Masalan: «Qo'shnilar shovqini — avariya emas. Avtoturargoh va shlagbaum — „Boshqa“ toifasi, past shoshilinchlik.»",
+      "newsInstructions": "O'chirishlar yangiliklarini tahlil qilish uchun ko'rsatmalar",
+      "newsInstructionsHint": "Masalan: «Bizning uy — 7-korpus, Qo'shni ko'chadagi o'chirishlar bizga tegishli emas.»",
+      "count": "{{n}} / 2000"
+    },
+    "ladder": {
+      "enabled": "Bosqich yoqilgan",
+      "disabledHint": "O'chirilgan bosqich o'tilgan hisoblanadi: bildirishnoma yuborilmaydi, keyingi bosqich o'z siljishi bo'yicha ishlaydi.",
+      "publicTitle": "Uy chatidagi ommaviy holatlar",
+      "publicEnabled": "Guruhdan kelgan arizalar haqida yashovchilar chatiga yozish",
+      "publicMin": "Minimal shoshilinchlik",
+      "publicCritical": "Faqat kritik",
+      "publicHigh": "Shoshilinch va kritik"
+    },
+    "templates": {
+      "title": "Bildirishnoma matnlari",
+      "hint": "Bo'sh = standart matn. O'rniga qo'yishlar: {{placeholders}}. Telegram teglari ruxsat etilgan (<b>, <i>, <code>, <a href>), {…} ichida formatlash yo'q.",
+      "reset": "Standartni qaytarish",
+      "ru": "RU",
+      "uz": "UZ",
+      "keys": {
+        "sla": {
+          "executor_overdue": "Ijrochiga: ariza muddati o'tdi",
+          "staff_group": "Xodimlar guruhiga: ariza muddati o'tdi",
+          "manager_overdue": "Menejerga: ariza muddati o'tdi",
+          "reassign_failed": "Menejerga: qayta tayinlash uchun hech kim yo'q",
+          "reassigned_old": "Avvalgi ijrochiga: ariza boshqaga o'tkazildi",
+          "clarification_reminder": "Yashovchiga: aniqlashtirishga javob kutilmoqda",
+          "clarification_manager": "Menejerga: yashovchi javob bermayapti",
+          "executed_unconfirmed": "Menejerga: bajarildi, tekshiruv yo'q",
+          "auto_accepted": "Yashovchiga: ariza avtomatik qabul qilindi",
+          "critical_unassigned": "Menejerga: ijrochisiz kritik ariza"
+        },
+        "public": {
+          "assigned": "Uy chatiga: ijrochi yo'lga chiqdi",
+          "executed": "Uy chatiga: bajarildi"
+        }
+      }
+    },
+    "save": "Qoidalarni saqlash",
+    "openPage": "AI qoidalari →"
   }
 }

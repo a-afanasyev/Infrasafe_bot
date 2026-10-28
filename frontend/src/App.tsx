@@ -76,6 +76,12 @@ const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfig
 const ResidentElevatorsPage = lazy(() => import('./pages/ResidentElevatorsPage'))
 const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
+// Мониторинг отключений (очередь новостей + настройки). DARK за
+// VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
+const NewsWatchPage = lazy(() => import('./pages/NewsWatchPage'))
+const AiManagerPage = lazy(() => import('./pages/AiManagerPage'))
+const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
+
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -83,7 +89,7 @@ interface ProtectedRouteProps {
   action?: ActionKey
 }
 
-function ProtectedRoute({ children, action }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, action }: ProtectedRouteProps) {
   const { isAuthenticated, user, hydrating } = useAuthStore()
   const location = useLocation()
   // Wait for the cold-start cookie probe before deciding — otherwise a fresh tab
@@ -228,6 +234,16 @@ export default function App() {
                   <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
                 </Route>
               )}
+              {NEWS_WATCH_ENABLED && (
+                <Route path="/dashboard/news-watch" element={<ProtectedRoute action="board.configure"><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><NewsWatchPage /></PageErrorBoundary>} />
+                </Route>
+              )}
+              {/* Правила ИИ-менеджера: без build-флага — страница сама показывает
+                  «недоступно», если на площадке нет AI_MANAGER_ENABLED. */}
+              <Route path="/dashboard/ai-manager" element={<ProtectedRoute action="auto_manager.configure"><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><AiManagerPage /></PageErrorBoundary>} />
+              </Route>
 
               {/* Учёт ресурсов УК — нативный портируемый модуль (не iframe).
                   Splat-роут: внутренний <ResourceAccountingRoutes/> резолвит

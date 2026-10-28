@@ -66,6 +66,8 @@ _EXPECTED_TABLES = frozenset({
     "material_receipts",
     "materials",
     "monitored_groups",
+    "news_items",
+    "news_watch_config",
     "notifications",
     "parking_spot_assignments",
     "parking_spots",

@@ -136,7 +136,10 @@ class TestRequireRoleGate:
         «нет прав доступа» (см. reference_require_role_di_signature.md)."""
         import uk_management_bot.handlers.auto_manager as am
         sig = inspect.signature(getattr(am, handler_name))
-        for p in ("db", "user", "roles"):
+        # mode_ai — единственный без middleware-сессии (AUD3-37: run_db +
+        # тестовый seam _db), остальным db приходит через DI.
+        wanted = ("user", "roles") if handler_name == "handle_auto_manager_mode_ai" else ("db", "user", "roles")
+        for p in wanted:
             assert p in sig.parameters, f"{handler_name} не принимает DI-параметр {p}"
 
 
@@ -204,6 +207,13 @@ class TestToggle:
 
 
 class TestAiModeBlocked:
+    """Без деплой-флага AI_MANAGER_ENABLED кнопка — hint-тост и ничего не пишет."""
+
+    @pytest.fixture(autouse=True)
+    def _flag_off(self, monkeypatch):
+        from uk_management_bot.config.settings import settings
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", False)
+
     @pytest.mark.asyncio
     async def test_tap_shows_hint_and_never_writes_mode(self, db):
         from uk_management_bot.handlers.auto_manager import handle_auto_manager_mode_ai
@@ -212,7 +222,7 @@ class TestAiModeBlocked:
         cb = _make_callback(data="auto_manager_mode_ai", telegram_id=90009)
         state = _make_state()
 
-        await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
 
         cb.answer.assert_awaited_once()
         _args, kwargs = cb.answer.call_args
@@ -232,10 +242,68 @@ class TestAiModeBlocked:
         state = _make_state()
 
         for _ in range(3):
-            await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+            await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
 
         rows = db.query(AutoManagerConfig).all()
         assert rows == [] or all(r.data["mode"] != "ai" for r in rows)
+
+
+# ───────────────────────────── AI mode toggle (flag on) ─────────────────────────────
+
+
+class TestAiModeToggle:
+    @pytest.fixture(autouse=True)
+    def _flag_on(self, monkeypatch):
+        from uk_management_bot.config.settings import settings
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+
+    @pytest.mark.asyncio
+    async def test_tap_switches_rule_to_ai_and_back(self, db):
+        from uk_management_bot.handlers.auto_manager import handle_auto_manager_mode_ai
+
+        user = _make_user(db, db_id=13, telegram_id=130013)
+        cb = _make_callback(data="auto_manager_mode_ai", telegram_id=130013)
+        state = _make_state()
+
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
+        row = _config_row(db)
+        assert row.data["mode"] == "ai"
+        assert row.updated_by == 13  # DB user.id, не telegram_id
+        text = cb.message.edit_text.call_args.args[0]
+        assert "ИИ-менеджер" in text
+        kb = cb.message.edit_text.call_args.kwargs["reply_markup"]
+        assert kb.inline_keyboard[1][0].text == "🤖 Режим: ИИ"
+        cb.answer.assert_awaited_with("Включён режим ИИ-менеджера")
+
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
+        assert _config_row(db).data["mode"] == "rule"
+        kb = cb.message.edit_text.call_args.kwargs["reply_markup"]
+        assert kb.inline_keyboard[1][0].text == "📐 Режим: по правилу"
+
+    @pytest.mark.asyncio
+    async def test_toggle_keeps_other_fields(self, db):
+        from uk_management_bot.handlers.auto_manager import handle_auto_manager_mode_ai
+        from uk_management_bot.services.auto_manager.config import save_config_sync
+
+        save_config_sync(db, {**DEFAULT_CONFIG, "enabled": True, "window_start": "21:00",
+                              "ai": {"min_confidence": 0.9}})
+        user = _make_user(db, db_id=14, telegram_id=140014)
+        cb = _make_callback(data="auto_manager_mode_ai", telegram_id=140014)
+        await handle_auto_manager_mode_ai(cb, _make_state(), _db=db, roles=["manager"], user=user)
+        data = _config_row(db).data
+        assert data["mode"] == "ai" and data["enabled"] is True
+        assert data["window_start"] == "21:00" and data["ai"]["min_confidence"] == 0.9
+
+    @pytest.mark.asyncio
+    async def test_status_screen_shows_ai_mode(self, db):
+        from uk_management_bot.handlers.auto_manager import handle_auto_manager_menu
+        from uk_management_bot.services.auto_manager.config import save_config_sync
+
+        save_config_sync(db, {**DEFAULT_CONFIG, "mode": "ai"})
+        user = _make_user(db, db_id=15, telegram_id=150015)
+        cb = _make_callback(data="auto_manager_menu", telegram_id=150015)
+        await handle_auto_manager_menu(cb, _make_state(), db=db, roles=["manager"], user=user)
+        assert "ИИ-менеджер" in cb.message.edit_text.call_args.args[0]
 
 
 # ───────────────────────────── change-window entry point ─────────────────────────────
@@ -404,3 +472,48 @@ class TestWindowInput:
         assert row.data["window_end"] == "06:45"
         assert row.data["timezone"] == DEFAULT_CONFIG["timezone"]
         assert row.data["max_requests_per_run"] == DEFAULT_CONFIG["max_requests_per_run"]
+
+
+# ───────────────────── выключение ИИ: уведомление об эскалациях ─────────────────────
+
+
+class TestAiSwitchOffNotice:
+    @pytest.fixture(autouse=True)
+    def _flag_on(self, monkeypatch):
+        from uk_management_bot.config.settings import settings
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+
+    @pytest.mark.asyncio
+    async def test_switching_ai_off_notifies_managers_about_escalating_requests(self, db, monkeypatch):
+        from datetime import datetime, timezone
+
+        from uk_management_bot.database.models.audit import AuditLog
+        from uk_management_bot.database.models.request import Request
+        from uk_management_bot.handlers.auto_manager import handle_auto_manager_mode_ai
+        from uk_management_bot.services import workflow_notifications
+        from uk_management_bot.services.auto_manager.config import save_config_sync
+
+        save_config_sync(db, {**DEFAULT_CONFIG, "enabled": True, "mode": "ai"})
+        manager = _make_user(db, db_id=16, telegram_id=160016)
+        db.add(Request(request_number="261028-001", user_id=16, category="plumbing", description="x",
+                       urgency="low", status="В работе", created_at=datetime.now(timezone.utc)))
+        db.add(AuditLog(user_id=None, action="ai_sla_step",
+                        details={"request_number": "261028-001", "track": "executor", "step": "manager"}))
+        db.commit()
+        sent = []
+
+        async def fake_send(bot, messages):
+            sent.extend(messages)
+            return len(messages)
+
+        monkeypatch.setattr(workflow_notifications, "send_notify_messages", fake_send)
+        cb = _make_callback(data="auto_manager_mode_ai", telegram_id=160016)
+        await handle_auto_manager_mode_ai(cb, _make_state(), roles=["manager"], user=manager, _db=db)
+        assert _config_row(db).data["mode"] == "rule"
+        assert [tg for tg, _ in sent] == [160016]
+        assert "1" in sent[0][1]
+
+        # обратно в ai — без уведомления
+        sent.clear()
+        await handle_auto_manager_mode_ai(cb, _make_state(), roles=["manager"], user=manager, _db=db)
+        assert sent == []

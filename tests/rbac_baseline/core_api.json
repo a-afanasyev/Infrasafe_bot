@@ -744,6 +744,43 @@
     "manager@pending"
    ]
   },
+  "GET /api/v2/news-watch/config": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/news-watch/items": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/news-watch/sources": {
+   "auth": "public",
+   "deps": [
+    "_require_enabled",
+    "_require_service_token"
+   ]
+  },
   "GET /api/v2/payment-control/account": {
    "auth": "roles",
    "allow": [
@@ -1762,6 +1799,19 @@
     "auth_ratelimit_guard"
    ]
   },
+  "POST /api/v2/auto-manager-config/ai-breaker/reset": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "POST /api/v2/callcenter/requests": {
    "auth": "roles",
    "allow": [
@@ -2017,6 +2067,58 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ]
+  },
+  "POST /api/v2/news-watch/inbox": {
+   "auth": "public",
+   "deps": [
+    "_require_enabled",
+    "_require_service_token"
+   ]
+  },
+  "POST /api/v2/news-watch/items/{item_id}/publish": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/news-watch/items/{item_id}/reject": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/news-watch/items/{item_id}/retry-broadcast": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "POST /api/v2/payment-control/accounts/balances": {
@@ -2613,6 +2715,21 @@
    ],
    "deps": [
     "_require_elevators_enabled"
+   ]
+  },
+  "PUT /api/v2/news-watch/config": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "PUT /api/v2/shifts/employees/rbac/roles/{key}": {

@@ -34,6 +34,7 @@ from uk_management_bot.utils.request_workflow import (
     RepeatConflict,
     RepeatRejected,
     RequestState,
+    SameExecutor,
     STATUS_RETURNED,
     WorkflowSnapshot,
     allowed_actions,
@@ -1028,3 +1029,130 @@ class TestManagerChangeCategoryEvents:
         purchase = _change(_cat_snap(REQUEST_STATUS_PURCHASE, "electricity",
                                      executor=EXECUTOR_ID), "plumbing")
         assert self._events(purchase, "notify") == []
+
+
+# ─────────────── ИИ-менеджер: системный актор ai_manager (фаза 1) ───────────────
+
+AI_MANAGER = ActorContext(kind="system", user_id=None, system_actor="ai_manager")
+
+
+def test_ai_manager_capabilities_on_new_request():
+    """Триаж: уточнение, смена категории, назначение дежурному/группе.
+    Отмена, закрытие, возврат в работу — вне allowlist даже при баге пакета."""
+    allowed = allowed_actions(_cat_snap(REQUEST_STATUS_NEW, "plumbing"), AI_MANAGER)
+    assert {Action.CLARIFY_REQUEST, Action.MANAGER_CHANGE_CATEGORY,
+            Action.SYSTEM_DISPATCH_ASSIGN, Action.ASSIGN_GROUP} <= allowed
+    assert Action.CANCEL not in allowed
+    assert Action.MANAGER_ASSIGN not in allowed
+
+
+def test_ai_manager_cannot_complete_or_return():
+    allowed = allowed_actions(_snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID), AI_MANAGER)
+    assert Action.MANAGER_COMPLETE not in allowed
+    assert Action.CANCEL not in allowed
+    executed = allowed_actions(_snap(REQUEST_STATUS_EXECUTED, executor=EXECUTOR_ID), AI_MANAGER)
+    assert Action.MANAGER_RETURN_TO_WORK not in executed
+    assert Action.MANAGER_CONFIRM not in executed
+
+
+def test_widened_authorize_does_not_leak_to_other_system_actors():
+    """Расширение authorize у CLARIFY/CHANGE_CATEGORY до `kind == "system"`
+    гейтится capability-allowlist по имени актора: dispatcher/auto_manager
+    их по-прежнему не получают."""
+    snap = _cat_snap(REQUEST_STATUS_NEW, "plumbing")
+    for actor in (DISPATCHER, AUTO_MANAGER, UNKNOWN_SYSTEM):
+        allowed = allowed_actions(snap, actor)
+        assert Action.CLARIFY_REQUEST not in allowed, actor.system_actor
+        assert Action.MANAGER_CHANGE_CATEGORY not in allowed, actor.system_actor
+
+
+def test_ai_manager_clarify_plans_notes_append_and_audit_question():
+    result = _plan(
+        _cat_snap(REQUEST_STATUS_NEW, "plumbing"), Action.CLARIFY_REQUEST, AI_MANAGER,
+        payload={"notes": "Уточнение: где именно течёт?", "question": "где именно течёт?"},
+        principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                               system_actor="ai_manager"),
+    )
+    fields = _patch_fields(result)
+    assert fields["notes"] == (Op.APPEND, "Уточнение: где именно течёт?")
+
+
+# ─────────────── ИИ-менеджер фаза 2: SYSTEM_REASSIGN + MANAGER_FORCE_ACCEPT ───────────────
+
+
+def test_system_reassign_only_from_in_progress_and_only_ai_manager():
+    snap_new = _snap(REQUEST_STATUS_NEW)
+    assert Action.SYSTEM_REASSIGN not in allowed_actions(snap_new, AI_MANAGER)
+    snap_work = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID)
+    assert Action.SYSTEM_REASSIGN in allowed_actions(snap_work, AI_MANAGER)
+    for actor in (DISPATCHER, AUTO_MANAGER, UNKNOWN_SYSTEM, MANAGER):
+        assert Action.SYSTEM_REASSIGN not in allowed_actions(snap_work, actor), actor
+
+
+def test_system_reassign_plans_like_manager_assign():
+    result = _plan(
+        _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+        Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"executor_id": 77},
+        principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                               system_actor="ai_manager"),
+    )
+    fields = _patch_fields(result)
+    assert fields["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+    assert fields["executor_id"] == (Op.SET, 77)
+    assert fields["assignment_type"] == (Op.SET, "individual")
+    assert fields["assigned_at"][0] is Op.SET_NOW
+    assert "assigned_by" not in fields  # системный актор — SET_ACTOR писал бы NULL
+    assert [d.kind for d in result.domain_ops] == ["create_assignment"]
+    notify = [e for e in result.events if e.kind == "notify"]
+    assert notify and notify[0].data["action"] == "system_reassign"
+
+
+def test_system_reassign_same_executor_is_rejected():
+    with pytest.raises(SameExecutor):
+        _plan(_snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+              Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"executor_id": EXECUTOR_ID},
+              principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                     system_actor="ai_manager"))
+
+
+def test_system_reassign_requires_executor_id():
+    with pytest.raises(PayloadInvalid):
+        _plan(_snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+              Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"group": "plumber"},
+              principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                     system_actor="ai_manager"))
+
+
+def test_system_reassign_unreachable_by_status_resolution():
+    """Legacy-вход «статус → действие» не должен резолвиться в системное
+    переназначение (как EXECUTOR_CLAIM / SYSTEM_AUTO_PROMOTE)."""
+    snap = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID)
+    with pytest.raises(InvalidTransition):
+        resolve_command(snap, AI_MANAGER, LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+
+
+def test_ai_manager_can_force_accept_only_from_completed():
+    assert Action.MANAGER_FORCE_ACCEPT in allowed_actions(
+        _snap(REQUEST_STATUS_COMPLETED, confirmed=True, executor=EXECUTOR_ID), AI_MANAGER)
+    assert Action.MANAGER_FORCE_ACCEPT not in allowed_actions(
+        _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID), AI_MANAGER)
+    # другие системные акторы не получают
+    for actor in (DISPATCHER, AUTO_MANAGER):
+        assert Action.MANAGER_FORCE_ACCEPT not in allowed_actions(
+            _snap(REQUEST_STATUS_COMPLETED, confirmed=True, executor=EXECUTOR_ID), actor)
+
+
+
+# ─────────────── ИИ-менеджер: SYSTEM_CLARIFY_RESUME ───────────────
+def test_system_clarify_resume_only_from_clarification_and_only_ai_manager():
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION as CLAR
+
+    snap = _snap(CLAR)
+    assert Action.SYSTEM_CLARIFY_RESUME in allowed_actions(snap, AI_MANAGER)
+    for actor in (DISPATCHER, AUTO_MANAGER, UNKNOWN_SYSTEM, MANAGER):
+        assert Action.SYSTEM_CLARIFY_RESUME not in allowed_actions(snap, actor), actor
+    assert Action.SYSTEM_CLARIFY_RESUME not in allowed_actions(_snap(REQUEST_STATUS_NEW), AI_MANAGER)
+    result = _plan(snap, Action.SYSTEM_CLARIFY_RESUME, AI_MANAGER, payload={},
+                   principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                          system_actor="ai_manager"))
+    assert _patch_fields(result)["status"] == (Op.SET, REQUEST_STATUS_NEW)

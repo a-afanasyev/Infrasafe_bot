@@ -155,6 +155,27 @@ async def merge_and_save_board_config(
     return normalized
 
 
+async def append_announcement(db: AsyncSession, item: dict, updated_by: int | None) -> StoredBoardConfigData:
+    """Добавить объявление ПЕРВЫМ — read-modify-write под тем же FOR UPDATE,
+    что и `merge_and_save_board_config` (он перезаписывает `announcements`
+    целиком и для append не годится). Повторный `id` не дублируется.
+    Вызывающий (news-watch) коммитит свою транзакцию вместе с этой записью."""
+    result = await db.execute(
+        select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID).with_for_update()
+    )
+    row = result.scalar_one_or_none()
+    stored: dict = copy.deepcopy(row.data) if row is not None and row.data else copy.deepcopy(DEFAULT_BOARD_CONFIG)
+    existing = [a for a in stored.get("announcements", []) if a.get("id") != item.get("id")]
+    normalized = StoredBoardConfigData.model_validate({**stored, "announcements": [item, *existing]})
+    if row is None:
+        db.add(BoardConfig(id=CONFIG_ROW_ID, data=normalized.model_dump(mode="json"), updated_by=updated_by))
+    else:
+        row.data = normalized.model_dump(mode="json")
+        row.updated_by = updated_by
+    await db.flush()
+    return normalized
+
+
 async def load_dispatch_phone(db: AsyncSession) -> str | None:
     """Телефон диспетчерской из СОХРАНЁННОЙ строки board_config — канон бота
     ``RequestHandlerService.get_dispatch_phone``: нет строки / битые данные /
