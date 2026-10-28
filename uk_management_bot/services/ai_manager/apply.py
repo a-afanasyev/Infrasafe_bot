@@ -22,10 +22,11 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from sqlalchemy import select
 
+import uk_management_bot.utils.constants as C
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
@@ -144,6 +145,17 @@ def _hints(ctx: _Context, ai_cfg: dict, session_factory) -> TriageHints:
 # ───────────── применение ─────────────
 
 
+def _question_for(question: Mapping[str, str], lang: str) -> str:
+    """Вопрос на языке жителя: uz_cyrl → uz (латиница модели) + транслитерация."""
+    from uk_management_bot.utils.helpers import LANGUAGE_FALLBACKS
+
+    text = question.get(LANGUAGE_FALLBACKS.get(lang, lang)) or question["ru"]
+    if lang == "uz_cyrl" and text != question["ru"]:
+        from uk_management_bot.utils.uz_translit import to_cyrillic
+        text = to_cyrillic(text)
+    return text
+
+
 def _clarify_note(question: str) -> str:
     from uk_management_bot.utils.business_time import fmt_datetime
     from uk_management_bot.utils.helpers import get_text
@@ -165,7 +177,8 @@ def _run(session_factory, request_number: str, action: Action, payload: dict):
 
 
 def _write_urgency_and_marker(session_factory, ctx: _Context, hints: TriageHints,
-                              urgency: str, category: Optional[str], clarified: bool) -> None:
+                              urgency: str, category: Optional[str], clarified: bool,
+                              resumed: bool = False) -> None:
     db = session_factory()
     try:
         if urgency != ctx.urgency:
@@ -183,6 +196,7 @@ def _write_urgency_and_marker(session_factory, ctx: _Context, hints: TriageHints
             "confidence": llm.confidence if llm else None,
             "reasoning": llm.reasoning if llm else None,
             "clarified": clarified,
+            "resumed": resumed,
             "duplicate_of": llm.duplicate_of if llm else None,
         }))
         db.commit()
@@ -262,7 +276,7 @@ def apply_triage_sync(request_number: str, ai_cfg: dict, session_factory=None) -
 
         if llm is not None and llm.needs_clarification and ai_cfg.get("clarify_enabled", True):
             step = "clarify"
-            question = llm.clarification_question.get(ctx.lang) or llm.clarification_question["ru"]
+            question = _question_for(llm.clarification_question, ctx.lang)
             outcome = _run(session_factory, request_number, Action.CLARIFY_REQUEST,
                            {"question": question, "notes": _clarify_note(question)})
             clarified = True
@@ -290,4 +304,77 @@ def apply_triage_sync(request_number: str, ai_cfg: dict, session_factory=None) -
         return TriageOutcome(clarified=clarified, category=category)
 
 
-__all__: Sequence[str] = ("TriageOutcome", "apply_triage_sync", "AUDIT_APPLIED", "AUDIT_FAILED")
+# ───────────── ответ жителя на вопрос ИИ ─────────────
+
+
+def _last_applied(db, request_number: str) -> Optional[dict]:
+    row = db.execute(
+        select(AuditLog.details)
+        .where(AuditLog.action == AUDIT_APPLIED)
+        .where(AuditLog.details["request_number"].as_string() == request_number)
+        .order_by(AuditLog.id.desc()).limit(1)
+    ).first()
+    return dict(row[0]) if row and row[0] else None
+
+
+def resume_after_answer_sync(request_number: str, reply_text: str, ai_cfg: dict,
+                             session_factory=None) -> Optional[str]:
+    """Житель ответил на вопрос ИИ: повторный триаж по «описание + ответ» (без
+    второго уточнения), категория/срочность, «Уточнение» → «Новая». Возвращает
+    категорию для dispatch; None — вопрос задавал человек, статус уже не
+    «Уточнение» или повторный ответ (маркер ``resumed``). Никогда не бросает.
+    """
+    if session_factory is None:
+        from uk_management_bot.database.session import SessionLocal
+        session_factory = SessionLocal
+    from uk_management_bot.utils.workflow_predicates import status_in_clause
+
+    step = "context"
+    try:
+        db = session_factory()
+        try:
+            req = db.execute(
+                select(Request).where(Request.request_number == request_number,
+                                      status_in_clause([C.REQUEST_STATUS_CLARIFICATION]))
+            ).scalar_one_or_none()
+            last = _last_applied(db, request_number) if req is not None else None
+            if req is None or not last or not last.get("clarified") or last.get("resumed"):
+                return None
+            user = db.get(User, req.user_id) if req.user_id else None
+            ctx = _Context(
+                request_number=request_number,
+                text=f"{req.description or ''}\n\nОтвет жителя на уточнение:\n{reply_text}",
+                category=req.category,
+                urgency=req.urgency,
+                lang=(getattr(user, "language", None) or "ru"),
+                open_same_address=_open_same_address(db, req, bool(ai_cfg.get("dedup_enabled", True))),
+            )
+        finally:
+            db.close()
+        step = "llm"
+        hints = _hints(ctx, ai_cfg, session_factory)
+        llm = hints.llm
+        step = "resume"
+        _run(session_factory, request_number, Action.SYSTEM_CLARIFY_RESUME, {})
+        category: Optional[str] = None
+        if llm is not None and llm.category and llm.category != ctx.category:
+            step = "category"
+            _run(session_factory, request_number, Action.MANAGER_CHANGE_CATEGORY,
+                 {"category": llm.category})
+            category = llm.category
+        step = "urgency"
+        urgency = triage.final_urgency(ctx.urgency, hints)
+        _write_urgency_and_marker(session_factory, ctx, hints, urgency, category,
+                                  clarified=False, resumed=True)
+        logger.info("ai_manager: %s resumed after answer urgency=%s category=%s",
+                    request_number, urgency, category or ctx.category)
+        return category or ctx.category
+    except Exception as e:
+        logger.warning("ai_manager: resume of %s failed at %s: %s",
+                       request_number, step, type(e).__name__)
+        _audit_failed(session_factory, request_number, step, e)
+        return None
+
+
+__all__: Sequence[str] = ("TriageOutcome", "apply_triage_sync", "resume_after_answer_sync",
+                          "AUDIT_APPLIED", "AUDIT_FAILED")

@@ -50,6 +50,7 @@ SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
                              Action.SYSTEM_DISPATCH_ASSIGN,
                              Action.ASSIGN_GROUP,
                              Action.SYSTEM_REASSIGN,
+                             Action.SYSTEM_CLARIFY_RESUME,
                              Action.MANAGER_FORCE_ACCEPT}),
     # "reconcile": frozenset(),  # появится при необходимости
 }

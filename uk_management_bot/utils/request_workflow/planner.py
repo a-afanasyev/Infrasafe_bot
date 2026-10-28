@@ -513,6 +513,7 @@ def check_repeat(snap: WorkflowSnapshot, command: ActionCommand,
 _STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM,
                                      Action.SYSTEM_AUTO_PROMOTE,
                                      Action.SYSTEM_REASSIGN,
+                                     Action.SYSTEM_CLARIFY_RESUME,
                                      # to_status=SAME_STATUS никогда не равен
                                      # target; исключение держит инвариант явным
                                      Action.MANAGER_CHANGE_CATEGORY})

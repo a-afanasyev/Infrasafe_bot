@@ -100,6 +100,22 @@ def _load_reply_gate(db, request_number: str, telegram_id: int) -> str:
     return "ok"
 
 
+def _ai_resume_sync(db, request_number: str, reply_text: str) -> None:
+    """Режим ИИ (mode=ai): ответ на вопрос ИИ → повторный триаж → «Новая» → dispatch."""
+    from sqlalchemy.orm import sessionmaker
+
+    from uk_management_bot.services.ai_manager.apply import resume_after_answer_sync
+    from uk_management_bot.services.dispatch import _ai_config_sync, auto_dispatch_new_request_sync
+
+    ai_cfg = _ai_config_sync(db)
+    if ai_cfg is None:
+        return
+    factory = sessionmaker(bind=db.get_bind(), autoflush=False)
+    category = resume_after_answer_sync(request_number, reply_text, ai_cfg, factory)
+    if category:
+        auto_dispatch_new_request_sync(request_number, category, session_factory=factory)
+
+
 def _apply_reply(db, request_number: str, telegram_id: int, reply_text: str, lang: str) -> tuple:
     """-> ('request_not_found'|'no_permission', []) | ('ok', [_ManagerNotice, ...]).
 
@@ -279,6 +295,14 @@ async def handle_reply_text(message: Message, state: FSMContext, language: str =
             await message.answer(get_text("clarification.no_permission_to_reply", language=lang))
             await state.clear()
             return
+
+        # Режим ИИ: если вопрос задавал ИИ-менеджер — повторный триаж по ответу,
+        # «Уточнение»→«Новая» и штатная диспетчеризация; иначе заявку ждёт менеджер.
+        # Best-effort: ответ уже сохранён, сбой ИИ его не отменяет.
+        try:
+            await run_db(lambda s: _ai_resume_sync(s, request_number, reply_text), db=_db)
+        except Exception as e:
+            logger.warning(f"ИИ-возобновление {request_number} пропущено: {type(e).__name__}")
 
         # Открытая доска узнаёт об ответе только через WS: у канбана нет иного
         # пути обновления, поэтому без этой публикации менеджер не увидел бы ни

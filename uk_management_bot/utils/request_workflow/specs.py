@@ -86,6 +86,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: a.kind == "system", RepeatPolicy.NO_OP_IF_SAME,
         system_only=True),
+    # ИИ-менеджер: ответ жителя на вопрос ИИ возвращает заявку в очередь
+    # («Новая»), а не «В работе» как CLARIFY_RESOLVED — исполнителя могло не быть.
+    Action.SYSTEM_CLARIFY_RESUME: ActionSpec(
+        frozenset({REQUEST_STATUS_CLARIFICATION}), REQUEST_STATUS_NEW,
+        lambda s, a: a.kind == "system", RepeatPolicy.REJECT,
+        system_only=True),
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
         _executor_can_work, RepeatPolicy.REJECT),

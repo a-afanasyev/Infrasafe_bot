@@ -76,6 +76,7 @@ PAYLOAD_SCHEMAS: Mapping[Action, PayloadSchema] = {
     Action.CLARIFY_REQUEST: PayloadSchema(
         required={"question": str}, optional={"notes": str}),
     Action.CLARIFY_RESOLVED: PayloadSchema(),
+    Action.SYSTEM_CLARIFY_RESUME: PayloadSchema(),
     Action.EXECUTOR_RESUME: PayloadSchema(),
     Action.EXECUTOR_CLAIM: PayloadSchema(),
     Action.SYSTEM_AUTO_PROMOTE: PayloadSchema(required={"executor_id": int}),

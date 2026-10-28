@@ -147,6 +147,9 @@ class Action(str, Enum):
     # ActionCommand; SYSTEM_DISPATCH_ASSIGN намеренно остаётся «только из
     # Новой», а его capability у dispatcher/auto_manager не расширяется.
     SYSTEM_REASSIGN = "system_reassign"
+    # ИИ-менеджер: житель ответил на вопрос ИИ → «Уточнение»→«Новая» (повторный
+    # триаж по ответу, затем штатная диспетчеризация). system_only.
+    SYSTEM_CLARIFY_RESUME = "system_clarify_resume"
     EXECUTOR_COMPLETE = "executor_complete"
     # Менеджер завершает работу за исполнителя (В работе/Закуп/Уточнение →
     # Выполнена). Продуктовое решение 2026-06-10: менеджерский shortcut-аналог

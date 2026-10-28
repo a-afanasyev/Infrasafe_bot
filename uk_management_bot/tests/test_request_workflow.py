@@ -1140,3 +1140,19 @@ def test_ai_manager_can_force_accept_only_from_completed():
     for actor in (DISPATCHER, AUTO_MANAGER):
         assert Action.MANAGER_FORCE_ACCEPT not in allowed_actions(
             _snap(REQUEST_STATUS_COMPLETED, confirmed=True, executor=EXECUTOR_ID), actor)
+
+
+
+# ─────────────── ИИ-менеджер: SYSTEM_CLARIFY_RESUME ───────────────
+def test_system_clarify_resume_only_from_clarification_and_only_ai_manager():
+    from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION as CLAR
+
+    snap = _snap(CLAR)
+    assert Action.SYSTEM_CLARIFY_RESUME in allowed_actions(snap, AI_MANAGER)
+    for actor in (DISPATCHER, AUTO_MANAGER, UNKNOWN_SYSTEM, MANAGER):
+        assert Action.SYSTEM_CLARIFY_RESUME not in allowed_actions(snap, actor), actor
+    assert Action.SYSTEM_CLARIFY_RESUME not in allowed_actions(_snap(REQUEST_STATUS_NEW), AI_MANAGER)
+    result = _plan(snap, Action.SYSTEM_CLARIFY_RESUME, AI_MANAGER, payload={},
+                   principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                          system_actor="ai_manager"))
+    assert _patch_fields(result)["status"] == (Op.SET, REQUEST_STATUS_NEW)

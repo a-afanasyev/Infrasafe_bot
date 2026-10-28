@@ -293,3 +293,44 @@ def test_clarified_before_failure_still_stops_dispatch(SF, monkeypatch, quiet):
     assert out.clarified is True and out.category is None
     assert _req(SF).status == C.REQUEST_STATUS_CLARIFICATION
     assert _audits(SF, AUDIT_FAILED)[0]["step"] == "category"
+
+
+
+# ───────────── ответ жителя на вопрос ИИ ─────────────
+
+
+def _ai_asked(SF):
+    s = SF()
+    s.add(AuditLog(user_id=None, action=AUDIT_APPLIED,
+                   details={"request_number": NUM, "actor": "ai_manager", "clarified": True}))
+    s.commit()
+    s.close()
+
+
+def test_resume_after_answer_retriages_and_returns_to_new(SF, monkeypatch, quiet):
+    _seed(SF, description="что-то не работает", category="other", status=C.REQUEST_STATUS_CLARIFICATION)
+    _ai_asked(SF)
+    captured = _llm(monkeypatch, _payload(category="electricity", urgency="high"))
+    assert apply.resume_after_answer_sync(NUM, "нет света в 3 подъезде", AI_CFG, SF) == "electricity"
+    req = _req(SF)
+    assert (req.status, req.category, req.urgency) == (C.REQUEST_STATUS_NEW, "electricity", "high")
+    assert "что-то не работает" in captured["text"] and "нет света в 3 подъезде" in captured["text"]
+    markers = _audits(SF, AUDIT_APPLIED)
+    assert markers[-1]["resumed"] is True and markers[-1]["clarified"] is False
+    # повторный ответ — уже не «Уточнение», ничего не делаем
+    assert apply.resume_after_answer_sync(NUM, "ещё раз", AI_CFG, SF) is None
+
+
+def test_resume_ignores_human_clarification(SF, monkeypatch, quiet):
+    _seed(SF, status=C.REQUEST_STATUS_CLARIFICATION)  # маркера ИИ нет — спрашивал менеджер
+    _llm(monkeypatch, _payload())
+    assert apply.resume_after_answer_sync(NUM, "ответ", AI_CFG, SF) is None
+    assert _req(SF).status == C.REQUEST_STATUS_CLARIFICATION
+
+
+def test_question_for_uz_cyrl_is_transliterated():
+    q = {"ru": "Что не работает?", "uz": "Nima ishlamayapti?"}
+    assert apply._question_for(q, "uz") == "Nima ishlamayapti?"
+    assert apply._question_for(q, "ru") == "Что не работает?"
+    assert apply._question_for(q, "uz_cyrl") == "Нима ишламаяпти?"
+    assert apply._question_for({"ru": "Что?", "uz": ""}, "uz_cyrl") == "Что?"
