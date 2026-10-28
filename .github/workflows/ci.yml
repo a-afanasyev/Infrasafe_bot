@@ -141,7 +141,7 @@ jobs:
       # держит гейт uk_management_bot/tests/test_ci_service_coverage.py.
       - name: Bandit — High confidence + High severity (blocking)
         run: |
-          bandit -r uk_management_bot access_control media_service resource-accounting payment_control \
+          bandit -r uk_management_bot access_control media_service resource-accounting payment_control news_watcher \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*' \
             -iii -lll
 
@@ -155,7 +155,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          bandit -r uk_management_bot access_control media_service resource-accounting payment_control \
+          bandit -r uk_management_bot access_control media_service resource-accounting payment_control news_watcher \
             -x '*/tests/*,*/test_*.py,*/venv/*,*/.venv/*'
 
   npm-audit:
@@ -238,6 +238,11 @@ jobs:
       # нечего; теперь hash-locked requirements.txt (uv pip compile pyproject.toml).
       - name: Audit resource-accounting dependencies
         run: pip-audit -r resource-accounting/backend/requirements.txt
+
+      # news_watcher — юзербот мониторинга отключений (отдельный образ за
+      # профилем news-watch): свой hash-lock requirements.txt (uv pip compile).
+      - name: Audit news_watcher dependencies
+        run: pip-audit -r news_watcher/requirements.txt
 
   media-tests:
     name: media-tests (pytest)
