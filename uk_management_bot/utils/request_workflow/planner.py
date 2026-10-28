@@ -68,7 +68,7 @@ def _build_patch(action: Action, to_canon: str, actor: ActorContext,
         ("status", Op.SET, _storage_status(to_canon)),
     ]
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
-                  Action.ASSIGN_GROUP):
+                  Action.SYSTEM_REASSIGN, Action.ASSIGN_GROUP):
         # Ветки взаимоисключающие по построению: у ASSIGN_GROUP в схеме только
         # `group`, у двух других — только `executor_id`, всё остальное схема
         # отвергает как unexpected field. Ветки СИММЕТРИЧНЫ — каждая чистит
@@ -185,7 +185,7 @@ def _build_domain_ops(action: Action, snap: WorkflowSnapshot,
         return (DomainOp("promote_group_assignment",
                          {"executor_id": payload["executor_id"]}),)
     if action in (Action.SYSTEM_DISPATCH_ASSIGN, Action.MANAGER_ASSIGN,
-                  Action.ASSIGN_GROUP):
+                  Action.SYSTEM_REASSIGN, Action.ASSIGN_GROUP):
         # PR2c: строку RequestAssignment создаём только при фактическом
         # назначении исполнителя/группы (см. _build_patch). FEAT-группы:
         # переназначение из «В работе» безопасно для partial-unique —
@@ -314,7 +314,7 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     # под тем же FOR UPDATE, где строился снимок (преflight адаптера гонку не
     # закрывает). Только при canon == to_status: из «Новой» назначение того же
     # legacy-executor_id двигает статус — это реальное изменение, не повтор.
-    if (action is Action.MANAGER_ASSIGN
+    if (action in (Action.MANAGER_ASSIGN, Action.SYSTEM_REASSIGN)
             and canon == spec.to_status
             and snap.request.executor_id is not None
             and command.payload.get("executor_id") == snap.request.executor_id):
@@ -512,6 +512,7 @@ def check_repeat(snap: WorkflowSnapshot, command: ActionCommand,
 # canon В работе→В работе не должен резолвиться в system-only действие).
 _STATUS_RESOLVE_EXCLUDE = frozenset({Action.EXECUTOR_CLAIM,
                                      Action.SYSTEM_AUTO_PROMOTE,
+                                     Action.SYSTEM_REASSIGN,
                                      # to_status=SAME_STATUS никогда не равен
                                      # target; исключение держит инвариант явным
                                      Action.MANAGER_CHANGE_CATEGORY})

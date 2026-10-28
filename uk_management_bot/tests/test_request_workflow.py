@@ -34,6 +34,7 @@ from uk_management_bot.utils.request_workflow import (
     RepeatConflict,
     RepeatRejected,
     RequestState,
+    SameExecutor,
     STATUS_RETURNED,
     WorkflowSnapshot,
     allowed_actions,
@@ -1074,3 +1075,68 @@ def test_ai_manager_clarify_plans_notes_append_and_audit_question():
     )
     fields = _patch_fields(result)
     assert fields["notes"] == (Op.APPEND, "Уточнение: где именно течёт?")
+
+
+# ─────────────── ИИ-менеджер фаза 2: SYSTEM_REASSIGN + MANAGER_FORCE_ACCEPT ───────────────
+
+
+def test_system_reassign_only_from_in_progress_and_only_ai_manager():
+    snap_new = _snap(REQUEST_STATUS_NEW)
+    assert Action.SYSTEM_REASSIGN not in allowed_actions(snap_new, AI_MANAGER)
+    snap_work = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID)
+    assert Action.SYSTEM_REASSIGN in allowed_actions(snap_work, AI_MANAGER)
+    for actor in (DISPATCHER, AUTO_MANAGER, UNKNOWN_SYSTEM, MANAGER):
+        assert Action.SYSTEM_REASSIGN not in allowed_actions(snap_work, actor), actor
+
+
+def test_system_reassign_plans_like_manager_assign():
+    result = _plan(
+        _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+        Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"executor_id": 77},
+        principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                               system_actor="ai_manager"),
+    )
+    fields = _patch_fields(result)
+    assert fields["status"] == (Op.SET, REQUEST_STATUS_IN_PROGRESS)
+    assert fields["executor_id"] == (Op.SET, 77)
+    assert fields["assignment_type"] == (Op.SET, "individual")
+    assert fields["assigned_at"][0] is Op.SET_NOW
+    assert "assigned_by" not in fields  # системный актор — SET_ACTOR писал бы NULL
+    assert [d.kind for d in result.domain_ops] == ["create_assignment"]
+    notify = [e for e in result.events if e.kind == "notify"]
+    assert notify and notify[0].data["action"] == "system_reassign"
+
+
+def test_system_reassign_same_executor_is_rejected():
+    with pytest.raises(SameExecutor):
+        _plan(_snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+              Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"executor_id": EXECUTOR_ID},
+              principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                     system_actor="ai_manager"))
+
+
+def test_system_reassign_requires_executor_id():
+    with pytest.raises(PayloadInvalid):
+        _plan(_snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID),
+              Action.SYSTEM_REASSIGN, AI_MANAGER, payload={"group": "plumber"},
+              principal=PrincipalRef(kind="system", user_id=None, source="ai_manager",
+                                     system_actor="ai_manager"))
+
+
+def test_system_reassign_unreachable_by_status_resolution():
+    """Legacy-вход «статус → действие» не должен резолвиться в системное
+    переназначение (как EXECUTOR_CLAIM / SYSTEM_AUTO_PROMOTE)."""
+    snap = _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID)
+    with pytest.raises(InvalidTransition):
+        resolve_command(snap, AI_MANAGER, LegacyStatusIntent("c", REQUEST_STATUS_IN_PROGRESS))
+
+
+def test_ai_manager_can_force_accept_only_from_completed():
+    assert Action.MANAGER_FORCE_ACCEPT in allowed_actions(
+        _snap(REQUEST_STATUS_COMPLETED, confirmed=True, executor=EXECUTOR_ID), AI_MANAGER)
+    assert Action.MANAGER_FORCE_ACCEPT not in allowed_actions(
+        _snap(REQUEST_STATUS_IN_PROGRESS, executor=EXECUTOR_ID), AI_MANAGER)
+    # другие системные акторы не получают
+    for actor in (DISPATCHER, AUTO_MANAGER):
+        assert Action.MANAGER_FORCE_ACCEPT not in allowed_actions(
+            _snap(REQUEST_STATUS_COMPLETED, confirmed=True, executor=EXECUTOR_ID), actor)

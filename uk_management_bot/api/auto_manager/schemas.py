@@ -52,6 +52,7 @@ class AutoManagerConfigData(BaseModel):
     # него каждый PUT полного конфига с дашборда сбрасывал бы `ai` в дефолт.
     # Вложенная валидация — в `validate_config` (единый источник правил).
     ai: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["ai"]))
+    sla: dict = Field(default_factory=lambda: deepcopy(DEFAULT_CONFIG["sla"]))
     # Read-only: доступен ли режим "ai" на площадке (деплой-флаг). Заполняет
     # роутер; присланное клиентом значение не учитывается.
     ai_available: Optional[bool] = None

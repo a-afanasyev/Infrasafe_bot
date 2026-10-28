@@ -21,7 +21,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from uk_management_bot.database.session import session_scope
+from uk_management_bot.database.session import run_db, session_scope
 from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.services.auto_manager.config import (
     load_config_sync,
@@ -186,39 +186,52 @@ async def handle_auto_manager_toggle(callback: CallbackQuery, state: FSMContext,
 
 @router.callback_query(F.data == "auto_manager_mode_ai")
 @require_action("admin_panel.use")
-async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext, db=None, roles: list = None, user=None):
+async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext, roles: list = None, user=None, *, _db=None):
     """Переключатель режима rule ↔ ai.
 
     Без деплой-флага ``AI_MANAGER_ENABLED`` — прежнее поведение: только
     hint-тост, конфиг не читается и не пишется (протухшая клавиатура или
     двойной тап не включат режим, который на площадке не работает).
+
+    AUD3-37: единственный хендлер файла без DI-параметра ``db`` — DB-фаза
+    идёт цельным sync-юнитом в worker-потоке (``run_db``), ``_db`` — тестовый
+    seam (как в handlers/group_intake.py). Роли/пользователь — из DI.
     """
+    telegram_id = callback.from_user.id
     if not _ai_available():
         try:
-            lang = get_user_language(callback.from_user.id, db) if db else "ru"
+            lang = await run_db(lambda s: get_user_language(telegram_id, s), db=_db)
             await callback.answer(get_text("auto_manager.ai_mode_hint", language=lang), show_alert=False)
         except Exception as e:
             logger.error(f"Ошибка hint'а ИИ-режима: {e}")
             await callback.answer()
         return
-    lang = "ru"  # A6-P3-21: см. handle_auto_manager_menu
+    lang = "ru"
+    updated_by = user.id if user else None
     try:
-        with _db_scope(db) as scoped:
-            lang = get_user_language(callback.from_user.id, scoped)
-            cfg = load_config_sync(scoped)
-            new_mode = "rule" if cfg.get("mode") == "ai" else "ai"
-            saved = save_config_sync(scoped, {**cfg, "mode": new_mode},
-                                     updated_by=user.id if user else None)
-            await callback.message.edit_text(
-                _status_text(saved, lang),
-                reply_markup=_status_keyboard(saved, lang),
-                parse_mode="HTML",
-            )
-            toast_key = "auto_manager.mode_switched_ai" if new_mode == "ai" else "auto_manager.mode_switched_rule"
-            await callback.answer(get_text(toast_key, language=lang))
+        lang, saved = await run_db(
+            lambda s: _toggle_mode_sync(s, telegram_id, updated_by), db=_db,
+        )
+        await callback.message.edit_text(
+            _status_text(saved, lang),
+            reply_markup=_status_keyboard(saved, lang),
+            parse_mode="HTML",
+        )
+        toast_key = ("auto_manager.mode_switched_ai" if saved["mode"] == "ai"
+                     else "auto_manager.mode_switched_rule")
+        await callback.answer(get_text(toast_key, language=lang))
     except Exception as e:
         logger.error(f"Ошибка переключения режима автоменеджера: {e}")
         await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
+
+
+def _toggle_mode_sync(session, telegram_id: int, updated_by: int | None) -> tuple[str, dict]:
+    """rule ↔ ai; остальные поля конфига сохраняются как есть."""
+    lang = get_user_language(telegram_id, session)
+    cfg = load_config_sync(session)
+    new_mode = "rule" if cfg.get("mode") == "ai" else "ai"
+    saved = save_config_sync(session, {**cfg, "mode": new_mode}, updated_by=updated_by)
+    return lang, saved
 
 
 @router.callback_query(F.data == "auto_manager_change_window")

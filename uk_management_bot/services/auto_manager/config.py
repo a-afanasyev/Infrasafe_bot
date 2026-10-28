@@ -48,6 +48,18 @@ DEFAULT_CONFIG: dict = {
     # которого подсказки не применяются (rule-путь); разрешение задавать
     # жителю уточняющий вопрос; поиск дублей по открытым заявкам адреса.
     "ai": {"min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True},
+    # SLA-лестница ИИ-менеджера (фаза 2, только при mode="ai"). Часы, int;
+    # 0 = ступень/трек выключены. `ladder` — смещения в часах от момента
+    # просрочки «В работе»: DM исполнителю → staff-группа → менеджер →
+    # переназначение дежурному.
+    "sla": {
+        "in_progress_max": {"low": 72, "medium": 48, "high": 12, "critical": 2},
+        "clarification_max": 48,
+        "executed_unconfirmed_max": 24,
+        "completed_unaccepted_days": 3,
+        "critical_unassigned_minutes": 30,
+        "ladder": {"remind_executor": 0, "staff_group": 2, "manager": 4, "reassign": 8},
+    },
 }
 
 #: Норматив в часах: от часа до года — защита от опечаток вида 0 или 99999.
@@ -112,6 +124,46 @@ def _validate_ai(raw: object) -> dict:
     return {**merged, "min_confidence": float(threshold)}
 
 
+def _non_negative_int(value: object, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field_name}: ожидается целое ≥ 0, получено {value!r}")
+    return value
+
+
+def _merge_int_block(raw: object, defaults: dict, field_name: str) -> dict:
+    """Частичный dict целых ≥ 0 поверх дефолтов; неизвестные ключи — ошибка."""
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{field_name}: ожидается dict, получено {raw!r}")
+    unknown = sorted(set(raw) - set(defaults))
+    if unknown:
+        raise ValueError(f"{field_name}: неизвестные ключи {unknown}")
+    merged = {**defaults, **raw}
+    return {k: _non_negative_int(v, f"{field_name}.{k}") for k, v in merged.items()}
+
+
+def _validate_sla(raw: object) -> dict:
+    """Блок ``sla``: два вложенных уровня (``in_progress_max``, ``ladder``)."""
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"sla: ожидается dict, получено {raw!r}")
+    defaults = DEFAULT_CONFIG["sla"]
+    unknown = sorted(set(raw) - set(defaults))
+    if unknown:
+        raise ValueError(f"sla: неизвестные ключи {unknown}")
+    merged = {**defaults, **raw}
+    return {
+        **{k: _non_negative_int(merged[k], f"sla.{k}") for k in (
+            "clarification_max", "executed_unconfirmed_max",
+            "completed_unaccepted_days", "critical_unassigned_minutes")},
+        "in_progress_max": _merge_int_block(
+            raw.get("in_progress_max"), defaults["in_progress_max"], "sla.in_progress_max"),
+        "ladder": _merge_int_block(raw.get("ladder"), defaults["ladder"], "sla.ladder"),
+    }
+
+
 def validate_config(raw: dict) -> dict:
     """Чистая валидация + нормализация конфига авто-менеджера.
 
@@ -130,6 +182,7 @@ def validate_config(raw: dict) -> dict:
     cfg = {**DEFAULT_CONFIG, **raw}
     cfg["sla_hours"] = _validate_sla_hours(raw.get("sla_hours"))
     cfg["ai"] = _validate_ai(raw.get("ai"))
+    cfg["sla"] = _validate_sla(raw.get("sla"))
 
     if not isinstance(cfg["enabled"], bool):
         raise ValueError(f"enabled: ожидается bool, получено {cfg['enabled']!r}")

@@ -92,6 +92,13 @@ _NOTIFY_MATRIX: dict[Action, object] = {
         ((EXECUTOR,), "notifications.workflow.assigned_executor"),
         ((APPLICANT,), "notifications.workflow.assigned"),
     ),
+    # Переназначение SLA-лестницей ИИ-менеджера: новому исполнителю — наряд,
+    # жителю — «передана другому» (ключ reassigned подставляется в _plan по
+    # флагу; здесь — тот же жительский ключ, что у ручного назначения).
+    Action.SYSTEM_REASSIGN: (
+        ((EXECUTOR,), "notifications.workflow.assigned_executor"),
+        ((APPLICANT,), "notifications.workflow.assigned"),
+    ),
     # Готовность к приёмке — единственное действие, которого ЖДУТ от жителя.
     Action.EXECUTOR_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),
     Action.MANAGER_COMPLETE: ((APPLICANT,), "notifications.workflow.executed"),

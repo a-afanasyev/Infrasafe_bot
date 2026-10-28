@@ -136,7 +136,10 @@ class TestRequireRoleGate:
         «нет прав доступа» (см. reference_require_role_di_signature.md)."""
         import uk_management_bot.handlers.auto_manager as am
         sig = inspect.signature(getattr(am, handler_name))
-        for p in ("db", "user", "roles"):
+        # mode_ai — единственный без middleware-сессии (AUD3-37: run_db +
+        # тестовый seam _db), остальным db приходит через DI.
+        wanted = ("user", "roles") if handler_name == "handle_auto_manager_mode_ai" else ("db", "user", "roles")
+        for p in wanted:
             assert p in sig.parameters, f"{handler_name} не принимает DI-параметр {p}"
 
 
@@ -219,7 +222,7 @@ class TestAiModeBlocked:
         cb = _make_callback(data="auto_manager_mode_ai", telegram_id=90009)
         state = _make_state()
 
-        await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
 
         cb.answer.assert_awaited_once()
         _args, kwargs = cb.answer.call_args
@@ -239,7 +242,7 @@ class TestAiModeBlocked:
         state = _make_state()
 
         for _ in range(3):
-            await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+            await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
 
         rows = db.query(AutoManagerConfig).all()
         assert rows == [] or all(r.data["mode"] != "ai" for r in rows)
@@ -262,7 +265,7 @@ class TestAiModeToggle:
         cb = _make_callback(data="auto_manager_mode_ai", telegram_id=130013)
         state = _make_state()
 
-        await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
         row = _config_row(db)
         assert row.data["mode"] == "ai"
         assert row.updated_by == 13  # DB user.id, не telegram_id
@@ -272,7 +275,7 @@ class TestAiModeToggle:
         assert kb.inline_keyboard[1][0].text == "🤖 Режим: ИИ"
         cb.answer.assert_awaited_with("Включён режим ИИ-менеджера")
 
-        await handle_auto_manager_mode_ai(cb, state, db=db, roles=["manager"], user=user)
+        await handle_auto_manager_mode_ai(cb, state, _db=db, roles=["manager"], user=user)
         assert _config_row(db).data["mode"] == "rule"
         kb = cb.message.edit_text.call_args.kwargs["reply_markup"]
         assert kb.inline_keyboard[1][0].text == "📐 Режим: по правилу"
@@ -286,7 +289,7 @@ class TestAiModeToggle:
                               "ai": {"min_confidence": 0.9}})
         user = _make_user(db, db_id=14, telegram_id=140014)
         cb = _make_callback(data="auto_manager_mode_ai", telegram_id=140014)
-        await handle_auto_manager_mode_ai(cb, _make_state(), db=db, roles=["manager"], user=user)
+        await handle_auto_manager_mode_ai(cb, _make_state(), _db=db, roles=["manager"], user=user)
         data = _config_row(db).data
         assert data["mode"] == "ai" and data["enabled"] is True
         assert data["window_start"] == "21:00" and data["ai"]["min_confidence"] == 0.9

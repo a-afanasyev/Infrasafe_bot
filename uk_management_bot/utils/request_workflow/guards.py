@@ -43,10 +43,14 @@ SYSTEM_CAPABILITIES: Mapping[str, frozenset[Action]] = {
     # полномочий — ЗДЕСЬ, а не в промпте: уточнить у жителя, поправить
     # категорию, назначить дежурному/группе. Отмена, закрытие, подтверждение,
     # возврат в работу — намеренно отсутствуют: даже баг пакета их не вызовет.
+    # Фаза 2 (SLA-лестница): SYSTEM_REASSIGN — переназначение просроченной
+    # «В работе»; MANAGER_FORCE_ACCEPT — принятие по таймауту жителя.
     "ai_manager": frozenset({Action.CLARIFY_REQUEST,
                              Action.MANAGER_CHANGE_CATEGORY,
                              Action.SYSTEM_DISPATCH_ASSIGN,
-                             Action.ASSIGN_GROUP}),
+                             Action.ASSIGN_GROUP,
+                             Action.SYSTEM_REASSIGN,
+                             Action.MANAGER_FORCE_ACCEPT}),
     # "reconcile": frozenset(),  # появится при необходимости
 }
 

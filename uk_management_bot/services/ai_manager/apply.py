@@ -31,12 +31,9 @@ from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.ai_manager import breaker, triage
 from uk_management_bot.services.ai_manager.triage import OpenRequest, TriageHints
-from uk_management_bot.utils.constants import (
-    REQUEST_STATUS_APPROVED,
-    REQUEST_STATUS_CANCELLED,
-)
 from uk_management_bot.utils.datetime_utils import utc_now
 from uk_management_bot.utils.request_workflow import Action, ActionCommand, PrincipalRef
+from uk_management_bot.utils.workflow_predicates import active_status_clause
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +83,7 @@ def _open_same_address(db, req: Request, dedup_enabled: bool) -> tuple[OpenReque
     q = (
         select(Request.request_number, Request.category, Request.description)
         .where(Request.request_number != req.request_number)
-        .where(Request.status.notin_((REQUEST_STATUS_APPROVED, REQUEST_STATUS_CANCELLED)))
+        .where(active_status_clause())
         .where(Request.created_at >= utc_now() - _DEDUP_WINDOW)
     )
     if req.apartment_id is not None:

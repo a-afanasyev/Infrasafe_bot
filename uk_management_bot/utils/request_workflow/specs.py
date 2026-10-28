@@ -79,6 +79,13 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
         frozenset({REQUEST_STATUS_NEW, REQUEST_STATUS_IN_PROGRESS}),
         REQUEST_STATUS_IN_PROGRESS,
         lambda s, a: _is_manager(a) or _engineer_can_assign(s, a), RepeatPolicy.NO_OP_IF_SAME),
+    # ИИ-менеджер (SLA-лестница): переназначение просроченной «В работе»
+    # другому дежурному. system_only + capability `ai_manager` (guards.py);
+    # SYSTEM_DISPATCH_ASSIGN намеренно остаётся «только из Новой».
+    Action.SYSTEM_REASSIGN: ActionSpec(
+        frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_IN_PROGRESS,
+        lambda s, a: a.kind == "system", RepeatPolicy.NO_OP_IF_SAME,
+        system_only=True),
     Action.EXECUTOR_PURCHASE: ActionSpec(
         frozenset({REQUEST_STATUS_IN_PROGRESS}), REQUEST_STATUS_PURCHASE,
         _executor_can_work, RepeatPolicy.REJECT),
@@ -157,10 +164,12 @@ ACTION_TABLE: Mapping[Action, ActionSpec] = {
     Action.APPLICANT_RETURN: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED}), STATUS_RETURNED,
         _owner_can_return, RepeatPolicy.REJECT),
+    # +system: ИИ-менеджер принимает «Выполнена» по таймауту жителя
+    # (capability `ai_manager`, конфиг sla.completed_unaccepted_days).
     Action.MANAGER_FORCE_ACCEPT: ActionSpec(
         frozenset({REQUEST_STATUS_COMPLETED, STATUS_RETURNED}),
         REQUEST_STATUS_APPROVED,
-        lambda s, a: _is_manager(a), RepeatPolicy.REJECT),
+        lambda s, a: a.kind == "system" or _is_manager(a), RepeatPolicy.REJECT),
     Action.CANCEL: ActionSpec(
         frozenset(set(CANON_STATUSES) - TERMINAL_STATUSES),
         REQUEST_STATUS_CANCELLED,
