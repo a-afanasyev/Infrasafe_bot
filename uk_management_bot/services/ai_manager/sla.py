@@ -48,6 +48,7 @@ from uk_management_bot.utils.request_workflow import Action, ActionCommand
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
     awaiting_manager_clause,
+    status_in_clause,
 )
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,7 @@ class AiSlaWatchdog:
         maxes, ladder = sla["in_progress_max"], sla["ladder"]
         out = []
         for req in db.execute(
-            select(Request).where(Request.status == REQUEST_STATUS_IN_PROGRESS)
+            select(Request).where(status_in_clause((REQUEST_STATUS_IN_PROGRESS,)))
         ).scalars():
             limit = int(maxes.get(req.urgency or "low", 0))
             if req.executor_id is None or limit <= 0:
@@ -192,7 +193,7 @@ class AiSlaWatchdog:
             return []
         out = []
         for req in db.execute(
-            select(Request).where(Request.status == REQUEST_STATUS_CLARIFICATION)
+            select(Request).where(status_in_clause((REQUEST_STATUS_CLARIFICATION,)))
         ).scalars():
             anchor = _aware(req.updated_at or req.created_at)
             phase = _Phase(req.request_number, TRACK_CLARIFICATION, req.status_version or 0, anchor.isoformat())
@@ -234,7 +235,7 @@ class AiSlaWatchdog:
             return []
         out = []
         for req in db.execute(
-            select(Request).where(Request.status == REQUEST_STATUS_NEW, Request.urgency == "critical")
+            select(Request).where(status_in_clause((REQUEST_STATUS_NEW,)), Request.urgency == "critical")
         ).scalars():
             if req.executor_id is not None:
                 continue

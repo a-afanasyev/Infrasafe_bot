@@ -56,6 +56,37 @@ async def update_auto_manager_config(
 
     Write-side rate-limit 30/min зеркалит `board_config`'s PUT (SEC-084) —
     та же защита от churn конфига украденным токеном."""
+    before = await load_config(db)
     saved = await save_config(db, payload.config_dict(), updated_by=user.id)
     logger.info("auto_manager_config обновлён пользователем %s", user.id)
+    await _notify_ai_switched_off(before.get("mode", "rule"), saved.get("mode", "rule"))
     return _response(saved)
+
+
+async def _notify_ai_switched_off(old_mode: str, new_mode: str) -> None:
+    """ai → rule: менеджерам — сколько открытых заявок было на SLA-эскалации.
+    Счёт — короткой sync-сессией в потоке, отправка — API-sender'ом. Best-effort."""
+    if old_mode != "ai" or new_mode == "ai":
+        return
+    import asyncio
+
+    from uk_management_bot.api import telegram_send
+
+    try:
+        notices = await asyncio.to_thread(_collect_switch_off_notices, old_mode, new_mode)
+        for tg_id, text in notices:
+            await telegram_send.send_message(tg_id, text, parse_mode="HTML")
+    except Exception as e:
+        logger.warning("ai_manager: уведомление о выключении не отправлено: %s", type(e).__name__)
+
+
+def _collect_switch_off_notices(old_mode: str, new_mode: str) -> list[tuple[int, str]]:
+    """Sync-юнит для потока: своя короткая сессия, наружу — (telegram_id, text)."""
+    from uk_management_bot.database.session import SessionLocal
+    from uk_management_bot.services.ai_manager.switch_off import manager_notices_sync
+
+    session = SessionLocal()
+    try:
+        return manager_notices_sync(session, old_mode, new_mode)
+    finally:
+        session.close()

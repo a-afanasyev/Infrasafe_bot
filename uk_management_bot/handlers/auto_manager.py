@@ -209,7 +209,7 @@ async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext
     lang = "ru"
     updated_by = user.id if user else None
     try:
-        lang, saved = await run_db(
+        lang, saved, notices = await run_db(
             lambda s: _toggle_mode_sync(s, telegram_id, updated_by), db=_db,
         )
         await callback.message.edit_text(
@@ -220,18 +220,25 @@ async def handle_auto_manager_mode_ai(callback: CallbackQuery, state: FSMContext
         toast_key = ("auto_manager.mode_switched_ai" if saved["mode"] == "ai"
                      else "auto_manager.mode_switched_rule")
         await callback.answer(get_text(toast_key, language=lang))
+        if notices:
+            # ai → rule: менеджерам — сколько открытых заявок было на SLA-эскалации.
+            from uk_management_bot.services.workflow_notifications import send_notify_messages
+            await send_notify_messages(callback.bot, notices)
     except Exception as e:
         logger.error(f"Ошибка переключения режима автоменеджера: {e}")
         await callback.answer(get_text("auto_manager.menu_load_error", language=lang), show_alert=True)
 
 
-def _toggle_mode_sync(session, telegram_id: int, updated_by: int | None) -> tuple[str, dict]:
-    """rule ↔ ai; остальные поля конфига сохраняются как есть."""
+def _toggle_mode_sync(session, telegram_id: int, updated_by: int | None) -> tuple[str, dict, list]:
+    """rule ↔ ai; остальные поля конфига сохраняются как есть.
+    Третий элемент — (telegram_id, text) менеджерам при выключении ИИ."""
+    from uk_management_bot.services.ai_manager.switch_off import manager_notices_sync
+
     lang = get_user_language(telegram_id, session)
     cfg = load_config_sync(session)
     new_mode = "rule" if cfg.get("mode") == "ai" else "ai"
     saved = save_config_sync(session, {**cfg, "mode": new_mode}, updated_by=updated_by)
-    return lang, saved
+    return lang, saved, manager_notices_sync(session, cfg.get("mode", "rule"), new_mode)
 
 
 @router.callback_query(F.data == "auto_manager_change_window")

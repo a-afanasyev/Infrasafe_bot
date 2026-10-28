@@ -313,3 +313,28 @@ async def test_put_roundtrips_sla_hours(am_client):
     resp = await client.put(PATH, json=_valid_payload(sla_hours=sla))
     assert resp.status_code == 200, resp.text
     assert (await client.get(PATH)).json()["sla_hours"] == sla
+
+
+@pytest.mark.asyncio
+async def test_put_switching_ai_off_notifies_managers(am_client, monkeypatch):
+    """ai → rule через дашборд: менеджерам уходит число заявок на эскалации
+    (счёт — sync-сессией в потоке, отправка — API-sender'ом)."""
+    from uk_management_bot.api import telegram_send
+    from uk_management_bot.api.auto_manager import router as am_router
+
+    monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+    manager = _user(29, ["manager"])
+    assert (await am_client(manager).put(PATH, json=_valid_payload(mode="ai"))).status_code == 200
+
+    sent = []
+
+    async def fake_send(chat_id, text, **kw):
+        sent.append((chat_id, text))
+        return True
+
+    monkeypatch.setattr(telegram_send, "send_message", fake_send)
+    monkeypatch.setattr(am_router, "_collect_switch_off_notices",
+                        lambda old, new: [(777, f"{old}->{new}")])
+    resp = await am_client(manager).put(PATH, json=_valid_payload(mode="rule"))
+    assert resp.status_code == 200
+    assert sent == [(777, "ai->rule")]

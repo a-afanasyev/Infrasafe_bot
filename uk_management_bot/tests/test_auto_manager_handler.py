@@ -472,3 +472,48 @@ class TestWindowInput:
         assert row.data["window_end"] == "06:45"
         assert row.data["timezone"] == DEFAULT_CONFIG["timezone"]
         assert row.data["max_requests_per_run"] == DEFAULT_CONFIG["max_requests_per_run"]
+
+
+# ───────────────────── выключение ИИ: уведомление об эскалациях ─────────────────────
+
+
+class TestAiSwitchOffNotice:
+    @pytest.fixture(autouse=True)
+    def _flag_on(self, monkeypatch):
+        from uk_management_bot.config.settings import settings
+        monkeypatch.setattr(settings, "AI_MANAGER_ENABLED", True)
+
+    @pytest.mark.asyncio
+    async def test_switching_ai_off_notifies_managers_about_escalating_requests(self, db, monkeypatch):
+        from datetime import datetime, timezone
+
+        from uk_management_bot.database.models.audit import AuditLog
+        from uk_management_bot.database.models.request import Request
+        from uk_management_bot.handlers.auto_manager import handle_auto_manager_mode_ai
+        from uk_management_bot.services import workflow_notifications
+        from uk_management_bot.services.auto_manager.config import save_config_sync
+
+        save_config_sync(db, {**DEFAULT_CONFIG, "enabled": True, "mode": "ai"})
+        manager = _make_user(db, db_id=16, telegram_id=160016)
+        db.add(Request(request_number="261028-001", user_id=16, category="plumbing", description="x",
+                       urgency="low", status="В работе", created_at=datetime.now(timezone.utc)))
+        db.add(AuditLog(user_id=None, action="ai_sla_step",
+                        details={"request_number": "261028-001", "track": "executor", "step": "manager"}))
+        db.commit()
+        sent = []
+
+        async def fake_send(bot, messages):
+            sent.extend(messages)
+            return len(messages)
+
+        monkeypatch.setattr(workflow_notifications, "send_notify_messages", fake_send)
+        cb = _make_callback(data="auto_manager_mode_ai", telegram_id=160016)
+        await handle_auto_manager_mode_ai(cb, _make_state(), roles=["manager"], user=manager, _db=db)
+        assert _config_row(db).data["mode"] == "rule"
+        assert [tg for tg, _ in sent] == [160016]
+        assert "1" in sent[0][1]
+
+        # обратно в ai — без уведомления
+        sent.clear()
+        await handle_auto_manager_mode_ai(cb, _make_state(), roles=["manager"], user=manager, _db=db)
+        assert sent == []
