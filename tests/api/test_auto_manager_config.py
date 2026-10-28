@@ -446,6 +446,11 @@ async def test_reset_breaker_access_and_audit(am_client, db_session_factory, fak
     assert row.user_id == 44
     assert row.details["before"] == {"open": True, "open_ttl": breaker.OPEN_TTL, "failures": 3}
     assert row.details["at"]
+    # повторный сброс закрытого и чистого предохранителя — 200, но без второй записи
+    assert (await am_client(_user(44, ["manager"])).post(RESET)).status_code == 200
+    async with db_session_factory() as s:
+        n = len((await s.execute(select(AuditLog).where(AuditLog.action == "ai_breaker_reset"))).scalars().all())
+    assert n == 1
 
 
 @pytest.mark.asyncio

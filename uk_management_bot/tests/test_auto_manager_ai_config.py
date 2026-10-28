@@ -37,7 +37,9 @@ def test_ai_instructions_and_extra_keywords_normalized():
     {"news_instructions": 5},
     {"extra_emergency_keywords": "газ"},
     {"extra_emergency_keywords": ["x" * 51]},
-    {"extra_emergency_keywords": [f"w{i}" for i in range(101)]},
+    {"extra_emergency_keywords": ["а"]},   # код-ревью M1: подстрока «а» есть в любом тексте → всё critical
+    {"extra_emergency_keywords": ["ab"]},
+    {"extra_emergency_keywords": [f"word{i}" for i in range(101)]},
     {"templates": []},
     {"templates": {"nope": {"ru": "x"}}},
     {"templates": {"sla.executor_overdue": {"ru": "{unknown} поле"}}},

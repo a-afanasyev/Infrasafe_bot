@@ -34,11 +34,14 @@ TEXT_MAX = 1000          # длина шаблона
 RENDERED_MAX = 3500      # длина после подстановки (лимит Telegram 4096 с запасом)
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 _ANY_BRACE = re.compile(r"\{[^{}]*\}|[{}]")
-_TAG = re.compile(r"<[^<>]+>")
+# Тег Telegram: сразу после «<» имя тега (без пробела) — «< b >» тегом не считается.
+_TAG = re.compile(r"</?[a-z][a-z0-9-]*(?:\s[^<>]*)?>", re.IGNORECASE)
 _TG_TAGS = frozenset({
     "b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre", "a", "tg-spoiler", "blockquote",
 })
-_TG_ATTRS: dict[str, frozenset[str]] = {"a": frozenset({"href"}), "pre": frozenset({"language"})}
+# Атрибуты по docs Telegram: <a href>, <code class="language-…"> (внутри <pre>).
+_TG_ATTRS: dict[str, frozenset[str]] = {"a": frozenset({"href"}), "code": frozenset({"class"})}
+_HREF_SCHEMES = ("http://", "https://", "tg://")
 _overrides: contextvars.ContextVar[Mapping[str, Mapping[str, str]]] = contextvars.ContextVar(
     "ai_templates", default={},
 )
@@ -75,18 +78,41 @@ class _TgHtml(HTMLParser):
         self.stack: list[str] = []
         self.error: Optional[str] = None
 
+    def _fail(self, message: str) -> None:
+        self.error = self.error or message
+
     def handle_starttag(self, tag: str, attrs) -> None:
         allowed = _TG_ATTRS.get(tag, frozenset())
-        if tag not in _TG_TAGS or any(name not in allowed for name, _ in attrs):
-            self.error = self.error or f"недопустимый тег <{tag}>"
+        names = [name for name, _ in attrs]
+        if tag not in _TG_TAGS or any(name not in allowed for name in names) or len(names) != len(set(names)):
+            self._fail(f"недопустимый тег <{tag}>")
+        if tag == "a":
+            href = dict(attrs).get("href") or ""
+            if not href.startswith(_HREF_SCHEMES):
+                self._fail("ссылка: href обязателен и только http://, https:// или tg://")
+        if tag == "code" and names and not (dict(attrs).get("class") or "").startswith("language-"):
+            self._fail('<code class="…"> — только language-<язык>')
         self.stack.append(tag)
 
     def handle_endtag(self, tag: str) -> None:
         if not self.stack or self.stack.pop() != tag:
-            self.error = self.error or f"непарный тег </{tag}>"
+            self._fail(f"непарный тег </{tag}>")
 
     def handle_startendtag(self, tag: str, attrs) -> None:
-        self.error = self.error or f"недопустимый тег <{tag}/>"
+        self._fail(f"недопустимый тег <{tag}/>")
+
+    # Telegram не разбирает комментарии, CDATA, PI и DOCTYPE — sendMessage даст 400.
+    def handle_comment(self, data: str) -> None:
+        self._fail("комментарии <!-- --> недопустимы")
+
+    def handle_pi(self, data: str) -> None:
+        self._fail("<?...?> недопустимо")
+
+    def handle_decl(self, decl: str) -> None:
+        self._fail("<!...> недопустимо")
+
+    def unknown_decl(self, data: str) -> None:
+        self._fail("<![...]> недопустимо")
 
 
 def check_telegram_html(text: str) -> None:

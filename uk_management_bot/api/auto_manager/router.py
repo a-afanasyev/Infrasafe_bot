@@ -94,9 +94,13 @@ async def reset_ai_breaker(
     before = await asyncio.to_thread(breaker.status)
     if before is None or not await asyncio.to_thread(breaker.reset):
         raise HTTPException(status_code=503, detail="Redis недоступен — предохранитель не сброшен")
-    db.add(AuditLog(user_id=user.id, action="ai_breaker_reset",
-                    details={"before": before, "at": utc_now().isoformat()}))
-    await db.commit()
+    # Аудит — только когда было что сбрасывать (закрытый и чистый предохранитель
+    # следа не оставляет). Порядок «сброс → аудит» осознанный: Redis-ключи с TTL
+    # истекут сами, а запись без сброса ввела бы в заблуждение.
+    if before["open"] or before["failures"]:
+        db.add(AuditLog(user_id=user.id, action="ai_breaker_reset",
+                        details={"before": before, "at": utc_now().isoformat()}))
+        await db.commit()
     logger.info("ai_manager: предохранитель сброшен пользователем %s", user.id)
     return AiBreakerStatus(**(await asyncio.to_thread(breaker.status) or _BREAKER_CLOSED))
 

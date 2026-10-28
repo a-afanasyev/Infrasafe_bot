@@ -38,6 +38,12 @@ def test_validate_overrides_subset_and_simple_placeholders_only():
 
 @pytest.mark.parametrize("bad_html", [
     "<div>x</div>", "<b>x", "x</b>", "<a onclick='x'>x</a>", "<b><i>x</b></i>", "a < b", "x > y", "<br/>",
+    # sec-ревью MEDIUM-1: Telegram не разбирает комментарии/CDATA/PI/DOCTYPE → 400 при отправке
+    "<!-- x -->hi", "<![CDATA[ x ]]>", "<?pi x?>", "<!DOCTYPE x>",
+    # sec-ревью LOW-1: ссылка только http(s)/tg и обязательно с href
+    '<a href="javascript:alert(1)">x</a>', "<a>x</a>", '<a href="x" href="y">x</a>',
+    # код-ревью L6: «< b >» с пробелом — не тег, это голый «<»
+    "a < b > c", '<code class="python">x</code>', '<pre language="x">x</pre>',
 ])
 def test_validate_overrides_rejects_invalid_telegram_html(bad_html):
     with pytest.raises(ValueError):
@@ -45,7 +51,8 @@ def test_validate_overrides_rejects_invalid_telegram_html(bad_html):
 
 
 @pytest.mark.parametrize("good_html", [
-    "<b>x</b>", "<i>x</i> <code>y</code>", '<a href="https://t.me/x">x</a>', "a &lt; b", "<tg-spoiler>x</tg-spoiler>",
+    "<b>x</b>", "<i>x</i> <code>y</code>", '<a href="https://t.me/x">x</a>', '<a href="tg://user?id=1">x</a>',
+    "a &lt; b", "<tg-spoiler>x</tg-spoiler>", '<pre><code class="language-python">x</code></pre>',
 ])
 def test_validate_overrides_accepts_telegram_html(good_html):
     assert T.validate_overrides({"sla.auto_accepted": {"ru": good_html}})["sla.auto_accepted"]["ru"] == good_html

@@ -80,6 +80,7 @@ DEFAULT_CONFIG: dict = {
 }
 
 _INSTRUCTIONS_MAX = 2000
+_KEYWORD_MIN = 3   # подстрочное совпадение: «а»/«ab» есть почти в любом тексте → всё critical
 _KEYWORD_MAX = 50
 _KEYWORDS_MAX = 100
 _PUBLIC_URGENCIES = ("critical", "high")
@@ -169,9 +170,11 @@ def _validate_keywords(raw: object) -> list[str]:
         raise ValueError("ai.extra_emergency_keywords: ожидается список строк")
     seen: list[str] = []
     for word in (k.strip().lower() for k in raw):
-        if len(word) > _KEYWORD_MAX:
-            raise ValueError(f"ai.extra_emergency_keywords: слово длиннее {_KEYWORD_MAX} символов")
-        if word and word not in seen and word not in EMERGENCY_KEYWORDS:
+        if not word:
+            continue
+        if not _KEYWORD_MIN <= len(word) <= _KEYWORD_MAX:
+            raise ValueError(f"ai.extra_emergency_keywords: слово {word!r} — ожидается {_KEYWORD_MIN}..{_KEYWORD_MAX} символов")
+        if word not in seen and word not in EMERGENCY_KEYWORDS:
             seen.append(word)
     if len(seen) > _KEYWORDS_MAX:
         raise ValueError(f"ai.extra_emergency_keywords: не более {_KEYWORDS_MAX} слов")
@@ -246,8 +249,9 @@ def validate_config(raw: dict) -> dict:
     """Чистая валидация + нормализация конфига авто-менеджера.
 
     Мёрджит `raw` поверх `DEFAULT_CONFIG` (отсутствующие ключи → дефолт), затем
-    валидирует каждое поле. Без I/O — вызывается и из Pydantic-схемы API, и из
-    сырого dict-пути бота; обязана вести себя идентично в обоих местах.
+    валидирует каждое поле. Без обращений к БД/сети (шаблоны читают локали через
+    lru_cache) — вызывается и из Pydantic-схемы API, и из сырого dict-пути бота;
+    обязана вести себя идентично в обоих местах.
 
     Raises:
         ValueError: конкретное поле не прошло валидацию.
