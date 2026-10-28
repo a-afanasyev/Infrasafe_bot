@@ -750,7 +750,8 @@ services:
     volumes:
       - news_watcher_data:/data
     environment:
-      - NEWS_WATCH_API_URL=${NEWS_WATCH_API_URL:-http://api:8000}
+      # uvicorn api слушает 8080 внутри сети compose (host-порт 8085 — только для localhost).
+      - NEWS_WATCH_API_URL=${NEWS_WATCH_API_URL:-http://api:8080}
       - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:?NEWS_WATCH_SERVICE_TOKEN is required — set it in Doppler (project uk-management)}
       - TG_API_ID=${TG_API_ID:?TG_API_ID is required — set it in Doppler (project uk-management)}
       - TG_API_HASH=${TG_API_HASH:?TG_API_HASH is required — set it in Doppler (project uk-management)}
