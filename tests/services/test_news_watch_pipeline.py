@@ -236,3 +236,18 @@ async def test_flag_off_rejects_ingest(ctx, monkeypatch):
     async with factory() as db:
         with pytest.raises(pipeline.NewsWatchError):
             await pipeline.ingest(db, _inbound())
+
+
+@pytest.mark.asyncio
+async def test_news_instructions_from_auto_manager_config_in_prompt(ctx, monkeypatch):
+    """Правила УК для новостей живут в auto_manager_config.ai.news_instructions."""
+    from uk_management_bot.services.auto_manager.config import DEFAULT_CONFIG as AM
+    from uk_management_bot.services.auto_manager.config import save_config as save_am
+
+    factory, _ = ctx
+    calls = _llm(monkeypatch, _verdict())
+    async with factory() as db:
+        await save_am(db, {**AM, "ai": {**AM["ai"], "news_instructions": "Наш дом — 7-й корпус."}})
+        await pipeline.ingest(db, _inbound())
+    assert "Правила управляющей компании" in calls[0]["system"] and "7-й корпус" in calls[0]["system"]
+    assert "ЖК Тест" in calls[0]["system"]   # описание комплекса остаётся отдельно

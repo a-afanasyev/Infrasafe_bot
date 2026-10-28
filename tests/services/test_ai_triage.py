@@ -203,3 +203,24 @@ def test_schema_is_flat_for_structured_outputs():
         assert banned not in dumped
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == set(schema["properties"])
+
+
+# ───────────── правила со страницы «Правила ИИ» ─────────────
+
+
+def test_detect_emergency_base_keywords_plus_extra():
+    assert detect_emergency("сломался шлагбаум", extra=("шлагбаум",)) == "critical"
+    assert detect_emergency("утечка газа", extra=("шлагбаум",)) == "critical"   # базовые неотключаемы
+    assert detect_emergency("шум у соседей", extra=("шлагбаум",)) is None
+
+
+def test_triage_instructions_land_in_system_prompt(monkeypatch):
+    create = MagicMock(return_value=_response(_payload()))
+    _sync_client(monkeypatch, create)
+    triage.llm_payload_sync("нет света", category=None, lang="ru", open_same_address=(),
+                            instructions="Шум — не аварийно.")
+    system = create.call_args.kwargs["system"]
+    assert "Правила управляющей компании" in system and "Шум — не аварийно." in system
+    assert system.index("Глоссарий категорий") < system.index("Правила управляющей компании")
+    triage.llm_payload_sync("нет света", category=None, lang="ru", open_same_address=())
+    assert "Правила управляющей компании" not in create.call_args.kwargs["system"]

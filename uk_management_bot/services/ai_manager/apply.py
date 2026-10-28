@@ -123,12 +123,13 @@ def _load_context(session_factory, request_number: str, ai_cfg: dict) -> Optiona
 
 
 def _hints(ctx: _Context, ai_cfg: dict, session_factory) -> TriageHints:
-    emergency = triage.detect_emergency(ctx.text)
+    emergency = triage.detect_emergency(ctx.text, ai_cfg.get("extra_emergency_keywords") or ())
     if breaker.is_open():
         logger.info("ai_manager: breaker open — %s only rule-triage", ctx.request_number)
         return TriageHints(emergency=emergency, llm=None)
     payload = triage.llm_payload_sync(
         ctx.text, category=ctx.category, lang=ctx.lang, open_same_address=ctx.open_same_address,
+        instructions=ai_cfg.get("triage_instructions", ""),
     )
     if payload is None:
         if breaker.record_failure():

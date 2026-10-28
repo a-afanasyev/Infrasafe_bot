@@ -29,7 +29,8 @@ from uk_management_bot.services.ai_manager.apply import (
 )
 
 NUM = "261028-001"
-AI_CFG = {"min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True}
+AI_CFG = {"min_confidence": 0.7, "clarify_enabled": True, "dedup_enabled": True,
+          "triage_instructions": "", "news_instructions": "", "extra_emergency_keywords": [], "templates": {}}
 
 
 @pytest.fixture()
@@ -102,8 +103,9 @@ def quiet(monkeypatch):
 def _llm(monkeypatch, payload):
     captured = {}
 
-    def fake(text, *, category, lang, open_same_address):
-        captured.update(text=text, category=category, lang=lang, open=open_same_address)
+    def fake(text, *, category, lang, open_same_address, instructions=""):
+        captured.update(text=text, category=category, lang=lang, open=open_same_address,
+                        instructions=instructions)
         return payload
 
     monkeypatch.setattr(triage, "llm_payload_sync", fake)
@@ -334,3 +336,16 @@ def test_question_for_uz_cyrl_is_transliterated():
     assert apply._question_for(q, "ru") == "Что не работает?"
     assert apply._question_for(q, "uz_cyrl") == "Нима ишламаяпти?"
     assert apply._question_for({"ru": "Что?", "uz": ""}, "uz_cyrl") == "Что?"
+
+
+# ───────────── правила со страницы «Правила ИИ» ─────────────
+
+
+def test_extra_emergency_keyword_raises_urgency_and_instructions_reach_llm(SF, monkeypatch, quiet):
+    _seed(SF, description="сломался шлагбаум на въезде")
+    captured = _llm(monkeypatch, None)
+    apply_triage_sync(NUM, {**AI_CFG, "extra_emergency_keywords": ["шлагбаум"],
+                            "triage_instructions": "Шлагбаум — срочно."}, SF)
+    assert _req(SF).urgency == "critical"
+    assert _audits(SF, AUDIT_APPLIED)[0]["emergency"] == "critical"
+    assert captured["instructions"] == "Шлагбаум — срочно."

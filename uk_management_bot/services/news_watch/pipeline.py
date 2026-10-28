@@ -109,10 +109,15 @@ _BASE_PROMPT = (
 )
 
 
+_INSTRUCTIONS_HEADER = "Правила управляющей компании (обязательны к учёту):"
+
+
 @lru_cache(maxsize=8)
-def _system_prompt(complex_context: str) -> str:
-    """Стабильный префикс (кэшируется провайдером) + описание комплекса."""
-    return f"{_BASE_PROMPT}\n\nОписание нашего комплекса:\n{complex_context or '—'}"
+def _system_prompt(complex_context: str, instructions: str = "") -> str:
+    """Стабильный префикс (кэшируется провайдером) + описание комплекса +
+    правила УК со страницы «Правила ИИ» (``auto_manager_config.ai.news_instructions``)."""
+    base = f"{_BASE_PROMPT}\n\nОписание нашего комплекса:\n{complex_context or '—'}"
+    return f"{base}\n\n{_INSTRUCTIONS_HEADER}\n{instructions}" if instructions else base
 
 
 def _parse_iso(raw: object) -> Optional[datetime]:
@@ -146,9 +151,9 @@ def _parse_verdict(payload: dict) -> Optional[dict]:
     }
 
 
-async def classify_async(text: str, complex_context: str) -> Optional[dict]:
+async def classify_async(text: str, complex_context: str, instructions: str = "") -> Optional[dict]:
     payload = await llm_json_async(
-        system=_system_prompt(complex_context),
+        system=_system_prompt(complex_context, instructions),
         user=f"Сообщение:\n{text[:_TEXT_LIMIT]}",  # html-raw: промпт LLM, не Telegram
         schema=_schema(),
         model=settings.NEWS_WATCH_MODEL,
@@ -161,6 +166,13 @@ async def classify_async(text: str, complex_context: str) -> Optional[dict]:
 
 
 # ───────────── inbox ─────────────
+
+
+async def _news_instructions(db: AsyncSession) -> str:
+    """Правила УК для новостей — из конфига автоменеджера (страница «Правила ИИ»)."""
+    from uk_management_bot.services.auto_manager.config import load_config as load_auto_manager_config
+
+    return (await load_auto_manager_config(db))["ai"].get("news_instructions", "")
 
 
 async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
@@ -181,7 +193,7 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
         posted_at=inbound.posted_at, status=NEWS_STATUS_IGNORED, broadcast_status=BROADCAST_NONE,
     )
     if prefilter(inbound.text, cfg["keywords"]):
-        verdict = await classify_async(inbound.text, cfg["complex_context"])
+        verdict = await classify_async(inbound.text, cfg["complex_context"], await _news_instructions(db))
         if verdict is None:
             item.status = NEWS_STATUS_PENDING  # LLM недоступен — решает человек
         else:

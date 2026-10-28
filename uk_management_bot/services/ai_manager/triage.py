@@ -69,12 +69,14 @@ def mask_phones(text: str) -> str:
 # ───────────── детерминированная часть ─────────────
 
 
-def detect_emergency(text: Optional[str]) -> Optional[str]:
-    """``"critical"`` при аварийном маркере в тексте, иначе None. Чистая."""
+def detect_emergency(text: Optional[str], extra: Sequence[str] = ()) -> Optional[str]:
+    """``"critical"`` при аварийном маркере в тексте, иначе None. Чистая.
+    Базовые ``EMERGENCY_KEYWORDS`` действуют всегда; ``extra`` — дополнительные
+    слова со страницы «Правила ИИ» (``ai.extra_emergency_keywords``)."""
     if not text:
         return None
     lowered = text.lower()
-    return "critical" if any(marker in lowered for marker in EMERGENCY_KEYWORDS) else None
+    return "critical" if any(marker in lowered for marker in (*EMERGENCY_KEYWORDS, *extra)) else None
 
 
 def final_urgency(current: Optional[str], hints: TriageHints) -> str:
@@ -135,16 +137,21 @@ _BASE_PROMPT = (
 )
 
 
-@lru_cache(maxsize=1)
-def _system_prompt() -> str:
+INSTRUCTIONS_HEADER = "Правила управляющей компании (обязательны к учёту):"
+
+
+@lru_cache(maxsize=4)
+def _system_prompt(instructions: str = "") -> str:
     """Стабильный системный промпт (кэшируется у провайдера): глоссарий
-    категорий — тот же, что у Group Intake."""
+    категорий — тот же, что у Group Intake; в конце — правила УК со страницы
+    «Правила ИИ» (``ai.triage_instructions``), если заданы."""
     from uk_management_bot.services.group_intake.classifier import (
         _GLOSSARY_RULES,
         _category_glossary,
     )
 
-    return f"{_BASE_PROMPT}\n\nГлоссарий категорий:\n{_category_glossary()}\n\n{_GLOSSARY_RULES}"
+    base = f"{_BASE_PROMPT}\n\nГлоссарий категорий:\n{_category_glossary()}\n\n{_GLOSSARY_RULES}"
+    return f"{base}\n\n{INSTRUCTIONS_HEADER}\n{instructions}" if instructions else base
 
 
 def _user_content(text: str, category: Optional[str], lang: str,
@@ -220,12 +227,12 @@ def parse_llm_triage(payload: Mapping[str, object], *, min_confidence: float,
 
 
 def llm_payload_sync(text: str, *, category: Optional[str], lang: str,
-                     open_same_address: Sequence[OpenRequest]) -> Optional[dict]:
+                     open_same_address: Sequence[OpenRequest], instructions: str = "") -> Optional[dict]:
     """Сырой ответ модели; None = сбой вызова (таймаут, сеть, refusal, битый
     JSON) — именно это считает предохранитель. Никогда не бросает."""
     try:
         return llm_json_sync(
-            system=_system_prompt(),
+            system=_system_prompt(instructions),
             user=_user_content(text, category, lang, open_same_address),
             schema=_schema(),
             model=settings.AI_MANAGER_MODEL,
@@ -241,10 +248,10 @@ def llm_payload_sync(text: str, *, category: Optional[str], lang: str,
 
 def llm_triage_sync(text: str, *, category: Optional[str], lang: str,
                     open_same_address: Sequence[OpenRequest],
-                    min_confidence: float) -> Optional[LlmTriage]:
+                    min_confidence: float, instructions: str = "") -> Optional[LlmTriage]:
     """Вызов + разбор; любой сбой или низкая уверенность → None."""
     payload = llm_payload_sync(text, category=category, lang=lang,
-                               open_same_address=open_same_address)
+                               open_same_address=open_same_address, instructions=instructions)
     if payload is None:
         return None
     return parse_llm_triage(
@@ -255,11 +262,12 @@ def llm_triage_sync(text: str, *, category: Optional[str], lang: str,
 
 def triage_sync(text: str, *, category: Optional[str], lang: str,
                 open_same_address: Sequence[OpenRequest],
-                min_confidence: float) -> TriageHints:
+                min_confidence: float, instructions: str = "",
+                extra_keywords: Sequence[str] = ()) -> TriageHints:
     """Оба анализатора; аварийность считается до и независимо от LLM."""
     return TriageHints(
-        emergency=detect_emergency(text),
+        emergency=detect_emergency(text, extra_keywords),
         llm=llm_triage_sync(text, category=category, lang=lang,
                             open_same_address=open_same_address,
-                            min_confidence=min_confidence),
+                            min_confidence=min_confidence, instructions=instructions),
     )
