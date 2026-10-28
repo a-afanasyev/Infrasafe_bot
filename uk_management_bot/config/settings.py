@@ -328,6 +328,14 @@ class Settings:
         self.AI_MANAGER_MODEL = os.getenv("AI_MANAGER_MODEL", "claude-sonnet-5-5")
         self.AI_MANAGER_EFFORT = os.getenv("AI_MANAGER_EFFORT", "low")
         self.AI_MANAGER_LLM_TIMEOUT = float(os.getenv("AI_MANAGER_LLM_TIMEOUT", "8.0"))
+        # ── Мониторинг отключений (news-watch, фаза 3 ИИ-менеджера) ──────
+        # DARK-гейт API-роутера /api/v2/news-watch (единый 404 без флага).
+        # Сервисный токен юзербота news_watcher — ТОЛЬКО Doppler; пустой токен
+        # при включённом флаге = inbox/sources отвечают 401 (fail-closed).
+        self.NEWS_WATCH_ENABLED = os.getenv("NEWS_WATCH_ENABLED", "false").lower() == "true"
+        self.NEWS_WATCH_SERVICE_TOKEN = os.getenv("NEWS_WATCH_SERVICE_TOKEN", "")
+        self.NEWS_WATCH_MODEL = os.getenv("NEWS_WATCH_MODEL", self.AI_MANAGER_MODEL)
+        self.NEWS_WATCH_LLM_TIMEOUT = float(os.getenv("NEWS_WATCH_LLM_TIMEOUT", "15.0"))
         if self.AI_MANAGER_ENABLED and not self.ANTHROPIC_API_KEY:
             logging.getLogger(__name__).warning(
                 "AI_MANAGER_ENABLED without ANTHROPIC_API_KEY — AI manager forced off"
