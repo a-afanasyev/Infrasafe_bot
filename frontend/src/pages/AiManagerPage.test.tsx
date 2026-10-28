@@ -63,6 +63,54 @@ describe('AiManagerPage', () => {
     }
   })
 
+  it('untouched keys come from a fresh GET (bot changed the mode meanwhile) and the draft is reseeded from the normalized PUT response', async () => {
+    let gets = 0
+    let current: Record<string, unknown> = CONFIG
+    let body: Record<string, unknown> | null = null
+    server.use(
+      // первый GET — страница; второй (хук делает его перед PUT) — бот уже выключил автоменеджер
+      http.get('*/api/v2/auto-manager-config', () => {
+        if (++gets === 2) current = { ...current, enabled: false, mode: 'rule' }
+        return HttpResponse.json(current)
+      }),
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        const ai = body.ai as Record<string, unknown>
+        // сервер нормализует: lower-case + дедуп слов
+        current = { ...current, ...body, ai: { ...ai, extra_emergency_keywords: ['шлагбаум'] } }
+        return HttpResponse.json(current)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AiManagerPage />)
+    const extra = await screen.findByLabelText(/Дополнительные аварийные слова/)
+    await user.type(extra, 'Шлагбаум, шлагбаум')
+    await user.click(screen.getByText('Сохранить правила'))
+    await waitFor(() => expect(body).not.toBeNull())
+    // нетронутые enabled/mode взяты из свежего GET, а не из черновика страницы
+    expect(body).toMatchObject({ enabled: false, mode: 'rule' })
+    expect(body!.ai).toMatchObject({ extra_emergency_keywords: ['Шлагбаум', 'шлагбаум'] })
+    await waitFor(() => expect(screen.getByLabelText(/Дополнительные аварийные слова/)).toHaveValue('шлагбаум'))
+    expect(screen.getByText('Сохранить правила')).toBeDisabled()
+  })
+
+  it('keeps the threshold while the input is incomplete and never sends 0 by accident', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+      body = (await request.json()) as Record<string, unknown>
+      return HttpResponse.json({ ...CONFIG, ...body })
+    }))
+    const user = userEvent.setup()
+    render(<AiManagerPage />)
+    const conf = await screen.findByLabelText('Порог уверенности модели (0–1)')
+    await user.clear(conf)
+    expect(screen.getByText('Сохранить правила')).toBeDisabled()   // пустое поле ≠ 0
+    await user.type(conf, '0.85')
+    await user.click(screen.getByText('Сохранить правила'))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect((body!.ai as { min_confidence: number }).min_confidence).toBe(0.85)
+  })
+
   it('shows the breaker banner and resets it', async () => {
     let reset = 0
     server.use(http.post('*/api/v2/auto-manager-config/ai-breaker/reset', () => {

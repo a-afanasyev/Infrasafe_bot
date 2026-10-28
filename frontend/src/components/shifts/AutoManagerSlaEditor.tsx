@@ -50,7 +50,7 @@ export default function SlaEditor({ value, pending = false, onSave, onChange }: 
   }
 
   const field = (label: string, current: number, set: (n: number) => void, suffix: string, extra?: React.ReactNode) => (
-    <label className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
+    <label key={label} className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
       <span className="truncate">{label}</span>
       <span className="flex items-center gap-1">
         {extra}

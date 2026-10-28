@@ -24,11 +24,26 @@ function textToKeywords(text: string): string[] {
   return text.split(/[,\n]/).map((w) => w.trim()).filter(Boolean)
 }
 
+/** Число 0..1 или null, пока ввод неполный («», «0.», «1.5»): порог 0 снял бы защиту. */
+function parseConfidence(raw: string): number | null {
+  const n = Number.parseFloat(raw)
+  return /^\d*\.?\d+$/.test(raw.trim()) && n >= 0 && n <= 1 ? n : null
+}
+
 export default function AiTriageForm({ value, baseKeywords, onChange }: AiTriageFormProps) {
   const { t } = useTranslation()
-  // Сырой текст ключевых слов — локально: иначе контролируемое поле терял бы
-  // запятую/пробел при каждом нажатии (массив ↔ строка нормализуется).
+  // Сырой текст ключевых слов и порога — локально: иначе контролируемое поле
+  // теряло бы запятую/пробел/«0.» при каждом нажатии (значение нормализуется).
+  // Ресинхронизация, когда родитель заменил черновик (ответ сервера, опрос):
+  // нормализованное из value отличается от нормализованного из текста.
   const [keywordsText, setKeywordsText] = useState(keywordsToText(value.extra_emergency_keywords))
+  if (JSON.stringify(textToKeywords(keywordsText)) !== JSON.stringify(value.extra_emergency_keywords)) {
+    setKeywordsText(keywordsToText(value.extra_emergency_keywords))
+  }
+  const [confidenceText, setConfidenceText] = useState(String(value.min_confidence))
+  if (parseConfidence(confidenceText) !== value.min_confidence && parseConfidence(confidenceText) !== null) {
+    setConfidenceText(String(value.min_confidence))
+  }
   const instructions = (key: 'triage_instructions' | 'news_instructions', label: string, hint: string) => (
     <label className="flex flex-col gap-1 text-[11px] text-text-muted">
       {label}
@@ -52,9 +67,13 @@ export default function AiTriageForm({ value, baseKeywords, onChange }: AiTriage
           {t('aiManager.triage.minConfidence')}
           <Input
             type="number" min={0} max={1} step={0.05} className="w-20 h-7 text-xs"
-            value={value.min_confidence}
+            value={confidenceText}
             aria-label={t('aiManager.triage.minConfidence')}
-            onChange={(e) => onChange({ ...value, min_confidence: Number.parseFloat(e.target.value) || 0 })}
+            onChange={(e) => {
+              setConfidenceText(e.target.value)
+              const n = parseConfidence(e.target.value)
+              if (n !== null) onChange({ ...value, min_confidence: n })
+            }}
           />
         </label>
         <label className="flex items-center gap-2">

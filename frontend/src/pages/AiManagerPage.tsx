@@ -19,9 +19,20 @@ import type { AutoManagerConfigOut } from '../types/autoManagerConfig'
  */
 type Draft = Pick<AutoManagerConfigOut, 'enabled' | 'mode' | 'ai' | 'sla'>
 type ModeChoice = 'off' | 'rule' | 'ai'
+const DRAFT_KEYS = ['enabled', 'mode', 'ai', 'sla'] as const
 
 function toDraft(data: AutoManagerConfigOut): Draft {
   return { enabled: data.enabled, mode: data.mode, ai: data.ai, sla: data.sla }
+}
+
+/** Только изменённые верхнеуровневые ключи: нетронутые enabled/mode/ai/sla не
+ *  затирают то, что за это время поменяли бот или карточка на «Сменах». */
+function changedKeys(draft: Draft, base: Draft): Partial<Draft> {
+  const patch: Partial<Draft> = {}
+  for (const key of DRAFT_KEYS) {
+    if (JSON.stringify(draft[key]) !== JSON.stringify(base[key])) Object.assign(patch, { [key]: draft[key] })
+  }
+  return patch
 }
 
 function modeOf(draft: Draft): ModeChoice {
@@ -53,9 +64,15 @@ export default function AiManagerPage() {
     return <div className="text-[13px] text-red-500">{t('autoManager.loadFailed')}</div>
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(data))
+  const patch = changedKeys(draft, toDraft(data))
+  const dirty = Object.keys(patch).length > 0
   const setMode = (choice: ModeChoice) =>
     setDraft(choice === 'off' ? { ...draft, enabled: false } : { ...draft, enabled: true, mode: choice })
+  // После сохранения черновик = нормализованный ответ сервера (lower-case слов,
+  // trim инструкций, отброшенные пустые шаблоны) — иначе кнопка оставалась бы активной.
+  const save = () => updateConfig.mutate(patch, {
+    onSuccess: (saved) => { setSeededFrom(saved); setDraft(toDraft(saved)) },
+  })
 
   return (
     <div className="flex flex-col gap-5 max-w-4xl">
@@ -114,7 +131,7 @@ export default function AiManagerPage() {
       </section>
 
       <div>
-        <Button disabled={!dirty || updateConfig.isPending} onClick={() => updateConfig.mutate(draft)}>
+        <Button disabled={!dirty || updateConfig.isPending} onClick={save}>
           {t('aiManager.save')}
         </Button>
       </div>
