@@ -229,3 +229,50 @@ describe('AutoManagerCard', () => {
     expect(localStorage.getItem('uk.shifts.autoManagerCollapsed')).toBe('0')
   })
 })
+
+describe('AutoManagerCard — SLA', () => {
+  const SLA = {
+    in_progress_max: { critical: 2, high: 12, medium: 48, low: 72 },
+    clarification_max: 48,
+    executed_unconfirmed_max: 24,
+    completed_unaccepted_days: 3,
+    critical_unassigned_minutes: 30,
+    ladder: { remind_executor: 0, staff_group: 2, manager: 4, reassign: 8 },
+  }
+
+  it('hides the SLA block when AI is unavailable', async () => {
+    server.use(http.get('*/api/v2/auto-manager-config', () => HttpResponse.json({ ...CONFIG, sla: SLA })))
+    render(<AutoManagerCard />)
+    await screen.findByText('🤖 Автоматический менеджер')
+    expect(screen.queryByText('Сохранить SLA')).not.toBeInTheDocument()
+  })
+
+  it('edits one SLA value and PUTs the whole sla block', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    let current = { ...CONFIG, ai_available: true, sla: SLA }
+    server.use(
+      http.get('*/api/v2/auto-manager-config', () => HttpResponse.json(current)),
+      http.put('*/api/v2/auto-manager-config', async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        bodies.push(body)
+        current = { ...current, ...body } as typeof current
+        return HttpResponse.json(current)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AutoManagerCard />)
+    const critical = await screen.findByLabelText('Критическая')
+    expect(critical).toHaveValue(2)
+    const save = screen.getByText('Сохранить SLA')
+    expect(save).toBeDisabled()
+
+    await user.clear(critical)
+    await user.type(critical, '1')
+    expect(save).not.toBeDisabled()
+    await user.click(save)
+
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0].sla).toEqual({ ...SLA, in_progress_max: { ...SLA.in_progress_max, critical: 1 } })
+    expect(bodies[0].mode).toBe('rule')
+  })
+})

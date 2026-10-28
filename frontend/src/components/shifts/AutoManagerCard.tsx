@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../shared/LoadingSpinner'
 import AutoManagerToggle from '../shared/AutoManagerToggle'
 import { cn } from '@/lib/utils'
-import type { AutoManagerConfigData } from '../../types/autoManagerConfig'
+import type { AutoManagerConfigData, AutoManagerSlaConfig } from '../../types/autoManagerConfig'
 import { readStorage, writeStorage } from '../../utils/safeStorage'
+import SlaEditor from './AutoManagerSlaEditor'
 
 // Строгий HH:MM (00-23:00-59) — минимальная client-side проверка формы, ДО
 // сети. Полную бизнес-валидацию (IANA-таймзона, диапазон max_requests и т.д.)
@@ -221,6 +222,16 @@ export default function AutoManagerCard() {
         <span>{t('autoManager.timezone')}: <span className="text-text-primary">{data.timezone}</span></span>
         <span>{t('autoManager.maxRequests')}: <span className="text-text-primary">{data.max_requests_per_run}</span></span>
       </div>
+
+      {/* SLA-лестница — только там, где ИИ-режим доступен (без него тик не
+          зарегистрирован и значения ни на что не влияют). */}
+      {aiAvailable && data.sla && (
+        <SlaEditor
+          value={data.sla}
+          pending={updateConfig.isPending}
+          onSave={(sla: AutoManagerSlaConfig) => updateConfig.mutate({ sla })}
+        />
+      )}
       </>)}
     </div>
   )

@@ -2168,7 +2168,32 @@
     "saved": "Avtomenejer konfiguratsiyasi saqlandi",
     "saveFailed": "Avtomenejer konfiguratsiyasini saqlab bo'lmadi",
     "loadFailed": "Avtomenejer konfiguratsiyasini yuklab bo'lmadi",
-    "modeAiTitle": "Ariza matnining LLM-triaji: toifa, shoshilinchlik, aniqlashtirish, takrorlar; ijrochi — qoida bo'yicha"
+    "modeAiTitle": "Ariza matnining LLM-triaji: toifa, shoshilinchlik, aniqlashtirish, takrorlar; ijrochi — qoida bo'yicha",
+    "sla": {
+      "title": "AI-menejer SLA zinasi (0 = o'chirilgan)",
+      "inProgress": "«Ishda» uzoqroq, soat",
+      "ladder": "Eskalatsiya zinasi, muddat o'tgandan soat",
+      "urgency": {
+        "critical": "Kritik",
+        "high": "Shoshilinch",
+        "medium": "O'rta",
+        "low": "Oddiy"
+      },
+      "step": {
+        "remind_executor": "Ijrochiga eslatish",
+        "staff_group": "Ijrochilar guruhi",
+        "manager": "Menejer",
+        "reassign": "Qayta tayinlash"
+      },
+      "clarification_max": "«Aniqlashtirish» javobsiz",
+      "executed_unconfirmed_max": "«Bajarildi» tekshiruvsiz",
+      "completed_unaccepted_days": "«Yakunlandi» qabulsiz",
+      "critical_unassigned_minutes": "Kritik ariza ijrochisiz",
+      "h": "soat",
+      "d": "kun",
+      "min": "daq",
+      "save": "SLA saqlash"
+    }
   },
   "templates": {
     "title": "Shablonlar",

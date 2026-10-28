@@ -27,8 +27,19 @@ export interface AutoManagerConfigData {
   sla_hours: SlaHours
   /** Блок ИИ-режима; бэкенд подставляет дефолт, если поля нет. */
   ai?: AutoManagerAiConfig
+  /** SLA-лестница ИИ-менеджера (часы/дни/минуты, 0 = выключено). */
+  sla?: AutoManagerSlaConfig
   /** Read-only: доступен ли режим "ai" на этой площадке. */
   ai_available?: boolean
+}
+
+export interface AutoManagerSlaConfig {
+  in_progress_max: SlaHours
+  clarification_max: number
+  executed_unconfirmed_max: number
+  completed_unaccepted_days: number
+  critical_unassigned_minutes: number
+  ladder: { remind_executor: number; staff_group: number; manager: number; reassign: number }
 }
 
 export interface SlaHours {
