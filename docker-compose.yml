@@ -742,6 +742,8 @@ services:
     container_name: uk-news-watcher
     restart: unless-stopped
     profiles: ["news-watch"]
+    networks:
+      - uk-network
     depends_on:
       - api
     sysctls:
