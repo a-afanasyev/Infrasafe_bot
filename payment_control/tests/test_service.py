@@ -350,3 +350,20 @@ def test_bulk_balances_ignore_payments_and_previews(client):
     preview(client, "account_number;debt;prepayment\n001;99;0\n")  # не активирован
     activate(client, preview(client, "account_number;operation_id;paid_at;amount\n001;op-1;2026-09-01;10\n", kind="payments"))
     assert bulk(client, ["001"]).json()["balances"] == {}
+
+
+def test_mening_uyim_export_splits_signed_balance(client):
+    """Выгрузка «Mening Uyim»: один знаковый «Balans» — плюс долг, минус предоплата; адрес уходит в примечание."""
+    header = ["№", "Viloyat", "Tuman", "Kompaniya", "Uy manzili", "Hisob raqami", "Balans", "Shartnoma holati"]
+    rows = [[1, "Toshkent", "Olmazor", "PFK", "11-uy, 1-xonadon", "1385963552", "796741.94", "x"],
+            [2, "Toshkent", "Olmazor", "PFK", "11-uy, 2-xonadon", "1385963553", "-851787.10", "x"],
+            [3, "Toshkent", "Olmazor", "PFK", "11-uy, 3-xonadon", "1385963554", "0", "x"]]
+    report = upload(client, "export.xlsx", xlsx_bytes([header, *rows]), source="Mening Uyim")
+    assert report.status_code == 200, report.text
+    assert report.json()["invalid"] == 0
+    first, second, third = report.json()["rows"]
+    assert (first["debt"], first["prepayment"], first["note"]) == ("796741.94", "0.00", "11-uy, 1-xonadon")
+    assert (second["debt"], second["prepayment"]) == ("0.00", "851787.10")
+    assert (third["debt"], third["prepayment"]) == ("0.00", "0.00")
+    activate(client, report)
+    assert balance(client, "1385963553")["current"]["prepayment"] == "851787.10"

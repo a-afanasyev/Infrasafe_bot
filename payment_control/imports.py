@@ -24,6 +24,8 @@ ALIASES = {
     "долг": "debt", "задолженность": "debt", "предоплата": "prepayment", "переплата": "prepayment",
     "номер платежа": "operation_id", "дата платежа": "paid_at", "сумма": "amount",
     "примечание": "note",
+    # Выгрузка «Mening Uyim»: один знаковый «Balans» вместо пары долг/предоплата.
+    "hisob raqami": "account_number", "balans": "balance", "uy manzili": "note",
 }
 
 
@@ -47,6 +49,14 @@ def money(value):
         return format(amount.quantize(Decimal("0.01")), "f")
     except InvalidOperation as exc:
         raise ValueError("Некорректная сумма") from exc
+
+
+def signed_balance(value):
+    """«Mening Uyim»: плюс — долг жителя, минус — предоплата (знак разбирается до money())."""
+    raw = str(value).strip()
+    if raw.startswith("-"):
+        return {"debt": "0.00", "prepayment": money(raw[1:])}
+    return {"debt": money(raw), "prepayment": "0.00"}
 
 
 def _assert_unpacked_size(archive, limit=30 * 1024 * 1024):
@@ -121,7 +131,13 @@ def read_rows(filename, content):
 
 def parse_file(filename, content, kind):
     header, rows = read_rows(filename, content)
-    required = {"account_number", "debt", "prepayment"} if kind == "balances" else {"account_number", "operation_id", "paid_at", "amount"}
+    signed = kind == "balances" and "balance" in header
+    if signed:
+        required = {"account_number", "balance"}
+    elif kind == "balances":
+        required = {"account_number", "debt", "prepayment"}
+    else:
+        required = {"account_number", "operation_id", "paid_at", "amount"}
     if not required.issubset(header):
         raise ValueError("Обязательные колонки: " + ", ".join(sorted(required)))
     result, seen = [], set()
@@ -131,7 +147,10 @@ def parse_file(filename, content, kind):
         try:
             account = account_number(raw.get("account_number"))
             data["account_number"] = account
-            if kind == "balances":
+            if signed:
+                data.update(signed_balance(raw.get("balance", "")))
+                key = account
+            elif kind == "balances":
                 data.update(debt=money(raw.get("debt", "")), prepayment=money(raw.get("prepayment", "")))
                 key = account
             else:

@@ -29,6 +29,21 @@ it('uploads a preview then activates only after a separate confirmation', async 
   expect(await screen.findByRole('button', { name: 'Деактивировать' })).toBeDisabled()
 })
 
+it('uploads a Mening Uyim export as a balances preview with a fixed source', async () => {
+  const report = { id: 9, kind: 'balances', source: 'Mening Uyim', filename: 'export.xlsx', as_of: '2026-09-01', status: 'preview', invalid: 0, row_count: 1, rows: [{ line: 2, account_number: '1385963552', debt: '796741.94', prepayment: '0.00', errors: [] }], audit: [] }
+  vi.spyOn(apiClient, 'get').mockImplementation(async url => ({ data: url.endsWith('/imports/9') ? report : [report] }))
+  const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: report })
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><PaymentControlPage /></MemoryRouter></QueryClientProvider>)
+  await userEvent.setup().upload(screen.getByLabelText('Загрузить из Mening Uyim (XLSX)'), new File(['x'], 'export.xlsx'))
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+  const body = post.mock.calls[0][1] as FormData
+  expect(body.get('kind')).toBe('balances')
+  expect(body.get('source')).toBe('Mening Uyim')
+  expect((body.get('file') as File).name).toBe('export.xlsx')
+  expect(await screen.findByText('1385963552')).toBeInTheDocument()
+  expect(screen.getByLabelText('Источник')).toHaveValue('Mening Uyim')
+})
+
 it('blocks activation for an invalid import and shows row errors', async () => {
   const report = { id: 3, kind: 'balances', source: 'Accounting', filename: 'bad.csv', as_of: '2026-09-01', status: 'preview', invalid: 1, row_count: 1, rows: [{ line: 2, account_number: '001', errors: ['Некорректная сумма'] }] }
   vi.spyOn(apiClient, 'get').mockImplementation(async url => ({ data: url.includes('/imports/3') ? report : [report] }))
