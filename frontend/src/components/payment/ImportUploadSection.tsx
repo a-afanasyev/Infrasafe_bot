@@ -15,6 +15,7 @@ interface Props {
   onAsOfChange: (asOf: string) => void
   onFileChange: (file: File | null) => void
   onUpload: () => void
+  onMeningUyim: (file: File) => void
 }
 
 const LABEL_CLASS = 'flex flex-col gap-1 text-sm text-text-secondary'
@@ -48,9 +49,18 @@ export default function ImportUploadSection(props: Props) {
       <label className={LABEL_CLASS}>CSV / XLSX
         <Input type="file" accept=".csv,.xlsx" onChange={e => props.onFileChange(e.target.files?.[0] || null)} />
       </label>
-      <Button disabled={!file || !source.trim() || !asOf || isPending} onClick={props.onUpload}>
-        {isPending ? t('common.loading') : t('paymentControl.preview')}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabled={!file || !source.trim() || !asOf || isPending} onClick={props.onUpload}>
+          {isPending ? t('common.loading') : t('paymentControl.preview')}
+        </Button>
+        {/* Выгрузка «Mening Uyim»: сразу предпросмотр с фиксированным источником и типом. */}
+        <label className="cursor-pointer rounded-md border border-border-default px-4 py-2 text-sm font-medium hover:bg-bg-card">
+          {t('paymentControl.meningUyim')}
+          <input type="file" accept=".xlsx" className="sr-only" disabled={!asOf || isPending}
+                 onChange={e => { const f = e.target.files?.[0]; if (f) props.onMeningUyim(f); e.target.value = '' }} />
+        </label>
+      </div>
+      <p className="text-xs text-text-muted">{t('paymentControl.meningUyimHint')}</p>
     </section>
   )
 }

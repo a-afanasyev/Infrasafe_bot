@@ -23,6 +23,8 @@
     "balances": "Qarz va oldindan to‘lovlar",
     "formatHint": "CSV: UTF-8 yoki Windows-1251; XLSX: faol varaq. 5 MB va 10 000 satrgacha. Hisob raqami matn bo‘lishi kerak. Summalar manfiy emas, kasrdan keyin ikki raqamgacha; summa yo‘q bo‘lsa, nol kiriting. Manba nomini o‘zgartirmang.",
     "preview": "Faylni tekshirish",
+    "meningUyim": "Mening Uyim’dan yuklash (XLSX)",
+    "meningUyimHint": "«Mening Uyim» eksporti: «Hisob raqami» va «Balans» ustunlari. Musbat balans — qarz, manfiy — oldindan to‘lov; manzil izohga tushadi. Manba «Mening Uyim», tur «Qarz va oldindan to‘lovlar», sana — yuqoridagi maydondan.",
     "error": "Ma’lumotlarni qayta ishlab bo‘lmadi",
     "rows": "Satrlar",
     "errors": "Xatolar",

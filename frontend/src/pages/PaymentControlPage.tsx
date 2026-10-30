@@ -19,6 +19,9 @@ import {
 
 const ROW_PAGE = 200
 
+// Стабильное имя источника: по нему дедуплицируются выгрузки «Mening Uyim».
+const MENING_UYIM = 'Mening Uyim'
+
 export default function PaymentControlPage() {
   const { t } = useTranslation()
   usePageTitle(t('paymentControl.title'))
@@ -66,6 +69,10 @@ export default function PaymentControlPage() {
       kind={kind} source={source} asOf={asOf} file={file} isPending={upload.isPending}
       onKindChange={setKind} onSourceChange={setSource} onAsOfChange={setAsOf} onFileChange={setFile}
       onUpload={() => upload.mutate({ kind, asOf, source, file })}
+      onMeningUyim={picked => {
+        setKind('balances'); setSource(MENING_UYIM); setFile(picked)
+        upload.mutate({ kind: 'balances', asOf, source: MENING_UYIM, file: picked })
+      }}
     />
     {error && <p role="alert" className="text-red">{safeErrorMessage(error, t('paymentControl.error'))}</p>}
     {detail.data && !detail.isError && <ImportDetailSection
