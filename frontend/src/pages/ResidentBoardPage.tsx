@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link, useSearchParams } from 'react-router'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useDisplayTz } from '../contexts/displayTz'
+import ResidentBoardTv from '../components/board/ResidentBoardTv'
+import { BOARD_STATUSES, boardClock, boardDate, boardDay, boardPublished } from '../components/board/boardDisplay'
 import { tCategory } from '../i18n/apiMaps'
 import { usePublicBoard } from '../hooks/usePublicBoard'
 import { useBoardConfig } from '../hooks/useBoardConfig'
@@ -11,7 +16,6 @@ import { groupBoardRows } from '../utils/boardRows'
 import WorkReportsModule from '../components/board/WorkReportsModule'
 import ElevatorsBoardModule from '../components/board/ElevatorsBoardModule'
 import { isElevatorsEnabled } from '../utils/featureFlags'
-import { toDisplayTz } from '../utils/timezone'
 
 // DARK-гейт модуля визуальных отчётов «до/после» на табло: монтируется только
 // при VITE_WORK_REPORTS_ENABLED=true (билд-арг), по умолчанию OFF.
@@ -19,24 +23,9 @@ const WORK_REPORTS_ENABLED = import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function formatClock(d: Date) {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-function formatUpdateTime(d: Date) {
-  return `${formatClock(d)}:${String(d.getSeconds()).padStart(2, '0')}`
-}
-
 // "08:00" → "08", "09:30" → "09:30" — compact for the small day tile.
 function hm(t: string) {
   return /:00$/.test(t) ? t.slice(0, 2) : t
-}
-
-// ISO → "10.03, 09:00"; falls back to the raw string if unparseable.
-function formatPublished(iso: string) {
-  if (Number.isNaN(new Date(iso).getTime())) return iso
-  const d = toDisplayTz(iso)
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}, ${formatClock(d)}`
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -53,15 +42,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Интернет/ТВ': '\u{1F4E1}', 'internet_tv': '\u{1F4E1}', 'internet': '\u{1F4E1}',
 }
 
-// Pipeline stages use API status values (Russian)
-const PIPELINE_STATUSES = [
-  { status: 'Новая', key: 'new', color: '#2563eb', bg: '#eff3ff' },
-  { status: 'В работе', key: 'in_progress', color: '#7c3aed', bg: '#f3f0ff' },
-  { status: 'Закуп', key: 'purchase', color: '#d97706', bg: '#fef9e7' },
-  { status: 'Уточнение', key: 'clarification', color: '#0891b2', bg: '#ecfeff' },
-  { status: 'Выполнена', key: 'executed', color: '#059669', bg: '#ecfdf5' },
-  { status: 'Принято', key: 'approved', color: '#16a34a', bg: '#f0fdf4' },
-]
+const PIPELINE_STATUSES = BOARD_STATUSES
 
 const DOT: React.CSSProperties = { display: 'inline-block', width: 6, height: 6, background: 'rgba(255,255,255,0.4)', borderRadius: '50%', margin: '0 32px', verticalAlign: 'middle' }
 
@@ -80,10 +61,21 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
   // «Редактор витрины».
   usePageTitle(t('nav.residentBoard'), !configOverride)
   const [now, setNow] = useState(new Date())
-  const { data: board } = usePublicBoard()
-  const { data: fetchedConfig } = useBoardConfig()
+  const { data: board, dataUpdatedAt, isError: boardError } = usePublicBoard()
+  const { data: fetchedConfig, isError: configError } = useBoardConfig()
+  const timeZone = useDisplayTz()
+  const [searchParams] = useSearchParams()
+  const largeScreen = useMediaQuery('(min-width: 1100px) and (min-height: 650px) and (orientation: landscape)')
+  // ТВ-режим — только по кнопке (?mode=tv), не по размеру экрана: табло в холле
+  // открывают по ссылке с главной, а обычный ноутбук не должен попадать в ТВ сам.
+  const tvMode = searchParams.get('mode') === 'tv' && largeScreen && !configOverride
+  const configReady = !!(configOverride || fetchedConfig?.org)
+  const updatedLabel = dataUpdatedAt
+    ? t('board.tv.updated', { time: boardClock(new Date(dataUpdatedAt), timeZone, true) })
+    : t('board.tv.loading')
+  const interrupted = boardError || (!!dataUpdatedAt && now.getTime() - dataUpdatedAt > 120_000)
 
-  const config = configOverride ?? fetchedConfig ?? defaultBoardConfig
+  const config = configOverride ?? (fetchedConfig?.org ? fetchedConfig : defaultBoardConfig)
   const lang: 'ru' | 'uz' = i18n.language?.startsWith('uz') ? 'uz' : 'ru'
   const loc = (lt: LocalizedText) => lt?.[lang] || lt?.ru || ''
 
@@ -92,19 +84,16 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     return () => clearInterval(id)
   }, [])
   // A9-P3-19 (класс ARCH-116): часы/дата/«сегодня» — стенка display-зоны
-  // объекта, а не зоны браузера (киоск/ТВ с чужой зоной). `now` остаётся
+  // объекта (useDisplayTz + Intl), а не зоны браузера. `now` остаётся
   // инстантом — для «прошло N минут».
-  const wallNow = toDisplayTz(now.toISOString())
 
-  // Date formatting via i18n
-  const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
-  const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const
-  const dateLabel = `${t(`days.full.${dayKeys[wallNow.getDay()]}`)}, ${wallNow.getDate()} ${t(`months.${monthKeys[wallNow.getMonth()]}`)} ${wallNow.getFullYear()}`
+  const dateLabel = boardDate(now, timeZone, t)
 
   // Elapsed time helper — FE-035: takes the tracked `now` so it stays pure in
   // render (no impure Date.now() call; React Compiler no longer flags it).
   function elapsed(iso: string, now: Date) {
-    const diff = (now.getTime() - new Date(iso).getTime()) / 1000
+    const diff = Math.max(0, (now.getTime() - new Date(iso).getTime()) / 1000)
+    if (!Number.isFinite(diff)) return t('board.tv.noData')
     if (diff < 3600) return t('board.elapsed.min', { count: Math.round(diff / 60) })
     if (diff < 86400) return t('board.elapsed.hours', { count: Math.round(diff / 3600) })
     return t('board.elapsed.days', { count: Math.round(diff / 86400) })
@@ -112,26 +101,33 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
 
   const statusCounts = board?.status_counts ?? {}
   const totalActive = ['Новая', 'В работе', 'Закуп', 'Уточнение'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
-  const totalDone = ['Выполнена', 'Исполнено', 'Принято'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
+  // Та же цифра, что на главной жителей: решённые за бизнес-месяц (бэк фильтрует по completed_at).
+  const totalDone = board?.completed_month ?? 0
 
   const activeRequests = board?.active_requests ?? []
 
-  const todayDow = wallNow.getDay() === 0 ? 6 : wallNow.getDay() - 1
+  const today = boardDay(now, timeZone)
 
   const avgResH = board?.avg_resolution_hours != null
     ? board.avg_resolution_hours.toFixed(1)
-    : '—'
+    : t('board.tv.noData')
 
   // Среднее арифметическое оценок жителей (1–5) при приёмке заявок.
   // Без оценок честно показываем «—», а не выдуманное число.
   const avgRating = board?.avg_rating ?? null
-  const satisfactionVal = avgRating != null ? avgRating.toFixed(1) : '—'
+  const satisfactionVal = avgRating != null ? avgRating.toFixed(1) : t('board.tv.noRatings')
   const satisfactionPct = avgRating != null ? Math.round((avgRating / 5) * 100) : 0
   const starFill = avgRating != null ? Math.min(5, Math.round(avgRating)) : 0
 
   // ── Editable content from board config ──────────────────────────────────────
   const dispatchText = `${loc(config.contacts.dispatch_label)}: ${config.contacts.dispatch_phone}`
   const botText = `${loc(config.bot.label)}: @${config.bot.username}`
+
+  if (tvMode) {
+    return <ResidentBoardTv board={board} config={configReady ? config : undefined} now={now} updatedAt={dataUpdatedAt} isError={boardError} configError={configError} />
+  }
+  // Never show example announcements/phone numbers while the config is unavailable.
+  if (!configReady) return <div className="rb-unavailable" style={{ padding: 32, background: '#f5f5f5', color: '#20252a', minHeight: '100vh' }}><h1>{brand.displayName}</h1><p>{t(configError ? 'board.tv.configUnavailable' : 'board.tv.loading')}</p></div>
 
   // ── Modules ─────────────────────────────────────────────────────────────────
   const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', overflow: 'hidden' }
@@ -142,13 +138,13 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
     <div key="stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
       {([
         { icon: '\u{1F4CB}', iconBg: '#eff3ff', label: t('board.stats.activeRequests'),
-          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#2563eb' }}>{totalActive}</span> },
+          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#2563eb' }}>{board ? totalActive : t('board.tv.noData')}</span> },
         { icon: '✅', iconBg: '#ecfdf5', label: t('board.stats.completedMonth'),
-          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#059669' }}>{totalDone}</span> },
+          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#059669' }}>{board ? totalDone : t('board.tv.noData')}</span> },
         { icon: '⏱', iconBg: '#fef9e7', label: t('board.stats.avgResolution'),
-          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#d97706' }}>{avgResH}<span style={{ fontSize: '1rem', color: '#9ca3af' }}>{t('analytics.h')}</span></span> },
+          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#d97706' }}>{avgResH}{board?.avg_resolution_hours != null && <span style={{ fontSize: '1rem', color: '#6b7280' }}> {t('analytics.h')}</span>}</span> },
         { icon: '\u{1F465}', iconBg: '#f3f0ff', label: t('board.stats.specialistsOnShift'),
-          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#7c3aed' }}>{board?.active_executors ?? '—'}</span> },
+          render: () => <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1, color: '#7c3aed' }}>{board?.active_executors ?? t('board.tv.noData')}</span> },
       ] as const).map(tile => (
         <div key={tile.label} className="rb-stat-tile" style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: 20, transition: 'transform 0.2s,box-shadow 0.2s', cursor: 'default' }}>
           <div style={{ width: 56, height: 56, borderRadius: 14, background: tile.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0 }}>{tile.icon}</div>
@@ -167,28 +163,25 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
         <div style={{ ...titleStyle, letterSpacing: '-0.01em' }}>{t('board.sections.currentRequests')}</div>
         <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#eff3ff', color: '#2563eb' }}>{t('board.sections.activeCount', { count: totalActive })}</div>
       </div>
-      {/* Horizontal scroll wrapper: on narrow viewports (mobile) the 6-status
-          pipeline + 6-column grid don't fit. Inner block has min-width so
-          users can swipe sideways through all status columns instead of
-          getting the rightmost columns clipped. */}
-      <div style={{ padding: '20px 0', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ minWidth: 720, padding: '0 28px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
+      {/* Narrow screens wrap status tiles and request columns via the responsive styles below. */}
+      <div className="rb-mobile-requests" style={{ padding: '20px 0', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="rb-mobile-pipeline-inner" style={{ minWidth: 720, padding: '0 28px' }}>
+          <div className="rb-mobile-stages" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
             {PIPELINE_STATUSES.map((step, i) => (
               <div key={step.status} style={{ display: 'contents' }}>
                 <div style={{ flex: 1, textAlign: 'center', padding: '14px 8px', borderRadius: 10, background: step.bg, color: step.color }}>
-                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{statusCounts[step.status] ?? 0}</span>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.4rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>{board ? statusCounts[step.status] ?? 0 : t('board.tv.noData')}</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.8 }}>{t(`board.pipeline.${step.key}`)}</span>
                 </div>
                 {i < PIPELINE_STATUSES.length - 1 && <span style={{ color: '#9ca3af', fontSize: '1.2rem', flexShrink: 0 }}>{'→'}</span>}
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
+          <div className="rb-mobile-columns" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)' }}>
             {PIPELINE_STATUSES.map((step, i) => {
               const colReqs = activeRequests.filter(r => r.status === step.status)
               return (
-                <div key={step.status} style={{ padding: '0 10px', borderRight: i < PIPELINE_STATUSES.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
+                <div key={step.status} data-status={t(`board.pipeline.${step.key}`)} style={{ padding: '0 10px', borderRight: i < PIPELINE_STATUSES.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {colReqs.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '14px 4px', color: '#cbd5e1', fontSize: '0.85rem' }}>{'—'}</div>
@@ -226,7 +219,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.95rem', marginBottom: 4 }}>{loc(ann.title)}</div>
               {loc(ann.text) && <div style={{ fontSize: '0.85rem', color: '#6b7280', lineHeight: 1.5 }}>{loc(ann.text)}</div>}
-              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 6 }}>{t('board.sections.published')} {formatPublished(ann.published_at)}</div>
+              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.72rem', color: '#9ca3af', marginTop: 6 }}>{t('board.sections.published')} {boardPublished(ann.published_at, timeZone)}</div>
             </div>
           </div>
         ))}
@@ -255,19 +248,15 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       <div style={headerStyle}>
         <div style={titleStyle}>{t('board.sections.workingHours')}</div>
       </div>
-      {/* TWA-17: 7 day cells × time-range labels overflow narrow phone widths
-          (≤360px). Wrap the grid (only) in a horizontal-scroll container
-          with min-width so users can swipe through the week — same pattern
-          as the request pipeline above. Emergency contact + bot text stay
-          outside so they don't pick up the horizontal scrollbar. */}
-      <div style={{ paddingTop: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ minWidth: 560, padding: '0 28px' }}>
+      {/* The week wraps into two columns on a phone. */}
+      <div className="rb-mobile-hours" style={{ paddingTop: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="rb-mobile-hours-inner" style={{ minWidth: 560, padding: '0 28px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 8, textAlign: 'center' }}>
-            {config.working_hours.map((d, i) => (
+            {config.working_hours.map((d) => (
               <div key={d.day}>
-                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: i === todayDow ? 'var(--board-green)' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
-                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: i === todayDow ? '#e8f5ef' : '#f0ede6', color: i === todayDow ? 'var(--board-green)' : '#1a1a1a', border: `2px solid ${i === todayDow ? 'var(--board-green)' : 'transparent'}` }}>
-                  {d.closed ? '—' : `${hm(d.open)}–${hm(d.close)}`}
+                <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '0.78rem', color: d.day === today ? 'var(--board-green)' : '#6b7280', marginBottom: 6 }}>{t(`days.short.${d.day}`)}</div>
+                <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.75rem', fontWeight: 600, padding: '8px 4px', borderRadius: 8, background: d.day === today ? '#e8f5ef' : '#f0ede6', color: d.day === today ? 'var(--board-green)' : '#1a1a1a', border: `2px solid ${d.day === today ? 'var(--board-green)' : 'transparent'}` }}>
+                  {d.closed ? t('board.tv.closed') : `${hm(d.open)}–${hm(d.close)}`}
                 </div>
               </div>
             ))}
@@ -304,30 +293,48 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
   }
 
   return (
-    <div style={{ fontFamily: "'Nunito', sans-serif", background: '#f7f5f0', color: '#1a1a1a', minHeight: '100vh', overflowX: 'hidden' }}>
+    <div style={{ fontFamily: "'Nunito', sans-serif", background: '#f5f5f5', color: '#1a1a1a', minHeight: '100vh', overflowX: 'hidden' }}>
 
       <style>{`
         /* FE-040: @import for Sora/Nunito/IBM Plex Mono moved to index.html
            (it re-injected and render-blocked on every render here). */
         @keyframes ticker { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
-        @keyframes rb-pulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(5,150,105,0.4); } 50% { opacity:.7; box-shadow:0 0 0 6px rgba(5,150,105,0); } }
+
         .rb-req-row:hover { background: #f0ede6 !important; }
         .rb-ann:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important; }
         .rb-stat-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important; }
         /* Пара блоков (два соседних 'half') — 2 колонки, на узком экране в 1. */
         .rb-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
         .rb-pair > * { min-width: 0; }
-        @media (max-width: 900px) { .rb-pair { grid-template-columns: 1fr; } }
+        @media (prefers-reduced-motion: reduce) { .rb-ticker span { animation: none !important; transform: none !important; } }
+        @media (max-width: 900px) {
+          .rb-pair { grid-template-columns: 1fr; }
+          .rb-header { padding: 16px !important; gap: 12px !important; flex-wrap: wrap; position: static !important; }
+          .rb-header > div:last-child { width: 100%; text-align: left !important; }
+          .rb-modules { padding: 16px !important; }
+          .rb-stat-tile { padding: 16px !important; gap: 12px !important; flex-direction: column; align-items: flex-start !important; }
+          .rb-stat-tile > div:last-child { min-width: 0; max-width: 100%; }
+          .rb-stat-tile span { font-size: 1.5rem !important; overflow-wrap: anywhere; }
+          .rb-stat-tile > div:first-child { width: 40px !important; height: 40px !important; }
+          .rb-mobile-requests, .rb-mobile-hours { overflow-x: visible !important; }
+          .rb-mobile-pipeline-inner, .rb-mobile-hours-inner { min-width: 0 !important; padding: 0 12px !important; }
+          .rb-mobile-stages { display: grid !important; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px !important; }
+          .rb-mobile-stages > div > span { display: none; }
+          .rb-mobile-columns { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 20px 4px; }
+          .rb-mobile-columns > div:before { content: attr(data-status); display: block; margin-bottom: 8px; font-weight: 700; }
+          .rb-mobile-hours-inner > div { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 12px !important; }
+          .rb-ticker { display: none; }
+        }
       `}</style>
 
       {/* Ticker */}
-      <div style={{ background: 'var(--board-green)', color: '#fff', padding: '10px 0', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+      <div className="rb-ticker" style={{ background: 'var(--board-green)', color: '#fff', padding: '10px 0', overflow: 'hidden', whiteSpace: 'nowrap' }}>
         <span style={{ display: 'inline-block', animation: 'ticker 34s linear infinite', fontWeight: 600, fontSize: '0.9rem', letterSpacing: '0.02em' }}>
           {'\u{1F4CB}'} {t('board.ticker.newRequests')}
           <span style={DOT} />
           {'\u{1F527}'} {t('board.ticker.specialistsWorking', { count: board?.active_executors ?? '…' })}
           <span style={DOT} />
-          {'✅'} {t('board.ticker.completedMonth', { count: totalDone })}
+          {'✅'} {t('board.stats.completedMonth')}: {board ? totalDone : t('board.tv.noData')}
           <span style={DOT} />
           {'\u{1F4DE}'} {dispatchText}
           <span style={DOT} />
@@ -337,7 +344,7 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       </div>
 
       {/* Header */}
-      <header style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '24px 48px', display: 'flex', alignItems: 'center', gap: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
+      <header className="rb-header" style={{ background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '24px 48px', display: 'flex', alignItems: 'center', gap: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', position: 'sticky', top: 0, zIndex: 50 }}>
         {brand.id === 'profk' ? (
           <img
             src={`${import.meta.env.BASE_URL}${brand.logoMark}`}
@@ -351,15 +358,20 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
           <div style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.4rem', color: '#1a1a1a', letterSpacing: '-0.02em' }}>{loc(config.org.name)}</div>
           <div style={{ fontSize: '0.85rem', color: '#9ca3af', marginTop: 2 }}>{loc(config.org.subtitle)}</div>
         </div>
+        {largeScreen && !configOverride && (
+          <Link to="?mode=tv" title={t('home.tvViewHint')} style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.8rem', fontWeight: 700, color: '#2563eb', textDecoration: 'none', border: '1px solid rgba(37,99,235,0.3)', borderRadius: 10, padding: '8px 14px' }}>
+            {t('home.tvView')}
+          </Link>
+        )}
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', color: '#1a1a1a', letterSpacing: '-0.02em', lineHeight: 1 }}>{formatClock(wallNow)}</div>
+          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontWeight: 700, fontSize: '2rem', color: '#1a1a1a', letterSpacing: '-0.02em', lineHeight: 1 }}>{boardClock(now, timeZone)}</div>
           <div style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: 4 }}>{dateLabel}</div>
         </div>
       </header>
 
       {/* Modules — rendered in layout order; two adjacent 'half' blocks pair
           into one 2-column row (groupBoardRows), everything else full-width. */}
-      <div style={{ padding: '32px 48px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1600, margin: '0 auto' }}>
+      <div className="rb-modules" style={{ padding: '32px 48px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1600, margin: '0 auto' }}>
         {groupBoardRows(config.layout.filter(item => item.visible && MODULES[item.id]))
           .map(row => row.length === 2
             ? <div key={row[0].id} className="rb-pair">{row.map(item => MODULES[item.id])}</div>
@@ -369,8 +381,8 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
       {/* Footer */}
       <footer style={{ padding: '20px 48px', textAlign: 'center', color: '#9ca3af', fontSize: '0.82rem', borderTop: '1px solid rgba(0,0,0,0.06)', background: '#fff' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', display: 'inline-block', animation: 'rb-pulse 2s ease-in-out infinite' }} />
-          {t('board.footer.realtime', { time: formatUpdateTime(wallNow) })}
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
+          {interrupted ? t(dataUpdatedAt ? 'board.tv.interrupted' : 'board.tv.unavailable') : updatedLabel}{interrupted && dataUpdatedAt > 0 && ` · ${updatedLabel}`}{configError && ` · ${t('board.tv.configUnavailable')}`}
         </span>
       </footer>
     </div>

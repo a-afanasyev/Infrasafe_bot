@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { render, screen } from '../../test/test-utils'
 import WorkReportsModule from './WorkReportsModule'
+import { columnsFor, fullRows } from './workReportsGrid'
 import { publicWorkReportMediaUrl } from '../../hooks/usePublicWorkReports'
 import type { PublicWorkReport, PublicWorkReportsPage } from '../../types/workReports'
 
@@ -202,3 +203,29 @@ describe('WorkReportsModule', () => {
     expect(screen.getByText('Нет фото')).toBeInTheDocument()
     expect(screen.getAllByRole('img')).toHaveLength(1)
   })
+
+// Табло в холле: 8 плиток при 7 в ряду давали ряд + одну «сироту» во втором.
+// Показываем только полные ряды; меньше ряда — всё, что есть.
+describe('WorkReportsModule — только полные ряды', () => {
+  it('columnsFor/fullRows: 1316px → 7 колонок, 8 плиток → 7, 5 плиток → 5', () => {
+    expect(columnsFor(1316)).toBe(7)
+    expect(fullRows([1, 2, 3, 4, 5, 6, 7, 8], 7)).toHaveLength(7)
+    expect(fullRows([1, 2, 3, 4, 5], 7)).toHaveLength(5)
+    expect(fullRows([1, 2, 3, 4], 2)).toHaveLength(4)
+    expect(fullRows([1, 2, 3], 0)).toHaveLength(3)
+  })
+
+  it('режет «сироту» по измеренной ширине сетки', () => {
+    const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1316)
+    class RO { constructor(private cb: () => void) {} observe() { this.cb() } disconnect() {} }
+    vi.stubGlobal('ResizeObserver', RO)
+    try {
+      mockQuery.data = { pages: [makePage(Array.from({ length: 8 }, (_, i) => makeReport({ id: 300 + i })))] }
+      render(<WorkReportsModule limit={8} />)
+      expect(screen.getAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/work-reports/'))).toHaveLength(7)
+    } finally {
+      vi.unstubAllGlobals()
+      widthSpy.mockRestore()
+    }
+  })
+})

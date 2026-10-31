@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -5,6 +6,7 @@ import { tCategory } from '../../i18n/apiMaps'
 import { usePublicWorkReports, publicWorkReportMediaUrl } from '../../hooks/usePublicWorkReports'
 import WorkReportPhoto from './WorkReportPhoto'
 import { formatCompletedOn } from './formatCompletedOn'
+import { GAP_PX, MIN_CARD_PX, columnsFor, fullRows } from './workReportsGrid'
 import type { PublicWorkReport } from '../../types/workReports'
 
 // T10 — public resident-board widget: compact preview of recently-published
@@ -22,7 +24,6 @@ import type { PublicWorkReport } from '../../types/workReports'
 // ResidentBoardPage (у него уже есть board-config, в т.ч. configOverride
 // редактора витрины).
 const DEFAULT_MAX_CARDS = 6
-
 const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04)', overflow: 'hidden' }
 const headerStyle: React.CSSProperties = { padding: '20px 28px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#f0ede6' }
 const titleStyle: React.CSSProperties = { fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: '1.1rem' }
@@ -100,6 +101,20 @@ export default function WorkReportsModule({ limit, title }: WorkReportsModulePro
   const { data } = usePublicWorkReports()
   const maxCards = limit && limit > 0 ? limit : DEFAULT_MAX_CARDS
   const items = (data?.pages[0]?.items ?? []).slice(0, maxCards)
+  const gridRef = useRef<HTMLDivElement>(null)
+  // 0 — ширина ещё не измерена (или нет ResizeObserver, как в jsdom) → без обрезки.
+  const [cols, setCols] = useState(0)
+  const hasItems = items.length > 0
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const measure = () => setCols(columnsFor(el.clientWidth))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [hasItems])
+  const shown = fullRows(items, cols)
 
   // Плановое поведение (не лоадер-скелетон): пустой список (включая ещё не
   // разрешившийся запрос) → секция не рендерится вовсе.
@@ -118,10 +133,12 @@ export default function WorkReportsModule({ limit, title }: WorkReportsModulePro
       </div>
       {/* auto-FILL, а не auto-fit: при 6 плитках auto-fit растягивал их на всю
           ширину и один «сирота» уезжал во второй ряд разной величины. */}
-      <div style={{ padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 18 }}>
-        {items.map(report => (
-          <ReportThumb key={report.id} report={report} t={t} />
-        ))}
+      <div style={{ padding: '20px 28px' }}>
+        <div ref={gridRef} style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${MIN_CARD_PX}px, 1fr))`, gap: GAP_PX }}>
+          {shown.map(report => (
+            <ReportThumb key={report.id} report={report} t={t} />
+          ))}
+        </div>
       </div>
     </div>
   )
