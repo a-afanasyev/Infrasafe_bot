@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Листовка для жителей</title>
+<style>
+  @font-face { font-family: "Montserrat"; font-weight: 600; font-style: normal; src: url(fonts/montserrat-cyrillic-600.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Montserrat"; font-weight: 600; font-style: normal; src: url(fonts/montserrat-latin-600.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Montserrat"; font-weight: 600; font-style: normal; src: url(fonts/montserrat-latin-ext-600.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Montserrat"; font-weight: 700; font-style: normal; src: url(fonts/montserrat-cyrillic-700.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Montserrat"; font-weight: 700; font-style: normal; src: url(fonts/montserrat-latin-700.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Montserrat"; font-weight: 700; font-style: normal; src: url(fonts/montserrat-latin-ext-700.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Montserrat"; font-weight: 800; font-style: normal; src: url(fonts/montserrat-cyrillic-800.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Montserrat"; font-weight: 800; font-style: normal; src: url(fonts/montserrat-latin-800.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Montserrat"; font-weight: 800; font-style: normal; src: url(fonts/montserrat-latin-ext-800.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Open Sans"; font-weight: 400; font-style: normal; src: url(fonts/open-sans-cyrillic-400.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Open Sans"; font-weight: 400; font-style: normal; src: url(fonts/open-sans-latin-400.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Open Sans"; font-weight: 400; font-style: normal; src: url(fonts/open-sans-latin-ext-400.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Open Sans"; font-weight: 600; font-style: normal; src: url(fonts/open-sans-cyrillic-600.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Open Sans"; font-weight: 600; font-style: normal; src: url(fonts/open-sans-latin-600.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Open Sans"; font-weight: 600; font-style: normal; src: url(fonts/open-sans-latin-ext-600.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: "Open Sans"; font-weight: 700; font-style: normal; src: url(fonts/open-sans-cyrillic-700.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+  @font-face { font-family: "Open Sans"; font-weight: 700; font-style: normal; src: url(fonts/open-sans-latin-700.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Open Sans"; font-weight: 700; font-style: normal; src: url(fonts/open-sans-latin-ext-700.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @page { size: A4; margin: 0; }
+  :root {
+    --green: #44c24a;
+    --green-dark: #2f8f35;
+    --green-soft: #eef8ee;
+    --ink: #1f2a24;
+    --muted: #5b6660;
+    --line: #d7e3d8;
+    --alert: #c62828;
+    --alert-soft: #fdecea;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #e9ece9; }
+  body { font-family: "Open Sans", Arial, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet {
+    width: 210mm; height: 297mm; margin: 10mm auto; background: #fff;
+    padding: 10mm 14mm 10mm; display: flex; flex-direction: column; gap: 4mm;
+    overflow: hidden; break-after: page;
+  }
+  .sheet:last-child { break-after: auto; }
+  @media print { html, body { background: #fff; } .sheet { margin: 0; } }
+
+  h1, h2, .num, .tile b, .alert b { font-family: Montserrat, Arial, sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: center; }
+  header img { height: 13mm; }
+  .lang { font: 700 11pt Montserrat, Arial, sans-serif; color: var(--muted); border: 1.5px solid var(--line); border-radius: 99px; padding: 1.5mm 4mm; }
+
+  .hero { display: grid; grid-template-columns: minmax(0,1fr) 44mm; gap: 8mm; align-items: center;
+    background: var(--green-soft); border-radius: 6mm; padding: 5mm 5mm 5mm 8mm; border-left: 3mm solid var(--green); }
+  h1 { font-size: 22pt; line-height: 1.12; font-weight: 800; }
+  h1 em { font-style: normal; color: var(--green-dark); }
+  .hero p { margin-top: 3mm; font-size: 11.5pt; line-height: 1.45; color: var(--muted); }
+  .qr { background: #fff; border-radius: 4mm; padding: 3mm; text-align: center; box-shadow: 0 0 0 1px var(--line); }
+  .qr img { width: 100%; display: block; }
+  .qr .handle { margin-top: 2mm; font: 800 13pt Montserrat, Arial, sans-serif; }
+  .qr .url { font-size: 10pt; color: var(--muted); }
+
+  h2 { font-size: 13pt; font-weight: 800; margin-bottom: 2.5mm; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 5mm; }
+  .step { border: 1.5px solid var(--line); border-radius: 4mm; padding: 3.5mm; font-size: 10pt; line-height: 1.35;
+    display: grid; grid-template-columns: 9mm minmax(0,1fr); gap: 3mm; align-items: start; }
+  .num { display: grid; place-items: center; width: 9mm; height: 9mm; border-radius: 50%;
+    background: var(--green); color: #fff; font-weight: 800; font-size: 13pt; }
+
+  .docs { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 2mm 5mm; border: 2px solid var(--green);
+    border-radius: 5mm; padding: 4mm 6mm; font-size: 10pt; line-height: 1.4; }
+  .docs .ic { grid-row: span 3; }
+  .docs .ic img { width: 8mm; display: block; }
+  .docs b.t { font: 800 12.5pt Montserrat, Arial, sans-serif; }
+  .docs ul { list-style: none; display: flex; flex-wrap: wrap; gap: 1.5mm 3mm; }
+  .docs li { background: var(--green-soft); border-radius: 99px; padding: 0.8mm 3.5mm; font-weight: 600; }
+  .docs p { color: var(--muted); }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 3mm 5mm; }
+  .tile { display: flex; gap: 3mm; font-size: 10pt; line-height: 1.35; }
+  .tile .ic img { width: 6mm; display: block; }
+  .tile b { display: block; font-size: 11pt; margin-bottom: 0.8mm; }
+  .tile span { color: var(--muted); }
+
+  .note { font-size: 10.5pt; line-height: 1.5; color: var(--muted); border-top: 1.5px dashed var(--line); padding-top: 4mm; }
+  .note strong { color: var(--ink); }
+
+  .alert { margin-top: auto; background: var(--alert-soft); border: 2px solid var(--alert); border-radius: 5mm;
+    padding: 4mm 7mm; display: grid; grid-template-columns: auto 1fr; gap: 3mm 6mm; align-items: center; }
+  .alert .ic { grid-row: span 2; }
+  .alert .ic img { width: 10mm; display: block; }
+  .alert b { font-size: 13pt; color: var(--alert); }
+  .alert p { font-size: 11pt; line-height: 1.4; }
+  .phone { display: flex; align-items: baseline; gap: 3mm; font: 700 13pt Montserrat, Arial, sans-serif; grid-column: 2; }
+  .phone .tel { font-size: 22pt; font-weight: 800; color: var(--alert); white-space: nowrap; }
+  .phone small { font: 600 10.5pt "Open Sans", Arial, sans-serif; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ===== RU ===== -->
+<section class="sheet" lang="ru">
+  <header>
+    <img src="profk-logo.png" alt="PROFK">
+    <span class="lang">Русский</span>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Заявки в управляющую компанию — <em>прямо в Telegram</em></h1>
+      <p>Сломалось, протекло, не горит свет? Подайте заявку за минуту — без установки и паролей.</p>
+    </div>
+    <div class="qr">
+      <img src="qr.svg" alt="QR-код бота @profkbot">
+      <div class="handle">@profkbot</div>
+      <div class="url">t.me/profkbot</div>
+    </div>
+  </div>
+
+  <div>
+    <h2>Как начать — 3 шага</h2>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div>Откройте бота по QR-коду, нажмите «Запустить», затем <strong>«🏠 Я житель»</strong>.</div></div>
+      <div class="step"><div class="num">2</div><div><strong>«📱 Поделиться контактом»</strong>, затем «📝 Регистрация (форма)»: двор, дом, квартира.</div></div>
+      <div class="step"><div class="num">3</div><div>Дождитесь <strong>«✅ Ваша заявка одобрена!»</strong>, нажмите «🔄 Перезапустить бота» и откройте «Приложение».</div></div>
+    </div>
+  </div>
+
+  <div class="docs">
+    <div class="ic"><img src="icons/1f4c4.svg" alt=""></div>
+    <b class="t">Подготовьте документы для подтверждения квартиры</b>
+    <ul><li>Паспорт</li><li>Кадастровая выписка (собственник)</li><li>Договор аренды (арендатор)</li></ul>
+    <p>По кнопке «📤 Загрузить документы» в боте отправьте фото или PDF до 20 МБ. Их видит только УК, после проверки они удаляются.</p>
+  </div>
+
+  <div>
+    <h2>Что можно делать</h2>
+    <div class="tiles">
+      <div class="tile"><div class="ic"><img src="icons/1f4dd.svg" alt=""></div><div><b>Подать заявку</b><span>с фото и срочностью</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f514.svg" alt=""></div><div><b>Следить за статусом</b><span>уведомления в чат бота</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f4ac.svg" alt=""></div><div><b>Писать исполнителю</b><span>диалог в карточке заявки</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/2b50.svg" alt=""></div><div><b>Принять работу</b><span>оценка 1–5 или возврат</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f697.svg" alt=""></div><div><b>Авто и пропуска</b><span>где есть шлагбаум</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f4e3.svg" alt=""></div><div><b>Жалобы и пожелания</b><span>«Профиль» → «Обратная связь»</span></div></div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Заявка принята, когда у неё есть номер</strong> вида 261031-004 — он приходит сразу после отправки. Язык (русский / узбекский) меняется в профиле.</p>
+
+  <div class="alert">
+    <div class="ic"><img src="icons/1f6a8.svg" alt=""></div>
+    <div><b>Авария или человек застрял в лифте?</b><p>Не ждите ответа на заявку — сразу звоните диспетчеру.</p></div>
+    <div class="phone">Диспетчер: <span class="tel">+998 78 333 19 71</span> <small>круглосуточно</small></div>
+  </div>
+</section>
+
+<!-- ===== UZ ===== -->
+<section class="sheet" lang="uz">
+  <header>
+    <img src="profk-logo.png" alt="PROFK">
+    <span class="lang">O'zbekcha</span>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Boshqaruv kompaniyasiga arizalar — <em>to'g'ridan-to'g'ri Telegram'da</em></h1>
+      <p>Nimadir buzildimi, suv oqyaptimi, chiroq yonmayaptimi? Bir daqiqada ariza bering — o'rnatish va parolsiz.</p>
+    </div>
+    <div class="qr">
+      <img src="qr.svg" alt="@profkbot boti QR-kodi">
+      <div class="handle">@profkbot</div>
+      <div class="url">t.me/profkbot</div>
+    </div>
+  </div>
+
+  <div>
+    <h2>Qanday boshlash kerak — 3 qadam</h2>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div>QR-kod orqali botni oching, «Boshlash», so'ng <strong>«🏠 Men rezidentman»</strong>ni bosing.</div></div>
+      <div class="step"><div class="num">2</div><div><strong>«📱 Kontaktni ulashish»</strong>, so'ng «📝 Ro'yxatdan o'tish (forma)»: hovli, uy, xonadon.</div></div>
+      <div class="step"><div class="num">3</div><div><strong>«✅ Sizning arizangiz tasdiqlandi!»</strong> xabarini kuting, «🔄 Botni qayta ishga tushirish»ni bosing va «Ilova»ni oching.</div></div>
+    </div>
+  </div>
+
+  <div class="docs">
+    <div class="ic"><img src="icons/1f4c4.svg" alt=""></div>
+    <b class="t">Kvartirani tasdiqlash uchun hujjatlarni tayyorlang</b>
+    <ul><li>Pasport</li><li>Kadastr ko'chirma (mulk egasi)</li><li>Ijara shartnomasi (ijarachi)</li></ul>
+    <p>Botdagi «📤 Hujjatlarni yuklash» tugmasi orqali 20 MB gacha surat yoki PDF yuboring. Ularni faqat boshqaruv kompaniyasi ko'radi, tekshiruvdan keyin o'chiriladi.</p>
+  </div>
+
+  <div>
+    <h2>Nimalar qilish mumkin</h2>
+    <div class="tiles">
+      <div class="tile"><div class="ic"><img src="icons/1f4dd.svg" alt=""></div><div><b>Ariza berish</b><span>rasm va shoshilinchlik bilan</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f514.svg" alt=""></div><div><b>Holatni kuzatish</b><span>bot chatiga bildirishnomalar</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f4ac.svg" alt=""></div><div><b>Ijrochiga yozish</b><span>ariza kartochkasida muloqot</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/2b50.svg" alt=""></div><div><b>Ishni qabul qilish</b><span>1–5 baho yoki qaytarish</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f697.svg" alt=""></div><div><b>Avto va ruxsatnomalar</b><span>shlagbaum bor joyda</span></div></div>
+      <div class="tile"><div class="ic"><img src="icons/1f4e3.svg" alt=""></div><div><b>Shikoyat yoki taklif</b><span>«Profil» → «Qayta aloqa»</span></div></div>
+    </div>
+  </div>
+
+  <p class="note"><strong>Ariza raqam olganda qabul qilingan hisoblanadi</strong> — 261031-004 ko'rinishidagi raqam yuborilgandan so'ng darhol keladi. Tilni (rus / o'zbek) profilda o'zgartirish mumkin.</p>
+
+  <div class="alert">
+    <div class="ic"><img src="icons/1f6a8.svg" alt=""></div>
+    <div><b>Avariya yoki liftda odam qolib ketdimi?</b><p>Ariza javobini kutmang — darhol dispetcherga qo'ng'iroq qiling.</p></div>
+    <div class="phone">Dispetcher: <span class="tel">+998 78 333 19 71</span> <small>kunduzi-kechasi</small></div>
+  </div>
+</section>
+
+</body>
+</html>
