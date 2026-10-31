@@ -1,5 +1,5 @@
 import { classifyCompletionError, newIdempotencyKey, retryDelay } from './policy'
-import type { QueueItem, QueueStore, SendOutcome } from './types'
+import type { QueueItem, QueueKind, QueueStore, SendOutcome } from './types'
 
 /** Сетевой вызов «Готово» (подменяется в тестах). */
 export type SendFn = (item: QueueItem) => Promise<unknown>
@@ -10,16 +10,18 @@ interface NewItem {
   photo: Blob
   fileName: string
   label?: string
+  kind?: QueueKind
 }
 
-/** Новая запись очереди — одна попытка «Готово» со своим ключом идемпотентности. */
+/** Новая запись очереди — одна попытка «Готово» / «Фото до» со своим ключом идемпотентности. */
 export function createQueueItem(
-  { userId, requestNumber, photo, fileName, label }: NewItem,
+  { userId, requestNumber, photo, fileName, label, kind }: NewItem,
   now: number,
   key: string = newIdempotencyKey(),
 ): QueueItem {
   return {
     id: key,
+    ...(kind === 'before' ? { kind } : {}),
     userId,
     requestNumber,
     idempotencyKey: key,

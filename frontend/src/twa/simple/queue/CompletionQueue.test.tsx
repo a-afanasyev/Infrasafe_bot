@@ -111,6 +111,22 @@ describe('CompletionQueueProvider', () => {
     await waitFor(async () => expect(await store.list()).toHaveLength(0))
   })
 
+  it('доставленное «Фото до» не стирает проваленное «Готово» той же заявки (и наоборот)', async () => {
+    const failedDone = queued('260926-007', { failed: 'bad_photo' })
+    const failedBefore = queued('260926-008', { kind: 'before', failed: 'bad_photo' })
+    const store = await memoryQueueWith([
+      failedDone, queued('260926-007', { ...now(), kind: 'before' }),
+      failedBefore, queued('260926-008', now()),
+    ])
+    const send = vi.fn().mockResolvedValue({})
+    renderQueue(store, send)
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    await waitFor(async () => expect((await store.list()).map((i) => i.id).sort()).toEqual(
+      [failedDone.id, failedBefore.id].sort()))
+    expect(toastMock.success).toHaveBeenCalledWith('Фото «до» по заявке 260926-007 отправлено')
+    expect(toastMock.success).toHaveBeenCalledWith('Фото по заявке 260926-008 отправлено')
+  })
+
   it('ждущее смены не шлётся при открытии и по таймеру — только после старта смены (flushNow)', async () => {
     const store = await memoryQueueWith([queued('260926-005', { ...now(), noShift: true })])
     const send = vi.fn().mockResolvedValue({})

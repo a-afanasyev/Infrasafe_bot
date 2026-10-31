@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next'
 import { URGENCY_MAP, type ApiUrgency } from '../../i18n/apiMaps'
 import type { TwaRequest } from '../types'
 import type { PoolItem } from './api'
-import type { QueueItem } from './queue/types'
+import { isDone, type QueueItem } from './queue/types'
 
 /**
  * Состояние плитки глазами исполнителя — пять значений вместо девяти статусов:
@@ -25,7 +25,9 @@ export interface QueueMarks {
   retake: ReadonlySet<string>
 }
 
-export function queueMarks(items: readonly QueueItem[]): QueueMarks {
+export function queueMarks(all: readonly QueueItem[]): QueueMarks {
+  // «Фото до» — не завершение: плитку не делает ни «ждёт отправки», ни «переснять».
+  const items = all.filter(isDone)
   return {
     pending: new Set(items.filter((i) => !i.failed).map((i) => i.requestNumber)),
     retake: new Set(items.filter((i) => i.failed === 'bad_photo').map((i) => i.requestNumber)),

@@ -2770,7 +2770,8 @@
         "returned": "Qaytarildi: {{reason}}",
         "photoAlt": "Yashovchining surati",
         "close": "Yopish",
-        "closed": "Ariza yopilgan"
+        "closed": "Ariza yopilgan",
+        "before": "Ishdan oldingi surat"
       },
       "urgent": "Shoshilinch",
       "ok": "Tushunarli",
@@ -2792,7 +2793,8 @@
       "final": {
         "closed": "Ariza allaqachon yopilgan",
         "notYours": "Bu sizning arizangiz emas",
-        "badPhoto": "Surat mos kelmadi. Qayta oling"
+        "badPhoto": "Surat mos kelmadi. Qayta oling",
+        "limit": "Ishdan oldingi suratlar 4 ta — boshqa qo‘shib bo‘lmaydi"
       },
       "problem": {
         "templates": {
@@ -2836,6 +2838,17 @@
       "address": {
         "entrance": "{{value}}-podyezd",
         "apartment": "{{value}}-xonadon"
+      },
+      "before": {
+        "title": "Ishdan oldingi suratlar",
+        "thumbAlt": "Ishdan oldingi surat",
+        "pending": "Ishdan oldingi surat yuborilishini kutmoqda: {{count}}",
+        "failed": "Ishdan oldingi surat yuborilmadi: {{reason}}",
+        "remove": "O‘chirish",
+        "shoot": "Ishni boshlashdan oldin joyni suratga oling",
+        "sent": "Ishdan oldingi surat saqlandi",
+        "toTask": "Arizaga",
+        "sentLater": "№ {{number}} ariza uchun ishdan oldingi surat yuborildi"
       }
     }
   },

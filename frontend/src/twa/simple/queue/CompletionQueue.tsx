@@ -4,23 +4,25 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { twaClient } from '../../twaClient'
-import { sendCompletion } from '../api'
+import { sendQueued } from '../api'
 import { attemptSend, createQueueItem, type SendFn } from './engine'
 import { dueItems, isSendable, nextWakeDelay, ownItems, staleForeign } from './policy'
 import { createMemoryStore, createStoreHolder, openQueueStore } from './store'
-import type { FinalReason, QueueItem, QueueStore, SendOutcome } from './types'
+import { queueKind, type FinalReason, type QueueItem, type QueueKind, type QueueStore, type SendOutcome } from './types'
 
 interface SubmitArgs {
   requestNumber: string
   photo: Blob
   fileName: string
   label?: string
+  /** «Фото до» (по умолчанию — «Готово»). */
+  kind?: QueueKind
 }
 
 interface CompletionQueueValue {
   /** Записи текущего пользователя, старые первыми (включая проваленные). */
   items: QueueItem[]
-  /** Сколько «Готово» ещё ждут отправки (без проваленных). */
+  /** Сколько фото («Готово» и «Фото до») ещё ждут отправки (без проваленных). */
   pendingCount: number
   /** Сохранить фото в очередь и сразу попробовать отправить. */
   submit: (args: SubmitArgs) => Promise<{ id: string; outcome: SendOutcome }>
@@ -38,6 +40,7 @@ export const FINAL_REASON_KEY: Record<FinalReason, string> = {
   closed: 'twa.simple.final.closed',
   not_yours: 'twa.simple.final.notYours',
   bad_photo: 'twa.simple.final.badPhoto',
+  limit: 'twa.simple.final.limit',
 }
 
 type FlushMode = 'due' | 'open' | 'shift'
@@ -57,7 +60,7 @@ interface Props {
  * «Готово» возвращается экрану; фоновый окончательный отказ не удаляется,
  * а помечается и показывается на плитке/карточке.
  */
-export function CompletionQueueProvider({ children, openStore = openQueueStore, send = sendCompletion, userId: userIdProp }: Props) {
+export function CompletionQueueProvider({ children, openStore = openQueueStore, send = sendQueued, userId: userIdProp }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data: profile } = useQuery<{ id?: number }>({
@@ -100,9 +103,11 @@ export function CompletionQueueProvider({ children, openStore = openQueueStore, 
         .then(async (store) => {
           const outcome = await attemptSend(store, item, send)
           if (outcome.kind === 'sent') {
-            // Доставлено — прежние проваленные попытки этой заявки больше не нужны.
+            // Доставлено — прежние проваленные попытки этой заявки и ЭТОЙ ЖЕ
+            // операции больше не нужны («Фото до» не гасит проваленное «Готово»).
             const stale = (await store.list()).filter(
-              (i) => i.failed && i.requestNumber === item.requestNumber && i.userId === item.userId,
+              (i) => i.failed && i.requestNumber === item.requestNumber && i.userId === item.userId
+                && queueKind(i) === queueKind(item),
             )
             for (const i of stale) await store.remove(i.id)
           }
@@ -120,6 +125,7 @@ export function CompletionQueueProvider({ children, openStore = openQueueStore, 
           settled.current.set(item.id, outcome)
           queryClient.invalidateQueries({ queryKey: ['twa', 'executor-tasks'] })
           queryClient.invalidateQueries({ queryKey: ['twa', 'request', item.requestNumber] })
+          queryClient.invalidateQueries({ queryKey: ['twa', 'media', item.requestNumber] })
         }
         return outcome
       })
@@ -139,7 +145,8 @@ export function CompletionQueueProvider({ children, openStore = openQueueStore, 
       for (const item of batch) {
         const outcome = await run(item, false).catch(() => null)
         if (outcome?.kind === 'sent') {
-          toast.success(t('twa.simple.done.sentLater', { number: item.requestNumber }))
+          const key = queueKind(item) === 'before' ? 'twa.simple.before.sentLater' : 'twa.simple.done.sentLater'
+          toast.success(t(key, { number: item.requestNumber }))
         }
       }
     },
@@ -194,9 +201,9 @@ export function CompletionQueueProvider({ children, openStore = openQueueStore, 
   }, [items, ready])
 
   const submit = useCallback(
-    async ({ requestNumber, photo, fileName, label }: SubmitArgs) => {
+    async ({ requestNumber, photo, fileName, label, kind }: SubmitArgs) => {
       if (userId == null) throw new Error('queue: user unknown')
-      const item = createQueueItem({ userId, requestNumber, photo, fileName, label }, Date.now())
+      const item = createQueueItem({ userId, requestNumber, photo, fileName, label, kind }, Date.now())
       try {
         await (await stores.get()).put(item)
       } catch (err) {

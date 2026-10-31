@@ -37,6 +37,7 @@ describe('classifyCompletionError', () => {
     ['502 от edge без кода', httpError(502)],
     ['503 media_unavailable', httpError(503, 'media_unavailable')],
     ['409 in_progress (тот же ключ ещё обрабатывается)', httpError(409, 'in_progress')],
+    ['503 idempotency_unavailable («Фото до» без Redis)', httpError(503, 'idempotency_unavailable')],
   ])('%s — повторять', (_name, err) => {
     expect(classifyCompletionError(err)).toEqual({ kind: 'retry', noShift: false })
   })
@@ -53,6 +54,7 @@ describe('classifyCompletionError', () => {
     [httpError(415, 'unsupported_photo_type'), 'bad_photo'],
     [httpError(422, 'photo_empty'), 'bad_photo'],
     [httpError(502, 'media_rejected'), 'bad_photo'],
+    [httpError(409, 'before_limit'), 'limit'],
   ])('%o — окончательно (%s)', (err, reason) => {
     expect(classifyCompletionError(err)).toEqual({ kind: 'final', reason })
   })
