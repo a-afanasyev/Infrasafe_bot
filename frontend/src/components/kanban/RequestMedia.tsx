@@ -8,6 +8,7 @@ import MediaUploadTile from './MediaUploadTile'
 
 // Категории фотоотчёта — зеркалят FileCategories media-прокси (SEC-021 whitelist).
 const COMPLETION_CATEGORIES = new Set(['completion_photo', 'completion_video', 'completion_document'])
+const BEFORE_CATEGORY = 'before_photo'
 
 /**
  * Медиа карточки заявки: фото заявки + фотоотчёт (менеджер может дозагрузить).
@@ -29,7 +30,10 @@ export default function RequestMedia({ requestNumber }: { requestNumber: string 
   const uploadRequest = useRequestMediaUpload({ requestNumber, kind: 'request' })
   const uploadCompletion = useRequestMediaUpload({ requestNumber, kind: 'completion' })
 
-  const requestItems = items.filter((m) => !COMPLETION_CATEGORIES.has(m.category ?? ''))
+  const requestItems = items.filter((m) => !COMPLETION_CATEGORIES.has(m.category ?? '') && m.category !== BEFORE_CATEGORY)
+  // Фото исполнителя «до работ»: только просмотр — грузит их исполнитель
+  // (POST /requests/{n}/before-photo), общий upload эту категорию не принимает.
+  const beforeItems = items.filter((m) => m.category === BEFORE_CATEGORY)
   const completionItems = items.filter((m) => COMPLETION_CATEGORIES.has(m.category ?? ''))
 
   // Сбой media-service — не «фото нет»: прокси отвечает ошибкой, а не [].
@@ -55,6 +59,18 @@ export default function RequestMedia({ requestNumber }: { requestNumber: string 
                 onFiles={(files) => uploadRequest.mutate(files)}
               />
             )}
+          </div>
+        </div>
+      )}
+      {beforeItems.length > 0 && (
+        <div data-testid="before-photos">
+          <div className="text-[11px] font-bold text-text-muted uppercase tracking-wide font-[family-name:var(--font-display)] mb-2">
+            {t('kanban.beforePhotos')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {beforeItems.map((m) => (
+              <MediaThumb key={m.id} id={m.id} isVideo={false} onOpen={() => setLightboxId(m.id)} />
+            ))}
           </div>
         </div>
       )}

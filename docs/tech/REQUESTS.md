@@ -517,6 +517,12 @@ scripts/group_intake_eval.sample.jsonl --keywords-only` (без API).
   `/api/v2/media/upload` категорию не принимает (422). В отчётах о работах
   автоподбор «до» берёт `before_photo`, без них — `request_photo`; проверка
   выбора и публикация принимают обе (`media_selection.before_side_media`).
+  Где снимают: простой режим TWA (`/twa/s/task/{n}/before`, офлайн-очередь с
+  `kind: 'before'` — не блокирует «Готово»), обычный TWA (`BeforePhotoButton`),
+  бот (`handlers/requests/executor_before.py`, кнопка `executor_before_{n}`).
+  Где видны: галереи TWA исполнителя и жителя (`MediaGallery kind="before"`),
+  дашборд (`RequestMedia`, группа «До работ»), приёмка жителем в боте
+  (альбом «До работ» перед фотоотчётом, `completion_media.get_before_media_entries`).
 - **Комментарии** — `RequestComment` с типами `status_change`, `clarification`,
   `purchase`, `report`, `category_change` (смена категории менеджером, 🏷),
   а также `material` (списание материалов). Изменения статуса могут нести

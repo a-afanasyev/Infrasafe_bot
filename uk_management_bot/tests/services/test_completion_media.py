@@ -75,6 +75,28 @@ class TestLegacyParse:
         assert cm.legacy_completion_entries({"file_id": "x"}) == []
 
 
+class TestBeforeResolver:
+    """Фото «до работ» исполнителя: только media-service, legacy-поля у них нет."""
+
+    async def test_only_before_photo_and_not_in_completion(self, monkeypatch):
+        client = FakeMediaClient(items=[
+            _ms_item(1, category="request_photo"),
+            _ms_item(2, category="before_photo"),
+            _ms_item(3, category="completion_photo"),
+            _ms_item(4, category="before_photo"),
+        ])
+        monkeypatch.setattr(cm, "get_media_client", lambda: client)
+        assert await cm.get_before_media_entries("260810-001") == [_mid(2), _mid(4)]
+        # «до» не попадает во фотоотчёт
+        assert await cm.get_completion_media_entries("260810-001", None) == [_mid(3)]
+
+    async def test_unavailable_or_disabled_is_empty(self, monkeypatch):
+        monkeypatch.setattr(cm, "get_media_client", lambda: FakeMediaClient(exc=ConnectionError("down")))
+        assert await cm.get_before_media_entries("260810-001") == []
+        monkeypatch.setattr(cm, "get_media_client", lambda: None)
+        assert await cm.get_before_media_entries("260810-001") == []
+
+
 class TestResolver:
     async def test_media_service_wins_filters_categories_and_uses_media_id(self, monkeypatch):
         client = FakeMediaClient(items=[

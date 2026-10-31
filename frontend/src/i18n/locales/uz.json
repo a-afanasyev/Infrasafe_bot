@@ -1377,7 +1377,8 @@
     "categoryRedispatchedGroup": "Ariza «{{spec}}» guruhiga yo‘naltirildi — hozir navbatchi yo‘q",
     "categorySpecMismatch": "Joriy ijrochining mutaxassisligi yangi kategoriyaga mos kelmaydi",
     "categoryLeftUnassigned": "Ariza guruhsiz «Yangi» holatida qoldi — ijrochi tayinlang",
-    "mediaListError": "Rasmlarni yuklab bo'lmadi — keyinroq urinib ko'ring"
+    "mediaListError": "Rasmlarni yuklab bo'lmadi — keyinroq urinib ko'ring",
+    "beforePhotos": "Ishdan oldin"
   },
   "callcenter": {
     "elevator": {
@@ -2562,7 +2563,8 @@
       "dialogPlaceholder": "Xabar yozish...",
       "dialogEmpty": "Hozircha xabarlar yo'q",
       "mediaLoadError": "Yuklab bo'lmadi",
-      "mediaListError": "Rasmlarni yuklab bo'lmadi — keyinroq urinib ko'ring"
+      "mediaListError": "Rasmlarni yuklab bo'lmadi — keyinroq urinib ko'ring",
+      "before": "Ishdan oldingi suratlar"
     },
     "exec": {
       "tabs": {
@@ -2684,6 +2686,13 @@
         "load_other": "Ishda {{count}} ta ariza",
         "done": "Ariza ustaga topshirildi",
         "failed": "Arizani topshirib bo'lmadi"
+      },
+      "before": {
+        "add": "Ishdan oldingi surat qo‘shish",
+        "uploading": "Yuklanmoqda…",
+        "uploaded": "Ishdan oldingi surat yuklandi: {{count}}",
+        "failed": "Ishdan oldingi surat yuklanmadi: {{count}}",
+        "count": "Ishdan oldingi suratlar: {{count}} / {{max}}"
       }
     },
     "timeline": {

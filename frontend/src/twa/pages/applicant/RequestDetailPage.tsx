@@ -120,6 +120,12 @@ export default function RequestDetailPage() {
           />
           <MediaGallery
             requestNumber={number}
+            kind="before"
+            title={t('twa.detail.before')}
+            onLightboxChange={setLightboxClose}
+          />
+          <MediaGallery
+            requestNumber={number}
             kind="completion"
             title={t('twa.detail.photoReport')}
             onLightboxChange={setLightboxClose}

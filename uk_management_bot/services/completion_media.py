@@ -27,10 +27,13 @@ logger = logging.getLogger(__name__)
 COMPLETION_CATEGORIES = frozenset(
     {"completion_photo", "completion_video", "completion_document"}
 )
+# Фото исполнителя «до работ» (services/executor_before_photo) — НЕ фотоотчёт.
+BEFORE_CATEGORIES = frozenset({"before_photo"})
 _KIND_BY_CATEGORY = {
     "completion_photo": "photo",
     "completion_video": "video",
     "completion_document": "document",
+    "before_photo": "photo",
 }
 
 
@@ -44,8 +47,8 @@ def legacy_completion_entries(raw: Any) -> List[MediaEntry]:
     return [entry for entry in parse_media_entries(raw) if entry.file_id]
 
 
-def _media_service_entry(item: Any) -> MediaEntry | None:
-    if not isinstance(item, dict) or item.get("category") not in COMPLETION_CATEGORIES:
+def _media_service_entry(item: Any, categories: frozenset = COMPLETION_CATEGORIES) -> MediaEntry | None:
+    if not isinstance(item, dict) or item.get("category") not in categories:
         return None
     media_id = item.get("id")
     if not isinstance(media_id, int) or isinstance(media_id, bool):
@@ -78,3 +81,17 @@ async def get_completion_media_entries(request_number: str, legacy_raw: Any) -> 
                 e,
             )
     return legacy_completion_entries(legacy_raw)
+
+
+async def get_before_media_entries(request_number: str) -> List[MediaEntry]:
+    """Фото «до работ» исполнителя. Только media-service (legacy-поля у них нет):
+    недоступен — пусто, просмотр фотоотчёта от этого не ломается."""
+    client = get_media_client()
+    if client is None:
+        return []
+    try:
+        items = await client.get_request_media(request_number, retries=1) or []
+    except Exception as e:  # noqa: BLE001 — недоступность сервиса не должна ронять хендлер
+        logger.warning("media-service недоступен для фото «до» %s: %s", request_number, type(e).__name__)
+        return []
+    return [e for e in (_media_service_entry(i, BEFORE_CATEGORIES) for i in items) if e is not None]

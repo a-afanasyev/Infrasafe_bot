@@ -24,6 +24,8 @@ from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.services.request_access import has_request_access_sync
 from uk_management_bot.utils.specializations import parse_specializations
 from uk_management_bot.utils.shifts import is_on_shift_now_sync
+from uk_management_bot.services.executor_before_photo import CLOSED_STATUSES as BEFORE_CLOSED_STATUSES
+from uk_management_bot.utils.request_workflow import normalize_status
 from uk_management_bot.utils.status_display import get_status_display as _sd_get_status_display, STATUS_EMOJI
 # Single Source of Truth for button texts - TASK 17 Entry Handler Fix
 
@@ -298,6 +300,12 @@ async def handle_view_request(callback: CallbackQuery, state: FSMContext):
             elif request.status in ["Выполнена", "Исполнено", "Принято"]:
                 # Заявка завершена - только просмотр
                 pass
+
+            # «Фото до работ» — своей заявке в любом незакрытом статусе (Закуп,
+            # Уточнение, Возвращена — тоже). Права и лимит перепроверит сервис.
+            if request.executor_id == user.id and normalize_status(request) not in BEFORE_CLOSED_STATUSES:
+                before_text = get_text("executor_before.button", language=lang)
+                rows.append([InlineKeyboardButton(text=before_text, callback_data=f"executor_before_{request.request_number}")])
 
             # Кнопка просмотра медиа (если есть)
             # TASK 17 Этап C: Локализованная кнопка

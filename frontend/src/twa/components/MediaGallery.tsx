@@ -15,11 +15,12 @@ interface MediaItem {
 interface Props {
   requestNumber: string
   /**
-   * Which media to show. 'request' = everything except the completion report;
+   * Which media to show. 'request' = resident's media (everything except the
+   * executor's photos); 'before' = executor's «Фото до работ» (before_photo);
    * 'completion' = only the executor's completion_photo report. Omit to show
-   * all. Lets a detail page render two distinct sections (Фото / Фотоотчёт).
+   * all. Lets a detail page render distinct sections (Фото / До работ / Фотоотчёт).
    */
-  kind?: 'request' | 'completion'
+  kind?: 'request' | 'before' | 'completion'
   /** Optional section title; when set, the gallery renders its own card and
    *  hides entirely (title included) when it has no matching media. */
   title?: string
@@ -63,7 +64,8 @@ export default function MediaGallery({ requestNumber, kind, title, onLightboxCha
 
   const visible = items.filter((m) => {
     if (kind === 'completion') return m.category === 'completion_photo'
-    if (kind === 'request') return m.category !== 'completion_photo'
+    if (kind === 'before') return m.category === 'before_photo'
+    if (kind === 'request') return m.category !== 'completion_photo' && m.category !== 'before_photo'
     return true
   })
 
@@ -174,6 +176,8 @@ function MediaThumb({ id, isVideo, onOpen }: ThumbProps) {
       type="button"
       onClick={onOpen}
       disabled={!url}
+      data-testid="media-thumb"
+      data-media-id={id}
       className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 active:scale-95 transition-transform"
     >
       {url && (
