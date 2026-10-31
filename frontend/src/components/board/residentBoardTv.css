@@ -26,7 +26,8 @@
 .rb-tv-stage .rh-status-dot { background: var(--stage-color); }
 .rb-tv-stage .rh-metric-number { color: var(--stage-color); }
 .rb-tv-stage .rh-metric-caption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 2.8em; }
-.rb-tv .rb-tv-empty-value { font-size: 16px; color: var(--rh-muted); letter-spacing: 0; }
+/* Специфичнее правил кегля ниже (в т.ч. в @media max-height) — иначе «Нет данных» рисуется цифрой. */
+.rb-tv .rb-tv-metric .rh-metric-number.rb-tv-empty-value { font-size: 16px; color: var(--rh-muted); letter-spacing: 0; }
 .rb-tv-empty { padding: 24px; color: var(--rh-muted); font-size: 14px; }
 .rb-tv-footer { font-size: 12px; }
 .rb-tv-status { margin-left: auto; font-variant-numeric: tabular-nums; }
