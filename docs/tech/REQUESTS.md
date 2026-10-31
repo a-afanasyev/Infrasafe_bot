@@ -507,6 +507,16 @@ scripts/group_intake_eval.sample.jsonl --keywords-only` (без API).
   домена — `MAX_MEDIA_FILES_PER_REQUEST=10` (`constants.py:9`).
 - **Медиа завершения** — `completion_media`, грузятся в Media Service с
   `report_type` (`completion_photo/video/document`, `executor.py:498-543`).
+- **Фото «до работ»** (2026-10-31) — категория `before_photo` в Media Service,
+  без колонки в БД. Единственный путь загрузки —
+  `POST /api/v2/requests/{n}/before-photo` (`services/executor_before_photo.py`):
+  назначенный исполнитель, любой незакрытый статус (не Выполнена/Исполнено/
+  Принято/Отменена), до 4 на заявку, статус не меняется, необязательно.
+  Идемпотентность — `completion_idempotency` в своём пространстве ключей
+  (`exec_before`), fail-closed при недоступном Redis. Общий
+  `/api/v2/media/upload` категорию не принимает (422). В отчётах о работах
+  автоподбор «до» берёт `before_photo`, без них — `request_photo`; проверка
+  выбора и публикация принимают обе (`media_selection.before_side_media`).
 - **Комментарии** — `RequestComment` с типами `status_change`, `clarification`,
   `purchase`, `report`, `category_change` (смена категории менеджером, 🏷),
   а также `material` (списание материалов). Изменения статуса могут нести

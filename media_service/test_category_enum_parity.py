@@ -16,6 +16,9 @@ UK_PROXY_CATEGORIES = (
     FileCategories.REQUEST_DOCUMENT,
     FileCategories.COMPLETION_PHOTO,
     FileCategories.COMPLETION_VIDEO,
+    # Фото «до работ»: UK шлёт его через /media/upload-report (report_type),
+    # он валидируется тем же enum.
+    FileCategories.BEFORE_PHOTO,
 )
 
 

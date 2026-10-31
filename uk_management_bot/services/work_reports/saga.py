@@ -20,7 +20,7 @@ from uk_management_bot.services.work_reports.errors import (
 from uk_management_bot.services.work_reports.media_selection import _VALIDATE_FETCH_LIMIT
 from uk_management_bot.utils.workflow_predicates import is_report_eligible
 from uk_management_bot.services.work_reports.addressing import address_looks_like_apartment
-from uk_management_bot.services.work_reports.media_selection import validate_media_ids
+from uk_management_bot.services.work_reports.media_selection import before_side_media, validate_media_ids
 from uk_management_bot.services.work_reports.previews import warm_report_previews
 
 logger = logging.getLogger(__name__)
@@ -175,12 +175,7 @@ async def publish_report(
         report.locked_media_ids = list(acquired)
         await db.commit()
 
-    before_meta = {
-        item["id"]: item
-        for item in await media_client.get_request_media(
-            report.request_number, category="request_photo", limit=_VALIDATE_FETCH_LIMIT
-        )
-    }
+    before_meta = await before_side_media(media_client, report.request_number)
     after_meta = {
         item["id"]: item
         for item in await media_client.get_request_media(

@@ -58,6 +58,18 @@ async def test_short_request_number_rejected(client):
 
 
 @pytest.mark.asyncio
+async def test_before_photo_is_not_accepted_by_generic_upload(client):
+    """Фото «до» — только через /requests/{n}/before-photo (лимит, идемпотентность,
+    только фото): общий прокси их обошёл бы."""
+    resp = await client.post(
+        "/api/v2/media/upload",
+        files=[_file_part()],
+        data={"request_number": "260524-001", "category": "before_photo"},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
 async def test_invalid_category_rejected(client):
     """`category` not in FileCategories enum → 422 via FastAPI validation."""
     resp = await client.post(

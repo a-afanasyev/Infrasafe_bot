@@ -206,3 +206,37 @@ async def test_release_is_single_atomic_compare_and_delete(monkeypatch):
     _script, numkeys, key, token = spy.await_args.args
     assert (numkeys, key, token) == (1, "exec_complete:lock:260925-001", lock.token)
     assert "exec_complete:lock:260925-001" not in redis.data
+
+
+# ── пространства операций: «Готово» и «Фото до» не делят ключи ──────────
+
+
+def test_complete_keys_are_unchanged():
+    """Живые записи «Готово» в Redis переживают деплой: строки ключей прежние."""
+    assert idem.record_key(41, "260925-001", "k") == "exec_complete:rec:41:260925-001:k"
+    assert idem._lock_key("260925-001") == "exec_complete:lock:260925-001"
+
+
+@pytest.mark.asyncio
+async def test_operations_do_not_share_records_or_locks(monkeypatch):
+    """Один UUID у «Фото до» и «Готово» — две независимые попытки."""
+    _use(monkeypatch, FakeRedis())
+    await idem.save(41, "260925-001", "k", idem.STATE_DONE, 501, op=idem.OP_BEFORE)
+    assert await idem.load(41, "260925-001", "k") is None
+    assert (await idem.load(41, "260925-001", "k", op=idem.OP_BEFORE)).media_id == 501
+
+    before = await idem.acquire_lock("260925-001", op=idem.OP_BEFORE)
+    complete = await idem.acquire_lock("260925-001")
+    assert before.acquired and complete.acquired
+    await idem.release_lock(before)
+    await idem.release_lock(complete)
+    assert (await idem.acquire_lock("260925-001", op=idem.OP_BEFORE)).acquired
+
+
+@pytest.mark.asyncio
+async def test_strict_load_raises_when_redis_down(monkeypatch):
+    """Fail-closed по запросу: без хранилища «Фото до» не грузится вслепую."""
+    _use(monkeypatch, BrokenRedis())
+    with pytest.raises(idem.IdempotencyUnavailable):
+        await idem.load(41, "260925-001", "k", op=idem.OP_BEFORE, strict=True)
+    assert await idem.load(41, "260925-001", "k") is None  # «Готово» по-прежнему fail-open

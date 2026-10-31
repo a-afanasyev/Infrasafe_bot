@@ -13,6 +13,7 @@ from uk_management_bot.services.work_reports.errors import MediaValidationError
 MAX_MEDIA_PER_SIDE = 4
 _AUTOFILL_FETCH_LIMIT = MAX_MEDIA_PER_SIDE * 4
 _VALIDATE_FETCH_LIMIT = 200
+BEFORE_SIDE_CATEGORIES = ("request_photo", "before_photo")
 
 # ===========================================================================
 # autofill_media / validate_media_ids
@@ -43,13 +44,18 @@ async def fetch_media_selection(
     вынуждали держать транзакцию с локами через HTTP-таймауты (30 с × 3
     ретрая на вызов). БД не трогает вовсе.
     """
-    before_raw = await media_client.get_request_media(
-        request_number, category="request_photo", limit=_AUTOFILL_FETCH_LIMIT
-    )
+    # «До»: фото исполнителя «до работ», без них — фото жителя (как было).
+    before_ids = _filter_and_cap(await media_client.get_request_media(
+        request_number, category="before_photo", limit=_AUTOFILL_FETCH_LIMIT
+    ))
+    if not before_ids:
+        before_ids = _filter_and_cap(await media_client.get_request_media(
+            request_number, category="request_photo", limit=_AUTOFILL_FETCH_LIMIT
+        ))
     after_raw = await media_client.get_request_media(
         request_number, category="completion_photo", limit=_AUTOFILL_FETCH_LIMIT
     )
-    return _filter_and_cap(before_raw), _filter_and_cap(after_raw)
+    return before_ids, _filter_and_cap(after_raw)
 
 
 def apply_media_selection(
@@ -100,6 +106,20 @@ async def autofill_media(db: AsyncSession, media_client: Any, report: WorkReport
     return apply_media_selection(report, before_ids, after_ids)
 
 
+async def before_side_media(media_client: Any, request_number: str) -> dict[int, dict]:
+    """Все допустимые фото стороны «до» по id: фото жителя и фото исполнителя
+    «до работ». Приоритет before_photo — только в автоподборе; проверка выбора
+    и сага публикации обязаны принимать обе категории, иначе автоподобранное
+    «до» падает на публикации."""
+    return {
+        item["id"]: item
+        for category in BEFORE_SIDE_CATEGORIES
+        for item in await media_client.get_request_media(
+            request_number, category=category, limit=_VALIDATE_FETCH_LIMIT
+        )
+    }
+
+
 async def validate_media_ids(
     media_client: Any,
     request_number: str,
@@ -116,12 +136,7 @@ async def validate_media_ids(
     Используется ручным PATCH и повторной проверкой перед публикацией — оба
     случая, где решение принял человек и заслуживает явного отказа.
     """
-    before_actual = {
-        item["id"]: item
-        for item in await media_client.get_request_media(
-            request_number, category="request_photo", limit=_VALIDATE_FETCH_LIMIT
-        )
-    }
+    before_actual = await before_side_media(media_client, request_number)
     after_actual = {
         item["id"]: item
         for item in await media_client.get_request_media(

@@ -235,3 +235,40 @@ async def test_validate_checks_after_side_independently():
 
     with pytest.raises(MediaValidationError):
         await validate_media_ids(client, "260725-001", [1], [2])
+
+
+# ── фото «до» исполнителя (before_photo) ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_autofill_prefers_executor_before_photo():
+    client = FakeMediaClient({
+        "request_photo": [_photo(1)], "before_photo": [_photo(5), _photo(6)],
+        "completion_photo": [_photo(2)],
+    })
+    result = await autofill_media(None, client, _mk_report())
+    assert result.before_media_ids == [5, 6]
+    assert result.after_media_ids == [2]
+
+
+@pytest.mark.asyncio
+async def test_autofill_falls_back_to_resident_photo_without_before_photo():
+    client = FakeMediaClient({"request_photo": [_photo(1)], "before_photo": [], "completion_photo": [_photo(2)]})
+    result = await autofill_media(None, client, _mk_report())
+    assert result.before_media_ids == [1]
+
+
+@pytest.mark.asyncio
+async def test_validate_accepts_before_side_from_both_categories():
+    """Публикация перепроверяет выбор: автоподобранные before_photo не 422."""
+    client = FakeMediaClient({
+        "request_photo": [_photo(1)], "before_photo": [_photo(5)], "completion_photo": [_photo(2)],
+    })
+    await validate_media_ids(client, "260725-001", [5, 1], [2])  # no raise
+
+
+@pytest.mark.asyncio
+async def test_validate_rejects_completion_photo_on_before_side():
+    client = FakeMediaClient({"request_photo": [], "before_photo": [], "completion_photo": [_photo(2)]})
+    with pytest.raises(MediaValidationError):
+        await validate_media_ids(client, "260725-001", [2], [2])
