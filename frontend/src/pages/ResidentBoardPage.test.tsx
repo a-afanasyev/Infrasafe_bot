@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '../test/test-utils'
 import { DEFAULT_DISPLAY_TZ, setDisplayTz } from '../utils/timezone'
+import { DisplayTzContext } from '../contexts/displayTz'
 import { defaultBoardConfig } from '../types/boardConfig'
 import type { BoardConfigData } from '../types/boardConfig'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server'
 import ResidentBoardPage from './ResidentBoardPage'
+
+// jsdom: matchMedia всегда false → ТВ-раскладка недостижима; считаем экран большим.
+vi.mock('../hooks/useMediaQuery', () => ({ useMediaQuery: () => true }))
 
 // T16 — модуль «Лифты» регистрируется в MODULES только под VITE_ELEVATORS_ENABLED:
 // без флага даже видимая layout-запись "elevators" ничего не рендерит.
@@ -34,7 +38,7 @@ describe('ResidentBoardPage — часы в display-зоне', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-06-05T10:30:00Z'))
     setDisplayTz('Pacific/Kiritimati')
-    render(<ResidentBoardPage configOverride={JSON.parse(JSON.stringify(defaultBoardConfig))} />)
+    render(<DisplayTzContext.Provider value="Pacific/Kiritimati"><ResidentBoardPage configOverride={JSON.parse(JSON.stringify(defaultBoardConfig))} /></DisplayTzContext.Provider>)
     expect(await screen.findByText('00:30')).toBeInTheDocument()
     expect(screen.getByText(/Суббота, 6 /)).toBeInTheDocument()
   })
@@ -74,5 +78,26 @@ describe('ResidentBoardPage — «Выполнено за месяц»', () => {
     render(<ResidentBoardPage configOverride={defaultBoardConfig} />)
     expect(await screen.findByText('182')).toBeInTheDocument()
     expect(screen.queryByText('251')).not.toBeInTheDocument()
+  })
+})
+
+// ТВ-режим — только по кнопке/ссылке ?mode=tv, не автоматически по размеру экрана.
+describe('ResidentBoardPage — ТВ-режим по кнопке', () => {
+  // Без configOverride (он выключает ТВ и кнопку — режим превью редактора) страница ждёт board-config с сервера.
+  beforeEach(() => {
+    server.use(http.get('*/api/v2/public/board-config', () => HttpResponse.json(defaultBoardConfig)))
+  })
+
+  it('большой экран без ?mode=tv — обычная страница с кнопкой «Для экрана»', async () => {
+    render(<ResidentBoardPage />, { routerEntries: ['/resident-board'] })
+    expect(await screen.findByText('Текущие заявки')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Для экрана' })).toHaveAttribute('href', '/resident-board?mode=tv')
+    expect(document.querySelector('.rb-tv')).toBeNull()
+  })
+
+  it('?mode=tv — ТВ-раскладка со ссылкой назад на обычную версию', async () => {
+    render(<ResidentBoardPage />, { routerEntries: ['/resident-board?mode=tv'] })
+    expect(await screen.findByRole('link', { name: 'Обычная версия' })).toHaveAttribute('href', '/resident-board')
+    expect(document.querySelector('.rb-tv')).not.toBeNull()
   })
 })

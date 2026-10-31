@@ -151,7 +151,7 @@ export default function ResidentHomePage({ configOverride }: ResidentHomePagePro
                 </button>
               ))}
             </div>
-            <Link className="rh-icon-button rh-tv-link" to="/resident-board" title={t('home.tvViewHint')}>
+            <Link className="rh-icon-button rh-tv-link" to="/resident-board?mode=tv" title={t('home.tvViewHint')}>
               <HomeIcon name="monitor" />
               <span>{t('home.tvView')}</span>
             </Link>

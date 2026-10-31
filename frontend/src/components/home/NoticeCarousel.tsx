@@ -15,13 +15,15 @@ interface NoticeCarouselProps {
   title?: string
   lang: Lang
   onOpen: (content: DetailContent) => void
+  // Интервал автосмены; ТВ-режим табло ставит длиннее (читают с расстояния).
+  intervalMs?: number
 }
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-export default function NoticeCarousel({ announcements, title: heading = '', lang, onOpen }: NoticeCarouselProps) {
+export default function NoticeCarousel({ announcements, title: heading = '', lang, onOpen, intervalMs = SLIDE_INTERVAL_MS }: NoticeCarouselProps) {
   const { t } = useTranslation()
   const [index, setIndex] = useState(0)
   // Без автосмены при «уменьшить движение» — пользователь листает сам.
@@ -31,9 +33,9 @@ export default function NoticeCarousel({ announcements, title: heading = '', lan
 
   useEffect(() => {
     if (paused || count < 2) return
-    const id = setInterval(() => setIndex((i) => (i + 1) % count), SLIDE_INTERVAL_MS)
+    const id = setInterval(() => setIndex((i) => (i + 1) % count), intervalMs)
     return () => clearInterval(id)
-  }, [paused, count])
+  }, [paused, count, intervalMs])
 
   const go = (delta: number) => setIndex((i) => (i + delta + count) % count)
   const loc = (v: { ru: string; uz: string }) => v[lang] || v.ru

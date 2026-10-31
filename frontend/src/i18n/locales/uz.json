@@ -2264,6 +2264,33 @@
     "saveAction": "Saqlash"
   },
   "board": {
+    "tv": {
+      "summary": "Arizalar haqida",
+      "noData": "Ma’lumot yo‘q",
+      "noRatings": "Hali baholar yo‘q",
+      "loading": "Ma’lumotlar yuklanmoqda…",
+      "configUnavailable": "Tablo sozlamalari mavjud emas",
+      "updated": "{{time}} da yangilandi",
+      "interrupted": "Yangilanish uzildi",
+      "unavailable": "Ma’lumotlar vaqtincha mavjud emas",
+      "noAnnouncements": "Yangi e’lonlar yo‘q",
+      "previous": "Oldingi sahifa",
+      "next": "Keyingi sahifa",
+      "pause": "Sahifalar almashishini to‘xtatish",
+      "resume": "Sahifalar almashishini davom ettirish",
+      "paused": "Almashish to‘xtatilgan",
+      "rotation": "Har 20 soniyada almashadi",
+      "awaitingAcceptance": "Qabulni kutmoqda",
+      "accepted": "Tasdiqlangan",
+      "more": "Yana {{count}} ta",
+      "none": "Arizalar yo‘q",
+      "requestsNote": "So‘nggi murojaatlar · Bajarish va qabul qilish — alohida bosqichlar",
+      "sendRequest": "Ariza yuborish",
+      "scanQr": "Telefon kamerasini qarating",
+      "qrLabel": "Murojaatlar uchun Telegram-bot QR-kodi",
+      "closed": "Dam olish",
+      "pageMode": "Oddiy ko‘rinish"
+    },
     "ticker": {
       "newRequests": "Yangi arizalar Telegram-bot orqali qabul qilinadi",
       "specialistsWorking": "Hududda {{count}} mutaxassis ishlaydi",

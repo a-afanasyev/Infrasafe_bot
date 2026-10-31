@@ -89,7 +89,7 @@ describe('ResidentHomePage', () => {
 
   it('«Для экрана» ведёт на табло', () => {
     render(<ResidentHomePage configOverride={config()} />)
-    expect(screen.getByRole('link', { name: /Для экрана/ })).toHaveAttribute('href', '/resident-board')
+    expect(screen.getByRole('link', { name: /Для экрана/ })).toHaveAttribute('href', '/resident-board?mode=tv')
   })
 
   it('счётчики обращений и разбивка по категориям по нажатию', async () => {
