@@ -3,6 +3,8 @@ import { render, screen } from '../test/test-utils'
 import { DEFAULT_DISPLAY_TZ, setDisplayTz } from '../utils/timezone'
 import { defaultBoardConfig } from '../types/boardConfig'
 import type { BoardConfigData } from '../types/boardConfig'
+import { http, HttpResponse } from 'msw'
+import { server } from '../test/msw/server'
 import ResidentBoardPage from './ResidentBoardPage'
 
 // T16 — модуль «Лифты» регистрируется в MODULES только под VITE_ELEVATORS_ENABLED:
@@ -52,5 +54,25 @@ describe('ResidentBoardPage — модуль «Лифты»', () => {
     expect(await screen.findByText('Текущие заявки')).toBeInTheDocument()
     expect(screen.queryByText('Наши лифты')).not.toBeInTheDocument()
     expect(screen.queryByText('Данные о лифтах пока не опубликованы')).not.toBeInTheDocument()
+  })
+})
+
+// «Выполнено за месяц» на табло суммировало status_counts без даты (все решённые
+// за всё время), тогда как главная жителей показывала completed_month за бизнес-месяц.
+// Табло берёт ту же цифру API.
+describe('ResidentBoardPage — «Выполнено за месяц»', () => {
+  it('показывает completed_month, а не сумму status_counts', async () => {
+    server.use(
+      http.get('*/api/v2/public/board', () =>
+        HttpResponse.json({
+          status_counts: { 'Выполнена': 100, 'Исполнено': 100, 'Принято': 51 },
+          completed_month: 182,
+          active_requests: [], active_executors: 0, avg_resolution_hours: null, avg_rating: null,
+        }),
+      ),
+    )
+    render(<ResidentBoardPage configOverride={defaultBoardConfig} />)
+    expect(await screen.findByText('182')).toBeInTheDocument()
+    expect(screen.queryByText('251')).not.toBeInTheDocument()
   })
 })

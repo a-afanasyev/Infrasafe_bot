@@ -112,7 +112,8 @@ export default function ResidentBoardPage({ configOverride }: ResidentBoardPageP
 
   const statusCounts = board?.status_counts ?? {}
   const totalActive = ['Новая', 'В работе', 'Закуп', 'Уточнение'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
-  const totalDone = ['Выполнена', 'Исполнено', 'Принято'].reduce((s, k) => s + (statusCounts[k] ?? 0), 0)
+  // Та же цифра, что на главной жителей: решённые за бизнес-месяц (бэк фильтрует по completed_at).
+  const totalDone = board?.completed_month ?? 0
 
   const activeRequests = board?.active_requests ?? []
 
