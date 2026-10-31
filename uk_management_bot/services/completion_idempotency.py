@@ -18,6 +18,10 @@
 (fail-closed) значит, что исполнитель на объекте не может закрыть работу, пока
 лежит кэш, — это хуже видимого и удаляемого дубля.
 
+У «Фото до» (`OP_BEFORE`) расчёт обратный — там `strict=True`: естественной
+идемпотентности нет (статус не меняется), фото необязательно, а дубль видит
+житель. Отказ без Redis ничего не блокирует, очередь TWA повторит позже.
+
 В логах — только класс ошибки Redis (как `describe_http_error`), без текста
 исключения: в нём может оказаться URL подключения.
 """
@@ -42,7 +46,16 @@ RECORD_TTL_SECONDS = 24 * 3600
 # истечь посреди живого запроса, а упавший процесс не должен держать заявку.
 LOCK_TTL_SECONDS = 90
 
-_PREFIX = "exec_complete"
+# Операция = пространство ключей: один UUID клиента у «Готово» и «Фото до» —
+# две независимые попытки, запись одной не «воспроизводит» другую. Строки
+# ключей «Готово» не менялись — живые записи переживают деплой.
+OP_COMPLETE = "exec_complete"
+OP_BEFORE = "exec_before"
+_OPS = frozenset({OP_COMPLETE, OP_BEFORE})
+
+
+class IdempotencyUnavailable(Exception):
+    """Redis недоступен, а вызывающий просил fail-closed (`strict=True`)."""
 
 # compare-and-delete: удалить лок, только если он всё ещё наш.
 _RELEASE_SCRIPT = (
@@ -69,14 +82,21 @@ class Lock:
     acquired: bool
     # Redis недоступен: работаем без лока (fail-open, см. докстринг модуля).
     degraded: bool = False
+    op: str = OP_COMPLETE
 
 
-def record_key(executor_id: int, request_number: str, key: str) -> str:
-    return f"{_PREFIX}:rec:{executor_id}:{request_number}:{key}"
+def _check_op(op: str) -> str:
+    if op not in _OPS:
+        raise ValueError(f"unknown idempotency op {op!r}")
+    return op
 
 
-def _lock_key(request_number: str) -> str:
-    return f"{_PREFIX}:lock:{request_number}"
+def record_key(executor_id: int, request_number: str, key: str, *, op: str = OP_COMPLETE) -> str:
+    return f"{_check_op(op)}:rec:{executor_id}:{request_number}:{key}"
+
+
+def _lock_key(request_number: str, *, op: str = OP_COMPLETE) -> str:
+    return f"{_check_op(op)}:lock:{request_number}"
 
 
 def _warn(op: str, exc: BaseException) -> None:
@@ -84,11 +104,15 @@ def _warn(op: str, exc: BaseException) -> None:
                    op, type(exc).__name__)
 
 
-async def load(executor_id: int, request_number: str, key: str) -> Optional[Record]:
+async def load(executor_id: int, request_number: str, key: str, *,
+               op: str = OP_COMPLETE, strict: bool = False) -> Optional[Record]:
+    """Запись попытки. strict — fail-closed: Redis недоступен → IdempotencyUnavailable."""
     try:
-        raw = await (await get_redis()).get(record_key(executor_id, request_number, key))
+        raw = await (await get_redis()).get(record_key(executor_id, request_number, key, op=op))
     except Exception as exc:  # noqa: BLE001 — fail-open, см. докстринг
         _warn("get", exc)
+        if strict:
+            raise IdempotencyUnavailable() from None
         return None
     if not raw:
         return None
@@ -103,24 +127,24 @@ async def load(executor_id: int, request_number: str, key: str) -> Optional[Reco
 
 
 async def save(executor_id: int, request_number: str, key: str,
-               state: str, media_id: Optional[int]) -> None:
+               state: str, media_id: Optional[int], *, op: str = OP_COMPLETE) -> None:
     value = json.dumps({"state": state, "media_id": media_id})
     try:
         await (await get_redis()).set(
-            record_key(executor_id, request_number, key), value, ex=RECORD_TTL_SECONDS)
+            record_key(executor_id, request_number, key, op=op), value, ex=RECORD_TTL_SECONDS)
     except Exception as exc:  # noqa: BLE001 — fail-open
         _warn("set", exc)
 
 
-async def acquire_lock(request_number: str) -> Lock:
+async def acquire_lock(request_number: str, *, op: str = OP_COMPLETE) -> Lock:
     token = secrets.token_hex(16)
     try:
         ok = await (await get_redis()).set(
-            _lock_key(request_number), token, nx=True, ex=LOCK_TTL_SECONDS)
+            _lock_key(request_number, op=op), token, nx=True, ex=LOCK_TTL_SECONDS)
     except Exception as exc:  # noqa: BLE001 — fail-open
         _warn("lock", exc)
-        return Lock(request_number, None, acquired=True, degraded=True)
-    return Lock(request_number, token if ok else None, acquired=bool(ok))
+        return Lock(request_number, None, acquired=True, degraded=True, op=op)
+    return Lock(request_number, token if ok else None, acquired=bool(ok), op=op)
 
 
 async def release_lock(lock: Lock) -> None:
@@ -133,6 +157,6 @@ async def release_lock(lock: Lock) -> None:
         return
     try:
         await (await get_redis()).eval(
-            _RELEASE_SCRIPT, 1, _lock_key(lock.request_number), lock.token)
+            _RELEASE_SCRIPT, 1, _lock_key(lock.request_number, op=lock.op), lock.token)
     except Exception as exc:  # noqa: BLE001 — лок истечёт по TTL
         _warn("unlock", exc)

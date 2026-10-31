@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { testI18n } from '../../test/test-utils'
 import type { TwaRequest } from '../types'
-import { NO_MARKS, firstLine, isUrgent, poolAddress, returnReason, sortMine, tileState, urgencyStripClass, type QueueMarks } from './model'
+import { queued } from '../../test/twaSimple'
+import { NO_MARKS, firstLine, isUrgent, poolAddress, queueMarks, returnReason, sortMine, tileState, urgencyStripClass, type QueueMarks } from './model'
 
 const marks = (pending: string[] = [], retake: string[] = []): QueueMarks => ({ pending: new Set(pending), retake: new Set(retake) })
 
@@ -77,5 +78,20 @@ describe('poolAddress / firstLine', () => {
   it('firstLine — первая непустая строка', () => {
     expect(firstLine('\n  Течёт кран  \nи ещё')).toBe('Течёт кран')
     expect(firstLine(undefined)).toBe('')
+  })
+})
+
+describe('queueMarks: состояние плитки — только от «Готово»', () => {
+  it('фото «до» в очереди и проваленное «до» не делают плитку pending/retake', () => {
+    const items = [
+      queued('before-pending', { kind: 'before' }),
+      queued('before-bad', { kind: 'before', failed: 'bad_photo' }),
+      queued('done-pending'),
+      queued('done-legacy', { kind: undefined }),
+    ]
+    const m = queueMarks(items)
+    expect([...m.pending].sort()).toEqual(['done-legacy', 'done-pending'])
+    expect([...m.retake]).toEqual([])
+    expect(tileState(task('before-pending'), m)).toBe('inWork')
   })
 })

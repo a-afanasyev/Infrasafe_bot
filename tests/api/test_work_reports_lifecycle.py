@@ -745,6 +745,26 @@ async def test_publish_happy_path_200(client: AsyncClient, db_session, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_autofill_with_before_photo_then_publish_200(client: AsyncClient, db_session, monkeypatch):
+    """Цепочка: автоподбор берёт фото «до» исполнителя, публикация их перепроверяет и пускает."""
+    _enable(monkeypatch)
+    await _mk_request(db_session, "260725-344", status="Принято", address_type=None)
+    report = await _mk_report(db_session, "260725-344", status="needs_media")
+    fake = FakeMediaClient(by_category={
+        "request_photo": [_photo(1)], "before_photo": [_photo(5)], "completion_photo": [_photo(2)],
+    })
+    _patch_media_client(monkeypatch, fake)
+
+    filled = await client.post(f"{BASE}/{report.id}/autofill")
+    assert filled.status_code == 200, filled.text
+    assert filled.json()["before_media_ids"] == [5]
+
+    resp = await client.post(f"{BASE}/{report.id}/publish")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "published"
+
+
+@pytest.mark.asyncio
 async def test_publish_409_wrong_starting_status(client: AsyncClient, db_session, monkeypatch):
     _enable(monkeypatch)
     report = await _mk_report(db_session, "260725-341", status="published")

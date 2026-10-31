@@ -11,7 +11,7 @@ import { useBackTo } from '../hooks/useSimpleNav'
 import { blobToDataUrl } from '../hooks/useResidentPhoto'
 import { ClosedPlate, Loading, PRIMARY_BTN, ResultScreen, SECONDARY_BTN, WaitManagerPlate } from '../components/Ui'
 import { FINAL_REASON_KEY, useCompletionQueue } from '../queue/CompletionQueue'
-import type { FinalReason, SendOutcome } from '../queue/types'
+import type { FinalReason, QueueKind, SendOutcome } from '../queue/types'
 
 // Фото «после» — до 1280 px по большей стороне: хватает, чтобы увидеть
 // работу, и уходит по плохой сети за разумное время.
@@ -32,8 +32,14 @@ type Stage =
   | { kind: 'queued'; id: string; noShift: boolean }
   | { kind: 'final'; reason: FinalReason }
 
-/** «Готово»: сразу камера → превью «Заново / Отправить» → галка или крест. */
-export default function DonePage() {
+interface DonePageProps {
+  /** 'before' — «Фото до»: та же съёмка и очередь, но статус не меняется. */
+  kind?: QueueKind
+}
+
+/** «Готово» / «Фото до»: сразу камера → превью «Заново / Отправить» → галка или крест. */
+export default function DonePage({ kind = 'done' }: DonePageProps) {
+  const before = kind === 'before'
   const { number = '' } = useParams()
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -45,7 +51,10 @@ export default function DonePage() {
   useBackTo(taskPath)
 
   const openCamera = () => inputRef.current?.click()
-  const toMine = () => navigate('/twa/s', { replace: true })
+  // «Фото до» — шаг посреди работы: возвращаемся к карточке, а не к списку.
+  const exitPath = before ? taskPath : '/twa/s'
+  const toMine = () => navigate(exitPath, { replace: true })
+  const exitLabel = before ? 'twa.simple.before.toTask' : 'twa.simple.done.toMine'
 
   // «Готово» — только из «В работе» (канон EXECUTOR_COMPLETE). Решаем по
   // СВЕЖЕЙ карточке (кэш мог устареть: заявку отменили); без сети — камеру
@@ -60,7 +69,8 @@ export default function DonePage() {
   }, [])
   const settled = isFetchedAfterMount || isError || fetchStatus === 'paused' || waitedLong
   const closed = settled && !!task && isClosed(task.status)
-  const blocked = settled && !!task && !canComplete(task.status)
+  // «Фото до» снимают в любом незакрытом статусе; «Готово» — только из «В работе».
+  const blocked = settled && !!task && (before ? isClosed(task.status) : !canComplete(task.status))
 
   // Камера — сразу: переход сюда был по тапу «Готово», жест ещё действует.
   // Если WebView не дал открыть без жеста — на экране большая кнопка «Камера».
@@ -73,9 +83,9 @@ export default function DonePage() {
 
   useEffect(() => {
     if (stage.kind !== 'sent') return
-    const id = window.setTimeout(() => navigate('/twa/s', { replace: true }), SUCCESS_HOLD_MS)
+    const id = window.setTimeout(() => navigate(exitPath, { replace: true }), SUCCESS_HOLD_MS)
     return () => window.clearTimeout(id)
-  }, [stage.kind, navigate])
+  }, [stage.kind, navigate, exitPath])
 
   // Сжимаем сразу после съёмки: превью строится из уменьшенной копии (одна
   // копия в памяти), и отправляется ровно то, что исполнитель видел.
@@ -116,6 +126,7 @@ export default function DonePage() {
         photo,
         fileName: photo.name || `${number}.jpg`,
         label: task?.address ?? undefined,
+        kind,
       })
       show(id, outcome)
     } catch (err) {
@@ -148,11 +159,11 @@ export default function DonePage() {
 
   const toMineButton = (
     <button type="button" onClick={toMine} className={`${SECONDARY_BTN} border-2 border-white text-white`}>
-      <Home size={26} aria-hidden /> {t('twa.simple.done.toMine')}
+      <Home size={26} aria-hidden /> {t(exitLabel)}
     </button>
   )
 
-  if (stage.kind === 'sent') return <ResultScreen ok title={t('twa.simple.done.sent')} />
+  if (stage.kind === 'sent') return <ResultScreen ok title={t(before ? 'twa.simple.before.sent' : 'twa.simple.done.sent')} />
 
   if (stage.kind === 'queued') {
     return (
@@ -187,7 +198,7 @@ export default function DonePage() {
           </button>
         ) : (
           <button type="button" onClick={toMine} className={`${PRIMARY_BTN} bg-white text-red-700`}>
-            <Home size={30} aria-hidden /> {t('twa.simple.done.toMine')}
+            <Home size={30} aria-hidden /> {t(exitLabel)}
           </button>
         )}
       </ResultScreen>
@@ -205,7 +216,7 @@ export default function DonePage() {
           onClick={toMine}
           className={`${SECONDARY_BTN} border-2 border-gray-400 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100`}
         >
-          <Home size={26} aria-hidden /> {t('twa.simple.done.toMine')}
+          <Home size={26} aria-hidden /> {t(exitLabel)}
         </button>
       </main>
     )
@@ -219,7 +230,7 @@ export default function DonePage() {
       {(stage.kind === 'camera' || stage.kind === 'processing') && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 py-10 text-center">
           <Camera size={96} className="text-gray-500" aria-hidden />
-          <p className="text-[24px] font-bold">{t('twa.simple.done.shoot')}</p>
+          <p className="text-[24px] font-bold">{t(before ? 'twa.simple.before.shoot' : 'twa.simple.done.shoot')}</p>
           <button
             type="button"
             disabled={stage.kind === 'processing'}

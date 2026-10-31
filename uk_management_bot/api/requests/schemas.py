@@ -338,6 +338,12 @@ class CommentBody(BaseModel):
     is_internal: bool = False
 
 
+class BeforePhotoOut(BaseModel):
+    """«Фото до» принято: id в media-service и сколько фото «до» у заявки теперь."""
+    media_id: int
+    count: int
+
+
 class ProblemBody(BaseModel):
     """«Проблема» исполнителя: шаблон обязателен, текст — по желанию; для `other` текст обязателен."""
     model_config = ConfigDict(extra="forbid")

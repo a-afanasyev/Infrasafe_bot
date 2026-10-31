@@ -9,7 +9,7 @@ import { SimpleTabs } from '../components/Chrome'
 import { ErrorBlock, Loading, SECONDARY_BTN } from '../components/Ui'
 import { firstLine, queueMarks, returnReason, sortMine, tileState } from '../model'
 import { FINAL_REASON_KEY, useCompletionQueue } from '../queue/CompletionQueue'
-import type { QueueItem } from '../queue/types'
+import { isDone, type QueueItem } from '../queue/types'
 
 /** «Готово» не принято окончательно, а заявки в списке уже нет: крупная плашка. */
 function LostTile({ item, onDismiss }: { item: QueueItem; onDismiss: () => void }) {
@@ -42,12 +42,13 @@ export default function MinePage() {
   const marks = useMemo(() => queueMarks(queued), [queued])
   const tasks = useMemo(() => sortMine(data ?? [], marks), [data, marks])
   const active = useMemo(() => new Set((data ?? []).map((task) => task.request_number)), [data])
-  // Окончательные отказы, которые не покажет плитка заявки: «закрыта» / «не
+  // Окончательные отказы «Готово» (проваленное «Фото до» видно на карточке),
+  // которые не покажет плитка заявки: «закрыта» / «не
   // ваша» — всегда; «переснять» — если заявки уже нет в списке.
   const lost = useMemo(
     () =>
       data
-        ? queued.filter((i) => i.failed && (i.failed !== 'bad_photo' || !active.has(i.requestNumber)))
+        ? queued.filter((i) => isDone(i) && i.failed && (i.failed !== 'bad_photo' || !active.has(i.requestNumber)))
         : [],
     [queued, data, active],
   )

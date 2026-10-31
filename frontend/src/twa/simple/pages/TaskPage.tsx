@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Camera, Check, Home, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Camera, Check, Clock, Home, Trash2, Undo2, X } from 'lucide-react'
 import { tCategory } from '../../../i18n/apiMaps'
-import { useTaskCard } from '../api'
+import { BEFORE_PHOTO_LIMIT, useBeforePhotoIds, useTaskCard } from '../api'
 import { useBackTo } from '../hooks/useSimpleNav'
 import { AuthPhoto } from '../components/Photo'
 import { useResidentPhotoId } from '../hooks/useResidentPhoto'
@@ -11,8 +11,9 @@ import { CategoryIcon, StateChip, UrgentMark } from '../components/TaskTile'
 import { ClosedPlate, ErrorBlock, Loading, PRIMARY_BTN, ResultScreen, SECONDARY_BTN, WaitManagerPlate } from '../components/Ui'
 import { canComplete, isClosed, returnReason } from '../model'
 import { FINAL_REASON_KEY, useCompletionQueue } from '../queue/CompletionQueue'
+import { isDone } from '../queue/types'
 
-/** Карточка заявки: фото жителя, адрес, весь текст, «Готово» / «Проблема». */
+/** Карточка заявки: фото жителя, адрес, весь текст, «Фото до», «Готово» / «Проблема». */
 export default function TaskPage() {
   const { number = '' } = useParams()
   const { t } = useTranslation()
@@ -29,12 +30,18 @@ export default function TaskPage() {
 
   const { data: task, isLoading, refetch } = useTaskCard(number)
   const photoId = useResidentPhotoId(number)
+  const beforeIds = useBeforePhotoIds(number)
 
   if (!task) {
     return <main className="p-3">{isLoading ? <Loading /> : <ErrorBlock onRetry={() => void refetch()} />}</main>
   }
 
-  const mine = queued.filter((i) => i.requestNumber === number)
+  const ofTask = queued.filter((i) => i.requestNumber === number)
+  // Состояние карточки — только от «Готово»: «Фото до» в очереди его не блокирует.
+  const mine = ofTask.filter(isDone)
+  const beforeQueued = ofTask.filter((i) => !isDone(i))
+  const beforePending = beforeQueued.filter((i) => !i.failed).length
+  const beforeFailed = beforeQueued.filter((i) => i.failed)
   const pending = mine.some((i) => !i.failed)
   const retake = mine.some((i) => i.failed === 'bad_photo')
   // Фоновая отправка «Готово» окончательно отказала (заявка закрыта / не ваша):
@@ -45,6 +52,7 @@ export default function TaskPage() {
   const closed = isClosed(task.status)
   const canAct = !pending && !closed
   const completable = canComplete(task.status)
+  const canShootBefore = canAct && beforeIds.length + beforePending < BEFORE_PHOTO_LIMIT
 
   if (lost?.failed) {
     return (
@@ -98,6 +106,48 @@ export default function TaskPage() {
 
       {task.description && (
         <p className="text-[18px] leading-relaxed whitespace-pre-line break-words">{task.description}</p>
+      )}
+
+      {(beforeIds.length > 0 || beforeQueued.length > 0 || canShootBefore) && (
+        <section className="flex flex-col gap-3" aria-label={t('twa.simple.before.title')}>
+          {beforeIds.length > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              {beforeIds.map((id) => (
+                <div key={id} data-testid="before-thumb" className="aspect-square rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800">
+                  <AuthPhoto mediaId={id} alt={t('twa.simple.before.thumbAlt')} className="w-full h-full object-cover" fallback={null} />
+                </div>
+              ))}
+            </div>
+          )}
+          {beforePending > 0 && (
+            <p className="flex items-center gap-2 text-[18px] text-amber-700 dark:text-amber-300">
+              <Clock size={22} aria-hidden /> {t('twa.simple.before.pending', { count: beforePending })}
+            </p>
+          )}
+          {beforeFailed.map((item) => (
+            <div key={item.id} role="alert" className="flex items-center gap-3 rounded-2xl border-2 border-red-500 bg-red-50 dark:bg-red-950/40 p-3">
+              <p className="flex-1 text-[18px] font-semibold text-red-700 dark:text-red-300 break-words">
+                {t('twa.simple.before.failed', { reason: item.failed ? t(FINAL_REASON_KEY[item.failed]) : '' })}
+              </p>
+              <button
+                type="button"
+                onClick={() => void dismiss(item.id)}
+                className="shrink-0 h-[56px] px-4 rounded-xl border-2 border-red-500 text-red-700 dark:text-red-300 text-[18px] font-semibold flex items-center gap-2"
+              >
+                <Trash2 size={22} aria-hidden /> {t('twa.simple.before.remove')}
+              </button>
+            </div>
+          ))}
+          {canShootBefore && (
+            <button
+              type="button"
+              onClick={() => navigate(`/twa/s/task/${encodeURIComponent(number)}/before`)}
+              className={`${SECONDARY_BTN} border-2 border-sky-600 text-sky-700 dark:text-sky-300 bg-white dark:bg-gray-900`}
+            >
+              <Camera size={26} aria-hidden /> {t('twa.simple.task.before')}
+            </button>
+          )}
+        </section>
       )}
 
       <p className="text-[16px] text-gray-500 dark:text-gray-400">{t('twa.simple.task.number', { number: task.request_number })}</p>

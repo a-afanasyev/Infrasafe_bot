@@ -2218,7 +2218,10 @@
       "pending_acceptance_title": "✅ Qabul qilishni kutmoqda",
       "press_pending_button": "Buyurtmalar ro'yxatini ko'rish uchun menyuda '✅ Qabul qilishni kutmoqda' tugmasini bosing.",
       "media_photo_caption": "Rasm {index}/{total}",
-      "media_file_caption": "Fayl {index}/{total}"
+      "media_file_caption": "Fayl {index}/{total}",
+      "before_media_attached": "📷 Ishdan oldingi suratlar: {count}",
+      "before_media_title": "📷 Ishdan oldin:",
+      "after_media_title": "✅ Ishdan keyin:"
     }
   },
   "unaccepted": {
@@ -2961,5 +2964,20 @@
     "pending_title": "📰 <b>O'chirish haqidagi yangilik tasdiqlashni kutmoqda</b>",
     "pending_body": "{kind}: {summary}\nManba: {source}. Chop etish — dashboardda, «O'chirishlar» bo'limi.",
     "broadcast": "📢 <b>{title}</b>\n{text}"
+  },
+  "executor_before": {
+    "button": "📷 Ishdan oldingi surat",
+    "prompt": "Ish boshlanishidan oldin joyni suratga olib yuboring — {max} tagacha. Keyin «Tayyor» tugmasini bosing.",
+    "btn_done": "✅ Tayyor ({count})",
+    "added": "Surat qo‘shildi: {count}. Yana yuboring yoki «Tayyor» tugmasini bosing.",
+    "uploading": "Yuklanmoqda…",
+    "sent": "📷 Ishdan oldingi suratlar yuklandi: {count}",
+    "btn_back": "↩️ Arizaga",
+    "err_limit": "Arizada allaqachon 4 ta ishdan oldingi surat bor — boshqa qo‘shib bo‘lmaydi",
+    "err_closed": "Ariza yopilgan — ishdan oldingi surat qo‘shib bo‘lmaydi",
+    "err_not_yours": "Bu sizning arizangiz emas",
+    "err_photo": "Surat mos kelmadi — boshqasini yuboring",
+    "err_media": "Surat xizmati vaqtincha ishlamayapti — keyinroq urinib ko‘ring",
+    "err_generic": "Ishdan oldingi suratni yuklab bo‘lmadi"
   }
 }

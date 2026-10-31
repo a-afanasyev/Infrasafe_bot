@@ -21,7 +21,9 @@ function detailOf(err: unknown): string | null {
 }
 
 /**
- * Что делать с ошибкой `POST /complete` (коды — executor_actions.complete_request).
+ * Что делать с ошибкой `POST /complete` и `POST /before-photo` (коды —
+ * executor_actions; у «Фото до» ещё 409 `before_limit` — окончательно,
+ * 503 `idempotency_unavailable` — повторять, как любой 5xx).
  *
  * Повторять: нет сети, 408/429, 5xx (в т.ч. 503 media_unavailable и 502 от
  * edge без нашего кода), 401 (токен обновится), 403 `no_active_shift` —
@@ -45,7 +47,8 @@ export function classifyCompletionError(err: unknown): ErrorClass {
   if (status >= 500) return { kind: 'retry', noShift: false }
   if (status === 404) return { kind: 'final', reason: 'not_yours' }
   if (status === 409) {
-    return detail === 'in_progress' ? { kind: 'retry', noShift: false } : { kind: 'final', reason: 'closed' }
+    if (detail === 'in_progress') return { kind: 'retry', noShift: false }
+    return { kind: 'final', reason: detail === 'before_limit' ? 'limit' : 'closed' }
   }
   if (status === 413 || status === 415 || status === 422) return { kind: 'final', reason: 'bad_photo' }
   return { kind: 'final', reason: 'closed' }

@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { notifyError } from '../../utils/errors'
 import StatusBadge from '../../components/StatusBadge'
 import MediaGallery from '../../components/MediaGallery'
+import BeforePhotoButton from '../../components/BeforePhotoButton'
 import CommentThread from '../../components/CommentThread'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { ArrowLeft, MapPin, Calendar } from 'lucide-react'
@@ -197,6 +198,13 @@ export default function TaskDetailPage() {
             title={t('twa.detail.media')}
             onLightboxChange={setLightboxClose}
           />
+          <MediaGallery
+            requestNumber={number}
+            kind="before"
+            title={t('twa.detail.before')}
+            onLightboxChange={setLightboxClose}
+          />
+          <BeforePhotoButton requestNumber={number} status={request.status} />
           <MediaGallery
             requestNumber={number}
             kind="completion"

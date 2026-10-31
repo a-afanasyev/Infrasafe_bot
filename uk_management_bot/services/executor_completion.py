@@ -163,7 +163,13 @@ async def _preflight(session_factory, request_number: str, principal: PrincipalR
     raise _refusal(pre.error, pre.snapshot, pre.actor)
 
 
-async def _upload(request_number: str, executor_id: int, photo_bytes: bytes, mime: str) -> int:
+async def upload_executor_photo(request_number: str, executor_id: int, photo_bytes: bytes,
+                                mime: str, *, category: str = COMPLETION_CATEGORY,
+                                name_suffix: str = "after") -> int:
+    """Фото исполнителя → media-service; `media_id` или CompletionRefused.
+
+    Общая точка «после» (здесь) и «до» (`services/executor_before_photo`).
+    """
     client = get_media_client()
     if client is None:
         raise CompletionRefused("media_unavailable", 503)
@@ -171,8 +177,8 @@ async def _upload(request_number: str, executor_id: int, photo_bytes: bytes, mim
         result = await client.upload_report_media(
             request_number=request_number,
             file_path=io.BytesIO(photo_bytes),
-            filename=f"{request_number}_after.{_EXTENSIONS[mime]}",
-            report_type=COMPLETION_CATEGORY,
+            filename=f"{request_number}_{name_suffix}.{_EXTENSIONS[mime]}",
+            report_type=category,
             uploaded_by=executor_id,
             content_type=mime,
             timeout=UPLOAD_TIMEOUT,
@@ -234,7 +240,7 @@ async def complete_with_photo(session_factory, request_number: str, executor_id:
         if record is not None and record.state == idem.STATE_UPLOADED and record.media_id:
             media_id = record.media_id  # фото уже в заявке, сбой был на шаге 4
         else:
-            media_id = await _upload(request_number, executor_id, photo_bytes, mime)
+            media_id = await upload_executor_photo(request_number, executor_id, photo_bytes, mime)
             await idem.save(executor_id, request_number, key, idem.STATE_UPLOADED, media_id)
 
         outcome = await _transition(session_factory, request_number, principal, command, executor_id)

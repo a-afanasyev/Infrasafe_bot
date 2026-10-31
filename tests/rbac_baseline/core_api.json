@@ -2218,6 +2218,20 @@
     "get_period"
    ]
   },
+  "POST /api/v2/requests/{request_number}/before-photo": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
   "POST /api/v2/requests/{request_number}/claim": {
    "auth": "roles",
    "allow": [

@@ -904,6 +904,25 @@
         "title": "BacklogOut",
         "type": "object"
       },
+      "BeforePhotoOut": {
+        "description": "«Фото до» принято: id в media-service и сколько фото «до» у заявки теперь.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "media_id": {
+            "title": "Media Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "media_id",
+          "count"
+        ],
+        "title": "BeforePhotoOut",
+        "type": "object"
+      },
       "BoardConfigResponse": {
         "description": "`response_model` для GET /public/board-config и PUT /board-config.\n\nБез нормализации: layout принимается/отдаётся ровно таким, каким его\nпостроил сервис-слой (к этому моменту уже отфильтрованным по фиче-флагу).\n\n`display_tz` (ARCH-137 B5) — зона показа развёртывания. Поле живёт ТОЛЬКО\nв ответе и заполняется в `to_public_response` (модель обслуживает и GET, и\nPUT — заполнение в хендлере уронило бы половину путей). В `BoardConfigUpdateIn`\nего НЕТ намеренно: вход строгий (`_StrictIn`), echo поля в PUT = 422 —\nфронт обязан отделять редактируемый конфиг от ответа.",
         "properties": {
@@ -1032,6 +1051,27 @@
           "layout"
         ],
         "title": "BoardConfigUpdateIn",
+        "type": "object"
+      },
+      "Body_add_before_photo_api_v2_requests__request_number__before_photo_post": {
+        "properties": {
+          "idempotency_key": {
+            "description": "UUID попытки; повтор с ним же безопасен",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Фото «до работ»: JPEG/PNG, до 8 МиБ",
+            "title": "Photo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo",
+          "idempotency_key"
+        ],
+        "title": "Body_add_before_photo_api_v2_requests__request_number__before_photo_post",
         "type": "object"
       },
       "Body_complete_request_api_v2_requests__request_number__complete_post": {
@@ -20996,6 +21036,64 @@
           }
         ],
         "summary": "Update Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/before-photo": {
+      "post": {
+        "description": "«Фото до»: одно фото к заявке, статус не меняется. До 4 на заявку.\n\nПовтор с тем же `idempotency_key` — 201 с прежним `media_id` без второй\nзагрузки (и без отказа по лимиту).\n\nОтветы: 201 — `{media_id, count}`; 403 `not_assigned`; 404; 409\n`invalid_status` (заявка закрыта) / `before_limit` / `in_progress`;\n413/415/422 — фото и ключ; 502 `media_rejected`; 503 `media_unavailable` /\n`idempotency_unavailable`.",
+        "operationId": "add_before_photo_api_v2_requests__request_number__before_photo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_before_photo_api_v2_requests__request_number__before_photo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BeforePhotoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Before Photo",
         "tags": [
           "requests"
         ]

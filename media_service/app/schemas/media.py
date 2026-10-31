@@ -29,6 +29,8 @@ class MediaCategoryEnum(str, Enum):
     REQUEST_DOCUMENT = "request_document"
     COMPLETION_PHOTO = "completion_photo"
     COMPLETION_VIDEO = "completion_video"
+    # Фото исполнителя «до работ» (UK: /requests/{n}/before-photo → upload-report)
+    BEFORE_PHOTO = "before_photo"
     DAMAGE_PHOTO = "damage_photo"
     MATERIALS_PHOTO = "materials_photo"
     PROCESS_VIDEO = "process_video"

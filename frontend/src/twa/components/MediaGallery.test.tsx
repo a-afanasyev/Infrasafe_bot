@@ -17,6 +17,26 @@ describe('MediaGallery', () => {
     expect(await screen.findByText('Не удалось загрузить фото — попробуйте позже')).toBeInTheDocument()
   })
 
+  it.each([
+    ['request', [1, 4]],
+    ['before', [2]],
+    ['completion', [3]],
+  ] as const)('kind=%s показывает только свои категории', async (kind, ids) => {
+    mockGet.mockImplementation((url: string) =>
+      url.endsWith('/request/260928-001')
+        ? Promise.resolve({ data: [
+          { id: 1, file_type: 'photo', mime_type: 'image/jpeg', category: 'request_photo' },
+          { id: 2, file_type: 'photo', mime_type: 'image/jpeg', category: 'before_photo' },
+          { id: 3, file_type: 'photo', mime_type: 'image/jpeg', category: 'completion_photo' },
+          { id: 4, file_type: 'video', mime_type: 'video/mp4', category: 'request_video' },
+        ] })
+        : new Promise(() => {}),
+    )
+    render(<MediaGallery requestNumber="260928-001" kind={kind} title="T" />)
+    const thumbs = await screen.findAllByTestId('media-thumb')
+    expect(thumbs.map((el) => Number(el.dataset.mediaId))).toEqual(ids)
+  })
+
   it('пустой список — ничего не рисует', async () => {
     mockGet.mockResolvedValue({ data: [] })
     const { container } = render(<MediaGallery requestNumber="260928-001" kind="request" title="Фото" />)

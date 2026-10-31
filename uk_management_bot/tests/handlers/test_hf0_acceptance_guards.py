@@ -447,6 +447,50 @@ class TestMediaViewGuard:
         cb.message.answer_photo.assert_awaited()
 
     @pytest.mark.asyncio
+    async def test_owner_sees_before_album_then_report(self, db, monkeypatch):
+        """Фото «до работ» исполнителя житель видит первым альбомом (решение 2026-10-31)."""
+        import uk_management_bot.handlers.request_acceptance as ra
+        from uk_management_bot.services.request_media_entries import MediaEntry
+
+        before = [MediaEntry(kind="photo", media_id=7)]
+        after = [MediaEntry(kind="photo", media_id=8)]
+        monkeypatch.setattr(ra, "get_before_media_entries", AsyncMock(return_value=before))
+        monkeypatch.setattr(ra, "get_completion_media_entries", AsyncMock(return_value=after))
+        albums = []
+
+        async def fake_send(message, entries, client, first_caption=None):
+            albums.append([e.media_id for e in entries])
+            return len(entries)
+        monkeypatch.setattr(ra, "send_media_entries", fake_send)
+
+        req = _mk_request(db, "260610-404", REQUEST_STATUS_COMPLETED)
+        db.commit()
+        cb = _mk_media_callback(req.request_number, OWNER_TG)
+        await ra.view_completion_media(cb, _db=db)
+
+        assert albums == [[7], [8]]
+        texts = [c.args[0] for c in cb.message.answer.await_args_list]
+        assert texts[1:] == ["📷 До работ:", "✅ После работ:"]
+
+    @pytest.mark.asyncio
+    async def test_only_before_photos_still_viewable(self, db, monkeypatch):
+        import uk_management_bot.handlers.request_acceptance as ra
+        from uk_management_bot.services.request_media_entries import MediaEntry
+
+        monkeypatch.setattr(ra, "get_before_media_entries", AsyncMock(return_value=[MediaEntry(kind="photo", media_id=7)]))
+        monkeypatch.setattr(ra, "get_completion_media_entries", AsyncMock(return_value=[]))
+        send = AsyncMock(return_value=1)
+        monkeypatch.setattr(ra, "send_media_entries", send)
+
+        req = _mk_request(db, "260610-405", REQUEST_STATUS_COMPLETED)
+        db.commit()
+        cb = _mk_media_callback(req.request_number, OWNER_TG)
+        await ra.view_completion_media(cb, _db=db)
+
+        send.assert_awaited_once()
+        assert "✅ После работ:" not in [c.args[0] for c in cb.message.answer.await_args_list]
+
+    @pytest.mark.asyncio
     async def test_approved_neighbor_can_view_media(self, db):
         from uk_management_bot.handlers.request_acceptance import view_completion_media
 

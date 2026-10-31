@@ -44,7 +44,7 @@ from uk_management_bot.services.workflow_notifications import (
     send_channel_status_text,
     send_notify_messages,
 )
-from uk_management_bot.services.completion_media import get_completion_media_entries
+from uk_management_bot.services.completion_media import get_before_media_entries, get_completion_media_entries
 from uk_management_bot.services.request_media_entries import send_media_entries
 from uk_management_bot.integrations import get_media_client
 from uk_management_bot.utils.workflow_predicates import (
@@ -331,8 +331,13 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
         completion_media = await get_completion_media_entries(
             view.request_number, view.completion_media
         )
-        if len(completion_media) > 0:
+        before_media = await get_before_media_entries(view.request_number)
+        has_media = bool(completion_media or before_media)
+        if before_media:
+            text += get_text("request_acceptance.handlers.before_media_attached", language=lang).format(count=len(before_media)) + "\n"
+        if completion_media:
             text += get_text("request_acceptance.handlers.media_attached", language=lang).format(count=len(completion_media)) + "\n"
+        if has_media:
             text += get_text("request_acceptance.handlers.press_to_view_media", language=lang) + "\n\n"
 
         text += get_text("request_acceptance.handlers.review_and_decide", language=lang)
@@ -341,7 +346,7 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
         keyboard = get_applicant_completed_request_actions_keyboard(request_number)
 
         # Добавляем кнопку для просмотра медиа если есть
-        if len(completion_media) > 0:
+        if has_media:
             rows = list(keyboard.inline_keyboard)
             rows.insert(0, [InlineKeyboardButton(
                 text=get_text("request_acceptance.handlers.btn_view_media", language=lang),
@@ -356,6 +361,27 @@ async def view_completed_request(callback: CallbackQuery, language: str = "ru", 
     except Exception as e:
         logger.error(f"Ошибка просмотра выполненной заявки: {e}")
         await callback.answer(get_text("request_acceptance.handlers.error_occurred", language=language), show_alert=True)
+
+
+async def _send_album(callback: CallbackQuery, entries, lang: str, request_number: str) -> int:
+    """Альбом медиа заявки; сколько ушло. Файлы media-service — байтами (его
+    file_id основному боту не годятся), чанки по лимиту Telegram — внутри
+    send_media_entries."""
+    caption_key = (
+        "request_acceptance.handlers.media_file_caption" if entries[0].kind == "document"
+        else "request_acceptance.handlers.media_photo_caption"
+    )
+    first_caption = (
+        get_text(caption_key, language=lang).format(index=1, total=len(entries))
+        if len(entries) > 1 else None
+    )
+    try:
+        return await send_media_entries(
+            callback.message, entries, get_media_client(), first_caption=first_caption
+        )
+    except TelegramAPIError as e:
+        logger.error("Ошибка отправки медиа заявки %s: %s", request_number, e)
+        return 0
 
 
 @router.callback_query(F.data.startswith("view_completion_media_"))
@@ -382,8 +408,11 @@ async def view_completion_media(callback: CallbackQuery, language: str = "ru", *
         entries = await get_completion_media_entries(
             request_number_display, completion_media
         )
+        # Фото «до работ» исполнителя — житель видит их до фотоотчёта (решение
+        # владельца 2026-10-31). Только media-service; недоступен — пусто.
+        before_entries = await get_before_media_entries(request_number_display)
 
-        if not entries:
+        if not entries and not before_entries:
             await callback.answer(get_text("request_acceptance.handlers.media_not_found", language=language), show_alert=True)
             return
 
@@ -395,23 +424,14 @@ async def view_completion_media(callback: CallbackQuery, language: str = "ru", *
             parse_mode="HTML"
         )
 
-        # Файлы media-service — байтами (его file_id основному боту не годятся),
-        # чанки по лимиту Telegram — внутри send_media_entries.
-        caption_key = (
-            "request_acceptance.handlers.media_file_caption" if entries[0].kind == "document"
-            else "request_acceptance.handlers.media_photo_caption"
-        )
-        first_caption = (
-            get_text(caption_key, language=lang).format(index=1, total=len(entries))
-            if len(entries) > 1 else None
-        )
-        try:
-            sent = await send_media_entries(
-                callback.message, entries, get_media_client(), first_caption=first_caption
-            )
-        except TelegramAPIError as e:
-            logger.error("Ошибка отправки фотоотчёта заявки %s: %s", request_number_display, e)
-            sent = 0
+        sent = 0
+        if before_entries:
+            await callback.message.answer(get_text("request_acceptance.handlers.before_media_title", language=lang))
+            sent += await _send_album(callback, before_entries, lang, request_number_display)
+        if entries:
+            if before_entries:
+                await callback.message.answer(get_text("request_acceptance.handlers.after_media_title", language=lang))
+            sent += await _send_album(callback, entries, lang, request_number_display)
         if sent == 0:
             await callback.message.answer(get_text("request_acceptance.handlers.media_send_failed", language=lang))
 

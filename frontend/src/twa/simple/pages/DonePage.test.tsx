@@ -170,6 +170,61 @@ describe('DonePage', () => {
     expect(mockPost).not.toHaveBeenCalled()
   })
 
+  describe('режим «Фото до»', () => {
+    function renderBefore() {
+      return render(
+        <QueueWrapper store={store}>
+          <Routes>
+            <Route path="/twa/s/task/:number/before" element={<DonePage kind="before" />} />
+            <Route path="/twa/s/task/:number" element={<div>TASK</div>} />
+            <Route path="/twa/s" element={<div>MINE</div>} />
+          </Routes>
+        </QueueWrapper>,
+        { routerEntries: [`/twa/s/task/${NUMBER}/before`] },
+      )
+    }
+
+    it('«Закуп» — камера (не «Ждёт менеджера»); уходит на /before-photo; потом — назад на карточку', async () => {
+      stubTelegram()
+      status = 'Закуп'
+      mockPost.mockResolvedValue({ data: { media_id: 1, count: 1 } })
+      renderBefore()
+      expect(await screen.findByText('Снимите место до начала работ')).toBeInTheDocument()
+      await shootAndSend()
+      expect(await screen.findByText('Фото «до» сохранено')).toBeInTheDocument()
+      expect(mockPost.mock.calls[0][0]).toBe(`/api/v2/requests/${NUMBER}/before-photo`)
+      expect(await screen.findByText('TASK', {}, { timeout: 3000 })).toBeInTheDocument()
+      expect(await store.list()).toEqual([])
+    })
+
+    it('сбой сети — фото в очереди как «до», кнопка ведёт к заявке', async () => {
+      stubTelegram()
+      mockPost.mockRejectedValue({ message: 'Network Error' })
+      renderBefore()
+      await shootAndSend()
+      expect(await screen.findByText('Не отправилось')).toBeInTheDocument()
+      const [item] = await store.list()
+      expect(item).toMatchObject({ requestNumber: NUMBER, kind: 'before' })
+      fireEvent.click(screen.getByRole('button', { name: /К заявке/ }))
+      expect(await screen.findByText('TASK')).toBeInTheDocument()
+    })
+
+    it('лимит (409 before_limit) — понятный текст', async () => {
+      stubTelegram()
+      mockPost.mockRejectedValue({ response: { status: 409, data: { detail: 'before_limit' } } })
+      renderBefore()
+      await shootAndSend()
+      expect(await screen.findByText('Уже 4 фото «до» — больше нельзя')).toBeInTheDocument()
+    })
+
+    it('выполненная заявка — «Заявка закрыта», без камеры', async () => {
+      status = 'Выполнена'
+      renderBefore()
+      expect(await screen.findByText('Заявка закрыта')).toBeInTheDocument()
+      expect(screen.queryByTestId('camera-input')).toBeNull()
+    })
+  })
+
   it('отменённая заявка — «Заявка закрыта», не «Ждёт менеджера», без камеры', async () => {
     status = 'Отменена'
     renderDone()

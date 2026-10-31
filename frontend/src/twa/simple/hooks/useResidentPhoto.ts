@@ -10,7 +10,8 @@ interface MediaItem {
 }
 
 function isResidentPhoto(m: MediaItem): boolean {
-  if (m.category === 'completion_photo') return false
+  // Фото исполнителя («после» и «до работ») — не фото жителя.
+  if (m.category === 'completion_photo' || m.category === 'before_photo') return false
   return m.file_type === 'photo' || !!m.mime_type?.startsWith('image/')
 }
 

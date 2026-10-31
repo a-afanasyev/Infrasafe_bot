@@ -20,7 +20,7 @@ from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.api.requests import service as svc
 from uk_management_bot.api.requests.problem_notify import notify_managers_problem_detached
 from uk_management_bot.api.requests.router import _card
-from uk_management_bot.api.requests.schemas import CommentOut, ProblemBody, RequestCard
+from uk_management_bot.api.requests.schemas import BeforePhotoOut, CommentOut, ProblemBody, RequestCard
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import AsyncSessionLocal
 from uk_management_bot.services.executor_completion import (
@@ -28,6 +28,7 @@ from uk_management_bot.services.executor_completion import (
     CompletionRefused,
     complete_with_photo,
 )
+from uk_management_bot.services.executor_before_photo import upload_before_photo
 from uk_management_bot.services.executor_problem import problem_comment_text
 from uk_management_bot.services.redis_pubsub import publish_request_event
 from uk_management_bot.services.workflow_notifications import (
@@ -97,6 +98,36 @@ async def complete_request(
         background.add_task(
             dispatch_notify_intents_detached, request_number, outcome.post_commit_intents)
     return await _fresh_card(db, request_number, user)
+
+
+@router.post("/{request_number}/before-photo", response_model=BeforePhotoOut, status_code=201)
+@limiter.limit(COMPLETE_RATE_LIMIT)
+async def add_before_photo(
+    request: Request,
+    request_number: str,
+    photo: UploadFile = File(..., description="Фото «до работ»: JPEG/PNG, до 8 МиБ"),
+    idempotency_key: str = Form(..., description="UUID попытки; повтор с ним же безопасен"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_action("requests.execute")),
+):
+    """«Фото до»: одно фото к заявке, статус не меняется. До 4 на заявку.
+
+    Повтор с тем же `idempotency_key` — 201 с прежним `media_id` без второй
+    загрузки (и без отказа по лимиту).
+
+    Ответы: 201 — `{media_id, count}`; 403 `not_assigned`; 404; 409
+    `invalid_status` (заявка закрыта) / `before_limit` / `in_progress`;
+    413/415/422 — фото и ключ; 502 `media_rejected`; 503 `media_unavailable` /
+    `idempotency_unavailable`.
+    """
+    photo_bytes = await photo.read(COMPLETION_PHOTO_MAX_BYTES + 1)
+    await db.close()  # сервис открывает свои сессии; не держим idle-транзакцию через загрузку
+    try:
+        result = await upload_before_photo(
+            AsyncSessionLocal, request_number, user.id, photo_bytes, idempotency_key)
+    except CompletionRefused as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.code)
+    return BeforePhotoOut(media_id=result.media_id, count=result.count)
 
 
 @router.post("/{request_number}/problem", response_model=CommentOut, status_code=201)

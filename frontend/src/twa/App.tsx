@@ -147,6 +147,7 @@ function TWAContent() {
           <Route path="pool" element={<SimplePoolPage />} />
           <Route path="task/:number" element={<SimpleTaskPage />} />
           <Route path="task/:number/done" element={<SimpleDonePage />} />
+          <Route path="task/:number/before" element={<SimpleDonePage kind="before" />} />
           <Route path="task/:number/problem" element={<SimpleProblemPage />} />
           <Route path="shift" element={<SimpleShiftPage />} />
         </Route>

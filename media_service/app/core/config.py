@@ -187,6 +187,8 @@ class FileCategories:
     REPORT_VIDEO = "report_video"
     COMPLETION_PHOTO = "completion_photo"
     COMPLETION_VIDEO = "completion_video"
+    # Фото исполнителя «до работ» — тот же канал отчётов, что «после»
+    BEFORE_PHOTO = "before_photo"
 
     # Обратная связь (жалобы/пожелания)
     FEEDBACK_PHOTO = "feedback_photo"
@@ -213,6 +215,7 @@ class FileCategories:
         REPORT_VIDEO: TelegramChannels.REPORTS,
         COMPLETION_PHOTO: TelegramChannels.REPORTS,
         COMPLETION_VIDEO: TelegramChannels.REPORTS,
+        BEFORE_PHOTO: TelegramChannels.REPORTS,
         FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
         ACCESS_PLATE: TelegramChannels.ACCESS,
         ACCESS_OVERVIEW: TelegramChannels.ACCESS,

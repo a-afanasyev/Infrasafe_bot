@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { twaClient } from '../twaClient'
 import type { TwaRequest } from '../types'
-import type { QueueItem } from './queue/types'
+import { limitMedia } from './hooks/useLazyMedia'
+import { queueKind, type QueueItem } from './queue/types'
 
 /** Плитка вкладки «Взять» (GET /api/v2/requests/pool, схема PoolItem). */
 export interface PoolItem {
@@ -69,13 +70,40 @@ export function useTaskCard(number: string, { fresh = false }: { fresh?: boolean
   })
 }
 
-export function sendCompletion(item: QueueItem): Promise<unknown> {
+/** Запись очереди → свой эндпоинт: «Готово» — /complete, «Фото до» — /before-photo. */
+export function sendQueued(item: QueueItem): Promise<unknown> {
   const form = new FormData()
   form.append('photo', new File([item.photo], item.fileName, { type: item.photo.type || 'image/jpeg' }))
   form.append('idempotency_key', item.idempotencyKey)
-  return twaClient.post(`/api/v2/requests/${encodeURIComponent(item.requestNumber)}/complete`, form, {
+  const action = queueKind(item) === 'before' ? 'before-photo' : 'complete'
+  return twaClient.post(`/api/v2/requests/${encodeURIComponent(item.requestNumber)}/${action}`, form, {
     timeout: COMPLETE_TIMEOUT_MS,
   })
+}
+
+/** = BEFORE_PHOTO_LIMIT бэкенда (services/executor_before_photo). */
+export const BEFORE_PHOTO_LIMIT = 4
+
+interface MediaListItem {
+  id: number
+  category?: string | null
+  status?: string | null
+}
+
+/**
+ * id фото «до» заявки. Ключ и запрос — как у MediaGallery / useResidentPhotoId
+ * (['twa','media',n]): кэш общий, очередь его инвалидирует после отправки.
+ */
+export function useBeforePhotoIds(number: string): number[] {
+  const { data } = useQuery<MediaListItem[]>({
+    queryKey: ['twa', 'media', number],
+    queryFn: () => limitMedia(() => twaClient.get(`/api/v2/media/request/${number}`).then((r) => r.data)),
+    enabled: !!number,
+    staleTime: 60_000,
+  })
+  return (Array.isArray(data) ? data : [])
+    .filter((m) => m.category === 'before_photo' && (m.status ?? 'active') === 'active')
+    .map((m) => m.id)
 }
 
 export function claimRequest(number: string): Promise<unknown> {

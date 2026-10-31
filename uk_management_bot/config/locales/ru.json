@@ -2217,7 +2217,10 @@
       "pending_acceptance_title": "✅ Ожидают приёмки",
       "press_pending_button": "Для просмотра списка заявок нажмите кнопку '✅ Ожидают приёмки' в меню.",
       "media_photo_caption": "Фото {index}/{total}",
-      "media_file_caption": "Файл {index}/{total}"
+      "media_file_caption": "Файл {index}/{total}",
+      "before_media_attached": "📷 Фото до работ: {count}",
+      "before_media_title": "📷 До работ:",
+      "after_media_title": "✅ После работ:"
     }
   },
   "unaccepted": {
@@ -2960,5 +2963,20 @@
     "pending_title": "📰 <b>Новость об отключении ждёт одобрения</b>",
     "pending_body": "{kind}: {summary}\nИсточник: {source}. Опубликовать — в дашборде, раздел «Отключения».",
     "broadcast": "📢 <b>{title}</b>\n{text}"
+  },
+  "executor_before": {
+    "button": "📷 Фото до работ",
+    "prompt": "Пришлите фото места до начала работ — до {max} шт. Затем нажмите «Готово».",
+    "btn_done": "✅ Готово ({count})",
+    "added": "Фото добавлено: {count}. Пришлите ещё или нажмите «Готово».",
+    "uploading": "Загружаю…",
+    "sent": "📷 Загружено фото «до»: {count}",
+    "btn_back": "↩️ К заявке",
+    "err_limit": "У заявки уже 4 фото «до» — больше нельзя",
+    "err_closed": "Заявка уже закрыта — фото «до» не добавить",
+    "err_not_yours": "Это не ваша заявка",
+    "err_photo": "Фото не подошло — пришлите другое",
+    "err_media": "Сервис фото временно недоступен — попробуйте позже",
+    "err_generic": "Не удалось загрузить фото «до»"
   }
 }
