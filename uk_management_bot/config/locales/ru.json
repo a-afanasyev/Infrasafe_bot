@@ -2670,7 +2670,8 @@
   },
   "auto_manager": {
     "assigned_notification": "🌙 <b>Вам назначена заявка (авто-менеджер)</b>\n\n№ {request_number}\nКатегория: {category}\nАдрес: {address}",
-    "no_duty_executor": "⚠️ <b>Нет дежурного исполнителя</b>\n\nЗаявка №{request_number} (специализация: {specialization}) осталась без индивидуального исполнителя — авто-менеджер не нашёл дежурного.",
+    "no_duty_digest": "⚠️ <b>Нет дежурного исполнителя</b>\n\nБез индивидуального исполнителя остались заявки ({count}) — авто-менеджер не нашёл дежурного:\n{items}",
+    "no_duty_digest_item": "• №{request_number} — {specialization}",
     "menu_load_error": "Не удалось загрузить экран автоменеджера",
     "ai_mode_hint": "ИИ-режим появится позже, работает режим по профилю.",
     "toggle_enabled_toast": "Автоменеджер включён",

@@ -2671,7 +2671,8 @@
   },
   "auto_manager": {
     "assigned_notification": "🌙 <b>Sizga ariza tayinlandi (avto-menejer)</b>\n\n№ {request_number}\nKategoriya: {category}\nManzil: {address}",
-    "no_duty_executor": "⚠️ <b>Navbatchi ijrochi topilmadi</b>\n\n№{request_number} arizasi (mutaxassislik: {specialization}) individual ijrochisiz qoldi — avto-menejer navbatchini topolmadi.",
+    "no_duty_digest": "⚠️ <b>Navbatchi ijrochi topilmadi</b>\n\nIndividual ijrochisiz qolgan arizalar ({count}) — avto-menejer navbatchini topolmadi:\n{items}",
+    "no_duty_digest_item": "• №{request_number} — {specialization}",
     "menu_load_error": "Avto-menejer ekranini yuklab bo'lmadi",
     "ai_mode_hint": "AI-rejim keyinroq qo'shiladi, hozircha profil bo'yicha rejim ishlaydi.",
     "toggle_enabled_toast": "Avto-menejer yoqildi",

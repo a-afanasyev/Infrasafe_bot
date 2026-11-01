@@ -298,7 +298,7 @@ async def test_notifies_manager_in_their_own_language_no_duty(env, monkeypatch):
 
     assert len(fake_bot.sent) == 1
     _, text = fake_bot.sent[0]
-    # UZ string for auto_manager.no_duty_executor (config/locales/uz.json).
+    # UZ-заголовок дайджеста auto_manager.no_duty_digest (config/locales/uz.json).
     assert "Navbatchi ijrochi topilmadi" in text
 
 
@@ -671,9 +671,13 @@ async def test_run_once_splits_slots_between_main_and_residual_same_tick(env, mo
     assert processed_residual == residual_numbers[:2]
     assert len(orchestrator._retry_after) == 8
 
-    # Ровно одно уведомление на заявку (dedup по request_number) — 6+2=8, не
-    # 10+10 (остальные не должны были попасть в тик вовсе).
-    assert len(fake_bot.sent) == 8
+    # Один дайджест менеджеру за тик, в нём ровно обработанные 6+2=8 заявок
+    # (dedup по request_number), а не 10+10 — остальные в тик не попали.
+    assert len(fake_bot.sent) == 1
+    text = fake_bot.sent[0][1]
+    assert "(8)" in text
+    assert all(n in text for n in main_numbers[:6] + residual_numbers[:2])
+    assert not any(n in text for n in main_numbers[6:] + residual_numbers[2:])
 
 
 def test_queues_skip_engineering_requests(env):
@@ -688,3 +692,59 @@ def test_queues_skip_engineering_requests(env):
     main = {n for (n,) in db.query(Request.request_number).filter(orch_mod._main_queue_filter())}
     assert residual == {"261027-003"}
     assert main == {"261027-005"}
+
+
+# ─────────────────────────── дайджест и срок давности ───────────────────────────
+
+@pytest.mark.asyncio
+async def test_no_duty_is_one_digest_per_manager_not_a_message_per_request(env, monkeypatch):
+    """Три заявки без дежурного, два менеджера → ровно два сообщения (по одному
+    каждому), и в каждом перечислены все три заявки. Раньше — сообщение на
+    заявку × менеджеров: залп при открытии окна."""
+    db, TestSessionLocal = env
+    _always_active_config(db)
+    monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
+
+    m1 = _manager(db, 2, 2002)
+    m2 = _manager(db, 3, 2003, language="uz")
+    numbers = ["260723-201", "260723-202", "260723-203"]
+    for i, number in enumerate(numbers):
+        _group_request(db, number, created_at=FIXED_NOW - timedelta(minutes=i))
+    # Ни одного исполнителя вовсе.
+
+    fake_bot = FakeBot()
+    orchestrator = AutoManagerOrchestrator(bot=fake_bot)
+    await orchestrator.run_once()
+
+    assert sorted(chat_id for chat_id, _ in fake_bot.sent) == sorted([m1.telegram_id, m2.telegram_id])
+    for _, text in fake_bot.sent:
+        assert all(number in text for number in numbers)
+        assert "(3)" in text
+    uz_text = next(text for chat_id, text in fake_bot.sent if chat_id == m2.telegram_id)
+    assert "Navbatchi ijrochi topilmadi" in uz_text
+
+
+@pytest.mark.asyncio
+async def test_requests_older_than_a_day_are_left_to_a_human_manager(env, monkeypatch):
+    """Зависшие «Новые»/групповые старше суток авто-менеджер не трогает и о них
+    не пишет — иначе каждую ночь при открытии окна тот же залп по тем же
+    заявкам (дедуп в памяти истекает за 12 ч)."""
+    db, TestSessionLocal = env
+    _always_active_config(db)
+    monkeypatch.setattr(orch_mod, "_now_utc", lambda: FIXED_NOW)
+
+    _manager(db, 2, 2002)
+    _residual_request(db, "260601-001", created_at=FIXED_NOW - timedelta(hours=25))
+    _group_request(db, "260601-002", created_at=FIXED_NOW - timedelta(days=40))
+    _residual_request(db, "260723-301", created_at=FIXED_NOW - timedelta(hours=23))
+    # Ни одного исполнителя вовсе.
+
+    fake_bot = FakeBot()
+    orchestrator = AutoManagerOrchestrator(bot=fake_bot)
+    await orchestrator.run_once()
+
+    assert set(orchestrator._retry_after) == {"260723-301"}
+    assert len(fake_bot.sent) == 1
+    text = fake_bot.sent[0][1]
+    assert "260723-301" in text
+    assert "260601-001" not in text and "260601-002" not in text
