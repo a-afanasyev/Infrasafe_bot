@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, true
 from sqlalchemy.orm import Session
 
 from uk_management_bot.constants.categories import get_specialization_for_category
@@ -91,6 +91,12 @@ _RETRY_COOLDOWN = timedelta(minutes=15)
 # TTL дедупа уведомлений approved-менеджерам про одну и ту же «нет дежурного».
 _NOTIFY_TTL = timedelta(hours=12)
 
+# Авто-менеджер — про свежие ночные заявки. Заявка старше суток без исполнителя
+# — уже дело живого менеджера: иначе зависшие «Новые» (на стендах — месяцами)
+# каждую ночь при открытии окна давали бы залп «нет дежурного» по всем
+# менеджерам, а дедуп в памяти (12 ч) истекал к следующему вечеру.
+_MAX_REQUEST_AGE = timedelta(hours=24)
+
 # Over-fetch батч — ограниченный (не безусловный SELECT *), но с запасом на
 # случай, что несколько первых строк батча уже in-cooldown/taken. Используется
 # И phase1 (forward-scan), и phase2 (wrap-around): если бы phase1 брал ровно
@@ -119,17 +125,13 @@ class _ExecutorNotifyJob:
 
 
 @dataclass
-class _ManagerNotifyJob:
-    recipients: list[tuple[int, str]]  # (telegram_id, language)
-    request_number: str
-    specialization: str
-
-
-@dataclass
 class _TickPlan:
     kanban_refreshes: list[str] = field(default_factory=list)
     executor_notifies: list[_ExecutorNotifyJob] = field(default_factory=list)
-    manager_notifies: list[_ManagerNotifyJob] = field(default_factory=list)
+    # «Нет дежурного» за тик — одним дайджестом каждому менеджеру, а не
+    # сообщением на заявку: (request_number, specialization).
+    no_duty: list[tuple[str, str]] = field(default_factory=list)
+    managers: list[tuple[int, str]] = field(default_factory=list)  # (telegram_id, language)
 
 
 def _now_utc() -> datetime:
@@ -137,7 +139,12 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _main_queue_filter():
+def _fresh_enough(now: Optional[datetime]):
+    """`now=None` — без отсечки (тесты предикатов); тик всегда передаёт `now`."""
+    return true() if now is None else Request.created_at >= now - _MAX_REQUEST_AGE
+
+
+def _main_queue_filter(now: Optional[datetime] = None):
     # «Новая» ОБЯЗАТЕЛЬНА в наборе: с инвариантом «В работе ⟺ есть исполнитель»
     # групповое назначение больше не двигает статус, и заявка-с-группой-без-
     # исполнителя лежит именно в «Новой». Оставь здесь один «В работе» —
@@ -148,6 +155,7 @@ def _main_queue_filter():
         pending_or_in_progress_clause,
     )
     return and_(
+        _fresh_enough(now),
         pending_or_in_progress_clause(),
         Request.executor_id.is_(None),
         Request.assignment_type == "group",
@@ -155,8 +163,9 @@ def _main_queue_filter():
     )
 
 
-def _residual_queue_filter():
+def _residual_queue_filter(now: Optional[datetime] = None):
     return and_(
+        _fresh_enough(now),
         Request.status == REQUEST_STATUS_NEW,
         Request.executor_id.is_(None),
         Request.assignment_type.is_(None),
@@ -221,8 +230,8 @@ class AutoManagerOrchestrator:
             await self._publish_kanban_refresh(request_number)
         for job in plan.executor_notifies:
             await self._send_executor_notify(job)
-        for job in plan.manager_notifies:
-            await self._send_manager_notify(job)
+        if plan.no_duty:
+            await self._send_manager_digest(plan)
 
     def _db_phase(self, now: datetime) -> Optional[_TickPlan]:
         """Sync-фаза тика: конфиг, очереди, назначения. Никаких await внутри."""
@@ -236,7 +245,7 @@ class AutoManagerOrchestrator:
 
             limit = cfg["max_requests_per_run"]
             has_residual = db.query(Request.request_number).filter(
-                _residual_queue_filter()).first() is not None
+                _residual_queue_filter(now)).first() is not None
 
             if has_residual:
                 # AUD6-P3-22: резерв residual — потолок, а не вытеснение main:
@@ -287,7 +296,7 @@ class AutoManagerOrchestrator:
 
     def _process_queue(self, db: Session, now: datetime, queue: str, slots: int,
                        snapshot, plan: _TickPlan) -> None:
-        filt = _main_queue_filter() if queue == "main" else _residual_queue_filter()
+        filt = _main_queue_filter(now) if queue == "main" else _residual_queue_filter(now)
         cursor = self._get_cursor(queue)
 
         q = db.query(Request).filter(filt)
@@ -513,11 +522,8 @@ class AutoManagerOrchestrator:
                 if ROLE_MANAGER in get_user_roles(u) and u.telegram_id
             ]
 
-        plan.manager_notifies.append(_ManagerNotifyJob(
-            recipients=list(self._managers_cache),
-            request_number=req.request_number,
-            specialization=specialization,
-        ))
+        plan.managers = list(self._managers_cache)
+        plan.no_duty.append((req.request_number, specialization))
         # Once per request (not per manager) — см. docstring класса. Метка
         # ставится в db-фазе: рассылка best-effort, а дедуп обязан сработать
         # и при частично упавшей отправке.
@@ -541,14 +547,18 @@ class AutoManagerOrchestrator:
             logger.warning("[AUTO_MANAGER] уведомление исполнителю tg=%s (заявка %s) не отправлено: %s",
                           job.telegram_id, job.request_number, e)
 
-    async def _send_manager_notify(self, job: _ManagerNotifyJob) -> None:
+    async def _send_manager_digest(self, plan: _TickPlan) -> None:
         bot = self._get_bot()
-        for telegram_id, language in job.recipients:
+        for telegram_id, language in plan.managers:
             try:
-                # Язык получателя, не жёстко "ru" — у каждого менеджера свой
-                # User.language (UZ-переводы уже добавлены в locale-файлы).
-                text = get_text("auto_manager.no_duty_executor", language=language).format(
-                    request_number=job.request_number, specialization=job.specialization,
+                items = "\n".join(
+                    get_text("auto_manager.no_duty_digest_item", language=language).format(
+                        request_number=number, specialization=html.escape(specialization),
+                    )
+                    for number, specialization in plan.no_duty
+                )
+                text = get_text("auto_manager.no_duty_digest", language=language).format(
+                    count=len(plan.no_duty), items=items,
                 )
                 # Цикл по получателям: без per-call предела медленный Telegram
                 # растягивает tick на N × session-таймаут (AUD3-09).
@@ -559,5 +569,5 @@ class AutoManagerOrchestrator:
                     request_timeout=SEND_TIMEOUT,
                 )
             except Exception as e:  # best-effort per-recipient
-                logger.warning("[AUTO_MANAGER] уведомление менеджеру tg=%s (заявка %s) не отправлено: %s",
-                              telegram_id, job.request_number, e)
+                logger.warning("[AUTO_MANAGER] дайджест менеджеру tg=%s (%d заявок) не отправлен: %s",
+                              telegram_id, len(plan.no_duty), e)
