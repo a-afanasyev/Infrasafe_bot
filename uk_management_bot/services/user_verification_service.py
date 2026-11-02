@@ -25,6 +25,9 @@ from uk_management_bot.database.models.user_verification import (
     DocumentType, VerificationStatus, AccessLevel
 )
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
+from uk_management_bot.services.residents.approval_rules import (
+    PROPERTY_DOC_TYPES, verification_refusal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,15 @@ _DOCUMENT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".pdf")
 #: Не чаще одной переподачи в сутки (первая после отказа — сразу).
 RESUBMIT_COOLDOWN = timedelta(hours=24)
 _RESUBMIT_ACTION = "resident_verification_resubmitted"
+
+
+class VerificationRefused(Exception):
+    """Правило доступа не даёт подтвердить верификацию (approval_rules).
+    `code` — ключ текста `user_mgmt.refusal.<code>` для менеджера."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
 
 
 class ResubmitResult(str, Enum):
@@ -147,7 +159,9 @@ class UserVerificationService:
     def approve_verification_db(
         self, user_id: int, admin_telegram_id: int, notes: Optional[str] = None,
     ) -> Optional[PurgeResult]:
-        """Одобрить верификацию одним commit (см. `_decide_verification`)."""
+        """Одобрить верификацию одним commit (см. `_decide_verification`).
+
+        Без документа на квартиру — `VerificationRefused`."""
         return self._decide_verification(user_id, admin_telegram_id, approve=True, notes=notes)
 
     def reject_verification(
@@ -174,6 +188,17 @@ class UserVerificationService:
         if admin is None or user is None or user.verification_status not in _DECIDABLE_FROM:
             self.db.rollback()
             return None
+        if approve:
+            # Документ на квартиру обязателен; очной проверки в боте нет —
+            # её отмечают в дашборде. Считать — ДО purge.
+            has_doc = self.db.query(UserDocument).filter(
+                UserDocument.user_id == user_id,
+                UserDocument.document_type.in_(PROPERTY_DOC_TYPES),
+            ).count() > 0
+            refusal = verification_refusal(has_property_doc=has_doc)
+            if refusal is not None:
+                self.db.rollback()
+                raise VerificationRefused(refusal)
         try:
             purge = purge_documents_sync(self.db, user)
             now = datetime.now(timezone.utc)

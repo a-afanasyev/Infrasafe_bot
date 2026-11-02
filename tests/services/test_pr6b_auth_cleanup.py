@@ -2,12 +2,11 @@
 
 CODE-05 — выборка жителей идёт по реальной роли 'applicant'
 (мёртвая ветка 'resident' удалена), заявители видны менеджеру.
-CODE-10 — auto_approve_user ДОБАВЛЯЕТ роль в непустой roles-массив
-(раньше непустой массив не трогался — роль терялась).
+(CODE-10 проверял `auto_approve_user` — удалён вместе с само-одобрением
+`/login` 2026-11-03; добавление роли в непустой массив делает `assign_role`.)
 
 Реальный sqlite (create_all) — мок не ловит семантику SQL-фильтров.
 """
-import json
 
 import pytest
 from sqlalchemy import create_engine
@@ -16,7 +15,6 @@ from sqlalchemy.pool import StaticPool
 
 from uk_management_bot.database.session import Base
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.user_management_service import UserManagementService
 
 
@@ -92,49 +90,3 @@ class TestApplicantSelection:
 
         assert stats["pending"] == 1
         assert stats["approved"] == 1
-
-
-# ── CODE-10 ───────────────────────────────────────────────────────────
-
-
-class TestAutoApproveRolesConsistency:
-    @pytest.mark.asyncio
-    async def test_appends_role_to_non_empty_roles(self, session):
-        """Роль добавляется в НЕпустой roles-массив (как в process_invite_join)."""
-        _add_user(session, user_id=1, telegram_id=101, roles='["executor"]',
-                  active_role="executor", status="pending")
-
-        svc = AuthService(session)
-        ok = await svc.auto_approve_user(101, "applicant")
-
-        assert ok is True
-        user = session.query(User).get(1)
-        assert user.status == "approved"
-        assert set(json.loads(user.roles)) == {"executor", "applicant"}
-        # активная роль уже была — не перетирается
-        assert user.active_role == "executor"
-
-    @pytest.mark.asyncio
-    async def test_initializes_empty_roles(self, session):
-        _add_user(session, user_id=1, telegram_id=101, roles=None,
-                  active_role=None, status="pending")
-
-        svc = AuthService(session)
-        ok = await svc.auto_approve_user(101, "executor")
-
-        assert ok is True
-        user = session.query(User).get(1)
-        assert json.loads(user.roles) == ["executor"]
-        assert user.active_role == "executor"
-
-    @pytest.mark.asyncio
-    async def test_role_already_present_is_not_duplicated(self, session):
-        _add_user(session, user_id=1, telegram_id=101, roles='["applicant"]',
-                  status="pending")
-
-        svc = AuthService(session)
-        ok = await svc.auto_approve_user(101, "applicant")
-
-        assert ok is True
-        user = session.query(User).get(1)
-        assert json.loads(user.roles) == ["applicant"]

@@ -4,11 +4,11 @@ from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents_sync
 from uk_management_bot.services.users.privileged import is_privileged_target
+from uk_management_bot.services.residents.approval_rules import account_refusal
 from uk_management_bot.authz.catalog import is_menu_mode
 from uk_management_bot.authz.role_set import BOT_ASSIGNABLE_ROLES, role_set_error
-from uk_management_bot.config.settings import settings
 from dataclasses import dataclass
-from typing import List
+from typing import List, Literal
 import logging
 import secrets
 import json
@@ -21,6 +21,10 @@ from uk_management_bot.utils.auth_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Итог одобрения из бота: "ok" или код отказа правила доступа (approval_rules).
+ApproveResult = Literal["ok", "phone_required", "verification_required", "error"]
+UnblockResult = Literal["approved", "pending", "error"]
 
 # Роли — корень доверия: их выдаёт уже доверенный пользователь (инвайт/сид/пароль),
 # поэтому они не проходят гейт верификации и не должны висеть в очереди одобрения.
@@ -108,37 +112,6 @@ class AuthService:
             first_name=first_name,
             last_name=last_name,
         )
-
-    def auto_approve_user_sync(self, telegram_id: int, role: str = "applicant") -> bool:
-        """Одобрить пользователя (sync-ядро).
-
-        AUD3-07/AUD5-ARCH-1: тело целиком синхронно; async-обёртка ниже
-        сохраняет контракт для неконвертированных вызывающих.
-        """
-        if role not in settings.USER_ROLES:
-            return False
-            
-        user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
-        if user:
-            user.status = "approved"
-            sync_legacy_role(user, role)
-            # CODE-10: добавляем роль в roles-массив и при непустом
-            # (логика как в process_invite_join), а не только при пустом.
-            current_roles = parse_roles_safe(user.roles)  # COD-01: JSON+CSV
-            if role not in current_roles:
-                current_roles.append(role)
-                user.roles = json.dumps(current_roles)
-            if not user.active_role or user.active_role.strip() == "":
-                user.active_role = role
-            _enforce_trusted_verification(self.db, user, [role])
-            self.db.commit()
-            logger.info(f"Пользователь {telegram_id} одобрен с ролью {role}")
-            return True
-        return False
-
-    async def auto_approve_user(self, telegram_id: int, role: str = "applicant") -> bool:
-        """Одобрить пользователя (async-обёртка над sync-ядром)."""
-        return self.auto_approve_user_sync(telegram_id=telegram_id, role=role)
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> User:
         """Получить пользователя по Telegram ID"""
@@ -241,29 +214,28 @@ class AuthService:
 
     # ═══ МЕТОДЫ МОДЕРАЦИИ ПОЛЬЗОВАТЕЛЕЙ ═══
     
-    def approve_user(self, user_id: int, approved_by: int, comment: str = "") -> bool:
-        """
-        Одобрить пользователя (pending -> approved)
-        
-        Args:
-            user_id: ID пользователя для одобрения
-            approved_by: ID менеджера, который одобряет
-            comment: Комментарий к одобрению
-            
-        Returns:
-            True если операция успешна
+    def approve_user(self, user_id: int, approved_by: int, comment: str = "") -> "ApproveResult":
+        """Одобрить пользователя (pending -> approved).
+
+        -> "ok" | код отказа правила доступа ("phone_required",
+        "verification_required") | "error". Сравнивать ТОЛЬКО с "ok":
+        любой код — непустая строка, и `if result:` принял бы отказ за успех.
         """
         try:
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для одобрения")
-                return False
-            
-            # Проверяем текущий статус
+                return "error"
             if user.status == 'approved':
                 logger.info(f"Пользователь {user_id} уже одобрен")
-                return True
-            
+                return "ok"
+            # Отказ — возвращаемый код, не исключение: общий except ниже его
+            # не проглотит и не превратит в безликий "error".
+            refusal = account_refusal(user)
+            if refusal is not None:
+                logger.info(f"Одобрение {user_id} отклонено правилом доступа: {refusal}")
+                return refusal
+
             old_status = user.status
             user.status = 'approved'
             
@@ -284,12 +256,12 @@ class AuthService:
             self.db.commit()
             
             logger.info(f"Пользователь {user_id} одобрен менеджером {approved_by}")
-            return True
-            
+            return "ok"
+
         except Exception as e:
             logger.error(f"Ошибка одобрения пользователя {user_id}: {e}")
             self.db.rollback()
-            return False
+            return "error"
     
     @staticmethod
     def _refuse_privileged(user: User, action: str) -> bool:
@@ -355,34 +327,30 @@ class AuthService:
             self.db.rollback()
             return False
     
-    def unblock_user(self, user_id: int, unblocked_by: int, comment: str = "") -> bool:
-        """
-        Разблокировать пользователя (blocked -> approved)
-        
-        Args:
-            user_id: ID пользователя для разблокировки
-            unblocked_by: ID менеджера, который разблокирует
-            comment: Комментарий к разблокировке
-            
-        Returns:
-            True если операция успешна
+    def unblock_user(self, user_id: int, unblocked_by: int, comment: str = "") -> "UnblockResult":
+        """Разблокировать пользователя.
+
+        -> "approved" | "pending" | "error". Житель без телефона или без
+        подтверждённой верификации уходит в "pending" (вернётся в онбординг) —
+        то же правило, что у API `residents.core.unblock_account`.
         """
         try:
             user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 logger.warning(f"Пользователь {user_id} не найден для разблокировки")
-                return False
+                return "error"
             if self._refuse_privileged(user, "разблокировка"):
-                return False
+                return "error"
 
             # Проверяем текущий статус
             if user.status != 'blocked':
                 logger.warning(f"Пользователь {user_id} не заблокирован (статус: {user.status})")
-                return False
-            
+                return "error"
+
             old_status = user.status
-            user.status = 'approved'  # Разблокированные пользователи автоматически одобряются
-            
+            new_status = "pending" if account_refusal(user) else "approved"
+            user.status = new_status
+
             # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(
                 action="user_unblocked",
@@ -391,21 +359,21 @@ class AuthService:
                 details=json.dumps({
                     "target_user_id": user_id,
                     "old_status": old_status,
-                    "new_status": "approved",
+                    "new_status": new_status,
                     "comment": comment,
                     "timestamp": str(self.db.execute(func.now()).scalar())
                 })
             )
             self.db.add(audit)
             self.db.commit()
-            
-            logger.info(f"Пользователь {user_id} разблокирован менеджером {unblocked_by}")
-            return True
-            
+
+            logger.info(f"Пользователь {user_id} разблокирован менеджером {unblocked_by} → {new_status}")
+            return new_status
+
         except Exception as e:
             logger.error(f"Ошибка разблокировки пользователя {user_id}: {e}")
             self.db.rollback()
-            return False
+            return "error"
     
     def assign_role(self, user_id: int, role: str, assigned_by: int, comment: str = "",
                     commit: bool = True) -> bool:

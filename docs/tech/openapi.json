@@ -4760,6 +4760,18 @@
             ],
             "title": "Phone"
           },
+          "phone_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Requested At"
+          },
           "roles": {
             "default": [],
             "items": {
@@ -4871,6 +4883,18 @@
               }
             ],
             "title": "Phone"
+          },
+          "phone_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Requested At"
           },
           "rating": {
             "anyOf": [
@@ -9641,6 +9665,18 @@
             ],
             "title": "Phone"
           },
+          "phone_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Requested At"
+          },
           "primary_address": {
             "anyOf": [
               {
@@ -9987,6 +10023,11 @@
         "additionalProperties": false,
         "description": "Необязательная заметка при подтверждении личности.",
         "properties": {
+          "in_person": {
+            "default": false,
+            "title": "In Person",
+            "type": "boolean"
+          },
           "notes": {
             "anyOf": [
               {
@@ -10909,6 +10950,16 @@
       },
       "StartOut": {
         "properties": {
+          "company_name": {
+            "default": "",
+            "title": "Company Name",
+            "type": "string"
+          },
+          "complex_name": {
+            "default": "",
+            "title": "Complex Name",
+            "type": "string"
+          },
           "prefill": {
             "$ref": "#/components/schemas/Prefill"
           },
@@ -22502,7 +22553,9 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ResidentVerificationNotesIn",
-                "default": {}
+                "default": {
+                  "in_person": false
+                }
               }
             }
           }

@@ -18,8 +18,12 @@ def _make_user(
     roles='["applicant"]',
     active_role="applicant",
     language="ru",
+    phone="+998901234567",
+    verification_status="verified",
 ):
     user = MagicMock()
+    user.phone = phone
+    user.verification_status = verification_status
     user.id = user_id
     user.telegram_id = telegram_id
     user.status = status
@@ -106,55 +110,6 @@ class TestGetOrCreateUser:
 
 
 # ---------------------------------------------------------------------------
-# auto_approve_user  (async)
-# ---------------------------------------------------------------------------
-
-class TestAutoApproveUser:
-    @pytest.mark.asyncio
-    async def test_approves_user_with_valid_role(self):
-        user = _make_user(status="pending")
-        db = _make_db(user=user)
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.USER_ROLES = ["applicant", "executor", "manager"]
-            service = AuthService(db)
-            result = await service.auto_approve_user(100, "executor")
-
-        assert result is True
-        assert user.status == "approved"
-        # PR-31/DB-060: legacy .role dropped — approval adds the role to roles JSON.
-        assert "executor" in json.loads(user.roles)
-
-    @pytest.mark.asyncio
-    async def test_returns_false_for_invalid_role(self):
-        db = _make_db()
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.USER_ROLES = ["applicant", "executor", "manager"]
-            service = AuthService(db)
-            result = await service.auto_approve_user(100, "superadmin")
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_returns_false_when_user_not_found(self):
-        db = _make_db(user=None)
-
-        with patch(
-            "uk_management_bot.services.auth_service.settings"
-        ) as mock_settings:
-            mock_settings.USER_ROLES = ["applicant", "executor", "manager"]
-            service = AuthService(db)
-            result = await service.auto_approve_user(999, "applicant")
-
-        assert result is False
-
-
-# ---------------------------------------------------------------------------
 # approve_user  (sync)
 # ---------------------------------------------------------------------------
 
@@ -189,9 +144,31 @@ class TestApproveUser:
         service = AuthService(db)
         result = service.approve_user(1, approved_by=2)
 
-        assert result is True
+        assert result == "ok"
         assert user.status == "approved"
         db.commit.assert_called()
+
+    @pytest.mark.parametrize("phone,verification,code", [
+        (None, "verified", "phone_required"),
+        ("+998901234567", "pending", "verification_required"),
+    ])
+    def test_refuses_incomplete_resident(self, phone, verification, code):
+        """Правило доступа: отказ — код (не False/«error»), статус не меняется."""
+        user = _make_user(status="pending", phone=phone, verification_status=verification)
+        db = self._db_for_approve(user)
+
+        result = AuthService(db).approve_user(1, approved_by=2)
+
+        assert result == code
+        assert user.status == "pending"
+        db.commit.assert_not_called()
+
+    def test_staff_is_not_subject_to_resident_rule(self):
+        user = _make_user(status="pending", roles='["executor"]', phone=None,
+                          verification_status="pending")
+        db = self._db_for_approve(user)
+
+        assert AuthService(db).approve_user(1, approved_by=2) == "ok"
 
     def test_returns_true_if_already_approved(self):
         user = _make_user(status="approved")
@@ -200,24 +177,24 @@ class TestApproveUser:
         service = AuthService(db)
         result = service.approve_user(1, approved_by=2)
 
-        assert result is True
+        assert result == "ok"
 
-    def test_returns_false_when_user_not_found(self):
+    def test_returns_error_when_user_not_found(self):
         db = _make_db(user=None)
 
         service = AuthService(db)
         result = service.approve_user(999, approved_by=2)
 
-        assert result is False
+        assert result == "error"
 
-    def test_returns_false_on_db_exception(self):
+    def test_returns_error_on_db_exception(self):
         db = MagicMock()
         db.query.side_effect = Exception("DB error")
 
         service = AuthService(db)
         result = service.approve_user(1, approved_by=2)
 
-        assert result is False
+        assert result == "error"
         db.rollback.assert_called()
 
 
@@ -302,25 +279,38 @@ class TestUnblockUser:
         service = AuthService(db)
         result = service.unblock_user(1, unblocked_by=2)
 
-        assert result is True
+        assert result == "approved"
         assert user.status == "approved"
 
-    def test_returns_false_when_not_blocked(self):
+    def test_incomplete_resident_returns_to_pending(self):
+        """Без телефона житель после разблокировки — в онбординг, не в доступ;
+        аудит пишет фактический статус."""
+        user = _make_user(status="blocked", phone=None)
+        db = self._db_for_unblock(user)
+
+        result = AuthService(db).unblock_user(1, unblocked_by=2)
+
+        assert result == "pending"
+        assert user.status == "pending"
+        audit = db.add.call_args.args[0]
+        assert json.loads(audit.details)["new_status"] == "pending"
+
+    def test_returns_error_when_not_blocked(self):
         user = _make_user(status="approved")
         db = _make_db(user=user)
 
         service = AuthService(db)
         result = service.unblock_user(1, unblocked_by=2)
 
-        assert result is False
+        assert result == "error"
 
-    def test_returns_false_when_user_not_found(self):
+    def test_returns_error_when_user_not_found(self):
         db = _make_db(user=None)
 
         service = AuthService(db)
         result = service.unblock_user(999, unblocked_by=2)
 
-        assert result is False
+        assert result == "error"
 
 
 # ---------------------------------------------------------------------------

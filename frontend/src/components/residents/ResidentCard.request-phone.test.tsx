@@ -43,4 +43,12 @@ describe('ResidentCard — запрос номера телефона', () => {
     expect(screen.getByText('+998901112233')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Запросить номер/ })).not.toBeInTheDocument()
   })
+
+  it('факт запроса с сервера переживает перезагрузку страницы', () => {
+    // Раньше «Запрос отправлен» жил только в состоянии мутации и пропадал по F5.
+    render(<ResidentCard resident={makeResident({ phone_requested_at: '2026-11-03T10:00:00Z' })} />)
+    expect(screen.getByText(/Номер запрошен · 03\.11\.2026/)).toBeInTheDocument()
+    // Повторный запрос остаётся доступен.
+    expect(screen.getByRole('button', { name: /Запросить номер/ })).not.toBeDisabled()
+  })
 })

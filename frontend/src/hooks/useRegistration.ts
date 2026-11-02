@@ -28,6 +28,9 @@ export interface RegistrationApartment {
 export interface RegistrationStart {
   registration_ticket: string
   prefill: { first_name?: string; last_name?: string; phone?: string | null }
+  /** Имена площадки для приветствия (настройки бэка; пусто — без имени). */
+  complex_name?: string
+  company_name?: string
 }
 
 /** Телефон в теле не передаётся: сервер берёт users.phone, который бот

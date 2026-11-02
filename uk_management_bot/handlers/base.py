@@ -43,7 +43,10 @@ from uk_management_bot.services.notification_service import (
 )
 from uk_management_bot.utils.helpers import get_text, get_user_language
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
-from uk_management_bot.keyboards.documents_entry import get_resubmit_inline
+from uk_management_bot.keyboards.documents_entry import (
+    get_resubmit_inline, get_upload_documents_inline,
+)
+from uk_management_bot.services.residents.approval_rules import PROPERTY_DOC_TYPES
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.filters import RoleFilter
@@ -107,6 +110,46 @@ class _MenuContext:
     has_any_apartment: bool
     db_roles: list
     active_role: Optional[str]
+    # Документ на квартиру обязателен (2026-11-03): без него онбординг жителя
+    # не закончен, пока менеджер не подтвердил проверку.
+    has_property_doc: bool = False
+    verification_status: Optional[str] = None
+
+
+#: Проверка закрыта решением менеджера — документ больше не нужен (verified)
+#: или ведёт переподача (rejected, `offer_resubmit_if_rejected`).
+_VERIFICATION_DECIDED = frozenset({"verified", "rejected"})
+#: Проверка открыта — загрузка документа принимается (зеркало _DECIDABLE_FROM).
+_VERIFICATION_OPEN = frozenset({"pending", "requested"})
+
+
+def _profile_complete(ctx: _MenuContext) -> bool:
+    """Онбординг жителя закончен: телефон, подтверждённая квартира и документ
+    на квартиру (или проверка уже решена). ОДИН предикат для /start,
+    needs_onboarding_redraw и экрана онбординга."""
+    return bool(
+        ctx.phone and ctx.has_approved_apartment
+        and (ctx.has_property_doc or ctx.verification_status in _VERIFICATION_DECIDED)
+    )
+
+
+def _needs_document_upload(ctx: _MenuContext) -> bool:
+    """Предложить inline-кнопку загрузки документа: квартира уже выбрана
+    (любой статус), документа на квартиру нет, проверка открыта."""
+    return bool(
+        ctx.phone and ctx.has_any_apartment and not ctx.has_property_doc
+        and ctx.verification_status in _VERIFICATION_OPEN
+    )
+
+
+def onboarding_welcome_text(lang: str) -> str:
+    """Приветствие жителя с именем ЖК и УК из настроек площадки."""
+    # Бот шлёт с parse_mode=HTML: «A&B» в имени сломал бы доставку.
+    complex_name = html.escape(settings.RESIDENTIAL_COMPLEX_NAME)
+    company = (html.escape(settings.MANAGEMENT_COMPANY_NAME)
+               or get_text("onboarding.company_default", language=lang))
+    return get_text("onboarding.welcome_resident", language=lang,
+                    complex=f" {complex_name}" if complex_name else "", company=company)
 
 
 def _menu_context(user) -> _MenuContext:
@@ -124,6 +167,8 @@ def _menu_context(user) -> _MenuContext:
         # COD-01: канонический парсер ролей (JSON+CSV)
         db_roles=parse_roles_safe(getattr(user, "roles", None)),
         active_role=getattr(user, "active_role", None),
+        has_property_doc=any(d.document_type in PROPERTY_DOC_TYPES for d in (user.documents or [])),
+        verification_status=getattr(user, "verification_status", None),
     )
 
 
@@ -474,7 +519,7 @@ def needs_onboarding_redraw(ctx: Optional[_MenuContext]) -> bool:
     return (
         ctx.status == "pending"
         and (ctx.db_roles or ["applicant"]) == ["applicant"]
-        and not (ctx.phone and ctx.has_approved_apartment)
+        and not _profile_complete(ctx)
     )
 
 
@@ -495,6 +540,16 @@ async def send_onboarding_screen(message: Message, tg_user, language: str = "ru"
     )
     text, keyboard = _build_onboarding_screen(ctx, language)
     await message.answer(text, reply_markup=keyboard)
+    await _offer_document_upload(message, ctx, language)
+
+
+async def _offer_document_upload(message: Message, ctx: _MenuContext, lang: str) -> None:
+    """Отдельное сообщение с inline-кнопкой загрузки документа — надёжный
+    повторный вход через /start (после TWA, потерянного сообщения, сбоя
+    доставки). Экран онбординга остаётся только текстом + reply-клавиатурой."""
+    if _needs_document_upload(ctx):
+        await message.answer(get_text("onboarding.documents.description", language=lang),
+                             reply_markup=get_upload_documents_inline(lang))
 
 
 def _build_onboarding_screen(ctx: _MenuContext, lang: str):
@@ -504,15 +559,14 @@ def _build_onboarding_screen(ctx: _MenuContext, lang: str):
     колбэк «Я житель» зовёт эту же сборку. Собственная копия экрана незаметно
     потеряла бы WebApp-кнопку регистрации при следующей правке.
     """
-    welcome_text = get_text("onboarding.welcome_new_user", language=lang)
-    welcome_text += f"\n\n{get_text('onboarding.profile_incomplete', language=lang)}"
+    welcome_text = onboarding_welcome_text(lang)
 
     # Клавиатура онбординга. Телефон — ТОЛЬКО из Telegram-контакта (спека
     # 2026-09-03): без телефона единственный шаг — «Поделиться контактом»
     # (request_contact), «Выбрать квартиру» появляется после него. Контакт
     # приходит без FSM-состояния и обрабатывается handlers/phone_share.py.
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    if ctx.phone and ctx.has_approved_apartment:
+    if _profile_complete(ctx):
         return welcome_text, None
 
     if not ctx.phone:
@@ -557,8 +611,7 @@ async def handle_regular_start(message: Message, roles: list[str] = None, active
     # Проверяем, нужен ли онбординг
     lang = language
 
-    has_approved_apartment = ctx.has_approved_apartment
-    is_profile_complete = ctx.phone and has_approved_apartment
+    is_profile_complete = _profile_complete(ctx)
 
     if offer_role_choice and _needs_role_choice(ctx):
         # Первый вход: пока не спросим, человек молча уйдёт в жители — ровно то,
@@ -574,6 +627,7 @@ async def handle_regular_start(message: Message, roles: list[str] = None, active
         welcome_text, onboarding_keyboard = _build_onboarding_screen(ctx, lang)
         if onboarding_keyboard is not None:
             await message.answer(welcome_text, reply_markup=onboarding_keyboard)
+            await _offer_document_upload(message, ctx, lang)
             logger.info(f"Новый пользователь {message.from_user.id} начал онбординг")
             return
 

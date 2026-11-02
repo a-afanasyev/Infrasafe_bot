@@ -203,12 +203,6 @@ def _init_button_texts() -> dict:
         fallback_text="Shift History"
     )
 
-    # Auth
-    button_texts['login'] = get_button_texts_for_all_languages(
-        "auth.login_button",
-        fallback_text="🔑 Войти"
-    )
-
     # WebApp-кнопки (reply-текст → inline web_app; см. handlers/webapp_buttons.py).
     # Ключи ТЕ ЖЕ, что рисуют handlers/base.py и keyboards/base.py.
     button_texts['register_webapp'] = get_button_texts_for_all_languages(
@@ -542,10 +536,6 @@ def get_shift_history_texts() -> List[str]:
         List[str]: Список текстов на всех поддерживаемых языках
     """
     return BUTTON_TEXTS.get('shift_history', ["Shift History"])
-
-
-def get_login_texts() -> List[str]:
-    return BUTTON_TEXTS.get('login', ["🔑 Войти"])
 
 
 def get_select_apartment_texts() -> List[str]:

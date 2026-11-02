@@ -51,7 +51,17 @@ logger = logging.getLogger(__name__)
 # Роли, при которых блокировка из раздела «Жители» безопасна (Т2).
 # `resource_meter_entry` — капабилити, а не рабочая роль: контролёр показаний
 # остаётся жителем, и его блокировка не отнимает ничьих рабочих доступов.
-PURE_APPLICANT_ROLES = frozenset({"applicant", "resource_meter_entry"})
+# Определение — в approval_rules (общее с правилом доступа), здесь реэкспорт.
+from uk_management_bot.services.residents.approval_rules import (  # noqa: E402
+    PURE_APPLICANT_ROLES, account_refusal,
+)
+
+
+#: Тексты отказа для лога/старых клиентов; UI переводит по коду (X-Error-Code).
+_ACCOUNT_REFUSAL_TEXT = {
+    "phone_required": "Нельзя одобрить без телефона — запросите номер у жителя",
+    "verification_required": "Сначала подтвердите верификацию (документ на квартиру)",
+}
 
 
 # ───────────────────────── общие помощники ─────────────────────────
@@ -251,6 +261,9 @@ async def approve_account(
             f"Одобрить можно только аккаунт в статусе «ожидает» (сейчас: {resident.status})",
             code="not_pending",
         )
+    refusal = account_refusal(resident)
+    if refusal is not None:
+        raise ResidentConflict(_ACCOUNT_REFUSAL_TEXT[refusal], code=refusal)
 
     old_status = resident.status
     result = await set_user_status(db, resident, "approved", commit=False)
@@ -284,7 +297,9 @@ async def block_account(
 
 
 async def unblock_account(db: AsyncSession, *, resident_id: int, actor_id: int) -> User:
-    """`blocked → approved`. Из любого другого статуса — 409 (Т13)."""
+    """`blocked → approved`, а без телефона или подтверждённой верификации —
+    `blocked → pending` (житель вернётся в онбординг). Из любого другого
+    статуса — 409 (Т13)."""
     resident = await _lock_and_require_resident(db, resident_id)
     _ensure_pure_applicant(resident)
     if resident.status != "blocked":
@@ -292,11 +307,12 @@ async def unblock_account(db: AsyncSession, *, resident_id: int, actor_id: int) 
             f"Аккаунт не заблокирован (статус: {resident.status})", code="not_blocked",
         )
 
-    result = await set_user_status(db, resident, "approved", commit=False)
+    new_status = "pending" if account_refusal(resident) else "approved"
+    result = await set_user_status(db, resident, new_status, commit=False)
     _audit(db, action="user_unblocked", actor_id=actor_id, resident=resident,
-           details={"old_status": "blocked", "new_status": "approved"})
+           details={"old_status": "blocked", "new_status": new_status})
     await _finish(db, event=result["event"], payload=result["payload"])
-    logger.info("Житель %s разблокирован менеджером %s", resident_id, actor_id)
+    logger.info("Житель %s разблокирован менеджером %s → %s", resident_id, actor_id, new_status)
     return resident
 
 

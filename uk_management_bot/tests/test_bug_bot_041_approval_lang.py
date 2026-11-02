@@ -52,7 +52,7 @@ async def test_process_approval_comment_notifies_in_user_language(monkeypatch):
     target_user = _uz_target_user()
 
     fake_auth = MagicMock()
-    fake_auth.approve_user = MagicMock(return_value=True)
+    fake_auth.approve_user = MagicMock(return_value="ok")  # ApproveResult
     monkeypatch.setattr(um.fsm, "AuthService", MagicMock(return_value=fake_auth))
 
     fake_mgmt = MagicMock()

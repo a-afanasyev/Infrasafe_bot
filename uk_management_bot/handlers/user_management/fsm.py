@@ -15,7 +15,7 @@ user_mgmt_back_to_list:248). Мёртвых нет.
 """
 import html
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from aiogram import F
@@ -56,6 +56,10 @@ class _ModerationResult:
     actions_keyboard: object = None
     target_telegram_id: Optional[int] = None
     target_language: Optional[str] = None
+    #: Код отказа правила доступа (approval_rules) — для текста менеджеру.
+    refusal: Optional[str] = None
+    #: Фактический статус после разблокировки: approved | pending.
+    new_status: Optional[str] = None
 
 
 def _user_card(db, user_mgmt_service, target_user_id: int, lang: str):
@@ -78,10 +82,10 @@ def _apply_approval(db, target_user_id: int, manager_id: int, comment: str, lang
     """Одобряет пользователя. -> результат с карточкой (или success=False)."""
     # Выполняем одобрение
     auth_service = AuthService(db)
-    success = auth_service.approve_user(target_user_id, manager_id, comment)
+    result = auth_service.approve_user(target_user_id, manager_id, comment)
 
-    if not success:
-        return _ModerationResult(success=False)
+    if result != "ok":
+        return _ModerationResult(success=False, refusal=None if result == "error" else result)
 
     # Получаем обновленную информацию о пользователе
     user_mgmt_service = UserManagementService(db)
@@ -105,13 +109,13 @@ def _apply_unblock(db, target_user_id: int, manager_id: int, comment: str, lang:
     """Разблокирует пользователя. -> результат с карточкой (или success=False)."""
     # Выполняем разблокировку
     auth_service = AuthService(db)
-    success = auth_service.unblock_user(target_user_id, manager_id, comment)
+    new_status = auth_service.unblock_user(target_user_id, manager_id, comment)
 
-    if not success:
+    if new_status == "error":
         return _ModerationResult(success=False)
 
     user_mgmt_service = UserManagementService(db)
-    return _user_card(db, user_mgmt_service, target_user_id, lang)
+    return replace(_user_card(db, user_mgmt_service, target_user_id, lang), new_status=new_status)
 
 
 def _apply_delete(db, target_user_id: int, manager_id: int, reason: str):
@@ -267,6 +271,8 @@ async def process_approval_comment(message: Message, state: FSMContext, language
                 result.user_info,
                 reply_markup=result.actions_keyboard
             )
+        elif result.refusal:
+            await message.answer(get_text(f'user_mgmt.refusal.{result.refusal}', language=lang))
         else:
             await message.answer(
                 get_text('moderation.operation_failed', language=lang)
@@ -354,8 +360,12 @@ async def process_unblock_comment(message: Message, state: FSMContext, language:
         )
 
         if result.success:
+            # Без телефона/подтверждённой верификации житель возвращается в
+            # онбординг (pending), а не получает доступ — менеджер должен это видеть.
+            key = ('moderation.user_unblocked_to_pending' if result.new_status == "pending"
+                   else 'moderation.user_unblocked_successfully')
             await message.answer(
-                get_text('moderation.user_unblocked_successfully', language=lang).format(
+                get_text(key, language=lang).format(
                     user_name=html.escape(result.user_name or "")
                 )
             )

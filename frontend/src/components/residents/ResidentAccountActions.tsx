@@ -42,6 +42,13 @@ export default function ResidentAccountActions({ resident }: Props) {
   const canBlock = isPureResident
   const isBlocked = resident.status === 'blocked'
   const busy = approve.isPending || block.isPending || unblock.isPending
+  // Правило доступа (бэкенд services/residents/approval_rules.py): жителю
+  // нужны телефон и подтверждённая верификация (документ на квартиру).
+  const approveBlocker = !resident.phone
+    ? 'residents.refusal.phone_required'
+    : resident.verification_status !== 'verified'
+      ? 'residents.refusal.verification_required'
+      : null
 
   return (
     <div className="bg-bg-card border border-border-default rounded-default p-5 flex flex-col gap-3">
@@ -51,7 +58,8 @@ export default function ResidentAccountActions({ resident }: Props) {
 
       <div className="flex gap-2 flex-wrap">
         {canApprove && resident.status === 'pending' && (
-          <Button size="sm" disabled={busy} onClick={() => approve.mutate({})}>
+          <Button size="sm" disabled={busy || approveBlocker !== null}
+                  onClick={() => approve.mutate({})}>
             {t('residents.approveAccount')}
           </Button>
         )}
@@ -72,6 +80,10 @@ export default function ResidentAccountActions({ resident }: Props) {
           </Button>
         )}
       </div>
+
+      {canApprove && resident.status === 'pending' && approveBlocker && (
+        <p className="text-[11px] text-text-muted m-0">{t(approveBlocker)}</p>
+      )}
 
       {!isPureResident && (
         <p className="text-[11px] text-text-muted m-0">

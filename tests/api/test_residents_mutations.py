@@ -62,9 +62,13 @@ async def address(db_session: AsyncSession):
     return apts
 
 
-async def _resident(db, tg, *, roles='["applicant"]', status="pending") -> User:
+async def _resident(db, tg, *, roles='["applicant"]', status="pending",
+                    phone="+998901234567", verification="verified") -> User:
+    # По умолчанию — житель, которому доступ дать можно (телефон + проверенный
+    # документ); отказы правила доступа — в TestAccountApprovalRule.
     u = User(telegram_id=tg, first_name="Ж", last_name=str(tg), roles=roles,
-             active_role="applicant", status=status, language="ru")
+             active_role="applicant", status=status, language="ru",
+             phone=phone, verification_status=verification)
     db.add(u)
     await db.commit()
     await db.refresh(u)
@@ -152,6 +156,37 @@ class TestAccountStateMachine:
 
 
 # ═══════════════════════ Т2: блокировка мультиролевых ═══════════════════════
+
+
+class TestAccountApprovalRule:
+    """Решение владельца 2026-11-03: доступ жителю — только с телефоном и
+    подтверждённой верификацией (документ на квартиру). Код отказа — в
+    X-Error-Code, по нему фронт переводит текст."""
+
+    async def test_no_phone_conflicts(self, client: AsyncClient, db_session: AsyncSession):
+        resident = await _resident(db_session, 4151, phone=None)
+        r = await client.post(f"{BASE}/{resident.id}/approve", json={})
+        assert r.status_code == 409
+        assert r.headers["X-Error-Code"] == "phone_required"
+
+    async def test_unverified_conflicts(self, client: AsyncClient, db_session: AsyncSession):
+        resident = await _resident(db_session, 4152, verification="pending")
+        r = await client.post(f"{BASE}/{resident.id}/approve", json={})
+        assert r.status_code == 409
+        assert r.headers["X-Error-Code"] == "verification_required"
+
+    async def test_unblock_incomplete_returns_to_pending(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        resident = await _resident(db_session, 4153, status="blocked", phone=None)
+        r = await client.post(f"{BASE}/{resident.id}/unblock")
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "pending"
+        row = (await db_session.execute(
+            select(AuditLog).where(AuditLog.action == "user_unblocked")
+        )).scalars().one()
+        details = row.details if isinstance(row.details, dict) else __import__("json").loads(row.details)
+        assert details["new_status"] == "pending"
 
 
 class TestBlockGuard:

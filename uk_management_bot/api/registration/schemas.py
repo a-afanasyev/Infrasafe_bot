@@ -47,6 +47,9 @@ class Prefill(BaseModel):
 class StartOut(BaseModel):
     registration_ticket: str
     prefill: Prefill
+    # Приветствие формы — те же настройки площадки, что у бота (пусто = без имени).
+    complex_name: str = ""
+    company_name: str = ""
 
 
 class RegisterApplicantIn(BaseModel):

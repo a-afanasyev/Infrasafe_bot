@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import i18n from '../i18n'
-import { safeErrorMessage } from '@/utils/errorMessage'
+import { apiErrorCode, safeErrorMessage } from '@/utils/errorMessage'
 import { apiClient } from '../api/client'
 import { useWebSocket } from './useWebSocket'
 import type {
@@ -84,10 +84,20 @@ export function useResident(id: number | null) {
 // Пропустишь один — менеджер увидит расхождение между экранами и не поймёт,
 // какому верить. Ключи адресных кэшей параметризованы (id дома, фильтры),
 // поэтому инвалидируются по префиксу — точный id знать неоткуда и не нужно.
+/** Текст отказа: машинный код (X-Error-Code) переводим сами — detail бэка
+ *  русский и в UZ-интерфейсе прозвучал бы по-русски. Нет перевода — detail. */
+function refusalMessage(error: unknown): string {
+  const code = apiErrorCode(error)
+  const key = code ? `residents.refusal.${code}` : null
+  if (key && i18n.exists(key)) return i18n.t(key)
+  return safeErrorMessage(error, i18n.t('common.error'))
+}
+
 function useResidentMutation<TArgs>(
   request: (args: TArgs) => Promise<unknown>,
   { successKey, errorKey, residentId }: {
-    successKey: string
+    /** Ключ тоста; функция — когда текст зависит от ответа (разблокировка). */
+    successKey: string | ((data: unknown) => string)
     errorKey: string
     residentId: number
   },
@@ -95,8 +105,8 @@ function useResidentMutation<TArgs>(
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: request,
-    onSuccess: () => {
-      toast.success(i18n.t(successKey))
+    onSuccess: (data: unknown) => {
+      toast.success(i18n.t(typeof successKey === 'function' ? successKey(data) : successKey))
       for (const key of [
         ['residents'], ['resident', residentId], ['residents-stats'],
         ['moderation'], ['address-stats'],
@@ -107,9 +117,7 @@ function useResidentMutation<TArgs>(
     },
     onError: (error: unknown) => {
       console.error(errorKey, error)
-      toast.error(i18n.t(errorKey), {
-        description: safeErrorMessage(error, i18n.t('common.error')),
-      })
+      toast.error(i18n.t(errorKey), { description: refusalMessage(error) })
     },
   })
 }
@@ -131,7 +139,14 @@ export function useBlockResident(id: number) {
 export function useUnblockResident(id: number) {
   return useResidentMutation<void>(
     () => apiClient.post(`/api/v2/residents/${id}/unblock`).then(r => r.data),
-    { successKey: 'residents.toast.unblocked', errorKey: 'residents.toast.unblockFailed', residentId: id },
+    {
+      // Без телефона/подтверждённой проверки житель возвращается в онбординг.
+      successKey: data => (data as { status?: string } | undefined)?.status === 'pending'
+        ? 'residents.toast.unblockedToPending'
+        : 'residents.toast.unblocked',
+      errorKey: 'residents.toast.unblockFailed',
+      residentId: id,
+    },
   )
 }
 
@@ -211,7 +226,7 @@ export function useRequestDocuments(id: number) {
 }
 
 export function useApproveVerification(id: number) {
-  return useResidentMutation<{ notes?: string }>(
+  return useResidentMutation<{ notes?: string; in_person?: boolean }>(
     body => apiClient.post(`/api/v2/residents/${id}/verification/approve`, body).then(r => r.data),
     { successKey: 'residents.toast.verified', errorKey: 'residents.toast.verifyFailed', residentId: id },
   )

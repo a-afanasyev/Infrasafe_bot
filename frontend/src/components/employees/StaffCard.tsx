@@ -6,6 +6,7 @@ import { useRequestEmployeePhone } from '../../hooks/useEmployees'
 import type { EmployeeBrief } from '../../hooks/useEmployees'
 import { AVATAR_GRADIENTS, SPEC_COLORS, getInitials } from '../../utils/employeeUtils'
 import { tSpecialization } from '../../i18n/apiMaps'
+import { formatDate } from '../../utils/timezone'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import SimpleModeBadge from './SimpleModeBadge'
@@ -86,6 +87,12 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
                 ? t('employees.phoneRequestSent')
                 : `📱 ${t('employees.requestPhone')}`}
             </button>
+          )}
+          {/* Факт запроса хранится на сервере — переживает перезагрузку. */}
+          {!employee.phone && !requestPhone.isSuccess && employee.phone_requested_at && (
+            <div className="text-[11px] text-text-muted mt-0.5">
+              {t('employees.phoneRequestedOn', { date: formatDate(employee.phone_requested_at) })}
+            </div>
           )}
           {/* Единый ряд бейджей: блокировка, верификация, роль, специализации */}
           <div className="flex flex-wrap gap-1 mt-2">

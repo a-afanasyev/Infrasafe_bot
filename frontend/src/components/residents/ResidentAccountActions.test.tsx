@@ -41,6 +41,28 @@ describe('ResidentAccountActions', () => {
     expect(screen.getByRole('button', { name: 'Одобрить аккаунт' })).toBeInTheDocument()
   })
 
+  it('без телефона одобрить нельзя — подсказка вместо тихой 409', () => {
+    render(<ResidentAccountActions
+      resident={profile({ status: 'pending', phone: null, verification_status: 'verified' })} />)
+    expect(screen.getByRole('button', { name: 'Одобрить аккаунт' })).toBeDisabled()
+    expect(screen.getByText(/нет телефона/)).toBeInTheDocument()
+  })
+
+  it('без подтверждённой верификации одобрить нельзя', () => {
+    render(<ResidentAccountActions
+      resident={profile({ status: 'pending', phone: '+998901234567', verification_status: 'pending' })} />)
+    expect(screen.getByRole('button', { name: 'Одобрить аккаунт' })).toBeDisabled()
+    expect(screen.getByText(/подтвердите верификацию/)).toBeInTheDocument()
+  })
+
+  it('телефон и подтверждённая верификация — одобрение доступно', async () => {
+    const user = userEvent.setup()
+    render(<ResidentAccountActions
+      resident={profile({ status: 'pending', phone: '+998901234567', verification_status: 'verified' })} />)
+    await user.click(screen.getByRole('button', { name: 'Одобрить аккаунт' }))
+    expect(approveMutate).toHaveBeenCalledWith({})
+  })
+
   it('одобренному аккаунту кнопка одобрения не показывается', () => {
     render(<ResidentAccountActions resident={profile({ status: 'approved' })} />)
     expect(screen.queryByRole('button', { name: 'Одобрить аккаунт' })).not.toBeInTheDocument()

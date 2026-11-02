@@ -75,6 +75,8 @@ class ResidentListItemOut(BaseModel):
     # Пользователь заблокировал бота (users.bot_blocked_at IS NOT NULL) —
     # бейдж в карточке; запрос номера/уведомления ему недоставимы.
     bot_blocked: bool = False
+    # Последний доставленный запрос номера — «Номер запрошен · дата».
+    phone_requested_at: Optional[datetime] = None
 
 
 class ResidentListOut(BaseModel):
@@ -173,6 +175,8 @@ class ResidentVerificationNotesIn(BaseModel):
     """Необязательная заметка при подтверждении личности."""
     model_config = {"extra": "forbid"}
     notes: Optional[str] = Field(None, max_length=1000)
+    #: Менеджер проверил документ на квартиру очно — загрузка не требуется.
+    in_person: bool = False
 
 
 class ResidentVerificationRejectIn(BaseModel):

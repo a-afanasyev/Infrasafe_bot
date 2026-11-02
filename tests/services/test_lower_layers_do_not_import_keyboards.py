@@ -25,6 +25,10 @@ KEYBOARDS_PREFIX = "uk_management_bot.keyboards"
 # (та же, что рисует бот-хендлер); это UI-артефакт, а не справочник.
 ALLOWED: set[tuple[str, str]] = {
     ("uk_management_bot/api/shifts/router/transfers.py", "uk_management_bot.keyboards.shift_transfer"),
+    # После регистрации в TWA жителю уходит та же inline-кнопка «Загрузить
+    # документы», что рисует бот (callback_data обязан совпасть с хендлером
+    # handlers/onboarding.open_document_upload) — UI-артефакт, 2026-11-03.
+    ("uk_management_bot/api/registration/notify.py", "uk_management_bot.keyboards.documents_entry"),
 }
 
 

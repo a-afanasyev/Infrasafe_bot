@@ -42,6 +42,8 @@ def _initdata(telegram_id: int) -> str:
 def _mock_notify(monkeypatch):
     monkeypatch.setattr(
         "uk_management_bot.api.registration.router.notify_managers_new_registration", AsyncMock())
+    monkeypatch.setattr(
+        "uk_management_bot.api.registration.router.offer_document_upload", AsyncMock())
 
 
 async def _user(db, telegram_id: int, status: str = "pending", phone: str | None = None) -> User:

@@ -109,7 +109,7 @@ async def approve_user_verification(callback: CallbackQuery, roles: list = None,
         admin_tg = callback.from_user.id
         # Решение одним commit (статусы + квартиры + удаление документов) — в
         # потоке; сеть (гигиена медиа, уведомления) ниже.
-        purge, notify_pair, restart_target = await run_db(
+        purge, notify_pair, restart_target, refusal = await run_db(
             lambda s: _approve_user_db(s, user_id, admin_tg), db=_db
         )
 
@@ -150,6 +150,9 @@ async def approve_user_verification(callback: CallbackQuery, roles: list = None,
                 get_text('verification.user_approved', language=lang),
                 show_alert=True
             )
+        elif refusal is not None:
+            await callback.answer(get_text(f'user_mgmt.refusal.{refusal}', language=lang),
+                                  show_alert=True)
         else:
             await callback.answer(
                 get_text('errors.operation_failed', language=lang),

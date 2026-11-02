@@ -70,10 +70,12 @@ class TestButtonTextsCache:
             "create_request", "my_requests", "profile", "help",
             "cancel", "back", "shift", "my_shifts", "switch_role",
             "admin_panel", "acceptance", "accept_shift", "end_shift",
-            "login", "skip",
+            "skip",
         ]
         for key in expected:
             assert key in bt_module.BUTTON_TEXTS, f"Expected key '{key}' missing from BUTTON_TEXTS"
+        # «🔑 Войти» (/login, само-одобрение) удалена 2026-11-03.
+        assert "login" not in bt_module.BUTTON_TEXTS
 
 
 class TestGetterFunctions:

@@ -97,6 +97,7 @@ async def list_residents(
             apartments_count=counts.get(u.id, 0),
             primary_address=_format_address(*primary) if primary else None,
             bot_blocked=u.bot_blocked_at is not None,
+            phone_requested_at=u.phone_requested_at,
         ))
     return ResidentListOut(items=items, total=total, limit=limit, offset=offset)
 

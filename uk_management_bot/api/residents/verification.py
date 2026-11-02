@@ -65,6 +65,7 @@ async def approve_verification(
 ):
     resident, purge = await verification_core.approve_verification(
         db, resident_id=resident_id, actor_id=user.id, notes=body.notes,
+        in_person=body.in_person,
     )
     await cleanup_purged_documents(purge)
     await notify.notify_verification_approved(resident)

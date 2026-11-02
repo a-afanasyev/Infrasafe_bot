@@ -17,10 +17,11 @@ from uk_management_bot.utils.helpers import get_text
 FRONTEND = "https://example.test"
 
 
-def _ctx(phone, *, approved=False):
+def _ctx(phone, *, approved=False, any_apartment=False, doc=False, verification="pending"):
     return _MenuContext(
         status="pending", phone=phone, has_approved_apartment=approved,
-        has_any_apartment=False, db_roles=["applicant"], active_role="applicant",
+        has_any_apartment=any_apartment or approved, db_roles=["applicant"],
+        active_role="applicant", has_property_doc=doc, verification_status=verification,
     )
 
 
@@ -64,8 +65,83 @@ def test_screen_without_frontend_url_has_no_form_button(monkeypatch):
 
 
 def test_complete_profile_has_no_keyboard():
-    _, kb = _build_onboarding_screen(_ctx("+998901234567", approved=True), "ru")
+    _, kb = _build_onboarding_screen(_ctx("+998901234567", approved=True, doc=True), "ru")
     assert kb is None
+
+
+# ─── Документ на квартиру обязателен (2026-11-03) ────────────────────────────
+
+def test_approved_apartment_without_document_is_not_complete():
+    """Квартиру подтвердили, документ не загружен, проверка открыта — онбординг
+    не закончен: иначе /start не дойдёт до кнопки загрузки."""
+    from uk_management_bot.handlers.base import _profile_complete, needs_onboarding_redraw
+
+    ctx = _ctx("+998901234567", approved=True)
+    assert not _profile_complete(ctx)
+    assert needs_onboarding_redraw(ctx)
+    _, kb = _build_onboarding_screen(ctx, "ru")
+    assert kb is not None
+
+
+@pytest.mark.parametrize("verification", ["verified", "rejected"])
+def test_decided_verification_completes_without_document(verification):
+    """После решения менеджера документы удалены — требовать их снова нельзя."""
+    from uk_management_bot.handlers.base import _profile_complete
+
+    assert _profile_complete(_ctx("+998901234567", approved=True, verification=verification))
+
+
+@pytest.mark.parametrize("kwargs,expected", [
+    ({"any_apartment": True}, True),                       # квартира выбрана, документа нет
+    ({"approved": True}, True),                            # квартира подтверждена, документа нет
+    ({"any_apartment": True, "doc": True}, False),         # документ есть
+    ({"any_apartment": True, "verification": "verified"}, False),
+    ({}, False),                                           # квартира ещё не выбрана
+])
+def test_needs_document_upload(kwargs, expected):
+    from uk_management_bot.handlers.base import _needs_document_upload
+
+    assert _needs_document_upload(_ctx("+998901234567", **kwargs)) is expected
+
+
+@pytest.mark.asyncio
+async def test_start_offers_inline_upload_when_document_missing():
+    from unittest.mock import patch
+
+    from uk_management_bot.handlers import base
+    from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB
+
+    msg = MagicMock()
+    msg.from_user = MagicMock(id=1, username="u", first_name="F", last_name="L")
+    msg.answer = AsyncMock()
+    ctx = _ctx("+998901234567", approved=True)
+    with patch.object(base, "run_db", new=AsyncMock(return_value=ctx)):
+        await base.handle_regular_start(msg, language="ru")
+
+    markups = [c.kwargs.get("reply_markup") for c in msg.answer.await_args_list]
+    inline = [m for m in markups if m is not None and hasattr(m, "inline_keyboard")]
+    assert [b.callback_data for b in inline[0].inline_keyboard[0]] == [UPLOAD_DOCUMENTS_CB]
+
+
+def test_welcome_names_complex_and_company(monkeypatch):
+    from uk_management_bot.handlers import base
+
+    monkeypatch.setattr(base.settings, "RESIDENTIAL_COMPLEX_NAME", "Olmazor Business City")
+    monkeypatch.setattr(base.settings, "MANAGEMENT_COMPANY_NAME", "")
+    text, _ = _build_onboarding_screen(_ctx(None), "ru")
+    assert "жителей ЖК Olmazor Business City." in text
+    assert text.endswith("С уважением, УК")
+    assert "{" not in text
+
+
+def test_welcome_without_names_has_no_placeholders(monkeypatch):
+    from uk_management_bot.handlers import base
+
+    monkeypatch.setattr(base.settings, "RESIDENTIAL_COMPLEX_NAME", "")
+    monkeypatch.setattr(base.settings, "MANAGEMENT_COMPANY_NAME", "PROFK")
+    for lang in ("ru", "uz"):
+        text = base.onboarding_welcome_text(lang)
+        assert "{" not in text and text.rstrip().endswith("PROFK")
 
 
 # ─── §3.2 ручной ввод телефона удалён ────────────────────────────────────────

@@ -58,7 +58,9 @@ def test_auth_service_refuses_moderation_of_privileged_target(method, args):
     target.status = "blocked" if method == "unblock_user" else "approved"
     db = _db_returning(target)
 
-    assert getattr(AuthService(db), method)(target.id, *args) is False
+    # unblock_user отдаёт код итога ("approved"|"pending"|"error"), остальные — bool.
+    result = getattr(AuthService(db), method)(target.id, *args)
+    assert result == ("error" if method == "unblock_user" else False)
     db.commit.assert_not_called()
     assert target.status in ("approved", "blocked")  # не менялся
     assert target.roles == '["manager"]'

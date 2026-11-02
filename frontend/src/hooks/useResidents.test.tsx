@@ -8,8 +8,11 @@ import {
   useBlockResident,
   useRejectBinding,
   useRemoveBinding,
+  useUnblockResident,
   useUpdateBinding,
 } from './useResidents'
+import { toast } from 'sonner'
+import i18n from '../i18n'
 
 // Компонентные тесты мокают весь этот модуль, поэтому сам слой мутаций —
 // тела запросов и набор инвалидируемых кэшей — оставался непроверенным. Ровно
@@ -148,5 +151,40 @@ describe('useResidents — мутации', () => {
     result.current.mutate({})
 
     await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('отказ правила доступа переводится по коду, а не русским detail', async () => {
+    // UZ-интерфейс: detail бэка русский, X-Error-Code — машинный код.
+    await i18n.changeLanguage('uz')
+    try {
+      api.post.mockRejectedValueOnce(Object.assign(new Error('conflict'), {
+        response: {
+          status: 409,
+          headers: { 'x-error-code': 'phone_required' },
+          data: { detail: 'Нельзя одобрить без телефона — запросите номер у жителя' },
+        },
+      }))
+      const { wrapper } = setup()
+      const { result } = renderHook(() => useApproveResident(7), { wrapper })
+      result.current.mutate({})
+      await waitFor(() => expect(result.current.isError).toBe(true))
+
+      const opts = vi.mocked(toast.error).mock.calls.at(-1)?.[1] as { description: string }
+      expect(opts.description).toBe(i18n.t('residents.refusal.phone_required'))
+      expect(opts.description).not.toMatch(/телефон/)
+    } finally {
+      await i18n.changeLanguage('ru')
+    }
+  })
+
+  it('разблокировка в pending — свой тост: житель вернулся к регистрации', async () => {
+    api.post.mockResolvedValueOnce({ data: { id: 7, status: 'pending' } })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUnblockResident(7), { wrapper })
+    result.current.mutate()
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(vi.mocked(toast.success)).toHaveBeenLastCalledWith(
+      i18n.t('residents.toast.unblockedToPending'))
   })
 })

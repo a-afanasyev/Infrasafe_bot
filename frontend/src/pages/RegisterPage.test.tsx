@@ -58,6 +58,29 @@ describe('RegisterPage', () => {
     expect(await screen.findByText('stub-address')).toBeInTheDocument()
   })
 
+  it('шаг контакта открывается приветствием с именем ЖК и подписью УК', async () => {
+    mockReg.start.mockResolvedValue({
+      ...START, prefill: { first_name: 'Иван' },
+      complex_name: 'Olmazor Business City', company_name: '',
+    })
+    render(<RegisterPage />)
+    await screen.findByText('stub-contact')
+    expect(screen.getByText(/для жителей ЖК Olmazor Business City\./)).toBeInTheDocument()
+    expect(screen.getByText(/С уважением, УК/)).toBeInTheDocument()
+  })
+
+  it('экран ожидания ведёт к загрузке документа в боте, не обещая отправку', async () => {
+    mockReg.start.mockResolvedValue(START)
+    mockReg.submit.mockResolvedValue({ status: 'pending' })
+    const user = userEvent.setup()
+    render(<RegisterPage />)
+    await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
+    const body = await screen.findByText(/загрузите документ на квартиру/)
+    expect(body).toHaveTextContent('/start')
+    expect(body).not.toHaveTextContent(/мы отправили/i)
+  })
+
   it('«Изменить адрес» возвращает к каскаду', async () => {
     mockReg.start.mockResolvedValue(START)
     const user = userEvent.setup()
