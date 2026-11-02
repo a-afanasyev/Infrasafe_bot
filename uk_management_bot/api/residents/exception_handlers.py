@@ -19,7 +19,11 @@ async def _resident_not_found_handler(request: Request, exc: ResidentNotFound) -
 
 
 async def _resident_conflict_handler(request: Request, exc: ResidentConflict) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+    # Машинный код — в X-Error-Code (как у регистрации, A9-P3-20): фронт
+    # переводит отказ по коду, а не показывает русский detail в UZ-интерфейсе.
+    headers = {"X-Error-Code": exc.code} if exc.code else None
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)},
+                        headers=headers)
 
 
 async def _resident_validation_handler(request: Request, exc: ResidentValidationError) -> JSONResponse:

@@ -11,7 +11,7 @@ sync unit-of-work, исполняемый в worker-потоке через ``ru
 ``process_manual_phone`` (FSM waiting_for_phone), весь кластер документов —
 ``process_document_type_selection`` / ``process_document_file`` (сохраняет сразу,
 шага подтверждения нет) / ``save_document``
-/ ``skip_documents`` / ``start_document_upload`` / ``complete_onboarding_with_documents``
+/ ``skip_documents_legacy`` / ``start_document_upload`` / ``complete_onboarding_with_documents``
 / ``add_more_documents`` / ``complete_onboarding_final`` (вход даёт
 handlers/user_apartment_selection.py: ставит OnboardingStates.waiting_for_document_type
 и показывает get_document_type_keyboard()).
@@ -52,6 +52,7 @@ from uk_management_bot.keyboards.onboarding import (
     get_document_type_name
 )
 from uk_management_bot.states.onboarding import OnboardingStates
+from uk_management_bot.services.residents.approval_rules import PROPERTY_DOC_TYPES
 from uk_management_bot.database.models.user_verification import DocumentType
 from uk_management_bot.utils.button_texts import (
     get_select_apartment_texts,
@@ -163,7 +164,8 @@ async def _discard_document_blob(media_id: int) -> None:
 
 
 def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
-    """-> (user_status, documents_summary) | None (пользователя нет в БД).
+    """-> (user_status, documents_summary, verification_status) | None
+    (пользователя нет в БД).
 
     ``documents_summary`` — словарь примитивов (см.
     UserVerificationService.get_user_documents_summary), безопасен вне сессии.
@@ -175,7 +177,22 @@ def _load_documents_completion(db, telegram_id: int) -> Optional[tuple]:
 
     verification_service = UserVerificationService(db)
     documents_summary = verification_service.get_user_documents_summary(user.id)
-    return user.status, documents_summary
+    return user.status, documents_summary, user.verification_status
+
+
+def _documents_outcome(verification_status: Optional[str], documents_by_type: dict) -> str:
+    """Итог шага документов — ОДИН на «Завершить» и старую «Пропустить».
+
+    -> "verified" (проверка уже пройдена: документы удалены, загрузка закрыта),
+       "resubmit" (отклонена — только переподача), "done" (документ на
+       квартиру загружен), "need_doc" (документа нет — шаг обязателен).
+    """
+    if verification_status == "verified":
+        return "verified"
+    if verification_status == "rejected":
+        return "resubmit"
+    has_property_doc = any(t.value in documents_by_type for t in PROPERTY_DOC_TYPES)
+    return "done" if has_property_doc else "need_doc"
 
 
 # Ручной ввод телефона и FSM-шаг waiting_for_phone удалены (спека 2026-09-03):
@@ -279,11 +296,10 @@ async def process_document_type_selection(message: Message, state: FSMContext, l
     """Обрабатывает выбор типа документа"""
     lang = language
 
-    # Проверяем специальные команды
-    if message.text in SKIP_DOCUMENTS_TEXTS:
-        await skip_documents(message, state, language=lang)
-        return
-    elif message.text in COMPLETE_ONBOARDING_TEXTS:
+    # Проверяем специальные команды. «Пропустить» осталась на старых
+    # клавиатурах — документ обязателен, поэтому она ведёт туда же, куда
+    # «Завершить»: тот сам решит, что делать (_documents_outcome).
+    if message.text in SKIP_DOCUMENTS_TEXTS or message.text in COMPLETE_ONBOARDING_TEXTS:
         await complete_onboarding_with_documents(message, state, language=lang,
                                                  _db=_db)
         return
@@ -475,17 +491,6 @@ async def save_document(message: Message, state: FSMContext, language: str = "ru
         await message.answer(get_text("errors.unknown_error", language=lang))
         await state.clear()
 
-async def skip_documents(message: Message, state: FSMContext, language: str = "ru"):
-    """Пропускает загрузку документов"""
-    lang = language
-    
-    await message.answer(
-        f"⏭️ {get_text('onboarding.documents.skip_documents', language=lang)}\n\n" +
-        get_text("onboarding.handlers.can_upload_later", language=lang),
-        reply_markup=get_onboarding_completion_keyboard(lang)
-    )
-    await state.clear()
-
 async def complete_onboarding_with_documents(message: Message, state: FSMContext, language: str = "ru", *, _db=None):
     """Завершает онбординг с документами"""
     lang = language
@@ -501,7 +506,28 @@ async def complete_onboarding_with_documents(message: Message, state: FSMContext
             await state.clear()
             return
 
-        user_status, documents_summary = loaded
+        user_status, documents_summary, verification_status = loaded
+        outcome = _documents_outcome(verification_status, documents_summary['documents_by_type'])
+
+        if outcome == "verified":
+            await message.answer(
+                get_text("onboarding.documents.already_verified", language=lang),
+                reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], user_status, language=lang),
+            )
+            await state.clear()
+            return
+        if outcome == "resubmit":
+            await message.answer(get_text("onboarding.documents.upload_rejected", language=lang),
+                                 reply_markup=get_resubmit_inline(lang))
+            await state.clear()
+            return
+        if outcome == "need_doc":
+            await message.answer(
+                get_text("onboarding.documents.property_required", language=lang),
+                reply_markup=get_document_type_keyboard(lang),
+            )
+            await state.set_state(OnboardingStates.waiting_for_document_type)
+            return
 
         # Формируем сообщение о завершении
         completion_text = get_text("onboarding.completed", language=lang)
@@ -553,3 +579,13 @@ async def complete_onboarding_final(message: Message, state: FSMContext,
     aiogram-DI: без протяжки финальный экран рендерился на "ru" (BUG-165)."""
     await complete_onboarding_with_documents(message, state, language=language,
                                              _db=_db)
+
+
+@router.message(F.text.in_(SKIP_DOCUMENTS_TEXTS))
+async def skip_documents_legacy(message: Message, state: FSMContext,
+                                language: str = "ru", *, _db=None):
+    """Совместимость: «⏭️ Пропустить документы» осталась на reply-клавиатурах,
+    выданных до 2026-11-03. Пропуска больше нет — решает тот же итог, что у
+    «Завершить»: проверенному — «уже пройдено», отклонённому — переподача,
+    без документа — требование загрузить."""
+    await complete_onboarding_with_documents(message, state, language=language, _db=_db)

@@ -1,4 +1,8 @@
-"""AuthService: доверенная роль и удаление пользователя тоже закрывают проверку."""
+"""AuthService: доверенная роль и удаление пользователя тоже закрывают проверку.
+
+Доверенную роль проверяем на `assign_role` — после удаления само-одобрения
+`/login` (2026-11-03) это единственный путь бота, назначающий роль и вызывающий
+`_enforce_trusted_verification`."""
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_verification import DocumentType, UserDocument
 from uk_management_bot.services.auth_service import AuthService
@@ -14,7 +18,7 @@ def _seed(db, el_seed, *, verification="pending"):
 
 def test_trusted_role_purges_documents(el_db, el_seed):
     _seed(el_db, el_seed)
-    assert AuthService(el_db).auto_approve_user_sync(7101, role="manager") is True
+    assert AuthService(el_db).assign_role(1, "manager", assigned_by=1) is True
     el_db.expire_all()
     assert el_db.get(User, 1).verification_status == "verified"
     assert el_db.query(UserDocument).count() == 0
@@ -22,7 +26,7 @@ def test_trusted_role_purges_documents(el_db, el_seed):
 
 def test_untrusted_role_keeps_open_documents(el_db, el_seed):
     _seed(el_db, el_seed)
-    AuthService(el_db).auto_approve_user_sync(7101, role="applicant")
+    assert AuthService(el_db).assign_role(1, "executor", assigned_by=1) is True
     el_db.expire_all()
     assert el_db.get(User, 1).verification_status == "pending"
     assert el_db.query(UserDocument).count() == 1

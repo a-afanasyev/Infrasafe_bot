@@ -115,7 +115,7 @@ async def test_unblock_re_renders_card_not_list(monkeypatch):
     list callback and raised IndexError)."""
     monkeypatch.setattr(moderation, "has_admin_access", lambda **kw: True)
     auth = MagicMock()
-    auth.approve_user.return_value = True
+    auth.approve_user.return_value = "ok"
     monkeypatch.setattr(_units, "AuthService", lambda db: auth)
     render = AsyncMock()
     monkeypatch.setattr(moderation, "_return_to_employee_info", render)

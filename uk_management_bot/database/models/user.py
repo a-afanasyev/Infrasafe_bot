@@ -41,6 +41,9 @@ class User(Base):
     # my_chat_member kicked/member (handlers/bot_membership.py) и вердикт
     # доставки запроса номера (api/users/phone_request.py). NULL = не заблокирован.
     bot_blocked_at = Column(DateTime(timezone=True), nullable=True)
+    # Последний доставленный запрос номера менеджером (api/users/phone_request.py):
+    # карточки показывают «Номер запрошен · дата» и после перезагрузки страницы.
+    phone_requested_at = Column(DateTime(timezone=True), nullable=True)
 
     # Простой режим исполнителя (TWA): включает менеджер конкретному человеку,
     # старая панель живёт параллельно. Сам исполнитель флаг не меняет.

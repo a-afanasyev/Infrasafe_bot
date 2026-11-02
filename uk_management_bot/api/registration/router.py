@@ -28,7 +28,9 @@ from uk_management_bot.api.registration.schemas import (
     ApartmentOut,
     ContactStatusOut,
 )
-from uk_management_bot.api.registration.notify import notify_managers_new_registration
+from uk_management_bot.api.registration.notify import (
+    notify_managers_new_registration, offer_document_upload,
+)
 from uk_management_bot.services.addresses import core as address_core
 from uk_management_bot.services.addresses.exceptions import (
     AddressConflict, AddressNotFound, AddressValidationError,
@@ -83,6 +85,8 @@ async def start(request: Request, body: StartIn, db: AsyncSession = Depends(get_
     return StartOut(
         registration_ticket=create_registration_ticket(telegram_id),
         prefill=prefill,
+        complex_name=settings.RESIDENTIAL_COMPLEX_NAME,
+        company_name=settings.MANAGEMENT_COMPANY_NAME,
     )
 
 
@@ -200,7 +204,7 @@ async def register_applicant(
     if existing_ua is not None:
         if existing_ua.status == "pending":
             await service.commit_registration(db)
-            return RegistrationResult(status="pending")
+            return await _registered(telegram_id, user)
         if existing_ua.status == "approved":
             await db.rollback()
             raise _conflict(CODE_ALREADY_RESIDENT, "Вы уже подтверждены как житель этой квартиры")
@@ -217,10 +221,18 @@ async def register_applicant(
         raise HTTPException(status_code=400, detail=str(e))
     except IntegrityError:
         await db.rollback()
-        return RegistrationResult(status="pending")
+        return await _registered(telegram_id, user)
 
     label = await get_apartment_label(db, body.apartment_id)
     await notify_managers_new_registration(
         telegram_id=telegram_id, full_name=full_name, apartment_label=label,
     )
+    return await _registered(telegram_id, user)
+
+
+async def _registered(telegram_id: int, user) -> RegistrationResult:
+    """ЕДИНЫЙ успешный выход регистрации (новая заявка, повтор с pending-
+    привязкой, гонка IntegrityError): каждый повтор заново присылает кнопку
+    загрузки документа — потерянное сообщение восстанавливается и так."""
+    await offer_document_upload(telegram_id=telegram_id, language=getattr(user, "language", None) or "ru")
     return RegistrationResult(status="pending")

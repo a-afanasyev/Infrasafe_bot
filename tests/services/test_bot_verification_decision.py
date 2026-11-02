@@ -28,7 +28,7 @@ def world(el_db, el_seed):
     el_db.add_all([
         UserApartment(user_id=1, apartment_id=1, status="pending"),
         UserVerification(user_id=1, status=VerificationStatus.REQUESTED),
-        UserDocument(user_id=1, document_type=DocumentType.PASSPORT, media_id=801,
+        UserDocument(user_id=1, document_type=DocumentType.PROPERTY_DEED, media_id=801,
                      encryption_key=b"k" * 32, document_uuid="00000000-0000-4000-8000-000000000801"),
     ])
     el_db.commit()
@@ -91,6 +91,23 @@ def test_failure_rolls_back_everything(world, monkeypatch):
     with pytest.raises(RuntimeError):
         UserVerificationService(world).approve_verification_db(1, MANAGER_TG)
 
+    world.expire_all()
+    assert world.get(User, 1).verification_status == "requested"
+    assert _docs(world) == 1
+
+
+def test_approve_without_property_document_is_refused(world):
+    """Решение владельца 2026-11-03: без документа на квартиру верификацию не
+    подтвердить; отказ ничего не трогает (документы и статусы на месте)."""
+    from uk_management_bot.services.user_verification_service import VerificationRefused
+
+    doc = world.query(UserDocument).filter_by(user_id=1).one()
+    doc.document_type = DocumentType.PASSPORT
+    world.commit()
+
+    with pytest.raises(VerificationRefused) as refused:
+        UserVerificationService(world).approve_verification_db(1, MANAGER_TG)
+    assert refused.value.code == "property_document_required"
     world.expire_all()
     assert world.get(User, 1).verification_status == "requested"
     assert _docs(world) == 1

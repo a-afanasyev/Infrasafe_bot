@@ -4,15 +4,14 @@ AUD3-07/AUD5-ARCH-1 (A2-хвост, волна 7): DB-фаза каждого х
 sync unit-of-work под ``run_db``; наружу выходят только примитивы. Telegram-IO
 (уведомления админам, ответы пользователю) — вне сессии.
 
-Инвентарь живости: все семь функций живые. ``/join`` и ``/login`` — команды;
-``confirm_position`` / ``cancel_registration`` рождают внутрифайловые
-клавиатуры анкеты; ``waiting_for_full_name`` / ``waiting_for_phone`` —
-FSM-состояния той же цепочки. Мёртвых нет.
+Инвентарь живости: ``/join`` — команда; ``confirm_position`` /
+``cancel_registration`` рождают внутрифайловые клавиатуры анкеты;
+``waiting_for_full_name`` / ``waiting_for_phone`` — FSM-состояния той же
+цепочки. Мёртвых нет.
 
-⚠️ Регистрация ``login_via_button`` по тексту кнопки «🔑 Войти»
-(``auth.login_button``) МЁРТВАЯ: генератора этой кнопки в репозитории нет
-вовсе. Сама функция живая — её напрямую зовёт ``login_command`` (/login),
-поэтому она сконвертирована, а не заморожена.
+``/login`` (и мёртвая кнопка «🔑 Войти») удалены 2026-11-03: команда сама
+одобряла любого как жителя — без телефона, квартиры и проверки документа.
+Доступ жителю даёт только менеджер (services/residents/approval_rules.py).
 """
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -27,44 +26,20 @@ from uk_management_bot.services.auth_service import AuthService
 from uk_management_bot.services.invite_service import InviteService, InviteRateLimiter, TokenAlreadyUsedError
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
-from uk_management_bot.keyboards.base import get_cancel_keyboard, get_main_keyboard_for_role
 from uk_management_bot.keyboards.contact import get_share_contact_keyboard
 from aiogram.types import ReplyKeyboardRemove
 import html
 import logging
 
-from uk_management_bot.utils.button_texts import get_cancel_texts, get_login_texts
+from uk_management_bot.utils.button_texts import get_cancel_texts
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-LOGIN_TEXTS = get_login_texts()
-
 
 # ==========================================================================
 # Sync unit-of-work (AUD3-07/AUD5-ARCH-1): исполняются в worker-потоке через
 # run_db; сессию открывает и закрывает run_db, event loop БД не трогает.
 # ==========================================================================
-
-
-def _apply_login(db, telegram_id: int, username, first_name, last_name):
-    """-> ('already_approved'|'ok'|'failed', статус пользователя).
-
-    Статус читается ПОСЛЕ попытки авто-одобрения: auto_approve_user правит ту
-    же строку в identity map, и исходный код брал ``user.status`` уже после неё.
-    """
-    auth = AuthService(db)
-    user = auth.get_or_create_user_sync(
-        telegram_id=telegram_id,
-        username=username,
-        first_name=first_name,
-        last_name=last_name,
-    )
-    if user.status == "approved":
-        return ("already_approved", user.status)
-
-    ok = auth.auto_approve_user_sync(telegram_id, role="applicant")
-    return ("ok" if ok else "failed", user.status)
 
 
 def _load_join_gate(db, token: str, telegram_id: int):
@@ -176,47 +151,6 @@ def _apply_registration(db, token: str, telegram_id: int, username, first_name, 
             [admin.telegram_id for admin in admin_users],
         ),
     )
-
-
-# ⚠️ Регистрация по тексту «🔑 Войти» мертва (генератора кнопки в репозитории
-# нет), но САМА функция живая: её напрямую зовёт login_command (/login).
-@router.message(F.text.in_(LOGIN_TEXTS))
-async def login_via_button(message: Message, user_status: str = None, language: str = "ru", *, _db=None):
-    # language injected by middleware
-
-    verdict, status = await run_db(
-        lambda s: _apply_login(
-            s,
-            message.from_user.id,
-            message.from_user.username,
-            message.from_user.first_name,
-            message.from_user.last_name,
-        ),
-        db=_db,
-    )
-    if verdict == "already_approved":
-        await message.answer(
-            get_text("auth.already_authorized", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], status, language=language)
-        )
-        return
-    if verdict == "ok":
-        await message.answer(
-            get_text("auth.login_success", language=language),
-            reply_markup=get_main_keyboard_for_role("applicant", ["applicant"], status, language=language),
-        )
-    else:
-        await message.answer(
-            get_text("auth.login_failed", language=language),
-            reply_markup=get_cancel_keyboard(language=language),
-        )
-
-
-@router.message(F.text == "/login")
-async def login_command(message: Message, language: str = "ru", *, _db=None):
-    # Аналог кнопки — одобряем пользователя как заявителя. language — из
-    # aiogram-DI: без протяжки ответ рендерился бы на "ru" (BUG-165).
-    await login_via_button(message, language=language, _db=_db)
 
 
 async def start_invite_registration(message: Message, state: FSMContext, token: str,

@@ -487,7 +487,8 @@
     "user_approved_successfully": "✅ Foydalanuvchi {user_name} muvaffaqiyatli tasdiqlandi",
     "user_blocked_successfully": "🚫 Foydalanuvchi {user_name} bloklandi",
     "user_deleted_successfully": "🗑️ Foydalanuvchi tizimdan muvaffaqiyatli o'chirildi",
-    "user_unblocked_successfully": "🔓 Foydalanuvchi {user_name} bloki yechildi"
+    "user_unblocked_successfully": "🔓 Foydalanuvchi {user_name} bloki yechildi",
+    "user_unblocked_to_pending": "🔓 Foydalanuvchi {user_name} bloki yechildi va ro'yxatdan o'tishga qaytarildi: telefon raqami yo'q yoki kvartira hujjati tasdiqlanmagan."
   },
   "my_shifts": {
     "keyboards": {
@@ -641,12 +642,12 @@
       "send_after_button": "Hujjat yuklash uchun quyidagi tugmani bosing va turini tanlang.",
       "choose_type_first": "Avval quyidagi tugma bilan hujjat turini tanlang, so'ng faylni qayta yuboring.",
       "confirm_upload": "Hujjatni yuklashni tasdiqlang:",
-      "description": "Tekshirish jarayonini tezlashtirish uchun siz kerakli hujjatlarni yuklashingiz mumkin:",
+      "description": "📄 Kvartira hujjatini albatta ilova qiling: mulk huquqi guvohnomasi (kadastr ko'chirmasi) yoki ijara shartnomasi. Hujjatlar faqat tekshiruv vaqtida shifrlangan holda vaqtincha saqlanadi. Tekshiruv tugagach, ularga kirish o'chiriladi.",
       "document_saved": "✅ Hujjat muvaffaqiyatli saqlandi!",
       "documents_summary": "📊 Yuklangan hujjatlarning qisqacha mazmuni:",
       "file_invalid": "❌ Fayl formati noto'g'ri. Ruxsat etilgan: JPG, PNG, PDF",
       "upload_unsupported": "❌ Bu format qabul qilinmaydi. Rasm yoki PDF yuboring.",
-      "upload_unavailable": "⚠️ Hujjatni saqlab bo'lmadi. Keyinroq urinib ko'ring yoki bu bosqichni o'tkazib yuboring.",
+      "upload_unavailable": "⚠️ Hujjatni saqlab bo'lmadi. Birozdan so'ng qayta urinib ko'ring.",
       "upload_not_required": "Hozir hujjatlar talab qilinmaydi.",
       "upload_rejected": "Tekshiruv rad etildi. Hujjatlarni qayta yuklash uchun arizani qayta topshiring.",
       "upload_limit": "Hujjatlarning maksimal soni yuklandi. Menejer qarorini kuting.",
@@ -656,7 +657,9 @@
       "title": "📄 Hujjatlar yuklanmoqda",
       "upload_cancelled": "❌ Hujjatni yuklash bekor qilindi.",
       "upload_file": "📤 Hujjat faylini yuklash:",
-      "unknown_type": "❌ Noma'lum hujjat turi. Taklif qilingan variantlardan birini tanlang."
+      "unknown_type": "❌ Noma'lum hujjat turi. Taklif qilingan variantlardan birini tanlang.",
+      "property_required": "Kvartira hujjatisiz arizani tekshirib bo'lmaydi. Mulk huquqi hujjatini yoki ijara shartnomasini yuklang.",
+      "already_verified": "✅ Hujjatlar tekshiruvi allaqachon o'tgan — hech narsa yuklash shart emas."
     },
     "pending_approval": "⏳ Arizangiz moderatsiyaga yuborildi. Administrator tasdiqlashidan keyin arizalar yaratishingiz mumkin.",
     "phone_saved": "✅ Telefon {phone} saqlandi!",
@@ -666,7 +669,7 @@
     "welcome_new_user": "👋 Xush kelibsiz! Qulay ish uchun profilingizni sozlaymiz.",
     "keyboards": {
       "passport": "📄 Pasport",
-      "property_deed": "🏠 Kadastr ko'chirma",
+      "property_deed": "🏠 Mulk huquqi",
       "rental_agreement": "📋 Ijara shartnomasi",
       "other_documents": "📄 Boshqa hujjatlar",
       "skip_documents": "⏭️ Hujjatlarni o'tkazib yuborish",
@@ -678,7 +681,7 @@
       "add_document": "📄 Hujjat qo'shish",
       "complete": "✅ Yakunlash",
       "doc_name_passport": "Pasport",
-      "doc_name_property_deed": "Kadastr ko'chirma",
+      "doc_name_property_deed": "Mulk huquqi",
       "doc_name_rental_agreement": "Ijara shartnomasi",
       "doc_name_utility_bill": "Kommunal to'lov kvitansiyasi",
       "doc_name_other": "Boshqa hujjatlar"
@@ -694,7 +697,9 @@
       "total_documents": "Jami hujjatlar",
       "type_short_field": "Turi",
       "btn_specify_address": "🏠 Manzilni ko'rsatish"
-    }
+    },
+    "welcome_resident": "👋 Tizimga xush kelibsiz!\nTizim{complex} turar-joy majmuasi aholisi uchun mo'ljallangan.\nRo'yxatdan o'tishda telefon raqamingizni va mulk huquqini tasdiqlovchi hujjatni yoki ijara shartnomasini taqdim etish majburiy.\nHurmat bilan, {company}",
+    "company_default": "Boshqaruv kompaniyasi"
   },
   "pagination": {
     "info": "Sahifa {page} dan {total_pages} (jami: {total_items})",
@@ -2062,6 +2067,11 @@
       "doc_deselected": "⬜️ {doc_type} olib tashlandi",
       "error_invalid_format": "Xatolik: noto'g'ri ma'lumot formati",
       "error_returning_to_panel": "Boshqaruv paneliga qaytishda xatolik."
+    },
+    "refusal": {
+      "phone_required": "⚠️ Tasdiqlab bo'lmaydi: aholining telefon raqami yo'q. Raqamni so'rang.",
+      "verification_required": "⚠️ Tasdiqlab bo'lmaydi: avval tekshiruvni tasdiqlang (kvartira hujjati).",
+      "property_document_required": "⚠️ Tasdiqlab bo'lmaydi: aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan."
     }
   },
   "address_apartments": {
@@ -2440,7 +2450,7 @@
       "select_apartment_step3": "✅ Hovli: <b>{yard_name}</b>\n✅ Bino: <b>{building_address}</b>\n\n🏠 3-qadam (3 dan): Xonadoningizni tanlang:",
       "select_building_step2": "✅ Hovli: <b>{yard_name}</b>\n\n🏢 2-qadam (3 dan): Binoni tanlang:",
       "select_yard_step1": "🏘 <b>Xonadon tanlash</b>\n\n1-qadam (3 dan): Xonadoningiz joylashgan hovlini tanlang:",
-      "upload_documents_prompt": "📄 <b>Hujjatlarni yuklash</b>\n\nShaxsingizni tasdiqlash uchun quyidagi hujjatlardan birini yuklang:\n• Pasport\n• Haydovchilik guvohnomasi\n• Suratli boshqa hujjat\n\nHujjat turini tanlang:",
+      "upload_documents_prompt": "📄 <b>Hujjatlarni yuklash</b>\n\nKvartira hujjatini albatta ilova qiling:\n• Mulk huquqi guvohnomasi (kadastr ko'chirmasi)\n• yoki ijara shartnomasi\n\nHujjatlar faqat tekshiruv vaqtida shifrlangan holda vaqtincha saqlanadi. Tekshiruv tugagach, ularga kirish o'chiriladi.\n\nHujjat turini tanlang:",
       "user_not_found": "❌ Foydalanuvchi topilmadi",
       "yard_not_found": "❌ Hovli topilmadi"
     }

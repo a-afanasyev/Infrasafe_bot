@@ -19,6 +19,9 @@ const DOCUMENT_TYPES = [
   'passport', 'property_deed', 'rental_agreement', 'utility_bill', 'other',
 ] as const
 
+/** Документ на квартиру — без него (или очной проверки) верификацию не подтвердить. */
+const PROPERTY_DOC_TYPES = new Set(['property_deed', 'rental_agreement'])
+
 export default function ResidentVerificationActions({ resident }: Props) {
   const { t } = useTranslation()
   const [requestOpen, setRequestOpen] = useState(false)
@@ -27,6 +30,10 @@ export default function ResidentVerificationActions({ resident }: Props) {
   const [approveOpen, setApproveOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [notes, setNotes] = useState('')
+  // Отметка «проверено очно» — про конкретного жителя: храним, для кого она
+  // поставлена, и на другом жителе она сама снята (без эффекта-сброса).
+  const [inPersonFor, setInPersonFor] = useState<number | null>(null)
+  const inPerson = inPersonFor === resident.id
 
   const request = useRequestDocuments(resident.id)
   const approve = useApproveVerification(resident.id)
@@ -37,6 +44,7 @@ export default function ResidentVerificationActions({ resident }: Props) {
   // 409 на уже закрытую, и показывать кнопку, которая упадёт, незачем.
   const decidable = resident.verification_status === 'pending'
     || resident.verification_status === 'requested'
+  const hasPropertyDoc = resident.documents.some(d => PROPERTY_DOC_TYPES.has(d.document_type))
 
   const toggle = (type: string) =>
     setTypes(prev => prev.includes(type) ? prev.filter(x => x !== type) : [...prev, type])
@@ -50,7 +58,8 @@ export default function ResidentVerificationActions({ resident }: Props) {
         </Button>
         {decidable && (
           <>
-            <Button size="sm" disabled={busy} onClick={() => setApproveOpen(true)}>
+            <Button size="sm" disabled={busy || (!hasPropertyDoc && !inPerson)}
+                    onClick={() => setApproveOpen(true)}>
               {t('residents.verifyResident')}
             </Button>
             <Button variant="destructive" size="sm" disabled={busy}
@@ -60,6 +69,16 @@ export default function ResidentVerificationActions({ resident }: Props) {
           </>
         )}
       </div>
+
+      {decidable && !hasPropertyDoc && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] text-text-muted m-0">{t('residents.propertyDocMissing')}</p>
+          <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
+            <input type="checkbox" checked={inPerson} onChange={e => setInPersonFor(e.target.checked ? resident.id : null)} />
+            {t('residents.inPersonChecked')}
+          </label>
+        </div>
+      )}
 
       {/* Запрос документов */}
       {requestOpen && (
@@ -113,7 +132,7 @@ export default function ResidentVerificationActions({ resident }: Props) {
         confirmLabel={t('residents.verifyResident')}
         variant="warning"
         loading={approve.isPending}
-        onConfirm={() => approve.mutate({})}
+        onConfirm={() => approve.mutate({ in_person: !hasPropertyDoc && inPerson })}
       />
 
       {/* Отказ */}

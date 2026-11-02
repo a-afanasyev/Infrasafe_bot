@@ -79,6 +79,8 @@ class EmployeeBrief(BaseModel):
     roles: list[str] = []  # parsed from User.roles (JSON) — нужен для бейджа роли в очереди
     # Сотрудник заблокировал бота — бейдж в карточке, доставка ему невозможна.
     bot_blocked: bool = False
+    # Последний доставленный запрос номера — «Номер запрошен · дата».
+    phone_requested_at: Optional[datetime] = None
     # Простой режим исполнителя в TWA (включает менеджер).
     simple_mode: bool = False
     # Язык профиля (ru / uz / uz_cyrl) — меняет сам пользователь или менеджер.
@@ -102,6 +104,7 @@ class EmployeeBrief(BaseModel):
                 "specialization": getattr(values, "specialization", None),
                 "roles": getattr(values, "roles", None),
                 "bot_blocked": getattr(values, "bot_blocked_at", None) is not None,
+                "phone_requested_at": getattr(values, "phone_requested_at", None),
                 "simple_mode": getattr(values, "simple_mode", False) is True,
                 "language": getattr(values, "language", None) or "ru",
             }

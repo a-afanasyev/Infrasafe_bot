@@ -123,6 +123,14 @@ def test_retired_specify_address_button_resolves_nowhere(text, ctx, who):
     assert _msg(text, **ctx) is None, f"{text!r} всё ещё разрешается для {who}"
 
 
+@pytest.mark.parametrize("text", ["/login", "🔑 Войти", "🔑 Kirish"])
+@pytest.mark.parametrize("ctx,who", [(APPLICANT, "applicant"), (MANAGER, "manager")])
+def test_retired_login_self_approval_resolves_nowhere(text, ctx, who):
+    """2026-11-03: `/login` сам одобрял любого жителем — без телефона, квартиры
+    и проверки документа. Вход закрыт целиком, не перевешен."""
+    assert _msg(text, **ctx) is None, f"{text!r} всё ещё разрешается для {who}"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Мина executor_* снята (BUG-154)
 # ══════════════════════════════════════════════════════════════════════════════

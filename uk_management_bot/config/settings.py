@@ -118,6 +118,11 @@ class Settings:
         # missing the value (BUG-BOT-001).
         self.BOT_USERNAME = os.getenv("BOT_USERNAME")
         self.TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+        # Приветствие онбординга жителя (несекретно, своё на площадку):
+        # «…для жителей ЖК <имя>» и подпись «С уважением, <УК>». Пусто —
+        # без имени ЖК / подпись по умолчанию из локали.
+        self.RESIDENTIAL_COMPLEX_NAME: str = os.getenv("RESIDENTIAL_COMPLEX_NAME", "").strip()
+        self.MANAGEMENT_COMPANY_NAME: str = os.getenv("MANAGEMENT_COMPANY_NAME", "").strip()
 
         self.DATABASE_URL = os.getenv(
             "DATABASE_URL",

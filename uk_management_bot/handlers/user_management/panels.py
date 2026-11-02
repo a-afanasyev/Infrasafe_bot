@@ -62,7 +62,7 @@ def _load_verification_stats(db) -> dict:
 
 
 def _apply_approve_from_notification(db, user_id: int, manager_id: int, lang: str) -> tuple:
-    """-> ('user_not_found', None, None) | ('ok', first_name, success)."""
+    """-> ('user_not_found', None, None) | ('ok', first_name, ApproveResult)."""
     from uk_management_bot.database.models.user import User as UserModel
     from uk_management_bot.services.auth_service import AuthService
 
@@ -74,9 +74,9 @@ def _apply_approve_from_notification(db, user_id: int, manager_id: int, lang: st
 
     # Одобряем пользователя (используем sync метод с user_id)
     auth_service = AuthService(db)
-    success = auth_service.approve_user(user_id, manager_id, get_text('user_mgmt.handlers.approved_via_notification', language=lang))
+    result = auth_service.approve_user(user_id, manager_id, get_text('user_mgmt.handlers.approved_via_notification', language=lang))
 
-    return ("ok", target_user.first_name, success)
+    return ("ok", target_user.first_name, result)
 
 
 def _apply_reject_from_notification(db, user_id: int, actor_telegram_id: int, lang: str) -> tuple:
@@ -296,7 +296,7 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
         # Получаем ID текущего менеджера (из параметра user или callback)
         manager_id = user.id if user else callback.from_user.id
 
-        verdict, target_first_name, success = await run_db(
+        verdict, target_first_name, result = await run_db(
             lambda s: _apply_approve_from_notification(s, user_id, manager_id, lang), db=_db
         )
 
@@ -304,7 +304,8 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
             await callback.answer(get_text('user_mgmt.handlers.user_not_found', language=lang), show_alert=True)
             return
 
-        if success:
+        # Только явное "ok": коды отказа — тоже непустые строки.
+        if result == "ok":
             await callback.answer(get_text('user_mgmt.handlers.user_approved_alert', language=lang).format(name=target_first_name), show_alert=True)
 
             # Обновляем сообщение
@@ -314,6 +315,8 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
             )
 
             logger.info(f"Пользователь {user_id} одобрен менеджером {callback.from_user.id}")
+        elif result != "error":
+            await callback.answer(get_text(f'user_mgmt.refusal.{result}', language=lang), show_alert=True)
         else:
             await callback.answer(get_text('user_mgmt.handlers.error_approving_user', language=lang), show_alert=True)
 

@@ -36,11 +36,18 @@ class TestGetDocumentTypeKeyboard:
             result = get_document_type_keyboard()
         assert isinstance(result, ReplyKeyboardMarkup)
 
-    def test_has_six_buttons(self):
+    def test_property_document_required_no_skip(self):
+        """Документ на квартиру обязателен (2026-11-03): «Пропустить» нет,
+        право собственности и аренда — первой строкой."""
         with patch(GET_TEXT_PATH, side_effect=_mock_get_text):
             from uk_management_bot.keyboards.onboarding import get_document_type_keyboard
             result = get_document_type_keyboard()
-        assert len(_all_reply_texts(result)) == 6
+        texts = _all_reply_texts(result)
+        assert len(texts) == 5
+        assert "onboarding.keyboards.skip_documents" not in texts
+        assert [b.text for b in result.keyboard[0]] == [
+            "onboarding.keyboards.property_deed", "onboarding.keyboards.rental_agreement",
+        ]
 
     @pytest.mark.parametrize("language", ["ru", "uz"])
     def test_language_accepted(self, language):

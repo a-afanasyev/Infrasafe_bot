@@ -23,6 +23,10 @@ def mock_notify(monkeypatch):
     m = AsyncMock()
     monkeypatch.setattr(
         "uk_management_bot.api.registration.router.notify_managers_new_registration", m)
+    # Кнопка загрузки документа жителю — тоже Telegram (тесты ниже шпионят
+    # уровнем ниже, на telegram_send, где важна сама отправка).
+    monkeypatch.setattr("uk_management_bot.api.telegram_send.send_message",
+                        AsyncMock(return_value=type("R", (), {"ok": True})()))
     return m
 
 

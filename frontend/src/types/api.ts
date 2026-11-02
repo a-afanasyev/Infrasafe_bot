@@ -20,6 +20,8 @@ export interface EmployeeBrief {
   roles: string[]
   /** Сотрудник заблокировал бота. */
   bot_blocked: boolean
+  /** Последний доставленный запрос номера (ISO) — «Номер запрошен · дата». */
+  phone_requested_at?: string | null
   /** Простой режим исполнителя в Mini App (включает менеджер). */
   simple_mode: boolean
   /** Язык профиля: ru / uz (латиница) / uz_cyrl (кириллица). */
@@ -383,6 +385,8 @@ export interface ResidentListItem {
   primary_address: string | null
   /** Пользователь заблокировал бота — запрос номера/уведомления недоставимы. */
   bot_blocked: boolean
+  /** Последний доставленный запрос номера (ISO) — «Номер запрошен · дата». */
+  phone_requested_at?: string | null
 }
 
 export interface ResidentListResponse {

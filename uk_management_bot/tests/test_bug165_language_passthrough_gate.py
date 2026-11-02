@@ -81,21 +81,6 @@ import pytest  # noqa: E402
 
 class TestThreadedLanguage:
     @pytest.mark.asyncio
-    async def test_login_command_threads_language(self, monkeypatch):
-        from types import SimpleNamespace
-
-        from uk_management_bot.handlers import auth as mod
-
-        seen = {}
-
-        async def _spy(message, user_status=None, language="ru", *, _db=None):
-            seen["language"] = language
-
-        monkeypatch.setattr(mod, "login_via_button", _spy)
-        await mod.login_command(SimpleNamespace(), language="uz")
-        assert seen["language"] == "uz"
-
-    @pytest.mark.asyncio
     async def test_complete_onboarding_final_threads_language(self, monkeypatch):
         from types import SimpleNamespace
 

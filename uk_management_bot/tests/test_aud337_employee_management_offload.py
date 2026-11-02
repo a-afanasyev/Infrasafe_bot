@@ -184,13 +184,13 @@ def test_apply_specialization_change_canon_parse_and_audit(db):
 def test_moderate_employee_routes_to_auth_service(db, monkeypatch):
     _user(db, db_id=9, tg_id=900)
     auth = MagicMock()
-    auth.approve_user.return_value = True
+    auth.approve_user.return_value = "ok"
     monkeypatch.setattr(emp, "AuthService", lambda s: auth)
 
     assert emp._moderate_employee(db, 900, 5, "approve_user", "коммент") == "ok"
     auth.approve_user.assert_called_once_with(5, 9, "коммент")
 
-    auth.approve_user.return_value = False
+    auth.approve_user.return_value = "error"
     assert emp._moderate_employee(db, 900, 5, "approve_user", "коммент") == "fail"
 
     assert emp._moderate_employee(db, 111, 5, "approve_user", "коммент") == "no_actor"

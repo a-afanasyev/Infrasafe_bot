@@ -67,7 +67,9 @@ async def _resident(db, tg, *, verification="pending") -> User:
     return u
 
 
-async def _doc(db, user_id, *, file_id="AgACSECRET", dtype=DocumentType.PASSPORT):
+# По умолчанию — документ на квартиру: без него верификацию не подтвердить
+# (approval_rules); отказы гейта — в TestPropertyDocumentGate.
+async def _doc(db, user_id, *, file_id="AgACSECRET", dtype=DocumentType.PROPERTY_DEED):
     d = UserDocument(user_id=user_id, document_type=dtype, file_id=file_id,
                      file_name="passport.jpg", file_size=1024)
     db.add(d)
@@ -217,7 +219,8 @@ class TestApproveVerification:
         ])
         await db_session.commit()
 
-        await client.post(f"{BASE}/{resident_id}/verification/approve", json={})
+        # Документа нет — менеджер проверил очно.
+        await client.post(f"{BASE}/{resident_id}/verification/approve", json={"in_person": True})
 
         db_session.expire_all()
         bindings = (await db_session.execute(
@@ -315,6 +318,62 @@ class TestApproveVerification:
         assert "Media Service" in text
 
 
+# ═══════════════════════ Обязательный документ на квартиру ═══════════════════════
+
+
+class TestPropertyDocumentGate:
+    """Решение владельца 2026-11-03: без документа на квартиру (право
+    собственности / аренда) верификацию не подтвердить — кроме очной проверки."""
+
+    async def test_no_document_conflicts_with_code(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        resident = await _resident(db_session, 6151, verification="pending")
+        r = await client.post(f"{BASE}/{resident.id}/verification/approve", json={})
+        assert r.status_code == 409
+        assert r.headers["X-Error-Code"] == "property_document_required"
+
+    async def test_passport_alone_is_not_enough(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        resident = await _resident(db_session, 6152, verification="pending")
+        resident_id = resident.id
+        await _doc(db_session, resident_id, dtype=DocumentType.PASSPORT)
+        r = await client.post(f"{BASE}/{resident_id}/verification/approve", json={})
+        assert r.status_code == 409
+        db_session.expire_all()
+        # Отказ ничего не трогает: документ на месте, статус прежний.
+        assert len((await db_session.execute(
+            select(UserDocument).where(UserDocument.user_id == resident_id)
+        )).scalars().all()) == 1
+
+    async def test_rental_agreement_is_enough(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        resident = await _resident(db_session, 6153, verification="pending")
+        await _doc(db_session, resident.id, dtype=DocumentType.RENTAL_AGREEMENT)
+        r = await client.post(f"{BASE}/{resident.id}/verification/approve", json={})
+        assert r.status_code == 200, r.text
+
+    async def test_in_person_check_is_audited(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        from uk_management_bot.database.models.audit import AuditLog
+        import json as _json
+
+        resident = await _resident(db_session, 6154, verification="pending")
+        resident_id = resident.id
+        r = await client.post(f"{BASE}/{resident_id}/verification/approve",
+                              json={"in_person": True})
+        assert r.status_code == 200, r.text
+        db_session.expire_all()
+        row = (await db_session.execute(
+            select(AuditLog).where(AuditLog.action == "resident_verification_approved")
+        )).scalars().all()[-1]
+        details = row.details if isinstance(row.details, dict) else _json.loads(row.details)
+        assert details["in_person"] is True
+
+
 # ═══════════════════════ Отказ ═══════════════════════
 
 
@@ -378,7 +437,7 @@ class TestRejectVerification:
     ):
         resident = await _resident(db_session, 6205, verification="requested")
         db_session.add(UserDocument(
-            user_id=resident.id, document_type=DocumentType.PASSPORT, media_id=7002,
+            user_id=resident.id, document_type=DocumentType.PROPERTY_DEED, media_id=7002,
             encryption_key=b"k" * 32, document_uuid="00000000-0000-4000-8000-000000007002",
         ))
         await db_session.commit()
@@ -421,7 +480,7 @@ class TestDocumentProxy:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         resident = await _resident(db_session, 6301)
-        await _doc(db_session, resident.id, file_id="AgACSECRETTOKEN")
+        await _doc(db_session, resident.id, file_id="AgACSECRETTOKEN", dtype=DocumentType.PASSPORT)
 
         r = await client.get(f"{BASE}/{resident.id}/documents")
         assert r.status_code == 200

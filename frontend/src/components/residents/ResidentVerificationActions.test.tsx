@@ -25,6 +25,11 @@ function profile(over: Partial<ResidentProfile> = {}): ResidentProfile {
   }
 }
 
+const PROPERTY_DOC = {
+  id: 9, document_type: 'property_deed', file_name: 'photo.jpg', file_size: 1,
+  verification_status: null, created_at: null,
+}
+
 beforeEach(() => {
   m.request.mockClear(); m.approve.mockClear(); m.reject.mockClear()
 })
@@ -67,7 +72,7 @@ describe('ResidentVerificationActions', () => {
 
   it('подтверждение честно предупреждает о последствиях', async () => {
     const user = userEvent.setup()
-    render(<ResidentVerificationActions resident={profile()} />)
+    render(<ResidentVerificationActions resident={profile({ documents: [PROPERTY_DOC] })} />)
 
     await user.click(screen.getByRole('button', { name: 'Верифицировать' }))
     const dialog = screen.getByRole('alertdialog')
@@ -75,6 +80,33 @@ describe('ResidentVerificationActions', () => {
     // Формулировка про копии обязана остаться: очистка Media Service
     // best-effort, и обещать полное стирание было бы враньём.
     expect(dialog).toHaveTextContent(/копии файлов могут сохраниться/i)
+  })
+
+  it('без документа на квартиру подтвердить нельзя — только с очной проверкой', async () => {
+    // Решение владельца 2026-11-03; бэкенд ответил бы 409 property_document_required.
+    const user = userEvent.setup()
+    render(<ResidentVerificationActions resident={profile()} />)
+
+    const verify = screen.getByRole('button', { name: 'Верифицировать' })
+    expect(verify).toBeDisabled()
+    expect(screen.getByText(/не загрузил документ на квартиру/)).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Документ проверен очно'))
+    expect(verify).not.toBeDisabled()
+    await user.click(verify)
+    await user.click(screen.getByRole('button', { name: 'Верифицировать', hidden: false }))
+    expect(m.approve).toHaveBeenCalledWith({ in_person: true })
+  })
+
+  it('с загруженным договором аренды подтверждение без галочки', async () => {
+    const user = userEvent.setup()
+    render(<ResidentVerificationActions resident={profile({
+      documents: [{ ...PROPERTY_DOC, document_type: 'rental_agreement' }],
+    })} />)
+
+    expect(screen.queryByLabelText('Документ проверен очно')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Верифицировать' }))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
   })
 
   it('отказ требует причину от 3 символов', async () => {

@@ -22,17 +22,18 @@ def get_document_type_keyboard(language: str = "ru") -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup с кнопками типов документов
     """
+    # Документ на квартиру обязателен (решение владельца 2026-11-03): его
+    # варианты — первой строкой, кнопки «Пропустить» больше нет.
     keyboard = [
         [
-            KeyboardButton(text=get_text("onboarding.keyboards.passport", language=language)),
-            KeyboardButton(text=get_text("onboarding.keyboards.property_deed", language=language))
+            KeyboardButton(text=get_text("onboarding.keyboards.property_deed", language=language)),
+            KeyboardButton(text=get_text("onboarding.keyboards.rental_agreement", language=language))
         ],
         [
-            KeyboardButton(text=get_text("onboarding.keyboards.rental_agreement", language=language)),
+            KeyboardButton(text=get_text("onboarding.keyboards.passport", language=language)),
             KeyboardButton(text=get_text("onboarding.keyboards.other_documents", language=language))
         ],
         [
-            KeyboardButton(text=get_text("onboarding.keyboards.skip_documents", language=language)),
             KeyboardButton(text=get_text("onboarding.keyboards.complete_onboarding", language=language))
         ]
     ]

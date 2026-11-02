@@ -1118,7 +1118,7 @@
     "apartment": "Xonadon",
     "submit": "Arizani yuborish",
     "pending_title": "Ariza yuborildi",
-    "pending_body": "Arizangiz tekshiruvga yuborildi. Tasdiqlangach sizga xabar beramiz.",
+    "pending_body": "Arizangiz tekshiruvga yuborildi. Keyingi qadam — bot chatida kvartira hujjatini yuklang: «📤 Hujjatlarni yuklash» tugmasini bosing yoki /start yuboring. Hujjatlar faqat tekshiruv vaqtida shifrlangan holda vaqtincha saqlanadi.",
     "open_in_telegram": "Ro'yxatdan o'tish uchun ushbu sahifani Telegram orqali oching.",
     "already_registered": "Siz allaqachon ro'yxatdan o'tgansiz. Ilovaga o'ting.",
     "error_generic": "Arizani yuborib bo'lmadi. Qaytadan urinib ko'ring.",
@@ -1139,7 +1139,9 @@
     "change_address": "Manzilni o'zgartirish",
     "address": "Manzil",
     "phone_required": "Avval Telegramda kontaktni ulashing.",
-    "apartment_label": "kv. {{number}}"
+    "apartment_label": "kv. {{number}}",
+    "welcome": "👋 Tizimga xush kelibsiz!\nTizim{{complex}} turar-joy majmuasi aholisi uchun mo'ljallangan.\nRo'yxatdan o'tishda telefon raqamingizni va mulk huquqini tasdiqlovchi hujjatni yoki ijara shartnomasini taqdim etish majburiy.\nHurmat bilan, {{company}}",
+    "company_default": "Boshqaruv kompaniyasi"
   },
   "status": {
     "new": "Yangi",
@@ -1466,7 +1468,8 @@
     "unblockConfirm": "Xodimni blokdan chiqarish",
     "blockConfirmDesc": "{{name}} xodimni bloklash?",
     "unblockConfirmDesc": "{{name}} xodimni blokdan chiqarish?",
-    "noRequests": "Tayinlash uchun arizalar yo'q"
+    "noRequests": "Tayinlash uchun arizalar yo'q",
+    "phoneRequestedOn": "Raqam so'raldi · {{date}}"
   },
   "employeeDetail": {
     "noSpecialization": "Ixtisoslik yo'q",
@@ -1713,7 +1716,8 @@
       "verified": "Shaxs tasdiqlandi",
       "verifyFailed": "Shaxsni tasdiqlab bo‘lmadi",
       "verificationRejected": "Tekshiruv rad etildi",
-      "verificationRejectFailed": "Tekshiruvni rad etib bo‘lmadi"
+      "verificationRejectFailed": "Tekshiruvni rad etib bo‘lmadi",
+      "unblockedToPending": "Hisob blokdan chiqarildi va ro'yxatdan o'tishga qaytarildi: telefon raqami yo'q yoki kvartira hujjati tasdiqlanmagan"
     },
     "requestDocuments": "Hujjat so‘rash",
     "requestDocumentsTitle": "Yashovchidan hujjat so‘rash",
@@ -1728,7 +1732,14 @@
     "documentOpen": "Ochish",
     "documentLoading": "Yuklanmoqda…",
     "documentClose": "Yopish",
-    "documentLoadFailed": "Hujjatni yuklab bo‘lmadi"
+    "documentLoadFailed": "Hujjatni yuklab bo‘lmadi",
+    "refusal": {
+      "phone_required": "Tasdiqlab bo'lmaydi: aholining telefon raqami yo'q. Raqamni so'rang.",
+      "verification_required": "Tasdiqlab bo'lmaydi: avval tekshiruvni tasdiqlang (kvartira hujjati).",
+      "property_document_required": "Tasdiqlab bo'lmaydi: aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan. Hujjatni shaxsan ko'rgan bo'lsangiz, yuzma-yuz tekshiruvni belgilang."
+    },
+    "propertyDocMissing": "Aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan.",
+    "inPersonChecked": "Hujjat yuzma-yuz tekshirildi"
   },
   "addressModals": {
     "addYard": "Hovli qo'shish",

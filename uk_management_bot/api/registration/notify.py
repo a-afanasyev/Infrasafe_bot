@@ -38,3 +38,25 @@ async def notify_managers_new_registration(*, telegram_id: int, full_name: str, 
         else:
             logger.warning("Уведомление о регистрации админу %s не доставлено", admin_id)
     return delivered
+
+
+async def offer_document_upload(*, telegram_id: int, language: str) -> bool:
+    """Best-effort: после регистрации в TWA прислать жителю в бот кнопку
+    «📤 Загрузить документы» (документ на квартиру обязателен, загрузка с
+    шифрованием живёт только в боте). Never raises; потерянное сообщение
+    восстанавливается через /start (handlers/base._offer_document_upload)."""
+    from uk_management_bot.keyboards.documents_entry import get_upload_documents_inline
+    from uk_management_bot.utils.helpers import get_text
+
+    # Общий модуль шлёт JSON: aiogram-клавиатуру сериализуем сами.
+    markup = get_upload_documents_inline(language).model_dump(mode="json", exclude_none=True)
+    try:
+        result = await telegram_send.send_message(
+            telegram_id, get_text("onboarding.documents.description", language=language),
+            reply_markup=markup,
+        )
+    except Exception as e:
+        logger.error("Кнопка загрузки документов жителю %s не отправлена: %s",
+                     telegram_id, describe_http_error(e))
+        return False
+    return result.ok

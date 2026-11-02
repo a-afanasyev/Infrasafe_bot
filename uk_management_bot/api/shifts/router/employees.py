@@ -30,6 +30,10 @@ from uk_management_bot.api.shifts.schemas import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.document_purge import cleanup_purged_documents
+from uk_management_bot.services.residents.approval_rules import (
+    account_refusal, is_pure_applicant, verification_refusal,
+)
+from uk_management_bot.services.residents.verification_core import has_property_document
 from uk_management_bot.utils.auth_helpers import get_user_roles
 
 from ._helpers import _ensure_not_privileged, _resolve_bot_username, _shift_brief
@@ -232,6 +236,13 @@ async def approve_employee(user_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=409, detail="User is already verified")
     if user.verification_status == "rejected":
         raise HTTPException(status_code=409, detail="User was rejected and cannot be re-approved this way")
+    # Житель — то же правило, что у раздела «Жители»: без документа на квартиру
+    # не подтверждаем (очная проверка с аудитом — только там).
+    if is_pure_applicant(user):
+        refusal = verification_refusal(has_property_doc=await has_property_document(db, user.id))
+        if refusal is not None:
+            raise HTTPException(status_code=409, detail="Нет документа на квартиру",
+                                headers={"X-Error-Code": refusal})
     await cleanup_purged_documents(await service.set_user_verification(db, user, "verified"))
     return {"id": user.id, "verification_status": user.verification_status}
 
@@ -271,8 +282,11 @@ async def unblock_employee(user_id: int, db: AsyncSession = Depends(get_db)):
     _ensure_not_privileged(user, action="Cannot modify status of a manager or admin user")
     if user.status != "blocked":
         raise HTTPException(status_code=409, detail="User is not blocked")
-    await service.set_user_status(db, user, "approved")
-    return {"message": "unblocked"}
+    # Житель без телефона/подтверждённой проверки — в онбординг, не в доступ
+    # (approval_rules; стафф правилом не затрагивается).
+    new_status = "pending" if account_refusal(user) else "approved"
+    await service.set_user_status(db, user, new_status)
+    return {"message": "unblocked", "status": new_status}
 
 
 @router.patch("/employees/{user_id}/activate")

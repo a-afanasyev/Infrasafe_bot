@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
-from uk_management_bot.services.user_verification_service import UserVerificationService
+from uk_management_bot.services.user_verification_service import UserVerificationService, VerificationRefused
 from uk_management_bot.services.notification_service import NotificationService
 from uk_management_bot.database.models.user_verification import (
     VerificationStatus
@@ -192,24 +192,28 @@ def _load_access_rights_card(db, user_id: int):
 
 def _approve_user_db(db, user_id: int, admin_telegram_id: int):
     """Одобрение одним commit + fetch уведомлений. → (purge | None, notify_pair,
-    restart_target). Сеть (гигиена медиа, отправки) — у вызывающего.
+    restart_target, refusal). Сеть (гигиена медиа, отправки) — у вызывающего.
+    `refusal` — код отказа правила (нет документа на квартиру) или None.
 
     Решение уже закоммичено к моменту fetch'а: его сбой не должен терять purge
     (иначе media_id не дойдут до гигиены) — уведомления просто не уйдут.
     """
     from uk_management_bot.database.models.user import User
 
-    purge = UserVerificationService(db).approve_verification_db(user_id, admin_telegram_id)
+    try:
+        purge = UserVerificationService(db).approve_verification_db(user_id, admin_telegram_id)
+    except VerificationRefused as refused:
+        return None, None, None, refused.code
     if purge is None:
-        return None, None, None
+        return None, None, None, None
     try:
         notify_pair = NotificationService(db).collect_verification_approved_message(user_id)
         target_user = db.query(User).filter(User.id == user_id).first()
         restart_target = (target_user.telegram_id, target_user.language or "ru") if target_user else None
     except Exception as e:  # noqa: BLE001
         logger.error("Уведомления об одобрении %s не собраны: %s", user_id, type(e).__name__)
-        return purge, None, None
-    return purge, notify_pair, restart_target
+        return purge, None, None, None
+    return purge, notify_pair, restart_target, None
 
 
 def _reject_user_db(db, user_id: int, admin_telegram_id: int, notes: str):

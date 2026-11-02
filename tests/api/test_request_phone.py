@@ -11,6 +11,7 @@ request_contact-клавиатурой; сам номер появится по�
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import select
 
 from uk_management_bot.api.users import phone_request
 from uk_management_bot.database.models.user import User
@@ -202,3 +203,39 @@ async def test_resident_not_found_404(client, sent):
     resp = await client.post("/api/v2/residents/999999/request-phone")
     assert resp.status_code == 404
     assert sent == []
+
+
+# ─── «Номер запрошен» переживает перезагрузку (users.phone_requested_at) ─────
+
+
+@pytest.mark.asyncio
+async def test_delivered_request_stamps_and_lists_requested_at(client, db_session, sent):
+    """Доставка при `bot_blocked_at IS NULL` раньше вообще не коммитила —
+    штамп обязан появиться и уйти в список жителей."""
+    resident = await _user(db_session, 7201, roles='["applicant"]', active_role="applicant")
+    resident_id = resident.id
+
+    assert (await client.post(f"/api/v2/residents/{resident_id}/request-phone")).status_code == 200
+
+    items = (await client.get("/api/v2/residents", params={"limit": 100})).json()["items"]
+    row = next(i for i in items if i["id"] == resident_id)
+    assert row["phone_requested_at"] is not None
+    # expire_all — после запросов к API: он просрочил бы и текущего пользователя.
+    db_session.expire_all()
+    stamped = (await db_session.execute(
+        select(User.phone_requested_at).where(User.id == resident_id))).scalar_one()
+    assert stamped is not None
+
+
+@pytest.mark.asyncio
+async def test_undelivered_request_does_not_stamp(client, db_session, monkeypatch):
+    emp = await _user(db_session, 7202)
+    emp_id = emp.id
+    monkeypatch.setattr(
+        phone_request, "_send", AsyncMock(return_value=phone_request.VERDICT_ERROR))
+
+    await client.post(f"/api/v2/shifts/employees/{emp_id}/request-phone")
+
+    db_session.expire_all()
+    assert (await db_session.execute(
+        select(User.phone_requested_at).where(User.id == emp_id))).scalar_one() is None

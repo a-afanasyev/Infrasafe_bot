@@ -117,8 +117,10 @@ def _moderate_employee(db: Session, actor_tg_id: int, employee_id: int,
     current_user = db.query(User).filter(User.telegram_id == actor_tg_id).first()
     if not current_user:
         return "no_actor"
-    success = getattr(AuthService(db), method_name)(employee_id, current_user.id, comment)
-    return "ok" if success else "fail"
+    result = getattr(AuthService(db), method_name)(employee_id, current_user.id, comment)
+    # block_user -> bool, approve_user -> "ok" | код отказа | "error": код —
+    # непустая строка, по истинности он сошёл бы за успех.
+    return "ok" if result is True or result == "ok" else "fail"
 
 
 def _delete_employee(db: Session, actor_tg_id: int, employee_id: int, comment: str):

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { useRequestResidentPhone } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
+import { formatDate } from '../../utils/timezone'
 import { BotBlockedBadge, ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
 
 interface Props {
@@ -58,6 +59,12 @@ export default function ResidentCard({ resident }: Props) {
                 ? t('employees.phoneRequestSent')
                 : `📱 ${t('employees.requestPhone')}`}
             </button>
+          )}
+          {/* Факт запроса хранится на сервере — переживает перезагрузку. */}
+          {!resident.phone && !requestPhone.isSuccess && resident.phone_requested_at && (
+            <div className="text-[11px] text-text-muted mt-0.5">
+              {t('employees.phoneRequestedOn', { date: formatDate(resident.phone_requested_at) })}
+            </div>
           )}
         </div>
       </div>

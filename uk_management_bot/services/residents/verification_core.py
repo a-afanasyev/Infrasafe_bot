@@ -24,7 +24,7 @@ verified/APPROVED, reject → rejected/REJECTED.
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.user import User
@@ -32,10 +32,13 @@ from uk_management_bot.database.models.user_apartment import (
     UserApartment, UserApartmentStatus,
 )
 from uk_management_bot.database.models.user_verification import (
-    UserVerification, VerificationStatus,
+    UserDocument, UserVerification, VerificationStatus,
 )
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents
 from uk_management_bot.services.residents import core, queries
+from uk_management_bot.services.residents.approval_rules import (
+    PROPERTY_DOC_TYPES, verification_refusal,
+)
 from uk_management_bot.services.residents.exceptions import (
     ResidentConflict, ResidentValidationError,
 )
@@ -123,8 +126,20 @@ async def request_documents(
     return resident
 
 
+async def has_property_document(db: AsyncSession, user_id: int) -> bool:
+    """Загружен ли документ на квартиру (право собственности / аренда)."""
+    count = (await db.execute(
+        select(func.count()).select_from(UserDocument).where(
+            UserDocument.user_id == user_id,
+            UserDocument.document_type.in_(PROPERTY_DOC_TYPES),
+        )
+    )).scalar_one()
+    return count > 0
+
+
 async def approve_verification(
     db: AsyncSession, *, resident_id: int, actor_id: int, notes: str | None = None,
+    in_person: bool = False,
 ) -> tuple[User, PurgeResult]:
     """Подтвердить личность жителя.
 
@@ -143,6 +158,17 @@ async def approve_verification(
         raise ResidentConflict(
             f"Верификация уже завершена (статус: {resident.verification_status})",
             code="verification_closed",
+        )
+    # Документ на квартиру обязателен (решение владельца 2026-11-03); очная
+    # проверка менеджером его заменяет и остаётся в аудите. Считать — ДО purge.
+    refusal = verification_refusal(
+        has_property_doc=await has_property_document(db, resident_id), in_person=in_person,
+    )
+    if refusal is not None:
+        raise ResidentConflict(
+            "Нет документа на квартиру: попросите жителя загрузить право "
+            "собственности или договор аренды, либо отметьте очную проверку",
+            code=refusal,
         )
 
     # До смены статуса: иначе flush запустит триггер 026 раньше и media_id не соберутся.
@@ -179,7 +205,8 @@ async def approve_verification(
     core._audit(db, action="resident_verification_approved", actor_id=actor_id,
                 resident=resident,
                 details={"auto_approved_apartments": len(pending),
-                         "deleted_documents": purge.count, "notes": notes})
+                         "deleted_documents": purge.count, "notes": notes,
+                         "in_person": in_person})
     await core._finish(db, event=None, payload=None)
     logger.info(
         "Житель %s верифицирован менеджером %s: авто-одобрено квартир %s, "

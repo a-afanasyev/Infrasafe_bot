@@ -45,6 +45,8 @@ services:
     environment:
       # ARCH-106: REDIS_URL строится из REDIS_PASSWORD; хост — uk-redis (п.4 выше).
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
+      # Приветствие онбординга (бот + TWA через api) — несекретно.
+      - RESIDENTIAL_COMPLEX_NAME=Olmazor Business City
     networks: !override
       - uk-internal
 
@@ -65,6 +67,7 @@ services:
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@uk-redis:6379/0
       - FRONTEND_URL=https://profk.uz
+      - RESIDENTIAL_COMPLEX_NAME=Olmazor Business City
     networks: !override
       - uk-network
       - uk-internal

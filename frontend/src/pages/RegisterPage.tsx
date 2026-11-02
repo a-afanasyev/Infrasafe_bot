@@ -61,6 +61,7 @@ export default function RegisterPage() {
   const [selected, setSelected] = useState<SelectedAddress | null>(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [site, setSite] = useState({ complex: '', company: '' })
   const startedRef = useRef(false)
 
   // A9-P3-20: «кв» — через i18n (было захардкожено по-русски и в UZ).
@@ -75,6 +76,7 @@ export default function RegisterPage() {
     try {
       const data = await start()
       setTicket(data.registration_ticket)
+      setSite({ complex: data.complex_name ?? '', company: data.company_name ?? '' })
       const name = [data.prefill.first_name, data.prefill.last_name].filter(Boolean).join(' ')
       setFullName((prev) => prev || name)
       const knownPhone = data.prefill.phone || ''
@@ -162,6 +164,11 @@ export default function RegisterPage() {
   }
 
   const muted = 'text-center text-sm text-text-secondary font-[family-name:var(--font-body)]'
+  // Приветствие владельца (2026-11-03) — тот же текст, что в боте.
+  const welcome = t('register.welcome', {
+    complex: site.complex ? ` ${site.complex}` : '',
+    company: site.company || t('register.company_default'),
+  })
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-root px-4">
@@ -199,6 +206,7 @@ export default function RegisterPage() {
           )}
           {phase === 'contact' && (
             <>
+              <div className={`${muted} whitespace-pre-line mb-5`}>{welcome}</div>
               {error && <div className="text-[13px] text-red mb-3 text-center">{error}</div>}
               <ContactStep ticket={ticket} contactStatus={reg.contactStatus} onDone={onContactDone} />
             </>
