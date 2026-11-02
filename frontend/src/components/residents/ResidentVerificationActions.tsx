@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ResidentProfile } from '../../types/api'
 import {
@@ -30,9 +30,10 @@ export default function ResidentVerificationActions({ resident }: Props) {
   const [approveOpen, setApproveOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [notes, setNotes] = useState('')
-  const [inPerson, setInPerson] = useState(false)
-  // Отметка «проверено очно» — про конкретного жителя, не переносится на другого.
-  useEffect(() => setInPerson(false), [resident.id])
+  // Отметка «проверено очно» — про конкретного жителя: храним, для кого она
+  // поставлена, и на другом жителе она сама снята (без эффекта-сброса).
+  const [inPersonFor, setInPersonFor] = useState<number | null>(null)
+  const inPerson = inPersonFor === resident.id
 
   const request = useRequestDocuments(resident.id)
   const approve = useApproveVerification(resident.id)
@@ -73,7 +74,7 @@ export default function ResidentVerificationActions({ resident }: Props) {
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] text-text-muted m-0">{t('residents.propertyDocMissing')}</p>
           <label className="flex items-center gap-2 text-[13px] text-text-secondary cursor-pointer">
-            <input type="checkbox" checked={inPerson} onChange={e => setInPerson(e.target.checked)} />
+            <input type="checkbox" checked={inPerson} onChange={e => setInPersonFor(e.target.checked ? resident.id : null)} />
             {t('residents.inPersonChecked')}
           </label>
         </div>
