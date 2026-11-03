@@ -61,7 +61,7 @@ export default function AiManagerPage() {
 
   if (isLoading || (!data && !isError)) return <LoadingSpinner />
   if (isError || !data || !draft) {
-    return <div className="text-[13px] text-red-500">{t('autoManager.loadFailed')}</div>
+    return <div className="p-5 px-6 text-[13px] text-red-500">{t('autoManager.loadFailed')}</div>
   }
 
   const patch = changedKeys(draft, toDraft(data))
@@ -75,7 +75,7 @@ export default function AiManagerPage() {
   })
 
   return (
-    <div className="flex flex-col gap-5 max-w-4xl">
+    <div className="p-5 px-6 flex flex-col gap-5 max-w-4xl">
       <div>
         <h1 className="font-[var(--font-display)] font-semibold text-lg text-text-primary">{t('aiManager.title')}</h1>
         <p className="text-[12px] text-text-muted">{t('aiManager.subtitle')}</p>

@@ -130,7 +130,8 @@ export default function ResidentsPage() {
   return (
     <div className="p-5 px-6 flex flex-col gap-5">
       {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* На телефоне 4 плитки в ряд обрезали числа и подписи — 2 в ряд до lg. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {STATS.map(card => (
           <div
             key={card.label}
@@ -142,7 +143,7 @@ export default function ResidentsPage() {
             >
               {card.icon}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-[family-name:var(--font-mono)] text-[22px] font-semibold text-text-primary">
                 {card.value}
               </div>

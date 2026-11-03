@@ -336,10 +336,15 @@ function TopbarInner({
         </Button>
       )}
 
-      <div className="flex-1" />
+      {/* Действия страницы — своя полоса: на узком экране она прокручивается
+          по горизонтали, а не выталкивает кнопки за край. dir="rtl" у полосы:
+          содержимое прижато вправо и прокрутка стартует с правого края, где
+          главная кнопка («+ Добавить»); левые элементы (поиск) — свайпом. */}
+      <div dir="rtl" className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none]">
+        <div dir="ltr" className="flex shrink-0 items-center gap-2">{actions}</div>
+      </div>
 
-      <div className="flex items-center gap-2">
-        {actions}
+      <div className="flex shrink-0 items-center gap-2">
         <LanguageSwitcher />
         {canToggle && (
           <Button
