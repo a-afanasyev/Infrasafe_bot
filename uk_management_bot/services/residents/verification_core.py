@@ -37,8 +37,9 @@ from uk_management_bot.database.models.user_verification import (
 from uk_management_bot.services.document_purge import PurgeResult, purge_documents
 from uk_management_bot.services.residents import core, queries
 from uk_management_bot.services.residents.approval_rules import (
-    PROPERTY_DOC_TYPES, verification_refusal,
+    PROPERTY_DOC_TYPES, account_refusal, is_pure_applicant, verification_refusal,
 )
+from uk_management_bot.services.users.status import set_user_status
 from uk_management_bot.services.residents.exceptions import (
     ResidentConflict, ResidentValidationError,
 )
@@ -140,7 +141,7 @@ async def has_property_document(db: AsyncSession, user_id: int) -> bool:
 async def approve_verification(
     db: AsyncSession, *, resident_id: int, actor_id: int, notes: str | None = None,
     in_person: bool = False,
-) -> tuple[User, PurgeResult]:
+) -> tuple[User, PurgeResult, bool]:
     """Подтвердить личность жителя.
 
     Побочные эффекты — те же, что у бот-пути, но одной транзакцией:
@@ -150,8 +151,15 @@ async def approve_verification(
         основная остаётся у прежней, иначе ею становится самая старая);
       * удаление строк `UserDocument`.
 
-    → (житель, PurgeResult удалённых документов). Blob'ы в Media Service чистит
-    вызывающий ПОСЛЕ commit — внешний сервис не должен откатывать решение.
+    Решение владельца 2026-11-03 (фикс B): документ проверен — значит, и
+    доступ дать можно. Если житель «чистый», аккаунт ещё `pending` и правило
+    доступа теперь не возражает (телефон есть), аккаунт одобряется в той же
+    транзакции: отдельный второй шаг «Одобрить» ничего не проверял и заводил
+    менеджеров бота в тупик (кейс profk id=93).
+
+    → (житель, PurgeResult удалённых документов, аккаунт одобрен этим вызовом).
+    Blob'ы в Media Service чистит вызывающий ПОСЛЕ commit — внешний сервис не
+    должен откатывать решение.
     """
     resident = await core._lock_and_require_resident(db, resident_id)
     if resident.verification_status not in _DECIDABLE_FROM:
@@ -207,13 +215,24 @@ async def approve_verification(
                 details={"auto_approved_apartments": len(pending),
                          "deleted_documents": purge.count, "notes": notes,
                          "in_person": in_person})
+
+    account_approved = (
+        resident.status == "pending"
+        and is_pure_applicant(resident)
+        and account_refusal(resident) is None
+    )
+    if account_approved:
+        await set_user_status(db, resident, "approved", commit=False)
+        core._audit(db, action="user_approved", actor_id=actor_id, resident=resident,
+                    details={"old_status": "pending", "new_status": "approved",
+                             "via": "verification"})
     await core._finish(db, event=None, payload=None)
     logger.info(
         "Житель %s верифицирован менеджером %s: авто-одобрено квартир %s, "
         "удалено записей документов %s",
         resident_id, actor_id, len(pending), purge.count,
     )
-    return resident, purge
+    return resident, purge, account_approved
 
 
 async def reject_verification(

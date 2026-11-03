@@ -19,7 +19,9 @@ from aiogram import F
 from aiogram.types import CallbackQuery
 
 from uk_management_bot.services.user_management_service import UserManagementService
-from uk_management_bot.keyboards.user_management import get_user_management_main_keyboard
+from uk_management_bot.keyboards.user_management import (
+    get_refusal_keyboard, get_user_management_main_keyboard,
+)
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.user_names import full_name
 from uk_management_bot.utils.auth_helpers import has_admin_access
@@ -316,7 +318,12 @@ async def handle_approve_user_from_notification(callback: CallbackQuery, roles: 
 
             logger.info(f"Пользователь {user_id} одобрен менеджером {callback.from_user.id}")
         elif result != "error":
-            await callback.answer(get_text(f'user_mgmt.refusal.{result}', language=lang), show_alert=True)
+            # Сообщением, не alert: к отказу нужна кнопка в дашборд.
+            await callback.answer()
+            await callback.message.answer(
+                get_text(f'user_mgmt.refusal.{result}', language=lang),
+                reply_markup=get_refusal_keyboard(result, user_id, lang),
+            )
         else:
             await callback.answer(get_text('user_mgmt.handlers.error_approving_user', language=lang), show_alert=True)
 

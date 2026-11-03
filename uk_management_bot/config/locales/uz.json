@@ -2070,7 +2070,7 @@
     },
     "refusal": {
       "phone_required": "⚠️ Tasdiqlab bo'lmaydi: aholining telefon raqami yo'q. Raqamni so'rang.",
-      "verification_required": "⚠️ Tasdiqlab bo'lmaydi: avval tekshiruvni tasdiqlang (kvartira hujjati).",
+      "verification_required": "⚠️ Tasdiqlab bo'lmaydi: kvartira hujjati hali tekshirilmagan. Dashboardda aholi kartochkasini oching va «Tasdiqlash» tugmasini bosing — hisob darhol tasdiqlanadi.",
       "property_document_required": "⚠️ Tasdiqlab bo'lmaydi: aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan."
     }
   },

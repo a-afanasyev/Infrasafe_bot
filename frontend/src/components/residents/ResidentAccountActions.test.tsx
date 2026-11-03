@@ -52,7 +52,7 @@ describe('ResidentAccountActions', () => {
     render(<ResidentAccountActions
       resident={profile({ status: 'pending', phone: '+998901234567', verification_status: 'pending' })} />)
     expect(screen.getByRole('button', { name: 'Одобрить аккаунт' })).toBeDisabled()
-    expect(screen.getByText(/подтвердите верификацию/)).toBeInTheDocument()
+    expect(screen.getByText(/нажмите «Верифицировать»/)).toBeInTheDocument()
   })
 
   it('телефон и подтверждённая верификация — одобрение доступно', async () => {

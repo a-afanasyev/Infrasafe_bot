@@ -1717,7 +1717,8 @@
       "verifyFailed": "Shaxsni tasdiqlab bo‘lmadi",
       "verificationRejected": "Tekshiruv rad etildi",
       "verificationRejectFailed": "Tekshiruvni rad etib bo‘lmadi",
-      "unblockedToPending": "Hisob blokdan chiqarildi va ro'yxatdan o'tishga qaytarildi: telefon raqami yo'q yoki kvartira hujjati tasdiqlanmagan"
+      "unblockedToPending": "Hisob blokdan chiqarildi va ro'yxatdan o'tishga qaytarildi: telefon raqami yo'q yoki kvartira hujjati tasdiqlanmagan",
+      "verifiedAndApproved": "Shaxs tasdiqlandi, hisob tasdiqlandi"
     },
     "requestDocuments": "Hujjat so‘rash",
     "requestDocumentsTitle": "Yashovchidan hujjat so‘rash",
@@ -1725,7 +1726,7 @@
     "requestSubmit": "So‘rash",
     "verifyResident": "Tasdiqlash",
     "verifyConfirm": "Yashovchi shaxsi tasdiqlansinmi?",
-    "verifyConfirmDesc": "Moderatsiyadagi barcha xonadonlar avtomatik tasdiqlanadi. Hujjat yozuvlari kartochkadan yo‘qoladi; tozalash amalga oshmasa, fayl nusxalari Telegram va Media Service’da qolishi mumkin.",
+    "verifyConfirmDesc": "Aholining telefon raqami bo‘lsa, hisobi darhol tasdiqlanadi. Moderatsiyadagi barcha xonadonlar avtomatik tasdiqlanadi. Hujjat yozuvlari kartochkadan yo‘qoladi; tozalash amalga oshmasa, fayl nusxalari Telegram va Media Service’da qolishi mumkin.",
     "rejectVerification": "Tekshiruvni rad etish",
     "rejectVerificationTitle": "Tekshiruvni rad etish",
     "rejectVerificationReason": "Rad etish sababi (kamida 3 belgi)",
@@ -1735,7 +1736,7 @@
     "documentLoadFailed": "Hujjatni yuklab bo‘lmadi",
     "refusal": {
       "phone_required": "Tasdiqlab bo'lmaydi: aholining telefon raqami yo'q. Raqamni so'rang.",
-      "verification_required": "Tasdiqlab bo'lmaydi: avval tekshiruvni tasdiqlang (kvartira hujjati).",
+      "verification_required": "Alohida tasdiqlab bo'lmaydi: quyidagi «Tasdiqlash» tugmasini bosing — hujjat tekshirilgach, hisob darhol tasdiqlanadi.",
       "property_document_required": "Tasdiqlab bo'lmaydi: aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan. Hujjatni shaxsan ko'rgan bo'lsangiz, yuzma-yuz tekshiruvni belgilang."
     },
     "propertyDocMissing": "Aholi kvartira hujjatini (mulk huquqi yoki ijara shartnomasi) yuklamagan.",

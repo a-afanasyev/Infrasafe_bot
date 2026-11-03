@@ -374,6 +374,68 @@ class TestPropertyDocumentGate:
         assert details["in_person"] is True
 
 
+# ═══════════════════════ Фикс B: верификация одобряет аккаунт ═══════════════════════
+
+
+class TestVerificationApprovesAccount:
+    """Кейс profk id=93 (2026-11-03): менеджер бота упирался в «сначала
+    подтвердите верификацию» без пути её подтвердить. Теперь подтверждение
+    верификации сразу даёт доступ жителю с телефоном — одним действием."""
+
+    async def _pending(self, db, tg, *, phone="+998901234567", roles='["applicant"]'):
+        u = User(telegram_id=tg, first_name="В", last_name=str(tg), roles=roles,
+                 active_role="applicant", status="pending", language="ru",
+                 verification_status="pending", phone=phone)
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+        await _doc(db, u.id)
+        return u.id
+
+    async def _status(self, db, rid):
+        db.expire_all()
+        return (await db.execute(select(User.status).where(User.id == rid))).scalar_one()
+
+    async def test_with_phone_account_approved_and_notified(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        from uk_management_bot.database.models.audit import AuditLog
+
+        rid = await self._pending(db_session, 6301)
+        with patch("uk_management_bot.api.residents.notify.notify_account_approved",
+                   new=AsyncMock()) as approved, \
+             patch("uk_management_bot.api.residents.notify.notify_verification_approved",
+                   new=AsyncMock()) as verified:
+            r = await client.post(f"{BASE}/{rid}/verification/approve", json={})
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "approved"
+        assert await self._status(db_session, rid) == "approved"
+        approved.assert_awaited_once()
+        verified.assert_not_awaited()
+        actions = (await db_session.execute(
+            select(AuditLog.action, AuditLog.details).where(AuditLog.action == "user_approved")
+        )).all()
+        assert any("verification" in str(d) for _, d in actions)
+
+    async def test_without_phone_account_stays_pending(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        rid = await self._pending(db_session, 6302, phone=None)
+        r = await client.post(f"{BASE}/{rid}/verification/approve", json={})
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "pending"
+        assert await self._status(db_session, rid) == "pending"
+
+    async def test_staff_account_not_approved_from_residents(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Стафф раздел «Жители» не одобряет — его активирует «Сотрудники»."""
+        rid = await self._pending(db_session, 6303, roles='["applicant", "executor"]')
+        r = await client.post(f"{BASE}/{rid}/verification/approve", json={})
+        assert r.status_code == 200, r.text
+        assert await self._status(db_session, rid) == "pending"
+
+
 # ═══════════════════════ Отказ ═══════════════════════
 
 

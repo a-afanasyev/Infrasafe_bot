@@ -63,15 +63,21 @@ async def approve_verification(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager_only),
 ):
-    resident, purge = await verification_core.approve_verification(
+    resident, purge, account_approved = await verification_core.approve_verification(
         db, resident_id=resident_id, actor_id=user.id, notes=body.notes,
         in_person=body.in_person,
     )
     await cleanup_purged_documents(purge)
-    await notify.notify_verification_approved(resident)
+    if account_approved:
+        # Одно сообщение «заявка одобрена» с кнопкой перезапуска — как у
+        # ручного одобрения аккаунта; отдельное «личность подтверждена» лишнее.
+        await notify.notify_account_approved(resident)
+    else:
+        await notify.notify_verification_approved(resident)
     return {
         "id": resident.id,
         "verification_status": resident.verification_status,
+        "status": resident.status,
         "deleted_documents": purge.count,
     }
 

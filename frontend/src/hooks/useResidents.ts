@@ -228,7 +228,14 @@ export function useRequestDocuments(id: number) {
 export function useApproveVerification(id: number) {
   return useResidentMutation<{ notes?: string; in_person?: boolean }>(
     body => apiClient.post(`/api/v2/residents/${id}/verification/approve`, body).then(r => r.data),
-    { successKey: 'residents.toast.verified', errorKey: 'residents.toast.verifyFailed', residentId: id },
+    {
+      // Фикс B: при телефоне верификация сразу одобряет и аккаунт.
+      successKey: data => (data as { status?: string } | undefined)?.status === 'approved'
+        ? 'residents.toast.verifiedAndApproved'
+        : 'residents.toast.verified',
+      errorKey: 'residents.toast.verifyFailed',
+      residentId: id,
+    },
   )
 }
 

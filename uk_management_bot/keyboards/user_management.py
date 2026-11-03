@@ -425,3 +425,24 @@ def _get_status_emoji(status: str) -> str:
         "blocked": "🚫"
     }
     return status_emojis.get(status, "❓")
+
+
+#: Отказы правила доступа, которые снимает проверка документа в дашборде.
+_DASHBOARD_REFUSALS = frozenset({"verification_required", "property_document_required"})
+
+
+def get_refusal_keyboard(refusal: str, user_id: int, language: str = 'ru') -> InlineKeyboardMarkup | None:
+    """Кнопка «Открыть в дашборде» к отказу одобрения — или None.
+
+    Документ жителя бот не показывает (копия в чате пережила бы уничтожение
+    ключа), проверка — только в дашборде; без кнопки отказ был тупиком
+    (кейс profk id=93, 2026-11-03).
+    """
+    from uk_management_bot.utils.twa_links import resident_card_url
+
+    url = resident_card_url(user_id) if refusal in _DASHBOARD_REFUSALS else None
+    if not url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=get_text('user_mgmt.handlers.open_in_dashboard_btn', language=language), url=url,
+    )]])

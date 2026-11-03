@@ -29,6 +29,7 @@ from uk_management_bot.services.document_purge import cleanup_purged_documents
 from uk_management_bot.keyboards.user_management import (
     get_user_management_main_keyboard,
     get_user_actions_keyboard,
+    get_refusal_keyboard,
 )
 from uk_management_bot.keyboards.base import get_main_keyboard
 from uk_management_bot.states.user_management import UserManagementStates
@@ -272,7 +273,10 @@ async def process_approval_comment(message: Message, state: FSMContext, language
                 reply_markup=result.actions_keyboard
             )
         elif result.refusal:
-            await message.answer(get_text(f'user_mgmt.refusal.{result.refusal}', language=lang))
+            await message.answer(
+                get_text(f'user_mgmt.refusal.{result.refusal}', language=lang),
+                reply_markup=get_refusal_keyboard(result.refusal, target_user_id, lang),
+            )
         else:
             await message.answer(
                 get_text('moderation.operation_failed', language=lang)
