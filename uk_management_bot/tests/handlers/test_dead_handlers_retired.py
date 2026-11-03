@@ -70,6 +70,12 @@ def _msg(text: str, **ctx):
     return resolve_ctx(ROUTERS, make_message(text), "message", **ctx)
 
 
+# Свободный текст без флоу ловит catch-all base (инструкция «как создать
+# заявку», 2026-11-03) — для ретайренного текста это и есть «никуда».
+FREE_TEXT_HINT = (f"{H}.base", "free_text_request_hint")
+RETIRED_MSG_OUTCOMES = (None, FREE_TEXT_HINT)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Ретайренные callback-входы: НИКТО не отвечает, ни жителю, ни менеджеру
 # ══════════════════════════════════════════════════════════════════════════════
@@ -113,14 +119,14 @@ def test_retired_callback_resolves_nowhere(data, ctx, who):
 def test_retired_active_shifts_button_resolves_nowhere(text, ctx, who):
     """BUG-150 `manager_active_shifts`: текст кнопки не рендерила ни одна
     клавиатура, но message-хендлер ловил его у любого, кто ВВЕДЁТ текст руками."""
-    assert _msg(text, **ctx) is None, f"{text!r} всё ещё разрешается для {who}"
+    assert _msg(text, **ctx) in RETIRED_MSG_OUTCOMES, f"{text!r} всё ещё разрешается для {who}"
 
 
 @pytest.mark.parametrize("text", sorted(get_specify_address_texts()))
 @pytest.mark.parametrize("ctx,who", [(APPLICANT, "applicant"), (MANAGER, "manager")])
 def test_retired_specify_address_button_resolves_nowhere(text, ctx, who):
     """BUG-158 `start_address_input`: LEGACY-текст, генератора нет нигде."""
-    assert _msg(text, **ctx) is None, f"{text!r} всё ещё разрешается для {who}"
+    assert _msg(text, **ctx) in RETIRED_MSG_OUTCOMES, f"{text!r} всё ещё разрешается для {who}"
 
 
 @pytest.mark.parametrize("text", ["/login", "🔑 Войти", "🔑 Kirish"])
@@ -128,7 +134,7 @@ def test_retired_specify_address_button_resolves_nowhere(text, ctx, who):
 def test_retired_login_self_approval_resolves_nowhere(text, ctx, who):
     """2026-11-03: `/login` сам одобрял любого жителем — без телефона, квартиры
     и проверки документа. Вход закрыт целиком, не перевешен."""
-    assert _msg(text, **ctx) is None, f"{text!r} всё ещё разрешается для {who}"
+    assert _msg(text, **ctx) in RETIRED_MSG_OUTCOMES, f"{text!r} всё ещё разрешается для {who}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

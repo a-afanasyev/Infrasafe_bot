@@ -19,7 +19,7 @@ A9-P2-4). Мёртвых нет.
 """
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from dataclasses import dataclass
@@ -966,3 +966,22 @@ async def process_admin_password(message: Message, state: FSMContext, user_statu
             reply_markup=await get_user_contextual_keyboard(message.from_user.id)
         )
         logger.warning(f"Неверная попытка назначения администратора от {message.from_user.id}")
+
+
+# ОБЯЗАН быть последним хендлером сообщений base_router (а base_router —
+# последним роутером): сюда доходит только то, что не взял ни один флоу.
+# 2026-11-03 profk: жители писали проблему прямым сообщением, бот молчал —
+# заявка не создавалась. Отвечаем инструкцией и возвращаем меню.
+@router.message(
+    StateFilter(None),
+    F.chat.type == "private",
+    (F.text & ~F.text.startswith("/")) | F.voice | F.video | F.video_note,
+)
+async def free_text_request_hint(message: Message, user_status: Optional[str] = None, language: str = "ru"):
+    """Свободное сообщение вне сценария → как подать заявку (pending — что ждём одобрения)."""
+    key = "auth.pending" if user_status == "pending" else "base.handlers.free_text_hint"
+    await message.answer(
+        get_text(key, language=language),
+        reply_markup=await get_user_contextual_keyboard(message.from_user.id),
+    )
+    logger.info(f"Пользователю {message.from_user.id} отправлена подсказка по созданию заявки")
