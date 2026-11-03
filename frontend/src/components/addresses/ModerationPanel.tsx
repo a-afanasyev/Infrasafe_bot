@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatDate as fmtDate } from '../../i18n/formatters'
+import OwnerCheckBadge from './OwnerCheckBadge'
 
 export default function ModerationPanel() {
   const { t } = useTranslation()
@@ -103,6 +104,8 @@ export default function ModerationPanel() {
           <div className="text-[13px] text-text-secondary font-[family-name:var(--font-display)] leading-relaxed">
             {buildAddress(item)}
           </div>
+
+          <OwnerCheckBadge check={item.owner_check} />
 
           {/* Ссылка в карточку: очередь показывает заявку, а решение часто
               требует контекста — других квартир жителя, статуса верификации. */}

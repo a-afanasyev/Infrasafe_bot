@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.addresses.schemas import ModerationItemOut, ModerationAction
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services import account_owners
 from uk_management_bot.services.addresses import core, queries
 
 router = APIRouter()
@@ -21,6 +22,7 @@ async def list_pending(
     user: User = Depends(require_action("addresses.manage")),
 ):
     rows = await queries.list_pending_moderation(db)
+    owners = await account_owners.owner_lookup(db, (row[0].apartment_id for row in rows))
 
     out = []
     for ua, first_name, last_name, phone, apt_number, bld_address, yard_name in rows:
@@ -40,6 +42,7 @@ async def list_pending(
             is_owner=ua.is_owner,
             is_primary=ua.is_primary,
             requested_at=ua.requested_at,
+            owner_check=account_owners.owner_check(owners.get(ua.apartment_id)).__dict__,
         ))
     return out
 
@@ -48,6 +51,7 @@ async def _build_moderation_response(db, ua) -> ModerationItemOut:
     """Map an approved/rejected UserApartment to the moderation response."""
     apt_row = await queries.get_apartment_location(db, ua.apartment_id)
     user_name, user_phone = await queries.get_user_name_phone(db, ua.user_id)
+    owners = await account_owners.owner_lookup(db, [ua.apartment_id])
 
     return ModerationItemOut(
         id=ua.id,
@@ -62,6 +66,7 @@ async def _build_moderation_response(db, ua) -> ModerationItemOut:
         is_owner=ua.is_owner,
         is_primary=ua.is_primary,
         requested_at=ua.requested_at,
+        owner_check=account_owners.owner_check(owners.get(ua.apartment_id)).__dict__,
     )
 
 

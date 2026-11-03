@@ -162,6 +162,24 @@ class TestApartmentModerationDetails:
         assert "Улица &lt;5&gt; &amp; 7" in text
         assert "Двор &lt;A&gt; &amp; B" in text
         assert "None" not in text
+        assert "Mening Uyim: у квартиры не указан лицевой счёт" in text
+
+    @pytest.mark.asyncio
+    async def test_account_owner_name_escaped(self, db):
+        """ФИО владельца — внешние данные выгрузки Mening Uyim."""
+        from uk_management_bot.database.models import AccountOwner, Apartment
+        from uk_management_bot.handlers import address_moderation
+
+        ua_id = self._seed(db)
+        db.query(Apartment).update({"account_number": "77"})
+        db.add(AccountOwner(account_number="77", owner_name="Ali <b> Valiyev"))
+        db.commit()
+        cb = _callback(f"addr_moderation_view:{ua_id}")
+        await address_moderation.show_moderation_details(
+            cb, AsyncMock(), language="ru", _db=db)
+
+        text = _sent_text(cb)
+        assert "Mening Uyim (л/с 77): владелец Ali &lt;b&gt; Valiyev" in text, text
 
 
 # ══════════════════════════════════════════════════════════════════════════

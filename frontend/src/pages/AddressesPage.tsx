@@ -28,6 +28,7 @@ import type {
 } from '../types/api'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import ModerationPanel from '../components/addresses/ModerationPanel'
+import AccountOwnersImport from '../components/addresses/AccountOwnersImport'
 import AddressTable from '../components/addresses/AddressTable'
 import AddressStatsBar from '../components/addresses/AddressStatsBar'
 import YardGrid from '../components/addresses/YardGrid'
@@ -232,7 +233,10 @@ export default function AddressesPage() {
 
       {/* Content area */}
       {view === 'moderation' ? (
-        <ModerationPanel />
+        <>
+          <AccountOwnersImport />
+          <ModerationPanel />
+        </>
       ) : (
         <>
           {/* Breadcrumb / Title */}

@@ -1,6 +1,59 @@
 {
   "components": {
     "schemas": {
+      "AccountOwnersImportOut": {
+        "properties": {
+          "linked": {
+            "title": "Linked",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "skipped",
+          "linked"
+        ],
+        "title": "AccountOwnersImportOut",
+        "type": "object"
+      },
+      "AccountOwnersSummaryOut": {
+        "properties": {
+          "imported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          },
+          "linked": {
+            "title": "Linked",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "linked"
+        ],
+        "title": "AccountOwnersSummaryOut",
+        "type": "object"
+      },
       "ActionOut": {
         "properties": {
           "approved_only": {
@@ -1123,6 +1176,21 @@
           "text"
         ],
         "title": "Body_create_feedback_api_v2_feedback_post",
+        "type": "object"
+      },
+      "Body_import_owners_api_v2_addresses_account_owners_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "CSV «Лицевой счёт;ФИО» из Mening Uyim, до 5 МБ",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_owners_api_v2_addresses_account_owners_import_post",
         "type": "object"
       },
       "Body_preview_api_v2_payment_control_imports_preview_post": {
@@ -6265,6 +6333,16 @@
             "title": "Is Primary",
             "type": "boolean"
           },
+          "owner_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "requested_at": {
             "anyOf": [
               {
@@ -7084,6 +7162,42 @@
           "subtitle"
         ],
         "title": "OrgCfgIn",
+        "type": "object"
+      },
+      "OwnerCheckOut": {
+        "description": "Владелец лицевого счёта квартиры по Mening Uyim — информация менеджеру.",
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "OwnerCheckOut",
         "type": "object"
       },
       "PasswordLogin": {
@@ -9254,6 +9368,16 @@
           "is_primary": {
             "title": "Is Primary",
             "type": "boolean"
+          },
+          "owner_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "requested_at": {
             "anyOf": [
@@ -13295,6 +13419,79 @@
           }
         },
         "summary": "Ratelimit Health"
+      }
+    },
+    "/api/v2/addresses/account-owners/import": {
+      "post": {
+        "description": "Загрузить владельцев лицевых счетов; заменяет предыдущую загрузку.",
+        "operationId": "import_owners_api_v2_addresses_account_owners_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_owners_api_v2_addresses_account_owners_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOwnersImportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Owners",
+        "tags": [
+          "addresses"
+        ]
+      }
+    },
+    "/api/v2/addresses/account-owners/summary": {
+      "get": {
+        "operationId": "owners_summary_api_v2_addresses_account_owners_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOwnersSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Owners Summary",
+        "tags": [
+          "addresses"
+        ]
       }
     },
     "/api/v2/addresses/apartments": {

@@ -60,6 +60,9 @@ from .elevators_config import ElevatorsConfig
 # Админка ролей: роли, их права и версия для сброса кэша прав
 from .rbac import RbacRole, RbacRolePermission, RbacState
 
+# Владельцы лицевых счетов из выгрузки Mening Uyim (подсказка при проверке жителя)
+from .account_owner import AccountOwner
+
 __all__ = [
     'User',
     'Request',
@@ -107,4 +110,5 @@ __all__ = [
     'RbacRole',
     'RbacRolePermission',
     'RbacState',
+    'AccountOwner',
 ]

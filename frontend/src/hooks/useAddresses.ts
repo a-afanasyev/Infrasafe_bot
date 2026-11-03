@@ -13,6 +13,8 @@ import type {
   ApartmentDetail,
   ModerationItem,
   BulkCreateResult,
+  AccountOwnersSummary,
+  AccountOwnersImportResult,
 } from '../types/api'
 
 // ── Queries ──────────────────────────────────────────────────────────
@@ -419,4 +421,36 @@ export function useAddressesWebSocket() {
     }
   }, [queryClient])
   useWebSocket('buildings', onEvent)
+}
+
+
+// ── Владельцы лицевых счетов (Mening Uyim) ──────────────────────────
+
+export function useAccountOwnersSummary() {
+  return useQuery<AccountOwnersSummary>({
+    queryKey: ['account-owners'],
+    queryFn: () => apiClient.get('/api/v2/addresses/account-owners/summary').then(r => r.data),
+  })
+}
+
+export function useImportAccountOwners() {
+  const queryClient = useQueryClient()
+  return useMutation<AccountOwnersImportResult, Error, File>({
+    mutationFn: (file) => {
+      const form = new FormData()
+      form.append('file', file)
+      return apiClient.post('/api/v2/addresses/account-owners/import', form).then(r => r.data)
+    },
+    onSuccess: (r) => {
+      toast.success(i18n.t('accountOwners.imported', { total: r.total, linked: r.linked, skipped: r.skipped }))
+      // Сверка живёт в очереди и в карточках жителей.
+      for (const key of [['account-owners'], ['moderation'], ['resident']]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Import account owners failed:', error)
+      toast.error(i18n.t('accountOwners.importFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
 }

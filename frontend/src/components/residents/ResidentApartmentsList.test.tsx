@@ -33,6 +33,15 @@ beforeEach(() => {
 })
 
 describe('ResidentApartmentsList', () => {
+  it('показывает владельца л/с из Mening Uyim', () => {
+    render(<ResidentApartmentsList residentId={1} apartments={[
+      binding({ id: 11, owner_check: { status: 'found', account_number: '1385963552', owner_name: 'Fayziyev Sohib' } }),
+      binding({ id: 12, apartment_number: '43', owner_check: { status: 'no_account', account_number: null, owner_name: null } }),
+    ]} />)
+    expect(screen.getByText('Mening Uyim (л/с 1385963552): владелец Fayziyev Sohib')).toBeInTheDocument()
+    expect(screen.getByText('Mening Uyim: у квартиры не указан лицевой счёт')).toBeInTheDocument()
+  })
+
   it('у pending-привязки — модерация, у approved — редактирование', () => {
     render(<ResidentApartmentsList residentId={1} apartments={[
       binding({ id: 11, status: 'pending', is_primary: false }),

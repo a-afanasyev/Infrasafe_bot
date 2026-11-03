@@ -3914,5 +3914,17 @@
     },
     "save": "Qoidalarni saqlash",
     "openPage": "AI qoidalari →"
+  },
+  "ownerCheck": {
+    "found": "Mening Uyim (hisob {{account}}): egasi {{owner}}",
+    "no_account": "Mening Uyim: xonadonning shaxsiy hisobi ko‘rsatilmagan",
+    "not_in_list": "Mening Uyim: {{account}} hisobi egalar ro‘yxatida yo‘q"
+  },
+  "accountOwners": {
+    "summary": "Hisob egalari (Mening Uyim): {{total}}, xonadonlarga mos: {{linked}} · {{date}}",
+    "empty": "Mening Uyim hisob egalari yuklanmagan — F.I.Sh. solishtirilmaydi",
+    "upload": "Hisob egalarini yuklash (CSV)",
+    "imported": "Yuklangan egalar: {{total}}, xonadonlarga mos: {{linked}}, o‘tkazib yuborilgan qatorlar: {{skipped}}",
+    "importFailed": "Hisob egalarini yuklab bo‘lmadi"
   }
 }

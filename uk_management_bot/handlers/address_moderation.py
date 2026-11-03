@@ -22,6 +22,7 @@ from aiogram.filters import StateFilter
 from uk_management_bot.database.session import run_db
 from uk_management_bot.handlers._role_gate import ActionGate
 from uk_management_bot.services.address_service import AddressService
+from uk_management_bot.services.account_owners import OwnerCheck, owner_check
 from uk_management_bot.states.address_management import ApartmentModerationStates
 from uk_management_bot.keyboards.address_management import (
     get_moderation_requests_keyboard,
@@ -90,6 +91,7 @@ class _RequestDetails:
     yard_name: Optional[str]
     requested_at: Optional[datetime]
     is_owner: bool
+    owner_check: Optional[OwnerCheck] = None
 
 
 @dataclass(frozen=True)
@@ -153,9 +155,12 @@ def _load_request_details(db, user_apartment_id: int) -> Optional[_RequestDetail
     if not user_apartment:
         return None
 
+    from uk_management_bot.database.models import AccountOwner
+
     user = user_apartment.user
     apartment = user_apartment.apartment
     building = apartment.building
+    owner = db.get(AccountOwner, apartment.account_number) if apartment.account_number else None
     return _RequestDetails(
         status=user_apartment.status,
         first_name=user.first_name,
@@ -168,6 +173,7 @@ def _load_request_details(db, user_apartment_id: int) -> Optional[_RequestDetail
         yard_name=building.yard.name if building and building.yard else None,
         requested_at=user_apartment.requested_at,
         is_owner=user_apartment.is_owner,
+        owner_check=owner_check((apartment.account_number, owner.owner_name if owner else None)),
     )
 
 
@@ -345,6 +351,14 @@ async def show_moderation_details(callback: CallbackQuery, state: FSMContext, la
             apartment_info = f"{apartment_info}, {html.escape(details.building_address)}"
             if details.yard_name:
                 apartment_info = f"{apartment_info} ({html.escape(details.yard_name)})"
+        if details.owner_check:
+            # Подсказка из выгрузки Mening Uyim; ФИО владельца — внешние данные.
+            apartment_info += "\n" + get_text(
+                f"address_moderation.handlers.owner_check.{details.owner_check.status}", language=lang,
+            ).format(
+                owner=html.escape(details.owner_check.owner_name or ""),
+                account=html.escape(details.owner_check.account_number or ""),
+            )
 
         # Дополнительная информация
         requested_date = details.requested_at.strftime('%d.%m.%Y %H:%M') if details.requested_at else get_text("address_moderation.handlers.unknown", language=lang)
