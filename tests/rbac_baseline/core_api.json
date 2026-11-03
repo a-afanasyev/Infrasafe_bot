@@ -276,6 +276,18 @@
     "require_health_token"
    ]
   },
+  "GET /api/v2/addresses/account-owners/summary": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "GET /api/v2/addresses/apartments/all": {
    "auth": "roles",
    "allow": [
@@ -1677,6 +1689,18 @@
    ],
    "deps": [
     "_require_work_reports_enabled"
+   ]
+  },
+  "POST /api/v2/addresses/account-owners/import": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
    ]
   },
   "POST /api/v2/addresses/apartments": {

@@ -11,6 +11,7 @@ import { formatDate as fmtDate } from '../../i18n/formatters'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import OwnerCheckBadge from '../addresses/OwnerCheckBadge'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -87,6 +88,7 @@ export default function ResidentApartmentsList({ residentId, apartments }: Props
               {a.requested_at && t('residents.requestedAt', { date: fmtDate(a.requested_at, { dateStyle: 'short' }) })}
               {a.reviewed_at && ` · ${t('residents.reviewedAt', { date: fmtDate(a.reviewed_at, { dateStyle: 'short' }) })}`}
             </div>
+            <OwnerCheckBadge check={a.owner_check} />
             {a.admin_comment && (
               <div className="text-[12px] text-text-secondary italic">{a.admin_comment}</div>
             )}

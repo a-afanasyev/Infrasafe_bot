@@ -351,6 +351,26 @@ export interface ModerationItem {
   is_owner: boolean
   is_primary: boolean
   requested_at: string | null
+  owner_check?: OwnerCheck | null
+}
+
+/** Владелец лицевого счёта квартиры по выгрузке Mening Uyim. */
+export interface OwnerCheck {
+  status: 'found' | 'no_account' | 'not_in_list'
+  account_number: string | null
+  owner_name: string | null
+}
+
+export interface AccountOwnersSummary {
+  total: number
+  linked: number
+  imported_at: string | null
+}
+
+export interface AccountOwnersImportResult {
+  total: number
+  skipped: number
+  linked: number
 }
 
 export interface AddressStats {
@@ -424,6 +444,7 @@ export interface ResidentApartment {
   requested_at: string | null
   reviewed_at: string | null
   admin_comment: string | null
+  owner_check?: OwnerCheck | null
 }
 
 export interface ResidentDocument {

@@ -2340,7 +2340,12 @@
       "request_details": "📋 <b>Заявка на квартиру</b>\n\n<b>👤 Пользователь:</b>\n• Имя: {user_name}\n• Username: {username}\n• Телефон: {phone}\n• Telegram ID: <code>{telegram_id}</code>\n\n<b>🏠 Квартира:</b>\n{apartment_info}\n\n<b>ℹ️ Дополнительно:</b>\n• Владелец: {is_owner_text}\n• Дата заявки: {requested_date}\n\n<b>Что делать?</b>\n✅ Подтвердить - пользователь получит доступ к квартире\n❌ Отклонить - заявка будет отклонена",
       "request_not_found": "❌ Заявка не найдена",
       "unknown": "Неизвестно",
-      "yes_owner": "Да (владелец)"
+      "yes_owner": "Да (владелец)",
+      "owner_check": {
+        "found": "🏠 Mening Uyim (л/с {account}): владелец {owner}",
+        "no_account": "ℹ️ Mening Uyim: у квартиры не указан лицевой счёт",
+        "not_in_list": "ℹ️ Mening Uyim: л/с {account} нет в выгрузке владельцев"
+      }
     }
   },
   "base": {

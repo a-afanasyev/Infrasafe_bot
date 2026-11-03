@@ -45,6 +45,7 @@ _EXPECTED_TABLES = frozenset({
     "access_passes",
     "access_rights",
     "access_rules",
+    "account_owners",
     "apartments",
     "audit_logs",
     "auto_manager_config",

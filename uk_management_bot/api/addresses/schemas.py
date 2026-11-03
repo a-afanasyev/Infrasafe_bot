@@ -153,6 +153,26 @@ class BulkCreateResult(BaseModel):
     errors: List[str]
 
 
+# --- Владельцы лицевых счетов (Mening Uyim) ---
+class OwnerCheckOut(BaseModel):
+    """Владелец лицевого счёта квартиры по Mening Uyim — информация менеджеру."""
+    status: str  # found | no_account | not_in_list
+    account_number: Optional[str] = None
+    owner_name: Optional[str] = None
+
+
+class AccountOwnersSummaryOut(BaseModel):
+    total: int
+    linked: int
+    imported_at: Optional[datetime] = None
+
+
+class AccountOwnersImportOut(BaseModel):
+    total: int
+    skipped: int
+    linked: int
+
+
 # --- Moderation ---
 class ModerationItemOut(BaseModel):
     id: int
@@ -167,6 +187,7 @@ class ModerationItemOut(BaseModel):
     is_owner: bool
     is_primary: bool
     requested_at: Optional[datetime] = None
+    owner_check: Optional[OwnerCheckOut] = None
     model_config = {"from_attributes": True}
 
 

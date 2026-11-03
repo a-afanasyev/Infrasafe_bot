@@ -29,6 +29,7 @@ from uk_management_bot.api.addresses import (
     buildings,
     apartments,
     moderation,
+    account_owners,
 )
 
 router = APIRouter()
@@ -38,3 +39,4 @@ router.include_router(yards.router)
 router.include_router(buildings.router)
 router.include_router(apartments.router)
 router.include_router(moderation.router)
+router.include_router(account_owners.router)

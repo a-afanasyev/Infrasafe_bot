@@ -24,6 +24,7 @@ from uk_management_bot.api.residents.schemas import (
     SortOrder,
 )
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services import account_owners
 from uk_management_bot.services.residents import queries
 from uk_management_bot.services.residents.exceptions import ResidentNotFound
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
@@ -131,6 +132,7 @@ async def get_resident(
     apartment_rows = await queries.list_resident_apartments(db, resident.id)
     documents = await queries.list_resident_documents(db, resident.id)
     verification = await queries.get_latest_verification(db, resident.id)
+    owners = await account_owners.owner_lookup(db, (apt.id for _, apt, _, _ in apartment_rows))
 
     return ResidentDetailOut(
         id=resident.id,
@@ -163,6 +165,7 @@ async def get_resident(
                 requested_at=ua.requested_at,
                 reviewed_at=ua.reviewed_at,
                 admin_comment=ua.admin_comment,
+                owner_check=account_owners.owner_check(owners.get(apt.id)).__dict__,
             )
             for ua, apt, bld, yard in apartment_rows
         ],

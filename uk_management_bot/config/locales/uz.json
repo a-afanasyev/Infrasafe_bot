@@ -2341,7 +2341,12 @@
       "request_details": "📋 <b>Xonadon uchun ariza</b>\n\n<b>👤 Foydalanuvchi:</b>\n• Ismi: {user_name}\n• Username: {username}\n• Telefon: {phone}\n• Telegram ID: <code>{telegram_id}</code>\n\n<b>🏠 Xonadon:</b>\n{apartment_info}\n\n<b>ℹ️ Qo'shimcha:</b>\n• Egalik: {is_owner_text}\n• Ariza sanasi: {requested_date}\n\n<b>Nima qilish kerak?</b>\n✅ Tasdiqlash - foydalanuvchi xonadonga kirish huquqini oladi\n❌ Rad etish - ariza rad etiladi",
       "request_not_found": "❌ Ariza topilmadi",
       "unknown": "Noma'lum",
-      "yes_owner": "Ha (egalik qiluvchi)"
+      "yes_owner": "Ha (egalik qiluvchi)",
+      "owner_check": {
+        "found": "🏠 Mening Uyim (hisob {account}): egasi {owner}",
+        "no_account": "ℹ️ Mening Uyim: xonadonning shaxsiy hisobi ko‘rsatilmagan",
+        "not_in_list": "ℹ️ Mening Uyim: {account} hisobi egalar ro‘yxatida yo‘q"
+      }
     }
   },
   "address_yards": {

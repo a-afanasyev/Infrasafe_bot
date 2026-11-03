@@ -8,6 +8,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from uk_management_bot.api.addresses.schemas import OwnerCheckOut
+
 # Сортировка списка. Белый список: чужое значение отбивается на входе (422) и
 # до SQL не доходит. Адрес и число квартир не сортируются — оба собираются
 # отдельными запросами уже после выборки страницы.
@@ -30,6 +32,9 @@ class ResidentApartmentOut(BaseModel):
     requested_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
     admin_comment: Optional[str] = None
+    # Владелец лицевого счёта квартиры по Mening Uyim — только в карточке
+    # жителя; ответы мутаций привязки его не несут.
+    owner_check: Optional[OwnerCheckOut] = None
 
 
 class ResidentDocumentOut(BaseModel):

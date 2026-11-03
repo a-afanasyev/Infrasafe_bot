@@ -25,6 +25,8 @@ vi.mock('../hooks/useAddresses', () => {
     useAddressStats: () => ({
       data: { yards: 2, buildings: 5, apartments: 40, residents: 90 },
     }),
+    useAccountOwnersSummary: () => ({ data: { total: 0, linked: 0, imported_at: null } }),
+    useImportAccountOwners: mutation,
     useYards: () => ({ data: queries.yards, isLoading: false }),
     useBuildings: (yardId: number | null) => {
       buildingsSpy(yardId)

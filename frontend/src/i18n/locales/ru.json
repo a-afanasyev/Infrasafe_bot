@@ -3931,5 +3931,17 @@
     },
     "save": "Сохранить правила",
     "openPage": "Правила ИИ →"
+  },
+  "ownerCheck": {
+    "found": "Mening Uyim (л/с {{account}}): владелец {{owner}}",
+    "no_account": "Mening Uyim: у квартиры не указан лицевой счёт",
+    "not_in_list": "Mening Uyim: л/с {{account}} нет в выгрузке владельцев"
+  },
+  "accountOwners": {
+    "summary": "Владельцы л/с (Mening Uyim): {{total}}, совпало с квартирами {{linked}} · {{date}}",
+    "empty": "Владельцы л/с из Mening Uyim не загружены — сверки ФИО не будет",
+    "upload": "Загрузить владельцев л/с (CSV)",
+    "imported": "Загружено владельцев: {{total}}, совпало с квартирами: {{linked}}, пропущено строк: {{skipped}}",
+    "importFailed": "Не удалось загрузить владельцев л/с"
   }
 }
