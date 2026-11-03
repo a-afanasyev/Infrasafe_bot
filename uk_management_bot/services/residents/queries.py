@@ -29,7 +29,7 @@ from uk_management_bot.database.models.user_apartment import (
     UserApartment, UserApartmentStatus,
 )
 from uk_management_bot.database.models.user_verification import (
-    UserDocument, UserVerification,
+    UserDocument, UserVerification, VerificationStatus,
 )
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.services.sql_sorting import apply_sort, text_key
@@ -209,6 +209,29 @@ async def apartments_count_map(db, user_ids: list[int]) -> dict[int, int]:
         .group_by(UserApartment.user_id)
     )
     return dict(result.all())
+
+
+async def documents_submitted_ids(db, user_ids: list[int]) -> set[int]:
+    """Жители, загрузившие документ ПОСЛЕ открытого запроса документов.
+
+    Статус верификации при загрузке не меняется (остаётся `requested`), поэтому
+    «предоставлены» выводится здесь: открытая запись REQUESTED + документ не
+    старше запроса. Без этого карточка висела на «Запрошены» и после загрузки.
+    """
+    if not user_ids:
+        return set()
+    result = await db.execute(
+        select(UserVerification.user_id).distinct()
+        .join(User, User.id == UserVerification.user_id)
+        .join(UserDocument, UserDocument.user_id == UserVerification.user_id)
+        .where(
+            UserVerification.user_id.in_(user_ids),
+            User.verification_status == "requested",
+            UserVerification.status == VerificationStatus.REQUESTED,
+            UserDocument.created_at >= UserVerification.requested_at,
+        )
+    )
+    return set(result.scalars().all())
 
 
 async def primary_address_map(db, user_ids: list[int]) -> dict[int, tuple[str, str, str]]:

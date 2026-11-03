@@ -154,11 +154,14 @@ export function useUnblockResident(id: number) {
  *  Мимо useResidentMutation намеренно: инвалидация не нужна — номер появится
  *  позже, когда житель поделится контактом в боте. */
 export function useRequestResidentPhone(id: number) {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () =>
       apiClient.post(`/api/v2/residents/${id}/request-phone`).then(r => r.data),
     onSuccess: () => {
       toast.success(i18n.t('toast.phoneRequested'))
+      // Иначе кэш списка без phone_requested_at переживёт размонтирование карточки.
+      queryClient.invalidateQueries({ queryKey: ['residents'] })
     },
     onError: (error: unknown) => {
       console.error('Request resident phone failed:', error)

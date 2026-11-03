@@ -95,7 +95,7 @@ export default function ResidentDetailPage() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <ResidentAccountBadge status={resident.status} />
-            <ResidentVerificationBadge status={resident.verification_status} />
+            <ResidentVerificationBadge status={resident.verification_status} submitted={resident.documents_submitted} />
             {/* Роли показываем только когда житель ещё и сотрудник: это
                 объясняет, почему блокировка отсюда недоступна (PR-4). */}
             {resident.roles.filter(r => r !== 'applicant').map(r => (

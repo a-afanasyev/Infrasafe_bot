@@ -77,7 +77,7 @@ export default function ResidentCard({ resident }: Props) {
 
       <div className="flex items-center gap-1.5 flex-wrap">
         <ResidentAccountBadge status={resident.status} />
-        <ResidentVerificationBadge status={resident.verification_status} />
+        <ResidentVerificationBadge status={resident.verification_status} submitted={resident.documents_submitted} />
         {resident.bot_blocked && <BotBlockedBadge />}
         <span className="text-[11px] text-text-muted ml-auto font-[family-name:var(--font-mono)]">
           {t('residents.apartmentsCount', { count: resident.apartments_count })}

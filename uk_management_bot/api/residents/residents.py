@@ -79,6 +79,7 @@ async def list_residents(
     user_ids = [u.id for u in users]
     counts = await queries.apartments_count_map(db, user_ids)
     primaries = await queries.primary_address_map(db, user_ids)
+    submitted = await queries.documents_submitted_ids(db, user_ids)
 
     items = []
     for u in users:
@@ -98,6 +99,7 @@ async def list_residents(
             primary_address=_format_address(*primary) if primary else None,
             bot_blocked=u.bot_blocked_at is not None,
             phone_requested_at=u.phone_requested_at,
+            documents_submitted=u.id in submitted,
         ))
     return ResidentListOut(items=items, total=total, limit=limit, offset=offset)
 
@@ -144,6 +146,7 @@ async def get_resident(
         language=resident.language,
         created_at=resident.created_at,
         bot_blocked=resident.bot_blocked_at is not None,
+        documents_submitted=resident.id in await queries.documents_submitted_ids(db, [resident.id]),
         roles=parse_roles_safe(resident.roles),
         apartments=[
             ResidentApartmentOut(

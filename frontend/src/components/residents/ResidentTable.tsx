@@ -94,7 +94,7 @@ export default function ResidentTable({ residents, sort }: Props) {
                   {r.apartments_count}
                 </td>
                 <td className="px-4 py-3">
-                  <ResidentVerificationBadge status={r.verification_status} />
+                  <ResidentVerificationBadge status={r.verification_status} submitted={r.documents_submitted} />
                 </td>
                 <td className="px-4 py-3">
                   <ResidentAccountBadge status={r.status} />
