@@ -15,6 +15,7 @@ from typing import Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 
 from uk_management_bot.database.session import run_db
@@ -34,6 +35,11 @@ from uk_management_bot.utils.user_names import display_name
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+# Telegram отклоняет inline-клавиатуру больше 100 кнопок («reply markup is too
+# long»): дома на 104/140 квартир не открывались. 60 + навигация + отмена < 100.
+APARTMENT_PAGE_SIZE = 60
+APARTMENT_PAGE_PREFIX = "user_apartment_page"
 
 SELECT_APARTMENT_TEXTS = get_select_apartment_texts()
 
@@ -389,16 +395,46 @@ async def process_building_selection(callback: CallbackQuery, state: FSMContext,
             get_text("user_apt_selection.handlers.select_apartment_step3", language=lang).format(
                 yard_name=html.escape(yard_name), building_address=html.escape(building.address)
             ),
-            reply_markup=get_user_apartment_selection_keyboard(
-                building.apartments,
-                "apartment",
-                "user_apartment_final",
-                language=lang
-            )
+            reply_markup=_apartments_keyboard(building.apartments, page=0, language=lang)
         )
 
     except Exception as e:
         logger.error(f"Ошибка при выборе здания {building_id}: {e}")
+        await callback.answer(get_text("user_apt_selection.handlers.error_processing", language=lang), show_alert=True)
+
+
+def _apartments_keyboard(apartments, page: int, language: str):
+    return get_user_apartment_selection_keyboard(
+        apartments, "apartment", "user_apartment_final", language=language,
+        page=page, page_size=APARTMENT_PAGE_SIZE, page_prefix=APARTMENT_PAGE_PREFIX,
+    )
+
+
+@router.callback_query(
+    F.data.startswith(f"{APARTMENT_PAGE_PREFIX}:"),
+    StateFilter(OnboardingStates.waiting_for_apartment_selection),
+)
+async def process_apartment_page(callback: CallbackQuery, state: FSMContext, language: str = "ru", *, _db=None):
+    """Листание квартир дома; дом — из СВОЕГО FSM, из callback только номер страницы."""
+    lang = language
+    raw = callback.data.split(":", 1)[1]
+    # callback_data шлёт клиент; isascii — unicode-цифры роняют int().
+    building_id = (await state.get_data()).get("selected_building_id")
+    if not (raw.isascii() and raw.isdigit()) or not building_id:
+        await callback.answer()
+        return
+
+    try:
+        building = await run_db(lambda s: _load_building_apartments(s, building_id), db=_db)
+        if not building or not building.apartments:
+            await callback.answer(get_text("user_apt_selection.handlers.building_not_found", language=lang), show_alert=True)
+            return
+        await callback.message.edit_reply_markup(
+            reply_markup=_apartments_keyboard(building.apartments, page=int(raw), language=lang)
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Ошибка страницы квартир здания {building_id}: {e}")
         await callback.answer(get_text("user_apt_selection.handlers.error_processing", language=lang), show_alert=True)
 
 

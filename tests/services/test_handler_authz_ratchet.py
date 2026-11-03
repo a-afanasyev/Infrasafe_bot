@@ -113,6 +113,7 @@ BASELINE = {
     ("user_apartment_selection.py", "process_yard_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку; итог — pending, одобряет менеджер)",
     ("user_apartment_selection.py", "process_building_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку)",
     ("user_apartment_selection.py", "process_apartment_selection"): "SELF (шаг выбора из справочника для СВОЕЙ заявки на привязку)",
+    ("user_apartment_selection.py", "process_apartment_page"): "SELF (из callback только номер СТРАНИЦЫ; дом — из СВОЕГО FSM)",
     ("requests/listing.py", "handle_back_to_list"): "SELF (из callback только номер СТРАНИЦЫ; заявки берутся по роли текущего пользователя)",
     ("shift_transfer.py", "handle_shift_selection"): "OWNER-CHECK@_check_shift_selectable (Shift.user_id == current.id в SQL)",
     ("shift_transfer.py", "handle_reason_selection"): "SELF (ключ причины в СВОЙ FSM; БД только за языком)",
