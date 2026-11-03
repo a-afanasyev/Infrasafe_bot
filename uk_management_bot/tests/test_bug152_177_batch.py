@@ -100,7 +100,10 @@ class TestLanguageReachesKeyboards:
         # три шага выбора + подтверждение
         assert src.count('"user_apartment_yard",\n                language=lang') == 1
         assert src.count('"user_apartment_building",\n                language=lang') == 1
-        assert src.count('"user_apartment_final",\n                language=lang') == 1
+        # квартиры — постранично через _apartments_keyboard (оба вызова с языком)
+        assert src.count('"user_apartment_final", language=language') == 1
+        assert src.count("_apartments_keyboard(building.apartments, page=0, language=lang)") == 1
+        assert src.count("_apartments_keyboard(building.apartments, page=int(raw), language=lang)") == 1
         assert 'cancel_callback="user_apartment_cancel",\n                language=lang' in src
 
     def test_moderation_keyboards_carry_language(self):
