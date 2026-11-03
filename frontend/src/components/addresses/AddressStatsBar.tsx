@@ -57,7 +57,7 @@ export default function AddressStatsBar({
   ]
 
   return (
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map(card => (
         <div
           key={card.label}
@@ -70,7 +70,7 @@ export default function AddressStatsBar({
           >
             {card.icon}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-[family-name:var(--font-mono)] text-[22px] font-semibold text-text-primary">
               {card.value}
             </div>

@@ -22,7 +22,9 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
   const staffRole = ['manager', 'inspector', 'executor'].find(r => employee.roles?.includes(r))
 
   return (
-    <div className="flex flex-row items-center gap-3.5 bg-bg-card border border-border-default rounded-default p-4">
+    // flex-wrap: на узком экране кнопки уходят на следующую строку, а не
+    // сжимают имя в ноль (бейдж роли наезжал на статус, «Отклонить» обрезалась).
+    <div className="flex flex-row flex-wrap items-center gap-3.5 bg-bg-card border border-border-default rounded-default p-4">
       {/* Avatar 48px */}
       <div
         className="w-12 h-12 rounded-full flex items-center justify-center font-[var(--font-display)] font-bold text-base text-white shrink-0"
@@ -32,7 +34,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
       </div>
 
       {/* Info column */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-[140px]">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-[var(--font-display)] font-semibold text-sm text-text-primary truncate">
             {name}
@@ -72,7 +74,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
       </div>
 
       {/* Button group */}
-      <div className="flex gap-2 shrink-0">
+      <div className="flex gap-2 shrink-0 ml-auto">
         <Button
           onClick={() => onApprove(employee.id)}
           disabled={isPending}

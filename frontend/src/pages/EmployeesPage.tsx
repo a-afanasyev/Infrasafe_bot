@@ -251,7 +251,7 @@ export default function EmployeesPage() {
       {/* Filters + view toggle */}
       <div className="flex flex-col gap-2">
         {/* Row 1: Role + Status + View toggle */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {/* Role */}
           {[
             { key: 'all', label: t('employees.filterRole') },
