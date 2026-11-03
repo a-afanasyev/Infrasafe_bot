@@ -14,6 +14,7 @@ const ACCOUNT_COLORS: Record<string, string> = {
 const VERIFICATION_COLORS: Record<string, string> = {
   pending: 'var(--text-muted)',
   requested: 'var(--amber)',
+  submitted: 'var(--blue)',
   verified: 'var(--emerald)',
   rejected: 'var(--red)',
 }
@@ -49,11 +50,13 @@ export function BotBlockedBadge() {
   return <Badge color="var(--red)">{`🚫 ${t('residents.botBlocked')}`}</Badge>
 }
 
-export function ResidentVerificationBadge({ status }: { status: string }) {
+/** `submitted` — документы запрошены и уже загружены: ждут проверки менеджером. */
+export function ResidentVerificationBadge({ status, submitted = false }: { status: string; submitted?: boolean }) {
   const { t } = useTranslation()
+  const shown = submitted && status === 'requested' ? 'submitted' : status
   return (
-    <Badge color={VERIFICATION_COLORS[status] ?? 'var(--text-muted)'}>
-      {t(`residents.verification.${status}`, status)}
+    <Badge color={VERIFICATION_COLORS[shown] ?? 'var(--text-muted)'}>
+      {t(`residents.verification.${shown}`, shown)}
     </Badge>
   )
 }

@@ -1657,7 +1657,8 @@
       "pending": "Не проверен",
       "requested": "Запрошены документы",
       "verified": "Подтверждён",
-      "rejected": "Отклонён"
+      "rejected": "Отклонён",
+      "submitted": "Документы предоставлены"
     },
     "bindingStatus": {
       "pending": "На модерации",

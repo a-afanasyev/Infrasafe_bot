@@ -9407,6 +9407,11 @@
             "title": "Documents",
             "type": "array"
           },
+          "documents_submitted": {
+            "default": false,
+            "title": "Documents Submitted",
+            "type": "boolean"
+          },
           "first_name": {
             "anyOf": [
               {
@@ -9616,6 +9621,11 @@
               }
             ],
             "title": "Created At"
+          },
+          "documents_submitted": {
+            "default": false,
+            "title": "Documents Submitted",
+            "type": "boolean"
           },
           "first_name": {
             "anyOf": [

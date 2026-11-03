@@ -387,6 +387,8 @@ export interface ResidentListItem {
   bot_blocked: boolean
   /** Последний доставленный запрос номера (ISO) — «Номер запрошен · дата». */
   phone_requested_at?: string | null
+  /** Документы запрошены и житель их загрузил — ждут проверки. */
+  documents_submitted?: boolean
 }
 
 export interface ResidentListResponse {
@@ -463,6 +465,7 @@ export interface ResidentProfile {
   apartments: ResidentApartment[]
   documents: ResidentDocument[]
   latest_verification: ResidentVerification | null
+  documents_submitted?: boolean
 }
 
 export interface BulkCreateResult {

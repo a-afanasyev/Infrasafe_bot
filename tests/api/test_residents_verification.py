@@ -165,6 +165,37 @@ class TestRequestDocuments:
         assert record.requested_info["document_types"] == ["passport"]
 
 
+class TestDocumentsSubmitted:
+    """«Документы предоставлены»: запрос открыт, а житель уже загрузил документ.
+
+    Статус верификации при загрузке остаётся `requested` — признак выводится
+    из открытого запроса и документа, загруженного после него."""
+
+    async def _flags(self, client, rid):
+        listed = (await client.get(BASE)).json()["items"]
+        card = (await client.get(f"{BASE}/{rid}")).json()
+        return next(i for i in listed if i["id"] == rid)["documents_submitted"], card["documents_submitted"]
+
+    async def test_flag_follows_upload_after_request(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        rid = (await _resident(db_session, 6050)).id
+        old = await _doc(db_session, rid)  # загружен ДО запроса — не в счёт
+        old.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+        await db_session.commit()
+        r = await client.post(f"{BASE}/{rid}/verification/request-documents",
+                              json={"document_types": ["passport"], "comment": "паспорт"})
+        assert r.status_code == 200, r.text
+        assert await self._flags(client, rid) == (False, False)
+
+        new = await _doc(db_session, rid, file_id="NEW")
+        new.created_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+        await db_session.commit()
+        assert await self._flags(client, rid) == (True, True)
+
+
 # ═══════════════════════ Подтверждение личности ═══════════════════════
 
 

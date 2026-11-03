@@ -1646,7 +1646,8 @@
       "pending": "Tekshirilmagan",
       "requested": "Hujjatlar so‘ralgan",
       "verified": "Tasdiqlangan",
-      "rejected": "Rad etilgan"
+      "rejected": "Rad etilgan",
+      "submitted": "Hujjatlar taqdim etildi"
     },
     "bindingStatus": {
       "pending": "Moderatsiyada",

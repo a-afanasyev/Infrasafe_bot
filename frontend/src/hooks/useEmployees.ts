@@ -93,11 +93,13 @@ export function useApproveEmployee() {
  *  Инвалидации нет намеренно: номер появится позже, когда пользователь
  *  поделится контактом в боте. */
 export function useRequestEmployeePhone() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.post(`/api/v2/shifts/employees/${id}/request-phone`).then(r => r.data),
     onSuccess: () => {
       toast.success(i18n.t('toast.phoneRequested'))
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
     },
     onError: (error: unknown) => {
       console.error('Request phone failed:', error)
