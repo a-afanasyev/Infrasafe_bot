@@ -269,7 +269,7 @@ export default function ResidentsPage() {
           ) : undefined}
         />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] auto-rows-fr gap-4">
           {items.map(r => <ResidentCard key={r.id} resident={r} />)}
         </div>
       )}

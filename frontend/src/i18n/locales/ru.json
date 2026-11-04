@@ -1651,7 +1651,8 @@
     "accountStatus": {
       "pending": "Ожидает",
       "approved": "Одобрен",
-      "blocked": "Заблокирован"
+      "blocked": "Заблокирован",
+      "incomplete": "Не завершил регистрацию"
     },
     "verification": {
       "pending": "Не проверен",

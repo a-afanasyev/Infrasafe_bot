@@ -1640,7 +1640,8 @@
     "accountStatus": {
       "pending": "Kutilmoqda",
       "approved": "Tasdiqlangan",
-      "blocked": "Bloklangan"
+      "blocked": "Bloklangan",
+      "incomplete": "Ro‘yxatdan o‘tishni tugatmagan"
     },
     "verification": {
       "pending": "Tekshirilmagan",
