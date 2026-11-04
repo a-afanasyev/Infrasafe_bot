@@ -26,6 +26,7 @@ from uk_management_bot.handlers.auth import start_invite_registration
 from uk_management_bot.handlers.base import send_onboarding_screen  # noqa: F401 — реэкспорт для тестов/колбэков
 from uk_management_bot.keyboards.base import get_no_invite_token_inline
 from uk_management_bot.keyboards.contact import get_share_contact_keyboard
+from uk_management_bot.services import tutorial_videos
 from uk_management_bot.states.registration import RegistrationStates
 from uk_management_bot.utils.button_texts import get_back_texts, get_cancel_texts
 from uk_management_bot.utils.helpers import get_text
@@ -66,6 +67,10 @@ async def choose_resident(callback: CallbackQuery, state: FSMContext, language: 
     await send_onboarding_screen(callback.message, callback.from_user, language, _db=_db)
     await callback.answer()
     logger.info(f"Пользователь {callback.from_user.id} выбрал ветку жителя")
+    tutorial_videos.schedule(tutorial_videos.send_tutorial_once(
+        callback.bot, callback.from_user.id, "registration", language,
+        ttl=tutorial_videos.REGISTRATION_ONCE_TTL,
+    ))
 
 
 @router.callback_query(F.data == "start_role:employee")

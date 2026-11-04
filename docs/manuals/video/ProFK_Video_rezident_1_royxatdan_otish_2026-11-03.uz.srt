@@ -1,0 +1,39 @@
+1
+00:00:00,403 --> 00:00:03,640
+Ro'yxatdan o'tish taxminan bir daqiqa oladi
+
+2
+00:00:03,640 --> 00:00:07,816
+Botga /start yuboring va «Men rezidentman» tugmasini bosing
+
+3
+00:00:07,816 --> 00:00:14,362
+«Kontaktni ulashish» tugmasini bosing va tasdiqlang. Telefonsiz ro'yxatdan o'tib bo'lmaydi
+
+4
+00:00:14,362 --> 00:00:20,825
+So'ng «Ro'yxatdan o'tish (forma)» → «Formani ochish»
+
+5
+00:00:20,825 --> 00:00:24,957
+Hovli, uy va kvartirani tanlang
+
+6
+00:00:24,957 --> 00:00:29,565
+Ma'lumotlarni tekshiring va «Arizani yuborish» tugmasini bosing
+
+7
+00:00:29,565 --> 00:00:33,695
+Chatga qayting va «Hujjatlarni yuklash» tugmasini bosing
+
+8
+00:00:33,695 --> 00:00:39,539
+«Mulk huquqi» yoki «Ijara shartnomasi»ni tanlang va hujjat rasmini yuboring
+
+9
+00:00:39,539 --> 00:00:44,672
+«Ro'yxatdan o'tishni yakunlash» tugmasini bosing va tekshiruvni kuting
+
+10
+00:00:44,672 --> 00:00:49,894
+Tasdiqlangach, «Botni qayta ishga tushirish» tugmasini bosing — tayyor!

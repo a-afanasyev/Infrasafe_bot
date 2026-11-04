@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:#cfe0bf}
+.phone{position:fixed;inset:0;display:flex;flex-direction:column}
+.hdr{background:#517da2;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;flex:none}
+.hdr .back{font-size:22px;opacity:.9}
+.hdr .av{width:38px;height:38px;border-radius:50%;background:#7bb36c;display:flex;align-items:center;justify-content:center;font-weight:700}
+.hdr b{display:block;font-size:16px}.hdr span{font-size:12px;opacity:.8}
+.feed{flex:1;overflow:hidden;padding:10px 8px 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
+.m{max-width:82%;min-width:70px;padding:7px 10px 16px;border-radius:12px;font-size:14.5px;line-height:1.35;white-space:pre-wrap;position:relative;box-shadow:0 1px 1px rgba(0,0,0,.12);animation:pop .25s ease-out}
+.bot{background:#fff;align-self:flex-start;border-bottom-left-radius:4px}
+.me{background:#e2fec7;align-self:flex-end;border-bottom-right-radius:4px}
+.t{position:absolute;right:8px;bottom:3px;font-size:11px;color:#8a9a8a}
+.ik{align-self:flex-start;width:82%;display:grid;gap:4px;margin-top:-2px;animation:pop .25s ease-out}
+.ik div{background:rgba(70,100,70,.38);color:#fff;text-align:center;padding:9px;border-radius:8px;font-size:14px;font-weight:500}
+.photo{width:220px;height:150px;background:linear-gradient(135deg,#9fb4c8,#e8eef3);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#456;font-size:13px}
+.note{align-self:center;background:rgba(0,0,0,.25);color:#fff;font-size:12.5px;padding:3px 10px;border-radius:10px}
+.kb{background:#f1f1f1;padding:6px;display:grid;gap:6px;border-top:1px solid #ccc;flex:none}
+.kb .row{display:grid;gap:6px}.kb .k{background:#fff;border-radius:6px;padding:12px 4px;text-align:center;font-size:14px;box-shadow:0 1px 1px rgba(0,0,0,.15)}
+.input{background:#fff;padding:10px 12px;color:#999;font-size:15px;border-top:1px solid #ddd;display:flex;align-items:center;gap:10px;flex:none}
+.input .app{background:#3390ec;color:#fff;border-radius:8px;padding:6px 10px;font-size:14px}
+.input .ph{flex:1}
+.dlg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.dlg .box{background:#fff;border-radius:14px;width:300px;padding:18px 18px 8px;font-size:15px;line-height:1.4}
+.dlg .box b{display:block;font-size:17px;margin-bottom:8px}
+.dlg .btns{display:flex;justify-content:flex-end;gap:6px;margin-top:12px}
+.dlg .btns div{color:#3390ec;font-weight:600;padding:10px 12px;font-size:15px}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style></head><body>
+<div class="phone">
+  <div class="hdr"><div class="back">←</div><div class="av">BK</div><div><b>Boshqaruv kompaniyasi boti</b><span>bot</span></div></div>
+  <div class="feed" id="feed"></div>
+  <div id="kb"></div>
+  <div class="input"><div class="app">☰ Ilova</div><div class="ph">Xabar</div><div>📎</div></div>
+</div>
+<script>
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+const feed = document.getElementById('feed')
+const add = (html) => { feed.insertAdjacentHTML('beforeend', html) }
+window.chat = {
+  bot(text, ik, time) {
+    add(`<div class="m bot">${esc(text)}<span class="t">${time||'09:30'}</span></div>`)
+    if (ik) add(`<div class="ik">${ik.map(b => `<div>${esc(b)}</div>`).join('')}</div>`)
+  },
+  me(text, time) { add(`<div class="m me">${esc(text)}<span class="t">${time||'09:30'} ✓✓</span></div>`) },
+  photo(label, time) { add(`<div class="m me" id="ph" style="padding:4px 4px 18px"><div class="photo">${esc(label)}</div><span class="t">${time||'09:30'} ✓✓</span></div>`) },
+  unphoto() { document.getElementById('ph')?.remove() },
+  note(text) { add(`<div class="note">${esc(text)}</div>`) },
+  kb(rows) {
+    document.getElementById('kb').innerHTML = rows ? `<div class="kb">${rows.map(r =>
+      `<div class="row" style="grid-template-columns:repeat(${r.length},1fr)">${r.map(k => `<div class="k">${esc(k)}</div>`).join('')}</div>`).join('')}</div>` : ''
+  },
+  clear() { feed.innerHTML = '' },
+  dialog(title, body, buttons) {
+    document.body.insertAdjacentHTML('beforeend', `<div class="dlg" id="dlg"><div class="box"><b>${esc(title)}</b>${esc(body)}<div class="btns">${buttons.map(b => `<div>${esc(b)}</div>`).join('')}</div></div></div>`)
+  },
+  closeDialog() { document.getElementById('dlg')?.remove() },
+}
+</script></body></html>

@@ -23,6 +23,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Optional
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.session import run_db
@@ -33,9 +34,11 @@ from uk_management_bot.keyboards.base import (
     get_main_keyboard_for_role,
     get_role_switch_inline,
     get_start_role_choice_inline,
+    get_tutorial_inline,
     get_user_contextual_keyboard,
     is_menu_mode,
 )
+from uk_management_bot.services import tutorial_videos
 from uk_management_bot.keyboards.shifts import get_shifts_main_keyboard
 from uk_management_bot.services.notification_service import (
     build_role_switched_message,
@@ -46,7 +49,9 @@ from uk_management_bot.utils.auth_helpers import parse_roles_safe
 from uk_management_bot.keyboards.documents_entry import (
     get_resubmit_inline, get_upload_documents_inline,
 )
-from uk_management_bot.services.residents.approval_rules import PROPERTY_DOC_TYPES
+from uk_management_bot.services.residents.approval_rules import (
+    PROPERTY_DOC_TYPES, account_refusal, is_pure_applicant,
+)
 from uk_management_bot.utils.callback_factories import RoleSwitchCB
 from uk_management_bot.middlewares.auth import require_action
 from uk_management_bot.filters import RoleFilter
@@ -131,6 +136,21 @@ def _profile_complete(ctx: _MenuContext) -> bool:
         ctx.phone and ctx.has_approved_apartment
         and (ctx.has_property_doc or ctx.verification_status in _VERIFICATION_DECIDED)
     )
+
+
+def _has_resident_access(ctx: _MenuContext) -> bool:
+    """Житель (только роли жителя) с полным доступом — правило approval_rules."""
+    probe = SimpleNamespace(roles=ctx.db_roles, phone=ctx.phone,
+                            verification_status=ctx.verification_status)
+    return ctx.status == "approved" and is_pure_applicant(probe) and account_refusal(probe) is None
+
+
+def _offer_request_tutorial(bot, chat_id: int, ctx: _MenuContext, lang: str) -> None:
+    """Ролик «как подать заявку» — один раз после получения доступа, в фоне."""
+    if _has_resident_access(ctx):
+        tutorial_videos.schedule(tutorial_videos.send_tutorial_once(
+            bot, chat_id, "request", lang, ttl=tutorial_videos.REQUEST_ONCE_TTL,
+        ))
 
 
 def _needs_document_upload(ctx: _MenuContext) -> bool:
@@ -653,6 +673,8 @@ async def handle_regular_start(message: Message, roles: list[str] = None, active
 
     await message.answer(welcome_text, reply_markup=get_main_keyboard_for_role(active_role, roles, ctx.status, language=lang))
     logger.info(f"Пользователь {message.from_user.id} запустил бота")
+    # Кто не нажал «Перезапустить бота» после одобрения — ролик при первом входе.
+    _offer_request_tutorial(message.bot, message.from_user.id, ctx, lang)
 
 @router.message(Command("menu"))
 async def cmd_menu(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None, user_status: str = None, language: str = "ru", *, _db=None):
@@ -704,7 +726,9 @@ async def handle_restart_bot(callback: CallbackQuery, roles: list[str] = None, a
         lang = language
         await callback.answer(get_text("base.handlers.bot_restarted", language=lang))
         logger.info(f"Пользователь {callback.from_user.id} перезапустил бота через кнопку")
-        
+        # «Перезапустить бота» жмут сразу после одобрения — тут ролик о заявках.
+        _offer_request_tutorial(callback.bot, callback.from_user.id, ctx, lang)
+
     except Exception as e:
         logger.error(f"Ошибка перезапуска бота: {e}")
         await callback.answer(get_text("base.handlers.error_restart", language=language), show_alert=True)
@@ -785,7 +809,17 @@ async def show_help(message: Message, language: str = "ru", *, _db=None):
     """Показывает справку по использованию бота."""
     lang = await run_db(lambda s: _lang(s, message.from_user.id), db=_db)
     help_text = get_text("help.usage_help", language=lang)
-    await message.answer(help_text)
+    await message.answer(help_text, reply_markup=get_tutorial_inline(lang))
+
+
+@router.callback_query(F.data.startswith("tutorial:"))
+async def send_tutorial_video(callback: CallbackQuery, language: str = "ru"):
+    """Кнопка видеоинструкции из «Помощи»."""
+    kind = callback.data.split(":", 1)[1]
+    await callback.answer()
+    # Публичная инструкция, прав не даёт — action каталога RBAC не нужен.
+    if kind in tutorial_videos.KINDS and await tutorial_videos.help_cooldown_passed(callback.from_user.id, kind):
+        await tutorial_videos.send_tutorial(callback.bot, callback.from_user.id, kind, language)
 
 
 @router.message(F.text.in_(PROFILE_TEXTS))
@@ -977,7 +1011,8 @@ async def process_admin_password(message: Message, state: FSMContext, user_statu
     F.chat.type == "private",
     (F.text & ~F.text.startswith("/")) | F.voice | F.video | F.video_note,
 )
-async def free_text_request_hint(message: Message, user_status: Optional[str] = None, language: str = "ru"):
+async def free_text_request_hint(message: Message, user_status: Optional[str] = None, language: str = "ru",
+                                 roles: Optional[list] = None):
     """Свободное сообщение вне сценария → как подать заявку (pending — что ждём одобрения)."""
     key = "auth.pending" if user_status == "pending" else "base.handlers.free_text_hint"
     await message.answer(
@@ -985,3 +1020,5 @@ async def free_text_request_hint(message: Message, user_status: Optional[str] = 
         reply_markup=await get_user_contextual_keyboard(message.from_user.id),
     )
     logger.info(f"Пользователю {message.from_user.id} отправлена подсказка по созданию заявки")
+    if user_status == "approved" and is_pure_applicant(SimpleNamespace(roles=roles)):
+        tutorial_videos.schedule(tutorial_videos.offer_after_free_text(message.bot, message.from_user.id, language))

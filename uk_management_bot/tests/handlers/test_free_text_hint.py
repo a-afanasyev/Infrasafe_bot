@@ -14,6 +14,14 @@ from uk_management_bot.handlers import base
 from uk_management_bot.utils.helpers import get_text
 
 
+@pytest.fixture(autouse=True)
+def _no_tutorial_redis(monkeypatch):
+    """Счётчик ролика (test_tutorial_videos) здесь не нужен — без живого Redis."""
+    from uk_management_bot.services import tutorial_videos
+
+    monkeypatch.setattr(tutorial_videos, "_get_redis", AsyncMock(side_effect=ConnectionError))
+
+
 def _msg(text="течёт кран в ванной", chat_type="private", **media):
     msg = MagicMock()
     msg.text = text
