@@ -2996,5 +2996,16 @@
     "err_photo": "Surat mos kelmadi — boshqasini yuboring",
     "err_media": "Surat xizmati vaqtincha ishlamayapti — keyinroq urinib ko‘ring",
     "err_generic": "Ishdan oldingi suratni yuklab bo‘lmadi"
+  },
+  "tutorial": {
+    "registration": {
+      "caption": "🎬 Qanday ro'yxatdan o'tish — bir daqiqalik video"
+    },
+    "request": {
+      "caption": "🎬 Ariza qanday beriladi — bir daqiqalik video"
+    },
+    "free_text_offer": "Siz oddiy xabar yozayotganga o'xshaysiz. Arizani «📝 Ariza yaratish» tugmasi orqali berish tezroq — buni bir daqiqada qanday qilishni ko'ring.",
+    "btn_registration": "🎬 Qanday ro'yxatdan o'tish",
+    "btn_request": "🎬 Ariza qanday beriladi"
   }
 }

@@ -1,0 +1,39 @@
+1
+00:00:00,403 --> 00:00:03,445
+Ariza berish bir daqiqadan kam vaqt oladi
+
+2
+00:00:03,445 --> 00:00:08,745
+Kiritish maydoni yonidagi «Ilova» tugmasi bilan ilovani oching
+
+3
+00:00:08,745 --> 00:00:12,001
+«Yaratish» bo'limi → nima bo'lganini tanlang
+
+4
+00:00:12,001 --> 00:00:15,131
+Manzilni tanlang: kvartira, uy yoki hovli
+
+5
+00:00:15,131 --> 00:00:18,650
+Muammoni tasvirlab bering
+
+6
+00:00:18,650 --> 00:00:21,375
+Rasm — ixtiyoriy, 5 tagacha
+
+7
+00:00:21,375 --> 00:00:25,899
+Shoshilinchlikni tanlang. «Kritik» — faqat avariya bo'lganda
+
+8
+00:00:25,899 --> 00:00:29,533
+Tekshiring va «Ariza yuborish» tugmasini bosing
+
+9
+00:00:29,533 --> 00:00:36,736
+Ariza yaratildi. Holatini «Arizalar» bo'limida ko'rasiz, bot har bir o'zgarish haqida xabar beradi
+
+10
+00:00:36,736 --> 00:00:40,738
+Avariya bo'lsa — darhol dispetcherga qo'ng'iroq qiling

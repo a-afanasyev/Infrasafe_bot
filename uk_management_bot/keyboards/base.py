@@ -277,6 +277,18 @@ def get_start_role_choice_inline(language: str = "ru") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_tutorial_inline(language: str = "ru") -> InlineKeyboardMarkup:
+    """Кнопки видеоинструкций в «Помощи» (callback → services/tutorial_videos)."""
+    builder = InlineKeyboardBuilder()
+    for kind in ("registration", "request"):
+        builder.add(InlineKeyboardButton(
+            text=get_text(f"tutorial.btn_{kind}", language=language),
+            callback_data=f"tutorial:{kind}",
+        ))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_no_invite_token_inline(language: str = "ru") -> InlineKeyboardMarkup:
     """Выход из шага ввода токена: «у меня нет кода» → вернуться к жителю."""
     builder = InlineKeyboardBuilder()
