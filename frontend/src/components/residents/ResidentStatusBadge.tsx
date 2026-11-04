@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { isRegistrationIncomplete } from './residentTone'
 
 /** Две НЕЗАВИСИМЫЕ оси статуса жителя, поэтому два разных бейджа:
  *  аккаунт (`users.status`) решает, пустят ли в бота, верификация
@@ -33,8 +34,17 @@ function Badge({ color, children }: { color: string; children: React.ReactNode }
   )
 }
 
-export function ResidentAccountBadge({ status }: { status: string }) {
+/** `phone`/`apartmentsCount` переданы → брошенный онбординг показываем
+ *  «Не завершил регистрацию» (см. isRegistrationIncomplete). */
+export function ResidentAccountBadge({ status, phone, apartmentsCount }: {
+  status: string
+  phone?: string | null
+  apartmentsCount?: number
+}) {
   const { t } = useTranslation()
+  if (apartmentsCount !== undefined && isRegistrationIncomplete({ status, phone: phone ?? null, apartments_count: apartmentsCount })) {
+    return <Badge color="var(--text-muted)">{t('residents.accountStatus.incomplete')}</Badge>
+  }
   return (
     <Badge color={ACCOUNT_COLORS[status] ?? 'var(--text-muted)'}>
       {t(`residents.accountStatus.${status}`, status)}

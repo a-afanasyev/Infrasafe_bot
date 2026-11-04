@@ -6,6 +6,18 @@ import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import { formatDate } from '../../utils/timezone'
 import { BotBlockedBadge, ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
+import { residentTone, type ResidentTone } from './residentTone'
+
+const TINT = (color: string, pct = 8) => `color-mix(in srgb, ${color} ${pct}%, var(--color-bg-card))`
+
+/** Фон и контур карточки по residentTone; одобренные — как раньше. */
+const TONE_STYLE: Record<ResidentTone, { background?: string; borderColor?: string }> = {
+  botBlocked: { background: TINT('var(--red)'), borderColor: 'var(--red)' },
+  incomplete: { borderColor: 'var(--red)' },
+  submitted: { background: TINT('var(--blue)') },
+  pending: { background: TINT('var(--amber)', 14) }, // жёлтый на 8% теряется в тёмной теме
+  default: {},
+}
 
 interface Props {
   resident: ResidentListItem
@@ -19,11 +31,14 @@ export default function ResidentCard({ resident }: Props) {
 
   const name = fullName(resident, t('residents.noName'))
   const isBlocked = resident.status === 'blocked'
+  const tone = residentTone(resident)
 
   return (
     <div
       onClick={() => navigate(`/dashboard/residents/${resident.id}`)}
-      className="bg-bg-card border border-border-default rounded-default p-4 flex flex-col gap-3 cursor-pointer transition-colors hover:border-accent"
+      data-tone={tone}
+      style={TONE_STYLE[tone]}
+      className="h-full bg-bg-card border border-border-default rounded-default p-4 flex flex-col gap-3 cursor-pointer transition-colors hover:border-accent"
     >
       <div className="flex items-start gap-3">
         <div
@@ -75,8 +90,8 @@ export default function ResidentCard({ resident }: Props) {
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <ResidentAccountBadge status={resident.status} />
+      <div className="mt-auto flex items-center gap-1.5 flex-wrap">
+        <ResidentAccountBadge status={resident.status} phone={resident.phone} apartmentsCount={resident.apartments_count} />
         <ResidentVerificationBadge status={resident.verification_status} submitted={resident.documents_submitted} />
         {resident.bot_blocked && <BotBlockedBadge />}
         <span className="text-[11px] text-text-muted ml-auto font-[family-name:var(--font-mono)]">
