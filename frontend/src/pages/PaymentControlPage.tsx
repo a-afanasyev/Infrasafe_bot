@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { todayInDisplayTz } from '../utils/timezone'
@@ -26,7 +26,12 @@ export default function PaymentControlPage() {
   const { t } = useTranslation()
   usePageTitle(t('paymentControl.title'))
   const [params, setParams] = useSearchParams()
-  const account = params.get('account') || ''
+  // A10-SAT-10: номер счёта живёт в state навигации и в памяти страницы, не в URL.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [account, setAccount] = useState<string>(
+    (location.state as { account?: string } | null)?.account ?? '',
+  )
   const selectedId = Number(params.get('import')) || null
   const [rowOffset, setRowOffset] = useState(Math.max(0, Number(params.get('offset')) || 0))
   const [kind, setKind] = useState<ImportKind>('balances')
@@ -63,7 +68,11 @@ export default function PaymentControlPage() {
     </div>
     <AccountLookupSection
       account={account} balance={balance} onRefresh={() => void refresh()} onSelectImport={selectImport}
-      onSearch={value => { const next = new URLSearchParams(params); next.set('account', value); setParams(next) }}
+      onSearch={value => {
+        setAccount(value)
+        // В state истории, не в URL: перезагрузка и «назад/вперёд» сохраняют поиск.
+        navigate({ search: location.search }, { replace: true, state: { account: value } })
+      }}
     />
     <ImportUploadSection
       kind={kind} source={source} asOf={asOf} file={file} isPending={upload.isPending}

@@ -42,7 +42,8 @@ export function usePaymentImport(importId: number | null, rowOffset: number) {
 export function usePaymentAccount(account: string) {
   return useQuery<AccountBalance>({
     queryKey: paymentKeys.accountOf(account),
-    queryFn: () => apiClient.get(`${BASE}/account`, { params: { account_number: account } }).then(r => r.data),
+    // POST с телом: номер счёта не попадает в URL и access-логи (A10-SAT-10).
+    queryFn: () => apiClient.post(`${BASE}/account`, { account_number: account }).then(r => r.data),
     enabled: !!account,
     retry: false,
   })

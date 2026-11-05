@@ -81,11 +81,12 @@ class TestGetUserVerificationKeyboard:
             result = get_user_verification_keyboard(user_id=1)
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_six_buttons(self):
+    def test_has_five_buttons(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.user_verification import get_user_verification_keyboard
             result = get_user_verification_keyboard(user_id=1)
-        assert len(_flat_texts(result)) == 6
+        # «Права доступа» скрыта (A9-P2-26)
+        assert len(_flat_texts(result)) == 5
 
     def test_approve_and_reject_callbacks(self):
         with patch(GET_TEXT_PATH, side_effect=_echo):
@@ -216,3 +217,12 @@ class TestGetCancelKeyboardVerification:
             from uk_management_bot.keyboards.user_verification import get_cancel_keyboard
             result = get_cancel_keyboard()
         assert "cancel_action" in _flat_cbs(result)
+
+
+def test_user_verification_keyboard_hides_access_rights():
+    """A9-P2-26: в access_rights никто не пишет — кнопка открывала пустую карточку."""
+    from uk_management_bot.keyboards.user_verification import get_user_verification_keyboard
+
+    callbacks = [b.callback_data for row in get_user_verification_keyboard(7).inline_keyboard for b in row]
+    assert not any(c.startswith("access_rights_") for c in callbacks)
+    assert "view_user_documents_7" in callbacks

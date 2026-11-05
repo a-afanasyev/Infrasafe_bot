@@ -93,12 +93,9 @@ def get_user_verification_keyboard(user_id: int, language: str = 'ru') -> Inline
             callback_data=f"verification_request_{user_id}"
         )],
         
-        # Управление правами доступа
-        [InlineKeyboardButton(
-            text=f"🔑 {get_text('verification.access_rights', language)}",
-            callback_data=f"access_rights_{user_id}"
-        )],
-        
+        # «🔑 Права доступа» скрыта (A9-P2-26): в access_rights никто не пишет —
+        # карточка всегда пустая; паркинг живёт в access_control.
+
         # Документы
         [InlineKeyboardButton(
             text=f"📄 {get_text('verification.view_documents', language)}",

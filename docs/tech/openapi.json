@@ -7218,6 +7218,21 @@
         "title": "PasswordLogin",
         "type": "object"
       },
+      "PaymentAccountIn": {
+        "properties": {
+          "account_number": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Account Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_number"
+        ],
+        "title": "PaymentAccountIn",
+        "type": "object"
+      },
       "PaymentAccountsIn": {
         "properties": {
           "account_numbers": {
@@ -7738,6 +7753,73 @@
         "title": "ProfileOut",
         "type": "object"
       },
+      "PublicBoardConfigResponse": {
+        "description": "`response_model` анонимного GET /public/board-config — без служебных флагов.",
+        "properties": {
+          "announcements": {
+            "items": {
+              "$ref": "#/components/schemas/AnnouncementCfg"
+            },
+            "title": "Announcements",
+            "type": "array"
+          },
+          "bot": {
+            "$ref": "#/components/schemas/BotCfg"
+          },
+          "contacts": {
+            "$ref": "#/components/schemas/ContactsCfg"
+          },
+          "display_tz": {
+            "title": "Display Tz",
+            "type": "string"
+          },
+          "elevators": {
+            "$ref": "#/components/schemas/ElevatorsCfg"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeCfg"
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/LayoutItem"
+            },
+            "title": "Layout",
+            "type": "array"
+          },
+          "org": {
+            "$ref": "#/components/schemas/OrgCfg"
+          },
+          "planned_works": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedWorkCfg"
+            },
+            "maxItems": 20,
+            "title": "Planned Works",
+            "type": "array"
+          },
+          "work_reports": {
+            "$ref": "#/components/schemas/PublicWorkReportsCfg"
+          },
+          "working_hours": {
+            "items": {
+              "$ref": "#/components/schemas/WorkingHourCfg"
+            },
+            "title": "Working Hours",
+            "type": "array"
+          }
+        },
+        "required": [
+          "org",
+          "contacts",
+          "bot",
+          "announcements",
+          "working_hours",
+          "layout",
+          "display_tz"
+        ],
+        "title": "PublicBoardConfigResponse",
+        "type": "object"
+      },
       "PublicBoardOut": {
         "properties": {
           "active_executors": {
@@ -8181,6 +8263,28 @@
           "after"
         ],
         "title": "PublicWorkReportOut",
+        "type": "object"
+      },
+      "PublicWorkReportsCfg": {
+        "description": "`work_reports` в анонимном ответе: только то, что рисует табло.",
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "limit": {
+            "default": 6,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "title": {
+            "$ref": "#/components/schemas/LocalizedText"
+          }
+        },
+        "title": "PublicWorkReportsCfg",
         "type": "object"
       },
       "PublicWorkReportsOut": {
@@ -18915,21 +19019,18 @@
       }
     },
     "/api/v2/payment-control/account": {
-      "get": {
-        "operationId": "account_api_v2_payment_control_account_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "account_number",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "minLength": 1,
-              "title": "Account Number",
-              "type": "string"
+      "post": {
+        "operationId": "account_api_v2_payment_control_account_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentAccountIn"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -19496,7 +19597,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BoardConfigResponse"
+                  "$ref": "#/components/schemas/PublicBoardConfigResponse"
                 }
               }
             },
@@ -25612,6 +25713,31 @@
       }
     },
     "/api/v2/work-reports/settings": {
+      "get": {
+        "description": "Настройки ленты отчётов вместе со служебными флагами автопубликации.",
+        "operationId": "get_work_reports_settings_api_v2_work_reports_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkReportsCfg"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Work Reports Settings",
+        "tags": [
+          "work-reports"
+        ]
+      },
       "put": {
         "description": "Обновить `work_reports`-блок board_config. Переиспользует\n`merge_and_save_board_config` — он же обслуживает PUT редактора витрины\n(см. его docstring) — а не переизобретает autopost_since-стамп здесь.\n\n`WorkReportsSettingsIn` не имеет поля `autopost_since` вообще — самый\nпростой guard от смуглинга клиентского значения; сервис-слой всё равно\nбы его перезаписал (см. `merge_and_save_board_config`).",
         "operationId": "update_work_reports_settings_api_v2_work_reports_settings_put",

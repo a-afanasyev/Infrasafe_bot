@@ -75,9 +75,16 @@ async def apartment_balance(apartment_id: int, user: User = Depends(staff), db: 
         return {**result, "status": "unavailable"}
 
 
-@router.get("/account")
-async def account(account_number: str = Query(..., min_length=1, max_length=64), user: User = Depends(staff)):
-    return await service_request("GET", "/account", user, params={"account_number": account_number})
+class PaymentAccountIn(BaseModel):
+    account_number: str = Field(min_length=1, max_length=64)
+
+
+# POST, а не GET с query: номер счёта не оседает в URL и access-логах edge
+# (A10-SAT-10). До сервиса — внутренняя сеть, там прежний GET.
+@router.post("/account")
+@limiter.limit("60/minute")
+async def account(request: Request, body: PaymentAccountIn, user: User = Depends(staff)):
+    return await service_request("GET", "/account", user, params={"account_number": body.account_number})
 
 
 class PaymentAccountsIn(BaseModel):

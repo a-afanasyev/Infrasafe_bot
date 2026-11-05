@@ -304,6 +304,24 @@ class BoardConfigResponse(_BoardConfigFields):
     display_tz: str
 
 
+#: Служебные флаги автопубликации отчётов (A10-FE-03): анонимной витрине не нужны,
+#: читает и пишет их только `/work-reports/settings`.
+PRIVATE_WORK_REPORTS_FIELDS = ("autopost", "autopost_since", "autopublish")
+
+
+class PublicWorkReportsCfg(BaseModel):
+    """`work_reports` в анонимном ответе: только то, что рисует табло."""
+    categories: list[str] = Field(default_factory=list)
+    limit: int = 6
+    title: LocalizedText = Field(default_factory=LocalizedText)
+
+
+class PublicBoardConfigResponse(BoardConfigResponse):
+    """`response_model` анонимного GET /public/board-config — без служебных флагов."""
+
+    work_reports: PublicWorkReportsCfg = Field(default_factory=PublicWorkReportsCfg)
+
+
 class _StrictIn(BaseModel):
     """Примесь для моделей ВХОДА: неизвестный ключ — 422, а не тихая потеря.
 

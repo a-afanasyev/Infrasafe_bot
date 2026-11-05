@@ -12,7 +12,11 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from uk_management_bot.services.board_config.schemas import BoardConfigResponse, BoardConfigUpdateIn
+from uk_management_bot.services.board_config.schemas import (
+    BoardConfigResponse,
+    BoardConfigUpdateIn,
+    PublicBoardConfigResponse,
+)
 from uk_management_bot.services.board_config.service import (
     load_board_config,
     merge_and_save_board_config,
@@ -27,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/public/board-config", response_model=BoardConfigResponse)
+@router.get("/public/board-config", response_model=PublicBoardConfigResponse)
 @limiter.limit("120/minute")
 async def get_board_config(
     request: Request,
@@ -39,7 +43,7 @@ async def get_board_config(
     не должна белеть.
     """
     cfg = await load_board_config(db)
-    return to_public_response(cfg)
+    return PublicBoardConfigResponse.model_validate(to_public_response(cfg).model_dump())
 
 
 @router.put("/board-config", response_model=BoardConfigResponse)
@@ -59,7 +63,9 @@ async def update_board_config(
     `payload` как раньше — старый код возвращал клиенту его же сырое
     непромёрженное тело вместо того, что реально сохранилось."""
     updates = payload.model_dump(mode="json", include=payload.model_fields_set)
-    merged = await merge_and_save_board_config(db, updates, user.id)
+    # Флаги автопубликации редактор витрины не видит (A10-FE-03) — сервис
+    # подставит сохранённые под блокировкой строки.
+    merged = await merge_and_save_board_config(db, updates, user.id, keep_private_work_reports=True)
 
     logger.info("board_config обновлён пользователем %s", user.id)
     return to_public_response(merged)

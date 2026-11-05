@@ -53,7 +53,7 @@ async def test_apartment_balance_uses_saved_account_and_unavailable_is_not_zero(
 
 @pytest.mark.parametrize('method,path,payload', [
     ('get', '/imports', None), ('get', '/imports/12?offset=200', None),
-    ('get', '/account?account_number=001', None),
+    ('post', '/account', {'account_number': '001'}),
     ('post', '/imports/12/activate', None),
     ('post', '/imports/12/deactivate', {'reason': 'Wrong file'}),
     ('post', '/accounts/balances', {'account_numbers': ['001', '002']}),
@@ -79,9 +79,20 @@ async def test_gateway_preview_and_upload_limit(client, monkeypatch):
     assert response.status_code == 413
 
 
+async def test_account_lookup_is_post_only(client, monkeypatch):
+    """A10-SAT-10: номер счёта — в теле POST, не в URL (история браузера, логи edge)."""
+    from uk_management_bot.api.payment_control import router as module
+    mock = AsyncMock(return_value={'ok': True})
+    monkeypatch.setattr(module, 'service_request', mock)
+    assert (await client.get('/api/v2/payment-control/account?account_number=001')).status_code == 405
+    ok = await client.post('/api/v2/payment-control/account', json={'account_number': '001'})
+    assert ok.status_code == 200
+    assert mock.call_args.kwargs['params'] == {'account_number': '001'}
+
+
 async def test_gateway_resident_cannot_read_financial_data(client, resident_user):
     async with acting_as(resident_user):
-        response = await client.get('/api/v2/payment-control/account?account_number=001')
+        response = await client.post('/api/v2/payment-control/account', json={'account_number': '001'})
     assert response.status_code == 403
 
 
@@ -141,7 +152,7 @@ async def make_user(db_session, telegram_id, roles, status="approved"):
 PAYMENT_ROUTES = [
     ("get", "/imports", None),
     ("get", "/imports/12", None),
-    ("get", "/account?account_number=001", None),
+    ("post", "/account", {"account_number": "001"}),
     ("get", "/apartments/1", None),
     ("post", "/imports/12/activate", None),
     ("post", "/imports/12/deactivate", {"reason": "Wrong file"}),
