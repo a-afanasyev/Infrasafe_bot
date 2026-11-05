@@ -151,8 +151,11 @@ def _parse(response: httpx.Response) -> TelegramResult:
 
 async def call(
     method: str, payload: Optional[dict] = None, *, timeout: Optional[float] = None,
+    files: Optional[dict] = None,
 ) -> TelegramResult:
-    """POST ``/bot<TOKEN>/<method>`` с JSON-телом. Никогда не поднимает сетевые исключения."""
+    """POST ``/bot<TOKEN>/<method>`` с JSON-телом (с ``files`` — multipart).
+
+    Никогда не поднимает сетевые исключения."""
     token = settings.BOT_TOKEN
     if not token:
         logger.error("Telegram %s: BOT_TOKEN не задан", method)
@@ -161,8 +164,13 @@ async def call(
     request_timeout = DEFAULT_TIMEOUT if timeout is None else timeout
     for attempt in (1, 2):
         try:
-            response = await _get_client().post(
-                url, json=payload or {}, timeout=request_timeout)
+            if files:
+                response = await _get_client().post(
+                    url, data={k: str(v) for k, v in (payload or {}).items()},
+                    files=files, timeout=request_timeout)
+            else:
+                response = await _get_client().post(
+                    url, json=payload or {}, timeout=request_timeout)
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
             logger.warning("Telegram %s: connect-сбой (попытка %s): %s",
                            method, attempt, describe_http_error(e))
@@ -269,3 +277,27 @@ async def download_file(
     except Exception as e:  # noqa: BLE001 — сеть; текст httpx несёт URL с токеном
         raise TelegramUnavailable(describe_http_error(e)) from None
     return b"".join(chunks)
+
+
+#: Загрузка ролика (до ~3 МБ) — дольше обычного вызова, но в бюджете edge (30 с).
+UPLOAD_TIMEOUT = 25.0
+
+
+async def send_video(
+    chat_id: int, video, *, caption: Optional[str] = None, mark_blocked: bool = True,
+) -> TelegramResult:
+    """``sendVideo``: ``video`` — file_id (str) или ``Path`` для загрузки файла."""
+    payload: dict = {"chat_id": chat_id, "supports_streaming": "true"}
+    if caption is not None:
+        payload["caption"] = caption
+    if isinstance(video, str):
+        result = await call("sendVideo", {**payload, "video": video})
+    else:
+        result = await call("sendVideo", payload, timeout=UPLOAD_TIMEOUT,
+                            files={"video": (video.name, video.read_bytes(), "video/mp4")})
+    if not result.ok:
+        logger.warning("Telegram не доставил видео %s: %s (%s)",
+                       chat_id, result.status, result.describe())
+    if result.status == STATUS_BLOCKED and mark_blocked:
+        await mark_bot_blocked(chat_id)
+    return result

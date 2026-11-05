@@ -1637,6 +1637,8 @@
     "noDocuments": "Hujjatlar yuklanmagan",
     "noVerification": "Tekshiruv yozuvlari yo‘q",
     "verificationRecordStatus": "Yozuv holati",
+    "registrationVideo": "🎬 Ro‘yxatdan o‘tish videosi",
+    "registrationVideoSentOn": "Video yuborildi · {{date}}",
     "accountStatus": {
       "pending": "Kutilmoqda",
       "approved": "Tasdiqlangan",
@@ -2925,6 +2927,8 @@
     "meterEntryFailed": "Ko'rsatkich kiritish huquqini o'zgartirib bo'lmadi",
     "phoneRequested": "Raqam so'rovi foydalanuvchiga Telegramga yuborildi",
     "phoneRequestFailed": "Raqam so'rovini yuborib bo'lmadi",
+    "registrationVideoSent": "Ro'yxatdan o'tish videosi Telegramga yuborildi",
+    "registrationVideoFailed": "Videoni yuborib bo'lmadi",
     "employeeRejected": "Xodim rad etildi",
     "employeeRejectFailed": "Xodimni rad etib bo'lmadi",
     "employeeBlocked": "Xodim bloklandi",

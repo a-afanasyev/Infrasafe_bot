@@ -9822,6 +9822,18 @@
             ],
             "title": "Primary Address"
           },
+          "registration_video_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Video Sent At"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -22691,6 +22703,52 @@
           }
         ],
         "summary": "Request Resident Phone",
+        "tags": [
+          "residents"
+        ]
+      }
+    },
+    "/api/v2/residents/{resident_id}/send-registration-video": {
+      "post": {
+        "description": "Отправить жителю в Telegram видео о регистрации (не чаще раза в сутки).",
+        "operationId": "send_resident_registration_video_api_v2_residents__resident_id__send_registration_video_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resident_id",
+            "required": true,
+            "schema": {
+              "title": "Resident Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Resident Registration Video",
         "tags": [
           "residents"
         ]

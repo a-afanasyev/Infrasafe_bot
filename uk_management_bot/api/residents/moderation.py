@@ -8,7 +8,7 @@
 `notify.py`. Адрес для текста уведомления берётся из карточки жителя уже после
 операции: так в сообщении гарантированно тот адрес, который житель увидит.
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
@@ -171,6 +171,33 @@ async def request_resident_phone(
         raise ResidentNotFound("Житель не найден")
     verdict = await send_phone_request(resident)
     await record_delivery_verdict(db, resident, verdict)
+    raise_unless_delivered(verdict)
+    return {"sent": True}
+
+
+@router.post("/{resident_id}/send-registration-video")
+@limiter.limit(_WRITE_LIMIT)
+async def send_resident_registration_video(
+    request: Request,
+    resident_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+):
+    """Отправить жителю в Telegram видео о регистрации (не чаще раза в сутки)."""
+    from uk_management_bot.api.residents.registration_video import (
+        send_registration_video, sent_recently,
+    )
+    from uk_management_bot.api.users.phone_request import (
+        raise_unless_delivered, record_delivery_verdict,
+    )
+
+    resident = await queries.get_resident(db, resident_id)
+    if resident is None:
+        raise ResidentNotFound("Житель не найден")
+    if sent_recently(resident):
+        raise HTTPException(status_code=409, detail="Видео уже отправлено — повторить можно через сутки")
+    verdict = await send_registration_video(resident)
+    await record_delivery_verdict(db, resident, verdict, stamp="registration_video_sent_at")
     raise_unless_delivered(verdict)
     return {"sent": True}
 

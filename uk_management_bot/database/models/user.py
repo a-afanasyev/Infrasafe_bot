@@ -44,6 +44,9 @@ class User(Base):
     # Последний доставленный запрос номера менеджером (api/users/phone_request.py):
     # карточки показывают «Номер запрошен · дата» и после перезагрузки страницы.
     phone_requested_at = Column(DateTime(timezone=True), nullable=True)
+    # Последнее доставленное видео о регистрации (api/residents/registration_video.py):
+    # «Видео отправлено · дата», повтор не чаще раза в сутки.
+    registration_video_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Простой режим исполнителя (TWA): включает менеджер конкретному человеку,
     # старая панель живёт параллельно. Сам исполнитель флаг не меняет.

@@ -66,12 +66,15 @@ def raise_unless_delivered(verdict: str) -> None:
     raise HTTPException(status_code=502, detail="Telegram delivery failed")
 
 
-async def record_delivery_verdict(db, user: User, verdict: str) -> None:
+async def record_delivery_verdict(db, user: User, verdict: str,
+                                  stamp: str = "phone_requested_at") -> None:
     """Записать вердикт доставки (и закоммитить).
 
     BLOCKED — штамп `bot_blocked_at` (карточка покажет «Бот заблокирован»).
     OK — снять `bot_blocked_at` (человек разблокировал) и ВСЕГДА поставить
-    `phone_requested_at` («Номер запрошен» переживает перезагрузку страницы).
+    штамп действия `stamp` (по умолчанию `phone_requested_at` — «Номер
+    запрошен» переживает перезагрузку страницы; видео о регистрации —
+    `registration_video_sent_at`).
     Сетевые/прочие сбои (`no_chat`/`error`) ничего не трогают: запрос не
     доставлен и о блокировке не говорит."""
     from datetime import datetime, timezone
@@ -81,7 +84,7 @@ async def record_delivery_verdict(db, user: User, verdict: str) -> None:
         await db.commit()
     elif verdict == VERDICT_OK:
         user.bot_blocked_at = None
-        user.phone_requested_at = datetime.now(timezone.utc)
+        setattr(user, stamp, datetime.now(timezone.utc))
         await db.commit()
 
 

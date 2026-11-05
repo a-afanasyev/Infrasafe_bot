@@ -172,6 +172,25 @@ export function useRequestResidentPhone(id: number) {
   })
 }
 
+/** Видео о регистрации тому, кто бросил её после /start (сервер: раз в сутки). */
+export function useSendRegistrationVideo(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post(`/api/v2/residents/${id}/send-registration-video`).then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.registrationVideoSent'))
+      queryClient.invalidateQueries({ queryKey: ['residents'] })
+    },
+    onError: (error: unknown) => {
+      console.error('Send registration video failed:', error)
+      toast.error(i18n.t('toast.registrationVideoFailed'), {
+        description: safeErrorMessage(error, i18n.t('common.error')),
+      })
+    },
+  })
+}
+
 /** Исправить ФИО жителя, введённое им с ошибкой при регистрации. */
 export function useRenameResident(id: number) {
   return useResidentMutation<string>(

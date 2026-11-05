@@ -1648,6 +1648,8 @@
     "noDocuments": "Документы не загружены",
     "noVerification": "Записей о верификации нет",
     "verificationRecordStatus": "Статус записи",
+    "registrationVideo": "🎬 Видео о регистрации",
+    "registrationVideoSentOn": "Видео отправлено · {{date}}",
     "accountStatus": {
       "pending": "Ожидает",
       "approved": "Одобрен",
@@ -2940,6 +2942,8 @@
     "meterEntryFailed": "Не удалось изменить доступ к вводу показаний",
     "phoneRequested": "Запрос номера отправлен пользователю в Telegram",
     "phoneRequestFailed": "Не удалось отправить запрос номера",
+    "registrationVideoSent": "Видео о регистрации отправлено в Telegram",
+    "registrationVideoFailed": "Не удалось отправить видео",
     "employeeRejected": "Сотрудник отклонён",
     "employeeRejectFailed": "Не удалось отклонить сотрудника",
     "employeeBlocked": "Сотрудник заблокирован",

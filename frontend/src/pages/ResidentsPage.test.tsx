@@ -26,6 +26,7 @@ vi.mock('../hooks/useResidents', () => ({
   useResidentStats: () => statsQuery,
   useResidentsWebSocket: () => undefined,
   useRequestResidentPhone: () => ({ mutate: () => {}, isPending: false, isSuccess: false }),
+  useSendRegistrationVideo: () => ({ mutate: () => {}, isPending: false }),
 }))
 
 // Адресный каскад — чужой домен; тут важно лишь, что опции появляются.

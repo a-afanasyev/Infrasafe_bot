@@ -409,6 +409,8 @@ export interface ResidentListItem {
   phone_requested_at?: string | null
   /** Документы запрошены и житель их загрузил — ждут проверки. */
   documents_submitted?: boolean
+  /** Последнее доставленное видео о регистрации (ISO); повтор — через сутки. */
+  registration_video_sent_at?: string | null
 }
 
 export interface ResidentListResponse {
