@@ -1,4 +1,4 @@
-"""Unit tests for MediaServiceClient — archive/delete, publication locks, convenience wrappers, report media, request media, additional search branches, get_media_file.
+"""Unit tests for MediaServiceClient — delete, publication locks, convenience wrappers, report media, request media.
 
 AUD5-ARCH-3 волна 14: часть исходного test_media_client.py (1019), тела байт-в-байт.
 """
@@ -12,7 +12,7 @@ from uk_management_bot.integrations.media_client import (
     upload_completion_photo,
 )
 
-# archive_media / delete_media
+# delete_media
 # ---------------------------------------------------------------------------
 
 class TestArchiveAndDelete:
@@ -431,16 +431,6 @@ class TestGetRequestMedia:
 
         with pytest.raises(Exception, match="timeout"):
             await client.get_request_media("260401-001")
-
-
-# ---------------------------------------------------------------------------
-# search_media — additional branches
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# get_media_file
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
