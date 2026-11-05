@@ -19,13 +19,13 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **614**
-- закрыто маркером: **597**
-- открыто маркером: **17**
+- закрыто маркером: **610**
+- открыто маркером: **4**
 
-  - `actionable` — **15**
+  - `actionable` — **2**
   - `deferred` — **2**
 
-Из них actionable по приоритету: P2=3, P3=12.
+Из них actionable по приоритету: P3=2.
 
 Значения `status`:
 
@@ -47,23 +47,10 @@
 
 | ID | P | status | method | Пакет | PR | Сервисы | Прод-верификация | Примечание |
 |---|---|---|---|---|---|---|---|---|
-| `A10-FE-03` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut |
-| `A10-INF-03` | P3 | actionable | owner-decision-2026-11-05 | AUD10-CODE | — | compose | — | сужено 2026-11-05: только cap_drop: [ALL] для Python-сервисов + расширить test_a10_compose_hardening; read_only/pids_limit не делать |
-| `A10-INT-13` | P3 | actionable | found-2026-10-24 | AUD10-CODE | — | bot | — | same-status notes-append без проверки актора — удалить ветку |
-| `A10-INT-14` | P3 | actionable | owner-decision-2026-11-05 | AUD10-CODE | — | bot | — | сужено 2026-11-05: только notify_superadmins при assign_role(manager) в боте; mgr_delete_/pending-исполнитель не делать |
-| `A10-SAT-03` | P3 | deferred | owner-decision-2026-11-05 | AUD10-CODE | — | media-service, provisioning | — | 2026-11-05: делать вместе с A9-P3-33 (media), отдельно не ценно |
-| `A10-SAT-10` | P3 | actionable | found-2026-10-23 | AUD10-CODE | — | api, frontend | — | лицевой счёт в query-string — POST с телом, account не в URL страницы |
-| `A10-HOST-06` | P3 | actionable | owner-decision-2026-11-05 | AUD10-HOST | — | хост profk | — | решение 2026-11-05: убрать ключ из /root/.ssh/authorized_keys и PermitRootLogin yes в основном sshd_config; NOPASSWD sudo принять (deploy в группе docker) |
+| `A10-SAT-03` | P3 | deferred | owner-decision-2026-11-05 | AUD10-CODE | — | media-service, provisioning | — | 2026-11-06: A9-P3-33 закрыт без alembic — SAT-03 отдельно (роль uk_media_app без DDL, DDL только в media-migrate); делать при следующей работе с media |
+| `A10-HOST-06` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хост profk | — | остаток на profk (2026-11-06): ключ в /root/.ssh/authorized_keys (1 строка) и строка PermitRootLogin yes в основном sshd_config (действующее значение no — drop-in 10-hardening.conf); NOPASSWD sudo принят |
 | `A10-HOST-07` | P3 | deferred | owner-decision-2026-11-05 | AUD10-HOST | — | compose, хосты | — | сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105 |
-| `A10-HOST-08` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | хосты | — | бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644 |
-| `A10-HOST-09` | P3 | actionable | owner-decision-2026-11-05 | AUD10-HOST | — | хосты | — | сужено 2026-11-05: только journalmatch fail2ban (ssh.service); auditd не нужен |
-| `A10-HOST-11` | P3 | actionable | verified-host-2026-10-23 | AUD10-HOST | — | Doppler | — | ADMIN_PASSWORD на 105 — 16 символов (profk 64) |
-| `A10-INF-09` | P3 | actionable | found-2026-10-23 | AUD10-HOST | — | рабочая машина | — | env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории |
-| `AUD7-SEC-03` | P2 | actionable | owner-decision-2026-11-05 | AUD7-S2 | — | UK API / resource API | — | решение владельца 2026-11-05: session_ttl_seconds resource-сервиса 12 ч → 1 ч вместо синхронного отзыва |
-| `AUD8-ENG-02` | P3 | actionable | owner-decision-2026-11-05 | AUD8-E1 | — | — | — | решение владельца 2026-11-05: ШИФРОВАТЬ — кросс-бэкап profk↔105 держит копию БД соседа, то есть это внешний бэкап |
-| `A9-P3-33` | P3 | actionable | owner-decision-2026-11-05 | AUD9-W7 | — | media-service | — | сужено 2026-11-05: create_all перед SQL-файлами в run_migrations.py (новая площадка падает на 0001); переход на alembic не нужен |
-| `A9-P2-24` | P2 | actionable | audit9-2026-09-22 | AUD9-W8 | — | media-service, bot | — | Чистка media_service: SDK и то, чем не пользуются ни код, ни владелец (поиск — оставить) |
-| `A9-P2-26` | P2 | actionable | owner-decision-2026-11-05 | AUD9-W8 | — | bot, БД | — | решение владельца 2026-11-05: только спрятать кнопку «Права доступа» (карточка всегда пустая); таблицу и код не удалять |
+| `A10-HOST-08` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хосты | — | 105 сделано (.env.bak в ~/quarantine-a11-20261105, каталог 700; secrets в каталоге 700); остаток — profk: 7 .env.bak* (/opt/uk ×4, /opt/infrasafe ×2, /home/infrasafe ×1) и судьба карантина на 105 |
 
 ## Спорные пункты, разведённые явно
 
