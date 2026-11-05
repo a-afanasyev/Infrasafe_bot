@@ -100,6 +100,7 @@ async def list_residents(
             primary_address=_format_address(*primary) if primary else None,
             bot_blocked=u.bot_blocked_at is not None,
             phone_requested_at=u.phone_requested_at,
+            registration_video_sent_at=u.registration_video_sent_at,
             documents_submitted=u.id in submitted,
         ))
     return ResidentListOut(items=items, total=total, limit=limit, offset=offset)

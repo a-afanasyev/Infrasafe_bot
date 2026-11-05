@@ -45,6 +45,14 @@ def video_path(kind: str, language: Optional[str]) -> Path:
     return ASSETS_DIR / f"{kind}_{lang}.mp4"
 
 
+def file_id_cache_key(path: Path) -> str:
+    """Ключ file_id в Redis; меняется вместе с файлом. OSError — файла нет.
+
+    Общий с API (кнопка «Видео о регистрации» в «Жителях»): токен бота один,
+    значит и file_id один."""
+    return f"tutorial:fid:{path.stem}:{path.stat().st_size}"
+
+
 async def _get_redis():
     from uk_management_bot.services.redis_pubsub import get_pubsub_redis
 
@@ -85,7 +93,7 @@ async def send_tutorial(bot, chat_id: int, kind: str, language: Optional[str],
     path = video_path(kind, language)
     caption = get_text(caption_key or f"tutorial.{kind}.caption", language=language)
     try:
-        key = f"tutorial:fid:{path.stem}:{path.stat().st_size}"
+        key = file_id_cache_key(path)
     except OSError as exc:
         logger.error("tutorial: нет файла ролика %s: %s", path.name, type(exc).__name__)
         return False

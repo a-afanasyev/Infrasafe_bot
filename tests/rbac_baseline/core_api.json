@@ -2385,6 +2385,18 @@
     "manager@pending"
    ]
   },
+  "POST /api/v2/residents/{resident_id}/send-registration-video": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "POST /api/v2/residents/{resident_id}/unblock": {
    "auth": "roles",
    "allow": [

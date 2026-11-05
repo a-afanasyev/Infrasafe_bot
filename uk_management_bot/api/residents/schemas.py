@@ -82,6 +82,7 @@ class ResidentListItemOut(BaseModel):
     bot_blocked: bool = False
     # Последний доставленный запрос номера — «Номер запрошен · дата».
     phone_requested_at: Optional[datetime] = None
+    registration_video_sent_at: Optional[datetime] = None
     # Документы запрошены и житель их уже загрузил — ждут проверки менеджером.
     documents_submitted: bool = False
 

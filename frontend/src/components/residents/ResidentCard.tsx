@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
-import { useRequestResidentPhone } from '../../hooks/useResidents'
+import { useRequestResidentPhone, useSendRegistrationVideo } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import { formatDate } from '../../utils/timezone'
@@ -19,6 +20,9 @@ const TONE_STYLE: Record<ResidentTone, { background?: string; borderColor?: stri
   default: {},
 }
 
+/** Совпадает с RESEND_AFTER сервера (api/residents/registration_video.py). */
+const VIDEO_RESEND_MS = 24 * 60 * 60 * 1000
+
 interface Props {
   resident: ResidentListItem
 }
@@ -28,10 +32,14 @@ export default function ResidentCard({ resident }: Props) {
   const { full: fullName } = usePersonName()
   const navigate = useNavigate()
   const requestPhone = useRequestResidentPhone(resident.id)
+  const sendVideo = useSendRegistrationVideo(resident.id)
+  const [mountedAt] = useState(Date.now) // «сейчас» на момент показа карточки: окно — сутки
 
   const name = fullName(resident, t('residents.noName'))
   const isBlocked = resident.status === 'blocked'
   const tone = residentTone(resident)
+  const videoSentAt = resident.registration_video_sent_at
+  const videoSentRecently = !!videoSentAt && mountedAt - Date.parse(videoSentAt) < VIDEO_RESEND_MS
 
   return (
     <div
@@ -81,6 +89,23 @@ export default function ResidentCard({ resident }: Props) {
               {t('employees.phoneRequestedOn', { date: formatDate(resident.phone_requested_at) })}
             </div>
           )}
+          {tone === 'incomplete' && (videoSentRecently ? (
+            <div className="text-[11px] text-text-muted mt-0.5">
+              {t('residents.registrationVideoSentOn', { date: formatDate(videoSentAt) })}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation()
+                sendVideo.mutate()
+              }}
+              disabled={sendVideo.isPending}
+              className="text-xs text-accent hover:underline mt-0.5 block disabled:opacity-60 disabled:no-underline"
+            >
+              {t('residents.registrationVideo')}
+            </button>
+          ))}
         </div>
       </div>
 
