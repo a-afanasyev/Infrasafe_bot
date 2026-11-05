@@ -133,8 +133,8 @@ ASSIGNMENT: dict[str, dict] = {
     # method=verified-2026-09-15 там, где запись/AC/метрика уточнены на этом снимке.
     # AUD7-COR-04 закрыт 2026-09-17 (PR #562): recompute_forward после upsert + range-lock у PUT/bulk/import.
     # AUD7-SEC-02 закрыт 2026-09-17 (PR #568).
-    "AUD7-SEC-03": A(pkg="AUD7-S2", status="decision", method="verified-2026-09-15",
-                       services="UK API / resource API", note="нужно решение об окне отзыва в существующем RBAC-плане; RBAC-план от 2026-09-05 в main отсутствует — сначала AUD7-DOC-01"),
+    "AUD7-SEC-03": A(pkg="AUD7-S2", status="actionable", method="owner-decision-2026-11-05",
+                       services="UK API / resource API", note="решение владельца 2026-11-05: session_ttl_seconds resource-сервиса 12 ч → 1 ч вместо синхронного отзыва"),
     # AUD7-SEC-04 закрыт 2026-09-17 (PR #565).
     # AUD7-SEC-05 закрыт 2026-09-17 (PR #567).
     # AUD7-CODE-01 закрыт 2026-09-18 (PR #573).
@@ -206,8 +206,7 @@ ASSIGNMENT: dict[str, dict] = {
     # (AUD3-37 + AUD5-CODE-6: волны B1–B4 + финал F1/F2, PR #362..#368 + F2)
     # ── П7
     # П7c (`AUD5-PRAC-11`) закрыт 2026-07-27: scripts вернулись в ruff-scope.
-    "AUD5-JUNK-5": A(pkg="П7", status="no-pr", method="verified-2026-09-11",
-                     note="локальные venv/db/png — только пофайлово с подтверждения; 2026-09-11: uk_management_bot/venv 152 МиБ, 37 PNG 7,1 МиБ, ruvector.db 1,5 МиБ; корневой .venv 249 МБ (09-09)"),
+    # AUD5-JUNK-5 закрыт 2026-11-05: вне git — не задача бэклога; файлы с секретами/ПДн (.env.bak.pr7, env.copy*, CSV лицевых счетов) удалены владельцем 2026-11-05, остальное — локальная гигиена.
     # П8 закрыт целиком 2026-07-27: `AUD5-CODE-12` (язык каждого админа),
     # `FS-11` (канон адреса + гейт), `AUD5-APIFE-17` (deep-link через MFA).
     # ── П8: i18n
@@ -224,10 +223,7 @@ ASSIGNMENT: dict[str, dict] = {
     # test_aud325_scoring_sqlite.py гоняет реальные SQL-предикаты скоринга;
     # мутационная порча каждого предиката краснит (мок-сосед — нет).
     # ── Программа A: архитектура
-    "AUD3-07": A(pkg="A2", status="deferred", method="verified-2026-09-15",
-                 note="ратчет построен 2026-09-01: test_aud307_unconverted_ratchet, "
-                      "baseline 23 файла / 232 сайта, двунаправленный; срез 2026-09-15: 62 CONVERTED; "
-                      "конверсия «при касании», deferred-трекер класса"),
+    # AUD3-07 закрыт 2026-11-05: запись снята: двунаправленный ратчет test_aud307_unconverted_ratchet держит конверсию сам (230 сайтов).
     # `AUD5-ARCH-1` закрыт 2026-08-19 консолидацией в `AUD3-07` (остаток обоих
     # совпадал побуквенно, прогресс с 2026-08-14 и так вёлся единым) — строка
     # удалена, `--check` падает на ID закрытого пункта.
@@ -297,15 +293,10 @@ ASSIGNMENT: dict[str, dict] = {
     # канону BUG-174; греп остальных send_to_user-сайтов чист.
     # `BUG-173` закрыт 2026-08-19 (волна живых дефектов): валидатор-зеркало
     # Create; сырые join-сайты рендера — класс BUG-149/169, остаются там.
-    "AUD5-CODE-10": A(pkg="A5", status="deferred", method="verified-2026-09-15",
-                      note="ратчет построен 2026-09-01: test_aud5_code10_long_functions_ratchet, "
-                           "baseline 40 файлов / 49 функций; срез 2026-09-15: 48 функций (комментарий гейта ещё 49); "
-                           "раскрой «при касании» под принуждением гейта"),
+    # AUD5-CODE-10 закрыт 2026-11-05: запись снята: ратчет test_aud5_code10_long_functions_ratchet держит рост сам (46 функций).
     # `AUD3-15` закрыт 2026-08-02: масштаб опровергнут (6 хрупких из 79),
     # починены точечно без смены формата callback_data (пакет A6 исчерпан).
-    "AUD5-ARCH-4": A(pkg="A7", status="deferred", method="gate-2026-08-09",
-                     note="гейт границы стоит (test_aud5_arch4_domain_boundary_gate); "
-                          "развязка (L) — только при намерении разносить сервисы"),
+    # AUD5-ARCH-4 закрыт 2026-11-05: запись снята: гейт test_aud5_arch4_domain_boundary_gate держит границу; развязка — только при разнесении сервисов.
     # Закрыто 2026-08-02 (волна 1 разбора бэклога): `AUD3-35`+`PENT-F11`
     # (RATE_LIMIT_TRUSTED_PROXIES выставлен на обоих продах, CIDR),
     # `SEC-131` (MEDIA_BOT_TOKEN снят из .env .105, Doppler-only),
@@ -330,15 +321,11 @@ ASSIGNMENT: dict[str, dict] = {
     # процедура ротации → uk-deploy SKILL.md.
     # `PENT-F12`, `PENT-F15`, `PENT-F16` закрыты 2026-09-02 вместе с П2: один PR
     # владельца edge на оба конфига, релоад 11:22 UTC, наши пробы снаружи зелёные.
-    "PENT-F13": A(pkg="—", status="deferred", method="owner-decision-2026-09-18",
-                 services="DNS/регистратор владельца (оба домена)",
-                 note="решение владельца 2026-09-18: CAA на текущем DNS-провайдере не реализуем — deferred до смены провайдера (тогда CAA + DNSSEC, проверять раздельно CAA и DS); OCSP stapling неприменим для Let's Encrypt (закрыто ранее)"),
+    # PENT-F13 снят (wontfix) 2026-11-05: принятый риск: CAA не поддерживается DNS-провайдером; вернуться при смене провайдера.
     # ── Деферралы, подтверждённые решением владельца 2026-07-27
-    "ARCH-06": A(pkg="—", status="deferred", method="verified-2026-09-11",
-                 note="AST-граф 2026-09-11: 0 циклов services↔utils; возвращаться вместе с развязкой границы (AUD5-ARCH-4/A7)"),
+    # ARCH-06 закрыт 2026-11-05: циклов services↔utils 0 (AST 09-11/09-15), исправлять нечего.
     # DB-049 закрыт 2026-10-01 (PR #660).
-    "SEC-115": A(pkg="—", status="deferred", method="verified-2026-09-11",
-                 note="UK-часть сделана (/api/uk-buildings-metrics + x-service-token при INFRASAFE_INVENTORY_TOKEN); остаток внешний — принуждение auth на стороне InfraSafe и проверка токена на продах"),
+    # SEC-115 закрыт 2026-11-05: UK-часть сделана, INFRASAFE_INVENTORY_TOKEN задан в Doppler и в api обоих продов (проверено 2026-11-05); принуждение auth передано InfraSafe.
     # ── Календарь: `PENT-F04` жил здесь до 2026-08-30 — единственный
     # calendar-пункт (снятие ?token= после срока депрекации 2026-09-01).
     # Закрыт PR #516: живых клиентов query-пути не было (0 SEC-03 warning'ов
@@ -354,7 +341,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-SEC-03 закрыт 2026-09-19 (PR #590).
     # AUD8-SEC-04 закрыт 2026-09-19 (PR #590).
     # AUD8-ENG-01 закрыт 2026-09-19 (PR #590).
-    "AUD8-ENG-02": A(pkg="AUD8-E1", status="decision", method="verified-2026-09-19", note="BACKUPS.md: дампы plaintext; ключи/cron на хостах — решение владельца"),
+    "AUD8-ENG-02": A(pkg="AUD8-E1", status="actionable", method="owner-decision-2026-11-05", note="решение владельца 2026-11-05: ШИФРОВАТЬ — кросс-бэкап profk↔105 держит копию БД соседа, то есть это внешний бэкап"),
     # AUD8-ENG-03 закрыт 2026-09-19 (PR #593).
     # AUD8-CODE-01 закрыт 2026-09-19 (PR #591).
     # AUD8-CODE-02 закрыт 2026-09-19 (PR #591).
@@ -364,50 +351,50 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-FE-04 закрыт 2026-09-19 (PR #592).
     # AUD8-FE-05 закрыт 2026-09-19 (PR #592).
     # AUD8-DB-01 закрыт 2026-09-19 (PR #591).
-    "AUD8-DB-02": A(pkg="AUD8-C1", status="deferred", method="verified-2026-09-19", note="OFFSET-пагинация; deferred до триггера p95>300 мс / >50k строк"),
+    # AUD8-DB-02 снят (wontfix) 2026-11-05: решение владельца: до 50k строк ЖК не дойдёт; вернуться, если списки станут медленными.
     # Аудит #9 (полный аудит 2026-09-22, AUDIT_REPORT.md): 62 пункта; пакеты AUD9-W1…W8 = волны roadmap.
     # A9-P3-38 закрыт 2026-09-24 (PR #634).
     # A9-P3-37 закрыт 2026-09-24 (PR #637).
     # A9-P3-36 закрыт 2026-09-24 (PR #633).
     # A9-P3-35 закрыт 2026-09-24 (PR #635).
     # A9-P3-34 закрыт 2026-09-24 (PR #636).
-    "A9-P3-39": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-28", services="media-service, api, access-api", note="media: отложенные находки ревью 2026-09-28 (права ключей, rate limit, контрактный тест, мелочи)"),
-    "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="found-2026-09-23", services="media-service", note="media: перевод на alembic; bootstrap новой площадки падает на 0001; сверить pre_0001.sql с прод-БД"),
+    # A9-P3-39 снят (wontfix) 2026-11-05: решение владельца: media слушает только localhost, мелочи не окупаются.
+    "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="owner-decision-2026-11-05", services="media-service", note="сужено 2026-11-05: create_all перед SQL-файлами в run_migrations.py (новая площадка падает на 0001); переход на alembic не нужен"),
     # Аудит #10 (безопасность, 2026-10-23, docs/audit/2026-10-23-security-audit.md). Кодовые P3 и
     # A10-API-01 закрыты одним PR (A10-CODE-01); ниже — хосты, DNS, внешнее репо InfraSafe, M-пункты кода.
     # A10-HOST-01 закрыт 2026-10-24 (оба хоста, по авторизации владельца).
     # A10-HOST-02 закрыт 2026-10-24 (окно обслуживания: upgrade + reboot обоих хостов).
     # A10-HOST-03 закрыт 2026-10-24 (daemon.json на 105, prune; диск 91→58 %).
-    "A10-HOST-04": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-10-24", services="хосты, Telegram", note="токен @profk_monitoring_bot был в bash_history (живой); истории очищены, HISTIGNORE; ротацию владелец решил не делать"),
-    "A10-HOST-05": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="InfraSafe compose", note="внешнее репо infrasafe: PostGIS=PG 15.4, wireguard:latest privileged, mosquitto:latest, alloy с docker.sock"),
-    "A10-HOST-06": A(pkg="AUD10-HOST", status="decision", method="verified-host-2026-10-23", services="хост profk", note="NOPASSWD sudo, ключ в /root, PermitRootLogin yes в основном sshd_config — выровнять с 105 или принять"),
-    "A10-HOST-07": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="compose, хосты", note="uk-internal на 105; payment-* в uk-internal на profk; пересоздание в окне HOST-02/03"),
+    # A10-HOST-04 снят (wontfix) 2026-11-05: принятый риск: ротацию токена владелец отклонил 2026-10-24, история очищена.
+    # A10-HOST-05 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (образы PG/WireGuard/Mosquitto/Alloy).
+    "A10-HOST-06": A(pkg="AUD10-HOST", status="actionable", method="owner-decision-2026-11-05", services="хост profk", note="решение 2026-11-05: убрать ключ из /root/.ssh/authorized_keys и PermitRootLogin yes в основном sshd_config; NOPASSWD sudo принять (deploy в группе docker)"),
+    "A10-HOST-07": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-11-05", services="compose, хосты", note="сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105"),
     "A10-HOST-08": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644"),
-    "A10-HOST-09": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="fail2ban journalmatch sshd.service vs ssh.service; auditd inactive"),
-    "A10-HOST-10": A(pkg="AUD10-EXT", status="deferred", method="verified-host-2026-10-23", services="edge", note="внешнее репо infrasafe: nginx.profk.conf правлен на месте + .bak; закоммитить"),
+    "A10-HOST-09": A(pkg="AUD10-HOST", status="actionable", method="owner-decision-2026-11-05", services="хосты", note="сужено 2026-11-05: только journalmatch fail2ban (ssh.service); auditd не нужен"),
+    # A10-HOST-10 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (живой nginx.profk.conf в репо, .bak, 404 на dotfiles).
     "A10-HOST-11": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="Doppler", note="ADMIN_PASSWORD на 105 — 16 символов (profk 64)"),
     # A10-EXT-01 закрыт 2026-10-24 (SPF -all + DMARC reject на infrasafe.uz, MX удалён).
-    "A10-EXT-03": A(pkg="AUD10-EXT", status="deferred", method="verified-edge-2026-10-23", services="asset-web", note="assets.profk.uz: script-src unsafe-inline (asset-bot, вне репо)"),
-    "A10-FE-01": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="frontend", note="telegram-web-app.js на всех страницах — грузить только для TWA/регистрации"),
+    # A10-EXT-03 закрыт 2026-11-05: передано InfraSafe/asset-bot 2026-11-05 (CSP assets.profk.uz).
+    # A10-FE-01 снят (wontfix) 2026-11-05: решение владельца: скрипт Telegram — доверенный корень, закреплён CSP; перенос рискует сломать TWA/регистрацию.
     "A10-FE-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut"),
-    "A10-FE-05": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="frontend", note="ветка TV-табло: t.me-ссылка через botHandle() (pre-merge)"),
-    "A10-SAT-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="media-service, provisioning", note="media под ролью-владельцем с DDL — роль uk_media_app, DDL только в media-migrate (с A9-P3-33)"),
-    "A10-SAT-04": A(pkg="AUD10-CODE", status="deferred", method="decision-2026-10-24", services="media-service, access-api, api", note="общий X-API-Key media без scope — принятый риск до A10-SAT-03"),
+    # A10-FE-05 закрыт 2026-11-05: уже в коде: ТВ-табло строит ссылку через ContactCard → botHandle(), ResidentBoardTv.tsx:122.
+    "A10-SAT-03": A(pkg="AUD10-CODE", status="deferred", method="owner-decision-2026-11-05", services="media-service, provisioning", note="2026-11-05: делать вместе с A9-P3-33 (media), отдельно не ценно"),
+    # A10-SAT-04 снят (wontfix) 2026-11-05: принятый риск: два внутренних клиента media в одной зоне доверия.
     "A10-SAT-10": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="лицевой счёт в query-string — POST с телом, account не в URL страницы"),
-    "A10-INF-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose", note="cap_drop/read_only/pids_limit для прикладных контейнеров (no-new-privileges уже в A10-CODE-01)"),
-    "A10-INF-08": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="compose, redis", note="пароль Redis в argv (--requirepass, redis-cli -a) — конфиг-файл + REDISCLI_AUTH"),
+    "A10-INF-03": A(pkg="AUD10-CODE", status="actionable", method="owner-decision-2026-11-05", services="compose", note="сужено 2026-11-05: только cap_drop: [ALL] для Python-сервисов + расширить test_a10_compose_hardening; read_only/pids_limit не делать"),
+    # A10-INF-08 снят (wontfix) 2026-11-05: принятый риск: argv Redis видит только тот, у кого уже root/docker на хосте.
     "A10-INF-09": A(pkg="AUD10-HOST", status="actionable", method="found-2026-10-23", services="рабочая машина", note="env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории"),
     # Этап 2 аудита #10 (2026-10-24, раздел 8 отчёта): A10-INT-01…09 закрыты одним PR.
-    "A10-INT-10": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="elevators.read открывает заявки лифта с ФИО и смену статуса лифта исполнителю — сузить до elevators.manage или фильтр по назначению"),
-    "A10-INT-11": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="POST /feedback без approved_only — действие feedback.create"),
-    "A10-INT-12": A(pkg="AUD10-CODE", status="decision", method="found-2026-10-24", services="api", note="request_photo доступен соседу по приёмке — причина доступа owner/executor/manager"),
+    # A10-INT-10 снят (wontfix) 2026-11-05: решение владельца: смена статуса лифта исполнителем/инженером — рабочий сценарий, ФИО заявителей исполнитель и так видит.
+    # A10-INT-11 снят (wontfix) 2026-11-05: решение владельца: жалоба от неодобренного жителя ничего не раскрывает, лимит 10/мин.
+    # A10-INT-12 снят (wontfix) 2026-11-05: решение владельца: фото заявки видно жильцу той же квартиры — так задумано.
     "A10-INT-13": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="bot", note="same-status notes-append без проверки актора — удалить ветку"),
-    "A10-INT-14": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="bot", note="pending-исполнитель по инвайту; mgr_delete_ по env; notify_superadmins при assign_role(manager)"),
-    "A10-INT-15": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="api", note="тест SEC-06 в регистрации"),
+    "A10-INT-14": A(pkg="AUD10-CODE", status="actionable", method="owner-decision-2026-11-05", services="bot", note="сужено 2026-11-05: только notify_superadmins при assign_role(manager) в боте; mgr_delete_/pending-исполнитель не делать"),
+    # A10-INT-15 закрыт 2026-11-05: тест есть: test_registration_applicant.py::test_applicant_privileged_pending_rejected_403.
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
     # A9-P3-30 закрыт 2026-09-23 (PR #611).
-    "A9-P3-29": A(pkg="AUD9-W5", status="actionable", method="found-2026-09-23", services="access-api, edge", note="Включение `ACCESS_COMMAND_RECLAIM_ENABLED` заблокировано проверкой персистентного дедупа edge-агента"),
+    # A9-P3-29 снят (wontfix) 2026-11-05: решение владельца: редиспетч зависших команд access никто не запрашивал.
     # A9-P2-33 закрыт 2026-09-23 (PR #615).
     # A9-P2-32 закрыт 2026-09-23 (PR #615).
     # A9-P1-1 закрыт 2026-09-23 (PR #598).
@@ -438,7 +425,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
     "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка media_service: SDK и то, чем не пользуются ни код, ни владелец (поиск — оставить)"),
     # A9-P2-25 закрыт 2026-09-23 (PR #612).
-    "A9-P2-26": A(pkg="AUD9-W8", status="deferred", method="owner-decision-2026-09-23", services="bot, БД", note="Чистка: в `access_rights` никто не пишет, а UI карточки прав её читает"),
+    "A9-P2-26": A(pkg="AUD9-W8", status="actionable", method="owner-decision-2026-11-05", services="bot, БД", note="решение владельца 2026-11-05: только спрятать кнопку «Права доступа» (карточка всегда пустая); таблицу и код не удалять"),
     # A9-P2-27 закрыт 2026-09-23 (PR #630).
     # A9-P2-28 закрыт 2026-09-23 (PR #612).
     # A9-P2-29 закрыт 2026-09-23 (PR #609).
