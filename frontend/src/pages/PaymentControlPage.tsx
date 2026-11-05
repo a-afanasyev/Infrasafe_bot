@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { todayInDisplayTz } from '../utils/timezone'
@@ -28,6 +28,7 @@ export default function PaymentControlPage() {
   const [params, setParams] = useSearchParams()
   // A10-SAT-10: номер счёта живёт в state навигации и в памяти страницы, не в URL.
   const location = useLocation()
+  const navigate = useNavigate()
   const [account, setAccount] = useState<string>(
     (location.state as { account?: string } | null)?.account ?? '',
   )
@@ -67,7 +68,11 @@ export default function PaymentControlPage() {
     </div>
     <AccountLookupSection
       account={account} balance={balance} onRefresh={() => void refresh()} onSelectImport={selectImport}
-      onSearch={setAccount}
+      onSearch={value => {
+        setAccount(value)
+        // В state истории, не в URL: перезагрузка и «назад/вперёд» сохраняют поиск.
+        navigate({ search: location.search }, { replace: true, state: { account: value } })
+      }}
     />
     <ImportUploadSection
       kind={kind} source={source} asOf={asOf} file={file} isPending={upload.isPending}

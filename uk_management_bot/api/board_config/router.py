@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.services.board_config.schemas import (
-    PRIVATE_WORK_REPORTS_FIELDS,
     BoardConfigResponse,
     BoardConfigUpdateIn,
     PublicBoardConfigResponse,
@@ -64,15 +63,9 @@ async def update_board_config(
     `payload` как раньше — старый код возвращал клиенту его же сырое
     непромёрженное тело вместо того, что реально сохранилось."""
     updates = payload.model_dump(mode="json", include=payload.model_fields_set)
-    if "work_reports" in updates:
-        # Флаги автопубликации редактор витрины не видит (A10-FE-03) — берём
-        # сохранённые, иначе его черновик сбросил бы их в дефолт.
-        stored = (await load_board_config(db)).work_reports.model_dump(mode="json")
-        updates["work_reports"] = {
-            **updates["work_reports"],
-            **{key: stored[key] for key in PRIVATE_WORK_REPORTS_FIELDS},
-        }
-    merged = await merge_and_save_board_config(db, updates, user.id)
+    # Флаги автопубликации редактор витрины не видит (A10-FE-03) — сервис
+    # подставит сохранённые под блокировкой строки.
+    merged = await merge_and_save_board_config(db, updates, user.id, keep_private_work_reports=True)
 
     logger.info("board_config обновлён пользователем %s", user.id)
     return to_public_response(merged)

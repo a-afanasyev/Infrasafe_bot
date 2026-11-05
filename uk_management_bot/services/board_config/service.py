@@ -23,6 +23,7 @@ from uk_management_bot.services.board_config.defaults import (
 )
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.board_config.schemas import (
+    PRIVATE_WORK_REPORTS_FIELDS,
     BoardConfigResponse,
     StoredBoardConfigData,
     WorkingHourCfg,
@@ -74,6 +75,8 @@ async def merge_and_save_board_config(
     db: AsyncSession,
     updates: dict,
     updated_by: int,
+    *,
+    keep_private_work_reports: bool = False,
 ) -> StoredBoardConfigData:
     """Смёржить `updates` в сохранённый board_config и сохранить результат.
 
@@ -109,6 +112,16 @@ async def merge_and_save_board_config(
         if key == "layout":
             continue
         merged[key] = value
+
+    if keep_private_work_reports and isinstance(updates.get("work_reports"), dict):
+        # A10-FE-03: редактор витрины флагов автопубликации не видит — берём
+        # сохранённые. Здесь, а не в роутере: строка уже под FOR UPDATE, и
+        # параллельный PUT /work-reports/settings не потеряется.
+        stored_wr = stored.get("work_reports") or {}
+        merged["work_reports"] = {
+            **merged["work_reports"],
+            **{key: stored_wr.get(key) for key in PRIVATE_WORK_REPORTS_FIELDS if key in stored_wr},
+        }
 
     if "layout" in updates:
         incoming = updates["layout"] or []
