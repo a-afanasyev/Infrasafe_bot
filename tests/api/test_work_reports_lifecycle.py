@@ -914,8 +914,39 @@ async def test_put_settings_rejects_smuggled_server_field(client: AsyncClient, m
     assert "autopost_since" in resp.text
 
     # И главное: смуглёж не сохранился — настройки остались нетронутыми.
-    current = await client.get("/api/v2/public/board-config")
-    assert current.json()["work_reports"]["autopost_since"] is None
+    current = await client.get(f"{BASE}/settings")
+    assert current.json()["autopost_since"] is None
+
+
+@pytest.mark.asyncio
+async def test_private_autopublish_flags_stay_out_of_public_board_config(
+    client: AsyncClient, monkeypatch
+):
+    """A10-FE-03: флаги автопубликации видит менеджер (GET /settings), но не аноним,
+    и PUT редактора витрины их не сбрасывает, хотя шлёт work_reports целиком."""
+    _enable(monkeypatch)
+    resp = await client.put(f"{BASE}/settings", json={"autopost": True, "autopublish": True, "limit": 9})
+    assert resp.status_code == 200, resp.text
+
+    public = (await client.get("/api/v2/public/board-config")).json()["work_reports"]
+    assert public["limit"] == 9
+    assert not {"autopost", "autopost_since", "autopublish"} & public.keys()
+
+    settings = (await client.get(f"{BASE}/settings")).json()
+    assert settings["autopost"] is True and settings["autopublish"] is True
+    assert settings["autopost_since"] is not None
+
+    # Редактор витрины: черновик из публичного ответа, без флагов.
+    board = (await client.get("/api/v2/public/board-config")).json()
+    draft = {k: v for k, v in board.items() if k != "display_tz"}
+    draft["work_reports"] = {**draft["work_reports"], "limit": 10}
+    put = await client.put("/api/v2/board-config", json=draft)
+    assert put.status_code == 200, put.text
+
+    after = (await client.get(f"{BASE}/settings")).json()
+    assert after["limit"] == 10
+    assert after["autopost"] is True and after["autopublish"] is True
+    assert after["autopost_since"] == settings["autopost_since"]
 
 
 # ── POST /reconcile ──────────────────────────────────────────────────

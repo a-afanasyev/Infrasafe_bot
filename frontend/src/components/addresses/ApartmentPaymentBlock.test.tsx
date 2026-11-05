@@ -17,7 +17,8 @@ it('shows dated debt, prepayment and the exact account link', async () => {
   mount()
   expect(await screen.findByText(/120.50/)).toBeInTheDocument()
   expect(screen.getByText(/2026-09-01/)).toBeInTheDocument()
-  expect(screen.getByRole('link').getAttribute('href')).toBe('/dashboard/payment-control?account=001&import=9&offset=0')
+  // A10-SAT-10: номер счёта едет state'ом навигации, в URL его нет.
+  expect(screen.getByRole('link').getAttribute('href')).toBe('/dashboard/payment-control?import=9&offset=0')
 })
 
 it('never substitutes zero for unavailable service', async () => {

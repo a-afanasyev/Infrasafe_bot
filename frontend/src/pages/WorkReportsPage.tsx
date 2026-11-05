@@ -10,7 +10,6 @@ import GroupSection from '../components/workReports/GroupSection'
 import ReasonDialog, { type ReasonTarget } from '../components/workReports/ReasonDialog'
 import WorkReportRow from '../components/workReports/WorkReportRow'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useBoardConfig } from '../hooks/useBoardConfig'
 import {
   useWorkReports,
   useSyncWorkReports,
@@ -23,6 +22,7 @@ import {
   useNeedsMediaCount,
   useReopenWorkReport,
   useUpdateWorkReportsSettings,
+  useWorkReportsSettings,
   useWorkReportsWebSocket,
 } from '../hooks/useWorkReports'
 import { tCategory } from '../i18n/apiMaps'
@@ -34,8 +34,8 @@ import type { WorkReportsCfg } from '../types/boardConfig'
  * (work-reports). Изолированный компонент страницы: маршрут (App.tsx) и
  * пункт меню (DashboardLayout.tsx) подключает следующая задача.
  *
- * Read-модель настроек — НЕ отдельный эндпоинт (его нет), а
- * useBoardConfig().data?.work_reports, см. заголовок useWorkReports.ts.
+ * Read-модель настроек — GET /work-reports/settings (useWorkReportsSettings):
+ * в публичном board-config нет флагов автопубликации (A10-FE-03).
  *
  * Подкомпоненты (GroupSection/ReasonDialog/WorkReportRow) вынесены в
  * components/workReports/* — по прецеденту EmployeesPage.tsx
@@ -78,8 +78,7 @@ export default function WorkReportsPage() {
   usePageTitle(t('workReports.title'))
   useWorkReportsWebSocket()
 
-  const { data: boardConfig } = useBoardConfig()
-  const rawSettings = boardConfig?.work_reports
+  const { data: rawSettings } = useWorkReportsSettings()
   // Нормализуем, а не берём блок как есть: фронт может доехать раньше бэкенда
   // (или ответить из кэша старой версии), и тогда `categories`/`autopublish` в
   // ответе отсутствуют. Без этого `settings.categories.includes(...)` падал бы

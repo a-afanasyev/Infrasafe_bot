@@ -95,6 +95,9 @@
   "uk_management_bot/handlers/shifts.py::start_shift": [
    "executor"
   ],
+  "uk_management_bot/handlers/user_management/roles_specs.py::process_role_change_comment": [
+   "manager"
+  ],
   "uk_management_bot/keyboards/base.py::get_main_keyboard_for_role": [
    "admin",
    "applicant",

@@ -37,8 +37,9 @@ function makeReport(overrides: Partial<WorkReport> & { id: number; status: WorkR
   }
 }
 
+// Настройки ленты страница читает из GET /work-reports/settings (A10-FE-03).
 function mockBoardConfig(work_reports: WorkReportsCfg = DEFAULT_CFG) {
-  return http.get('*/api/v2/public/board-config', () => HttpResponse.json({ work_reports }))
+  return http.get('*/api/v2/work-reports/settings', () => HttpResponse.json(work_reports))
 }
 
 function mockList(items: WorkReport[]) {
@@ -59,8 +60,8 @@ describe('WorkReportsPage', () => {
   it('fires PUT .../settings with the new autopost value and reflects server state', async () => {
     let autopost = false
     server.use(
-      http.get('*/api/v2/public/board-config', () =>
-        HttpResponse.json({ work_reports: { ...DEFAULT_CFG, autopost } }),
+      http.get('*/api/v2/work-reports/settings', () =>
+        HttpResponse.json({ ...DEFAULT_CFG, autopost }),
       ),
       mockList([]),
       http.put('*/api/v2/work-reports/settings', async ({ request }) => {
@@ -215,8 +216,8 @@ describe('WorkReportsPage', () => {
     let autopublish = false
     let body: Record<string, unknown> | null = null
     server.use(
-      http.get('*/api/v2/public/board-config', () =>
-        HttpResponse.json({ work_reports: { ...DEFAULT_CFG, autopublish } }),
+      http.get('*/api/v2/work-reports/settings', () =>
+        HttpResponse.json({ ...DEFAULT_CFG, autopublish }),
       ),
       mockList([]),
       http.put('*/api/v2/work-reports/settings', async ({ request }) => {
@@ -250,8 +251,8 @@ describe('WorkReportsPage', () => {
   it('toggling a category sends the full new list, not a diff', async () => {
     let body: Record<string, unknown> | null = null
     server.use(
-      http.get('*/api/v2/public/board-config', () =>
-        HttpResponse.json({ work_reports: { ...DEFAULT_CFG, categories: ['cleaning'] } }),
+      http.get('*/api/v2/work-reports/settings', () =>
+        HttpResponse.json({ ...DEFAULT_CFG, categories: ['cleaning'] }),
       ),
       mockList([]),
       http.put('*/api/v2/work-reports/settings', async ({ request }) => {
@@ -276,8 +277,8 @@ describe('WorkReportsPage', () => {
     // categories. Страница обязана отрендериться, а не упасть на
     // settings.categories.includes(...).
     server.use(
-      http.get('*/api/v2/public/board-config', () =>
-        HttpResponse.json({ work_reports: { autopost: false, autopost_since: null, limit: 6, title: { ru: '', uz: '' } } }),
+      http.get('*/api/v2/work-reports/settings', () =>
+        HttpResponse.json({ autopost: false, autopost_since: null, limit: 6, title: { ru: '', uz: '' } }),
       ),
       mockList([]),
     )

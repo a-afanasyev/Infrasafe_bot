@@ -235,10 +235,17 @@ export function useReopenWorkReport() {
   })
 }
 
-// Инвалидирует ['board-config'], НЕ ['work-reports'] — это PUT-эндпоинт
-// пишет в board_config.work_reports, и именно ['board-config'] — ключ,
-// который читает useBoardConfig() (единственный read-хук для этих настроек,
-// см. заголовок файла).
+/** Настройки ленты вместе с флагами автопубликации. В публичном board-config
+ *  флагов нет (A10-FE-03), поэтому страница отчётов читает их отсюда. */
+export function useWorkReportsSettings() {
+  return useQuery({
+    queryKey: ['work-reports-settings'],
+    queryFn: () => apiClient.get(`${BASE}/settings`).then((r) => r.data as WorkReportsCfg),
+  })
+}
+
+// PUT пишет в board_config.work_reports: сбрасываем и настройки, и board-config
+// (табло читает оттуда limit/title/categories).
 export function useUpdateWorkReportsSettings() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -246,6 +253,7 @@ export function useUpdateWorkReportsSettings() {
     mutationFn: (payload: WorkReportsSettingsPayload) =>
       apiClient.put(`${BASE}/settings`, payload).then((r) => r.data as WorkReportsCfg),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-reports-settings'] })
       queryClient.invalidateQueries({ queryKey: ['board-config'] })
       toast.success(t('workReports.toast.settingsUpdated'))
     },

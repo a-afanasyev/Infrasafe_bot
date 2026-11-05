@@ -52,20 +52,31 @@ it('blocks activation for an invalid import and shows row errors', async () => {
   expect(screen.getByText('Некорректная сумма')).toBeInTheDocument()
 })
 
+type Entry = string | { pathname: string; search?: string; state?: unknown }
+
+function mountPage(entries: Entry[] = ['/']) {
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <MemoryRouter initialEntries={entries}><PaymentControlPage /></MemoryRouter>
+  </QueryClientProvider>)
+}
+
 it('searches an account, opens its source and deactivates with a reason', async () => {
   const report = { id: 7, kind: 'balances', source: 'Accounting', filename: 'debt.xlsx', as_of: '2026-09-01', status: 'active', invalid: 0, row_count: 201,
     rows: [{ line: 2, account_number: '001', debt: '0.00', prepayment: '50.00', errors: [] }],
     audit: [{ action: 'activate', actor_id: '7', created_at: '2026-09-01', reason: 'Проверено' }] }
   const snapshot = { debt: '0.00', prepayment: '50.00', as_of: '2026-09-01', source: 'Accounting', filename: 'debt.xlsx', import_id: 7, line: 2, position: 0 }
-  const get = vi.spyOn(apiClient, 'get').mockImplementation(async url => ({ data: url.endsWith('/account')
+  const get = vi.spyOn(apiClient, 'get').mockImplementation(async url => ({ data:
+    url.endsWith('/imports/7') ? report : Array.from({ length: 50 }, (_, i) => ({ ...report, id: i + 1 })) }))
+  const post = vi.spyOn(apiClient, 'post').mockImplementation(async url => ({ data: url.endsWith('/account')
     ? { status: 'available', account_number: '001', current: snapshot, history: [snapshot], payments: [{ operation_id: 'bank-1', paid_at: '2026-09-01', amount: '50.00', source: 'Bank', import_id: 7 }] }
-    : url.endsWith('/imports/7') ? report : Array.from({ length: 50 }, (_, i) => ({ ...report, id: i + 1 })) }))
-  const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: report })
+    : report }))
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><PaymentControlPage /></MemoryRouter></QueryClientProvider>)
   const user = userEvent.setup()
   await user.type(screen.getByRole('textbox', { name: 'Лицевой счёт' }), '001')
   await user.click(screen.getByRole('button', { name: 'Найти', exact: true }))
   await user.click(await screen.findByRole('button', { name: 'debt.xlsx · Строка 2' }))
+  // A10-SAT-10: номер ушёл в теле POST, а не в URL.
+  expect(post).toHaveBeenCalledWith('/api/v2/payment-control/account', { account_number: '001' })
   expect(await screen.findByRole('button', { name: 'Деактивировать' })).toBeDisabled()
   await user.click(screen.getByText('История активных снимков (до 50)'))
   await user.click(screen.getByRole('button', { name: `${formatBusinessDate('2026-09-01')} · Accounting` }))
@@ -91,18 +102,14 @@ it('searches an account, opens its source and deactivates with a reason', async 
 
 it('reports service errors without rendering an invented balance', async () => {
   vi.spyOn(apiClient, 'get').mockRejectedValue(new Error('Offline'))
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/?account=001&import=9']}><PaymentControlPage /></MemoryRouter></QueryClientProvider>)
+  vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('Offline'))
+  mountPage([{ pathname: '/', search: '?import=9', state: { account: '001' } }])
   expect((await screen.findAllByText('Сервис контроля платежей недоступен. Суммы не подтверждены.')).length).toBeGreaterThan(0)
   expect(screen.queryByText(/0\.00\s*UZS/)).not.toBeInTheDocument()
 })
 
 // ── Правки по итогам ревью ───────────────────────────────────────────────────
 
-function mountPage(entries = ['/']) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <MemoryRouter initialEntries={entries}><PaymentControlPage /></MemoryRouter>
-  </QueryClientProvider>)
-}
 
 it('ставит заголовок документа', async () => {
   vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [] })
@@ -122,9 +129,10 @@ it('отказ по данным (422) показывает сообщение �
     isAxiosError: true,
     response: { status: 422, data: { detail: 'Некорректный лицевой счёт' } },
   })
-  vi.spyOn(apiClient, 'get').mockImplementation(async url =>
+  vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [] })
+  vi.spyOn(apiClient, 'post').mockImplementation(async url =>
     url.endsWith('/account') ? Promise.reject(rejection) : { data: [] })
-  mountPage(['/?account=..bad'])
+  mountPage([{ pathname: '/', state: { account: '..bad' } }])
   expect(await screen.findByText('Некорректный лицевой счёт')).toBeInTheDocument()
   expect(screen.queryByText('Сервис контроля платежей недоступен. Суммы не подтверждены.')).not.toBeInTheDocument()
 })
@@ -135,9 +143,10 @@ it('подсвечивает строку искомого лицевого сч
     rows: [{ line: 2, account_number: '001', debt: '10.00', prepayment: '0.00', errors: [] },
            { line: 3, account_number: '002', debt: '20.00', prepayment: '0.00', errors: [] }] }
   vi.spyOn(apiClient, 'get').mockImplementation(async url => ({
-    data: url.includes('/imports/4') ? report : url.endsWith('/account') ? { status: 'no_data', account_number: '002', current: null } : [report],
+    data: url.includes('/imports/4') ? report : [report],
   }))
-  mountPage(['/?import=4&account=002'])
+  vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { status: 'no_data', account_number: '002', current: null } })
+  mountPage([{ pathname: '/', search: '?import=4', state: { account: '002' } }])
   const marked = await screen.findByText('002')
   expect(marked.closest('tr')).toHaveClass('bg-accent/10')
   expect(screen.getByText('001').closest('tr')).not.toHaveClass('bg-accent/10')

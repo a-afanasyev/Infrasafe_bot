@@ -327,7 +327,17 @@ async def autofill_pending(
     return {"processed": processed}
 
 
-# ── PUT /settings ─────────────────────────────────────────────────────────
+# ── GET/PUT /settings ─────────────────────────────────────────────────────
+
+
+@router.get("/settings", response_model=WorkReportsCfg)
+async def get_work_reports_settings(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager_only),
+) -> WorkReportsCfg:
+    """Настройки ленты отчётов вместе со служебными флагами автопубликации."""
+    # A10-FE-03: в публичном board-config флагов больше нет.
+    return (await load_board_config(db)).work_reports
 
 
 @router.put("/settings", response_model=WorkReportsCfg)

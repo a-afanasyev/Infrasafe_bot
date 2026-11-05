@@ -24,6 +24,25 @@ from uk_management_bot.database.session import run_db
 
 from ._router import router
 
+
+async def _notify_superadmins_manager_grant(message: Message, user_name: str) -> None:
+    """A10-INT-14: выдача роли manager в боте видна суперадминам сразу, как в
+    дашборде (`api/shifts/service/manager_grant.py`). Best-effort: сбой отправки
+    не отменяет уже применённые роли."""
+    from uk_management_bot.config.settings import settings
+
+    actor = message.from_user
+    text = (
+        "⚠️ Через бота выдана роль manager\n"
+        f"Кому: {html.escape(user_name)}\n"
+        f"Кто выдал: {html.escape(actor.full_name)} (tg {actor.id})"
+    )
+    for admin_id in settings.ADMIN_USER_IDS or []:
+        try:
+            await message.bot.send_message(admin_id, text)
+        except Exception as exc:  # noqa: BLE001 — уведомление не должно ломать действие
+            logger.error("Не удалось уведомить суперадмина %s о выдаче manager: %s", admin_id, exc)
+
 logger = logging.getLogger(__name__)
 
 
@@ -416,6 +435,8 @@ async def process_role_change_comment(message: Message, state: FSMContext, langu
         )
 
         if success:
+            if "manager" in added_roles:
+                await _notify_superadmins_manager_grant(message, user_name)
             await message.answer(
                 get_text('moderation.roles_updated_successfully', language=lang).format(
                     user_name=html.escape(user_name)

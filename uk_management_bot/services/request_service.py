@@ -276,19 +276,12 @@ class RequestService:
             if not actor:
                 return {"success": False, "message": "Пользователь не найден", "request": None}
 
-            # Same-status notes-append: канон не моделирует «дописать примечание
-            # без перехода». Сохраняем прежнее поведение прямой записью в notes
-            # (notes — не workflow-поле, вне SSOT-владения).
+            # Тот же статус — без записи. Дописывание notes здесь было (A10-INT-13):
+            # шло мимо проверки актора, а вызывающие notes не передают.
             current = self.get_request_by_number(request_number)
             if current is None:
                 return {"success": False, "message": "Заявка не найдена", "request": None}
             if new_status == current.status:
-                if notes:
-                    existing = (current.notes or "").strip()
-                    current.notes = (existing + "\n" if existing else "") + notes
-                    self.db.commit()
-                    self.db.refresh(current)
-                    return {"success": True, "message": "Примечание добавлено", "request": current}
                 return {"success": True, "message": "Статус не изменён", "request": current}
 
             payload = self._build_status_payload(

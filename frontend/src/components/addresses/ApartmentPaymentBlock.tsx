@@ -6,8 +6,9 @@ export default function ApartmentPaymentBlock({ apartmentId, accountNumber }: { 
   const { t } = useTranslation()
   const query = useApartmentPayment(apartmentId, accountNumber)
   const current = !query.isError ? query.data?.current : null
+  // Лицевой счёт — через state навигации, не в URL (A10-SAT-10): URL оседает
+  // в истории браузера и логах edge.
   const params = new URLSearchParams()
-  if (accountNumber) params.set('account', accountNumber)
   if (current) {
     params.set('import', String(current.import_id))
     params.set('offset', String(Math.floor((current.position ?? 0) / 200) * 200))
@@ -25,7 +26,7 @@ export default function ApartmentPaymentBlock({ apartmentId, accountNumber }: { 
         </div>
         <p className="text-xs text-text-muted">{t('paymentControl.asOf')}: {current.as_of} · {current.source} · {current.filename}</p>
       </>}
-    <Link className="mt-3 inline-block text-accent underline" to={`/dashboard/payment-control?${params}`}>
+    <Link className="mt-3 inline-block text-accent underline" to={`/dashboard/payment-control?${params}`} state={{ account: accountNumber ?? '' }}>
       {t('paymentControl.verify')}
     </Link>
   </section>

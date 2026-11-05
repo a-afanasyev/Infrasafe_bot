@@ -57,7 +57,6 @@ BASELINE: dict[str, int] = {
     "uk_management_bot/services/metrics_manager.py": 2,
     "uk_management_bot/services/profile_service.py": 1,
     "uk_management_bot/services/reconciliation.py": 2,
-    "uk_management_bot/services/request_service.py": 1,
     "uk_management_bot/services/shift_analytics.py": 2,
     "uk_management_bot/services/shift_assignment_service/service.py": 2,
     "uk_management_bot/services/shift_planning_service/analytics.py": 1,
