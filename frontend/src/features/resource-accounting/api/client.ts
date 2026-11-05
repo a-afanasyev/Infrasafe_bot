@@ -10,7 +10,8 @@ import type { ListMeta } from './types';
  */
 interface ResourceApiConfig {
   baseUrl: string;
-  onUnauthorized: () => void;
+  /** Перевыпуск сессии. Вернёт Promise — клиент дождётся его и повторит запрос. */
+  onUnauthorized: () => void | Promise<void>;
 }
 
 const config: ResourceApiConfig = {
@@ -77,15 +78,30 @@ async function request(path: string, options: RequestOptions): Promise<unknown> 
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(`${config.baseUrl}${path}${buildQuery(params)}`, {
-    method,
-    headers,
-    body: requestBody,
-    credentials: 'include',
-  });
+  const send = () =>
+    fetch(`${config.baseUrl}${path}${buildQuery(params)}`, {
+      method,
+      headers,
+      body: requestBody,
+      credentials: 'include',
+    });
+
+  let response = await send();
 
   if (response.status === 401) {
-    config.onUnauthorized();
+    if (path.startsWith('/v1/auth/')) {
+      // Сам бутстрап сессии ходит сюда — ждать перевыпуска здесь = ждать себя.
+      void config.onUnauthorized();
+    } else {
+      // AUD7-SEC-03: сессия живёт час. Запрос на границе часа (сохранение
+      // показаний) не должен теряться: перевыпускаем сессию и повторяем один раз.
+      try {
+        await config.onUnauthorized();
+      } catch {
+        // перевыпуск не удался — отдадим исходный 401 ниже
+      }
+      response = await send();
+    }
   }
 
   let payload: unknown = null;

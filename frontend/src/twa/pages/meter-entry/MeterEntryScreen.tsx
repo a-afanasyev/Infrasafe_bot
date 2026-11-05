@@ -49,9 +49,7 @@ const ensureSession = (): Promise<void> => {
 const configureApi = () =>
   configureResourceApi({
     baseUrl: RESOURCE_BASE_URL,
-    onUnauthorized: () => {
-      void ensureSession()
-    },
+    onUnauthorized: () => ensureSession(),
   })
 
 export default function MeterEntryScreen() {
@@ -95,9 +93,7 @@ export default function MeterEntryScreen() {
         config={{
           baseUrl: RESOURCE_BASE_URL,
           basePath: RESOURCE_BASE_PATH,
-          onUnauthorized: () => {
-            void ensureSession()
-          },
+          onUnauthorized: () => ensureSession(),
         }}
       >
         <ResourceAccountingRoutes />

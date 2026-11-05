@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, apiPaged } from './client';
+import { api, ApiError, apiPaged, configureResourceApi } from './client';
 // Регистрирует testI18n (ru) как i18n-инстанс react-i18next — запасной текст ошибки берётся из локали.
 import '../../../test/test-utils';
 
@@ -70,5 +70,45 @@ describe('api client', () => {
     const result = await apiPaged<{ id: string }>('/v1/meters', { params: { page: 2 } });
     expect(result.data).toEqual([{ id: 'a' }]);
     expect(result.meta).toEqual({ total: 42, page: 2, per_page: 25 });
+  });
+});
+
+
+describe('перевыпуск сессии на 401 (AUD7-SEC-03, сессия — час)', () => {
+  const res = (status: number, payload: unknown) =>
+    ({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(payload) }) as Response;
+
+  afterEach(() => {
+    configureResourceApi({ onUnauthorized: () => {} });
+  });
+
+  it('ждёт перевыпуска и повторяет запрос один раз — показания не теряются', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(res(401, { error: { code: 'unauthorized' } }))
+      .mockResolvedValueOnce(res(200, { data: { saved: true } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onUnauthorized = vi.fn().mockResolvedValue(undefined);
+    configureResourceApi({ onUnauthorized });
+
+    const result = await api('/v1/readings', { method: 'POST', body: { value: 5 } });
+
+    expect(result).toEqual({ saved: true });
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('повтор тоже 401 — ошибка, без бесконечного цикла', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(401, { error: { code: 'unauthorized' } })));
+    configureResourceApi({ onUnauthorized: vi.fn().mockResolvedValue(undefined) });
+    await expect(api('/v1/readings')).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('/v1/auth/* не ждёт перевыпуска и не повторяется (его зовёт сам бутстрап)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(401, {})));
+    const onUnauthorized = vi.fn(() => new Promise<void>(() => {}));
+    configureResourceApi({ onUnauthorized });
+    await expect(api('/v1/auth/me')).rejects.toBeInstanceOf(ApiError);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -51,9 +51,7 @@ const ensureSession = (): Promise<void> => {
 const configureApi = () =>
   configureResourceApi({
     baseUrl: RESOURCE_BASE_URL,
-    onUnauthorized: () => {
-      void ensureSession()
-    },
+    onUnauthorized: () => ensureSession(),
   })
 
 /**

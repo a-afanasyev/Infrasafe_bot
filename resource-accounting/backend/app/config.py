@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     # Signing key for the httpOnly session cookie
     session_secret: str = _DEFAULT_SESSION_SECRET
     session_cookie_name: str = "resource_session"
-    session_ttl_seconds: int = 12 * 3600
+    # AUD7-SEC-03 (решение владельца 2026-11-05): окно отзыва = TTL сессии. Снятая
+    # в УК роль или блокировка перестаёт действовать здесь не позже чем через час:
+    # фронт на 401 молча перевыпускает сессию через UK, и тот уже проверяет права.
+    session_ttl_seconds: int = 3600
     cookie_secure: bool = False  # True in production (HTTPS only)
 
     # Service-to-service token: UK backend uses it to mint launch tickets
