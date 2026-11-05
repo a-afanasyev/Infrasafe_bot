@@ -29,6 +29,16 @@
 profk — `infrasafe-backup-metrics.timer` → node_exporter textfile
 (`backup_last_success_timestamp_seconds`), алерты — в obs-стеке.
 
+**Шифрование копии у пира (AUD8-ENG-02, с 2026-11-05).** Кросс-бэкап кладёт базу
+хоста на соседний, поэтому взлом соседа раскрывал бы обе базы. Копия, уходящая
+пиру, шифруется `age` публичным ключом (`PEER_AGE_RECIPIENT` в `backup.conf`) и
+хранится у пира как `*.tar.age`. **Приватный ключ — только в Bitwarden владельца**
+(Secure Note «UK backup age key»); на хостах его нет. Локальные копии остаются
+открытыми `*.tar` — они рядом с живой базой, шифрование им ничего не даёт, а RTO
+бережёт. Статус: profk → 105 шифруется; 105 → profk — после `sudo apt install age`
+на 105 и строки `PEER_AGE_RECIPIENT` в `~/.backup/backup.conf`. Потеря ключа =
+копии у пира не восстановить (остаются только локальные).
+
 **Не покрыто намеренно:** сами медиа-файлы (лежат в Telegram-каналах media-service,
 локально только метаданные `uk_media` — решение владельца 2026-09-02); Redis
 (кэш/pending, восстанавливается пустым); на 105 — InfluxDB/Node-RED/Mosquitto
@@ -94,6 +104,21 @@ docker rm -f uk-restore-rehearsal; rm -rf "$W"
 `--no-owner`; роли должны существовать — PR-7 `provision-roles`), затем
 `alembic current` (main) и preflight api. Медиа-файлы не восстанавливаются — они в
 Telegram.
+
+### Восстановление с зашифрованной копии пира
+
+Нужно, когда локальной копии нет (умер диск/хост). Ключ достаётся из Bitwarden во
+временный файл и после работы стирается; на хостах его не оставлять.
+
+```bash
+# на машине владельца (age: brew install age)
+scp infrasafe105:backups/peer/profk/profk-<TS>.tar.age .   # копия profk лежит на 105
+KEY=$(mktemp); chmod 600 "$KEY"
+pbpaste > "$KEY"            # ключ из Bitwarden в буфере (или: bw get notes "UK backup age key" > "$KEY")
+age -d -i "$KEY" profk-<TS>.tar.age > profk-<TS>.tar
+rm -P "$KEY"
+tar -tf profk-<TS>.tar      # дальше — как с локальной копией выше
+```
 
 ## Известные грабли
 
