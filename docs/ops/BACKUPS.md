@@ -39,6 +39,12 @@ profk — `infrasafe-backup-metrics.timer` → node_exporter textfile
 на 105 и строки `PEER_AGE_RECIPIENT` в `~/.backup/backup.conf`. Потеря ключа =
 копии у пира не восстановить (остаются только локальные).
 
+**Ротация копий пира на 105 (с 2026-11-06).** До этого её не было: `backup-metrics.sh`
+на 105 не стоял, и копии profk копились с 26.07 (107 шт.; открытые удалены 06.11 после
+перехода на шифрование). Теперь — user-cron `17 * * * *` `~/.backup/backup-metrics.sh`
+(`PEER_RETAIN_DAYS=40`, метрики в `~/obs/textfile/backup_peer.prom`); бэкап crontab —
+`~/.backup/crontab.bak-20261106`.
+
 **Не покрыто намеренно:** сами медиа-файлы (лежат в Telegram-каналах media-service,
 локально только метаданные `uk_media` — решение владельца 2026-09-02); Redis
 (кэш/pending, восстанавливается пустым); на 105 — InfluxDB/Node-RED/Mosquitto
