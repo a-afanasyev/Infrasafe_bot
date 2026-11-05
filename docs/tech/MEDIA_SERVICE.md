@@ -12,7 +12,7 @@
 - Внутри docker-сети: `http://media-service:8000`, заголовок `X-API-Key`
   (любой ключ из `MEDIA_API_KEYS`).
 - На хосте (profk и 105): `127.0.0.1:8009`, снаружи порт не опубликован.
-- Без ключа отвечают только `/api/v1/health`, `/api/v1/health/live`,
+- Без ключа отвечают только `/api/v1/health` и
   `/api/v1/health/ready` (цель docker healthcheck: проверяет БД).
 - Swagger (`/docs`) на проде выключен (`DEBUG=false`).
 

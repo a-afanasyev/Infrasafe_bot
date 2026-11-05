@@ -1092,27 +1092,3 @@ async def get_request_timeline(
     except Exception as e:
         logger.error(f"Failed to get timeline for request {request_number}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка получения временной линии")
-
-
-@router.get("/{media_id}/similar", response_model=List[MediaFileResponse])
-async def find_similar_media(
-    media_id: int,
-    similarity_threshold: float = Query(default=0.7, ge=0.0, le=1.0, description="Порог схожести"),
-    limit: int = Query(default=10, ge=1, le=50, description="Лимит результатов"),
-    search_service: MediaSearchService = Depends(get_search_service)
-):
-    """
-    Поиск похожих медиа-файлов
-    """
-    try:
-        similar_files = await search_service.find_similar_media(
-            media_file_id=media_id,
-            similarity_threshold=similarity_threshold,
-            limit=limit
-        )
-
-        return [MediaFileResponse.model_validate(mf) for mf in similar_files]
-
-    except Exception as e:
-        logger.error(f"Failed to find similar media for {media_id}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка поиска похожих файлов")

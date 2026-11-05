@@ -64,6 +64,22 @@ def test_app_services_forbid_privilege_escalation():
     assert missing == [], missing
 
 
+# Python-сервисы работают не от root и не трогают привилегии в entrypoint — им не
+# нужна ни одна capability. Фронт (nginx) не входит: ему нужны CHOWN/SETUID/SETGID.
+PYTHON_SERVICES = APP_SERVICES - {"frontend"}
+
+
+def test_python_services_drop_all_capabilities():
+    """A10-INF-03 (сужен 2026-11-05): cap_drop: [ALL]; read_only/pids_limit — нет."""
+    seen: dict[str, list[str]] = {}
+    for name in COMPOSE_FILES:
+        for svc, body in _services(name).items():
+            if svc in PYTHON_SERVICES and body:
+                seen.setdefault(svc, []).extend(body.get("cap_drop") or [])
+    missing = sorted(svc for svc in PYTHON_SERVICES if "ALL" not in seen.get(svc, []))
+    assert missing == [], missing
+
+
 def test_payment_services_never_join_shared_network():
     """A10-INT-04: на profk `uk-network` — общая с InfraSafe (edge-nginx, asset-web);
     платёжная БД и payment-api живут только в приватной `uk-internal`."""

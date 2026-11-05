@@ -56,7 +56,6 @@ class Settings(BaseSettings):
 
     # === FILE LIMITS ===
     max_file_size: int = 50 * 1024 * 1024  # 50MB
-    max_files_per_request: int = 10
     allowed_file_types: List[str] = ["image/jpeg", "image/png", "image/gif", "video/mp4", "video/mov"]
 
     # AUD6-P2-46: удалены фантомные секции REDIS (redis в сервисе не

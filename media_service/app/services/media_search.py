@@ -274,64 +274,6 @@ class MediaSearchService:
             return result
 
     @sync_unit
-    def find_similar_media(
-        self,
-        media_file_id: int,
-        similarity_threshold: float = 0.7,
-        limit: int = 10
-    ) -> List[MediaFile]:
-        """
-        Поиск похожих медиа-файлов на основе тегов и метаданных
-        """
-        with get_db_context() as db:
-            # Получаем исходный файл
-            source_file = db.query(MediaFile).filter(MediaFile.id == media_file_id).first()
-            if not source_file:
-                logger.warning(f"Media file {media_file_id} not found")
-                return []
-
-            source_tags = set(source_file.tag_list)
-
-            # Если нет тегов, ищем по категории
-            if not source_tags:
-                similar_files = db.query(MediaFile).filter(
-                    MediaFile.category == source_file.category,
-                    MediaFile.id != media_file_id,
-                    MediaFile.status == "active"
-                ).limit(limit).all()
-
-                logger.info(f"Found {len(similar_files)} similar files by category")
-                return similar_files
-
-            # Ищем файлы с похожими тегами
-            similar_files = []
-            candidates = db.query(MediaFile).filter(
-                MediaFile.id != media_file_id,
-                MediaFile.status == "active"
-            ).all()
-
-            for candidate in candidates:
-                candidate_tags = set(candidate.tag_list)
-                if not candidate_tags:
-                    continue
-
-                # Вычисляем коэффициент Жаккара
-                intersection = len(source_tags.intersection(candidate_tags))
-                union = len(source_tags.union(candidate_tags))
-
-                if union > 0:
-                    similarity = intersection / union
-                    if similarity >= similarity_threshold:
-                        similar_files.append((candidate, similarity))
-
-            # Сортируем по убыванию схожести
-            similar_files.sort(key=lambda x: x[1], reverse=True)
-            result = [file_data[0] for file_data in similar_files[:limit]]
-
-            logger.info(f"Found {len(result)} similar files for media {media_file_id}")
-            return result
-
-    @sync_unit
     def get_request_media_timeline(self, request_number: str) -> List[Dict[str, Any]]:
         """
         Возвращает временную линию медиа-файлов для заявки
@@ -357,26 +299,3 @@ class MediaSearchService:
 
             logger.info(f"Generated timeline for request {request_number}: {len(timeline)} files")
             return timeline
-
-    @sync_unit
-    def get_unused_tags(self, min_usage: int = 1) -> List[Dict[str, Any]]:
-        """
-        Возвращает неиспользуемые или малоиспользуемые теги
-        """
-        with get_db_context() as db:
-            unused_tags = db.query(MediaTag).filter(
-                MediaTag.usage_count < min_usage
-            ).order_by(MediaTag.created_at.desc()).all()
-
-            result = []
-            for tag in unused_tags:
-                result.append({
-                    "tag": tag.tag_name,
-                    "count": tag.usage_count,
-                    "category": tag.tag_category,
-                    "created_at": tag.created_at.isoformat(),
-                    "is_system": tag.is_system
-                })
-
-            logger.info(f"Found {len(result)} unused/rarely used tags")
-            return result

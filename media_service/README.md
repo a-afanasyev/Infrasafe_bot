@@ -37,8 +37,6 @@ MEDIA_PG_DRIFT_URL=postgresql+psycopg2://media:<pw>@localhost:5432/uk_media \
 MEDIA_REQUIRE_PG_TESTS=1 pytest -q --cov=app --cov=run_migrations --cov-fail-under=73
 ```
 
-`test_upload.py` — ручной smoke живого стека, из pytest исключён (`pytest.ini`).
-
 ## Конфигурация
 
 Секреты (`TELEGRAM_BOT_TOKEN`, `SECRET_KEY`, `MEDIA_API_KEYS`, `DATABASE_URL`)
