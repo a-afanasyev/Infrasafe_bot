@@ -8,7 +8,7 @@
       -e DATABASE_URL=sqlite:////tmp/uk_media_test.db \
       -e MEDIA_API_KEYS=testkey \
       -v "$(pwd)":/app -w /app uk-media-service:latest \
-      python -m pytest test_access_upload.py test_access_client.py -v
+      python -m pytest test_access_upload.py -v
 
 `Settings` грузится на уровне модуля (паттерн SEC-065/066), поэтому окружение
 задаём ДО импорта app.* — через os.environ.setdefault здесь (переменные из

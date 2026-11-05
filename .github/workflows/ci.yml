@@ -283,8 +283,7 @@ jobs:
 
       # Юниты: conftest.py поднимает файловый sqlite и мокает Telegram,
       # окружение выставляет сам (os.environ.setdefault — см. его докстринг),
-      # поэтому DATABASE_URL здесь НЕ задаём. `test_upload.py` исключён в
-      # pytest.ini: он ходит в живой стек и «проходит» всегда.
+      # поэтому DATABASE_URL здесь НЕ задаём.
       # A9-P2-21: test_schema_drift_pg.py — дрейф-гейт на postgres из services:
       # пустая БД (create_all + migrations/*.sql) и существующая прод-БД
       # (schema_baseline/pre_0001.sql + migrations + create_all) обязаны

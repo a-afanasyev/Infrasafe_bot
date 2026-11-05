@@ -16,6 +16,7 @@ services:
   app:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     # Используем локальный Dockerfile для сборки образа
     build: .
     
@@ -126,6 +127,7 @@ services:
   group-intake-bot:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: .
     container_name: uk-group-intake-bot
     restart: unless-stopped
@@ -188,6 +190,7 @@ services:
   api:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -312,6 +315,7 @@ services:
   access-api:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build:
       context: .
       dockerfile: Dockerfile.access
@@ -680,6 +684,7 @@ services:
   resource-api:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./resource-accounting/backend
     container_name: uk-resource-api
     restart: unless-stopped
@@ -715,6 +720,7 @@ services:
   resource-worker:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build: ./resource-accounting/backend
     container_name: uk-resource-worker
     restart: unless-stopped

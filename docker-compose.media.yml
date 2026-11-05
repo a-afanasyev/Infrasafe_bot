@@ -2,8 +2,8 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.media.yml up -d
 #
-# Shares uk-network, postgres (own logical DB uk_media), redis with the
-# main stack. ARCH-106 Phase 2: секреты (bot token, SECRET_KEY, MEDIA_API_KEYS,
+# Shares uk-network and postgres (own logical DB uk_media) with the main
+# stack; redis media не использует (A9-P2-24). ARCH-106 Phase 2: секреты (bot token, SECRET_KEY, MEDIA_API_KEYS,
 # DATABASE_URL) приходят из Doppler через `doppler run --`; media_service/.env
 # держит только несекретную конфигурацию (CHANNEL_*, ALLOWED_ORIGINS, DEBUG, лимиты).
 # A10-INF-04: ротация json-file логов на уровне compose (на 105 нет
@@ -18,6 +18,7 @@ services:
   media-service:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build:
       context: ./media_service
       dockerfile: Dockerfile
@@ -38,13 +39,10 @@ services:
       # ARCH-137 B4: зона показа для подписей к медиа (C1-bis); несекретное, дефолт = прежнее поведение
       - DISPLAY_TZ=${DISPLAY_TZ:-Asia/Tashkent}
     volumes:
-      - media_uploads:/app/data/uploads
       # Кэш превью публичной витрины — томом, чтобы рестарт его не сбрасывал.
       - media_preview_cache:/app/.preview-cache
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - uk-network
@@ -79,8 +77,6 @@ services:
       # mirrors the bot-side `migrate` service's own reasoning: Settings eagerly
       # validates several vars at import time even though this job only touches
       # the DB, so a partial env here would crash on import before reaching main().
-      # REDIS_URL is deliberately excluded: migrate doesn't touch Redis, and
-      # settings.redis_url has a safe default (unlike the vars below).
       - TELEGRAM_BOT_TOKEN=${MEDIA_BOT_TOKEN:?MEDIA_BOT_TOKEN is required — set it in Doppler (project uk-management)}
       - SECRET_KEY=${MEDIA_SECRET_KEY:?MEDIA_SECRET_KEY is required — set it in Doppler (project uk-management)}
       - MEDIA_API_KEYS=${MEDIA_API_KEYS:?MEDIA_API_KEYS is required — set it in Doppler (project uk-management)}
@@ -92,7 +88,5 @@ services:
       - uk-network
 
 volumes:
-  media_uploads:
-    driver: local
   media_preview_cache:
     driver: local

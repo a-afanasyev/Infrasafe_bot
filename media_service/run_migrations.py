@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from app.db.database import engine
+from app.models.media import Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("media_migrate")
@@ -44,6 +45,10 @@ def main() -> None:
         logger.warning("No migration files found in %s", MIGRATIONS_DIR)
         return
     with engine.begin() as conn:
+        # A9-P3-33: на пустой БД (новая площадка) 0001 начинается с ALTER TABLE
+        # media_files — таблиц ещё нет. create_all создаёт недостающие и не
+        # трогает существующие, поэтому на рабочей БД это no-op.
+        Base.metadata.create_all(bind=conn)
         applied = apply_migrations(conn)
     logger.info("Applied %d migration file(s)", applied)
 

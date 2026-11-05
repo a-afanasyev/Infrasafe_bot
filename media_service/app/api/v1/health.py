@@ -89,47 +89,6 @@ async def detailed_health_check():
         raise HTTPException(status_code=503, detail="Health check error")
 
 
-@router.get("/database")
-async def database_health():
-    """
-    Проверка состояния базы данных
-    """
-    try:
-        db_status = check_db_connection()
-
-        if db_status:
-            return {"status": "ok", "database": "connected", "timestamp": datetime.now()}
-        else:
-            raise HTTPException(status_code=503, detail="Database connection failed")
-
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Database error")
-
-
-@router.get("/telegram")
-async def telegram_health():
-    """
-    Проверка состояния Telegram API
-    """
-    try:
-        # Получаем информацию о боте (общий процессный клиент, A9-P2-15)
-        bot_info = await get_telegram_client().bot.get_me()
-
-        if bot_info:
-            return {
-                "status": "ok",
-                "telegram": "connected",
-                "timestamp": datetime.now()
-            }
-        else:
-            raise HTTPException(status_code=503, detail="Telegram API connection failed")
-
-    except Exception as e:
-        logger.error(f"Telegram health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Telegram API error")
-
-
 @router.get("/ready")
 async def readiness_check():
     """
@@ -152,17 +111,3 @@ async def readiness_check():
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
         raise HTTPException(status_code=503, detail="Service not ready")
-
-
-@router.get("/live")
-async def liveness_check():
-    """
-    Проверка жизнеспособности сервиса (для Kubernetes)
-    """
-    try:
-        # Простая проверка что сервис отвечает
-        return {"status": "alive", "timestamp": datetime.now()}
-
-    except Exception as e:
-        logger.error(f"Liveness check failed: {e}")
-        raise HTTPException(status_code=503, detail="Service not alive")

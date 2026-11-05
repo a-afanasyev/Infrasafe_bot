@@ -3,7 +3,8 @@
 Скрипт для инициализации каналов в базе данных MediaService
 """
 
-from app.db.database import engine, SessionLocal, Base
+from app.db.database import engine, SessionLocal
+from app.models.media import Base
 from app.models.media import MediaChannel
 from app.core.config import settings, TelegramChannels
 

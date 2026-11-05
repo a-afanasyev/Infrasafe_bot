@@ -388,18 +388,6 @@ class TelegramClientService:
                 )
             return DeleteResult(outcome, reason=str(e) or type(e).__name__)
 
-    async def get_chat(self, chat_id: Union[int, str]):
-        """
-        Получение информации о чате/канале
-        """
-        try:
-            chat = await self.bot.get_chat(chat_id)
-            return chat
-
-        except TelegramAPIError as e:
-            logger.error(f"Failed to get chat info for {chat_id}: {e}")
-            raise
-
     async def close(self):
         """
         Закрытие соединения

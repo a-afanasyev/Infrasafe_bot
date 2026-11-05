@@ -18,7 +18,6 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Копирование кода приложения
 COPY app/ ./app/
-COPY client/ ./client/
 COPY migrations/ ./migrations/
 COPY run_migrations.py .
 

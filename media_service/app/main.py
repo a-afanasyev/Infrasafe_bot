@@ -150,7 +150,7 @@ async def log_requests(request: Request, call_next):
 # API-key authentication middleware
 # Exempt paths that don't require auth (basic health checks only)
 # /health/ready — цель docker healthcheck: отвечает только «БД жива/нет».
-_AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready", "/", "/version", "/docs", "/redoc", "/openapi.json"}
+_AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/health/ready", "/", "/version", "/docs", "/redoc", "/openapi.json"}
 
 
 @app.middleware("http")

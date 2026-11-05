@@ -4,7 +4,6 @@
 """
 
 import logging
-from datetime import datetime
 from typing import List, Optional, Dict, Any, BinaryIO, Union
 import httpx
 from pathlib import Path
@@ -294,122 +293,6 @@ class MediaServiceClient:
             logger.error(f"Failed to get media for request {request_number}: {e}")
             raise
 
-    async def search_media(
-        self,
-        query: Optional[str] = None,
-        request_numbers: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
-        file_types: Optional[List[str]] = None,
-        categories: Optional[List[str]] = None,
-        uploaded_by: Optional[int] = None,
-        status: str = "active",
-        limit: int = 50,
-        offset: int = 0
-    ) -> Dict[str, Any]:
-        """
-        Поиск медиа-файлов с фильтрами
-
-        Args:
-            query: Текстовый поиск
-            request_numbers: Номера заявок
-            tags: Теги
-            date_from: Дата начала
-            date_to: Дата окончания
-            file_types: Типы файлов
-            categories: Категории
-            uploaded_by: ID пользователя
-            status: Статус файлов
-            limit: Лимит результатов
-            offset: Смещение
-
-        Returns:
-            Результаты поиска с пагинацией
-        """
-        try:
-            params = {
-                "status": status,
-                "limit": limit,
-                "offset": offset
-            }
-
-            if query:
-                params["query"] = query
-
-            if request_numbers:
-                params["request_numbers"] = ",".join(request_numbers)
-
-            if tags:
-                params["tags"] = ",".join(tags)
-
-            if date_from:
-                params["date_from"] = date_from.isoformat()
-
-            if date_to:
-                params["date_to"] = date_to.isoformat()
-
-            if file_types:
-                params["file_types"] = ",".join(file_types)
-
-            if categories:
-                params["categories"] = ",".join(categories)
-
-            if uploaded_by is not None:
-                params["uploaded_by"] = uploaded_by
-
-            response = await self.client.get("/media/search", params=params)
-            response.raise_for_status()
-
-            result = response.json()
-            logger.info(f"Search returned {result['total_count']} results")
-            return result
-
-        except Exception as e:
-            logger.error(f"Failed to search media: {e}")
-            raise
-
-    async def get_media_file(self, media_id: int) -> Dict[str, Any]:
-        """
-        Получение информации о медиа-файле по ID
-
-        Args:
-            media_id: ID медиа-файла
-
-        Returns:
-            Информация о медиа-файле
-        """
-        try:
-            response = await get_with_retries(self.client, f"/media/{media_id}")
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to get media file {media_id}: {e}")
-            raise
-
-    async def get_media_url(self, media_id: int) -> Optional[str]:
-        """
-        Получение URL для доступа к медиа-файлу
-
-        Args:
-            media_id: ID медиа-файла
-
-        Returns:
-            URL файла или None
-        """
-        try:
-            response = await get_with_retries(self.client, f"/media/{media_id}/url")
-            response.raise_for_status()
-
-            result = response.json()
-            return result.get("file_url")
-
-        except Exception as e:
-            logger.error(f"Failed to get media URL {media_id}: {e}")
-            return None
-
     async def download_media_file(self, media_id: int) -> Optional[tuple[bytes, str]]:
         """Байты файла и его content-type, либо None при любой HTTP-ошибке.
 
@@ -431,63 +314,6 @@ class MediaServiceClient:
             return None
         content_type = response.headers.get("content-type", "application/octet-stream")
         return response.content, content_type
-
-    async def update_media_tags(
-        self,
-        media_id: int,
-        tags: List[str],
-        replace: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Обновление тегов медиа-файла
-
-        Args:
-            media_id: ID медиа-файла
-            tags: Новые теги
-            replace: Заменить все теги или добавить
-
-        Returns:
-            Обновленная информация о файле
-        """
-        try:
-            data = {
-                "tags": tags,
-                "replace": replace
-            }
-
-            response = await self.client.put(f"/media/{media_id}/tags", json=data)
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to update tags for media {media_id}: {e}")
-            raise
-
-    async def archive_media(self, media_id: int, reason: Optional[str] = None) -> bool:
-        """
-        Архивация медиа-файла
-
-        Args:
-            media_id: ID медиа-файла
-            reason: Причина архивации
-
-        Returns:
-            True если успешно
-        """
-        try:
-            data = {}
-            if reason:
-                data["archive_reason"] = reason
-
-            response = await self.client.post(f"/media/{media_id}/archive", json=data)
-            response.raise_for_status()
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to archive media {media_id}: {e}")
-            return False
 
     async def delete_media(self, media_id: int) -> bool:
         """
@@ -548,7 +374,7 @@ class MediaServiceClient:
             True если успешно (включая идемпотентный кейс уже залоченного
             активного файла). False при любой неудаче (файл не найден, не
             активен, сетевая ошибка) — тот же контракт "проглатывания" bool,
-            что у archive_media/delete_media выше; вызывающих, которым нужно
+            что у delete_media выше; вызывающих, которым нужно
             различать причины отказа, пока не существует.
         """
         try:
@@ -675,95 +501,6 @@ class MediaServiceClient:
         except Exception as e:
             logger.warning(f"Failed to warm media previews {media_ids}: {e}")
             return {}
-
-    async def get_request_timeline(self, request_number: str) -> Dict[str, Any]:
-        """
-        Получение временной линии медиа-файлов для заявки
-
-        Args:
-            request_number: Номер заявки
-
-        Returns:
-            Временная линия с медиа-файлами
-        """
-        try:
-            response = await self.client.get(f"/media/request/{request_number}/timeline")
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to get timeline for request {request_number}: {e}")
-            raise
-
-    async def get_popular_tags(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """
-        Получение популярных тегов
-
-        Args:
-            limit: Количество тегов
-
-        Returns:
-            Список популярных тегов
-        """
-        try:
-            response = await self.client.get("/media/tags/popular", params={"limit": limit})
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to get popular tags: {e}")
-            raise
-
-    async def get_media_statistics(self) -> Dict[str, Any]:
-        """
-        Получение статистики медиа-файлов
-
-        Returns:
-            Статистика медиа-файлов
-        """
-        try:
-            response = await self.client.get("/media/statistics")
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to get media statistics: {e}")
-            raise
-
-    async def find_similar_media(
-        self,
-        media_id: int,
-        similarity_threshold: float = 0.7,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Поиск похожих медиа-файлов
-
-        Args:
-            media_id: ID исходного файла
-            similarity_threshold: Порог схожести
-            limit: Лимит результатов
-
-        Returns:
-            Список похожих файлов
-        """
-        try:
-            params = {
-                "similarity_threshold": similarity_threshold,
-                "limit": limit
-            }
-
-            response = await self.client.get(f"/media/{media_id}/similar", params=params)
-            response.raise_for_status()
-
-            return response.json()
-
-        except Exception as e:
-            logger.error(f"Failed to find similar media for {media_id}: {e}")
-            raise
 
     async def health_check(self) -> Dict[str, Any]:
         """

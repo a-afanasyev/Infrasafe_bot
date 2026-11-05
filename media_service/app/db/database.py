@@ -5,7 +5,6 @@
 import asyncio
 import functools
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Any, Callable, Generator, TypeVar
@@ -26,23 +25,6 @@ engine = create_engine(
 # Создание сессии
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Базовый класс для моделей
-Base = declarative_base()
-
-
-def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency для получения сессии базы данных
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 @contextmanager
@@ -95,18 +77,6 @@ def create_tables():
     from app.models.media import Base
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created successfully")
-
-
-def drop_tables():
-    """
-    Удаление всех таблиц (только для разработки)
-    """
-    if not settings.debug:
-        raise RuntimeError("Cannot drop tables in production")
-
-    from app.models.media import Base
-    Base.metadata.drop_all(bind=engine)
-    logger.warning("Database tables dropped")
 
 
 async def init_db():

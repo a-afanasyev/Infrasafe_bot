@@ -7,7 +7,6 @@ AUD5-ARCH-3 волна 14: test_media_client.py (1019) разнесён на т�
 import io
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from datetime import datetime
 
 from uk_management_bot.integrations.media_client import (
     MediaServiceClient,
@@ -255,81 +254,6 @@ class TestUploadRequestMediaFormatting:
 
         call_data = client.client.post.call_args[1]["data"]
         assert call_data["uploaded_by"] == "7"
-
-
-# ---------------------------------------------------------------------------
-# search_media — params building
-# ---------------------------------------------------------------------------
-
-class TestSearchMediaParams:
-    @pytest.mark.asyncio
-    async def test_basic_params_always_present(self):
-        client = MediaServiceClient("http://localhost")
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"total_count": 0, "items": []}
-        client.client.get = AsyncMock(return_value=mock_response)
-
-        await client.search_media()
-
-        params = client.client.get.call_args[1]["params"]
-        assert "status" in params
-        assert "limit" in params
-        assert "offset" in params
-
-    @pytest.mark.asyncio
-    async def test_request_numbers_joined_with_comma(self):
-        client = MediaServiceClient("http://localhost")
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"total_count": 0}
-        client.client.get = AsyncMock(return_value=mock_response)
-
-        await client.search_media(request_numbers=["260401-001", "260401-002"])
-
-        params = client.client.get.call_args[1]["params"]
-        assert params["request_numbers"] == "260401-001,260401-002"
-
-    @pytest.mark.asyncio
-    async def test_date_from_formatted_as_iso(self):
-        client = MediaServiceClient("http://localhost")
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"total_count": 0}
-        client.client.get = AsyncMock(return_value=mock_response)
-
-        dt = datetime(2026, 4, 1, 12, 0, 0)
-        await client.search_media(date_from=dt)
-
-        params = client.client.get.call_args[1]["params"]
-        assert params["date_from"] == dt.isoformat()
-
-
-# ---------------------------------------------------------------------------
-# get_media_url
-# ---------------------------------------------------------------------------
-
-class TestGetMediaUrl:
-    @pytest.mark.asyncio
-    async def test_returns_url_from_response(self):
-        client = MediaServiceClient("http://localhost")
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"file_url": "http://cdn/file.jpg"}
-        client.client.get = AsyncMock(return_value=mock_response)
-
-        url = await client.get_media_url(42)
-
-        assert url == "http://cdn/file.jpg"
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_exception(self):
-        client = MediaServiceClient("http://localhost")
-        client.client.get = AsyncMock(side_effect=Exception("timeout"))
-
-        url = await client.get_media_url(99)
-
-        assert url is None
 
 
 # ---------------------------------------------------------------------------

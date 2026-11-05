@@ -127,6 +127,7 @@ services:
   media-service:
     logging: *default-logging
     security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     build:
       context: ./media_service
       dockerfile: Dockerfile
