@@ -25,6 +25,7 @@
 |---|---|
 | `docker-compose.yml` | Базовый стек: `app`, `group-intake-bot` (профиль `group-intake`), `api`, `access-api`, `frontend`, `postgres`, `redis`, `resource-postgres`/`resource-api`/`resource-worker`; one-shot'ы под профилем `tools`: `provision-roles`, `migrate`, `resource-provision-roles`, `resource-migrate` |
 | `docker-compose.media.yml` | Overlay: `media-service` + one-shot `media-migrate` (площадка 105) |
+| `docker-compose.infrasafe.yml` | Сетевой override площадки 105: БД, бот, media, resource-worker и tools-джобы — только в приватной `uk-internal`; в `uk-network` (общей с edge InfraSafe) — api/access-api/frontend/resource-api и news-watcher |
 | `docker-compose.profk.yml` | Тонкий override площадки profk (сети `uk-network` external + `uk-internal`, бренд фронта, media внутри). Standalone не работает — только поверх базового файла |
 | `docker-compose.payments.yml` | Overlay «Контроль платежей»: `payment-postgres`, `payment-api`, one-shot `payment-migrate`; добавляет `PAYMENT_SERVICE_URL/TOKEN` в `api` |
 | `docker-compose.dev.yml` | Самостоятельный dev-стек с hot-reload (`make dev-up`): `app` на `Dockerfile.dev` с примонтированными `uk_management_bot/` и `alembic/`, свои `postgres`/`redis` (контейнеры `*-dev`). Без ролей PR-7 — не эталон, проверка перед мержем — `make test-ci` |

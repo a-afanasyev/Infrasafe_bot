@@ -16,6 +16,7 @@ COMPOSE_FILES = (
     "docker-compose.profk.yml",
     "docker-compose.media.yml",
     "docker-compose.payments.yml",
+    "docker-compose.infrasafe.yml",
 )
 APP_SERVICES = {
     "app", "group-intake-bot", "api", "access-api", "frontend",
@@ -27,11 +28,16 @@ class _ComposeLoader(yaml.SafeLoader):
     """SafeLoader, понимающий compose-теги `!override`/`!reset` как обычные узлы."""
 
 
+class _Override(list):
+    """Список под `!override` — заменяет, а не дополняет значение базового файла."""
+
+
 def _construct_tagged(loader: yaml.SafeLoader, tag_suffix: str, node: yaml.Node):
     if isinstance(node, yaml.MappingNode):
         return loader.construct_mapping(node)
     if isinstance(node, yaml.SequenceNode):
-        return loader.construct_sequence(node)
+        items = loader.construct_sequence(node)
+        return _Override(items) if tag_suffix == "override" else items
     return loader.construct_scalar(node)
 
 
@@ -110,3 +116,21 @@ def test_postgres_healthchecks_name_database():
             if "pg_isready" in cmd and " -d " not in cmd:
                 offenders.append(f"{name}:{svc}")
     assert offenders == []
+
+
+SITE_NETWORK_OVERLAYS = ("docker-compose.profk.yml", "docker-compose.infrasafe.yml")
+DATABASES = ("postgres", "redis", "resource-postgres")
+
+
+def test_databases_never_share_edge_network():
+    """A11 HOST-11-05 / A10-HOST-07: в `uk-network` сидит edge-nginx InfraSafe —
+    БД на обеих площадках только в приватной `uk-internal`. Именно `!override`:
+    без него список сливается с базовым и `uk-network` возвращается."""
+    offenders = []
+    for name in SITE_NETWORK_OVERLAYS:
+        services = _services(name)
+        for db in DATABASES:
+            nets = (services.get(db) or {}).get("networks")
+            if not isinstance(nets, _Override) or list(nets) != ["uk-internal"]:
+                offenders.append(f"{name}:{db}")
+    assert offenders == [], offenders

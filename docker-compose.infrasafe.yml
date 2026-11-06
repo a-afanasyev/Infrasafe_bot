@@ -1,0 +1,77 @@
+# docker-compose.infrasafe.yml — сетевой override для infrasafe.uz (105).
+# A11 HOST-11-05 / A10-HOST-07: на 105 БД UK сидели в общей uk-network вместе с
+# edge-nginx InfraSafe — взлом edge давал прямой сетевой доступ к uk-postgres/
+# uk-redis/uk-resource-postgres. Здесь — тот же раздел, что на profk
+# (docker-compose.profk.yml, п.2–3):
+#   * uk-network — только то, к чему ходит edge (api, access-api, frontend,
+#     resource-api) и news-watcher (ему нужен только api);
+#   * uk-internal — БД, бот, media, resource-worker, tools-джобы + api/access-api/
+#     resource-api вторым интерфейсом (до БД).
+#
+# Набор (порядок важен; канон — таблица «Площадка → COMPOSE» в SKILL uk-deploy):
+#   -f docker-compose.yml -f docker-compose.media.yml -f docker-compose.infrasafe.yml
+# Без этого файла `up` вернёт сервис только в uk-network — api/бот потеряют БД.
+#
+# uk-internal — обычный bridge, НЕ `internal: true`: на internal-сети Docker не
+# публикует порты, а 127.0.0.1:5432/6379 и порты obs-экспортёров (Alloy) нужны.
+# Имя задано явно — obs-compose (~/obs) подключает экспортёры к ней как external.
+
+services:
+  postgres:
+    networks: !override
+      - uk-internal
+  redis:
+    networks: !override
+      - uk-internal
+  resource-postgres:
+    networks: !override
+      - uk-internal
+
+  app:
+    networks: !override
+      - uk-internal
+  group-intake-bot:
+    networks: !override
+      - uk-internal
+  media-service:
+    networks: !override
+      - uk-internal
+  resource-worker:
+    networks: !override
+      - uk-internal
+
+  provision-roles:
+    networks: !override
+      - uk-internal
+  migrate:
+    networks: !override
+      - uk-internal
+  media-migrate:
+    networks: !override
+      - uk-internal
+  resource-provision-roles:
+    networks: !override
+      - uk-internal
+  resource-migrate:
+    networks: !override
+      - uk-internal
+
+  api:
+    networks: !override
+      - uk-network
+      - uk-internal
+  access-api:
+    networks: !override
+      - uk-network
+      - uk-internal
+  # Маппинг-форма СЛИВАЕТСЯ с базовой: uk-network с алиасами resource-api/
+  # resource-api.internal наследуется (по ним ходят edge, api, access-api),
+  # uk-internal добавляется.
+  resource-api:
+    networks:
+      uk-internal: {}
+
+networks:
+  uk-internal:
+    driver: bridge
+    name: uk-internal

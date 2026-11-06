@@ -2,6 +2,7 @@
 # DEAD-10 (PR-10): unified-стек удалён; канонические compose-файлы:
 #   docker-compose.yml        — основной стек (app, api, frontend, postgres, redis)
 #   docker-compose.media.yml  — override для media-service (прод 105)
+#   docker-compose.infrasafe.yml — сети 105: БД только в uk-internal (A11 HOST-11-05)
 #   Прод-деплой — НЕ через make: doppler run + набор -f площадки из
 #   .claude/skills/uk-deploy/SKILL.md (таблица «Площадка → COMPOSE», A9-P1-3).
 #   docker-compose.dev.yml    — dev с hot-reload (bot + alembic bind-mount)

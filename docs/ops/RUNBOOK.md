@@ -10,7 +10,7 @@
 
 ## 1. Карта контейнеров и портов
 
-Набор compose-файлов зависит от площадки — **единственный источник истины: таблица «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`** (profk: base + `docker-compose.profk.yml` + `docker-compose.payments.yml`; 105: base + `docker-compose.media.yml`). Ниже `$COMPOSE` — значение из этой таблицы. Контроль доступа (`access-api`) объявлен в основном `docker-compose.yml`.
+Набор compose-файлов зависит от площадки — **единственный источник истины: таблица «Площадка → COMPOSE» в `.claude/skills/uk-deploy/SKILL.md`** (profk: base + `docker-compose.profk.yml` + `docker-compose.payments.yml`; 105: base + `docker-compose.media.yml` + `docker-compose.infrasafe.yml`). Ниже `$COMPOSE` — значение из этой таблицы. Контроль доступа (`access-api`) объявлен в основном `docker-compose.yml`.
 
 | Контейнер | Сервис (compose) | Образ / сборка | Host-порт (127.0.0.1) | Порт в контейнере | Роль |
 |---|---|---|---|---|---|
@@ -45,7 +45,7 @@
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
 # bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
 #   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
-#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml -f docker-compose.infrasafe.yml"
 : "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 
 # 1. Забрать код
@@ -112,7 +112,7 @@ git checkout <good-sha>          # или git reset --hard <good-sha> — ТОЛ
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g)
 # bash (в zsh нужен ${=COMPOSE}); COMPOSE — строго из таблицы «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md:
 #   profk: COMPOSE="-f docker-compose.yml -f docker-compose.profk.yml -f docker-compose.payments.yml"
-#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml"
+#   105:   COMPOSE="-f docker-compose.yml -f docker-compose.media.yml -f docker-compose.infrasafe.yml"
 : "${COMPOSE:?задайте COMPOSE своей площадки из таблицы SKILL — без него compose поднимет стек без overlay}"
 doppler run --project uk-management --config <cfg> -- \
   docker compose $COMPOSE build
