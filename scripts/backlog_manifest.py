@@ -394,7 +394,7 @@ ASSIGNMENT: dict[str, dict] = {
     "A11-HOST-02": A(pkg="AUD11-HOST", status="no-pr", method="host-2026-11-05", services="хост 105", note="shred карантина ≥2026-11-06; решения по archive-adhoc, ~/pgsql, висячим томам"),
     "A11-EXT-01": A(pkg="AUD11-EXT", status="actionable", method="audit11-2026-11-05", services="InfraSafe compose/edge/app", note="внешнее репо; HOST-11-02 env postgres, N-04 origin, мелочи edge (фаза 4)"),
     "A11-DNS-01": A(pkg="AUD11-HOST", status="no-pr", method="ext-2026-11-05", services="DNS", note="www → Wix без серта при HSTS includeSubDomains; fountain/mail висячие"),
-    "A11-DEC-01": A(pkg="AUD11-CODE", status="decision", method="audit11-2026-11-05", services="api, InfraSafe", note="auto_publish, сверка source_chat_id, ПДн в промпте, TELEMETRY_HMAC_SECRET"),
+    "A11-DEC-01": A(pkg="AUD11-CODE", status="deferred", method="owner-decision-2026-11-07", services="api, InfraSafe", note="CODE-11-03/04/07 — риск принят; остаток — ротация TELEMETRY_HMAC_SECRET при ближайшей перепрошивке контроллеров"),
     # A10-INT-15 закрыт 2026-11-05: тест есть: test_registration_applicant.py::test_applicant_privileged_pending_rejected_403.
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
