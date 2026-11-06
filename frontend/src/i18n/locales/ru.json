@@ -1630,6 +1630,7 @@
     "headerResident": "Житель",
     "headerAddress": "Основной адрес",
     "headerApartments": "Квартир",
+    "headerRegistered": "Регистрация",
     "headerVerification": "Верификация",
     "headerStatus": "Статус",
     "apartmentsCount_one": "{{count}} квартира",

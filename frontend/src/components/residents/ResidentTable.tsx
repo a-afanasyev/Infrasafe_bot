@@ -4,7 +4,10 @@ import { useNavigate } from 'react-router'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
 import EmptyState from '../shared/EmptyState'
-import { ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
+import { formatDate, formatTime } from '../../utils/timezone'
+import ResidentContactActions from './ResidentContactActions'
+import { BotBlockedBadge, ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
+import { residentTone, toneEdgeStyle, toneRowStyle } from './residentTone'
 import { SortIndicator } from '../shared/SortIndicator'
 import type { UseTableSortResult } from '../../hooks/useTableSort'
 import { RESIDENT_COLUMNS } from './residentSortColumns'
@@ -60,13 +63,16 @@ export default function ResidentTable({ residents, sort }: Props) {
         <tbody>
           {residents.map(r => {
             const name = fullName(r, t('residents.noName'))
+            const tone = residentTone(r)
             return (
               <tr
                 key={r.id}
+                data-tone={tone}
+                style={toneRowStyle(tone)}
                 onClick={() => navigate(`/dashboard/residents/${r.id}`)}
-                className="border-b border-border-default last:border-b-0 cursor-pointer hover:bg-bg-surface transition-colors"
+                className="border-b border-border-default last:border-b-0 cursor-pointer hover:bg-bg-surface hover:brightness-95 transition"
               >
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" style={toneEdgeStyle(tone)}>
                   <div className="flex items-center gap-2.5">
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold font-[family-name:var(--font-display)] shrink-0"
@@ -79,11 +85,7 @@ export default function ResidentTable({ residents, sort }: Props) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-[13px] text-text-primary truncate">{name}</div>
-                      {r.phone && (
-                        <div className="text-[11px] text-text-muted font-[family-name:var(--font-mono)]">
-                          {r.phone}
-                        </div>
-                      )}
+                      <ResidentContactActions resident={r} />
                     </div>
                   </div>
                 </td>
@@ -93,11 +95,17 @@ export default function ResidentTable({ residents, sort }: Props) {
                 <td className="px-4 py-3 text-[13px] text-text-secondary font-[family-name:var(--font-mono)]">
                   {r.apartments_count}
                 </td>
+                <td className="px-4 py-3 text-[12px] text-text-secondary font-[family-name:var(--font-mono)] whitespace-nowrap">
+                  {r.created_at ? `${formatDate(r.created_at)} ${formatTime(r.created_at)}` : '—'}
+                </td>
                 <td className="px-4 py-3">
                   <ResidentVerificationBadge status={r.verification_status} submitted={r.documents_submitted} />
                 </td>
                 <td className="px-4 py-3">
-                  <ResidentAccountBadge status={r.status} phone={r.phone} apartmentsCount={r.apartments_count} />
+                  <div className="flex flex-col items-start gap-1">
+                    <ResidentAccountBadge status={r.status} phone={r.phone} apartmentsCount={r.apartments_count} />
+                    {r.bot_blocked && <BotBlockedBadge />}
+                  </div>
                 </td>
               </tr>
             )

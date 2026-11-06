@@ -1620,6 +1620,7 @@
     "headerResident": "Yashovchi",
     "headerAddress": "Asosiy manzil",
     "headerApartments": "Xonadonlar",
+    "headerRegistered": "Ro‘yxatdan o‘tgan",
     "headerVerification": "Tekshiruv",
     "headerStatus": "Holat",
     "apartmentsCount_one": "{{count}} xonadon",
