@@ -100,7 +100,7 @@ def _resource_role(user: User) -> str:
 
 def _display_name(user: User) -> str:
     """Имя для отображения у партнёра (first/last nullable → безопасный fallback)."""
-    name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    name = f"{user.first_name or ''} {user.last_name or ''}".strip()  # html-raw: имя для партнёрского сервиса (JSON), не Telegram
     return name or user.username or f"user-{user.id}"
 
 

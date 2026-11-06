@@ -13,6 +13,7 @@ from news_watcher.watcher import (
     diff_sources,
     handle_message,
     inbound_payload,
+    is_broadcast_channel,
     normalize_handle,
 )
 
@@ -126,3 +127,22 @@ def test_inbound_payload_shape():
     p = inbound_payload(-1, 2, "x" * 300, "t" * 30000, datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert len(p["chat_title"]) == 255 and len(p["text"]) == 20000
     assert p["posted_at"].startswith("2026-01-01") and p["source_chat_id"] == -1
+
+
+# ───────────── A11-CODE-06: вступать только в каналы ─────────────
+
+
+class _Entity:
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)
+
+
+@pytest.mark.parametrize("entity, expected", [
+    (_Entity(broadcast=True, megagroup=False), True),    # канал
+    (_Entity(broadcast=False, megagroup=True), False),   # супергруппа
+    (_Entity(first_name="Иван"), False),                 # пользователь/бот — без broadcast
+    (None, False),
+])
+def test_only_broadcast_channels_are_joinable(entity, expected):
+    """Иначе менеджер с board.configure заставил бы аккаунт юзербота вступать в любые группы."""
+    assert is_broadcast_channel(entity) is expected

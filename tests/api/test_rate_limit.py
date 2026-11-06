@@ -121,3 +121,33 @@ async def test_public_board_cache_serves_stale_within_ttl(client, db_session, ma
     # Still the cached payload — the new "Новая" request is not visible yet.
     assert second.json()["status_counts"]["Новая"] == 0
     assert second.json() == first.json()
+
+
+# ── A11 EXT-11-07: Retry-After в ответе 429 ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_429_carries_retry_after():
+    from uk_management_bot.api.rate_limit import rate_limit_exceeded_handler
+
+    test_limiter = Limiter(key_func=client_ip_key)
+    app = FastAPI()
+    app.state.limiter = test_limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+    @app.get("/ping")
+    @test_limiter.limit("1/minute")
+    async def ping(request: Request):
+        return {"ok": True}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        assert (await ac.get("/ping", headers={"X-Real-IP": "3.3.3.3"})).status_code == 200
+        r = await ac.get("/ping", headers={"X-Real-IP": "3.3.3.3"})
+    assert r.status_code == 429
+    assert r.headers["Retry-After"] == "60"
+
+
+def test_main_app_uses_retry_after_handler():
+    from uk_management_bot.api.main import app as main_app
+    from uk_management_bot.api.rate_limit import rate_limit_exceeded_handler
+
+    assert main_app.exception_handlers[RateLimitExceeded] is rate_limit_exceeded_handler

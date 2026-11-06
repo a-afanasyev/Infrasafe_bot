@@ -131,6 +131,10 @@ finish() {
 }
 trap finish EXIT
 
+echo "==> гейт checkout: нет дампов ПДн в репозитории (A11-CODE-11, как CI-job lint)"
+# В образ не попадают .git и docs/ — проверка возможна только здесь, до сборки.
+python3 "${ROOT}/ci/check_no_data_dumps.py"
+
 echo "==> сборка образа из текущего дерева ($IMAGE)"
 # A9-P2-19: в Dockerfile INSTALL_DEV=false по умолчанию (прод-образ без
 # pytest) — тестовому образу dev-зависимости включаются явно.

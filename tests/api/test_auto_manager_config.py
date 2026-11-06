@@ -462,3 +462,17 @@ async def test_reset_breaker_503_when_redis_down(am_client, monkeypatch):
             return _boom
     monkeypatch.setattr(breaker, "_get_client", lambda: _Down())
     assert (await am_client(_user(45, ["manager"])).post(RESET)).status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_put_writes_audit_with_diff_only_on_change(am_client, db_session_factory):
+    """A11-CODE-05: правка конфига ИИ — строка audit_logs с diff; повтор без изменений — без записи."""
+    manager = _user(20, ["manager"])
+    payload = _valid_payload(ai={**DEFAULT_CONFIG["ai"], "triage_instructions": "Сантехнику — срочно"})
+    assert (await am_client(manager).put(PATH, json=payload)).status_code == 200
+    assert (await am_client(manager).put(PATH, json=payload)).status_code == 200
+    async with db_session_factory() as session:
+        rows = (await session.execute(
+            select(AuditLog).where(AuditLog.action == "auto_manager_config_updated"))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].details["changed"]["ai.triage_instructions"]["after"] == "Сантехнику — срочно"

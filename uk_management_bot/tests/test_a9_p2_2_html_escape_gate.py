@@ -46,7 +46,9 @@ import pytest
 BOT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 #: Глобальный охват: все модули бота, кроме тестов. Без baseline/allowlist.
-_SCAN_ROOTS = ("handlers", "services", "utils")
+#: ``api`` — с A11-CODE-01: news-watch шлёт сырой текст чужих каналов и ответ
+#: LLM из ``api/news_watch`` (httpx-sender), а гейт этот пакет не видел.
+_SCAN_ROOTS = ("api", "handlers", "services", "utils")
 
 
 def _scanned_modules() -> list[pathlib.Path]:
@@ -71,6 +73,8 @@ _TAINTED_ATTRS = frozenset({
     "user_name", "executor_name", "author_name", "applicant_name",
     "manager_name",
     "title", "reason", "apartment_number", "house_number",
+    # A11-CODE-01: news-watch — текст внешнего канала, его название и ответ LLM
+    "raw_text", "chat_title", "summary_ru", "summary_uz",
 })
 
 
@@ -486,6 +490,10 @@ def _wrap(body: str) -> str:
     'get_text("k", name=issue.material_name)',
     'text = f"{template.name}"',
     'get_text("k").format(number=apt.apartment_number)',
+    # A11-CODE-01: news-watch
+    'summary = item.summary_ru or item.raw_text[:300]\nget_text("k", summary=summary)',
+    'get_text("k", source=item.chat_title or item.source_chat_id)',
+    'get_text("k", text=(item.summary_ru if lang == "ru" else item.summary_uz) or item.raw_text[:500])',
 ])
 def test_gate_catches_synthetic_violation(snippet):
     assert scan_source(_wrap(snippet), "synthetic"), snippet
@@ -523,6 +531,7 @@ def test_gate_catches_synthetic_violation(snippet):
     'text = f"{locale.get(\'requests\', {}).get(\'address\', \'A\')}: x"',
     'u = html.escape(f"@{d.username}") if d.username else "-"\nget_text("k").format(username=u)',
     'note = f"{u.first_name}: {text}"  # html-raw: пишется в notes, не в Telegram',
+    'summary = html.escape(item.summary_ru or item.raw_text[:300])\nget_text("k", summary=summary)',
 ])
 def test_gate_passes_escaped_or_non_html(snippet):
     assert scan_source(_wrap(snippet), "synthetic") == [], snippet

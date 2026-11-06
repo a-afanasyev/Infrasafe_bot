@@ -73,7 +73,13 @@ async def _count(request_number: str) -> int:
     return sum(1 for i in items if isinstance(i, dict) and i.get("status", "active") == "active")
 
 
-async def _check_access(session_factory, request_number: str, executor_id: int) -> None:
+async def check_before_access(session_factory, request_number: str, executor_id: int) -> None:
+    """Права исполнителя на «фото до» (канон ``can_upload_completion_async``) и открытый статус.
+
+    Отказ — ``CompletionRefused``. Публична для бота (A11-CODE-09): проверка до
+    входа в FSM и повторно перед скачиванием файлов из Telegram; внутри
+    ``upload_before_photo`` она остаётся — бот не единственный вызывающий.
+    """
     async with session_factory() as db:
         request = await db.get(Request, request_number)
         if request is None:
@@ -112,7 +118,7 @@ async def upload_before_photo(session_factory, request_number: str, executor_id:
         if record is not None and record.state == idem.STATE_DONE and record.media_id:
             return BeforePhotoResult(record.media_id, await _count(request_number))
 
-        await _check_access(session_factory, request_number, executor_id)
+        await check_before_access(session_factory, request_number, executor_id)
         count = await _count(request_number)
         if count >= BEFORE_PHOTO_LIMIT:
             raise CompletionRefused("before_limit", 409)

@@ -34,7 +34,7 @@ from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.news_item import NEWS_STATUSES, NewsItem
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.news_watch import pipeline
-from uk_management_bot.services.news_watch.config import load_config, save_config
+from uk_management_bot.services.news_watch.config import load_config, update_config_audited
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,10 @@ async def get_config(db: AsyncSession = Depends(get_db), user: User = Depends(_m
 @limiter.limit("30/minute")
 async def put_config(request: Request, payload: NewsWatchConfigData,
                      db: AsyncSession = Depends(get_db), user: User = Depends(_manager)):
-    saved = await save_config(db, payload.model_dump(), updated_by=user.id)
+    try:
+        _, saved = await update_config_audited(db, payload.model_dump(), actor_id=user.id)
+    except ValueError as e:  # лимиты A11 проверяются при записи, не схемой
+        raise HTTPException(status_code=422, detail=str(e)) from None
     logger.info("news_watch_config обновлён пользователем %s", user.id)
     return NewsWatchConfigData.model_validate(saved)
 

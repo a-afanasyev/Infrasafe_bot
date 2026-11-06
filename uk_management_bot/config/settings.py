@@ -323,6 +323,10 @@ class Settings:
         self.GROUP_INTAKE_LLM_TIMEOUT = float(os.getenv("GROUP_INTAKE_LLM_TIMEOUT", "8.0"))
         self.GROUP_INTAKE_MIN_CONFIDENCE = float(os.getenv("GROUP_INTAKE_MIN_CONFIDENCE", "0.6"))
         self.GROUP_INTAKE_LLM_PER_MINUTE = int(os.getenv("GROUP_INTAKE_LLM_PER_MINUTE", "6"))
+        # A11-CODE-02: глобальный бюджет LLM-вызовов news-watch (все воркеры API), в минуту.
+        self.NEWS_WATCH_LLM_PER_MINUTE = int(os.getenv("NEWS_WATCH_LLM_PER_MINUTE", "20"))
+        # Окно DM менеджерам о новостях на одобрение (флуд источника ≠ шторм уведомлений).
+        self.NEWS_WATCH_NOTIFY_PER_MINUTE = int(os.getenv("NEWS_WATCH_NOTIFY_PER_MINUTE", "5"))
 
         # ── ИИ-менеджер заявок (режим mode="ai" автоменеджера) ───────────
         # DARK-гейт: без флага режим "ai" не принимается API/ботом, job SLA не

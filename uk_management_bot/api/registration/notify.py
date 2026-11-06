@@ -25,7 +25,7 @@ async def notify_managers_new_registration(*, telegram_id: int, full_name: str, 
     if not settings.ADMIN_USER_IDS:
         logger.warning("ADMIN_USER_IDS not set — registration notification skipped")
         return 0
-    text = f"🆕 Новая регистрация заявителя\n{full_name}\nКвартира: {apartment_label}\nTG: {telegram_id}"
+    text = f"🆕 Новая регистрация заявителя\n{full_name}\nКвартира: {apartment_label}\nTG: {telegram_id}"  # html-raw: send_message без parse_mode — обычный текст
     delivered = 0
     for admin_id in settings.ADMIN_USER_IDS:
         try:

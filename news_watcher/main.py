@@ -10,7 +10,15 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from news_watcher.watcher import ApiClient, Offsets, Settings, diff_sources, handle_message, normalize_handle
+from news_watcher.watcher import (
+    ApiClient,
+    Offsets,
+    Settings,
+    diff_sources,
+    handle_message,
+    is_broadcast_channel,
+    normalize_handle,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("news_watcher.main")
@@ -27,6 +35,9 @@ async def run() -> None:
     client = TelegramClient(StringSession(settings.session), settings.api_id, settings.api_hash)
     subscribed: set[str] = set()
     entities: dict[str, object] = {}
+    # Не-каналы (A11-CODE-06): не вступаем и не резолвим заново каждые refresh_seconds
+    # (лишние ResolveUsername → FloodWait); забываем, когда менеджер убрал источник.
+    rejected: set[str] = set()
 
     async def refresh_sources() -> None:
         nonlocal subscribed
@@ -35,10 +46,15 @@ async def run() -> None:
         except Exception as e:
             logger.warning("sources fetch failed: %s", type(e).__name__)
             return
+        rejected.intersection_update(wanted)
         join, leave = diff_sources(subscribed, wanted)
-        for handle in sorted(join):
+        for handle in sorted(join - rejected):
             try:
                 entity = await client.get_entity(handle)
+                if not is_broadcast_channel(entity):
+                    rejected.add(handle)
+                    logger.warning("skip %s: not a broadcast channel", handle)
+                    continue
                 await client(JoinChannelRequest(entity))
                 entities[handle] = entity
                 subscribed = subscribed | {handle}

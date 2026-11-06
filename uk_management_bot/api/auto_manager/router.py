@@ -25,7 +25,7 @@ from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.ai_manager import breaker, templates
 from uk_management_bot.services.ai_manager.triage import EMERGENCY_KEYWORDS
-from uk_management_bot.services.auto_manager.config import load_config, save_config
+from uk_management_bot.services.auto_manager.config import load_config, update_config_audited
 from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -73,8 +73,8 @@ async def update_auto_manager_config(
 
     Write-side rate-limit 30/min зеркалит `board_config`'s PUT (SEC-084) —
     та же защита от churn конфига украденным токеном."""
-    before = await load_config(db)
-    saved = await save_config(db, payload.config_dict(), updated_by=user.id)
+    # A11-CODE-05: before — под блокировкой строки, конфиг и аудит — одним commit.
+    before, saved = await update_config_audited(db, payload.config_dict(), actor_id=user.id)
     logger.info("auto_manager_config обновлён пользователем %s", user.id)
     await _notify_ai_switched_off(before.get("mode", "rule"), saved.get("mode", "rule"))
     return await _response(saved)

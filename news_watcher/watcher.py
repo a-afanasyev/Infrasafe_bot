@@ -146,6 +146,15 @@ async def handle_message(api: ApiClient, offsets: Offsets, *, chat_id: int, mess
     return accepted
 
 
+def is_broadcast_channel(entity: Any) -> bool:
+    """A11-CODE-06: вступать можно только в канал (``Channel.broadcast``).
+
+    Источник задаёт менеджер в дашборде; без проверки аккаунт юзербота вступал бы
+    и в группы/супергруппы по любому @username (антиспам-бан, чужие чаты).
+    """
+    return bool(getattr(entity, "broadcast", False)) and not getattr(entity, "megagroup", False)
+
+
 def normalize_handle(value: Any) -> Optional[str]:
     """username Telegram-сущности → ``@name`` в нижнем регистре."""
     if not value:

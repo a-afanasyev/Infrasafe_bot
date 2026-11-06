@@ -9,10 +9,9 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from uk_management_bot.api.rate_limit import limiter
+from uk_management_bot.api.rate_limit import limiter, rate_limit_exceeded_handler
 from uk_management_bot.config.settings import settings as _settings
 
 # Sentry error tracking with FastAPI integration (optional)
@@ -86,7 +85,7 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Address-core domain exceptions → HTTP 404/409/422
 from uk_management_bot.api.addresses.exception_handlers import (
@@ -123,7 +122,7 @@ app.add_middleware(
     # молча откатится на длину страницы (ровно тот обман, который и чинили).
     # `X-Error-Code` — машинный код 409 регистрации (A9-P3-20): без экспозиции
     # кросс-ориджин (dev без прокси) браузер вырежет его, и фронт уйдёт в фолбэк.
-    expose_headers=["X-Request-ID", "X-Total-Count", "X-Error-Code"],
+    expose_headers=["X-Request-ID", "X-Total-Count", "X-Error-Code", "Retry-After"],
 )
 
 

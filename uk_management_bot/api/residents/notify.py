@@ -175,14 +175,14 @@ async def notify_account_approved(resident: User) -> None:
 async def notify_apartment_attached(resident: User, address: str) -> None:
     lang = _lang(resident)
     await _safe_send(resident, get_text(
-        "web_notifications.apartment_attached", language=lang, address=address,
+        "web_notifications.apartment_attached", language=lang, address=address,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ))
 
 
 async def notify_binding_approved(resident: User, address: str) -> None:
     lang = _lang(resident)
     await _safe_send(resident, get_text(
-        "web_notifications.binding_approved", language=lang, address=address,
+        "web_notifications.binding_approved", language=lang, address=address,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ))
 
 
@@ -190,14 +190,14 @@ async def notify_binding_rejected(resident: User, address: str, comment: str) ->
     lang = _lang(resident)
     await _safe_send(resident, get_text(
         "web_notifications.binding_rejected", language=lang,
-        address=address, comment=comment,
+        address=address, comment=comment,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ))
 
 
 async def notify_binding_removed(resident: User, address: str) -> None:
     lang = _lang(resident)
     await _safe_send(resident, get_text(
-        "web_notifications.binding_removed", language=lang, address=address,
+        "web_notifications.binding_removed", language=lang, address=address,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ))
 
 
@@ -211,7 +211,7 @@ async def notify_documents_requested(
     # BUG-188 на API-пути: без кнопки житель не мог войти в загрузку.
     await _safe_send(resident, get_text(
         "web_notifications.documents_requested", language=lang,
-        documents=format_requested_documents(document_types, lang), comment=comment,
+        documents=format_requested_documents(document_types, lang), comment=comment,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ), reply_markup=_inline_button(
         get_text("onboarding.documents.btn_upload_inline", language=lang), UPLOAD_DOCUMENTS_CB,
     ))
@@ -231,7 +231,7 @@ async def notify_verification_rejected(resident: User, notes: str) -> None:
     # Переподача доступна только «чистому» жителю — остальным кнопку не даём.
     pure = not set(parse_roles_safe(resident.roles)) - PURE_APPLICANT_ROLES
     await _safe_send(resident, get_text(
-        "web_notifications.verification_rejected", language=lang, notes=notes,
+        "web_notifications.verification_rejected", language=lang, notes=notes,  # html-raw: _safe_send без parse_mode — обычный текст (докстринг модуля)
     ), reply_markup=_inline_button(
         get_text("verification_resubmit.btn", language=lang), RESUBMIT_CB) if pure else None)
 

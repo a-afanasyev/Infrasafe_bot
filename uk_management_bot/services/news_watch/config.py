@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 
 CONFIG_ROW_ID = 1
 _CONTEXT_MAX_LEN = 2000
+# A11-CODE-02/06: каждый источник — подписка реального Telegram-аккаунта, каждое
+# ключевое слово расширяет поток в платный LLM. Слово короче 3 символов как
+# подстрока совпадает почти с любым текстом.
+MAX_SOURCES = 30
+MAX_KEYWORDS = 100
+MIN_KEYWORD_LEN = 3
 _SOURCE_RE = re.compile(r"^(?:https?://)?(?:t\.me/|telegram\.me/)?@?([A-Za-z][A-Za-z0-9_]{3,31})/?$")
 
 DEFAULT_CONFIG: dict = {
@@ -47,7 +53,7 @@ def normalize_source_chat(raw: object) -> str:
     return "@" + match.group(1).lower()
 
 
-def _validate_sources(raw: object) -> list[dict]:
+def _validate_sources(raw: object, limits: bool) -> list[dict]:
     if raw is None:
         return []
     if not isinstance(raw, list):
@@ -68,10 +74,12 @@ def _validate_sources(raw: object) -> list[dict]:
             continue
         seen.add(chat)
         out.append({"chat": chat, "title": title.strip()[:255]})
+    if limits and len(out) > MAX_SOURCES:
+        raise ValueError(f"sources: не больше {MAX_SOURCES} источников, получено {len(out)}")
     return out
 
 
-def _validate_keywords(raw: object) -> list[str]:
+def _validate_keywords(raw: object, limits: bool) -> list[str]:
     if raw is None:
         return list(DEFAULT_CONFIG["keywords"])
     if not isinstance(raw, list):
@@ -81,13 +89,23 @@ def _validate_keywords(raw: object) -> list[str]:
         if not isinstance(word, str):
             raise ValueError(f"keywords[]: ожидается строка, получено {word!r}")
         lowered = word.strip().lower()
+        if limits and lowered and len(lowered) < MIN_KEYWORD_LEN:
+            raise ValueError(f"keywords[]: не короче {MIN_KEYWORD_LEN} символов, получено {word!r}")
         if lowered and lowered not in out:
             out.append(lowered)
+    if limits and len(out) > MAX_KEYWORDS:
+        raise ValueError(f"keywords: не больше {MAX_KEYWORDS} слов, получено {len(out)}")
     return out
 
 
-def validate_config(raw: dict) -> dict:
-    """Чистая валидация + нормализация; ValueError на невалидном поле."""
+def validate_config(raw: dict, *, limits: bool = True) -> dict:
+    """Чистая валидация + нормализация; ValueError на невалидном поле.
+
+    ``limits`` — лимиты A11 (источники ≤ MAX_SOURCES, слова ≤ MAX_KEYWORDS,
+    слово ≥ MIN_KEYWORD_LEN): строго при ЗАПИСИ; при чтении сохранённого
+    (``load_config``, схема ответа API) — без них, чтобы конфиг, сохранённый до
+    введения лимитов, не превращался молча в дефолт с пустыми источниками.
+    """
     if not isinstance(raw, dict):
         raise ValueError(f"config: ожидается dict, получено {type(raw).__name__}")
     unknown = sorted(set(raw) - set(DEFAULT_CONFIG))
@@ -120,9 +138,9 @@ def validate_config(raw: dict) -> dict:
             raise ValueError(f"broadcast.{key}: ожидается bool, получено {value!r}")
 
     return {
-        "sources": _validate_sources(raw.get("sources")),
+        "sources": _validate_sources(raw.get("sources"), limits),
         "complex_context": context,
-        "keywords": _validate_keywords(raw.get("keywords")),
+        "keywords": _validate_keywords(raw.get("keywords"), limits),
         "auto_publish": cfg["auto_publish"],
         "min_confidence": float(threshold),
         "broadcast": broadcast,
@@ -140,7 +158,7 @@ def load_config_sync(db: Session) -> dict:
     except (OperationalError, ProgrammingError) as e:
         logger.warning("news_watch_config недоступен, отдаю дефолт: %s", e)
     try:
-        return validate_config(data)
+        return validate_config(data, limits=False)
     except ValueError as e:
         logger.warning("news_watch_config.data не проходит валидацию, отдаю дефолт: %s", e)
         return validate_config(DEFAULT_CONFIG)
@@ -170,7 +188,7 @@ async def load_config(db: AsyncSession) -> dict:
     except (OperationalError, ProgrammingError) as e:
         logger.warning("news_watch_config недоступен, отдаю дефолт: %s", e)
     try:
-        return validate_config(data)
+        return validate_config(data, limits=False)
     except ValueError as e:
         logger.warning("news_watch_config.data не проходит валидацию, отдаю дефолт: %s", e)
         return validate_config(DEFAULT_CONFIG)
@@ -187,3 +205,60 @@ async def save_config(db: AsyncSession, data: dict, updated_by: int | None = Non
         row.updated_by = updated_by
     await db.commit()
     return validated
+
+
+async def update_config_audited(db: AsyncSession, data: dict, *, actor_id: int) -> tuple[dict, dict]:
+    """A11-CODE-05: сохранить из API — строка и ``audit_logs`` одной транзакцией → (before, after)."""
+    from uk_management_bot.services.config_audit import update_singleton_audited
+
+    return await update_singleton_audited(
+        db, NewsWatchConfig, data, validate=validate_config, defaults=DEFAULT_CONFIG,
+        actor_id=actor_id, action="news_watch_config_updated",
+    )
+
+
+# ───────────────────────── предполётная проверка (деплой) ─────────────────────────
+
+def check_stored_config_sync(db: Session) -> str | None:
+    """Совместим ли СОХРАНЁННЫЙ конфиг с текущими правилами валидации.
+
+    ``load_config`` при невалидных данных молча отдаёт дефолт (пустые источники,
+    выключенная автопубликация) — новые правила (A11: лимиты источников/слов)
+    без этой проверки тихо обнулили бы настройку на проде. None — совместим
+    (или строки ещё нет), иначе текст ошибки валидации.
+    """
+    row = db.query(NewsWatchConfig).filter(NewsWatchConfig.id == CONFIG_ROW_ID).first()
+    if row is None or not row.data:
+        return None
+    try:
+        validate_config(row.data)
+    except ValueError as e:
+        return str(e)
+    return None
+
+
+def main(argv: list[str] | None = None, *, session_factory=None) -> int:
+    """``python -m uk_management_bot.services.news_watch.config --check-stored`` → 0/1."""
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="news_watch.config")
+    parser.add_argument("--check-stored", action="store_true", required=True,
+                        help="проверить сохранённый news_watch_config новыми правилами")
+    parser.parse_args(argv)
+    if session_factory is None:
+        from uk_management_bot.database.session import SessionLocal
+
+        session_factory = SessionLocal
+    with session_factory() as db:
+        problem = check_stored_config_sync(db)
+    if problem:
+        logger.error("news_watch_config несовместим с новыми правилами: %s — деплой остановить, "
+                     "исправить конфиг в дашборде («Отключения»)", problem)
+        return 1
+    logger.info("news_watch_config: совместим")
+    return 0
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    raise SystemExit(main())

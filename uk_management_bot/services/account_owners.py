@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from dataclasses import dataclass
 from typing import Iterable, Literal
 
@@ -105,7 +104,7 @@ async def replace_owners(
     db.add(AuditLog(
         action="account_owners_imported",
         user_id=actor_id,
-        details=json.dumps({"total": len(owners), "skipped": skipped, "linked": linked}),
+        details={"total": len(owners), "skipped": skipped, "linked": linked},
     ))
     await db.commit()
     return ImportSummary(total=len(owners), skipped=skipped, linked=linked)

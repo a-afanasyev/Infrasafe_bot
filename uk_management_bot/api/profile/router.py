@@ -164,7 +164,7 @@ async def get_my_apartments(
             "apartment_number": apt.apartment_number,
             "building_address": bld_addr,
             "yard_name": yard_name,
-            "full_address": f"Квартира {apt.apartment_number}, {bld_addr}, ({yard_name})",
+            "full_address": f"Квартира {apt.apartment_number}, {bld_addr}, ({yard_name})",  # html-raw: JSON-ответ API, не Telegram
         }
         for apt, bld_addr, yard_name in rows
     ]

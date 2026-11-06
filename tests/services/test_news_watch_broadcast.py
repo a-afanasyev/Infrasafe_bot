@@ -51,10 +51,11 @@ async def ctx(el_async_factory, monkeypatch):
 
 async def _item(factory, **over) -> int:
     async with factory() as db:
-        item = NewsItem(source_chat_id=-1, source_message_id=over.pop("msg", 1), raw_text="raw",
-                        kind="power", summary_ru="нет света", summary_uz="chiroq yo'q",
+        fields = {"raw_text": "raw", "kind": "power", "summary_ru": "нет света",
+                  "summary_uz": "chiroq yo'q", **over}
+        item = NewsItem(source_chat_id=-1, source_message_id=fields.pop("msg", 1),
                         status=NEWS_STATUS_PUBLISHED, published_at=NOW,
-                        broadcast_status=over.pop("bs", BROADCAST_PENDING), **over)
+                        broadcast_status=fields.pop("bs", BROADCAST_PENDING), **fields)
         db.add(item)
         await db.commit()
         return item.id
@@ -220,3 +221,43 @@ async def test_heartbeat_moves_started_at_while_delivering(ctx):
     started = row.broadcast_started_at
     started = started if started.tzinfo else started.replace(tzinfo=timezone.utc)
     assert started > NOW  # захват пишет NOW (фикс. часы теста), heartbeat — реальное время
+
+
+# ───────────── A11-CODE-01: экранирование внешнего текста ─────────────
+
+
+class TextSender:
+    """Запоминает (текст, parse_mode) каждой отправки."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, object]] = []
+
+    async def __call__(self, chat_id, text, **kw):
+        self.calls.append((text, kw.get("parse_mode")))
+        return TelegramResult(STATUS_OK, 200)
+
+
+@pytest.mark.asyncio
+async def test_raw_text_of_foreign_channel_has_no_tags(ctx):
+    """Сырой текст канала (LLM не дал summary): HTML-теги вырезаны, «5<10» и «&» экранированы, разметка шаблона цела."""
+    factory = ctx
+    await _item(factory, raw_text="Отключение 5<10 & <b>жирно</b>", summary_ru=None, summary_uz=None)
+    sender = TextSender()
+    await _run(factory, sender)
+    text, mode = sender.calls[0]
+    assert mode == "HTML"
+    assert "Отключение 5&lt;10 &amp; жирно" in text
+    assert "<b>жирно</b>" not in text and "&lt;b&gt;" not in text
+    assert text.startswith("📢 <b>")  # <b> шаблона локали не экранирован
+
+
+@pytest.mark.asyncio
+async def test_llm_summary_cannot_inject_link(ctx):
+    factory = ctx
+    await _item(factory, summary_ru='Нет воды <a href="https://phish.example">тут</a>',
+                summary_uz="suv <i>yo'q</i>")
+    sender = TextSender()
+    await _run(factory, sender)
+    text = sender.calls[0][0]
+    assert "<a href" not in text and "phish.example" not in text
+    assert "Нет воды тут" in text and "suv yo&#x27;q" in text and "&lt;i&gt;" not in text

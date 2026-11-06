@@ -11,8 +11,10 @@ to in-memory.
 """
 import logging
 
-from fastapi import HTTPException
-from slowapi import Limiter
+from fastapi import HTTPException, Request
+from fastapi.responses import Response
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from uk_management_bot.api.rate_limit_keys import client_ip_key
 from uk_management_bot.config.settings import settings
@@ -101,3 +103,18 @@ def auth_ratelimit_guard() -> None:
             status_code=503,
             detail="Authentication temporarily unavailable (rate-limit backend degraded). Retry shortly.",
         )
+
+
+def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
+    """Стандартный 429 slowapi + ``Retry-After`` (RFC 6585), A11 EXT-11-07.
+
+    Значение — длина окна лимита в секундах: верхняя граница ожидания, клиенту
+    не нужно угадывать. ``headers_enabled`` у Limiter не включаем — тогда
+    slowapi требует параметр ``response`` у каждого эндпоинта.
+    """
+    response = _rate_limit_exceeded_handler(request, exc)
+    try:
+        response.headers["Retry-After"] = str(int(exc.limit.limit.get_expiry()))
+    except (AttributeError, TypeError, ValueError) as e:  # форма исключения slowapi сменилась
+        logger.warning("rate limit: Retry-After not computed: %s", type(e).__name__)
+    return response
