@@ -15,7 +15,7 @@ const TINT = (color: string, pct = 8) => `color-mix(in srgb, ${color} ${pct}%, v
 const TONE_STYLE: Record<ResidentTone, { background?: string; borderColor?: string }> = {
   botBlocked: { background: TINT('var(--red)'), borderColor: 'var(--red)' },
   incomplete: { borderColor: 'var(--red)' },
-  submitted: { background: TINT('var(--blue)') },
+  submitted: { background: TINT('var(--blue)', 18), borderColor: 'var(--blue)' }, // на 8% синий неотличим от белого
   pending: { background: TINT('var(--amber)', 14) }, // жёлтый на 8% теряется в тёмной теме
   default: {},
 }
