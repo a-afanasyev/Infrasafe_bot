@@ -133,8 +133,7 @@ ASSIGNMENT: dict[str, dict] = {
     # method=verified-2026-09-15 там, где запись/AC/метрика уточнены на этом снимке.
     # AUD7-COR-04 закрыт 2026-09-17 (PR #562): recompute_forward после upsert + range-lock у PUT/bulk/import.
     # AUD7-SEC-02 закрыт 2026-09-17 (PR #568).
-    "AUD7-SEC-03": A(pkg="AUD7-S2", status="actionable", method="owner-decision-2026-11-05",
-                       services="UK API / resource API", note="решение владельца 2026-11-05: session_ttl_seconds resource-сервиса 12 ч → 1 ч вместо синхронного отзыва"),
+    # AUD7-SEC-03 закрыт 2026-11-06: PR #707: TTL сессии resource 1 ч + повтор запроса после перевыпуска сессии.
     # AUD7-SEC-04 закрыт 2026-09-17 (PR #565).
     # AUD7-SEC-05 закрыт 2026-09-17 (PR #567).
     # AUD7-CODE-01 закрыт 2026-09-18 (PR #573).
@@ -341,7 +340,7 @@ ASSIGNMENT: dict[str, dict] = {
     # AUD8-SEC-03 закрыт 2026-09-19 (PR #590).
     # AUD8-SEC-04 закрыт 2026-09-19 (PR #590).
     # AUD8-ENG-01 закрыт 2026-09-19 (PR #590).
-    "AUD8-ENG-02": A(pkg="AUD8-E1", status="actionable", method="owner-decision-2026-11-05", note="решение владельца 2026-11-05: ШИФРОВАТЬ — кросс-бэкап profk↔105 держит копию БД соседа, то есть это внешний бэкап"),
+    # AUD8-ENG-02 закрыт 2026-11-06: копии у пира шифруются age в обе стороны (profk→105 с 2026-11-05, 105→profk с 2026-11-06), приватный ключ — Bitwarden владельца, репетиция расшифровки пройдена; открытые копии у пиров удалены; docs/ops/BACKUPS.md (#704, #708).
     # AUD8-ENG-03 закрыт 2026-09-19 (PR #593).
     # AUD8-CODE-01 закрыт 2026-09-19 (PR #591).
     # AUD8-CODE-02 закрыт 2026-09-19 (PR #591).
@@ -359,7 +358,7 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P3-35 закрыт 2026-09-24 (PR #635).
     # A9-P3-34 закрыт 2026-09-24 (PR #636).
     # A9-P3-39 снят (wontfix) 2026-11-05: решение владельца: media слушает только localhost, мелочи не окупаются.
-    "A9-P3-33": A(pkg="AUD9-W7", status="actionable", method="owner-decision-2026-11-05", services="media-service", note="сужено 2026-11-05: create_all перед SQL-файлами в run_migrations.py (новая площадка падает на 0001); переход на alembic не нужен"),
+    # A9-P3-33 закрыт 2026-11-06: PR #706 (сужено): run_migrations делает create_all до SQL-файлов, новая площадка не падает на 0001.
     # Аудит #10 (безопасность, 2026-10-23, docs/audit/2026-10-23-security-audit.md). Кодовые P3 и
     # A10-API-01 закрыты одним PR (A10-CODE-01); ниже — хосты, DNS, внешнее репо InfraSafe, M-пункты кода.
     # A10-HOST-01 закрыт 2026-10-24 (оба хоста, по авторизации владельца).
@@ -367,29 +366,29 @@ ASSIGNMENT: dict[str, dict] = {
     # A10-HOST-03 закрыт 2026-10-24 (daemon.json на 105, prune; диск 91→58 %).
     # A10-HOST-04 снят (wontfix) 2026-11-05: принятый риск: ротацию токена владелец отклонил 2026-10-24, история очищена.
     # A10-HOST-05 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (образы PG/WireGuard/Mosquitto/Alloy).
-    "A10-HOST-06": A(pkg="AUD10-HOST", status="actionable", method="owner-decision-2026-11-05", services="хост profk", note="решение 2026-11-05: убрать ключ из /root/.ssh/authorized_keys и PermitRootLogin yes в основном sshd_config; NOPASSWD sudo принять (deploy в группе docker)"),
+    "A10-HOST-06": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-11-06", services="хост profk", note="остаток на profk (2026-11-06): ключ в /root/.ssh/authorized_keys (1 строка) и строка PermitRootLogin yes в основном sshd_config (действующее значение no — drop-in 10-hardening.conf); NOPASSWD sudo принят"),
     "A10-HOST-07": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-11-05", services="compose, хосты", note="сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105"),
-    "A10-HOST-08": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="хосты", note="бэкапы .env* со старыми секретами, obs/secrets 644, profk-initdb.sql 644"),
-    "A10-HOST-09": A(pkg="AUD10-HOST", status="actionable", method="owner-decision-2026-11-05", services="хосты", note="сужено 2026-11-05: только journalmatch fail2ban (ssh.service); auditd не нужен"),
+    "A10-HOST-08": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-11-06", services="хосты", note="105 сделано (.env.bak в ~/quarantine-a11-20261105, каталог 700; secrets в каталоге 700); остаток — profk: 7 .env.bak* (/opt/uk ×4, /opt/infrasafe ×2, /home/infrasafe ×1) и судьба карантина на 105"),
+    # A10-HOST-09 закрыт 2026-11-06: fail2ban на обоих: override journalmatch _SYSTEMD_UNIT=ssh.service (штатный фильтр Debian 12 искал sshd.service — 0 банов за всё время); profk проверен тестовым входом.
     # A10-HOST-10 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (живой nginx.profk.conf в репо, .bak, 404 на dotfiles).
-    "A10-HOST-11": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-10-23", services="Doppler", note="ADMIN_PASSWORD на 105 — 16 символов (profk 64)"),
+    # A10-HOST-11 закрыт 2026-11-06: ADMIN_PASSWORD на 105 — 64 символа (проверено в контейнере api).
     # A10-EXT-01 закрыт 2026-10-24 (SPF -all + DMARC reject на infrasafe.uz, MX удалён).
     # A10-EXT-03 закрыт 2026-11-05: передано InfraSafe/asset-bot 2026-11-05 (CSP assets.profk.uz).
     # A10-FE-01 снят (wontfix) 2026-11-05: решение владельца: скрипт Telegram — доверенный корень, закреплён CSP; перенос рискует сломать TWA/регистрацию.
-    "A10-FE-03": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="public/board-config отдаёт анониму операционные поля — PublicBoardConfigOut"),
+    # A10-FE-03 закрыт 2026-11-06: PR #705: анонимный board-config без autopost/autopost_since/autopublish (PublicBoardConfigResponse), флаги — GET /work-reports/settings; PUT витрины подставляет их под FOR UPDATE.
     # A10-FE-05 закрыт 2026-11-05: уже в коде: ТВ-табло строит ссылку через ContactCard → botHandle(), ResidentBoardTv.tsx:122.
-    "A10-SAT-03": A(pkg="AUD10-CODE", status="deferred", method="owner-decision-2026-11-05", services="media-service, provisioning", note="2026-11-05: делать вместе с A9-P3-33 (media), отдельно не ценно"),
+    "A10-SAT-03": A(pkg="AUD10-CODE", status="deferred", method="owner-decision-2026-11-05", services="media-service, provisioning", note="2026-11-06: A9-P3-33 закрыт без alembic — SAT-03 отдельно (роль uk_media_app без DDL, DDL только в media-migrate); делать при следующей работе с media"),
     # A10-SAT-04 снят (wontfix) 2026-11-05: принятый риск: два внутренних клиента media в одной зоне доверия.
-    "A10-SAT-10": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-23", services="api, frontend", note="лицевой счёт в query-string — POST с телом, account не в URL страницы"),
-    "A10-INF-03": A(pkg="AUD10-CODE", status="actionable", method="owner-decision-2026-11-05", services="compose", note="сужено 2026-11-05: только cap_drop: [ALL] для Python-сервисов + расширить test_a10_compose_hardening; read_only/pids_limit не делать"),
+    # A10-SAT-10 закрыт 2026-11-06: PR #705: POST /payment-control/account (GET → 405), номер в state истории, не в URL.
+    # A10-INF-03 закрыт 2026-11-06: PR #706 (сужено): cap_drop: [ALL] у app/api/access-api/media/resource-*/group-intake, гейт test_python_services_drop_all_capabilities; на обоих продах HostConfig.CapDrop=[ALL].
     # A10-INF-08 снят (wontfix) 2026-11-05: принятый риск: argv Redis видит только тот, у кого уже root/docker на хосте.
-    "A10-INF-09": A(pkg="AUD10-HOST", status="actionable", method="found-2026-10-23", services="рабочая машина", note="env.copy*/.env.bak.pr7 на диске; подтвердить плейсхолдеры microservices/* в истории"),
+    # A10-INF-09 закрыт 2026-11-06: env.copy/env.copy.dev/.env.bak.pr7 удалены (rm -P, 2026-11-05); microservices/*/.env* в истории — только плейсхолдеры и dev-шаблоны (хосты docker-контейнеров/localhost), прод-секреты ротированы 2026-05-30.
     # Этап 2 аудита #10 (2026-10-24, раздел 8 отчёта): A10-INT-01…09 закрыты одним PR.
     # A10-INT-10 снят (wontfix) 2026-11-05: решение владельца: смена статуса лифта исполнителем/инженером — рабочий сценарий, ФИО заявителей исполнитель и так видит.
     # A10-INT-11 снят (wontfix) 2026-11-05: решение владельца: жалоба от неодобренного жителя ничего не раскрывает, лимит 10/мин.
     # A10-INT-12 снят (wontfix) 2026-11-05: решение владельца: фото заявки видно жильцу той же квартиры — так задумано.
-    "A10-INT-13": A(pkg="AUD10-CODE", status="actionable", method="found-2026-10-24", services="bot", note="same-status notes-append без проверки актора — удалить ветку"),
-    "A10-INT-14": A(pkg="AUD10-CODE", status="actionable", method="owner-decision-2026-11-05", services="bot", note="сужено 2026-11-05: только notify_superadmins при assign_role(manager) в боте; mgr_delete_/pending-исполнитель не делать"),
+    # A10-INT-13 закрыт 2026-11-06: PR #705: ветка notes-append без проверки актора удалена.
+    # A10-INT-14 закрыт 2026-11-06: PR #705 (сужено): выдача manager в боте уведомляет суперадминов, имена экранированы, тест.
     # A10-INT-15 закрыт 2026-11-05: тест есть: test_registration_applicant.py::test_applicant_privileged_pending_rejected_403.
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).
@@ -423,9 +422,9 @@ ASSIGNMENT: dict[str, dict] = {
     # A9-P2-21 закрыт 2026-09-23 (PR #619).
     # A9-P2-22 закрыт 2026-09-23 (PR #613).
     # A9-P2-23 закрыт 2026-09-23 (PR #612).
-    "A9-P2-24": A(pkg="AUD9-W8", status="actionable", method="audit9-2026-09-22", services="media-service, bot", note="Чистка media_service: SDK и то, чем не пользуются ни код, ни владелец (поиск — оставить)"),
+    # A9-P2-24 закрыт 2026-11-06: PR #706 (суженный объём ревью 2026-09-28): SDK, дубли БД, /similar, health /database|/telegram|/live, 9 методов бот-клиента, redis/том у media; поиск оставлен.
     # A9-P2-25 закрыт 2026-09-23 (PR #612).
-    "A9-P2-26": A(pkg="AUD9-W8", status="actionable", method="owner-decision-2026-11-05", services="bot, БД", note="решение владельца 2026-11-05: только спрятать кнопку «Права доступа» (карточка всегда пустая); таблицу и код не удалять"),
+    # A9-P2-26 закрыт 2026-11-06: PR #705 по решению владельца: кнопка «Права доступа» скрыта, фича/таблица остаются.
     # A9-P2-27 закрыт 2026-09-23 (PR #630).
     # A9-P2-28 закрыт 2026-09-23 (PR #612).
     # A9-P2-29 закрыт 2026-09-23 (PR #609).
