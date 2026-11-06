@@ -60,11 +60,11 @@ doppler run --project uk-management --config <profk|infrasafe> -- true && echo "
 
 На infrasafe/105 все три `-f` обязательны в КАЖДОЙ команде: `docker-compose.media.yml` подключает media-service, `docker-compose.infrasafe.yml` разводит сети (A11 HOST-11-05: БД, бот, media, resource-worker, tools-джобы — только `uk-internal`; edge InfraSafe в `uk-network` до БД не достаёт). ⚠️ Без `infrasafe.yml` пересоздание вернёт сервис в одну `uk-network`, и api/бот/media потеряют БД (healthcheck `--wait` упадёт). obs-экспортёры (`~/obs/compose.yml`) подключены к `uk-internal` как external.
 
-**Разовый переход 105 на `uk-internal` (2026-11-07, PR #714) — порядок обязателен:** сначала БД, потом клиенты. Наоборот бот/media (только `uk-internal`) поднимутся без БД и `--wait` упадёт.
+**Разовый переход 105 на `uk-internal` (2026-11-07, PR #714) — порядок обязателен:** сначала БД, потом клиенты. Наоборот бот/media (только `uk-internal`) поднимутся без БД и `--wait` упадёт; media — до app, иначе бот стартует с «Media Service: Name or service not known».
 ```bash
 export DEPLOY_UID=$(id -u) DEPLOY_GID=$(id -g); C="docker compose -f docker-compose.yml -f docker-compose.media.yml -f docker-compose.infrasafe.yml"
 doppler run --project uk-management --config infrasafe -- $C up -d --no-deps --no-build --wait postgres redis resource-postgres
-for s in api access-api app media-service resource-api resource-worker; do doppler run --project uk-management --config infrasafe -- $C up -d --no-deps --no-build --wait --wait-timeout 120 $s; done
+for s in api access-api media-service app resource-api resource-worker; do doppler run --project uk-management --config infrasafe -- $C up -d --no-deps --no-build --wait --wait-timeout 120 $s; done
 # затем ~/obs/compose.yml: uk-экспортёры → external-сеть `uk-internal`, `docker compose up -d` трёх экспортёров
 ```
 
