@@ -9,7 +9,7 @@
 #
 # Набор файлов (порядок важен, этот файл — последним; канон — таблица
 # «Площадка → COMPOSE» в .claude/skills/uk-deploy/SKILL.md):
-#   -f docker-compose.yml -f docker-compose.media.yml -f docker-compose.registry.infrasafe.yml
+#   -f docker-compose.yml -f docker-compose.media.yml -f docker-compose.infrasafe.yml -f docker-compose.registry.infrasafe.yml
 #
 # UK_IMAGE_SHA — ПОЛНЫЙ 40-символьный SHA коммита, из которого CI собрал образы;
 # на хосте = коммит рабочей копии: `export UK_IMAGE_SHA=$(git rev-parse HEAD)`.
