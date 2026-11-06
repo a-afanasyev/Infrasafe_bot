@@ -20,6 +20,8 @@ def _env(monkeypatch):
     monkeypatch.setattr(eb, "_before_actor", AsyncMock(return_value=("ru", 41)))
     monkeypatch.setattr(eb, "_session_factory", lambda: "factory")
     monkeypatch.setattr(eb, "_download", AsyncMock(side_effect=lambda bot, fid: f"bytes-{fid}".encode()))
+    # Права по умолчанию есть; отказ — в тестах A11-CODE-09 ниже.
+    monkeypatch.setattr(eb, "check_before_access", AsyncMock(return_value=None))
 
 
 class FakeState:
@@ -128,3 +130,60 @@ async def test_done_for_other_request_than_collected_is_ignored(monkeypatch):
     await eb.executor_before_done(_callback(f"executor_before_done_{NUMBER}"), state)
     upload.assert_not_awaited()
     assert state.data["before_media"]  # чужой «Готово» не сбрасывает сбор
+
+
+# ───────────── A11-CODE-09: права — до входа в FSM и перед скачиванием ─────────────
+
+
+@pytest.mark.asyncio
+async def test_start_without_access_does_not_enter_fsm(monkeypatch):
+    monkeypatch.setattr(eb, "check_before_access", AsyncMock(side_effect=CompletionRefused("not_assigned", 403)))
+    state = FakeState()
+    cb = _callback(f"executor_before_{NUMBER}")
+    await eb.executor_before_start(cb, state)
+    assert state.state is None and state.data == {}
+    cb.message.answer.assert_not_awaited()
+    assert cb.answer.await_args.kwargs.get("show_alert") is True
+    assert cb.answer.await_args.args[0] == "Это не ваша заявка"
+
+
+@pytest.mark.asyncio
+async def test_start_for_unknown_user_does_not_enter_fsm(monkeypatch):
+    monkeypatch.setattr(eb, "_before_actor", AsyncMock(return_value=("ru", None)))
+    state = FakeState()
+    await eb.executor_before_start(_callback(f"executor_before_{NUMBER}"), state)
+    assert state.state is None
+    eb.check_before_access.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reassigned_between_photos_and_done_downloads_nothing(monkeypatch):
+    """Вошёл законно → прислал фото → заявку переназначили → «Готово»: файлы не скачиваются."""
+    upload = AsyncMock()
+    monkeypatch.setattr(eb, "upload_before_photo", upload)
+    state = FakeState()
+    await eb.executor_before_start(_callback(f"executor_before_{NUMBER}"), state)
+    assert state.state == eb.ExecutorBeforeStates.waiting_before_media
+    for i in (1, 2):
+        await eb.executor_before_collect(_photo_message(f"f{i}", f"u{i}", i), state)
+
+    eb.check_before_access.side_effect = CompletionRefused("not_assigned", 403)  # переназначили
+    done = _callback(f"executor_before_done_{NUMBER}")
+    await eb.executor_before_done(done, state)
+
+    eb._download.assert_not_awaited()
+    upload.assert_not_awaited()
+    assert done.message.answer.await_args.args[0] == "Это не ваша заявка"
+    assert state.data == {}
+
+
+@pytest.mark.asyncio
+async def test_access_check_crash_answers_with_generic_error(monkeypatch):
+    """Сбой БД при проверке прав — короткая общая фраза, кнопка не «висит», FSM не включён."""
+    monkeypatch.setattr(eb, "check_before_access", AsyncMock(side_effect=RuntimeError("db down")))
+    state = FakeState()
+    cb = _callback(f"executor_before_{NUMBER}")
+    await eb.executor_before_start(cb, state)
+    assert state.state is None
+    cb.answer.assert_awaited_once()
+    assert cb.answer.await_args.kwargs.get("show_alert") is True

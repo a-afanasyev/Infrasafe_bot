@@ -26,7 +26,9 @@ class NewsWatchConfigData(BaseModel):
 
     @model_validator(mode="after")
     def _validate_via_shared_rules(self) -> "NewsWatchConfigData":
-        validate_config(self.model_dump())
+        # Структурные правила; лимиты A11 — строго при записи (update_config_audited),
+        # иначе ответ GET падал бы на конфиге, сохранённом до введения лимитов.
+        validate_config(self.model_dump(), limits=False)
         return self
 
 

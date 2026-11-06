@@ -55,7 +55,7 @@ async def get_announcements(request: Request, db=Depends(get_db), lang: str = "r
     emergency = loc(cfg.contacts.emergency)
     parts: list[str] = []
     if phone:
-        parts.append(f"{label}: {phone}")
+        parts.append(f"{label}: {phone}")  # html-raw: JSON-ответ API, не Telegram
     if emergency:
         parts.append(emergency)
     if parts:

@@ -220,15 +220,23 @@ return c
 """
 
 
+async def window_allowed(key: str, limit: int, window: int = _LLM_WINDOW) -> bool:
+    """Оконный лимит (атомарный INCR + TTL): не больше ``limit`` за ``window`` секунд.
+
+    Общий для LLM-бюджетов (Group Intake — на группу, news-watch — глобальный).
+    Любая ошибка Redis → ``False`` (fail-closed: платный вызов не делаем).
+    """
+    try:
+        count = await _get_client().eval(_LLM_INCR_LUA, 1, key, window)
+        return int(count) <= limit
+    except Exception as e:
+        logger.warning("llm budget %s: redis failed: %s", key.split(":")[0], type(e).__name__)
+        return False
+
+
 async def llm_allowed(chat_id: int) -> bool:
     """Лимит LLM-вызовов на группу в минуту (атомарный INCR + окно)."""
-    key = f"gint:llm:{chat_id}"
-    try:
-        count = await _get_client().eval(_LLM_INCR_LUA, 1, key, _LLM_WINDOW)
-        return int(count) <= settings.GROUP_INTAKE_LLM_PER_MINUTE
-    except Exception as e:
-        logger.warning("group_intake: llm_allowed failed: %s", type(e).__name__)
-        return False
+    return await window_allowed(f"gint:llm:{chat_id}", settings.GROUP_INTAKE_LLM_PER_MINUTE)
 
 
 async def invite_allowed(telegram_id: int) -> bool:

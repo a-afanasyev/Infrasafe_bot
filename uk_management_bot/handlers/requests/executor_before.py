@@ -23,7 +23,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from uk_management_bot.services.executor_before_photo import BEFORE_PHOTO_LIMIT, upload_before_photo
+from uk_management_bot.services.executor_before_photo import (
+    BEFORE_PHOTO_LIMIT,
+    check_before_access,
+    upload_before_photo,
+)
 from uk_management_bot.services.executor_completion import COMPLETION_PHOTO_MAX_BYTES, CompletionRefused
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 from uk_management_bot.utils.fsm_media import append_fsm_media
@@ -106,7 +110,13 @@ async def executor_before_start(callback: CallbackQuery, state: FSMContext):
     if request_number is None:
         await callback.answer()
         return
-    lang, _ = await _before_actor(callback.from_user.id)
+    lang, user_id = await _before_actor(callback.from_user.id)
+    # A11-CODE-09: callback_data шлёт клиент — права до входа в FSM, иначе бот
+    # принимал бы и скачивал фото человека, который к заявке не относится.
+    refusal = "not_assigned" if user_id is None else await _access_refusal(request_number, user_id)
+    if refusal is not None:
+        await callback.answer(get_text(refusal_key(refusal), language=lang), show_alert=True)
+        return
     await state.set_state(ExecutorBeforeStates.waiting_before_media)
     await state.update_data(before_request_number=request_number, **{_FSM_KEY: []})
     await callback.message.answer(
@@ -145,6 +155,18 @@ async def _download(bot: Bot, file_id: str) -> Optional[bytes]:
     return data if 0 < len(data) <= COMPLETION_PHOTO_MAX_BYTES else None
 
 
+async def _access_refusal(request_number: str, user_id: int) -> Optional[str]:
+    """Код отказа ``check_before_access`` или None, если доступ есть."""
+    try:
+        await check_before_access(_session_factory(), request_number, user_id)
+    except CompletionRefused as exc:
+        return exc.code
+    except Exception as exc:  # noqa: BLE001 — БД/сеть: отказ с общей фразой, не «часики» на кнопке
+        logger.warning("executor_before: проверка прав не выполнена: %s", type(exc).__name__)
+        return "check_failed"
+    return None
+
+
 def _session_factory():
     from uk_management_bot.database.session import AsyncSessionLocal
 
@@ -165,6 +187,13 @@ async def executor_before_done(callback: CallbackQuery, state: FSMContext):
 
     sent = 0
     errors: list[str] = []
+    # A11-CODE-09: между входом и «Готово» заявку могли закрыть или переназначить —
+    # перепроверка ДО скачивания (сервис проверяет ещё раз при загрузке).
+    if user_id is not None and items:
+        refusal = await _access_refusal(request_number, user_id)
+        if refusal is not None:
+            errors.append(refusal_key(refusal))
+            items = []
     for item in items:
         if user_id is None:
             errors.append(refusal_key("not_assigned"))

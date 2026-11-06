@@ -96,3 +96,17 @@ def test_env_example_does_not_carry_superuser_credentials():
     text = (ROOT / ".env.example").read_text(encoding="utf-8")
     offenders = re.findall(r"^(POSTGRES_PASSWORD|DATABASE_URL)=", text, re.M)
     assert offenders == [], offenders
+
+
+def test_postgres_healthchecks_name_database():
+    """A11 HOST-11-11: pg_isready без -d стучится в БД с именем пользователя —
+    на resource-postgres это 25 тыс. «FATAL: database "resource" does not exist»
+    за трое суток, в которых тонут настоящие ошибки аутентификации."""
+    offenders = []
+    for name in COMPOSE_FILES:
+        for svc, cfg in (_services(name) or {}).items():
+            test = (cfg or {}).get("healthcheck", {}).get("test") or []
+            cmd = " ".join(test) if isinstance(test, list) else str(test)
+            if "pg_isready" in cmd and " -d " not in cmd:
+                offenders.append(f"{name}:{svc}")
+    assert offenders == []

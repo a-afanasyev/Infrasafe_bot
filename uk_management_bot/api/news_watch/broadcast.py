@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
@@ -55,12 +56,15 @@ def _backoff(attempts: int) -> timedelta:
 
 
 def _render(item: NewsItem) -> str:
-    from uk_management_bot.services.news_watch.pipeline import kind_title
+    from uk_management_bot.services.news_watch.pipeline import kind_title, strip_tags
     from uk_management_bot.utils.helpers import get_text
 
+    # A11-CODE-01: summary (ответ LLM) и raw_text (текст чужого канала) — внешний
+    # ввод → теги вырезаны + html.escape; разметка шаблона локали и kind_title — наши.
     parts = [
         get_text("news_watch.broadcast", language=lang, title=kind_title(item.kind, lang),
-                 text=(item.summary_ru if lang == "ru" else item.summary_uz) or item.raw_text[:500])
+                 text=html.escape(strip_tags(
+                     (item.summary_ru if lang == "ru" else item.summary_uz) or item.raw_text[:500])))
         for lang in ("ru", "uz")
     ]
     return "\n\n".join(parts)

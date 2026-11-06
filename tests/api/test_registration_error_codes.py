@@ -99,6 +99,7 @@ async def test_error_code_header_exposed_via_cors(client, db_session):
     assert r.status_code == 409
     exposed = [h.strip().lower() for h in r.headers.get("access-control-expose-headers", "").split(",")]
     assert "x-error-code" in exposed
+    assert "retry-after" in exposed  # A11 EXT-11-07: дашборд должен видеть, сколько ждать после 429
 
 
 @pytest.mark.asyncio

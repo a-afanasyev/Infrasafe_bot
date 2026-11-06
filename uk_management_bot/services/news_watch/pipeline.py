@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -39,6 +40,7 @@ from uk_management_bot.database.models.news_item import (
 )
 from uk_management_bot.services.llm.client import llm_json_async
 from uk_management_bot.services.news_watch.config import load_config
+from uk_management_bot.services.news_watch.limiter import news_watch_llm_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +162,7 @@ async def classify_async(text: str, complex_context: str, instructions: str = ""
         timeout=settings.NEWS_WATCH_LLM_TIMEOUT,
         max_tokens=_MAX_TOKENS,
         effort=settings.AI_MANAGER_EFFORT,
+        retry_allowed=news_watch_llm_allowed,  # повтор — тоже платный вызов, из того же бюджета
         tag="news_watch",
     )
     return _parse_verdict(payload) if payload is not None else None
@@ -193,7 +196,14 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
         posted_at=inbound.posted_at, status=NEWS_STATUS_IGNORED, broadcast_status=BROADCAST_NONE,
     )
     if prefilter(inbound.text, cfg["keywords"]):
-        verdict = await classify_async(inbound.text, cfg["complex_context"], await _news_instructions(db))
+        if await news_watch_llm_allowed():
+            verdict = await classify_async(inbound.text, cfg["complex_context"], await _news_instructions(db))
+        else:
+            # A11-CODE-02: бюджет исчерпан или Redis недоступен — LLM не зовём,
+            # новость не теряется: pending без вердикта, решает человек.
+            logger.warning("news_watch: llm budget exhausted, item from %s left for manager",
+                           inbound.source_chat_id)
+            verdict = None
         if verdict is None:
             item.status = NEWS_STATUS_PENDING  # LLM недоступен — решает человек
         else:
@@ -219,6 +229,15 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
 # ───────────── публикация ─────────────
 
 
+# Тег = «<» + буква, «/» или «!»: «5<10» и «a < b» тегами не считаются.
+_TAG_RE = re.compile(r"<[/!A-Za-z][^<>]*>")
+
+
+def strip_tags(text: str) -> str:
+    """Текст новости для Telegram без HTML-тегов (экранирование — в точке вывода)."""
+    return _TAG_RE.sub("", text)
+
+
 def kind_title(kind: Optional[str], lang: str) -> str:
     from uk_management_bot.utils.helpers import get_text
 
@@ -233,8 +252,8 @@ def announcement_from(item: NewsItem) -> dict:
         "icon": _ICONS.get(item.kind or "other", "📢"),
         "important": True,
         "title": {"ru": kind_title(item.kind, "ru"), "uz": kind_title(item.kind, "uz")},
-        "text": {"ru": item.summary_ru or item.raw_text[:_SUMMARY_LIMIT],
-                 "uz": item.summary_uz or item.raw_text[:_SUMMARY_LIMIT]},
+        "text": {"ru": strip_tags(item.summary_ru or item.raw_text[:_SUMMARY_LIMIT]),
+                 "uz": strip_tags(item.summary_uz or item.raw_text[:_SUMMARY_LIMIT])},
         "published_at": published.replace(tzinfo=None).isoformat(timespec="seconds"),
     }
 

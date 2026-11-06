@@ -111,7 +111,7 @@ async def create_call_center_request(
 
     notes = None
     if body.caller_name or body.caller_phone:
-        notes = f"Звонок: {body.caller_name or ''} {body.caller_phone or ''}".strip()
+        notes = f"Звонок: {body.caller_name or ''} {body.caller_phone or ''}".strip()  # html-raw: пишется в notes заявки (БД), экранируется в точке вывода
 
     try:
         persisted = await service.persist_call_center_request(

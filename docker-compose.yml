@@ -251,6 +251,8 @@ services:
       # сервисный токен — для inbox юзербота.
       - NEWS_WATCH_ENABLED=${NEWS_WATCH_ENABLED:-false}
       - NEWS_WATCH_SERVICE_TOKEN=${NEWS_WATCH_SERVICE_TOKEN:-}
+      - NEWS_WATCH_LLM_PER_MINUTE=${NEWS_WATCH_LLM_PER_MINUTE:-20}
+      - NEWS_WATCH_NOTIFY_PER_MINUTE=${NEWS_WATCH_NOTIFY_PER_MINUTE:-5}
       - NEWS_WATCH_MODEL=${NEWS_WATCH_MODEL:-claude-sonnet-5-5}
       - NEWS_WATCH_LLM_TIMEOUT=${NEWS_WATCH_LLM_TIMEOUT:-8}
       # DARK-гейт визуального модуля «Отчёты о работах»: гейтит manager+public API
@@ -636,7 +638,7 @@ services:
     networks:
       - uk-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 10

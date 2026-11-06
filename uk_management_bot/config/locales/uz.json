@@ -2980,6 +2980,7 @@
     },
     "pending_title": "📰 <b>O'chirish haqidagi yangilik tasdiqlashni kutmoqda</b>",
     "pending_body": "{kind}: {summary}\nManba: {source}. Chop etish — dashboardda, «O'chirishlar» bo'limi.",
+    "pending_overflow": "📰 Hozir o'chirishlar haqidagi yangiliklar odatdagidan ko'p — alohida bildirishnomalar bir daqiqaga to'xtatildi. Barcha yangiliklar dashboardda, «O'chirishlar» bo'limida tasdiqlashni kutmoqda.",
     "broadcast": "📢 <b>{title}</b>\n{text}"
   },
   "executor_before": {

@@ -389,6 +389,12 @@ ASSIGNMENT: dict[str, dict] = {
     # A10-INT-12 снят (wontfix) 2026-11-05: решение владельца: фото заявки видно жильцу той же квартиры — так задумано.
     # A10-INT-13 закрыт 2026-11-06: PR #705: ветка notes-append без проверки актора удалена.
     # A10-INT-14 закрыт 2026-11-06: PR #705 (сужено): выдача manager в боте уведомляет суперадминов, имена экранированы, тест.
+    # Аудит #11 (2026-11-05, площадка infrasafe.uz). A11-CODE-01 закрыт PR фазы 2.
+    "A11-CODE-02": A(pkg="AUD11-CODE", status="actionable", method="review-2026-11-06", services="api", note="рассылка news-watch: постоянные ошибки доставки → done вместо failed"),
+    "A11-HOST-02": A(pkg="AUD11-HOST", status="no-pr", method="host-2026-11-05", services="хост 105", note="shred карантина ≥2026-11-06; решения по archive-adhoc, ~/pgsql, висячим томам"),
+    "A11-EXT-01": A(pkg="AUD11-EXT", status="actionable", method="audit11-2026-11-05", services="InfraSafe compose/edge/app", note="внешнее репо; HOST-11-02 env postgres, N-04 origin, мелочи edge (фаза 4)"),
+    "A11-DNS-01": A(pkg="AUD11-HOST", status="no-pr", method="ext-2026-11-05", services="DNS", note="www → Wix без серта при HSTS includeSubDomains; fountain/mail висячие"),
+    "A11-DEC-01": A(pkg="AUD11-CODE", status="decision", method="audit11-2026-11-05", services="api, InfraSafe", note="auto_publish, сверка source_chat_id, ПДн в промпте, TELEMETRY_HMAC_SECRET"),
     # A10-INT-15 закрыт 2026-11-05: тест есть: test_registration_applicant.py::test_applicant_privileged_pending_rejected_403.
     # A9-P3-32 закрыт 2026-09-23 (PR #621).
     # A9-P3-31 закрыт 2026-09-23 (PR #626).

@@ -85,7 +85,7 @@ class TelegramResult:
         """Безопасное для лога описание (без URL и токена)."""
         if self.http_status is None:
             return self.description or self.status
-        return f"HTTP {self.http_status} ({self.description})"
+        return f"HTTP {self.http_status} ({self.description})"  # html-raw: строка для лога
 
 
 class TelegramUnavailable(Exception):

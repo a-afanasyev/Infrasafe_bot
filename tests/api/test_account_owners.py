@@ -127,3 +127,14 @@ async def test_owner_in_moderation_and_resident_card(
     for user_id, check in expected.items():
         card = (await client.get(f"/api/v2/residents/{user_id}")).json()
         assert card["apartments"][0]["owner_check"] == check
+
+
+async def test_import_audit_details_is_object_without_names(client: AsyncClient, db_session: AsyncSession, flat):
+    """A11-CODE-10: details — JSON-объект (как во всём аудите), а не строка с JSON; ФИО не пишем."""
+    from uk_management_bot.database.models.audit import AuditLog
+
+    r = await client.post(f"{BASE}/import", files=_upload(SAMPLE))
+    assert r.status_code == 200, r.text
+    row = (await db_session.execute(
+        select(AuditLog).where(AuditLog.action == "account_owners_imported"))).scalars().one()
+    assert row.details == {"total": 2, "skipped": 1, "linked": 1}

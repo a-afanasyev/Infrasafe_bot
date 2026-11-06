@@ -31,6 +31,12 @@ from uk_management_bot.services.news_watch.pipeline import Inbound
 NOW = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
 
 
+@pytest.fixture(autouse=True)
+def _llm_budget(monkeypatch):
+    """Бюджет LLM не исчерпан. Гарантии лимитера (Redis) — tests/services/test_news_watch_limiter.py."""
+    monkeypatch.setattr(pipeline, "news_watch_llm_allowed", AsyncMock(return_value=True))
+
+
 def _inbound(text="Плановое отключение электроэнергии 29.10 с 10:00 до 16:00 по ул. Тестовая 1-15",
              msg_id=1, chat_id=-1001, title="Электросети"):
     return Inbound(source_chat_id=chat_id, source_message_id=msg_id, chat_title=title,
@@ -168,6 +174,20 @@ async def test_auto_publish_appends_announcement_and_queues_broadcast(ctx, monke
 
 
 @pytest.mark.asyncio
+async def test_board_announcement_has_no_html_tags(ctx, monkeypatch):
+    factory, notify = ctx
+    _llm(monkeypatch, _verdict(summary_ru='Нет <b>света</b> 5<10 <a href="https://x.example">тут</a>',
+                               summary_uz="chiroq <i>yo'q</i>"))
+    async with factory() as db:
+        await save_config(db, {**DEFAULT_CONFIG, "auto_publish": True, "min_confidence": 0.8})
+        item, _ = await pipeline.ingest(db, _inbound())
+    async with factory() as db:
+        anns = (await db.execute(select(BoardConfig))).scalar_one().data["announcements"]
+    [ann] = [a for a in anns if a["id"] == f"news-{item.id}"]
+    assert ann["text"] == {"ru": "Нет света 5<10 тут", "uz": "chiroq yo'q"}
+
+
+@pytest.mark.asyncio
 async def test_auto_publish_below_threshold_stays_pending(ctx, monkeypatch):
     factory, _ = ctx
     _llm(monkeypatch, _verdict(confidence=0.5))
@@ -251,3 +271,15 @@ async def test_news_instructions_from_auto_manager_config_in_prompt(ctx, monkeyp
         await pipeline.ingest(db, _inbound())
     assert "Правила управляющей компании" in calls[0]["system"] and "7-й корпус" in calls[0]["system"]
     assert "ЖК Тест" in calls[0]["system"]   # описание комплекса остаётся отдельно
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ('Нет <b>воды</b> <a href="https://x.example">тут</a>', "Нет воды тут"),
+    ("давление 5<10 и a < b > c", "давление 5<10 и a < b > c"),  # сравнения — не теги
+    ("<!-- c --><br/>строка</p>", "строка"),
+    ("без тегов & amp", "без тегов & amp"),
+])
+def test_strip_tags(raw, expected):
+    from uk_management_bot.services.news_watch.pipeline import strip_tags
+
+    assert strip_tags(raw) == expected

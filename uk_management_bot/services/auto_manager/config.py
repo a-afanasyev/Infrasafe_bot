@@ -412,3 +412,13 @@ async def save_config(db: AsyncSession, data: dict, updated_by: int | None = Non
     await db.commit()
 
     return validated
+
+
+async def update_config_audited(db: AsyncSession, data: dict, *, actor_id: int) -> tuple[dict, dict]:
+    """A11-CODE-05: сохранить из API — строка и ``audit_logs`` одной транзакцией → (before, after)."""
+    from uk_management_bot.services.config_audit import update_singleton_audited
+
+    return await update_singleton_audited(
+        db, AutoManagerConfig, data, validate=validate_config, defaults=DEFAULT_CONFIG,
+        actor_id=actor_id, action="auto_manager_config_updated",
+    )

@@ -18,14 +18,16 @@
 
 ## Агрегаты
 
-- пунктов всего (с Priority): **614**
-- закрыто маркером: **610**
-- открыто маркером: **4**
+- пунктов всего (с Priority): **620**
+- закрыто маркером: **611**
+- открыто маркером: **9**
 
-  - `actionable` — **2**
+  - `actionable` — **4**
+  - `decision` — **1**
+  - `no-pr` — **2**
   - `deferred` — **2**
 
-Из них actionable по приоритету: P3=2.
+Из них actionable по приоритету: P2=1, P3=3.
 
 Значения `status`:
 
@@ -51,6 +53,11 @@
 | `A10-HOST-06` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хост profk | — | остаток на profk (2026-11-06): ключ в /root/.ssh/authorized_keys (1 строка) и строка PermitRootLogin yes в основном sshd_config (действующее значение no — drop-in 10-hardening.conf); NOPASSWD sudo принят |
 | `A10-HOST-07` | P3 | deferred | owner-decision-2026-11-05 | AUD10-HOST | — | compose, хосты | — | сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105 |
 | `A10-HOST-08` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хосты | — | 105 сделано (.env.bak в ~/quarantine-a11-20261105, каталог 700; secrets в каталоге 700); остаток — profk: 7 .env.bak* (/opt/uk ×4, /opt/infrasafe ×2, /home/infrasafe ×1) и судьба карантина на 105 |
+| `A11-CODE-02` | P3 | actionable | review-2026-11-06 | AUD11-CODE | — | api | — | рассылка news-watch: постоянные ошибки доставки → done вместо failed |
+| `A11-DEC-01` | P3 | decision | audit11-2026-11-05 | AUD11-CODE | — | api, InfraSafe | — | auto_publish, сверка source_chat_id, ПДн в промпте, TELEMETRY_HMAC_SECRET |
+| `A11-EXT-01` | P2 | actionable | audit11-2026-11-05 | AUD11-EXT | — | InfraSafe compose/edge/app | — | внешнее репо; HOST-11-02 env postgres, N-04 origin, мелочи edge (фаза 4) |
+| `A11-DNS-01` | P3 | no-pr | ext-2026-11-05 | AUD11-HOST | — | DNS | — | www → Wix без серта при HSTS includeSubDomains; fountain/mail висячие |
+| `A11-HOST-02` | P3 | no-pr | host-2026-11-05 | AUD11-HOST | — | хост 105 | — | shred карантина ≥2026-11-06; решения по archive-adhoc, ~/pgsql, висячим томам |
 
 ## Спорные пункты, разведённые явно
 
