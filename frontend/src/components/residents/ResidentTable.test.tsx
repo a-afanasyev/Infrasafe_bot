@@ -4,6 +4,12 @@ import ResidentTable from './ResidentTable'
 import { apiClient } from '../../api/client'
 import type { ResidentListItem } from '../../types/api'
 
+const navigate = vi.fn()
+vi.mock('react-router', async importOriginal => ({
+  ...(await importOriginal<typeof import('react-router')>()),
+  useNavigate: () => navigate,
+}))
+
 /**
  * Табличный вид «Жителей» (2026-11-06): строки окрашены как карточки,
  * под ФИО — те же кнопки «Запросить номер» / «Видео о регистрации».
@@ -29,7 +35,10 @@ function makeResident(overrides: Partial<ResidentListItem> = {}): ResidentListIt
 const row = (name: RegExp) => screen.getByText(name).closest('tr') as HTMLElement
 
 describe('ResidentTable — цвета строк и кнопки', () => {
-  beforeEach(() => vi.restoreAllMocks())
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    navigate.mockClear()
+  })
 
   it('тон строки совпадает с карточкой', () => {
     render(<ResidentTable residents={[
@@ -54,11 +63,18 @@ describe('ResidentTable — цвета строк и кнопки', () => {
     expect(r.dataset.tone).toBe('incomplete')
     // Контур тона — полоса на первой ячейке (у <tr> box-shadow рисуется не везде).
     expect(r.querySelector('td')?.getAttribute('style')).toContain('inset 3px')
-    expect(within(r).getByRole('button', { name: /Видео о регистрации|Видео/ })).toBeInTheDocument()
 
     fireEvent.click(within(r).getByRole('button', { name: /Запросить номер/ }))
-    await waitFor(() =>
-      expect(post).toHaveBeenCalledWith('/api/v2/residents/7/request-phone'))
+    fireEvent.click(within(r).getByRole('button', { name: /Видео о регистрации/ }))
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith('/api/v2/residents/7/request-phone')
+      expect(post).toHaveBeenCalledWith('/api/v2/residents/7/send-registration-video')
+    })
+    expect(navigate).not.toHaveBeenCalled()
+
+    // Клик по самой строке — открывает жителя (кнопки выше этого не делали).
+    fireEvent.click(within(r).getByText(/Назима/))
+    expect(navigate).toHaveBeenCalledWith('/dashboard/residents/7')
   })
 
   it('колонка «Регистрация» показывает дату', () => {

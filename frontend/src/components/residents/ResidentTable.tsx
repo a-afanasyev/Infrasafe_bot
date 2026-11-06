@@ -70,7 +70,7 @@ export default function ResidentTable({ residents, sort }: Props) {
                 data-tone={tone}
                 style={toneRowStyle(tone)}
                 onClick={() => navigate(`/dashboard/residents/${r.id}`)}
-                className="border-b border-border-default last:border-b-0 cursor-pointer hover:bg-bg-surface hover:brightness-95 transition"
+                className="border-b border-border-default last:border-b-0 cursor-pointer hover:bg-bg-surface transition-colors"
               >
                 <td className="px-4 py-3" style={toneEdgeStyle(tone)}>
                   <div className="flex items-center gap-2.5">
