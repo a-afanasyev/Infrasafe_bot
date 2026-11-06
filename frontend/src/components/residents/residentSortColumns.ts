@@ -20,6 +20,7 @@ export const RESIDENT_COLUMNS: readonly ResidentColumn[] = [
   { id: 'name', labelKey: 'residents.headerResident', kind: 'text', serverField: 'name' },
   { id: 'address', labelKey: 'residents.headerAddress', kind: 'text' },
   { id: 'apartments', labelKey: 'residents.headerApartments', kind: 'number' },
+  { id: 'created_at', labelKey: 'residents.headerRegistered', kind: 'date', serverField: 'created_at' },
   // «По возрастанию» — сначала то, что требует внимания менеджера.
   { id: 'verification', labelKey: 'residents.headerVerification', kind: 'enum', serverField: 'verification' },
   { id: 'status', labelKey: 'residents.headerStatus', kind: 'enum', serverField: 'status' },

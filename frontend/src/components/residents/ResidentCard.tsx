@@ -1,27 +1,11 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import { useNavigate } from 'react-router'
-import { useRequestResidentPhone, useSendRegistrationVideo } from '../../hooks/useResidents'
 import type { ResidentListItem } from '../../types/api'
 import { AVATAR_GRADIENTS, getInitials } from '../../utils/employeeUtils'
-import { formatDate } from '../../utils/timezone'
 import { BotBlockedBadge, ResidentAccountBadge, ResidentVerificationBadge } from './ResidentStatusBadge'
-import { residentTone, type ResidentTone } from './residentTone'
-
-const TINT = (color: string, pct = 8) => `color-mix(in srgb, ${color} ${pct}%, var(--color-bg-card))`
-
-/** Фон и контур карточки по residentTone; одобренные — как раньше. */
-const TONE_STYLE: Record<ResidentTone, { background?: string; borderColor?: string }> = {
-  botBlocked: { background: TINT('var(--red)'), borderColor: 'var(--red)' },
-  incomplete: { borderColor: 'var(--red)' },
-  submitted: { background: TINT('var(--blue)', 18), borderColor: 'var(--blue)' }, // на 8% синий неотличим от белого
-  pending: { background: TINT('var(--amber)', 14) }, // жёлтый на 8% теряется в тёмной теме
-  default: {},
-}
-
-/** Совпадает с RESEND_AFTER сервера (api/residents/registration_video.py). */
-const VIDEO_RESEND_MS = 24 * 60 * 60 * 1000
+import ResidentContactActions from './ResidentContactActions'
+import { residentTone, TONE_STYLE } from './residentTone'
 
 interface Props {
   resident: ResidentListItem
@@ -31,15 +15,10 @@ export default function ResidentCard({ resident }: Props) {
   const { t } = useTranslation()
   const { full: fullName } = usePersonName()
   const navigate = useNavigate()
-  const requestPhone = useRequestResidentPhone(resident.id)
-  const sendVideo = useSendRegistrationVideo(resident.id)
-  const [mountedAt] = useState(Date.now) // «сейчас» на момент показа карточки: окно — сутки
 
   const name = fullName(resident, t('residents.noName'))
   const isBlocked = resident.status === 'blocked'
   const tone = residentTone(resident)
-  const videoSentAt = resident.registration_video_sent_at
-  const videoSentRecently = !!videoSentAt && mountedAt - Date.parse(videoSentAt) < VIDEO_RESEND_MS
 
   return (
     <div
@@ -62,50 +41,7 @@ export default function ResidentCard({ resident }: Props) {
           <div className="font-[family-name:var(--font-display)] font-semibold text-sm text-text-primary truncate">
             {name}
           </div>
-          {resident.phone ? (
-            <div className="text-xs text-text-muted font-[family-name:var(--font-mono)] mt-0.5">
-              {resident.phone}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={e => {
-                // Карточка целиком кликабельна (открывает жителя) — кнопка
-                // не должна вести туда же.
-                e.stopPropagation()
-                requestPhone.mutate()
-              }}
-              disabled={requestPhone.isPending || requestPhone.isSuccess}
-              className="text-xs text-accent hover:underline mt-0.5 block disabled:opacity-60 disabled:no-underline"
-            >
-              {requestPhone.isSuccess
-                ? t('employees.phoneRequestSent')
-                : `📱 ${t('employees.requestPhone')}`}
-            </button>
-          )}
-          {/* Факт запроса хранится на сервере — переживает перезагрузку. */}
-          {!resident.phone && !requestPhone.isSuccess && resident.phone_requested_at && (
-            <div className="text-[11px] text-text-muted mt-0.5">
-              {t('employees.phoneRequestedOn', { date: formatDate(resident.phone_requested_at) })}
-            </div>
-          )}
-          {tone === 'incomplete' && (videoSentRecently ? (
-            <div className="text-[11px] text-text-muted mt-0.5">
-              {t('residents.registrationVideoSentOn', { date: formatDate(videoSentAt) })}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation()
-                sendVideo.mutate()
-              }}
-              disabled={sendVideo.isPending}
-              className="text-xs text-accent hover:underline mt-0.5 block disabled:opacity-60 disabled:no-underline"
-            >
-              {t('residents.registrationVideo')}
-            </button>
-          ))}
+          <ResidentContactActions resident={resident} />
         </div>
       </div>
 
