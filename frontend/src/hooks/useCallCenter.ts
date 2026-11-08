@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { KANBAN_QUERY_PREFIX } from './useKanban'
 
@@ -9,14 +9,18 @@ export interface CallCenterResident {
 }
 
 /** Тело POST /api/v2/callcenter/requests (CallCenterCreateRequest): адрес —
- *  либо свободный `address`, либо `building_id` (+ поля лифта). */
+ *  ровно один уровень справочника (`yard_id`/`building_id`/`apartment_id`,
+ *  + поля лифта); `address_text` — слова звонящего, уходят в примечания. */
 export interface CallCenterBody {
   category: string
   urgency: string
   description: string
   user_id?: number
-  address?: string
+  /** Адрес — ровно один уровень справочника (двор/дом/квартира). */
+  yard_id?: number
   building_id?: number | null
+  apartment_id?: number
+  address_text?: string
   elevator_id?: number | null
   elevator_operational?: boolean | null
 }
@@ -36,4 +40,36 @@ export function useCreateCallCenterRequest() {
       queryClient.invalidateQueries({ queryKey: KANBAN_QUERY_PREFIX })
     },
   })
+}
+
+/** Вариант адреса из справочника, предложенный по словам звонящего. */
+export interface AddressOption {
+  type: 'yard' | 'building'
+  id: number
+  yard_id: number
+  label: string
+}
+
+export interface AddressSuggestion {
+  options: AddressOption[]
+  ai_used: boolean
+  category: string | null
+  urgency: string | null
+}
+
+/** Возможности формы на площадке: свободный ввод адреса — только при ИИ. */
+export function useCallCenterCapabilities(enabled: boolean) {
+  return useQuery<{ address_suggest: boolean }>({
+    queryKey: ['callcenter-capabilities'],
+    queryFn: () => apiClient.get('/api/v2/callcenter/capabilities').then(r => r.data),
+    enabled,
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** Адрес со слов звонящего → варианты двора/дома (ИИ + поиск по справочнику). */
+export function suggestCallCenterAddress(addressText: string, description: string): Promise<AddressSuggestion> {
+  return apiClient
+    .post('/api/v2/callcenter/address-suggest', { address_text: addressText, description: description || undefined })
+    .then(r => r.data)
 }

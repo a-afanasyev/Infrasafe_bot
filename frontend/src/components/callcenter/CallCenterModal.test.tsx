@@ -104,8 +104,9 @@ describe('CallCenterModal — категория «Лифт»', () => {
     expect(screen.getByRole('button', { name: 'Создать заявку' })).toBeDisabled()
   })
 
-  it('флаг выключен: форма как раньше — свободный адрес, полей лифта нет', async () => {
+  it('флаг выключен: адрес — двор из справочника, полей лифта нет', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'false')
+    mockDirectories()
     let body: Record<string, unknown> | null = null
     server.use(
       http.post('*/api/v2/callcenter/requests', async ({ request }) => {
@@ -116,21 +117,94 @@ describe('CallCenterModal — категория «Лифт»', () => {
     const user = userEvent.setup()
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'elevator')
-    expect(screen.queryByLabelText('Двор *')).toBeNull()
-    await user.type(screen.getByLabelText('Адрес / квартира *'), 'ул. Тестовая, 1')
+    expect(screen.queryByLabelText('Лифт *')).toBeNull()
+    // Свободного адреса больше нет (2026-11-07): без двора отправить нельзя.
+    expect(screen.queryByLabelText('Адрес / квартира *')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Создать заявку' })).toBeDisabled()
+    await screen.findByRole('option', { name: 'Двор 3' })
+    await user.selectOptions(screen.getByLabelText('Двор *'), '3')
     await user.click(screen.getByRole('button', { name: 'Создать заявку' }))
     await waitFor(() =>
-      expect(body).toEqual({ category: 'elevator', urgency: 'low', description: 'Не едет', address: 'ул. Тестовая, 1' }),
+      expect(body).toEqual({ category: 'elevator', urgency: 'low', description: 'Не едет', yard_id: 3 }),
     )
   })
 
-  it('обычная категория при включённом флаге — свободный адрес', async () => {
+  it('обычная категория: двор → дом → квартира, уходит самый глубокий уровень', async () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockDirectories()
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/addresses/buildings/12/apartments', () =>
+        HttpResponse.json([{ id: 40, building_id: 12, apartment_number: '15' }])),
+      http.post('*/api/v2/callcenter/requests', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ request_number: '260906-003' }, { status: 201 })
+      }),
+    )
     const user = userEvent.setup()
     render(<CallCenterModal isOpen onClose={() => {}} />)
     await fillBase(user, 'plumbing')
-    expect(screen.getByLabelText('Адрес / квартира *')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Двор *')).toBeNull()
+    expect(screen.queryByLabelText('Лифт *')).toBeNull()
+    expect(screen.getByLabelText('Квартира')).toBeDisabled()
+    await screen.findByRole('option', { name: 'Двор 3' })
+    await user.selectOptions(screen.getByLabelText('Двор *'), '3')
+    await screen.findByRole('option', { name: 'ул. Мирзо-Улугбека, 12' })
+    await user.selectOptions(screen.getByLabelText('Дом'), '12')
+    await screen.findByRole('option', { name: '15' })
+    await user.selectOptions(screen.getByLabelText('Квартира'), '40')
+    await user.click(screen.getByRole('button', { name: 'Создать заявку' }))
+    await waitFor(() =>
+      expect(body).toEqual({ category: 'plumbing', urgency: 'low', description: 'Не едет', apartment_id: 40 }),
+    )
+  })
+
+  it('ИИ на площадке: адрес со слов → варианты справочника → дом в заявке, текст в примечания', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockDirectories()
+    let suggestBody: unknown = null
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.get('*/api/v2/callcenter/capabilities', () => HttpResponse.json({ address_suggest: true })),
+      http.post('*/api/v2/callcenter/address-suggest', async ({ request }) => {
+        suggestBody = await request.json()
+        return HttpResponse.json({
+          ai_used: true, category: 'repair', urgency: 'low',
+          options: [
+            { type: 'building', id: 12, yard_id: 3, label: 'ул. Мирзо-Улугбека, 12 (Двор 3)' },
+            { type: 'building', id: 14, yard_id: 3, label: 'ул. Мирзо-Улугбека, 14 (Двор 3)' },
+          ],
+        })
+      }),
+      http.post('*/api/v2/callcenter/requests', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ request_number: '261107-020' }, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<CallCenterModal isOpen onClose={() => {}} />)
+    await user.type(screen.getByLabelText('Описание проблемы'), 'kafel')
+    await user.type(await screen.findByLabelText('Адрес со слов звонящего'), '4g 10 etaj')
+    await user.click(screen.getByRole('button', { name: 'Определить адрес' }))
+    // Категория подставлена ИИ в пустое поле.
+    await waitFor(() => expect(screen.getByLabelText<HTMLSelectElement>('Категория').value).toBe('repair'))
+    expect(suggestBody).toEqual({ address_text: '4g 10 etaj', description: 'kafel' })
+    await user.click(screen.getByRole('button', { name: 'ул. Мирзо-Улугбека, 12 (Двор 3)' }))
+    await waitFor(() => expect(screen.getByLabelText<HTMLSelectElement>('Дом').value).toBe('12'))
+    await user.click(screen.getByRole('button', { name: 'Создать заявку' }))
+    await waitFor(() => expect(body).toEqual({
+      category: 'repair', urgency: 'low', description: 'kafel', building_id: 12, address_text: '4g 10 etaj',
+    }))
+  })
+
+  it('без ИИ на площадке поля свободного адреса нет', async () => {
+    vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
+    mockDirectories()
+    server.use(http.get('*/api/v2/callcenter/capabilities', () => HttpResponse.json({ address_suggest: false })))
+    const user = userEvent.setup()
+    render(<CallCenterModal isOpen onClose={() => {}} />)
+    await fillBase(user, 'plumbing')
+    await screen.findByRole('option', { name: 'Двор 3' })
+    expect(screen.queryByLabelText('Адрес со слов звонящего')).toBeNull()
   })
 
   it('422 от сервера показывается текстом ошибки', async () => {

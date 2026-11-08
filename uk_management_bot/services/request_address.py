@@ -51,7 +51,9 @@ ROLE_ALLOWED_LEVELS: dict[str, tuple[str, ...]] = {
     "applicant": ("yard", "building", "apartment"),
     "inspector": ("building",),
     "staff_group": ("yard", "building"),
-    "manager": ("building",),
+    # Менеджер (колл-центр): любой активный двор/дом/квартира — заявки без
+    # адреса из справочника не принимаются (решение владельца 2026-11-07).
+    "manager": ("yard", "building", "apartment"),
 }
 
 # Роли без требования принадлежности: судим по активной сущности справочника

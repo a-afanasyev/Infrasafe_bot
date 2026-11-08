@@ -51,7 +51,7 @@ class TestCallCenterCreateRequest:
 
     def test_valid_minimal(self):
         body = CallCenterCreateRequest(
-            category="Электрика", urgency="Обычная", description="Не горит свет"
+            category="Электрика", urgency="Обычная", description="Не горит свет", yard_id=1
         )
         # FS-04: валидатор нормализует legacy RU-лейбл к канон-EN-ключу.
         assert body.category == "electricity"
@@ -59,7 +59,26 @@ class TestCallCenterCreateRequest:
         assert body.apartment_id is None
         assert body.caller_name is None
         assert body.caller_phone is None
-        assert body.address is None
+        assert body.address_level() == ("yard", 1)
+
+    def test_address_from_directory_required(self):
+        # 2026-11-07: без двора/дома/квартиры из справочника заявку не принимаем;
+        # свободный текст адреса больше не поле схемы (лишний ключ игнорируется).
+        with pytest.raises(ValidationError, match="справочника"):
+            CallCenterCreateRequest(category="Электрика", urgency="low", description="x")
+        with pytest.raises(ValidationError, match="справочника"):
+            CallCenterCreateRequest(category="Электрика", urgency="low", description="x",
+                                    address="4g 10 etaj")
+
+    def test_only_one_address_level(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            CallCenterCreateRequest(category="Электрика", urgency="low", description="x",
+                                    yard_id=1, building_id=2)
+
+    def test_deepest_level_wins_in_address_level(self):
+        body = CallCenterCreateRequest(category="Электрика", urgency="low", description="x",
+                                       building_id=7)
+        assert body.address_level() == ("building", 7)
 
     def test_valid_full(self):
         body = CallCenterCreateRequest(
@@ -70,7 +89,6 @@ class TestCallCenterCreateRequest:
             apartment_id=10,
             caller_name="Иван Петров",
             caller_phone="+998901234567",
-            address="ул. Мира 5",
         )
         assert body.user_id == 42
         assert body.caller_name == "Иван Петров"
@@ -89,8 +107,10 @@ class TestCallCenterCreateRequest:
 
     def test_urgency_normalized_to_key(self):
         # TASK 17: канон-ключ; толерантно принимает ключ и legacy-рус.
-        assert CallCenterCreateRequest(category="Электрика", urgency="high", description="x").urgency == "high"
-        assert CallCenterCreateRequest(category="Электрика", urgency="Срочная", description="x").urgency == "high"
+        assert CallCenterCreateRequest(category="Электрика", urgency="high", description="x",
+                                       yard_id=1).urgency == "high"
+        assert CallCenterCreateRequest(category="Электрика", urgency="Срочная", description="x",
+                                       yard_id=1).urgency == "high"
 
     def test_unknown_urgency_raises(self):
         with pytest.raises(ValidationError):
@@ -104,4 +124,5 @@ class TestCallCenterSelectableCategoryGate:
             CallCenterCreateRequest(category=category, urgency="low", description="x")
 
     def test_accepts_repair(self):
-        assert CallCenterCreateRequest(category="Ремонт", urgency="low", description="x").category == "repair"
+        assert CallCenterCreateRequest(category="Ремонт", urgency="low", description="x",
+                                       yard_id=1).category == "repair"

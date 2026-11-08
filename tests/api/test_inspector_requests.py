@@ -16,6 +16,8 @@ from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.database.models.user_apartment import UserApartment
+from sqlalchemy import select
+
 from uk_management_bot.database.models.request import Request as RequestModel
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
@@ -322,6 +324,12 @@ async def test_purge_building_blocked_by_building_level_request(
 # ─────────────────────────── callcenter edge-cases ─────────────────────
 
 
+async def _owner_id(db_session, number):
+    row = (await db_session.execute(
+        select(RequestModel).where(RequestModel.request_number == number))).scalar_one()
+    return row.user_id
+
+
 def _cc_body(**extra):
     b = {"category": "Электрика", "urgency": "low", "description": "Звонок жителя"}
     b.update(extra)
@@ -329,45 +337,69 @@ def _cc_body(**extra):
 
 
 @pytest.mark.asyncio
-async def test_callcenter_apartment_without_user_422(make_client, manager_user, addr_tree):
+async def test_callcenter_apartment_without_user_owner_is_manager(make_client, manager_user, addr_tree,
+                                                                  db_session):
+    # 2026-11-07: звонящий не найден среди жителей — менеджер выбирает любую
+    # активную квартиру из справочника, владелец заявки — он сам.
     async with make_client(manager_user) as ac:
         r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(apartment_id=addr_tree["apt"].id))
-    assert r.status_code == 422
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["address_type"] == "apartment"
+    assert data["apartment_id"] == addr_tree["apt"].id
+    assert await _owner_id(db_session, data["request_number"]) == manager_user.id
 
 
 @pytest.mark.asyncio
-async def test_callcenter_nonexistent_user_404(make_client, manager_user):
+async def test_callcenter_nonexistent_user_404(make_client, manager_user, addr_tree):
     async with make_client(manager_user) as ac:
-        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(user_id=999999, address="ул. Х"))
+        r = await ac.post("/api/v2/callcenter/requests",
+                          json=_cc_body(user_id=999999, building_id=addr_tree["building"].id))
     assert r.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_callcenter_target_not_applicant_422(make_client, manager_user, inspector):
+async def test_callcenter_target_not_applicant_422(make_client, manager_user, inspector, addr_tree):
     async with make_client(manager_user) as ac:
-        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(user_id=inspector.id, address="ул. Х"))
+        r = await ac.post("/api/v2/callcenter/requests",
+                          json=_cc_body(user_id=inspector.id, building_id=addr_tree["building"].id))
     assert r.status_code == 422
+    assert "applicant" in r.text
 
 
 @pytest.mark.asyncio
-async def test_callcenter_no_apartment_empty_address_422(make_client, manager_user):
+async def test_callcenter_free_text_address_rejected_422(make_client, manager_user, db_session):
+    # 2026-11-07: заявка без адреса из справочника не принимается (кейс
+    # 261107-013 «4g 10 etaj» на profk). Строка в БД не появляется.
     async with make_client(manager_user) as ac:
-        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(address="   "))
+        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(address="4g 10 etaj"))
     assert r.status_code == 422
+    assert "справочника" in r.text
+    assert (await db_session.execute(select(RequestModel))).scalars().all() == []
 
 
 @pytest.mark.asyncio
-async def test_callcenter_no_user_owner_is_manager_legacy(make_client, manager_user):
+async def test_callcenter_yard_level_owner_is_manager(make_client, manager_user, addr_tree, db_session):
     async with make_client(manager_user) as ac:
-        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(address="ул. Свободная 3"))
+        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(yard_id=addr_tree["yard"].id))
     assert r.status_code == 201, r.text
     data = r.json()
-    assert data["address_type"] == "legacy"
-    assert data["address"] == "ул. Свободная 3"
+    assert data["address_type"] == "yard"
+    assert data["address"] == "Двор А"
+    assert await _owner_id(db_session, data["request_number"]) == manager_user.id
 
 
 @pytest.mark.asyncio
-async def test_callcenter_create_auto_dispatches_group(make_client, manager_user, monkeypatch):
+@pytest.mark.parametrize("level", ["yard_inactive", "building_in_inactive_yard"])
+async def test_callcenter_inactive_address_422(make_client, manager_user, addr_tree, level):
+    key = "yard_id" if level.startswith("yard") else "building_id"
+    async with make_client(manager_user) as ac:
+        r = await ac.post("/api/v2/callcenter/requests", json=_cc_body(**{key: addr_tree[level].id}))
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_callcenter_create_auto_dispatches_group(make_client, manager_user, monkeypatch, addr_tree):
     """FEAT-группы (followup #1): call-center create — канал создания → авто-dispatch
     на группу-специализацию (раньше оставалась «Новая»)."""
     import uk_management_bot.services.dispatch as dispatch_mod
@@ -379,7 +411,7 @@ async def test_callcenter_create_auto_dispatches_group(make_client, manager_user
     monkeypatch.setattr(dispatch_mod, "auto_dispatch_new_request_async", fake_dispatch)
     async with make_client(manager_user) as ac:
         r = await ac.post("/api/v2/callcenter/requests",
-                          json=_cc_body(category="Сантехника", address="ул. Тест 1"))
+                          json=_cc_body(category="Сантехника", building_id=addr_tree["building"].id))
     assert r.status_code == 201, r.text
     # FS-04: категория нормализуется к канон-EN-ключу до dispatch.
     assert calls == [(r.json()["request_number"], "plumbing")]

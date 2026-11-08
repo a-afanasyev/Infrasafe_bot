@@ -1276,7 +1276,6 @@
     "saveFailed": "Не удалось сохранить. Попробуйте снова.",
     "searchResident": "Ошибка поиска жителя",
     "createRequest": "Ошибка при создании заявки",
-    "specifyAddress": "Укажите адрес",
     "createShift": "Ошибка при создании смены",
     "updateShift": "Ошибка при обновлении смены",
     "deleteShift": "Ошибка при удалении смены",
@@ -1299,6 +1298,9 @@
     "updateTemplate": "Ошибка при сохранении шаблона"
   },
   "kanban": {
+    "addressNotBound": "Адрес не из справочника — заявку нельзя взять в работу. Привяжите двор, дом или квартиру.",
+    "bindAddress": "Привязать адрес",
+    "bindAddressDone": "Адрес привязан",
     "createByCall": "Создать по звонку",
     "emptyColumn": "Нет заявок",
     "confirmed": "Подтверждено",
@@ -1382,7 +1384,24 @@
     "mediaListError": "Не удалось загрузить фото — попробуйте позже",
     "beforePhotos": "До работ"
   },
+  "addressPicker": {
+    "yard": "Двор *",
+    "yardPlaceholder": "Выберите двор...",
+    "building": "Дом",
+    "wholeYard": "Весь двор",
+    "apartment": "Квартира",
+    "wholeBuilding": "Весь дом",
+    "required": "Выберите адрес из справочника: двор, дом или квартиру"
+  },
   "callcenter": {
+    "suggest": {
+      "label": "Адрес со слов звонящего",
+      "placeholder": "Например: 4г, 10 этаж",
+      "button": "Определить адрес",
+      "loading": "Ищу...",
+      "none": "В справочнике не найдено — выберите адрес ниже",
+      "failed": "Не удалось определить адрес — выберите его ниже"
+    },
     "elevator": {
       "yard": "Двор *",
       "yardPlaceholder": "Выберите двор...",
@@ -1404,8 +1423,6 @@
     "urgencyLabel": "Срочность",
     "descriptionLabel": "Описание проблемы",
     "descriptionPlaceholder": "Описание проблемы",
-    "addressLabel": "Адрес / квартира *",
-    "addressPlaceholder": "Адрес / квартира *",
     "submitLoading": "Создаю...",
     "submit": "Создать заявку"
   },

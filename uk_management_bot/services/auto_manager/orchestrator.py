@@ -160,6 +160,7 @@ def _main_queue_filter(now: Optional[datetime] = None):
         Request.executor_id.is_(None),
         Request.assignment_type == "group",
         _not_engineering(),
+        _address_bound(),
     )
 
 
@@ -170,7 +171,15 @@ def _residual_queue_filter(now: Optional[datetime] = None):
         Request.executor_id.is_(None),
         Request.assignment_type.is_(None),
         _not_engineering(),
+        _address_bound(),
     )
+
+
+def _address_bound():
+    """Заявку без адреса из справочника назначать нельзя (`plan_transition`
+    отказывает, решение владельца 2026-11-07) — в очередь она не берётся, иначе
+    каждый тик повторял бы заведомый отказ. Её сначала чинит менеджер."""
+    return Request.address_type.is_distinct_from("legacy")
 
 
 def _not_engineering():

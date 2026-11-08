@@ -352,6 +352,49 @@ async def acceptance_rows(db: AsyncSession, *, user: User) -> list:
     return result.all()
 
 
+class AddressAlreadyBound(Exception):
+    """У заявки уже есть адрес из справочника — перепривязка не делается."""
+
+
+async def bind_address(db: AsyncSession, request_number: str, resolved, actor_id: int) -> bool:
+    """Привязать адрес из справочника к заявке с legacy-текстом.
+
+    Решение владельца 2026-11-07: заявка без адреса из справочника не уходит в
+    работу (`plan_transition`); этим путём менеджер её «чинит». Исходный текст
+    («4g 10 etaj» — там бывает этаж/подъезд) не теряется: дописывается в
+    примечания для исполнителя и уходит в аудит.
+
+    → False, если заявки нет; AddressAlreadyBound — адрес уже из справочника.
+    """
+    from uk_management_bot.database.models.audit import AuditLog
+
+    req = (await db.execute(
+        select(RequestModel).where(RequestModel.request_number == request_number).with_for_update()
+    )).scalar_one_or_none()
+    if req is None:
+        return False
+    if any(fk is not None for fk in (req.apartment_id, req.building_id, req.yard_id)):
+        raise AddressAlreadyBound(request_number)
+
+    old_address = (req.address or "").strip()
+    req.address_type = resolved.address_type
+    req.apartment_id = resolved.apartment_id
+    req.building_id = resolved.building_id
+    req.yard_id = resolved.yard_id
+    req.address = resolved.canonical_address
+    if old_address:
+        note = f"Исходный адрес: {old_address}"  # html-raw: notes заявки (БД), экранируется в точке вывода
+        req.notes = f"{req.notes}\n{note}" if req.notes else note  # html-raw: notes (БД), экранируется при выводе
+    db.add(AuditLog(user_id=actor_id, action="request.address_bound", details={
+        "request_number": request_number,
+        "old_address": old_address,
+        "address_type": resolved.address_type,
+        "address": resolved.canonical_address,
+    }))
+    await db.commit()
+    return True
+
+
 async def request_with_executor(db: AsyncSession, request_number: str):
     """→ (Request, executor User|None) | None."""
     ExecutorUser = aliased(User)

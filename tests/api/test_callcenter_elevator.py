@@ -70,10 +70,11 @@ async def elevators(db_session: AsyncSession):
 
 
 def _body(elevators=None, **extra) -> dict:
-    """Тело с квартирой жителя (дом известен); без ``elevators`` — legacy-адрес."""
+    """Тело с квартирой жителя (дом известен); без ``elevators`` — уровень двора
+    (дома нет)."""
     body = {"category": "elevator", "urgency": "high", "description": "Звонок: лифт стоит"}
     if elevators is None:
-        body["address"] = "ул. Садовая 3"
+        body["yard_id"] = extra.pop("yard_id")
     else:
         body["user_id"] = elevators["resident"].id
         body["apartment_id"] = elevators["apt"].id
@@ -89,7 +90,7 @@ async def _row(db_session: AsyncSession, number: str) -> RequestModel:
 
 @pytest.mark.asyncio
 async def test_elevator_category_without_fields_422(client, elevators):
-    r = await client.post(URL, json=_body())
+    r = await client.post(URL, json=_body(elevators))
     assert r.status_code == 422, r.text
     assert "elevator_id" in r.text
 
@@ -217,9 +218,10 @@ async def test_elevator_of_other_building_422(client, db_session, elevators):
 
 
 @pytest.mark.asyncio
-async def test_legacy_address_without_building_422(client, db_session, elevators):
-    """Свободный адрес без квартиры — дома нет → лифт привязать нельзя."""
-    r = await client.post(URL, json=_body(elevator_id=elevators["ok"].id, elevator_operational=False))
+async def test_yard_level_without_building_422(client, db_session, elevators):
+    """Адрес уровня двора — дома нет → лифт привязать нельзя."""
+    r = await client.post(URL, json=_body(yard_id=elevators["building"].yard_id,
+                                          elevator_id=elevators["ok"].id, elevator_operational=False))
     assert r.status_code == 422, r.text
     assert "нужен дом или квартира" in r.json()["detail"]
     assert (await db_session.execute(select(RequestModel))).scalars().all() == []
@@ -228,8 +230,8 @@ async def test_legacy_address_without_building_422(client, db_session, elevators
 @pytest.mark.asyncio
 async def test_flag_off_fields_ignored(client, db_session, elevators, monkeypatch):
     monkeypatch.setattr(settings, "ELEVATORS_ENABLED", False)
-    r1 = await client.post(URL, json=_body())
-    r2 = await client.post(URL, json=_body(elevator_id=elevators["raw"].id, elevator_operational=True))
+    r1 = await client.post(URL, json=_body(elevators))
+    r2 = await client.post(URL, json=_body(elevators, elevator_id=elevators["raw"].id, elevator_operational=True))
     assert r1.status_code == 201 and r2.status_code == 201, (r1.text, r2.text)
     for resp in (r1, r2):
         row = await _row(db_session, resp.json()["request_number"])

@@ -402,6 +402,18 @@
     "manager@pending"
    ]
   },
+  "GET /api/v2/callcenter/capabilities": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "GET /api/v2/callcenter/search-resident": {
    "auth": "roles",
    "allow": [
@@ -1487,6 +1499,18 @@
     "manager@pending"
    ]
   },
+  "PATCH /api/v2/requests/{request_number}/address": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "PATCH /api/v2/requests/{request_number}/category": {
    "auth": "roles",
    "allow": [
@@ -1830,6 +1854,18 @@
    "allow": [
     "manager",
     "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/callcenter/address-suggest": {
+   "auth": "roles",
+   "allow": [
+    "manager",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",

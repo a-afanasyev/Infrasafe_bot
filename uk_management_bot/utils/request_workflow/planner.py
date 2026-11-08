@@ -30,6 +30,7 @@ from .types import (
     Action,
     ActionCommand,
     ActorContext,
+    AddressNotBound,
     DomainOp,
     EditForbidden,
     EventIntent,
@@ -332,6 +333,7 @@ def plan_transition(snap: WorkflowSnapshot, command: ActionCommand,
     if return_count is not None:
         patch += (("return_count", Op.SET, return_count),)
     _enforce_in_progress_has_executor(action, to_status, snap, patch)
+    _enforce_address_bound(action, to_status, snap)
     domain_ops = _build_domain_ops(action, snap, command.payload)
     events = _build_events(action, principal, snap.request,
                            to_status, command.payload,
@@ -467,6 +469,26 @@ def _enforce_in_progress_has_executor(action: Action, to_canon: str,
     raise InvalidTransition(
         f"{action.value}: «{REQUEST_STATUS_IN_PROGRESS}» без исполнителя — "
         f"назначьте исполнителя (заявка осталась бы ничьей)"
+    )
+
+
+def _enforce_address_bound(action: Action, to_canon: str,
+                           snap: WorkflowSnapshot) -> None:
+    """Заявка без адреса из справочника не уходит в работу (решение владельца
+    2026-11-07) — ОДНОЙ проверкой, как инвариант выше.
+
+    «В работу» — это и переход в «В работе» (назначение, взятие, возобновление),
+    и адресация группе: ASSIGN_GROUP статус не меняет, но выдаёт заявку
+    дежурным. Закрытие и отмена не блокируются — уже начатая работа не должна
+    застревать.
+    """
+    if snap.request.address_bound:
+        return
+    if to_canon != REQUEST_STATUS_IN_PROGRESS and action is not Action.ASSIGN_GROUP:
+        return
+    raise AddressNotBound(
+        f"{action.value}: адрес заявки не из справочника — привяжите двор, дом "
+        f"или квартиру, затем назначайте"
     )
 
 

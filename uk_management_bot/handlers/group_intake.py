@@ -83,11 +83,22 @@ from uk_management_bot.services.group_intake.classifier import (
 from uk_management_bot.services.group_intake.category_keywords import guess_category
 from uk_management_bot.services.group_intake.done_detector import is_done_report
 from uk_management_bot.services.group_intake.prefilter import prefilter
-from uk_management_bot.services.group_intake.translit import CYR_TO_LAT
+# Поиск адреса по справочнику — общий с колл-центром (имена сохранены: на них
+# опираются вызовы и тесты этого модуля).
+from uk_management_bot.services.group_intake.address_match import (  # noqa: F401
+    _MAX_MATCH_ATTEMPTS,
+    _MAX_TEXT_DIGIT_TOKENS,
+    _STAFF_MATCH_LIMIT,
+    _digit_tokens,
+    _hint_needles,
+    _hint_predicate,
+    _hint_variants,
+    _match_staff_address_sync,
+    _query_staff_addresses,
+)
 from uk_management_bot.services.request_address import (
     AddressResolutionError,
     format_building_address,
-    format_yard_address,
     resolve_request_address_sync,
 )
 from uk_management_bot.utils.auth_helpers import get_user_roles
@@ -98,7 +109,6 @@ from uk_management_bot.utils.constants import (
     ROLE_MANAGER,
 )
 from uk_management_bot.utils.helpers import get_text
-from uk_management_bot.utils.sql_search import ci_contains, escape_like, is_postgres
 
 logger = logging.getLogger(__name__)
 
@@ -122,13 +132,6 @@ CB_CAT = "gint:cat"
 # Роли-репортёры staff-групп (решение владельца из планирования v1).
 _STAFF_ROLES = frozenset({ROLE_EXECUTOR, ROLE_INSPECTOR, ROLE_MANAGER})
 
-# Кандидатов адреса в выборе — не больше, чем влезает кнопками.
-_STAFF_MATCH_LIMIT = 4
-# Капы матчера (security-review 2026-08-22): без них сообщение, набитое
-# digit-токенами («потоп 1a 2b 3c …»), порождало до сотен последовательных
-# SELECT'ов с ICU-collation на одно сообщение — тихий DoS БД от инсайдера.
-_MAX_MATCH_ATTEMPTS = 8
-_MAX_TEXT_DIGIT_TOKENS = 5
 
 # Порядок «шага вниз» при отказе резолвера на уровне scope: от широкого к
 # квартире. apartment-уровень — последняя опора; отказ на нём = адреса нет.
@@ -286,156 +289,6 @@ def _staff_author_lang_sync(db, telegram_id: int) -> Optional[str]:
     if not _STAFF_ROLES & set(get_user_roles(user)):
         return None
     return user.language or "ru"
-
-
-# Кириллица → латиница для адресного хинта: справочник может быть латинским
-# («Yangi Olmazor, 14V»), а сотрудник пишет кириллицей («14в», «Янги Олмазор»).
-# Транслит детерминированный, НЕ полагаемся на LLM: address_hint извлекается
-# дословно из сообщения. Таблица общая с keyword-проходом категорий —
-# services/group_intake/translit.py.
-_CYR_TO_LAT = CYR_TO_LAT
-
-
-def _hint_variants(needle: str) -> list[str]:
-    """Хинт + его транслит-вариант (если отличается). Кириллический «14в»
-    обязан находить латинский «14V» без участия человека."""
-    variants = [needle]
-    translit = needle.lower().translate(_CYR_TO_LAT)
-    if translit != needle.lower():
-        variants.append(translit)
-    return variants
-
-
-def _hint_needles(hint: str) -> list[str]:
-    """Полный хинт + токены-запасные варианты (живой smoke: LLM отдал
-    «у дома 14в», и подстрочный поиск целиком не нашёл «Yangi Olmazor, 14V»).
-
-    Порядок: сначала весь хинт, затем токены с цифрой (номер дома — самый
-    селективный признак), затем прочие слова по убыванию длины. Матчер идёт
-    по списку до первого непустого результата, так что мусорные слова
-    («дома», «подъезд») в дело вступают, только если ничего лучше нет.
-    """
-    import re
-
-    needle = hint.strip()
-    tokens = [t for t in re.split(r"\W+", needle, flags=re.UNICODE) if len(t) >= 2]
-    tokens.sort(key=lambda t: (not any(ch.isdigit() for ch in t), -len(t)))
-    seen = {needle.lower()}
-    needles = [needle]
-    for token in tokens:
-        if token.lower() not in seen:
-            seen.add(token.lower())
-            needles.append(token)
-    return needles
-
-
-def _hint_predicate(column, needle: str, *, pg: bool):
-    """OR по ci_contains для всех транслит-вариантов хинта."""
-    from sqlalchemy import or_
-
-    return or_(*(
-        ci_contains(column, f"%{escape_like(variant)}%", is_postgres=pg)
-        for variant in _hint_variants(needle)
-    ))
-
-
-def _digit_tokens(text: str) -> list[str]:
-    """Токены с цифрой из произвольного текста (номер дома — «21v», «14в»),
-    длиной ≥2, по убыванию длины. Чисто-числовые короткие («2 подъезд»)
-    отсеиваются длиной, болтовня — требованием цифры."""
-    import re
-
-    tokens = [
-        t for t in re.split(r"\W+", text, flags=re.UNICODE)
-        if len(t) >= 2 and any(ch.isdigit() for ch in t)
-    ]
-    seen: set[str] = set()
-    unique = []
-    for token in sorted(tokens, key=len, reverse=True):
-        if token.lower() not in seen:
-            seen.add(token.lower())
-            unique.append(token)
-    return unique[:_MAX_TEXT_DIGIT_TOKENS]
-
-
-def _match_staff_address_sync(db, scope: str, hint: Optional[str],
-                              text: Optional[str] = None) -> list[dict]:
-    """Адрес staff-репорта — по СПРАВОЧНИКУ, не по квартирам автора.
-
-    scope=yard → поиск по дворам; building|apartment|unknown → по домам
-    (сотрудник не заводит заявку в чужую квартиру — apartment трактуем как
-    building). Поиск через ci_contains (единственный кириллице-безопасный
-    путь при C-локали БД) по уже экранированному шаблону (escape_like);
-    кириллица дополнительно пробуется в транслите (_hint_variants).
-
-    Три эшелона, до первого непустого результата:
-    1) полный LLM-хинт; 2) его токены (_hint_needles, цифра — приоритет);
-    3) токены с цифрой из ПОЛНОГО текста сообщения — живой smoke показал,
-       что LLM может выбросить номер дома из хинта («dom 2 podyezd» при
-       «21v dom 2 podyezd…»), а в тексте номер есть всегда, если автор
-       его назвал. Без хинта и без совпадений — пусто («укажите дом»).
-    """
-    pg = is_postgres(db)
-    tried: set[str] = set()
-    needles: list[str] = []
-    hint_needle = (hint or "").strip()
-    if hint_needle:
-        needles.extend(_hint_needles(hint_needle))
-    for token in _digit_tokens(text or ""):
-        needles.append(token)
-    for candidate_needle in needles:
-        if len(tried) >= _MAX_MATCH_ATTEMPTS:
-            break
-        if candidate_needle.lower() in tried:
-            continue
-        tried.add(candidate_needle.lower())
-        options = _query_staff_addresses(db, scope, candidate_needle, pg)
-        if options:
-            return options
-    return []
-
-
-def _query_staff_addresses(db, scope: str, needle: str, pg: bool) -> list[dict]:
-    if scope == "yard":
-        rows = db.execute(
-            select(Yard)
-            .where(
-                Yard.is_active.is_(True),
-                _hint_predicate(Yard.name, needle, pg=pg),
-            )
-            .order_by(Yard.name)
-            .limit(_STAFF_MATCH_LIMIT)
-        ).scalars().all()
-        return [
-            {
-                "type": "yard",
-                "id": yard.id,
-                "label_public": format_yard_address(yard),
-                "label_full": format_yard_address(yard),
-            }
-            for yard in rows
-        ]
-    rows = db.execute(
-        select(Building)
-        .join(Building.yard)
-        .options(contains_eager(Building.yard))
-        .where(
-            Building.is_active.is_(True),
-            Yard.is_active.is_(True),
-            _hint_predicate(Building.address, needle, pg=pg),
-        )
-        .order_by(Building.address)
-        .limit(_STAFF_MATCH_LIMIT)
-    ).scalars().all()
-    return [
-        {
-            "type": "building",
-            "id": building.id,
-            "label_public": format_building_address(building),
-            "label_full": format_building_address(building),
-        }
-        for building in rows
-    ]
 
 
 def _regate_sync(db, chat_id: int, telegram_id: int, candidate: dict) -> Optional[dict]:

@@ -3,7 +3,8 @@
 Module-level async функции `(db, *, plain-параметры) -> ORM|примитивы`.
 HTTPException, парсинг и сериализация — в router.py.
 """
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,6 +77,7 @@ async def persist_call_center_request(
     description: str,
     apartment_id: int | None,
     building_id: int | None = None,
+    yard_id: int | None = None,
     address: str,
     address_type: str,
     notes: str | None,
@@ -89,9 +91,9 @@ async def persist_call_center_request(
     PR5: атомарный счётчик дня (раньше COUNT(*)+1 без retry — коллизия
     после удаления строки роняла запрос 500-кой).
 
-    Адрес — ровно один FK (CHECK ck_requests_address_type_fk): ``apartment_id``
-    (уровень квартиры) ИЛИ ``building_id`` (уровень дома, ремонт лифта из
-    карточки) ИЛИ ни одного (legacy) — роутер даёт согласованный ``address_type``.
+    Адрес — ровно один FK (CHECK ck_requests_address_type_fk): ``apartment_id``,
+    ``building_id`` или ``yard_id`` из справочника — роутер даёт согласованный
+    ``address_type``.
     Лифт (Р11, Ф4a-1) — единая проверка ``resolve_request_elevator_async``
     ДО выдачи номера; ``ElevatorValidationError`` наверх (роутер → 422).
     Р18 запрет на лифт «В ремонте»/«На ТО» здесь НЕ применяется
@@ -116,6 +118,7 @@ async def persist_call_center_request(
         description=description,
         apartment_id=apartment_id,
         building_id=building_id,
+        yard_id=yard_id,
         address=address,
         address_type=address_type,
         status="Новая",
@@ -143,3 +146,48 @@ async def persist_call_center_request(
     await db.refresh(req)
     await db.commit()
     return PersistedRequest(request=req, elevator=binding.elevator)
+
+
+@dataclass(frozen=True)
+class AddressSuggestion:
+    options: list[dict]
+    ai_used: bool
+    category: Optional[str] = None
+    urgency: Optional[str] = None
+
+
+def _match_directory(db, scope: str, hint: Optional[str], text: str) -> list[dict]:
+    """Поиск по справочнику — тот же матчер, что у staff-групп (синхронный,
+    исполняется через ``AsyncSession.run_sync`` на соединении запроса)."""
+    from uk_management_bot.services.group_intake.address_match import _match_staff_address_sync
+
+    options = _match_staff_address_sync(db, scope, hint, text)
+    if not options and scope == "yard":
+        # ИИ сказал «двор», а дворов не нашлось — дома тоже варианты.
+        options = _match_staff_address_sync(db, "building", hint, text)
+    return options
+
+
+async def suggest_address(db: AsyncSession, address_text: str,
+                          description: Optional[str]) -> AddressSuggestion:
+    """Адрес со слов звонящего → варианты двора/дома из справочника.
+
+    Как в Group Intake: ИИ (классификатор групп) вытаскивает подсказку адреса и
+    уровень, детерминированный матчер ищет по справочнику с транслитом и
+    номерами домов из текста. ИИ не ответил / не счёл заявкой — матчер идёт по
+    самому тексту (номера домов), так что варианты бывают и без ИИ.
+    """
+    from uk_management_bot.services.group_intake.classifier import Outcome, classify_message
+
+    message = f"{description}\nАдрес: {address_text}" if description else f"Адрес: {address_text}"  # html-raw: текст для модели, не HTML-сообщение
+    result = await classify_message(message)
+    ai_used = result.outcome is Outcome.REQUEST
+    scope = result.location_scope if ai_used else "unknown"
+    hint = result.address_hint if ai_used else None
+    options = await db.run_sync(_match_directory, scope, hint, address_text)
+    return AddressSuggestion(
+        options=options,
+        ai_used=ai_used,
+        category=result.category if ai_used else None,
+        urgency=result.urgency if ai_used else None,
+    )

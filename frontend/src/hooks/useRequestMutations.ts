@@ -184,3 +184,23 @@ export function useAssignRequestExecutor(options: {
     onError: (error: unknown) => options.onError?.(error),
   })
 }
+
+/**
+ * Привязка адреса из справочника к заявке с legacy-текстом (решение владельца
+ * 2026-11-07): без неё заявку нельзя взять в работу. Тело — ровно один уровень.
+ */
+export function useBindRequestAddress(requestNumber: string | null) {
+  const queryClient = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (body: { yard_id: number } | { building_id: number } | { apartment_id: number }) =>
+      apiClient.patch(`/api/v2/requests/${requestNumber}/address`, body).then(r => r.data),
+    onSuccess: () => {
+      toast.success(t('kanban.bindAddressDone'))
+      invalidateRequestViews(queryClient, requestNumber)
+    },
+    onError: (error: unknown) => {
+      toast.error(safeErrorMessage(error, FALLBACK_ERROR))
+    },
+  })
+}
