@@ -342,7 +342,7 @@ async def _commit_reassign(callback: CallbackQuery, user: User,
         RequestNotFound, run_command_sync,
     )
     from uk_management_bot.utils.request_workflow import (
-        Action, ActionCommand, PrincipalRef, SameExecutor, WorkflowError,
+        Action, ActionCommand, AddressNotBound, PrincipalRef, SameExecutor, WorkflowError,
     )
 
     request_number = pre.request_number
@@ -367,6 +367,12 @@ async def _commit_reassign(callback: CallbackQuery, user: User,
         await callback.answer(
             get_text("admin.handlers.reassign_same_executor", language=lang),
             show_alert=True)
+        return
+    except AddressNotBound:
+        # Адрес-текст (legacy): назначать нельзя, пока менеджер не привяжет
+        # двор/дом/квартиру в дашборде (решение владельца 2026-11-07).
+        await callback.answer(
+            get_text("admin.handlers.address_not_bound", language=lang), show_alert=True)
         return
     except WorkflowError as e:
         logger.info("MANAGER_ASSIGN отклонён для %s: %s", request_number, e)

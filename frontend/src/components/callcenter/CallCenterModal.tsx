@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { usePersonName } from '../../hooks/usePersonName'
 import {
   searchCallCenterResidents,
+  suggestCallCenterAddress,
+  useCallCenterCapabilities,
   useCreateCallCenterRequest,
+  type AddressOption,
   type CallCenterBody,
   type CallCenterResident,
 } from '../../hooks/useCallCenter'
@@ -24,13 +27,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { safeErrorMessage } from '@/utils/errorMessage'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
 import CallCenterElevatorFields from './CallCenterElevatorFields'
+import AddressLevelPicker from '../addresses/AddressLevelPicker'
+import { addressLevelBody, EMPTY_ADDRESS_LEVEL, type AddressLevelValue } from '../addresses/addressLevel'
 import { EMPTY_ELEVATOR_VALUE, isElevatorValueComplete, type CallCenterElevatorValue } from './callCenterElevator'
 
 interface Props { isOpen: boolean; onClose: () => void }
 
 import { CATEGORIES, URGENCIES } from '../../constants'
 
-const INITIAL_FORM = { category: '', urgency: 'low', description: '', address: '' }
+const INITIAL_FORM = { category: '', urgency: 'low', description: '' }
 
 export default function CallCenterModal({ isOpen, onClose }: Props) {
   const { t } = useTranslation()
@@ -40,6 +45,13 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
   const [selected, setSelected] = useState<number | null>(null)
   const [form, setForm] = useState(INITIAL_FORM)
   const [elevator, setElevator] = useState<CallCenterElevatorValue>(EMPTY_ELEVATOR_VALUE)
+  // Адрес — только из справочника (решение владельца 2026-11-07).
+  const [address, setAddress] = useState<AddressLevelValue>(EMPTY_ADDRESS_LEVEL)
+  // Свободный ввод при включённом ИИ: слова звонящего → варианты справочника.
+  const caps = useCallCenterCapabilities(isOpen)
+  const [addressText, setAddressText] = useState('')
+  const [suggestions, setSuggestions] = useState<AddressOption[] | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const createRequest = useCreateCallCenterRequest()
@@ -56,6 +68,9 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
       setSelected(null)
       setForm(INITIAL_FORM)
       setElevator(EMPTY_ELEVATOR_VALUE)
+      setAddress(EMPTY_ADDRESS_LEVEL)
+      setAddressText('')
+      setSuggestions(null)
       setError('')
     }
   }, [isOpen])
@@ -68,11 +83,12 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
     }
   }
 
-  const canSubmit = elevatorMode ? isElevatorValueComplete(elevator) : form.address.trim().length > 0
+  const addressBody = addressLevelBody(address)
+  const canSubmit = elevatorMode ? isElevatorValueComplete(elevator) : addressBody !== null
 
   const buildBody = (): CallCenterBody => {
     const base: CallCenterBody = { category: form.category, urgency: form.urgency, description: form.description, user_id: selected || undefined }
-    if (!elevatorMode) return { ...base, address: form.address }
+    if (!elevatorMode) return { ...base, ...addressBody, address_text: addressText.trim() || undefined }
     return {
       ...base,
       building_id: elevator.buildingId,
@@ -81,9 +97,29 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
     }
   }
 
+  const suggest = async () => {
+    setSuggesting(true)
+    setError('')
+    try {
+      const res = await suggestCallCenterAddress(addressText.trim(), form.description)
+      setSuggestions(res.options)
+      // Категорию/срочность ИИ подставляем только в нетронутые поля.
+      if (res.category && !form.category) setForm(f => ({ ...f, category: res.category as string }))
+      if (res.urgency && form.urgency === INITIAL_FORM.urgency) setForm(f => ({ ...f, urgency: res.urgency as string }))
+      if (res.options.length === 1) applySuggestion(res.options[0])
+    } catch (e: unknown) {
+      setError(safeErrorMessage(e, t('callcenter.suggest.failed')))
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  const applySuggestion = (o: AddressOption) =>
+    setAddress({ yardId: o.yard_id, buildingId: o.type === 'building' ? o.id : null, apartmentId: null })
+
   const submit = async () => {
     if (!canSubmit) {
-      setError(t(elevatorMode ? 'callcenter.elevator.required' : 'errors.specifyAddress'))
+      setError(t(elevatorMode ? 'callcenter.elevator.required' : 'addressPicker.required'))
       return
     }
     setLoading(true)
@@ -176,19 +212,53 @@ export default function CallCenterModal({ isOpen, onClose }: Props) {
           />
         </div>
 
-        {/* Address (required): для «Лифта» — дом/лифт/работает из справочников */}
+        {/* Адрес (обязателен, из справочника): для «Лифта» — дом/лифт/работает */}
         {elevatorMode ? (
           <CallCenterElevatorFields value={elevator} onChange={setElevator} />
         ) : (
-          <div className="space-y-1.5">
-            <Label htmlFor="cc-address">{t('callcenter.addressLabel')}</Label>
-            <Input
-              id="cc-address"
-              placeholder={t('callcenter.addressPlaceholder')}
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-          </div>
+          <>
+            {caps.data?.address_suggest && (
+              <div className="space-y-1.5">
+                <Label htmlFor="cc-address-text">{t('callcenter.suggest.label')}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cc-address-text"
+                    className="flex-1"
+                    placeholder={t('callcenter.suggest.placeholder')}
+                    value={addressText}
+                    onChange={(e) => setAddressText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addressText.trim().length >= 2 && suggest()}
+                  />
+                  <Button variant="outline" onClick={suggest} disabled={suggesting || addressText.trim().length < 2}>
+                    {t(suggesting ? 'callcenter.suggest.loading' : 'callcenter.suggest.button')}
+                  </Button>
+                </div>
+                {suggestions !== null && (suggestions.length === 0 ? (
+                  <p className="text-text-muted text-xs">{t('callcenter.suggest.none')}</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestions.map(o => {
+                      const chosen = o.type === 'building' ? address.buildingId === o.id : address.yardId === o.id && address.buildingId === null
+                      return (
+                        <button
+                          key={`${o.type}-${o.id}`}
+                          type="button"
+                          onClick={() => applySuggestion(o)}
+                          className={cn(
+                            'border rounded-sm px-2 py-1 text-xs transition-colors',
+                            chosen ? 'border-accent bg-accent-dim' : 'border-border-default hover:bg-bg-surface',
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+            <AddressLevelPicker value={address} onChange={setAddress} idPrefix="cc" />
+          </>
         )}
 
         {error && <p className="text-red text-sm">{error}</p>}

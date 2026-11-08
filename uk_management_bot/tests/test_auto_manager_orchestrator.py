@@ -694,6 +694,23 @@ def test_queues_skip_engineering_requests(env):
     assert main == {"261027-005"}
 
 
+def test_queues_skip_requests_without_directory_address(env):
+    """Заявку с legacy-адресом назначать нельзя (решение владельца 2026-11-07) —
+    в очереди она не берётся, иначе каждый тик повторял бы заведомый отказ."""
+    db, _ = env
+    _residual_request(db, "261107-001")
+    _residual_request(db, "261107-002")
+    _group_request(db, "261107-003")
+    _group_request(db, "261107-004")
+    for number in ("261107-002", "261107-004"):
+        db.query(Request).filter(Request.request_number == number).update({"address_type": "legacy"})
+    db.commit()
+    residual = {n for (n,) in db.query(Request.request_number).filter(orch_mod._residual_queue_filter())}
+    main = {n for (n,) in db.query(Request.request_number).filter(orch_mod._main_queue_filter())}
+    assert residual == {"261107-001"}
+    assert main == {"261107-003"}
+
+
 # ─────────────────────────── дайджест и срок давности ───────────────────────────
 
 @pytest.mark.asyncio

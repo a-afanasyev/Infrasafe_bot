@@ -38,6 +38,7 @@ import { STATUS_BADGE } from './statusStyles'
 import ElevatorStatusPromptDialog from '../elevators/ElevatorStatusPromptDialog'
 import { isElevatorsEnabled } from '../../utils/featureFlags'
 import { getUrgencyStyle } from './urgencyStyle'
+import RequestAddressBind from './RequestAddressBind'
 
 const SOURCE_ICON: Record<string, string> = {
   bot: '🤖', twa: '📱', web: '🌐', call_center: '📞', inspector: '🚶', infrasafe: '⚡',
@@ -403,6 +404,11 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   </div>
                 )}
               </div>
+
+              {/* Адрес-текст (legacy) блокирует назначение — менеджер привязывает справочник. */}
+              {request.address_type === 'legacy' && isManager && (
+                <RequestAddressBind requestNumber={request.request_number} />
+              )}
 
               {/* Contextual blocks */}
               {request.requested_materials && (

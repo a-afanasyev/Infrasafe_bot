@@ -131,6 +131,38 @@
         "title": "AddressCountOut",
         "type": "object"
       },
+      "AddressOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "yard",
+              "building"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "yard_id",
+          "label"
+        ],
+        "title": "AddressOption",
+        "type": "object"
+      },
       "AddressStatsOut": {
         "properties": {
           "apartments_active": {
@@ -177,6 +209,78 @@
           "residents_pending"
         ],
         "title": "AddressStatsOut",
+        "type": "object"
+      },
+      "AddressSuggestBody": {
+        "additionalProperties": false,
+        "properties": {
+          "address_text": {
+            "maxLength": 300,
+            "minLength": 2,
+            "title": "Address Text",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "required": [
+          "address_text"
+        ],
+        "title": "AddressSuggestBody",
+        "type": "object"
+      },
+      "AddressSuggestOut": {
+        "description": "Варианты адреса из справочника; выбирает человек.",
+        "properties": {
+          "ai_used": {
+            "title": "Ai Used",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/AddressOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "urgency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urgency"
+          }
+        },
+        "required": [
+          "options",
+          "ai_used"
+        ],
+        "title": "AddressSuggestOut",
         "type": "object"
       },
       "AddressesOut": {
@@ -976,6 +1080,47 @@
         "title": "BeforePhotoOut",
         "type": "object"
       },
+      "BindAddressBody": {
+        "additionalProperties": false,
+        "description": "Привязка адреса из справочника к заявке без него (legacy-текст).",
+        "properties": {
+          "apartment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apartment Id"
+          },
+          "building_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Id"
+          },
+          "yard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Id"
+          }
+        },
+        "title": "BindAddressBody",
+        "type": "object"
+      },
       "BoardConfigResponse": {
         "description": "`response_model` для GET /public/board-config и PUT /board-config.\n\nБез нормализации: layout принимается/отдаётся ровно таким, каким его\nпостроил сервис-слой (к этому моменту уже отфильтрованным по фиче-флагу).\n\n`display_tz` (ARCH-137 B5) — зона показа развёртывания. Поле живёт ТОЛЬКО\nв ответе и заполняется в `to_public_response` (модель обслуживает и GET, и\nPUT — заполнение в хендлере уронило бы половину путей). В `BoardConfigUpdateIn`\nего НЕТ намеренно: вход строгий (`_StrictIn`), echo поля в PUT = 422 —\nфронт обязан отделять редактируемый конфиг от ответа.",
         "properties": {
@@ -1633,8 +1778,22 @@
         "title": "BulkCreateResult",
         "type": "object"
       },
+      "CallCenterCapabilities": {
+        "description": "Что доступно форме колл-центра на этой площадке.",
+        "properties": {
+          "address_suggest": {
+            "title": "Address Suggest",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address_suggest"
+        ],
+        "title": "CallCenterCapabilities",
+        "type": "object"
+      },
       "CallCenterCreateRequest": {
-        "description": "Заявка колл-центра. Адрес — один из трёх вариантов:\n\n* ``user_id`` + ``apartment_id`` — квартира жителя (дом = дом квартиры);\n* ``building_id`` — уровень дома (ремонт лифта из карточки, T5/T6): любой\n  активный дом, владелец — менеджер-актор, если ``user_id`` не задан;\n* иначе свободный ``address`` (legacy) — лифт к такой заявке не привязать.\n\nЛифт (``elevator_id``/``elevator_operational``) — ``_ElevatorFieldsMixin``:\nобязателен для категории «лифт» при включённом флаге.",
+        "description": "Заявка колл-центра. Адрес — ровно один уровень из справочника\n(решение владельца 2026-11-07: заявки без адреса из справочника не\nпринимаются; свободный текст адреса больше не принимается):\n\n* ``apartment_id`` — квартира; с ``user_id`` — обязана быть квартирой этого\n  жителя, без ``user_id`` — любая активная (владелец — менеджер-актор);\n* ``building_id`` — дом (любой активный);\n* ``yard_id`` — двор (любой активный).\n\nЛифт (``elevator_id``/``elevator_operational``) — ``_ElevatorFieldsMixin``:\nобязателен для категории «лифт» при включённом флаге.",
         "properties": {
           "acceptance_mode": {
             "anyOf": [
@@ -1647,17 +1806,17 @@
             ],
             "title": "Acceptance Mode"
           },
-          "address": {
+          "address_text": {
             "anyOf": [
               {
-                "maxLength": 500,
+                "maxLength": 300,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address Text"
           },
           "apartment_id": {
             "anyOf": [
@@ -1750,6 +1909,17 @@
               }
             ],
             "title": "User Id"
+          },
+          "yard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Id"
           }
         },
         "required": [
@@ -15294,9 +15464,83 @@
         ]
       }
     },
+    "/api/v2/callcenter/address-suggest": {
+      "post": {
+        "description": "Адрес со слов звонящего → варианты двора/дома из справочника.\n\nПлатный вызов модели — поэтому только при включённом ИИ и под лимитом.\nВарианты лишь подсказка: адрес заявки выбирает и подтверждает менеджер.",
+        "operationId": "suggest_call_center_address_api_v2_callcenter_address_suggest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddressSuggestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressSuggestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suggest Call Center Address",
+        "tags": [
+          "callcenter"
+        ]
+      }
+    },
+    "/api/v2/callcenter/capabilities": {
+      "get": {
+        "description": "Что показывать в форме: свободный ввод адреса — только при включённом\nИИ на площадке (решение владельца 2026-11-07).",
+        "operationId": "call_center_capabilities_api_v2_callcenter_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallCenterCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Call Center Capabilities",
+        "tags": [
+          "callcenter"
+        ]
+      }
+    },
     "/api/v2/callcenter/requests": {
       "post": {
-        "description": "Менеджер заводит заявку (call-центр) — от имени жителя или от себя.\n\nМодель доступа (план «Обходчик»):\n  * apartment_id без user_id → 422;\n  * несуществующий target user → 404; не-житель → 422;\n  * квартира должна принадлежать именно target user (approved+активна) → иначе\n    422 (resolver-ветка проверяет принадлежность к target user_id, не к актору);\n  * при выбранной квартире клиентский address игнорируется → канонический;\n  * building_id (T6, ремонт лифта из карточки) → любой активный дом (роль\n    `manager` в матрице request_address, building-only), address_type=\n    'building', клиентский address игнорируется; вместе с apartment_id → 422\n    (схема);\n  * без квартиры/дома свободный address обязателен и непустой →\n    address_type='legacy';\n  * без user_id владелец — сам менеджер.",
+        "description": "Менеджер заводит заявку (call-центр) — от имени жителя или от себя.\n\nМодель доступа (план «Обходчик», адрес из справочника — 2026-11-07):\n  * адрес — ровно один уровень справочника (схема: иначе 422), свободный\n    текст не принимается;\n  * несуществующий target user → 404; не-житель → 422;\n  * квартира при выбранном жителе обязана быть ЕГО (approved+активна) →\n    иначе 422; без жителя — любая активная квартира;\n  * двор/дом — любой активный (роль `manager` в матрице request_address);\n  * адрес в заявке всегда канонический, из справочника;\n  * без user_id владелец — сам менеджер.",
         "operationId": "create_call_center_request_api_v2_callcenter_requests_post",
         "requestBody": {
           "content": {
@@ -21407,6 +21651,64 @@
           }
         ],
         "summary": "Update Request",
+        "tags": [
+          "requests"
+        ]
+      }
+    },
+    "/api/v2/requests/{request_number}/address": {
+      "patch": {
+        "description": "Двор/дом/квартира из справочника — к заявке с legacy-адресом.\n\n404 — нет заявки; 409 — адрес уже из справочника (перепривязку не делаем:\nэто другой вопрос с последствиями для группы и отчётов); 422 — адрес\nнеактивен/не существует.",
+        "operationId": "bind_request_address_api_v2_requests__request_number__address_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_number",
+            "required": true,
+            "schema": {
+              "title": "Request Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindAddressBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bind Request Address",
         "tags": [
           "requests"
         ]

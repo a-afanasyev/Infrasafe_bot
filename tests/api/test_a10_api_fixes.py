@@ -196,7 +196,7 @@ async def test_webhook_oversized_body_rejected_before_signature(client):
 def test_callcenter_description_is_capped_like_resident_request():
     with pytest.raises(ValidationError):
         CallCenterCreateRequest(category="Электрика", urgency="Обычная", description="x" * 2001)
-    CallCenterCreateRequest(category="Электрика", urgency="Обычная", description="x" * 2000)
+    CallCenterCreateRequest(category="Электрика", urgency="Обычная", description="x" * 2000, yard_id=1)
 
 
 def test_callcenter_caller_fields_are_capped():

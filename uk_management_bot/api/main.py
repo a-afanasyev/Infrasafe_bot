@@ -29,6 +29,7 @@ from uk_management_bot.api.lifecycle import lifespan
 from uk_management_bot.api.auth.router import router as auth_router
 from uk_management_bot.api.requests.router import router as requests_router
 from uk_management_bot.api.requests.executor_actions import router as requests_executor_router
+from uk_management_bot.api.requests.address_bind import router as requests_address_router
 from uk_management_bot.api.callcenter.router import router as callcenter_router
 # DEAD-08 (PR-11): api/notifications удалён — 0 вызовов с фронта, 0 хитов в
 # прод-access-логах, закрыт edge-allowlist'ом SEC-22; модель Notification
@@ -151,6 +152,7 @@ app.include_router(requests_pool_router, prefix="/api/v2/requests", tags=["reque
 app.include_router(requests_handover_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(requests_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(requests_executor_router, prefix="/api/v2/requests", tags=["requests"])
+app.include_router(requests_address_router, prefix="/api/v2/requests", tags=["requests"])
 app.include_router(callcenter_router, prefix="/api/v2/callcenter", tags=["callcenter"])
 app.include_router(profile_router, prefix="/api/v2/profile", tags=["profile"])
 app.include_router(ws_router, prefix="/ws/v2", tags=["websocket"])

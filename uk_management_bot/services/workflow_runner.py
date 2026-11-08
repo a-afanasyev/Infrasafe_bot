@@ -196,6 +196,8 @@ def _new_state_from(req: Request) -> RequestState:
         acceptance_mode=req.acceptance_mode or ACCEPTANCE_MODE_RESIDENT,
         category=req.category,
         return_count=req.return_count or 0,
+        # Свободный текст адреса помечен явно (колл-центр до 2026-11-07).
+        address_bound=req.address_type != "legacy",
     )
 
 

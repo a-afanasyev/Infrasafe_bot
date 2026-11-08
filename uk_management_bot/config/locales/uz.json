@@ -243,6 +243,7 @@
       "reassign_no_duty": "«{spec}» mutaxassisligi bo‘yicha navbatchi yo‘q",
       "reassign_duty_lookup_failed": "Navbatchini tanlab bo'lmadi, qaytadan urinib ko'ring",
       "reassign_bad_status": "Qayta tayinlash faqat «Yangi» yoki «Ishda» holatidagi arizalar uchun mumkin",
+      "address_not_bound": "Ariza manzili ma'lumotnomadan emas — tayinlab bo‘lmaydi. Dashboarddagi ariza kartasida hovli, uy yoki xonadonni biriktiring.",
       "reassign_rejected": "Qayta tayinlash rad etildi: ariza o‘zgardi, kartani qaytadan oching",
       "reassign_from_unassigned": "tayinlanmagan edi",
       "reassign_manager_only": "Qayta tayinlash menejer uchun mavjud",

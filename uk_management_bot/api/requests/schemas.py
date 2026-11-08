@@ -184,6 +184,42 @@ def validate_elevator_fields(
         raise ValueError(str(exc)) from exc
 
 
+class _AddressLevelMixin(BaseModel):
+    """Адрес заявки — ровно один уровень справочника: двор, дом или квартира.
+
+    Решение владельца 2026-11-07: заявки без адреса из справочника не
+    принимаются (свободный текст — нет). Общий для колл-центра и привязки
+    адреса к legacy-заявке."""
+
+    yard_id: Optional[int] = None
+    building_id: Optional[int] = None
+    apartment_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _one_address_level(self):
+        # Ровно один FK у заявки (CHECK ck_requests_address_type_fk).
+        chosen = [x for x in (self.yard_id, self.building_id, self.apartment_id) if x is not None]
+        if not chosen:
+            raise ValueError("адрес обязателен: выберите двор, дом или квартиру из справочника")
+        if len(chosen) > 1:
+            raise ValueError("yard_id, building_id and apartment_id are mutually exclusive")
+        return self
+
+    def address_level(self) -> tuple[str, int]:
+        """(уровень, id) единственного выбранного уровня адреса."""
+        if self.apartment_id is not None:
+            return "apartment", self.apartment_id
+        if self.building_id is not None:
+            return "building", self.building_id
+        return "yard", self.yard_id
+
+
+class BindAddressBody(_AddressLevelMixin):
+    """Привязка адреса из справочника к заявке без него (legacy-текст)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class _ElevatorFieldsMixin(BaseModel):
     """``elevator_id``/``elevator_operational`` + Р11-проверка после полей."""
 

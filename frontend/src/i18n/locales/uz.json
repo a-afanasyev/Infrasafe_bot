@@ -1276,7 +1276,6 @@
     "saveFailed": "Saqlab bo'lmadi. Qayta urinib ko'ring.",
     "searchResident": "Aholini qidirish xatosi",
     "createRequest": "Ariza yaratishda xatolik",
-    "specifyAddress": "Manzilni kiriting",
     "createShift": "Smena yaratishda xatolik",
     "updateShift": "Smenani yangilashda xatolik",
     "deleteShift": "Smenani o'chirishda xatolik",
@@ -1299,6 +1298,9 @@
     "updateTemplate": "Shablonni saqlashda xatolik"
   },
   "kanban": {
+    "addressNotBound": "Manzil ma'lumotnomadan emas — arizani ishga berib bo‘lmaydi. Hovli, uy yoki xonadonni biriktiring.",
+    "bindAddress": "Manzilni biriktirish",
+    "bindAddressDone": "Manzil biriktirildi",
     "createByCall": "Qo'ng'iroq orqali yaratish",
     "emptyColumn": "Arizalar yo'q",
     "confirmed": "Tasdiqlangan",
@@ -1382,7 +1384,24 @@
     "mediaListError": "Rasmlarni yuklab bo'lmadi — keyinroq urinib ko'ring",
     "beforePhotos": "Ishdan oldin"
   },
+  "addressPicker": {
+    "yard": "Hovli *",
+    "yardPlaceholder": "Hovlini tanlang...",
+    "building": "Uy",
+    "wholeYard": "Butun hovli",
+    "apartment": "Xonadon",
+    "wholeBuilding": "Butun uy",
+    "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
+  },
   "callcenter": {
+    "suggest": {
+      "label": "Qo‘ng‘iroq qiluvchi aytgan manzil",
+      "placeholder": "Masalan: 4g, 10-qavat",
+      "button": "Manzilni aniqlash",
+      "loading": "Qidirilmoqda...",
+      "none": "Ma'lumotnomada topilmadi — manzilni pastda tanlang",
+      "failed": "Manzilni aniqlab bo‘lmadi — uni pastda tanlang"
+    },
     "elevator": {
       "yard": "Hovli *",
       "yardPlaceholder": "Hovlini tanlang...",
@@ -1404,8 +1423,6 @@
     "urgencyLabel": "Shoshilinchlik",
     "descriptionLabel": "Muammo tavsifi",
     "descriptionPlaceholder": "Muammo tavsifi",
-    "addressLabel": "Manzil / kvartira *",
-    "addressPlaceholder": "Manzil / kvartira *",
     "submitLoading": "Yaratilmoqda...",
     "submit": "Ariza yaratish"
   },
