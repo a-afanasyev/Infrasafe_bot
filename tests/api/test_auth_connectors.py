@@ -109,12 +109,50 @@ async def test_otp_resend_after_lockout_does_not_refill_attempts():
         await auth_service.store_otp(uid, "111111")
         for _ in range(auth_service.MFA_MAX_ATTEMPTS):
             await auth_service.verify_otp(uid, "000000")
-        await auth_service.store_otp(uid, "222222")          # resend
+        with pytest.raises(auth_service.OtpLocked):          # resend во время блока
+            await auth_service.store_otp(uid, "222222")
         ok, msg = await auth_service.verify_otp(uid, "222222")
-        assert ok is False and "Too many attempts" in msg
+        assert ok is False
     finally:
         await r.delete(f"mfa:otp:{uid}")
         await r.aclose()
+
+
+@pytest.mark.asyncio
+async def test_otp_lockout_is_not_extended_by_resend():
+    """Ревью PR #718: resend во время блока не продлевает TTL и не кладёт мёртвый код —
+    иначе знающий пароль держал бы блок бесконечно, а «через 5 минут» врало."""
+    r = await _redis_or_skip()
+    uid = 930_000_000 + uuid.uuid4().int % 1_000_000
+    key = f"mfa:otp:{uid}"
+    try:
+        await auth_service.store_otp(uid, "111111")
+        for _ in range(auth_service.MFA_MAX_ATTEMPTS):
+            await auth_service.verify_otp(uid, "000000")
+        await r.expire(key, 100)
+        with pytest.raises(auth_service.OtpLocked):
+            await auth_service.store_otp(uid, "222222")
+        assert await r.ttl(key) <= 100
+        assert await r.hget(key, "code") is None
+    finally:
+        await r.delete(key)
+        await r.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/api/v2/auth/login", "/api/v2/auth/login/resend-otp"])
+async def test_locked_otp_answers_429_without_sending(path, client, db_session, manager_user, monkeypatch):
+    manager_user.email, manager_user.password_hash = "lock@test", auth_service.hash_password("pw-123456")
+    db_session.add(manager_user)
+    await db_session.commit()
+    monkeypatch.setattr(auth_router, "store_otp", AsyncMock(side_effect=auth_service.OtpLocked))
+    send = AsyncMock(return_value=True)
+    monkeypatch.setattr(auth_router, "send_otp_via_bot", send)
+    body = ({"email": "lock@test", "password": "pw-123456"} if path.endswith("login")
+            else {"mfa_token": auth_service.create_mfa_token(manager_user.id)})
+    resp = await client.post(path, json=body)
+    assert resp.status_code == 429, resp.text
+    send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -198,6 +236,17 @@ async def test_registration_ticket_reissue_and_completion_revoke():
     finally:
         await r.delete(f"reg:ticket:{tid}")
         await r.aclose()
+
+
+@pytest.mark.asyncio
+async def test_registration_ticket_marker_is_fail_open(monkeypatch):
+    """Ревью PR #718: без Redis /start и завершение регистрации не дают 500."""
+    from uk_management_bot.api.registration import tickets
+
+    monkeypatch.setattr(tickets, "_get_redis", AsyncMock(side_effect=ConnectionError("down")))
+    token = await tickets.issue_registration_ticket(4242)
+    assert tickets.verify_registration_ticket(token) == 4242
+    await tickets.revoke_registration_tickets(4242)   # не бросает
 
 
 # ── 8. CSRF для cookie-сессии ───────────────────────────────────────────

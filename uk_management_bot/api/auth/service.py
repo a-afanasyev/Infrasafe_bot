@@ -286,16 +286,29 @@ async def _get_redis() -> aioredis.Redis:
     return aioredis.from_url(url, decode_responses=True)
 
 
+class OtpLocked(Exception):
+    """Попытки OTP исчерпаны — до истечения TTL новый код не выдаётся."""
+
+
 async def store_otp(user_id: int, code: str) -> None:
-    """Store OTP in Redis with TTL and attempt counter."""
+    """Store OTP in Redis with TTL and attempt counter.
+
+    Raises OtpLocked, если попытки исчерпаны: ключ не трогаем — resend не
+    продлевает блок и не кладёт код, который всё равно не пройдёт проверку.
+    """
     r = await _get_redis()
     key = f"mfa:otp:{user_id}"
-    # A10-INT-07: resend перезаписывает код, но НЕ возвращает исчерпанные попытки —
-    # иначе «resend → 3 попытки → resend» обнулял бы счётчик в рамках окна.
-    await r.hset(key, "code", code)
-    await r.hsetnx(key, "attempts", str(MFA_MAX_ATTEMPTS))
-    await r.expire(key, MFA_TOKEN_EXPIRE_MINUTES * 60)
-    await r.aclose()
+    try:
+        attempts = await r.hget(key, "attempts")
+        if attempts is not None and int(attempts) <= 0:
+            raise OtpLocked()
+        # A10-INT-07: resend перезаписывает код, но НЕ возвращает исчерпанные попытки —
+        # иначе «resend → 3 попытки → resend» обнулял бы счётчик в рамках окна.
+        await r.hset(key, "code", code)
+        await r.hsetnx(key, "attempts", str(MFA_MAX_ATTEMPTS))
+        await r.expire(key, MFA_TOKEN_EXPIRE_MINUTES * 60)
+    finally:
+        await r.aclose()
 
 
 # AUD7-SEC-05: проверка и потребление OTP — одна атомарная операция. Раньше

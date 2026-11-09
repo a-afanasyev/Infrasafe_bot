@@ -30,6 +30,7 @@ def test_auth_cookies_are_httponly_strict_and_path_scoped():
 @pytest.mark.asyncio
 async def test_store_otp_keeps_remaining_attempts():
     redis = MagicMock()
+    redis.hget = AsyncMock(return_value=None)  # блока нет
     redis.hset = AsyncMock()
     redis.hsetnx = AsyncMock()
     redis.expire = AsyncMock()

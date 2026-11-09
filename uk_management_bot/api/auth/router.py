@@ -17,7 +17,7 @@ from uk_management_bot.api.auth.service import (
     create_access_token, create_refresh_token_value,
     ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS,
     TWA_REFRESH_TOKEN_EXPIRE_HOURS,
-    create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, send_otp_via_bot,
+    create_mfa_token, verify_mfa_token, generate_otp, store_otp, verify_otp, OtpLocked, send_otp_via_bot,
     user_by_email, save_refresh_token, _rotate_refresh_token,
     revoke_refresh_token, persist_password_hash,
     _REFRESH_INVALID, _REFRESH_NOT_APPROVED,
@@ -179,7 +179,7 @@ async def login_password(request: Request, data: PasswordLogin, db: AsyncSession
 
     # Generate and send OTP
     otp_code = generate_otp()
-    await store_otp(user.id, otp_code)
+    await _store_otp_or_429(user.id, otp_code)
     sent = await send_otp_via_bot(user.telegram_id, otp_code)
     if not sent:
         raise HTTPException(
@@ -225,6 +225,17 @@ async def verify_login_otp(
     return WebTokenResponse(access_token=tokens["access_token"])
 
 
+async def _store_otp_or_429(user_id: int, code: str) -> None:
+    """Блок OTP (попытки исчерпаны) — честный 429, код не отправляется."""
+    try:
+        await store_otp(user_id, code)
+    except OtpLocked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Try again in 5 minutes.",
+        )
+
+
 @router.post("/login/resend-otp")
 @limiter.limit("3/minute")
 async def resend_otp(request: Request, data: MFARequiredResponse, db: AsyncSession = Depends(get_db)):
@@ -237,7 +248,7 @@ async def resend_otp(request: Request, data: MFARequiredResponse, db: AsyncSessi
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not found")
 
     otp_code = generate_otp()
-    await store_otp(user.id, otp_code)
+    await _store_otp_or_429(user.id, otp_code)
     await send_otp_via_bot(user.telegram_id, otp_code)
     return {"ok": True}
 

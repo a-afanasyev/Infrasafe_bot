@@ -53,11 +53,16 @@ def verify_registration_ticket(token: str) -> Optional[int]:
 
 
 async def _set_marker(telegram_id: int, value: str) -> None:
-    r = await _get_redis()
+    """Fail-open, как и проверка: без Redis тикет живёт по подписи и TTL,
+    а /start и завершение регистрации не падают 500."""
     try:
-        await r.set(_KEY.format(telegram_id), value, ex=TICKET_TTL_MINUTES * 60)
-    finally:
-        await r.aclose()
+        r = await _get_redis()
+        try:
+            await r.set(_KEY.format(telegram_id), value, ex=TICKET_TTL_MINUTES * 60)
+        finally:
+            await r.aclose()
+    except Exception as exc:  # noqa: BLE001 — сбой Redis не роняет регистрацию
+        logger.warning("registration ticket marker: Redis unavailable: %s", type(exc).__name__)
 
 
 async def issue_registration_ticket(telegram_id: int) -> str:
