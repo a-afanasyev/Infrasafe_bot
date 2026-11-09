@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.orm import Session
 from uk_management_bot.database.models.user import User
-from uk_management_bot.services.request_access import has_request_access_sync
+from uk_management_bot.services.request_access import can_upload_completion_sync, has_request_access_sync
 from uk_management_bot.services.request_handler_service import RequestHandlerService
 from uk_management_bot.services.group_pool_notify import notify_group_pool_claimed_sync
 from uk_management_bot.integrations import get_media_client
@@ -466,7 +466,13 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
 
             request = service.get_request_by_number(request_number)
 
-            if not request:
+            # BOT-01 (ревью 2026-11-07): право — ДО загрузки. Файлы уходят в
+            # media-service как completion_* заявки из callback, а фотоотчёт
+            # читается оттуда же: без этой проверки любой пользователь бота
+            # подкладывал фото в чужую заявку, канон отказывал уже после.
+            # Отказ — текстом «не найдено», как в executor_view_media.
+            actor = service.get_user_by_telegram_id(callback.from_user.id)
+            if not request or actor is None or not can_upload_completion_sync(db_session, actor, request):
                 await callback.answer(get_text("requests.request_not_found", language=lang), show_alert=True)
                 await state.clear()
                 return
@@ -476,10 +482,7 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
             if completion_media:
                 from uk_management_bot.utils.media_helpers import upload_report_file_to_media_service
                 bot = callback.bot
-
-                # Получаем user_id для uploaded_by
-                user = service.get_user_by_telegram_id(callback.from_user.id)
-                uploaded_by = user.id if user else None
+                uploaded_by = actor.id
 
                 logger.info(f"Загрузка {len(completion_media)} файлов в Media Service для заявки {request_number}")
 
@@ -523,10 +526,9 @@ async def executor_finish_completion(callback: CallbackQuery, state: FSMContext)
             # I/O — вне транзакции). Отчёт → completion_report, файлы →
             # completion_media (list; ридеры принимают и list, и json-строку).
             from uk_management_bot.utils.request_workflow import Action
-            actor = service.get_user_by_telegram_id(callback.from_user.id)
             media_payload = media_service_files if media_service_files else completion_media
             outcome, err = _run_executor_command(
-                request_number, actor.id if actor else None,
+                request_number, actor.id,
                 Action.EXECUTOR_COMPLETE,
                 {"completion_report": completion_comment or "",
                  "completion_media": media_payload or []},

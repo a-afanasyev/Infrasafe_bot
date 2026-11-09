@@ -328,7 +328,7 @@ async def activate_employee(db: AsyncSession, user: User) -> PurgeResult:
 
 async def decline_employee(db: AsyncSession, user: User) -> User:
     """Отклонить pending-стафф: `status`→blocked."""
-    user.status = "blocked"
+    await set_user_status(db, user, "blocked", commit=False)
     await db.commit()
     await db.refresh(user)
     return user
@@ -384,7 +384,7 @@ async def soft_delete_employee(
     user.deleted_at = datetime.now(timezone.utc)
     user.deleted_by = deleted_by_id
     user.deletion_reason = reason
-    user.status = "deleted"
+    await set_user_status(db, user, "deleted", commit=False)
 
     # End any active shift
     active_shifts_result = await db.execute(

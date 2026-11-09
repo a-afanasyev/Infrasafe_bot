@@ -146,15 +146,18 @@ async def test_accept_not_your_transfer_403(client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_accept_pending_not_yet_assigned_409(client, db_session):
+async def test_accept_pending_not_yet_assigned_is_not_yours(client, db_session):
+    """У pending-передачи получателя ещё нет — она ничья. Посторонний получает
+    «не ваша», а не `wrong_status`: статус чужой передачи не раскрывается
+    (IDOR-ревью 2026-11-07, IDOR-02)."""
     initiator = await _user(db_session, 3061)
     me = await _user(db_session, 3062)
     shift = await _shift(db_session, initiator.id)
     transfer = await _transfer(db_session, shift_id=shift.id, from_id=initiator.id, status="pending")
     _as(me)
     resp = await client.post(f"{TR}/{transfer.id}/respond", json={"action": "accept"})
-    assert resp.status_code == 409
-    assert resp.json()["detail"] == "wrong_status"
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "not_your_transfer"
 
 
 # ═══════════════════════════ reject ═══════════════════════════

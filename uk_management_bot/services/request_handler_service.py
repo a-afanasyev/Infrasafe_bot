@@ -482,8 +482,9 @@ def guard_executor_issue(db: Session, *, request_number: str,
 
     Returns:
         (request, user, err_key): err_key — ключ локали при отказе, иначе None.
-        Проверки: заявка существует; статус «В работе»; актор — назначенный
-        исполнитель заявки.
+        Проверки: заявка существует; актор — назначенный исполнитель заявки;
+        статус «В работе». Исполнитель — раньше статуса (BOT-02): иначе чужой
+        различал бы статус чужой заявки.
     """
     from uk_management_bot.utils.constants import REQUEST_STATUS_IN_PROGRESS
 
@@ -494,10 +495,10 @@ def guard_executor_issue(db: Session, *, request_number: str,
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if user is None:
         return request, None, "common.user_not_found"
-    if request.status != REQUEST_STATUS_IN_PROGRESS:
-        return request, user, "materials.issue.wrong_status"
     if request.executor_id != user.id:
         return request, user, "materials.issue.not_executor"
+    if request.status != REQUEST_STATUS_IN_PROGRESS:
+        return request, user, "materials.issue.wrong_status"
     return request, user, None
 
 

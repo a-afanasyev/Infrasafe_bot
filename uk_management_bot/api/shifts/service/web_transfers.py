@@ -240,10 +240,11 @@ async def accept_transfer_web(
     transfer = await get_transfer_for_update(db, transfer_id)
     if not transfer:
         return {"success": False, "error": "transfer_not_found"}
-    if transfer.status != "assigned":
-        return {"success": False, "error": "wrong_status"}
+    # Сначала «чья», потом статус: иначе чужой различал бы статусы передачи.
     if transfer.to_executor_id != executor_id:
         return {"success": False, "error": "not_your_transfer"}
+    if transfer.status != "assigned":
+        return {"success": False, "error": "wrong_status"}
 
     shift = await get_shift_for_update(db, transfer.shift_id)
     if not shift:
@@ -293,10 +294,11 @@ async def reject_transfer_web_by_recipient(
     transfer = await get_transfer_for_update(db, transfer_id)
     if not transfer:
         return {"success": False, "error": "transfer_not_found"}
-    if transfer.status != "assigned":
-        return {"success": False, "error": "wrong_status"}
+    # Сначала «чья», потом статус: иначе чужой различал бы статусы передачи.
     if transfer.to_executor_id != executor_id:
         return {"success": False, "error": "not_your_transfer"}
+    if transfer.status != "assigned":
+        return {"success": False, "error": "wrong_status"}
 
     if not transfer.update_status("rejected"):
         return {"success": False, "error": "wrong_status"}

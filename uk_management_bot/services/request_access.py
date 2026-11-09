@@ -247,6 +247,11 @@ async def can_upload_completion_async(db: AsyncSession, user, request) -> bool:
     return reason in COMPLETION_UPLOAD_REASONS
 
 
+def can_upload_completion_sync(db: Session, user, request) -> bool:
+    """Синхронный близнец `can_upload_completion_async` — для бот-пути «Готово»."""
+    return request_access_reason_sync(db, user, _staff_probe(request)) in COMPLETION_UPLOAD_REASONS
+
+
 def _staff_probe(request) -> SimpleNamespace:
     """Заявка без фактов владельца и квартиры: канон проверяет владельца РАНЬШЕ
     исполнителя, и назначенный исполнитель, сам создавший заявку, иначе

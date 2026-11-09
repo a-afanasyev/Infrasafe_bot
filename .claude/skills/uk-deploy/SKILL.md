@@ -349,6 +349,18 @@ docker exec uk-management-bot env | grep ADMIN_COMMAND_ENABLED   # ожидае�
 
 Проверка проброса (значения не печатаются): `docker exec uk-management-api env | cut -d= -f1 | grep NEXT`.
 
+## Ротация ключей media-service (`MEDIA_API_KEYS`, без простоя)
+
+`media-service` принимает **любой** ключ из списка `MEDIA_API_KEYS` (через запятую). Клиенты шлют один ключ: `app`/`group-intake-bot`/`api` — `MEDIA_SERVICE_API_KEY` (fallback `MEDIA_API_KEY`), `access-api` — `MEDIA_API_KEY`. Ключи равноправны (по категориям не разграничены) — меняются все вместе.
+
+1. Сгенерировать новый ключ и **дописать** его в `MEDIA_API_KEYS` в Doppler (через web-dashboard): `OLD,NEW`.
+2. Деплой `media-service` → принимает оба ключа.
+3. Переключить клиентов: `MEDIA_API_KEY` (и `MEDIA_SERVICE_API_KEY`, если задан) = `NEW` → деплой `app group-intake-bot api access-api`.
+4. Проверить отсутствие 401 от media (`docker logs uk-management-api 2>&1 | grep -c "Media service rejected API key"` — ожидается 0 после переключения).
+5. Убрать `OLD` из `MEDIA_API_KEYS` → деплой `media-service`.
+
+Значения в логи/чат не выводить; проверка проброса — только имена: `docker exec uk-media-service env | cut -d= -f1 | grep MEDIA_API`.
+
 ## Ротация JWT_SECRET без force-logout (ARCH-107, dual-key через `kid`)
 
 Раньше смена `JWT_SECRET` мгновенно разлогинивала все web/TWA-сессии. Теперь верификатор (`api/auth/service.py`, общий для `api` и `access-api`) принимает набор ключей {primary, next} — каждый токен несёт `kid` в заголовке, подписант (`api`) переключается флагом. Переменные `JWT_SECRET_NEXT`/`JWT_USE_NEXT_SECRET` проброшены **только `api` и `access-api`** (`app`/`migrate` JWT не верифицируют; их settings-валидация флага не увидит — это нормально).
