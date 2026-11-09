@@ -238,6 +238,20 @@ def test_accept_rollback_when_target_invalid_no_dangling_accepted(db):
     assert db.query(Shift).filter(Shift.id == 1).first().user_id == 10
 
 
+def test_foreign_executor_cannot_learn_transfer_status(db):
+    """IDOR-ревью 2026-11-07: на чужую передачу — «не ваша» при любом её статусе."""
+    _user(db, 10, 1010)
+    _user(db, 20, 2020)
+    _user(db, 21, 2121)
+    _shift(db, 1, 10, status="planned")
+    svc = _service(db)
+    tid = svc.create_transfer(1, 10, "illness", "", "normal")["transfer_id"]
+    svc.assign_transfer(tid, 20, manager_id=30)
+    assert svc.reject_transfer(tid, 20)["success"] is True
+    assert svc.accept_transfer(tid, 21) == {"success": False, "error": "not_your_transfer"}
+    assert svc.reject_transfer(tid, 21) == {"success": False, "error": "not_your_transfer"}
+
+
 def test_accept_not_your_transfer(db):
     _user(db, 10, 1010)
     _user(db, 20, 2020)

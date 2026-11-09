@@ -9,6 +9,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from uk_management_bot.api.rate_limit import limiter, rate_limit_exceeded_handler
@@ -142,6 +143,53 @@ async def security_headers(request: Request, call_next):
         "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
     )
     return response
+
+
+# AUTH-04 (ревью 2026-11-07): CSRF под cookie-сессией. SameSite=Strict не
+# закрывает same-site — поддомены площадки шлют cookie менеджера в «простых»
+# (без preflight) POST: form/multipart/text и без тела. Мутация с cookie и без
+# Bearer проходит только со своего origin. Bearer (TWA, сервисы) не CSRF-уязвим.
+_CSRF_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_CSRF_SIMPLE_TYPES = frozenset({"application/x-www-form-urlencoded", "multipart/form-data", "text/plain"})
+_CSRF_TRUSTED_ORIGINS = frozenset(allowed_origins)
+
+
+def _csrf_allowed(request: Request) -> bool:
+    site = request.headers.get("sec-fetch-site")
+    origin = request.headers.get("origin")
+    if site == "same-origin":
+        return True
+    if origin is not None:
+        return origin in _CSRF_TRUSTED_ORIGINS
+    if site in ("same-site", "cross-site"):
+        return False
+    # Не браузер (ни Origin, ни Sec-Fetch-*): тело «простого» типа не пускаем.
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    return content_type not in _CSRF_SIMPLE_TYPES
+
+
+class CsrfGuard:
+    """Чистый ASGI, не `@app.middleware`: лишний BaseHTTPMiddleware сдвигал
+    BackgroundTasks раньше ответа (test_network_outside_tx). Тело не читается."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["method"] in _CSRF_UNSAFE_METHODS:
+            from uk_management_bot.api.auth.router import COOKIE_ACCESS_NAME, COOKIE_REFRESH_NAME
+
+            request = Request(scope)
+            if ("authorization" not in request.headers
+                    and (COOKIE_ACCESS_NAME in request.cookies or COOKIE_REFRESH_NAME in request.cookies)
+                    and not _csrf_allowed(request)):
+                response = JSONResponse(status_code=403, content={"detail": "csrf_rejected"})
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(CsrfGuard)
 
 
 # Routers

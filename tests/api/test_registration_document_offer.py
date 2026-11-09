@@ -20,11 +20,6 @@ from uk_management_bot.keyboards.documents_entry import UPLOAD_DOCUMENTS_CB
 pytestmark = pytest.mark.asyncio
 
 
-def _bearer(tid: int) -> dict:
-    from uk_management_bot.api.registration.tickets import create_registration_ticket
-    return {"Authorization": f"Bearer {create_registration_ticket(tid)}"}
-
-
 @pytest.fixture(autouse=True)
 def _mute_managers(monkeypatch):
     monkeypatch.setattr(
@@ -52,9 +47,14 @@ async def _resident_with_apartment(db, telegram_id: int) -> int:
     return a.id
 
 
-def _register(client, tid: int, apt_id: int):
-    return client.post("/api/v2/registration/applicant", headers=_bearer(tid),
-                       json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+async def _register(client, tid: int, apt_id: int):
+    """Каждая попытка — со свежим тикетом, как после `/start`: завершённая
+    регистрация гасит прежний (AUTH-03)."""
+    from uk_management_bot.api.registration.tickets import issue_registration_ticket
+    ticket = await issue_registration_ticket(tid)
+    return await client.post("/api/v2/registration/applicant",
+                             headers={"Authorization": f"Bearer {ticket}"},
+                             json={"full_name": "Иван Иванов", "apartment_id": apt_id})
 
 
 def _upload_button_calls(send_mock):

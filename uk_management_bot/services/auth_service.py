@@ -302,6 +302,9 @@ class AuthService:
             
             old_status = user.status
             user.status = 'blocked'
+            # AUTH-02: заблокированный теряет все веб/TWA-сессии сразу.
+            from uk_management_bot.services.users.status import revoke_user_sessions_sync
+            revoke_user_sessions_sync(self.db, user.id)
             
             # CODE-02: переиспользуем уже загруженный user — без повторного SELECT
             audit = AuditLog(

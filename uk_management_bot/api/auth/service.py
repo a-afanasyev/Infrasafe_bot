@@ -304,12 +304,14 @@ async def store_otp(user_id: int, code: str) -> None:
 # получали «N attempts remaining» по устаревшему значению. Сравнение внутри
 # Redis идёт по sha1-хэшам (redis.sha1hex): побайтовое сравнение хэшей не
 # раскрывает префикс кода, а сам код в Lua не сравнивается напрямую.
+# AUTH-01 (ревью 2026-11-07): исчерпание НЕ удаляет ключ — гасит код и держит
+# attempts=0 до TTL. Раньше DEL отдавал resend-у (hsetnx) три свежие попытки.
 _OTP_CONSUME_LUA = """
 local code = redis.call('HGET', KEYS[1], 'code')
 if not code then return {'missing', 0} end
 local attempts = tonumber(redis.call('HGET', KEYS[1], 'attempts') or '0')
 if attempts <= 0 then
-  redis.call('DEL', KEYS[1])
+  redis.call('HDEL', KEYS[1], 'code')
   return {'exhausted', 0}
 end
 if redis.sha1hex(code) == redis.sha1hex(ARGV[1]) then
@@ -318,7 +320,7 @@ if redis.sha1hex(code) == redis.sha1hex(ARGV[1]) then
 end
 local remaining = redis.call('HINCRBY', KEYS[1], 'attempts', -1)
 if remaining <= 0 then
-  redis.call('DEL', KEYS[1])
+  redis.call('HDEL', KEYS[1], 'code')
   return {'exhausted', 0}
 end
 return {'invalid', remaining}
@@ -337,7 +339,7 @@ async def verify_otp(user_id: int, code: str) -> tuple[bool, str]:
     if outcome == "missing":
         return False, "OTP expired or not found. Please login again."
     if outcome == "exhausted":
-        return False, "Too many attempts. Please login again."
+        return False, "Too many attempts. Try again in 5 minutes."
     if outcome == "invalid":
         return False, f"Invalid code. {int(remaining)} attempts remaining."
     return True, ""

@@ -16,6 +16,13 @@ def _bearer(tid):
     return {"Authorization": f"Bearer {create_registration_ticket(tid)}"}
 
 
+async def _restarted(tid):
+    """Тикет, как его выдаёт `/start`: после завершённой регистрации прежний
+    погашен (AUTH-03), повтор идёт с новым."""
+    from uk_management_bot.api.registration.tickets import issue_registration_ticket
+    return {"Authorization": f"Bearer {await issue_registration_ticket(tid)}"}
+
+
 @pytest.fixture
 def mock_notify(monkeypatch):
     """Never hit the real Telegram API in tests."""
@@ -68,8 +75,8 @@ async def test_applicant_double_submit_idempotent(api_client, async_db, seed_use
     await seed_user(telegram_id=99200, phone="+998901112233")
     apt_id = (await seed_apartment()).id
     payload = {"full_name": "Иван Иванов", "apartment_id": apt_id}
-    r1 = await api_client.post("/api/v2/registration/applicant", headers=_bearer(99200), json=payload)
-    r2 = await api_client.post("/api/v2/registration/applicant", headers=_bearer(99200), json=payload)
+    r1 = await api_client.post("/api/v2/registration/applicant", headers=await _restarted(99200), json=payload)
+    r2 = await api_client.post("/api/v2/registration/applicant", headers=await _restarted(99200), json=payload)
     assert r1.status_code == 200
     assert r2.status_code == 200
     user = (await async_db.execute(select(User).where(User.telegram_id == 99200))).scalar_one()

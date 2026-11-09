@@ -305,10 +305,11 @@ class ShiftTransferService:
             ).with_for_update().first()
             if not transfer:
                 return {"success": False, "error": "transfer_not_found"}
-            if transfer.status != "assigned":
-                return {"success": False, "error": "wrong_status"}
+            # Сначала «чья», потом статус: иначе чужой различал бы статусы передачи.
             if transfer.to_executor_id != executor_id:
                 return {"success": False, "error": "not_your_transfer"}
+            if transfer.status != "assigned":
+                return {"success": False, "error": "wrong_status"}
 
             # Транзишен accepted, затем перенос через общее ядро (без истории —
             # сама строка передачи и есть история).
@@ -358,10 +359,11 @@ class ShiftTransferService:
             ).with_for_update().first()
             if not transfer:
                 return {"success": False, "error": "transfer_not_found"}
-            if transfer.status != "assigned":
-                return {"success": False, "error": "wrong_status"}
+            # Сначала «чья», потом статус: иначе чужой различал бы статусы передачи.
             if transfer.to_executor_id != executor_id:
                 return {"success": False, "error": "not_your_transfer"}
+            if transfer.status != "assigned":
+                return {"success": False, "error": "wrong_status"}
 
             if not transfer.update_status("rejected", comment):
                 return {"success": False, "error": "wrong_status"}

@@ -750,10 +750,15 @@ async def update_request(
 
     # ── Manager path: только не-workflow поля (deprecated workflow-поля дропаем —
     # их место в status-переходе через layer, не прямой записью) ──
-    else:
+    elif manages:
         for field in list(updates.keys()):
             if field not in _MANAGER_EDIT_FIELDS:
                 del updates[field]
+
+    # IDOR-ревью 2026-11-07: `requests.update`, выданное в админке роли без
+    # исполнения/авторства/управления, — не право править любую заявку.
+    else:
+        raise HTTPException(status_code=403, detail="Not permitted to edit this request")
 
     # Terminal-guard на ВСЕ поля edit-ветки (A9-P3-13; раньше — только urgency):
     # финализированная заявка заморожена — исполнитель не дописывает отчёт/

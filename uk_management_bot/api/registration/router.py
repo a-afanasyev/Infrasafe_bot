@@ -12,7 +12,7 @@ from uk_management_bot.api.rate_limit import limiter, auth_ratelimit_guard
 from uk_management_bot.api.auth.service import verify_twa_init_data
 from uk_management_bot.config.settings import settings
 from uk_management_bot.api.registration.tickets import (
-    create_registration_ticket, verify_registration_ticket,
+    check_registration_ticket, issue_registration_ticket, revoke_registration_tickets,
 )
 from uk_management_bot.api.registration.catalog import (
     get_apartment_label,
@@ -83,18 +83,18 @@ async def start(request: Request, body: StartIn, db: AsyncSession = Depends(get_
         phone=existing.phone if existing else None,
     )
     return StartOut(
-        registration_ticket=create_registration_ticket(telegram_id),
+        registration_ticket=await issue_registration_ticket(telegram_id),
         prefill=prefill,
         complex_name=settings.RESIDENTIAL_COMPLEX_NAME,
         company_name=settings.MANAGEMENT_COMPANY_NAME,
     )
 
 
-def require_registration_ticket(authorization: str | None = Header(default=None)) -> int:
+async def require_registration_ticket(authorization: str | None = Header(default=None)) -> int:
     """Зависимость: telegram_id из Bearer-тикета регистрации (спека §4.1)."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing registration ticket")
-    tid = verify_registration_ticket(authorization.split(" ", 1)[1])
+    tid = await check_registration_ticket(authorization.split(" ", 1)[1])
     if tid is None:
         raise HTTPException(status_code=401, detail="Invalid or expired registration ticket")
     return tid
@@ -234,5 +234,7 @@ async def _registered(telegram_id: int, user) -> RegistrationResult:
     """ЕДИНЫЙ успешный выход регистрации (новая заявка, повтор с pending-
     привязкой, гонка IntegrityError): каждый повтор заново присылает кнопку
     загрузки документа — потерянное сообщение восстанавливается и так."""
+    # AUTH-03: регистрация завершена — тикет больше ничего не открывает.
+    await revoke_registration_tickets(telegram_id)
     await offer_document_upload(telegram_id=telegram_id, language=getattr(user, "language", None) or "ru")
     return RegistrationResult(status="pending")
