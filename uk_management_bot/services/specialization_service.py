@@ -252,5 +252,6 @@ class SpecializationService:
             )
             self.db.add(audit)
             
-        except Exception as e:
-            logger.error(f"Ошибка создания аудит лога: {e}")
+        except Exception:
+            # С трассой: молчаливая строка в логе скрывала потерю аудита месяцами.
+            logger.exception("Ошибка создания аудит лога")

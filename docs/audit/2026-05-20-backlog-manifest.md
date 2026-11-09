@@ -49,7 +49,7 @@
 | ID | P | status | method | Пакет | PR | Сервисы | Прод-верификация | Примечание |
 |---|---|---|---|---|---|---|---|---|
 | `A10-SAT-03` | P3 | deferred | owner-decision-2026-11-05 | AUD10-CODE | — | media-service, provisioning | — | 2026-11-06: A9-P3-33 закрыт без alembic — SAT-03 отдельно (роль uk_media_app без DDL, DDL только в media-migrate); делать при следующей работе с media |
-| `A10-HOST-06` | P3 | actionable | verified-host-2026-11-09 | AUD10-HOST | — | хост profk | — | 2026-11-09: строка PermitRootLogin yes в основном sshd_config закомментирована (sshd -t ok, reload, действует no, вход проверен; копия sshd_config.bak-20261109). Остаток — 1 ключ в /root/.ssh/authorized_keys с подписью infrasafe-prod-new: похоже ключ InfraSafe — уточнить у них и удалить, если не нужен; NOPASSWD sudo принят |
+| `A10-HOST-06` | P3 | actionable | verified-host-2026-11-09 | AUD10-HOST | — | хост profk | — | 2026-11-09: устаревшая строка PermitRootLogin в основном sshd_config закомментирована (конфиг проверен, вход проверен). Остаток — сторонний ключ в authorized_keys: уточнить владельца у InfraSafe и удалить, если не нужен |
 | `A10-HOST-07` | P3 | deferred | owner-decision-2026-11-05 | AUD10-HOST | — | compose, хосты | — | сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105 |
 | `A11-CODE-02` | P3 | actionable | review-2026-11-06 | AUD11-CODE | — | api | — | рассылка news-watch: постоянные ошибки доставки → done вместо failed |
 | `A11-DEC-01` | P3 | deferred | owner-decision-2026-11-07 | AUD11-CODE | — | api, InfraSafe | — | CODE-11-03/04/07 — риск принят; остаток — ротация TELEMETRY_HMAC_SECRET при ближайшей перепрошивке контроллеров |
