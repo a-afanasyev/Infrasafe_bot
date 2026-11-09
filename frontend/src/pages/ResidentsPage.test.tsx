@@ -167,6 +167,26 @@ describe('ResidentsPage', () => {
     expect(lastCall()[2]).toEqual({ limit: 25, offset: 25 })
   })
 
+  it('таблица на странице за концом списка тоже предлагает вернуться в начало', async () => {
+    sessionStorage.setItem('residents.offset', '25')
+    localStorage.setItem('residents_view_mode', 'table')
+    listQuery.data = { items: [], total: 5, limit: 25, offset: 25 }
+    const user = userEvent.setup()
+    render(<ResidentsPage />)
+    await user.click(screen.getByRole('button', { name: 'В начало списка' }))
+    expect(lastCall()[2]).toEqual({ limit: 25, offset: 0 })
+    localStorage.removeItem('residents_view_mode')
+  })
+
+  it('испорченные сохранённые значения заменяются начальными', () => {
+    sessionStorage.setItem('residents.offset', '"abc"')
+    sessionStorage.setItem('residents.yard', '"x"')
+    sessionStorage.setItem('residents.status', '{bad json')
+    render(<ResidentsPage />)
+    expect(lastCall()[0]).toEqual({})
+    expect(lastCall()[2]).toEqual({ limit: 25, offset: 0 })
+  })
+
   it('чекбокс скрывает заблокировавших бота', async () => {
     const user = userEvent.setup()
     render(<ResidentsPage />)

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useTableSort } from '../hooks/useTableSort'
-import { useSessionState } from '../hooks/useSessionState'
+import { isBoolean, isIdOrNull, isOffset, isString, useSessionState } from '../hooks/useSessionState'
 import {
   RESIDENT_COLUMNS,
   RESIDENTS_SORT_STORAGE_KEY,
@@ -31,14 +31,14 @@ export default function ResidentsPage() {
 
   // Фильтры, поиск и страница — в sessionStorage: «Назад» из карточки
   // жителя возвращает к тому же срезу списка (сортировка — в useTableSort).
-  const [statusFilter, setStatusFilter] = useSessionState<string>('residents.status', 'all')
-  const [verificationFilter, setVerificationFilter] = useSessionState<string>('residents.verification', 'all')
-  const [yardId, setYardId] = useSessionState<number | null>('residents.yard', null)
-  const [buildingId, setBuildingId] = useSessionState<number | null>('residents.building', null)
-  const [apartmentId, setApartmentId] = useSessionState<number | null>('residents.apartment', null)
-  const [hideBotBlocked, setHideBotBlocked] = useSessionState<boolean>('residents.hideBotBlocked', false)
-  const [search, setSearch] = useSessionState<string>('residents.search', '')
-  const [offset, setOffset] = useSessionState<number>('residents.offset', 0)
+  const [statusFilter, setStatusFilter] = useSessionState('residents.status', 'all', isString)
+  const [verificationFilter, setVerificationFilter] = useSessionState('residents.verification', 'all', isString)
+  const [yardId, setYardId] = useSessionState<number | null>('residents.yard', null, isIdOrNull)
+  const [buildingId, setBuildingId] = useSessionState<number | null>('residents.building', null, isIdOrNull)
+  const [apartmentId, setApartmentId] = useSessionState<number | null>('residents.apartment', null, isIdOrNull)
+  const [hideBotBlocked, setHideBotBlocked] = useSessionState('residents.hideBotBlocked', false, isBoolean)
+  const [search, setSearch] = useSessionState('residents.search', '', isString)
+  const [offset, setOffset] = useSessionState('residents.offset', 0, isOffset)
   const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
     try {
       const stored = localStorage.getItem('residents_view_mode')
@@ -269,7 +269,7 @@ export default function ResidentsPage() {
         <div className="flex-1 flex items-center justify-center text-text-muted">
           {t('common.error')}
         </div>
-      ) : viewMode === 'table' ? (
+      ) : viewMode === 'table' && !(items.length === 0 && offset > 0) ? (
         <ResidentTable residents={items} sort={sortWithReset} />
       ) : items.length === 0 ? (
         // offset > 0 при пустой выдаче = страница уехала за конец списка
