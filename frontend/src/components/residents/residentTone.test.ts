@@ -15,6 +15,7 @@ describe('residentTone', () => {
     ['одобрен — без цвета', {}, 'default'],
     ['ожидает — жёлтый', { status: 'pending', verification_status: 'pending' }, 'pending'],
     ['прислал документы — синий', { status: 'pending', verification_status: 'requested', documents_submitted: true }, 'submitted'],
+    ['документы приложены при регистрации — синий', { status: 'pending', verification_status: 'pending', documents_submitted: true }, 'submitted'],
     ['документы запрошены, но не присланы — жёлтый', { status: 'pending', verification_status: 'requested' }, 'pending'],
     ['не завершил регистрацию — красный контур', { status: 'pending', phone: null, apartments_count: 0 }, 'incomplete'],
     ['заблокировал бота — красный', { bot_blocked: true }, 'botBlocked'],

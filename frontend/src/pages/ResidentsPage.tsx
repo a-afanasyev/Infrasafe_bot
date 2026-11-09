@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useTableSort } from '../hooks/useTableSort'
+import { isBoolean, isIdOrNull, isOffset, isString, useSessionState } from '../hooks/useSessionState'
 import {
   RESIDENT_COLUMNS,
   RESIDENTS_SORT_STORAGE_KEY,
@@ -28,13 +29,16 @@ export default function ResidentsPage() {
   const { setActions, clearActions } = useTopbar()
   useResidentsWebSocket()
 
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [verificationFilter, setVerificationFilter] = useState<string>('all')
-  const [yardId, setYardId] = useState<number | null>(null)
-  const [buildingId, setBuildingId] = useState<number | null>(null)
-  const [apartmentId, setApartmentId] = useState<number | null>(null)
-  const [search, setSearch] = useState<string>('')
-  const [offset, setOffset] = useState(0)
+  // Фильтры, поиск и страница — в sessionStorage: «Назад» из карточки
+  // жителя возвращает к тому же срезу списка (сортировка — в useTableSort).
+  const [statusFilter, setStatusFilter] = useSessionState('residents.status', 'all', isString)
+  const [verificationFilter, setVerificationFilter] = useSessionState('residents.verification', 'all', isString)
+  const [yardId, setYardId] = useSessionState<number | null>('residents.yard', null, isIdOrNull)
+  const [buildingId, setBuildingId] = useSessionState<number | null>('residents.building', null, isIdOrNull)
+  const [apartmentId, setApartmentId] = useSessionState<number | null>('residents.apartment', null, isIdOrNull)
+  const [hideBotBlocked, setHideBotBlocked] = useSessionState('residents.hideBotBlocked', false, isBoolean)
+  const [search, setSearch] = useSessionState('residents.search', '', isString)
+  const [offset, setOffset] = useSessionState('residents.offset', 0, isOffset)
   const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
     try {
       const stored = localStorage.getItem('residents_view_mode')
@@ -70,6 +74,7 @@ export default function ResidentsPage() {
     setOffset(0)
   }
   const onApartmentChange = withPageReset(setApartmentId)
+  const onHideBotBlockedChange = withPageReset(setHideBotBlocked)
 
   const filters: ResidentFilters = {
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
@@ -77,6 +82,7 @@ export default function ResidentsPage() {
     ...(apartmentId !== null ? { apartment_id: apartmentId } : {}),
     ...(apartmentId === null && buildingId !== null ? { building_id: buildingId } : {}),
     ...(apartmentId === null && buildingId === null && yardId !== null ? { yard_id: yardId } : {}),
+    ...(hideBotBlocked ? { hide_bot_blocked: true } : {}),
   }
 
   const sort = useTableSort<ResidentListItem>(RESIDENT_COLUMNS, RESIDENTS_SORT_STORAGE_KEY)
@@ -105,12 +111,15 @@ export default function ResidentsPage() {
 
   // Поиск в топбаре — только через TopbarSearch (неконтролируемое поле +
   // debounce): контролируемое теряет символы, см. докстринг компонента.
+  // Поле неконтролируемое: восстановленный поиск нужен ему только при монтировании.
+  const [initialSearch] = useState(search)
   const actionsNode = useMemo(() => (
     <TopbarSearch
       placeholder={t('residents.searchPlaceholder')}
+      initialValue={initialSearch}
       onSearch={value => { setSearch(value); setOffset(0) }}
     />
-  ), [t])
+  ), [t, initialSearch, setSearch, setOffset])
 
   useEffect(() => {
     setActions(actionsNode)
@@ -242,6 +251,14 @@ export default function ResidentsPage() {
               <option key={a.id} value={a.id}>{a.apartment_number}</option>
             ))}
           </Select>
+          <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hideBotBlocked}
+              onChange={e => onHideBotBlockedChange(e.target.checked)}
+            />
+            {t('residents.hideBotBlocked')}
+          </label>
         </div>
       </div>
 
@@ -252,7 +269,7 @@ export default function ResidentsPage() {
         <div className="flex-1 flex items-center justify-center text-text-muted">
           {t('common.error')}
         </div>
-      ) : viewMode === 'table' ? (
+      ) : viewMode === 'table' && !(items.length === 0 && offset > 0) ? (
         <ResidentTable residents={items} sort={sortWithReset} />
       ) : items.length === 0 ? (
         // offset > 0 при пустой выдаче = страница уехала за конец списка

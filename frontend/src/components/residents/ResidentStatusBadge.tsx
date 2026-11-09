@@ -60,10 +60,10 @@ export function BotBlockedBadge() {
   return <Badge color="var(--red)">{`🚫 ${t('residents.botBlocked')}`}</Badge>
 }
 
-/** `submitted` — документы запрошены и уже загружены: ждут проверки менеджером. */
+/** `submitted` — документы загружены (при регистрации или по запросу): ждут проверки менеджером. */
 export function ResidentVerificationBadge({ status, submitted = false }: { status: string; submitted?: boolean }) {
   const { t } = useTranslation()
-  const shown = submitted && status === 'requested' ? 'submitted' : status
+  const shown = submitted && (status === 'requested' || status === 'pending') ? 'submitted' : status
   return (
     <Badge color={VERIFICATION_COLORS[shown] ?? 'var(--text-muted)'}>
       {t(`residents.verification.${shown}`, shown)}

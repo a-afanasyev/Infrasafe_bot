@@ -160,6 +160,17 @@ class TestListFilters:
         data = (await client.get(f"{BASE}?verification_status=requested")).json()
         assert {i["telegram_id"] for i in data["items"]} == {3111}
 
+    async def test_hide_bot_blocked(self, client: AsyncClient, db_session: AsyncSession):
+        await _resident(db_session, 3131)
+        blocked = await _resident(db_session, 3132)
+        blocked.bot_blocked_at = datetime.datetime(2026, 11, 1, tzinfo=datetime.timezone.utc)
+        await db_session.commit()
+
+        assert (await client.get(BASE)).json()["total"] == 2
+        data = (await client.get(f"{BASE}?hide_bot_blocked=true")).json()
+        assert {i["telegram_id"] for i in data["items"]} == {3131}
+        assert data["total"] == 1
+
     async def test_search_by_name_and_phone(self, client: AsyncClient, db_session: AsyncSession):
         await _resident(db_session, 3121, first_name="Пётр", last_name="Сидоров", phone="+998901112233")
         await _resident(db_session, 3122, first_name="Мария", last_name="Ким", phone="+998907778899")

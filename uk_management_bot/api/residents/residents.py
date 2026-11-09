@@ -64,6 +64,7 @@ async def list_residents(
     building_id: int | None = Query(None),
     apartment_id: int | None = Query(None),
     q: str | None = Query(None, description="ФИО или телефон"),
+    hide_bot_blocked: bool = Query(False, description="скрыть заблокировавших бота"),
     sort: ResidentSortField | None = Query(None, description="колонка сортировки"),
     order: SortOrder = Query("asc"),
     limit: int = Query(25, ge=1, le=100),
@@ -75,7 +76,8 @@ async def list_residents(
         db,
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id,
-        q=q, sort=sort, order=order, limit=limit, offset=offset,
+        q=q, hide_bot_blocked=hide_bot_blocked,
+        sort=sort, order=order, limit=limit, offset=offset,
     )
     user_ids = [u.id for u in users]
     counts = await queries.apartments_count_map(db, user_ids)

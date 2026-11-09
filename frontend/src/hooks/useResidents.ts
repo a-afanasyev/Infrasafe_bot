@@ -17,6 +17,7 @@ export type ResidentFilters = {
   yard_id?: number
   building_id?: number
   apartment_id?: number
+  hide_bot_blocked?: boolean
 }
 
 // Раздел живёт на polling'е, а не на WS: события есть только у привязок к
