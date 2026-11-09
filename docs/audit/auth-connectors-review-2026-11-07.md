@@ -78,7 +78,7 @@
 
 - **CSRF (AUTH-04).** Мутация под cookie с чужого Origin, со `Sec-Fetch-Site: same-site/cross-site`, а также form/multipart/text без Origin получает 403 `{"detail": "csrf_rejected"}`. Дашборд не затронут: его запросы идут со своего origin (`Sec-Fetch-Site: same-origin`, Origin = `FRONTEND_URL`). TWA и сервисы ходят с Bearer и проверку не проходят. Реализация — чистый ASGI-класс `CsrfGuard`: вариант через `@app.middleware` сдвигал BackgroundTasks раньше ответа, это поймали `test_network_outside_tx` и `test_elevators_status_calendar`.
 - **Тикет регистрации (AUTH-03).** Повторная отправка `/registration/applicant` **тем же** тикетом после успешной регистрации даёт 401. Повтор с новым тикетом из `/start` идемпотентен, как и раньше: `test_applicant_double_submit_idempotent` переведён на этот путь. Тесты, где ожидание расходилось с требованием, правлены явно: `test_registration_document_offer.py`, `test_registration_applicant.py`.
-- **OTP (AUTH-01).** После 3 неверных кодов действует блок до истечения 5 минут, повторный вход его не снимает. Текст ответа — «Too many attempts. Try again in 5 minutes.»
+- **OTP (AUTH-01).** После 3 неверных кодов действует блок до истечения 5 минут, повторный вход его не снимает. Текст ответа — «Too many attempts. Try again in 5 minutes.» Во время блока `/login` и `/login/resend-otp` отвечают 429 и код не отправляют; блок не продлевается (правка по ревью PR #718). Без Redis выдача и гашение тикета регистрации не падают, а работают по подписи (fail-open, как проверка).
 - **Списание материалов (BOT-02).** Чужой исполнитель всегда получает «не ваша заявка», статус ему не раскрывается.
 
 ## Прогоны
