@@ -366,9 +366,9 @@ ASSIGNMENT: dict[str, dict] = {
     # A10-HOST-03 закрыт 2026-10-24 (daemon.json на 105, prune; диск 91→58 %).
     # A10-HOST-04 снят (wontfix) 2026-11-05: принятый риск: ротацию токена владелец отклонил 2026-10-24, история очищена.
     # A10-HOST-05 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (образы PG/WireGuard/Mosquitto/Alloy).
-    "A10-HOST-06": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-11-06", services="хост profk", note="остаток на profk (2026-11-06): ключ в /root/.ssh/authorized_keys (1 строка) и строка PermitRootLogin yes в основном sshd_config (действующее значение no — drop-in 10-hardening.conf); NOPASSWD sudo принят"),
+    "A10-HOST-06": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-11-09", services="хост profk", note="2026-11-09: устаревшая строка PermitRootLogin в основном sshd_config закомментирована (конфиг проверен, вход проверен). Остаток — сторонний ключ в authorized_keys: уточнить владельца у InfraSafe и удалить, если не нужен"),
     "A10-HOST-07": A(pkg="AUD10-HOST", status="deferred", method="owner-decision-2026-11-05", services="compose, хосты", note="сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105"),
-    "A10-HOST-08": A(pkg="AUD10-HOST", status="actionable", method="verified-host-2026-11-06", services="хосты", note="105 сделано (.env.bak в ~/quarantine-a11-20261105, каталог 700; secrets в каталоге 700); остаток — profk: 7 .env.bak* (/opt/uk ×4, /opt/infrasafe ×2, /home/infrasafe ×1) и судьба карантина на 105"),
+    # A10-HOST-08 закрыт 2026-11-09: profk: 5 оставшихся .env.bak* уничтожены shred по «да» владельца (/opt/infrasafe ×2 к этому дню уже убраны), на хосте 0; 105: карантин ~/quarantine-a11-20261105 удалён.
     # A10-HOST-09 закрыт 2026-11-06: fail2ban на обоих: override journalmatch _SYSTEMD_UNIT=ssh.service (штатный фильтр Debian 12 искал sshd.service — 0 банов за всё время); profk проверен тестовым входом.
     # A10-HOST-10 закрыт 2026-11-05: передано в бэклог InfraSafe 2026-11-05 (живой nginx.profk.conf в репо, .bak, 404 на dotfiles).
     # A10-HOST-11 закрыт 2026-11-06: ADMIN_PASSWORD на 105 — 64 символа (проверено в контейнере api).

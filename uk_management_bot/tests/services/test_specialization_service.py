@@ -271,3 +271,35 @@ class TestFormatSpecializationsList:
             result = service.format_specializations_list(["invalid_spec"])
             # Invalid specs are skipped → falls back to no_specializations text
             assert "Нет специализаций" in result
+
+
+# ---------------------------------------------------------------------------
+# Аудит на НАСТОЯЩЕЙ БД (2026-11-09): мок выше подменял db.execute готовой датой,
+# поэтому сырой SQL `SELECT datetime('now')` (SQLite-синтаксис, без text())
+# падал на проде молча — с 2026-10-13 смена специализации шла без аудита.
+# ---------------------------------------------------------------------------
+
+def test_specialization_change_writes_audit_on_real_db():
+    import json
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from uk_management_bot.database.models.audit import AuditLog
+    from uk_management_bot.database.models.user import User
+    from uk_management_bot.database.session import Base
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    db.add(User(id=26, telegram_id=9026, roles='["executor"]', status="approved", specialization='["repair"]'))
+    db.commit()
+
+    assert SpecializationService(db).set_user_specializations(26, ["security"], 2, "охрана") is True
+
+    audit = db.query(AuditLog).filter(AuditLog.action == "specializations_updated").one()
+    details = json.loads(audit.details) if isinstance(audit.details, str) else audit.details
+    assert audit.user_id == 2
+    assert details["old_specializations"] == ["repair"]
+    assert details["new_specializations"] == ["security"]
+    assert details["timestamp"]

@@ -19,14 +19,14 @@
 ## Агрегаты
 
 - пунктов всего (с Priority): **620**
-- закрыто маркером: **611**
-- открыто маркером: **9**
+- закрыто маркером: **612**
+- открыто маркером: **8**
 
-  - `actionable` — **4**
+  - `actionable` — **3**
   - `no-pr` — **2**
   - `deferred` — **3**
 
-Из них actionable по приоритету: P2=1, P3=3.
+Из них actionable по приоритету: P2=1, P3=2.
 
 Значения `status`:
 
@@ -49,9 +49,8 @@
 | ID | P | status | method | Пакет | PR | Сервисы | Прод-верификация | Примечание |
 |---|---|---|---|---|---|---|---|---|
 | `A10-SAT-03` | P3 | deferred | owner-decision-2026-11-05 | AUD10-CODE | — | media-service, provisioning | — | 2026-11-06: A9-P3-33 закрыт без alembic — SAT-03 отдельно (роль uk_media_app без DDL, DDL только в media-migrate); делать при следующей работе с media |
-| `A10-HOST-06` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хост profk | — | остаток на profk (2026-11-06): ключ в /root/.ssh/authorized_keys (1 строка) и строка PermitRootLogin yes в основном sshd_config (действующее значение no — drop-in 10-hardening.conf); NOPASSWD sudo принят |
+| `A10-HOST-06` | P3 | actionable | verified-host-2026-11-09 | AUD10-HOST | — | хост profk | — | 2026-11-09: устаревшая строка PermitRootLogin в основном sshd_config закомментирована (конфиг проверен, вход проверен). Остаток — сторонний ключ в authorized_keys: уточнить владельца у InfraSafe и удалить, если не нужен |
 | `A10-HOST-07` | P3 | deferred | owner-decision-2026-11-05 | AUD10-HOST | — | compose, хосты | — | сужено 2026-11-05: payment-часть сделана; остаток — uk-internal на 105, в окно обслуживания 105 |
-| `A10-HOST-08` | P3 | actionable | verified-host-2026-11-06 | AUD10-HOST | — | хосты | — | 105 сделано (.env.bak в ~/quarantine-a11-20261105, каталог 700; secrets в каталоге 700); остаток — profk: 7 .env.bak* (/opt/uk ×4, /opt/infrasafe ×2, /home/infrasafe ×1) и судьба карантина на 105 |
 | `A11-CODE-02` | P3 | actionable | review-2026-11-06 | AUD11-CODE | — | api | — | рассылка news-watch: постоянные ошибки доставки → done вместо failed |
 | `A11-DEC-01` | P3 | deferred | owner-decision-2026-11-07 | AUD11-CODE | — | api, InfraSafe | — | CODE-11-03/04/07 — риск принят; остаток — ротация TELEMETRY_HMAC_SECRET при ближайшей перепрошивке контроллеров |
 | `A11-EXT-01` | P2 | actionable | audit11-2026-11-05 | AUD11-EXT | — | InfraSafe compose/edge/app | — | внешнее репо; HOST-11-02 env postgres, N-04 origin, мелочи edge (фаза 4) |
