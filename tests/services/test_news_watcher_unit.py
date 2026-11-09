@@ -11,6 +11,7 @@ from news_watcher.watcher import (
     Offsets,
     Settings,
     diff_sources,
+    ensure_connected,
     handle_message,
     inbound_payload,
     is_broadcast_channel,
@@ -146,3 +147,19 @@ class _Entity:
 def test_only_broadcast_channels_are_joinable(entity, expected):
     """Иначе менеджер с board.configure заставил бы аккаунт юзербота вступать в любые группы."""
     assert is_broadcast_channel(entity) is expected
+
+
+class _Client:
+    def __init__(self, connected: bool):
+        self._connected = connected
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+
+def test_lost_telegram_connection_stops_the_watcher():
+    """Telethon сдаётся после 5 переподключений, а цикл источников жил дальше:
+    юзербот 06.11 трое суток «работал» без связи. Падение → restart: unless-stopped."""
+    ensure_connected(_Client(True))
+    with pytest.raises(ConnectionError):
+        ensure_connected(_Client(False))
