@@ -6,6 +6,8 @@ interface Props {
   onSearch: (value: string) => void
   /** Пауза перед вызовом onSearch, мс. */
   delay?: number
+  /** Стартовый текст (восстановленный поиск); дальше полем владеет DOM. */
+  initialValue?: string
   className?: string
 }
 
@@ -31,6 +33,7 @@ export default function TopbarSearch({
   placeholder,
   onSearch,
   delay = 300,
+  initialValue = '',
   className = 'w-[220px]',
 }: Props) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -47,7 +50,7 @@ export default function TopbarSearch({
     <Input
       type="text"
       placeholder={placeholder}
-      defaultValue=""
+      defaultValue={initialValue}
       onChange={e => {
         const value = e.target.value
         clearTimeout(timer.current)

@@ -22322,6 +22322,18 @@
             }
           },
           {
+            "description": "скрыть заблокировавших бота",
+            "in": "query",
+            "name": "hide_bot_blocked",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "скрыть заблокировавших бота",
+              "title": "Hide Bot Blocked",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "колонка сортировки",
             "in": "query",
             "name": "sort",

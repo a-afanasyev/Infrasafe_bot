@@ -1637,6 +1637,7 @@
     "allYards": "Все дворы",
     "allBuildings": "Все дома",
     "allApartments": "Все квартиры",
+    "hideBotBlocked": "Скрыть заблокировавших бота",
     "viewTile": "Плитками",
     "viewTable": "Таблицей",
     "noName": "Без имени",

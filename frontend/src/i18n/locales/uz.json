@@ -1627,6 +1627,7 @@
     "allYards": "Barcha hovlilar",
     "allBuildings": "Barcha uylar",
     "allApartments": "Barcha xonadonlar",
+    "hideBotBlocked": "Botni bloklaganlarni yashirish",
     "viewTile": "Kartochkalar",
     "viewTable": "Jadval",
     "noName": "Ismsiz",

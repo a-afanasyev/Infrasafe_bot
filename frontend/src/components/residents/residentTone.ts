@@ -14,7 +14,7 @@ export type ResidentTone = 'botBlocked' | 'incomplete' | 'submitted' | 'pending'
 export function residentTone(r: ToneInput): ResidentTone {
   if (r.bot_blocked) return 'botBlocked'
   if (isRegistrationIncomplete(r)) return 'incomplete'
-  if (r.documents_submitted && r.verification_status === 'requested') return 'submitted'
+  if (r.documents_submitted) return 'submitted' // флаг бэкенда: только pending/requested с документом
   if (r.status === 'pending') return 'pending'
   return 'default'
 }

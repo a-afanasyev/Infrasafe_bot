@@ -65,6 +65,7 @@ function renderWithTopbar() {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()  // фильтры живут в sessionStorage — тесты не должны их наследовать
   listQuery.data = { items: [], total: 0, limit: 25, offset: 0 }
   listQuery.isLoading = false
   listQuery.isError = false
@@ -113,5 +114,19 @@ describe('ResidentsPage — поиск в топбаре', () => {
       const last = useResidentsSpy.mock.calls[useResidentsSpy.mock.calls.length - 1]
       expect(last[2]).toEqual({ limit: 25, offset: 0 })
     })
+  })
+
+  it('поиск возвращается в поле и в запрос после ухода в карточку', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderWithTopbar()
+    await user.type(screen.getByPlaceholderText(/ФИО или телефон/), 'ким')
+    await waitFor(() => {
+      expect(useResidentsSpy.mock.calls[useResidentsSpy.mock.calls.length - 1][1]).toBe('ким')
+    })
+    unmount()
+
+    renderWithTopbar()
+    expect((screen.getByPlaceholderText(/ФИО или телефон/) as HTMLInputElement).value).toBe('ким')
+    expect(useResidentsSpy.mock.calls[useResidentsSpy.mock.calls.length - 1][1]).toBe('ким')
   })
 })

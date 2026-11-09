@@ -195,6 +195,20 @@ class TestDocumentsSubmitted:
         await db_session.commit()
         assert await self._flags(client, rid) == (True, True)
 
+    async def test_flag_set_for_documents_from_registration(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Документ приложен при регистрации, запроса не было — тоже «предоставлены»."""
+        rid = (await _resident(db_session, 6051)).id
+        assert await self._flags(client, rid) == (False, False)
+        await _doc(db_session, rid)
+        assert await self._flags(client, rid) == (True, True)
+
+    async def test_flag_cleared_once_verified(self, client: AsyncClient, db_session: AsyncSession):
+        rid = (await _resident(db_session, 6052, verification="verified")).id
+        await _doc(db_session, rid)
+        assert await self._flags(client, rid) == (False, False)
+
 
 # ═══════════════════════ Подтверждение личности ═══════════════════════
 

@@ -116,6 +116,7 @@ def _apply_list_filters(
     apartment_id: int | None,
     q: str | None,
     is_postgres: bool,
+    hide_bot_blocked: bool = False,
 ):
     """Общие фильтры списка и его COUNT — один источник, чтобы total не разъехался."""
     query = query.where(*_resident_scope())
@@ -124,6 +125,8 @@ def _apply_list_filters(
         query = query.where(User.status == status)
     if verification_status:
         query = query.where(User.verification_status == verification_status)
+    if hide_bot_blocked:
+        query = query.where(User.bot_blocked_at.is_(None))
 
     if apartment_id is not None:
         query = query.where(_belonging_exists(Apartment.id == apartment_id))
@@ -151,6 +154,7 @@ async def list_residents(
     building_id: int | None = None,
     apartment_id: int | None = None,
     q: str | None = None,
+    hide_bot_blocked: bool = False,
     sort: str | None = None,
     order: str | None = None,
     limit: int = 25,
@@ -174,6 +178,7 @@ async def list_residents(
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id, q=q,
         is_postgres=is_postgres,
+        hide_bot_blocked=hide_bot_blocked,
     )
     page_query = apply_sort(
         page_query,
@@ -189,6 +194,7 @@ async def list_residents(
         status=status, verification_status=verification_status,
         yard_id=yard_id, building_id=building_id, apartment_id=apartment_id, q=q,
         is_postgres=is_postgres,
+        hide_bot_blocked=hide_bot_blocked,
     )
 
     users = list((await db.execute(page_query)).scalars().all())
@@ -212,14 +218,21 @@ async def apartments_count_map(db, user_ids: list[int]) -> dict[int, int]:
 
 
 async def documents_submitted_ids(db, user_ids: list[int]) -> set[int]:
-    """Жители, загрузившие документ ПОСЛЕ открытого запроса документов.
+    """Жители, чьи документы ждут проверки менеджером.
 
+    Два случая: документ приложен при регистрации (верификация `pending`,
+    запроса не было) или загружен ПОСЛЕ открытого запроса документов.
     Статус верификации при загрузке не меняется (остаётся `requested`), поэтому
     «предоставлены» выводится здесь: открытая запись REQUESTED + документ не
     старше запроса. Без этого карточка висела на «Запрошены» и после загрузки.
     """
     if not user_ids:
         return set()
+    from_registration = await db.execute(
+        select(UserDocument.user_id).distinct()
+        .join(User, User.id == UserDocument.user_id)
+        .where(UserDocument.user_id.in_(user_ids), User.verification_status == "pending")
+    )
     result = await db.execute(
         select(UserVerification.user_id).distinct()
         .join(User, User.id == UserVerification.user_id)
@@ -231,7 +244,7 @@ async def documents_submitted_ids(db, user_ids: list[int]) -> set[int]:
             UserDocument.created_at >= UserVerification.requested_at,
         )
     )
-    return set(result.scalars().all())
+    return set(result.scalars().all()) | set(from_registration.scalars().all())
 
 
 async def primary_address_map(db, user_ids: list[int]) -> dict[int, tuple[str, str, str]]:

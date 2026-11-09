@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useTableSort } from '../hooks/useTableSort'
+import { useSessionState } from '../hooks/useSessionState'
 import {
   RESIDENT_COLUMNS,
   RESIDENTS_SORT_STORAGE_KEY,
@@ -28,13 +29,16 @@ export default function ResidentsPage() {
   const { setActions, clearActions } = useTopbar()
   useResidentsWebSocket()
 
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [verificationFilter, setVerificationFilter] = useState<string>('all')
-  const [yardId, setYardId] = useState<number | null>(null)
-  const [buildingId, setBuildingId] = useState<number | null>(null)
-  const [apartmentId, setApartmentId] = useState<number | null>(null)
-  const [search, setSearch] = useState<string>('')
-  const [offset, setOffset] = useState(0)
+  // Фильтры, поиск и страница — в sessionStorage: «Назад» из карточки
+  // жителя возвращает к тому же срезу списка (сортировка — в useTableSort).
+  const [statusFilter, setStatusFilter] = useSessionState<string>('residents.status', 'all')
+  const [verificationFilter, setVerificationFilter] = useSessionState<string>('residents.verification', 'all')
+  const [yardId, setYardId] = useSessionState<number | null>('residents.yard', null)
+  const [buildingId, setBuildingId] = useSessionState<number | null>('residents.building', null)
+  const [apartmentId, setApartmentId] = useSessionState<number | null>('residents.apartment', null)
+  const [hideBotBlocked, setHideBotBlocked] = useSessionState<boolean>('residents.hideBotBlocked', false)
+  const [search, setSearch] = useSessionState<string>('residents.search', '')
+  const [offset, setOffset] = useSessionState<number>('residents.offset', 0)
   const [viewMode, setViewMode] = useState<'tile' | 'table'>(() => {
     try {
       const stored = localStorage.getItem('residents_view_mode')
@@ -70,6 +74,7 @@ export default function ResidentsPage() {
     setOffset(0)
   }
   const onApartmentChange = withPageReset(setApartmentId)
+  const onHideBotBlockedChange = withPageReset(setHideBotBlocked)
 
   const filters: ResidentFilters = {
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
@@ -77,6 +82,7 @@ export default function ResidentsPage() {
     ...(apartmentId !== null ? { apartment_id: apartmentId } : {}),
     ...(apartmentId === null && buildingId !== null ? { building_id: buildingId } : {}),
     ...(apartmentId === null && buildingId === null && yardId !== null ? { yard_id: yardId } : {}),
+    ...(hideBotBlocked ? { hide_bot_blocked: true } : {}),
   }
 
   const sort = useTableSort<ResidentListItem>(RESIDENT_COLUMNS, RESIDENTS_SORT_STORAGE_KEY)
@@ -105,12 +111,15 @@ export default function ResidentsPage() {
 
   // Поиск в топбаре — только через TopbarSearch (неконтролируемое поле +
   // debounce): контролируемое теряет символы, см. докстринг компонента.
+  // Поле неконтролируемое: восстановленный поиск нужен ему только при монтировании.
+  const [initialSearch] = useState(search)
   const actionsNode = useMemo(() => (
     <TopbarSearch
       placeholder={t('residents.searchPlaceholder')}
+      initialValue={initialSearch}
       onSearch={value => { setSearch(value); setOffset(0) }}
     />
-  ), [t])
+  ), [t, initialSearch, setSearch, setOffset])
 
   useEffect(() => {
     setActions(actionsNode)
@@ -242,6 +251,14 @@ export default function ResidentsPage() {
               <option key={a.id} value={a.id}>{a.apartment_number}</option>
             ))}
           </Select>
+          <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hideBotBlocked}
+              onChange={e => onHideBotBlockedChange(e.target.checked)}
+            />
+            {t('residents.hideBotBlocked')}
+          </label>
         </div>
       </div>
 
