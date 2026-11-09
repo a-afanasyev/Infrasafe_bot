@@ -10,6 +10,7 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from typing import List, Dict
 from sqlalchemy.orm import Session
 
@@ -244,7 +245,9 @@ class SpecializationService:
                     "old_specializations": old_specializations,
                     "new_specializations": new_specializations,
                     "comment": comment,
-                    "timestamp": str(self.db.execute("SELECT datetime('now')").scalar())
+                    # Время — из Python: сырой SQL `datetime('now')` (SQLite, без text())
+                    # падал на Postgres, и аудит молча не писался (2026-10-13…11-09).
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
             )
             self.db.add(audit)
