@@ -146,6 +146,17 @@ async def handle_message(api: ApiClient, offsets: Offsets, *, chat_id: int, mess
     return accepted
 
 
+def ensure_connected(client: Any) -> None:
+    """Связь с Telegram потеряна → ConnectionError, процесс падает.
+
+    Telethon после 5 неудачных переподключений сдаётся, а цикл источников живёт
+    дальше по HTTP — юзербот выглядел живым, но не получал сообщений (06.11,
+    трое суток). Падение отдаёт перезапуск `restart: unless-stopped`.
+    """
+    if not client.is_connected():
+        raise ConnectionError("telegram connection lost")
+
+
 def is_broadcast_channel(entity: Any) -> bool:
     """A11-CODE-06: вступать можно только в канал (``Channel.broadcast``).
 

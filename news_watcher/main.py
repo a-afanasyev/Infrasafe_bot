@@ -14,6 +14,7 @@ from news_watcher.watcher import (
     ApiClient,
     Offsets,
     Settings,
+    ensure_connected,
     diff_sources,
     handle_message,
     is_broadcast_channel,
@@ -86,6 +87,7 @@ async def run() -> None:
     logger.info("news_watcher started")
     try:
         while True:
+            ensure_connected(client)
             await refresh_sources()
             await asyncio.sleep(settings.refresh_seconds)
     finally:
