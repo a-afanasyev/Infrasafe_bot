@@ -78,12 +78,13 @@ async def put_config(request: Request, payload: NewsWatchConfigData,
 
 @router.get("/items", response_model=NewsItemsOut)
 async def list_items(status: str = Query(default="pending"), limit: int = Query(default=50, ge=1, le=200),
+                     offset: int = Query(default=0, ge=0),
                      db: AsyncSession = Depends(get_db), user: User = Depends(_manager)):
     if status not in NEWS_STATUSES:
         raise HTTPException(status_code=422, detail=f"status: ожидается одно из {list(NEWS_STATUSES)}")
     total = (await db.execute(select(func.count()).select_from(NewsItem).where(NewsItem.status == status))).scalar_one()
     rows = (await db.execute(
-        select(NewsItem).where(NewsItem.status == status).order_by(NewsItem.id.desc()).limit(limit)
+        select(NewsItem).where(NewsItem.status == status).order_by(NewsItem.id.desc()).offset(offset).limit(limit)
     )).scalars().all()
     return NewsItemsOut(items=[NewsItemOut.model_validate(r) for r in rows], total=int(total))
 

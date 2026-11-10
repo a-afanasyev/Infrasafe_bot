@@ -308,3 +308,35 @@ async def test_no_managers_does_not_spend_notify_window(db_session_factory, monk
         await s.commit()
         assert await notify.notify_managers_pending(s, item) == 0
     gate.assert_not_awaited()
+
+
+async def test_list_pages_with_offset_and_exposes_next_attempt(client, db_session_factory):
+    """«Отсеяны (527)», а список отдавал только последние 50 — остальное было не видно."""
+    from datetime import datetime, timezone
+
+    manager = _user(3, ["manager"])
+    next_at = datetime(2026, 11, 10, 9, 0, tzinfo=timezone.utc)
+    async with db_session_factory() as s:
+        s.add(manager)
+        s.add_all([NewsItem(source_chat_id=-1, source_message_id=i, raw_text=f"n{i}", status="ignored",
+                            broadcast_status="failed", broadcast_next_at=next_at) for i in range(1, 6)])
+        await s.commit()
+    first = (await client(manager).get(f"{BASE}/items?status=ignored&limit=2")).json()
+    second = (await client(manager).get(f"{BASE}/items?status=ignored&limit=2&offset=2")).json()
+    assert first["total"] == second["total"] == 5
+    assert [i["raw_text"] for i in first["items"]] == ["n5", "n4"]
+    assert [i["raw_text"] for i in second["items"]] == ["n3", "n2"]
+    assert first["items"][0]["broadcast_next_at"].startswith("2026-11-10T09:00")
+
+
+async def test_event_keywords_round_trip(client, db_session_factory):
+    """Ревью: схема API не знала event_keywords — pydantic молча отбрасывал поле."""
+    manager = _user(3, ["manager"])
+    async with db_session_factory() as s:
+        s.add(manager)
+        await s.commit()
+    body = (await client(manager).get(f"{BASE}/config")).json()
+    assert body["event_keywords"], "дефолтные слова-события видны в форме"
+    resp = await client(manager).put(f"{BASE}/config", json={**body, "event_keywords": ["отключ", "to’xtat"]})
+    assert resp.status_code == 200, resp.text
+    assert (await client(manager).get(f"{BASE}/config")).json()["event_keywords"] == ["отключ", "to'xtat"]

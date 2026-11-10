@@ -6,10 +6,16 @@
 с ``next_at <= now`` и ``attempts < MAX`` → ``running`` → жители
 (``users.id > cursor``, applicant, approved, не удалён, бот не заблокирован)
 через httpx-sender API, курсор фиксируется после каждой отправки →
-группы жителей → ``done``. Любое исключение → ``failed``, ``attempts+1``,
+группы жителей. Любое исключение → ``failed``, ``attempts+1``,
 ``next_at = now + 2^attempts мин``, курсор сохранён — после рестарта
 продолжение без дублей. 429: ждём ``retry_after`` и повторяем того же
 получателя один раз.
+
+A11-CODE-02: временная ошибка доставки (не blocked/no_chat) — житель в
+``details.retry``, неудачная группа — в ``details.groups_failed``; ``done``
+только если оба пусты, иначе ``failed`` с бэкоффом, и следующая попытка шлёт
+сначала им. ABORT_AFTER_ERRORS ошибок подряд (нет связи с Telegram) — проход
+прерывается, а не прожигает весь список.
 """
 from __future__ import annotations
 
@@ -45,10 +51,16 @@ STALE = timedelta(minutes=10)
 PAUSE_SECONDS = 0.05
 # Курсор фиксируется после КАЖДОЙ отправки: один UPDATE на сообщение при
 # паузе 50 мс — дёшево, зато рестарт воркера не даёт ни одного дубля.
-CURSOR_EVERY = 1
 BATCH = 200
+ABORT_AFTER_ERRORS = 10
+# Сон 429 без heartbeat: дольше STALE — второй воркер возьмёт рассылку и пошлёт дубли.
+MAX_RETRY_AFTER_SECONDS = 60
 
 Sender = Callable[..., Awaitable[telegram_send.TelegramResult]]
+
+
+class TelegramUnavailable(Exception):
+    """ABORT_AFTER_ERRORS ошибок подряд — связи с Telegram нет."""
 
 
 def _backoff(attempts: int) -> timedelta:
@@ -106,12 +118,25 @@ async def _claim(db: AsyncSession, now: datetime) -> Optional[int]:
     return item.id
 
 
+def _eligible():
+    return (roles_contain(User.roles, "applicant"), User.status == "approved",
+            User.deleted_at.is_(None), User.bot_blocked_at.is_(None))
+
+
 async def _recipients(db: AsyncSession, after_id: int) -> list[tuple[int, int]]:
     rows = await db.execute(
-        select(User.id, User.telegram_id)
-        .where(User.id > after_id, roles_contain(User.roles, "applicant"),
-               User.status == "approved", User.deleted_at.is_(None), User.bot_blocked_at.is_(None))
+        select(User.id, User.telegram_id).where(User.id > after_id, *_eligible())
         .order_by(User.id).limit(BATCH)
+    )
+    return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
+
+
+async def _retry_recipients(db: AsyncSession, user_ids: list[int]) -> list[tuple[int, int]]:
+    """Жители из списка повтора, всё ещё подходящие (выбывшие — молча из списка)."""
+    if not user_ids:
+        return []
+    rows = await db.execute(
+        select(User.id, User.telegram_id).where(User.id.in_(user_ids), *_eligible()).order_by(User.id)
     )
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
@@ -131,7 +156,7 @@ async def _progress(db: AsyncSession, item_id: int, **values) -> None:
 async def _send_once(send: Sender, sleep, chat_id: int, text: str) -> telegram_send.TelegramResult:
     result = await send(chat_id, text, parse_mode="HTML")
     if result.retry_after is not None:
-        await sleep(float(result.retry_after))
+        await sleep(min(float(result.retry_after), MAX_RETRY_AFTER_SECONDS))
         result = await send(chat_id, text, parse_mode="HTML")
     return result
 
@@ -143,35 +168,63 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
         text = _render(item)
         cursor = item.broadcast_cursor or 0
         details = dict(item.broadcast_details or {})
-    counters = {"sent": int(details.get("sent", 0)), "blocked": int(details.get("blocked", 0)),
-                "errors": int(details.get("errors", 0))}
+    counters = {key: int(details.get(key, 0)) for key in ("sent", "blocked", "no_chat")}
+    retry: list[int] = [int(u) for u in details.get("retry", [])]
     groups_done: list[int] = list(details.get("groups", []))
+    groups_failed: list[int] = []
+    streak = 0  # ошибок подряд
 
-    if cfg["broadcast"]["dm"]:
+    def snapshot() -> dict:
+        # errors — недоставлено СЕЙЧАС (не число неудачных попыток за все проходы)
+        return {**counters, "errors": len(retry) + len(groups_failed),
+                "retry": list(retry), "groups": groups_done, "groups_failed": groups_failed}
+
+    async def save(**values) -> None:
+        async with factory() as db:
+            await _progress(db, item_id, broadcast_details=snapshot(), **values)
+
+    async def deliver_dm(uid: int, tg_id: int) -> None:
+        nonlocal streak
+        result = await _send_once(send, sleep, tg_id, text)
+        if uid in retry:
+            retry.remove(uid)
+        if result.ok:
+            counters["sent"] += 1
+        elif result.status == telegram_send.STATUS_BLOCKED:
+            counters["blocked"] += 1
+        elif result.status == telegram_send.STATUS_NO_CHAT:
+            counters["no_chat"] += 1  # не открывал чат с ботом — повтор не поможет
+        else:
+            retry.append(uid)
+            streak += 1
+            if streak >= ABORT_AFTER_ERRORS:
+                # uid уже в retry: курсор за ним, иначе продолжение пошлёт ему дважды
+                await save(broadcast_cursor=max(cursor, uid))
+                raise TelegramUnavailable()
+            return
+        streak = 0
+
+    if not cfg["broadcast"]["dm"]:
+        retry.clear()  # личку выключили — повторять в неё больше некому
+    else:
+        async with factory() as db:
+            pending_retry = await _retry_recipients(db, retry)
+        still = {uid for uid, _ in pending_retry}
+        retry[:] = [u for u in retry if u in still]
+        for uid, tg_id in pending_retry:
+            await deliver_dm(uid, tg_id)
+            await save()
+            await sleep(PAUSE_SECONDS)
         while True:
             async with factory() as db:
                 batch = await _recipients(db, cursor)
             if not batch:
                 break
-            since_flush = 0
             for uid, tg_id in batch:
-                result = await _send_once(send, sleep, tg_id, text)
-                if result.ok:
-                    counters["sent"] += 1
-                elif result.status == telegram_send.STATUS_BLOCKED:
-                    counters["blocked"] += 1
-                else:
-                    counters["errors"] += 1
-                cursor, since_flush = uid, since_flush + 1
-                if since_flush >= CURSOR_EVERY:
-                    async with factory() as db:
-                        await _progress(db, item_id, broadcast_cursor=cursor,
-                                   broadcast_details={**counters, "groups": groups_done})
-                    since_flush = 0
+                await deliver_dm(uid, tg_id)
+                cursor = uid
+                await save(broadcast_cursor=cursor)
                 await sleep(PAUSE_SECONDS)
-            async with factory() as db:
-                await _progress(db, item_id, broadcast_cursor=cursor,
-                           broadcast_details={**counters, "groups": groups_done})
 
     if cfg["broadcast"]["residents_groups"]:
         async with factory() as db:
@@ -187,11 +240,10 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
             if result.ok:
                 groups_done.append(int(chat_id))
             else:
-                counters["errors"] += 1
-            async with factory() as db:
-                await _progress(db, item_id, broadcast_details={**counters, "groups": groups_done})
+                groups_failed.append(int(chat_id))
+            await save()
             await sleep(PAUSE_SECONDS)
-    return {**counters, "groups": groups_done}
+    return snapshot()
 
 
 async def run_broadcast_cycle(factory=None, *, send: Optional[Sender] = None,
@@ -223,6 +275,16 @@ async def run_broadcast_cycle(factory=None, *, send: Optional[Sender] = None,
             attempts = (item.broadcast_attempts or 0) + 1
             await _set(db, item_id, broadcast_status=BROADCAST_FAILED, broadcast_attempts=attempts,
                        broadcast_next_at=now + _backoff(attempts))
+        stats["failed"] = 1
+        return stats
+    if details["retry"] or details["groups_failed"]:
+        async with factory() as db:
+            item = await db.get(NewsItem, item_id)
+            attempts = (item.broadcast_attempts or 0) + 1
+            await _set(db, item_id, broadcast_status=BROADCAST_FAILED, broadcast_details=details,
+                       broadcast_attempts=attempts, broadcast_next_at=now + _backoff(attempts))
+        logger.warning("news_watch.broadcast: item %s undelivered: %s residents, %s groups (attempt %s)",
+                       item_id, len(details["retry"]), len(details["groups_failed"]), attempts)
         stats["failed"] = 1
         return stats
     async with factory() as db:

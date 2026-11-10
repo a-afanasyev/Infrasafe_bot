@@ -3829,6 +3829,8 @@
     "publish": "Chop etish",
     "reject": "Rad etish",
     "retryBroadcast": "Tarqatishni takrorlash",
+    "delivery": "Yetkazildi {{sent}} · botni bloklagan {{blocked}} · bot bilan chat yo'q {{noChat}} · yetkazilmadi {{undelivered}}",
+    "nextAttempt": "qayta urinish {{time}} da",
     "broadcast": "Tarqatish",
     "empty": "Bo'sh",
     "status": {
@@ -3858,6 +3860,7 @@
       "context": "AI uchun majmua tavsifi",
       "contextHint": "Majmua, ko'chalar, tuman, mahalla, mo'ljallar — yangilik biz haqimizda ekanini nimadan bilish",
       "keywords": "Oldindan filtr kalit so'zlari (vergul bilan)",
+      "eventKeywords": "Hodisa so'zlari (vergul bilan): yangilik AI'ga faqat unda hodisa so'zi ham, kalit so'z ham bo'lsa yuboriladi",
       "autoPublish": "Yuqori ishonchda avtomatik chop etish",
       "minConfidence": "Ishonch chegarasi",
       "broadcastDm": "Yashovchilarga shaxsiy xabar",

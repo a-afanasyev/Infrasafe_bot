@@ -29,11 +29,14 @@ function textToSources(text: string): NewsWatchConfig['sources'] {
     })
 }
 
+const splitWords = (text: string) => text.split(/[,\n]/).map((k) => k.trim()).filter(Boolean)
+
 export default function NewsWatchConfigForm({ value, pending, onSave }: Props) {
   const { t } = useTranslation()
   const [sources, setSources] = useState(sourcesToText(value.sources))
   const [context, setContext] = useState(value.complex_context)
   const [keywords, setKeywords] = useState(value.keywords.join(', '))
+  const [eventKeywords, setEventKeywords] = useState((value.event_keywords ?? []).join(', '))
   const [autoPublish, setAutoPublish] = useState(value.auto_publish)
   const [minConfidence, setMinConfidence] = useState(String(value.min_confidence))
   const [broadcast, setBroadcast] = useState(value.broadcast)
@@ -42,7 +45,8 @@ export default function NewsWatchConfigForm({ value, pending, onSave }: Props) {
     onSave({
       sources: textToSources(sources),
       complex_context: context.trim(),
-      keywords: keywords.split(/[,\n]/).map((k) => k.trim()).filter(Boolean),
+      keywords: splitWords(keywords),
+      event_keywords: splitWords(eventKeywords),
       auto_publish: autoPublish,
       min_confidence: Number.parseFloat(minConfidence) || 0,
       broadcast,
@@ -67,6 +71,11 @@ export default function NewsWatchConfigForm({ value, pending, onSave }: Props) {
         {t('newsWatch.config.keywords')}
         <textarea className={field} rows={2} value={keywords} onChange={(e) => setKeywords(e.target.value)}
           aria-label={t('newsWatch.config.keywords')} />
+      </label>
+      <label className="flex flex-col gap-1 text-[11px] text-text-muted">
+        {t('newsWatch.config.eventKeywords')}
+        <textarea className={field} rows={2} value={eventKeywords} onChange={(e) => setEventKeywords(e.target.value)}
+          aria-label={t('newsWatch.config.eventKeywords')} />
       </label>
       <div className="flex flex-wrap items-center gap-4 text-[13px] text-text-primary">
         <label className="flex items-center gap-2">

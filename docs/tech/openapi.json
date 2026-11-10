@@ -6770,6 +6770,18 @@
             ],
             "title": "Broadcast Details"
           },
+          "broadcast_next_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Next At"
+          },
           "broadcast_status": {
             "title": "Broadcast Status",
             "type": "string"
@@ -6999,6 +7011,13 @@
             "default": "",
             "title": "Complex Context",
             "type": "string"
+          },
+          "event_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Keywords",
+            "type": "array"
           },
           "keywords": {
             "items": {
@@ -19035,6 +19054,17 @@
               "maximum": 200,
               "minimum": 1,
               "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }

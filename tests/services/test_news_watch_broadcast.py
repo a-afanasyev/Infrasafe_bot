@@ -11,7 +11,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from uk_management_bot.api.telegram_send import STATUS_BLOCKED, STATUS_ERROR, STATUS_OK, TelegramResult
+from uk_management_bot.api.telegram_send import (
+    STATUS_BLOCKED, STATUS_ERROR, STATUS_NO_CHAT, STATUS_OK, TelegramResult,
+)
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.monitored_group import MonitoredGroup
 from uk_management_bot.database.models.news_item import (
@@ -69,11 +71,13 @@ async def _row(factory, item_id) -> NewsItem:
 class Sender:
     """Запоминает отправки; сценарии по chat_id."""
 
-    def __init__(self, fail_for=(), retry_after_once=(), crash_at=None):
+    def __init__(self, fail_for=(), retry_after_once=(), crash_at=None, error_for=(), no_chat_for=(),
+                 all_error=False):
         self.sent: list[int] = []
         self.fail_for = set(fail_for)
         self.retry_once = set(retry_after_once)
         self.crash_at = crash_at
+        self.error_for, self.no_chat_for, self.all_error = set(error_for), set(no_chat_for), all_error
 
     async def __call__(self, chat_id, text, **kw):
         if self.crash_at is not None and len(self.sent) >= self.crash_at:
@@ -84,6 +88,10 @@ class Sender:
         self.sent.append(chat_id)
         if chat_id in self.fail_for:
             return TelegramResult(STATUS_BLOCKED, 403, "blocked")
+        if self.all_error or chat_id in self.error_for:
+            return TelegramResult(STATUS_ERROR, None, "network")
+        if chat_id in self.no_chat_for:
+            return TelegramResult(STATUS_NO_CHAT, 400, "chat not found")
         return TelegramResult(STATUS_OK, 200)
 
 
@@ -261,3 +269,129 @@ async def test_llm_summary_cannot_inject_link(ctx):
     text = sender.calls[0][0]
     assert "<a href" not in text and "phish.example" not in text
     assert "Нет воды тут" in text and "suv yo&#x27;q" in text and "&lt;i&gt;" not in text
+
+
+# ───────────── A11-CODE-02: честный итог доставки ─────────────
+
+LATER = NOW + timedelta(hours=1)
+
+
+@pytest.mark.asyncio
+async def test_transient_errors_mark_failed_then_retry_only_them(ctx):
+    """Раньше: errors+1, курсор дальше, «доставлена» — не получившие так и не получали."""
+    factory = ctx
+    item_id = await _item(factory)
+    (uid_a, tg_a), (uid_b, tg_b) = RESIDENTS[2], RESIDENTS[5]
+    await _run(factory, Sender(error_for=(tg_a, tg_b)))
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_FAILED and row.broadcast_attempts == 1
+    assert row.broadcast_next_at is not None
+    assert row.broadcast_details["retry"] == [uid_a, uid_b]
+    assert row.broadcast_details["sent"] == len(RESIDENTS) - 2
+
+    second = Sender()
+    await _run(factory, second, now=LATER)
+    assert second.sent == [tg_a, tg_b], "повтор только тем, кому не дошло; группа уже получила"
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_DONE
+    assert row.broadcast_details["retry"] == [] and row.broadcast_details["sent"] == len(RESIDENTS)
+
+
+@pytest.mark.asyncio
+async def test_no_chat_is_counted_not_retried_and_not_a_failure(ctx):
+    factory = ctx
+    item_id = await _item(factory)
+    await _run(factory, Sender(no_chat_for=(RESIDENTS[0][1], RESIDENTS[1][1])))
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_DONE
+    assert row.broadcast_details["no_chat"] == 2 and row.broadcast_details["retry"] == []
+
+
+@pytest.mark.asyncio
+async def test_telegram_down_aborts_early_and_resumes_without_duplicates(ctx):
+    """06.11: связи с Telegram нет — не жечь весь список, а остановиться и повторить."""
+    factory = ctx
+    item_id = await _item(factory)
+    down = Sender(all_error=True)
+    result, _ = await _run(factory, down)
+    assert len(down.sent) == broadcast.ABORT_AFTER_ERRORS and result["failed"] == 1
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_FAILED
+    assert len(row.broadcast_details["retry"]) == broadcast.ABORT_AFTER_ERRORS
+
+    up = Sender()
+    await _run(factory, up, now=LATER)
+    tgs = [tg for _, tg in RESIDENTS]
+    assert sorted(t for t in up.sent if t != GROUP) == tgs and up.sent.count(GROUP) == 1
+    assert (await _row(factory, item_id)).broadcast_status == BROADCAST_DONE
+
+
+@pytest.mark.asyncio
+async def test_failed_group_is_retried(ctx):
+    factory = ctx
+    item_id = await _item(factory)
+    await _run(factory, Sender(error_for=(GROUP,)))
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_FAILED and row.broadcast_details["groups_failed"] == [GROUP]
+    second = Sender()
+    await _run(factory, second, now=LATER)
+    assert second.sent == [GROUP]
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_DONE and row.broadcast_details["groups"] == [GROUP]
+
+
+@pytest.mark.asyncio
+async def test_retry_list_drops_residents_who_became_ineligible(ctx):
+    factory = ctx
+    item_id = await _item(factory)
+    uid, tg = RESIDENTS[7]
+    await _run(factory, Sender(error_for=(tg,)))
+    async with factory() as db:
+        (await db.get(User, uid)).bot_blocked_at = NOW
+        await db.commit()
+    second = Sender()
+    await _run(factory, second, now=LATER)
+    assert second.sent == []
+    assert (await _row(factory, item_id)).broadcast_status == BROADCAST_DONE
+
+
+@pytest.mark.asyncio
+async def test_long_retry_after_is_capped_below_stale(ctx):
+    """Ревью: сон дольше STALE → второй воркер берёт «протухшую» рассылку → дубли."""
+    factory = ctx
+    await _item(factory)
+    target = RESIDENTS[0][1]
+
+    class Slow(Sender):
+        async def __call__(self, chat_id, text, **kw):
+            if chat_id == target and target not in self.sent and chat_id not in self.retry_once:
+                self.retry_once.add(chat_id)
+                return TelegramResult(STATUS_ERROR, 429, "Too Many Requests", retry_after=3600)
+            return await super().__call__(chat_id, text, **kw)
+
+    _, slept = await _run(factory, Slow())
+    assert max(slept) <= broadcast.MAX_RETRY_AFTER_SECONDS < broadcast.STALE.total_seconds()
+
+
+@pytest.mark.asyncio
+async def test_dm_switched_off_does_not_keep_failing_on_old_retry_list(ctx):
+    factory = ctx
+    item_id = await _item(factory)
+    await _run(factory, Sender(error_for=(RESIDENTS[0][1],)))
+    async with factory() as db:
+        await save_config(db, {**DEFAULT_CONFIG, "broadcast": {"dm": False, "residents_groups": True}})
+    await _run(factory, Sender(), now=LATER)
+    row = await _row(factory, item_id)
+    assert row.broadcast_status == BROADCAST_DONE and row.broadcast_details["retry"] == []
+
+
+@pytest.mark.asyncio
+async def test_errors_count_is_currently_undelivered_not_attempts(ctx):
+    factory = ctx
+    item_id = await _item(factory)
+    tg = RESIDENTS[0][1]
+    await _run(factory, Sender(error_for=(tg,)))
+    await _run(factory, Sender(error_for=(tg,)), now=LATER)
+    assert (await _row(factory, item_id)).broadcast_details["errors"] == 1
+    await _run(factory, Sender(), now=LATER + timedelta(hours=1))
+    assert (await _row(factory, item_id)).broadcast_details["errors"] == 0

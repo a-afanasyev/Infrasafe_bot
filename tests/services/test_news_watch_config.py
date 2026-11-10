@@ -170,3 +170,22 @@ def test_limits_only_on_write_stored_config_still_loads(sync_session):
     assert "гв" in cfg["keywords"]
     with pytest.raises(ValueError, match="keywords"):
         validate_config(stored)  # запись того же — отказ
+
+
+def test_event_keywords_default_and_normalized():
+    assert validate_config({})["event_keywords"], "дефолтные слова-события ru/uz обязаны быть"
+    assert validate_config({"event_keywords": ["ОТКЛЮЧ", "отключ", " To’xtat "]})["event_keywords"] == [
+        "отключ", "to'xtat"]
+
+
+def test_stored_config_without_event_keywords_gets_defaults():
+    """Конфиг, сохранённый до появления поля, не теряет фильтр событий."""
+    cfg = validate_config({"keywords": ["вод"]}, limits=False)
+    assert cfg["event_keywords"] == DEFAULT_CONFIG["event_keywords"]
+
+
+def test_event_keywords_limits():
+    with pytest.raises(ValueError, match="event_keywords"):
+        validate_config({"event_keywords": ["ab"]})
+    with pytest.raises(ValueError, match="event_keywords"):
+        validate_config({"event_keywords": [f"слово{i}" for i in range(MAX_KEYWORDS + 1)]})

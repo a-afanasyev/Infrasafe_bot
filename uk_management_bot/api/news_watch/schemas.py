@@ -20,6 +20,7 @@ class NewsWatchConfigData(BaseModel):
     sources: list[NewsSource] = Field(default_factory=list)
     complex_context: str = ""
     keywords: list[str] = Field(default_factory=lambda: list(DEFAULT_CONFIG["keywords"]))
+    event_keywords: list[str] = Field(default_factory=lambda: list(DEFAULT_CONFIG["event_keywords"]))
     auto_publish: bool = False
     min_confidence: float = DEFAULT_CONFIG["min_confidence"]
     broadcast: dict = Field(default_factory=lambda: dict(DEFAULT_CONFIG["broadcast"]))
@@ -51,6 +52,7 @@ class NewsItemOut(BaseModel):
     decided_by: Optional[int] = None
     broadcast_status: str
     broadcast_attempts: int
+    broadcast_next_at: Optional[datetime] = None
     broadcast_details: Optional[dict] = None
     created_at: Optional[datetime] = None
 

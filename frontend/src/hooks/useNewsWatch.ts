@@ -15,7 +15,7 @@ export const NEWS_WATCH_BASE = '/api/v2/news-watch'
 
 export const newsWatchKeys = {
   config: ['news-watch-config'] as const,
-  items: (status: NewsItemStatus) => ['news-watch-items', status] as const,
+  items: (status: NewsItemStatus, offset = 0) => ['news-watch-items', status, offset] as const,
 }
 
 export function useNewsWatchConfig() {
@@ -39,10 +39,14 @@ export function useSaveNewsWatchConfig() {
   })
 }
 
-export function useNewsItems(status: NewsItemStatus) {
+export const NEWS_PAGE_SIZE = 50
+
+export function useNewsItems(status: NewsItemStatus, offset = 0) {
   return useQuery<{ items: NewsItem[]; total: number }>({
-    queryKey: newsWatchKeys.items(status),
-    queryFn: () => apiClient.get(`${NEWS_WATCH_BASE}/items`, { params: { status } }).then((r) => r.data),
+    queryKey: newsWatchKeys.items(status, offset),
+    queryFn: () => apiClient.get(`${NEWS_WATCH_BASE}/items`, {
+      params: { status, limit: NEWS_PAGE_SIZE, offset },
+    }).then((r) => r.data),
     refetchInterval: 30_000,
   })
 }

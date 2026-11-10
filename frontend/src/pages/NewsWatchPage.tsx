@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useNewsDecision, useNewsItems, useNewsWatchConfig, useSaveNewsWatchConfig } from '../hooks/useNewsWatch'
+import {
+  NEWS_PAGE_SIZE, useNewsDecision, useNewsItems, useNewsWatchConfig, useSaveNewsWatchConfig,
+} from '../hooks/useNewsWatch'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import NewsWatchConfigForm from '../components/newsWatch/NewsWatchConfigForm'
 import type { NewsItem, NewsItemStatus } from '../types/newsWatch'
@@ -14,6 +16,32 @@ import { cn } from '@/lib/utils'
  * повтор при сбое) и настройки мониторинга. DARK за VITE_NEWS_WATCH_ENABLED.
  */
 const TABS: NewsItemStatus[] = ['pending', 'published', 'rejected', 'ignored']
+// = broadcast.MAX_ATTEMPTS: после стольких попыток воркер сам не повторяет.
+const MAX_BROADCAST_ATTEMPTS = 5
+
+/** «Доставлено N · заблокировали бота N · нет чата с ботом N · не доставлено N». */
+function DeliveryLine({ item }: { item: NewsItem }) {
+  const { t, i18n } = useTranslation()
+  const d = (item.broadcast_details ?? {}) as Record<string, unknown>
+  const num = (key: string) => (typeof d[key] === 'number' ? (d[key] as number) : 0)
+  const len = (key: string) => (Array.isArray(d[key]) ? (d[key] as unknown[]).length : 0)
+  if (!item.broadcast_details) return null
+  // Записи до A11-CODE-02 списка retry не знают — показываем их errors.
+  const undelivered = 'retry' in d ? len('retry') + len('groups_failed') : num('errors')
+  const next = item.broadcast_next_at ? new Date(item.broadcast_next_at) : null
+  const autoRetry = item.broadcast_status === 'failed' && next != null
+    && item.broadcast_attempts < MAX_BROADCAST_ATTEMPTS
+  return (
+    <span className="text-[11px] text-text-muted">
+      {t('newsWatch.delivery', {
+        sent: num('sent'), blocked: num('blocked'), noChat: num('no_chat'), undelivered,
+      })}
+      {autoRetry && ` · ${t('newsWatch.nextAttempt', {
+        time: next.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' }),
+      })}`}
+    </span>
+  )
+}
 
 function ItemCard({ item, onDecide, pending }: {
   item: NewsItem
@@ -50,12 +78,14 @@ function ItemCard({ item, onDecide, pending }: {
         {item.status === 'published' && (
           <span className="text-[11px] text-text-muted">
             {t('newsWatch.broadcast')}: {t(`newsWatch.broadcastStatus.${item.broadcast_status}`)}
-            {item.broadcast_status === 'failed' && (
+            {item.broadcast_status === 'failed'
+              && (item.broadcast_attempts >= MAX_BROADCAST_ATTEMPTS || !item.broadcast_next_at) && (
               <Button size="sm" variant="outline" className="ml-2" disabled={pending}
                 onClick={() => onDecide('retry-broadcast')}>{t('newsWatch.retryBroadcast')}</Button>
             )}
           </span>
         )}
+        {item.status === 'published' && <DeliveryLine item={item} />}
       </div>
     </div>
   )
@@ -65,7 +95,9 @@ export default function NewsWatchPage() {
   const { t } = useTranslation()
   usePageTitle(t('newsWatch.title'))
   const [tab, setTab] = useState<NewsItemStatus>('pending')
-  const items = useNewsItems(tab)
+  const [offset, setOffset] = useState(0)
+  const items = useNewsItems(tab, offset)
+  const total = items.data?.total ?? 0
   const config = useNewsWatchConfig()
   const save = useSaveNewsWatchConfig()
   const decide = useNewsDecision()
@@ -76,7 +108,7 @@ export default function NewsWatchPage() {
 
       <div className="flex gap-2">
         {TABS.map((s) => (
-          <button key={s} type="button" onClick={() => setTab(s)} aria-pressed={tab === s}
+          <button key={s} type="button" onClick={() => { setTab(s); setOffset(0) }} aria-pressed={tab === s}
             className={cn('px-3 py-1.5 rounded-sm text-xs font-semibold border transition-colors',
               tab === s ? 'bg-accent-dim text-accent border-border-active'
                 : 'bg-bg-surface text-text-muted border-border-default hover:border-border-active')}>
@@ -96,6 +128,18 @@ export default function NewsWatchPage() {
             <ItemCard key={item.id} item={item} pending={decide.isPending}
               onDecide={(decision) => decide.mutate({ id: item.id, decision })} />
           ))}
+        </div>
+      )}
+
+      {total > NEWS_PAGE_SIZE && (
+        <div className="flex items-center justify-center gap-3">
+          <Button variant="outline" size="sm" disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - NEWS_PAGE_SIZE))}>{t('common.back')}</Button>
+          <span className="text-xs text-text-muted font-[family-name:var(--font-mono)]">
+            {offset + 1}–{Math.min(offset + NEWS_PAGE_SIZE, total)} / {total}
+          </span>
+          <Button variant="outline" size="sm" disabled={offset + NEWS_PAGE_SIZE >= total}
+            onClick={() => setOffset(offset + NEWS_PAGE_SIZE)}>{t('common.next')}</Button>
         </div>
       )}
 
