@@ -9,7 +9,8 @@ import NewsWatchPage from './NewsWatchPage'
 const CONFIG = {
   sources: [{ chat: '@toshkent_elektr', title: 'Электросети' }],
   complex_context: 'ЖК Тест',
-  keywords: ['отключ', 'suv'],
+  keywords: ['вод', 'suv'],
+  event_keywords: ['отключ', 'авари'],
   auto_publish: false,
   min_confidence: 0.8,
   broadcast: { dm: true, residents_groups: true },
@@ -71,7 +72,8 @@ describe('NewsWatchPage', () => {
     expect(body).toMatchObject({
       sources: [{ chat: '@suv_taminoti', title: 'Водоканал' }, { chat: '@hokimiyat', title: '' }],
       complex_context: 'ЖК Тест',
-      keywords: ['отключ', 'suv'],
+      keywords: ['вод', 'suv'],
+      event_keywords: ['отключ', 'авари'],
       auto_publish: true,
       min_confidence: 0.8,
     })
@@ -83,5 +85,69 @@ describe('NewsWatchPage', () => {
     await screen.findByText('29.10 10:00–16:00 нет света')
     await user.click(screen.getByText('Отклонены'))
     expect(await screen.findByText('Пусто')).toBeInTheDocument()
+  })
+
+  it('edits event keywords separately from resource keywords', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.put('*/api/v2/news-watch/config', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(body)
+      }),
+    )
+    const user = userEvent.setup()
+    render(<NewsWatchPage />)
+    const events = await screen.findByLabelText(/Слова-события/)
+    expect(events).toHaveValue('отключ, авари')
+    await user.clear(events)
+    await user.type(events, 'отключ, to’xtat')
+    await user.click(screen.getByText('Сохранить настройки'))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(body).toMatchObject({ keywords: ['вод', 'suv'], event_keywords: ['отключ', 'to’xtat'] })
+  })
+
+  it('shows delivery counters and the next automatic attempt', async () => {
+    const future = new Date(Date.now() + 30 * 60_000).toISOString()
+    server.use(
+      http.get('*/api/v2/news-watch/items', () => HttpResponse.json({
+        items: [{ ...ITEM, status: 'published', broadcast_status: 'failed', broadcast_attempts: 1,
+          broadcast_next_at: future,
+          broadcast_details: { sent: 16, blocked: 0, no_chat: 1, errors: 2, retry: [5, 9], groups: [], groups_failed: [] } }],
+        total: 1,
+      })),
+    )
+    render(<NewsWatchPage />)
+    expect(await screen.findByText(/Доставлено 16/)).toBeInTheDocument()
+    expect(screen.getByText(/нет чата с ботом 1/)).toBeInTheDocument()
+    expect(screen.getByText(/не доставлено 2/)).toBeInTheDocument()
+    expect(screen.getByText(/повтор в/)).toBeInTheDocument()
+    expect(screen.queryByText('Повторить рассылку')).not.toBeInTheDocument()
+  })
+
+  it('offers manual retry once automatic attempts are exhausted', async () => {
+    server.use(
+      http.get('*/api/v2/news-watch/items', () => HttpResponse.json({
+        items: [{ ...ITEM, status: 'published', broadcast_status: 'failed', broadcast_attempts: 5,
+          broadcast_next_at: null, broadcast_details: { sent: 0, retry: [1, 2, 3], groups: [], groups_failed: [] } }],
+        total: 1,
+      })),
+    )
+    render(<NewsWatchPage />)
+    expect(await screen.findByText('Повторить рассылку')).toBeInTheDocument()
+    expect(screen.getByText(/не доставлено 3/)).toBeInTheDocument()
+  })
+
+  it('pages through a long tab with offset', async () => {
+    const offsets: (string | null)[] = []
+    server.use(
+      http.get('*/api/v2/news-watch/items', ({ request }) => {
+        offsets.push(new URL(request.url).searchParams.get('offset'))
+        return HttpResponse.json({ items: [ITEM], total: 120 })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<NewsWatchPage />)
+    await user.click(await screen.findByRole('button', { name: 'Далее' }))
+    await waitFor(() => expect(offsets).toContain('50'))
   })
 })

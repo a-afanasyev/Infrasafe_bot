@@ -2,7 +2,8 @@
 
 ``complex_context`` — свободное описание комплекса для LLM (адреса, район,
 махалля, ориентиры): это и есть «страница настроек» вместо хардкода адресов.
-``keywords`` — детерминированный префильтр: нет совпадения → LLM не зовём.
+``keywords`` (ресурс: вода, газ, свет…) и ``event_keywords`` (событие: отключение,
+авария…) — детерминированный префильтр: LLM зовём, только если в тексте есть оба.
 ``sources`` — каналы/группы (@username или ссылка t.me), на которые
 подписывается юзербот (получает список через GET /news-watch/sources).
 """
@@ -36,6 +37,13 @@ DEFAULT_CONFIG: dict = {
     "keywords": [
         "отключ", "электр", "свет", "вод", "газ", "отопл", "авари", "плановые работы",
         "elektr", "svet", "chiroq", "suv", "gaz", "issiqlik", "o'chir", "ochir", "avariya",
+    ],
+    # Без слова-события подстрока ресурса ловит «водителей», «газопроводов» —
+    # ≈40% отсеянных на profk уходило в LLM впустую. Пустой список = только keywords.
+    "event_keywords": [
+        "отключ", "авари", "плановые работы", "плановых работ", "ремонт", "прекращ",
+        "ограничен", "перебо", "не будет", "o'chir", "ochir", "avariya", "ta'mir",
+        "to'xtat", "toxtat", "uzilish", "vaqtincha", "cheklan",
     ],
     "auto_publish": False,
     "min_confidence": 0.8,
@@ -79,22 +87,30 @@ def _validate_sources(raw: object, limits: bool) -> list[dict]:
     return out
 
 
-def _validate_keywords(raw: object, limits: bool) -> list[str]:
+_APOSTROPHES = str.maketrans({c: "'" for c in "’‘ʻʼ`"})
+
+
+def normalize_word(text: str) -> str:
+    """Нижний регистр + один апостроф: узбекский пишут через ' ’ ʻ ʼ ‘ `."""
+    return text.lower().translate(_APOSTROPHES)
+
+
+def _validate_keywords(raw: object, limits: bool, field: str = "keywords") -> list[str]:
     if raw is None:
-        return list(DEFAULT_CONFIG["keywords"])
+        return list(DEFAULT_CONFIG[field])
     if not isinstance(raw, list):
-        raise ValueError(f"keywords: ожидается список строк, получено {raw!r}")
+        raise ValueError(f"{field}: ожидается список строк, получено {raw!r}")
     out: list[str] = []
     for word in raw:
         if not isinstance(word, str):
-            raise ValueError(f"keywords[]: ожидается строка, получено {word!r}")
-        lowered = word.strip().lower()
+            raise ValueError(f"{field}[]: ожидается строка, получено {word!r}")
+        lowered = normalize_word(word.strip())
         if limits and lowered and len(lowered) < MIN_KEYWORD_LEN:
-            raise ValueError(f"keywords[]: не короче {MIN_KEYWORD_LEN} символов, получено {word!r}")
+            raise ValueError(f"{field}[]: не короче {MIN_KEYWORD_LEN} символов, получено {word!r}")
         if lowered and lowered not in out:
             out.append(lowered)
     if limits and len(out) > MAX_KEYWORDS:
-        raise ValueError(f"keywords: не больше {MAX_KEYWORDS} слов, получено {len(out)}")
+        raise ValueError(f"{field}: не больше {MAX_KEYWORDS} слов, получено {len(out)}")
     return out
 
 
@@ -141,6 +157,7 @@ def validate_config(raw: dict, *, limits: bool = True) -> dict:
         "sources": _validate_sources(raw.get("sources"), limits),
         "complex_context": context,
         "keywords": _validate_keywords(raw.get("keywords"), limits),
+        "event_keywords": _validate_keywords(raw.get("event_keywords"), limits, "event_keywords"),
         "auto_publish": cfg["auto_publish"],
         "min_confidence": float(threshold),
         "broadcast": broadcast,

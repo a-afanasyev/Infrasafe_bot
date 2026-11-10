@@ -11,6 +11,7 @@ export interface NewsWatchConfig {
   sources: NewsSource[]
   complex_context: string
   keywords: string[]
+  event_keywords: string[]
   auto_publish: boolean
   min_confidence: number
   broadcast: { dm: boolean; residents_groups: boolean }
@@ -35,6 +36,7 @@ export interface NewsItem {
   decided_by: number | null
   broadcast_status: 'none' | 'pending' | 'running' | 'done' | 'failed'
   broadcast_attempts: number
+  broadcast_next_at?: string | null
   broadcast_details: Record<string, unknown> | null
   created_at: string | null
 }

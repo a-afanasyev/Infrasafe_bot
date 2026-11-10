@@ -91,6 +91,42 @@ def test_prefilter_is_case_insensitive_substring():
     assert pipeline.prefilter("", ["x"]) is False
 
 
+def test_prefilter_requires_event_and_resource():
+    """Подстрока «вод» есть в «водителей», «газ» — в «газопроводов»: без слова-события
+    такие новости уходили в платный LLM (≈40% отсеянных на profk)."""
+    res, events = ["вод", "газ", "suv", "gaz"], ["отключ", "авари", "to'xtat"]
+    assert pipeline.prefilter("Завтра отключение воды на ул. Тестовая", res, events) is True
+    assert pipeline.prefilter("Новые правила для водителей такси", res, events) is False
+    assert pipeline.prefilter("Строительство газопроводов идёт по плану", res, events) is False
+    assert pipeline.prefilter("Отключение интернета на Чиланзаре", res, events) is False  # нет ресурса
+
+
+@pytest.mark.parametrize("apostrophe", ["'", "’", "ʻ", "ʼ", "‘", "`"])
+def test_prefilter_normalizes_uzbek_apostrophes(apostrophe):
+    """Опубликованная 10.11 новость о газе пришла как «to’xtatish» (U+2019)."""
+    text = f"tabiiy gazni vaqtincha to{apostrophe}xtatishimizga ruxsat"
+    assert pipeline.prefilter(text, ["gaz"], ["to'xtat"]) is True
+    assert pipeline.prefilter("gazni vaqtincha to'xtat", ["gaz"], [f"to{apostrophe}xtat"]) is True
+
+
+def test_prefilter_without_events_keeps_old_behaviour():
+    assert pipeline.prefilter("Новые правила для водителей", ["вод"], []) is True
+
+
+@pytest.mark.asyncio
+async def test_resource_without_event_is_ignored_without_llm(ctx, monkeypatch):
+    factory, _ = ctx
+    calls = _llm(monkeypatch, _verdict())
+    async with factory() as db:
+        item, _ = await pipeline.ingest(db, _inbound(text="Руководители провели совещание о газопроводах"))
+    assert item.status == NEWS_STATUS_IGNORED and calls == []
+
+
+def test_prompt_asks_for_empty_summaries_when_irrelevant():
+    """Пересказ нерелевантной новости на двух языках — выходные токены впустую."""
+    assert "relevant=false" in pipeline._BASE_PROMPT and "пустые" in pipeline._BASE_PROMPT
+
+
 @pytest.mark.asyncio
 async def test_prefilter_miss_is_ignored_without_llm(ctx, monkeypatch):
     factory, notify = ctx

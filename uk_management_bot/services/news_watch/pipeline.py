@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,7 @@ from uk_management_bot.database.models.news_item import (
     NewsItem,
 )
 from uk_management_bot.services.llm.client import llm_json_async
-from uk_management_bot.services.news_watch.config import load_config
+from uk_management_bot.services.news_watch.config import load_config, normalize_word
 from uk_management_bot.services.news_watch.limiter import news_watch_llm_allowed
 
 logger = logging.getLogger(__name__)
@@ -66,12 +66,19 @@ class Inbound:
 # ───────────── правила ─────────────
 
 
-def prefilter(text: str, keywords: list[str]) -> bool:
-    """Есть ли в тексте хотя бы одно ключевое слово (подстрока, без регистра)."""
+def prefilter(text: str, keywords: list[str], event_keywords: Sequence[str] = ()) -> bool:
+    """Есть ли в тексте слово-ресурс И (если список задан) слово-событие.
+
+    Подстрока без регистра, апострофы узбекского сведены к одному.
+    """
     if not text:
         return False
-    lowered = text.lower()
-    return any(word and word in lowered for word in keywords)
+    lowered = normalize_word(text)
+
+    def hit(words) -> bool:
+        return any(word and normalize_word(word) in lowered for word in words)
+
+    return hit(keywords) and (not event_keywords or hit(event_keywords))
 
 
 # ───────────── LLM ─────────────
@@ -107,7 +114,8 @@ _BASE_PROMPT = (
     "starts_at/ends_at — ISO 8601 с датой и временем, если они названы, иначе null "
     "(год — текущий, если не указан); summary_ru и summary_uz — одно-два предложения "
     "для жителей на каждом языке: что отключают, где, когда (без ссылок и телефонов); "
-    "confidence — уверенность 0..1, что это про наш комплекс."
+    "confidence — уверенность 0..1, что это про наш комплекс. Если relevant=false — "
+    "summary_ru и summary_uz пустые строки (пересказ не нужен)."
 )
 
 
@@ -195,7 +203,7 @@ async def ingest(db: AsyncSession, inbound: Inbound) -> tuple[NewsItem, bool]:
         chat_title=(inbound.chat_title or "")[:255] or None, raw_text=inbound.text,
         posted_at=inbound.posted_at, status=NEWS_STATUS_IGNORED, broadcast_status=BROADCAST_NONE,
     )
-    if prefilter(inbound.text, cfg["keywords"]):
+    if prefilter(inbound.text, cfg["keywords"], cfg["event_keywords"]):
         if await news_watch_llm_allowed():
             verdict = await classify_async(inbound.text, cfg["complex_context"], await _news_instructions(db))
         else:
