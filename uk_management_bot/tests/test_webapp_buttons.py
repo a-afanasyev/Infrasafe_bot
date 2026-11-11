@@ -147,3 +147,71 @@ def test_meter_button_text_routes_to_webapp_handler(lang):
         roles=["applicant", METER_ENTRY_ROLE], user=None, user_status="approved",
     )
     assert winner == (H, "open_meter_entry_webapp"), winner
+
+
+# ─── Диспетчер: «Заявка по звонку» (TWA /twa/dispatch) ───────────────────────
+
+DISPATCH_KEY = "base.handlers.btn_dispatch"
+
+
+def test_dispatcher_only_keyboard_has_one_work_button():
+    """Человек только с ролью «Диспетчер»: приём звонка и ничего лишнего."""
+    kb = get_main_keyboard_for_role("dispatcher", ["dispatcher"], "approved", language="ru")
+    buttons = _reply_buttons(kb)
+    assert [b.text for b in buttons] == [
+        get_text(DISPATCH_KEY, language="ru"),
+        get_text("main_menu.profile", language="ru"),
+        get_text("main_menu.help", language="ru"),
+        get_text("main_menu.feedback", language="ru"),
+    ]
+    assert all(b.web_app is None for b in buttons), "reply web_app не передаёт initData"
+
+
+def test_dispatch_button_joins_other_menus_exactly_once():
+    text = get_text(DISPATCH_KEY, language="ru")
+    for active in ("executor", "dispatcher"):
+        kb = get_main_keyboard_for_role(active, ["executor", "dispatcher"], "approved", language="ru")
+        assert [b.text for b in _reply_buttons(kb)].count(text) == 1, active
+
+
+@pytest.mark.parametrize("roles,status", [
+    (["manager"], "approved"),          # право есть, роли диспетчера нет — меню менеджера не трогаем
+    (["dispatcher"], "pending"),        # ещё не одобрен
+])
+def test_dispatch_button_hidden(roles, status):
+    kb = get_main_keyboard_for_role(roles[0], roles, status, language="ru")
+    assert get_text(DISPATCH_KEY, language="ru") not in [b.text for b in _reply_buttons(kb)]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_text_answers_with_inline_webapp_button():
+    from uk_management_bot.handlers.webapp_buttons import open_dispatch_webapp
+
+    msg = _message(get_text(DISPATCH_KEY, language="ru"))
+    await open_dispatch_webapp(msg, roles=["dispatcher"], language="ru")
+
+    markup = msg.answer.call_args.kwargs["reply_markup"]
+    urls = [b.web_app.url for b in _inline_buttons(markup) if b.web_app is not None]
+    assert urls == [f"{FRONTEND}/uk/twa/dispatch"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_text_without_right_is_denied_without_webapp():
+    """Текст кнопки шлёт КЛИЕНТ (BUG-169): без права — отказ, без ссылки."""
+    from uk_management_bot.handlers.webapp_buttons import open_dispatch_webapp
+
+    msg = _message(get_text(DISPATCH_KEY, language="ru"))
+    await open_dispatch_webapp(msg, roles=["applicant"], language="ru")
+
+    assert msg.answer.call_args.args[0] == get_text("errors.permission_denied", language="ru")
+    assert msg.answer.call_args.kwargs.get("reply_markup") is None
+
+
+@pytest.mark.parametrize("lang", ["ru", "uz"])
+def test_dispatch_button_text_routes_to_webapp_handler(lang):
+    text = get_text(DISPATCH_KEY, language=lang)
+    winner = resolve_ctx(
+        _main_routers(), make_message(text), "message",
+        roles=["dispatcher"], user=None, user_status="approved", active_role="dispatcher",
+    )
+    assert winner == (H, "open_dispatch_webapp"), winner

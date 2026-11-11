@@ -39,10 +39,13 @@ RESOURCE_METER_ENTRY = "resource_meter_entry"
 # Инженер: эскалации InfraSafe, работа без смены по своей заявке «Инженерный
 # разбор», передача мастеру. Выдаётся только вместе с executor (authz/role_set).
 ENGINEER = "engineer"
+# Диспетчер: приём заявок по телефону (TWA /twa/dispatch). Режим меню с одной
+# кнопкой, как у обходчика; дашборд и управление заявками ему не выданы.
+DISPATCHER = "dispatcher"
 
 KNOWN_ROLES: frozenset[str] = frozenset({
     APPLICANT, EXECUTOR, MANAGER, INSPECTOR, ADMIN, SYSTEM_ADMIN,
-    SECURITY_OPERATOR, RESOURCE_METER_ENTRY, ENGINEER,
+    SECURITY_OPERATOR, RESOURCE_METER_ENTRY, ENGINEER, DISPATCHER,
 })
 
 #: Роли-капабилити: дают права, но режимом меню (active_role) не бывают.
@@ -122,7 +125,7 @@ _ACTIONS: tuple[Action, ...] = (
     # Подсказка интерфейса: кнопка «прикрепить фото» в карточке. Сервер пускает
     # загрузку всем, у кого есть доступ к заявке (check_request_access).
     _action("requests.photos.attach", {_M, _SA, ENGINEER}, "Дашборд: кнопка прикрепить фото к заявке"),
-    _action("callcenter.use", {_M}, "Колл-центр: заявки по звонку"),
+    _action("callcenter.use", {_M, DISPATCHER}, "Колл-центр: заявки по звонку"),
     _action("feedback.manage", {_M}, "Обратная связь жителей"),
     _action("group_intake.manage", {_M}, "Group Intake: группы и заявки из чатов"),
     _action("board.configure", {_M}, "Настройка табло"),
@@ -134,7 +137,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("shifts.own", {_E}, "Свои смены исполнителя: начать, закончить, передать"),
     # ---------------------------------------------------------- адреса и жители
     _action("addresses.manage", {_M}, "Справочник адресов: изменение и модерация"),
-    _action("addresses.read", {_M, _I}, "Чтение дворов и домов", approved_only=True),
+    _action("addresses.read", {_M, _I, DISPATCHER}, "Чтение дворов и домов", approved_only=True),
     _action("residents.manage", {_M}, "Жители: список, карточка, модерация, документы"),
     _action("apartments.moderate", {_M, _A}, "Одобрить или отклонить заявку жителя на привязку квартиры"),
     # ---------------------------------------------------------- прочие модули
@@ -144,7 +147,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("resources.meter_entry", {RESOURCE_METER_ENTRY}, "Ввод показаний счётчиков из Mini App",
             approved_only=True),
     _action("materials.manage", {_M, _SA}, "Склад материалов", approved_only=True),
-    _action("elevators.lookup", {_AP, _E, _I, _M, ENGINEER}, "Лифты дома при подаче заявки", approved_only=True),
+    _action("elevators.lookup", {_AP, _E, _I, _M, ENGINEER, DISPATCHER}, "Лифты дома при подаче заявки", approved_only=True),
     _action("elevators.read", {_E, _M, ENGINEER}, "Лифты: реестр, карточка, статус, ТО", approved_only=True),
     _action("elevators.manage", {_M, ENGINEER}, "Лифты: изменение реестра и календаря", approved_only=True),
     # ---------------------------------------------------------- охрана (access-api)

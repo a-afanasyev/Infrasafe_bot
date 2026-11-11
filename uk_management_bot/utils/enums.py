@@ -14,6 +14,8 @@ class UserRole(IntEnum):
     # Роли модуля контроля доступа (access_control, ТЗ §3.2)
     SYSTEM_ADMIN = 5
     SECURITY_OPERATOR = 6
+    # Приём заявок по телефону (TWA /twa/dispatch)
+    DISPATCHER = 7
 
     @property
     def db_value(self) -> str:
@@ -31,6 +33,7 @@ _ROLE_TO_DB = {
     UserRole.INSPECTOR: "inspector",
     UserRole.SYSTEM_ADMIN: "system_admin",
     UserRole.SECURITY_OPERATOR: "security_operator",
+    UserRole.DISPATCHER: "dispatcher",
 }
 
 _ROLE_DB_TO_ENUM = {v: k for k, v in _ROLE_TO_DB.items()}

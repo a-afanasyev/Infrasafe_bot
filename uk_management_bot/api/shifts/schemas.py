@@ -335,7 +335,7 @@ class ActiveRequestsCount(BaseModel):
 
 
 class CreateInviteRequest(BaseModel):
-    role: Literal["executor", "manager"]
+    role: Literal["executor", "manager", "dispatcher"]
     specializations: list[str] = []
     hours: int = Field(default=24, ge=1, le=168)
 

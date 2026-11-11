@@ -29,6 +29,7 @@ ROLE_APPLICANT = "applicant"
 ROLE_EXECUTOR = "executor"
 ROLE_MANAGER = "manager"
 ROLE_INSPECTOR = "inspector"
+ROLE_DISPATCHER = "dispatcher"  # приём заявок по телефону
 # Роли модуля контроля доступа (access_control, ТЗ §3.2)
 ROLE_SYSTEM_ADMIN = "system_admin"
 ROLE_SECURITY_OPERATOR = "security_operator"
@@ -37,6 +38,7 @@ USER_ROLES = [
     ROLE_EXECUTOR,
     ROLE_MANAGER,
     ROLE_INSPECTOR,
+    ROLE_DISPATCHER,
     ROLE_SYSTEM_ADMIN,
     ROLE_SECURITY_OPERATOR,
 ]

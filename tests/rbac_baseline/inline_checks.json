@@ -3,6 +3,9 @@
   "uk_management_bot/api/callcenter/router.py::create_call_center_request": [
    "applicant"
   ],
+  "uk_management_bot/api/callcenter/router.py::list_resident_apartments": [
+   "applicant"
+  ],
   "uk_management_bot/api/registration/service.py::_is_privileged": [
    "applicant"
   ],
@@ -113,16 +116,7 @@
    "executor"
   ],
   "uk_management_bot/services/invite_service.py::generate_invite": [
-   "applicant",
-   "executor",
-   "inspector",
-   "manager"
-  ],
-  "uk_management_bot/services/invite_service.py::validate_invite": [
-   "applicant",
-   "executor",
-   "inspector",
-   "manager"
+   "executor"
   ],
   "uk_management_bot/services/profile_service.py::format_profile_text": [
    "executor",

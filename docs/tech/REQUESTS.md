@@ -333,7 +333,7 @@ FSM `RequestStates` (`handlers/requests/shared.py:193-204`), шаги:
 | `twa` | Mini App | `api/requests/` |
 | `inspector` | обходчик «в поле» | `handlers/inspector_requests.py` |
 | `group` | Group Intake (жительские и staff-группы, LLM) | `handlers/group_intake.py` → `save_request` (staff: `acceptance_mode=manager`, `reported_by_user_id`, provenance `source_chat_id/message_id`) |
-| колл-центр | оператор с дашборда | `api/callcenter/` |
+| колл-центр | менеджер с дашборда; диспетчер из Mini App `/twa/dispatch` (роль `dispatcher`, заявка без найденного жителя — `acceptance_mode=manager`) | `api/callcenter/` |
 | вебхук | портал InfraSafe (inbox с дедупом) | `api/webhooks/` |
 
 **Категория из групп (Group Intake).** Классификатор — LLM с глоссарием

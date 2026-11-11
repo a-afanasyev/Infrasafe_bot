@@ -33,7 +33,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
   ]
   // Form state — только то, что несёт инвайт-токен (роль/спец/срок). ФИО и
   // телефон кандидат вводит сам при регистрации в боте.
-  const [role, setRole] = useState<'executor' | 'manager'>('executor')
+  const [role, setRole] = useState<'executor' | 'manager' | 'dispatcher'>('executor')
   const [specs, setSpecs] = useState<string[]>([])
   const [invHours, setInvHours] = useState(24)
 
@@ -108,6 +108,7 @@ export default function AddEmployeeModal({ open, onClose }: Props) {
                 {([
                   { value: 'executor' as const, label: t('role.executor') },
                   { value: 'manager' as const, label: t('role.manager') },
+                  { value: 'dispatcher' as const, label: t('role.dispatcher') },
                 ]).map(r => (
                   <button
                     key={r.value}

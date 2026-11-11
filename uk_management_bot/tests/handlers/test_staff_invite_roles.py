@@ -63,7 +63,7 @@ def _join(db, user, role, specialization=None):
 
 
 class TestFreshCandidate:
-    @pytest.mark.parametrize("staff_role", ["executor", "manager", "inspector"])
+    @pytest.mark.parametrize("staff_role", ["executor", "manager", "inspector", "dispatcher"])
     def test_staff_invite_drops_applicant(self, db, staff_role):
         user = _user(db, roles=["applicant"])
 

@@ -43,8 +43,9 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Роли, видящие лифты любого дома (жителю — только дома с одобренной квартирой)
-STAFF_ROLES: frozenset[str] = frozenset({"executor", "inspector", "manager"})
+# Роли, видящие лифты любого дома (жителю — только дома с одобренной квартирой).
+# Диспетчер принимает звонок по любому адресу.
+STAFF_ROLES: frozenset[str] = frozenset({"executor", "inspector", "manager", "dispatcher"})
 SOURCE_MANUAL = "manual"
 SOURCE_REQUEST_HINT = "request_hint"
 

@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 # web_app-кнопку Mini App, но НЕ участвует в переключении active_role.
 METER_ENTRY_ROLE = "resource_meter_entry"
 
+# «Диспетчер»: приём заявок по телефону в Mini App. Свой режим меню с одной
+# рабочей кнопкой; у сотрудника с другими ролями та же кнопка в его меню.
+DISPATCHER_ROLE = "dispatcher"
+DISPATCH_ACTION = "callcenter.use"
+
 
 #: Режимы, где живёт админ-панель.
 ADMIN_PANEL_MODES = frozenset({"manager", "admin"})
@@ -27,6 +32,19 @@ def _can(roles: list[str], action_key: str) -> bool:
     from uk_management_bot.authz import has_action_roles
 
     return bool(roles) and has_action_roles(roles, action_key)
+
+
+def _add_dispatch_button(builder: ReplyKeyboardBuilder, roles: list[str],
+                         user_status: str | None, language: str) -> None:
+    """Кнопка «Заявка по звонку» — держателю роли с правом, не на модерации.
+
+    Текстовая, БЕЗ web_app (reply web_app не передаёт initData): ссылку шлёт
+    handlers/webapp_buttons.py inline-кнопкой по нажатию.
+    """
+    if DISPATCHER_ROLE not in roles or user_status == "pending" or not settings.FRONTEND_URL:
+        return
+    if _can(roles, DISPATCH_ACTION):
+        builder.add(KeyboardButton(text=get_text("base.handlers.btn_dispatch", language=language)))
 
 
 def is_menu_mode(role: str) -> bool:
@@ -190,6 +208,11 @@ def get_main_keyboard_for_role(
             builder.add(KeyboardButton(text=get_text("main_menu.inspector_create", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
         builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
+    elif active_role == DISPATCHER_ROLE:
+        # Клавиатура диспетчера: одноцелевая роль — принять заявку по телефону.
+        _add_dispatch_button(builder, unique_roles, user_status, language)
+        builder.add(KeyboardButton(text=get_text("main_menu.profile", language=language)))
+        builder.add(KeyboardButton(text=get_text("main_menu.help", language=language)))
     else:
         # Базовые кнопки для заявителя/других ролей
         # Кнопку "Создать заявку" (applicant-flow) НЕ показываем:
@@ -214,6 +237,11 @@ def get_main_keyboard_for_role(
     # шлёт handlers/webapp_buttons.py inline-кнопкой по нажатию.
     if METER_ENTRY_ROLE in unique_roles and settings.FRONTEND_URL:
         builder.add(KeyboardButton(text=get_text("base.handlers.btn_meter_entry", language=language)))
+
+    # «Заявка по звонку» в меню других режимов — сотруднику с ролью диспетчера
+    # не нужно переключать режим, чтобы принять звонок.
+    if active_role != DISPATCHER_ROLE:
+        _add_dispatch_button(builder, unique_roles, user_status, language)
 
     # Обратная связь — доступна всем авторизованным ролям
     builder.add(KeyboardButton(text=get_text("main_menu.feedback", language=language)))

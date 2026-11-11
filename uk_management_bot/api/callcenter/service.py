@@ -6,14 +6,17 @@ HTTPException, парсинг и сериализация — в router.py.
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from sqlalchemy import select, or_, func
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.requests.elevator_fields import PersistedRequest
 from uk_management_bot.config.settings import settings
+from uk_management_bot.database.models.apartment import Apartment
+from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.services.elevator_service import resolve_request_elevator_async
+from uk_management_bot.services.request_address import list_available_request_addresses_async
 from uk_management_bot.services.request_number_service import RequestNumberService
 from uk_management_bot.utils.auth_helpers import legacy_role_filter
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT
@@ -25,8 +28,25 @@ from uk_management_bot.utils.sql_search import (
 from uk_management_bot.database.roles_type import roles_contain
 
 
+# Чем в базе разделяют цифры номера: «+998 (90) 000-00-01».
+_PHONE_SEPARATORS = (" ", "-", "(", ")", "+")
+
+
+def _phone_digits(column, *, pg: bool):
+    """Номер без разделителей — для сравнения по цифрам."""
+    if pg:
+        return func.regexp_replace(column, r"\D", "", "g")
+    # sqlite (тесты) regexp_replace не знает — снимаем известные разделители.
+    for separator in _PHONE_SEPARATORS:
+        column = func.replace(column, separator, "")
+    return column
+
+
 async def search_approved_applicants(db: AsyncSession, *, q: str):
-    """Поиск approved-жителей по телефону/имени/фамилии (лимит 10)."""
+    """Поиск approved-жителей по телефону/имени/фамилии (лимит 10).
+
+    Запрос из одних цифр — это номер звонящего: ищем по цифрам номера, как бы
+    он ни был записан (с пробелами, дефисами, скобками)."""
     escaped_q = _escape_like(q)
     pattern = f"%{escaped_q}%"
 
@@ -54,10 +74,14 @@ async def search_approved_applicants(db: AsyncSession, *, q: str):
                 roles_contain(User.roles, "applicant"),
                 legacy_role_filter("applicant"),
             ),
-            ci_contains_any(
-                (User.phone, User.first_name, User.last_name),
-                pattern,
-                is_postgres=is_postgres(db),
+            or_(
+                ci_contains_any(
+                    (User.phone, User.first_name, User.last_name),
+                    pattern,
+                    is_postgres=is_postgres(db),
+                ),
+                # Цифры не содержат спецсимволов LIKE — экранирование не нужно.
+                _phone_digits(User.phone, pg=is_postgres(db)).like(f"%{q}%") if q.isdigit() else false(),
             ),
         ).limit(10)
     )
@@ -66,6 +90,28 @@ async def search_approved_applicants(db: AsyncSession, *, q: str):
 
 async def user_by_id(db: AsyncSession, user_id: int) -> User | None:
     return await db.get(User, user_id)
+
+
+def _apartment_order(number: str) -> tuple[int, str]:
+    """Номера квартир — строки: «7» раньше «12», буквенные — в конце."""
+    digits = "".join(ch for ch in number if ch.isdigit())
+    return (int(digits) if digits else 10**9, number)
+
+
+async def list_building_apartments(db: AsyncSession, building_id: int) -> list[Apartment] | None:
+    """Активные квартиры активного дома по возрастанию номера; None — дома нет."""
+    building = await db.get(Building, building_id)
+    if building is None or not building.is_active:
+        return None
+    rows = (await db.execute(
+        select(Apartment).where(Apartment.building_id == building_id, Apartment.is_active.is_(True))
+    )).scalars().all()
+    return sorted(rows, key=lambda a: _apartment_order(a.apartment_number))
+
+
+async def list_resident_apartments(db: AsyncSession, user_id: int) -> list[dict]:
+    """Квартиры жителя (approved-привязки) — те же, что он сам видит при подаче заявки."""
+    return (await list_available_request_addresses_async(db, user_id))["apartments"]
 
 
 async def persist_call_center_request(

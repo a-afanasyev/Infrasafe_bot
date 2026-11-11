@@ -121,6 +121,7 @@
     },
     "addresses.read": {
       "roles": [
+        "dispatcher",
         "inspector",
         "manager"
       ],
@@ -165,6 +166,7 @@
     },
     "callcenter.use": {
       "roles": [
+        "dispatcher",
         "manager"
       ],
       "approved_only": false,
@@ -193,6 +195,7 @@
     "elevators.lookup": {
       "roles": [
         "applicant",
+        "dispatcher",
         "engineer",
         "executor",
         "inspector",

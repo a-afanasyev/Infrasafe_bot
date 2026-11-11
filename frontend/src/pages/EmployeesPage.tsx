@@ -257,6 +257,7 @@ export default function EmployeesPage() {
             { key: 'all', label: t('employees.filterRole') },
             { key: 'executor', label: t('role.executor') },
             { key: 'manager', label: t('role.manager') },
+            { key: 'dispatcher', label: t('role.dispatcher') },
           ].map(f => (
             <button
               key={f.key}

@@ -1,4 +1,5 @@
-"""Reply-кнопки, открывающие Mini App: «Регистрация (форма)», «Ввод показаний».
+"""Reply-кнопки, открывающие Mini App: «Регистрация (форма)», «Ввод показаний»,
+«Заявка по звонку».
 
 Почему не `KeyboardButton(web_app=…)`: Telegram не передаёт initData в Mini App,
 открытое с reply-кнопки (WebAppInitData «is empty if the Mini App was launched
@@ -15,8 +16,10 @@ from aiogram import F, Router
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from uk_management_bot.config.settings import settings
-from uk_management_bot.keyboards.base import METER_ENTRY_ROLE
+from uk_management_bot.authz import has_action_roles
+from uk_management_bot.keyboards.base import DISPATCH_ACTION, METER_ENTRY_ROLE
 from uk_management_bot.utils.button_texts import (
+    get_dispatch_texts,
     get_meter_entry_texts,
     get_register_webapp_texts,
 )
@@ -28,9 +31,11 @@ router = Router()
 
 REGISTER_WEBAPP_TEXTS = get_register_webapp_texts()
 METER_ENTRY_TEXTS = get_meter_entry_texts()
+DISPATCH_TEXTS = get_dispatch_texts()
 
 REGISTER_PATH = "/uk/register"
 METER_ENTRY_PATH = "/uk/twa/meter-entry"
+DISPATCH_PATH = "/uk/twa/dispatch"
 
 
 def _open_webapp_markup(path: str, language: str) -> InlineKeyboardMarkup:
@@ -75,3 +80,19 @@ async def open_meter_entry_webapp(
         await message.answer(get_text("errors.permission_denied", language=language))
         return
     await _answer_with_webapp(message, "base.handlers.meter_entry_prompt", METER_ENTRY_PATH, language)
+
+
+@router.message(F.text.in_(DISPATCH_TEXTS))
+async def open_dispatch_webapp(
+    message: Message, roles: list[str] | None = None, language: str = "ru", **_kwargs
+) -> None:
+    """«📞 Заявка по звонку» → inline-кнопка на экран диспетчера.
+
+    Текст кнопки присылает клиент (BUG-169): право проверяем здесь — то же
+    действие, что требует API колл-центра.
+    """
+    if not roles or not has_action_roles(roles, DISPATCH_ACTION):
+        logger.warning("dispatch webapp requested without right by tg=%s", message.from_user.id)
+        await message.answer(get_text("errors.permission_denied", language=language))
+        return
+    await _answer_with_webapp(message, "base.handlers.dispatch_prompt", DISPATCH_PATH, language)

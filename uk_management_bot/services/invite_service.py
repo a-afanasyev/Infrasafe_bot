@@ -38,6 +38,10 @@ def requires_specialization(role: str) -> bool:
     return role in SPECIALIZATION_REQUIRED_ROLES
 
 
+#: Роли, которые можно выдать приглашением.
+INVITE_ROLES = ('applicant', 'executor', 'manager', 'inspector', 'dispatcher')
+
+
 class InviteService:
     """Сервис для создания и валидации токенов приглашений"""
 
@@ -61,7 +65,7 @@ class InviteService:
             Токен в формате invite_v1:{payload}.{signature}
         """
         # Валидация входных данных
-        if role not in ['applicant', 'executor', 'manager', 'inspector']:
+        if role not in INVITE_ROLES:
             raise ValueError(f"Invalid role: {role}")
             
         if requires_specialization(role) and not specialization:
@@ -183,7 +187,7 @@ class InviteService:
                 if field not in payload:
                     raise ValueError(f"Token missing required field: {field}")
 
-            if payload['role'] not in ['applicant', 'executor', 'manager', 'inspector']:
+            if payload['role'] not in INVITE_ROLES:
                 raise ValueError("Invalid role in token")
 
             # Atomically consume the nonce if mark_used_by is set.

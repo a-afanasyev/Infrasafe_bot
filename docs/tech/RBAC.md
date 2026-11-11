@@ -28,7 +28,7 @@ flowchart LR
 
 | Понятие | Что это | Где живёт |
 |---|---|---|
-| **Роль** | Кто человек: `applicant`, `executor`, `manager`, `inspector`, `admin`, `system_admin`, `security_operator`, капабилити `resource_meter_entry` и `engineer` (выдаётся только вместе с `executor`, только из веб-админки) | `users.roles` (jsonb), канонический резолвер `utils/auth_helpers.get_user_roles` |
+| **Роль** | Кто человек: `applicant`, `executor`, `manager`, `inspector`, `dispatcher` (приём заявок по телефону), `admin`, `system_admin`, `security_operator`, капабилити `resource_meter_entry` и `engineer` (выдаётся только вместе с `executor`, только из веб-админки) | `users.roles` (jsonb), канонический резолвер `utils/auth_helpers.get_user_roles` |
 | **Действие** | Именованная операция + роли, которые её разрешают + требуется ли одобренный аккаунт | `authz/catalog.py` |
 | **Проверка** | «Разрешено ли этому человеку это действие» | `authz.can`, `require_action`, `ActionGate`, `useCan` |
 
@@ -275,15 +275,15 @@ flowchart LR
 | `access.resident.self` | `applicant` | да | Охрана: свои авто и пропуска жителя |
 | `access.zones.manage` | `manager`, `system_admin` | да | Охрана: зоны и шлагбаумы |
 | `addresses.manage` | `manager` |  | Справочник адресов: изменение и модерация |
-| `addresses.read` | `inspector`, `manager` | да | Чтение дворов и домов |
+| `addresses.read` | `dispatcher`, `inspector`, `manager` | да | Чтение дворов и домов |
 | `admin_panel.use` | `admin`, `manager` |  | Бот: админ-панель и менеджерские экраны |
 | `apartments.moderate` | `admin`, `manager` |  | Одобрить или отклонить заявку жителя на привязку квартиры |
 | `auto_manager.configure` | `admin`, `manager` |  | Настройка автоматического менеджера |
 | `board.configure` | `manager` |  | Настройка табло |
-| `callcenter.use` | `manager` |  | Колл-центр: заявки по звонку |
+| `callcenter.use` | `dispatcher`, `manager` |  | Колл-центр: заявки по звонку |
 | `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
 | `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |
-| `elevators.lookup` | `applicant`, `engineer`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |
+| `elevators.lookup` | `applicant`, `dispatcher`, `engineer`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |
 | `elevators.manage` | `engineer`, `manager` | да | Лифты: изменение реестра и календаря |
 | `elevators.read` | `engineer`, `executor`, `manager` | да | Лифты: реестр, карточка, статус, ТО |
 | `elevators.technician` | `admin`, `engineer`, `executor`, `manager` |  | Бот: раздел лифтов |

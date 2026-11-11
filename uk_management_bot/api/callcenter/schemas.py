@@ -45,7 +45,8 @@ class CallCenterCreateRequest(_AddressLevelMixin, _ElevatorFieldsMixin):
     description: str = Field(max_length=MAX_DESCRIPTION_LENGTH)
     user_id: Optional[int] = None
     caller_name: Optional[str] = Field(default=None, max_length=200)
-    caller_phone: Optional[str] = Field(default=None, max_length=32)
+    # Только номер: поле уходит в примечания заявки и в сообщения бота.
+    caller_phone: Optional[str] = Field(default=None, max_length=32, pattern=r"^\+?\d{5,20}$")
     # Адрес со слов звонящего (подсказка ИИ, 2026-11-07) — не адрес заявки, а
     # детали для исполнителя («10 этаж»): уходит в примечания.
     address_text: Optional[str] = Field(default=None, max_length=300)
@@ -104,3 +105,54 @@ class AddressSuggestOut(BaseModel):
     ai_used: bool
     category: Optional[str] = None
     urgency: Optional[str] = None
+
+
+class ApartmentNumberOut(BaseModel):
+    """Квартира дома для выбора адреса диспетчером: номер без данных жильцов."""
+
+    id: int
+    number: str
+
+
+class CallerApartmentOut(BaseModel):
+    """Квартира найденного жителя — адрес заявки в одно касание."""
+
+    id: int
+    label: str
+    # Дом квартиры — для шага «Лифт».
+    building_id: int
+
+
+class RequestCheckBody(_AddressLevelMixin):
+    """Заявка по звонку на проверку перед отправкой — те же поля, что у создания."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    urgency: str
+    description: str = Field(min_length=1, max_length=MAX_DESCRIPTION_LENGTH)
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        return _validate_request_category(v)
+
+    @field_validator("urgency")
+    @classmethod
+    def validate_urgency(cls, v: str) -> str:
+        return validate_canonical_urgency(v)
+
+
+class RequestCheckIssue(BaseModel):
+    """Замечание к полю: текст собирает клиент по ``code``."""
+
+    field: Literal["description", "category", "urgency", "address"]
+    code: str
+    # Значение для «Исправить» (категория/срочность); для адреса — ``options``.
+    suggestion: Optional[str] = None
+    options: list[AddressOption] = []
+
+
+class RequestCheckOut(BaseModel):
+    ai_used: bool
+    issues: list[RequestCheckIssue]

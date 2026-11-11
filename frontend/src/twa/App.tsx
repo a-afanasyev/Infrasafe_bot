@@ -33,6 +33,9 @@ import PassNewPage from './pages/access/PassNewPage'
 // Inspector pages
 import InspectorCreatePage from './pages/inspector/CreatePage'
 
+// Диспетчер: заявка по телефону
+import DispatchPage from './pages/dispatch/DispatchPage'
+
 // Executor pages
 import TasksPage from './pages/executor/TasksPage'
 import ShiftPage from './pages/executor/ShiftPage'
@@ -126,6 +129,9 @@ function TWAContent() {
 
         {/* Inspector route — building-level заявка с обхода (двор→дом). */}
         <Route path="/inspector" element={<RoleGuard required="inspector" fallback="/twa"><InspectorCreatePage /></RoleGuard>} />
+
+        {/* Диспетчер — приём заявки по телефону; открывается кнопкой бота. */}
+        <Route path="/dispatch" element={<RoleGuard required="dispatcher" fallback="/twa"><DispatchPage /></RoleGuard>} />
 
         {/* Executor routes — wrapped in RoleGuard (TWA-12) so an applicant
             opening /twa/exec/* gets sent back to /twa/app rather than seeing

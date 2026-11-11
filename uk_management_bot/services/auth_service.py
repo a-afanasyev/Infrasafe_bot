@@ -32,7 +32,7 @@ TRUSTED_VERIFICATION_ROLES = {"manager", "admin"}
 
 # Роли персонала: их выдача по инвайту означает, что человек пришёл РАБОТАТЬ,
 # а не жить, — см. process_invite_join_sync.
-_STAFF_ROLES = {"executor", "manager", "inspector"}
+_STAFF_ROLES = {"executor", "manager", "inspector", "dispatcher"}
 
 # Капабилити, а не «жительство»: resource_meter_entry открывает Mini App «Ввод
 # показаний» и может стоять у кого угодно, поэтому при подсчёте «чистого

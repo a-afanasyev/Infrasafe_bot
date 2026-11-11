@@ -19,7 +19,7 @@ export default function PendingApprovalCard({ employee, onApprove, onReject, isP
   const initials = getInitials(employee.first_name, employee.last_name)
   const name = fullName(employee, t('employees.noName'))
   // Бейдж роли: приоритет manager > inspector > executor (у приглашённого есть и applicant).
-  const staffRole = ['manager', 'inspector', 'executor'].find(r => employee.roles?.includes(r))
+  const staffRole = ['manager', 'inspector', 'executor', 'dispatcher'].find(r => employee.roles?.includes(r))
 
   return (
     // flex-wrap: на узком экране кнопки уходят на следующую строку, а не
