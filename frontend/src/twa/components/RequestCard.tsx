@@ -9,10 +9,12 @@ interface Props {
   description?: string | null
   executorName?: string | null
   createdAt: string
+  /** Заявку оформил диспетчер по телефонному звонку (её видят жильцы квартиры). */
+  byPhone?: boolean
   onClick?: () => void
 }
 
-export default function RequestCard({ requestNumber, status, category, description, executorName, createdAt, onClick }: Props) {
+export default function RequestCard({ requestNumber, status, category, description, executorName, createdAt, byPhone, onClick }: Props) {
   const { t } = useTranslation()
   const date = new Date(createdAt)
   const dateStr = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}`
@@ -31,6 +33,11 @@ export default function RequestCard({ requestNumber, status, category, descripti
       </div>
       {description && (
         <p className="text-[12px] text-gray-500 dark:text-gray-400 line-clamp-2">{description}</p>
+      )}
+      {byPhone && (
+        <div className="mt-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+          {t('twa.requests.byPhone')}
+        </div>
       )}
       <div className="flex items-center justify-between mt-2 text-[11px] text-gray-400">
         {executorName && <span>👤 {executorName}</span>}

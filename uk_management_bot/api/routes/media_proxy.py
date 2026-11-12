@@ -33,7 +33,7 @@ from uk_management_bot.integrations.http_retry import (
 from uk_management_bot.services.request_number_service import (
     REQUEST_NUMBER_PATTERN as _REQUEST_NUMBER_PATTERN_STR,
 )
-from uk_management_bot.services.request_access import can_upload_completion_async
+from uk_management_bot.services.request_access import can_upload_completion_async, request_access_reason_async
 from uk_management_bot.services.request_media_markers import (
     extract_media_id,
     with_media_marker,
@@ -163,6 +163,10 @@ async def proxy_media_upload(
     # Ссылка на строку живёт до записи маркера — `_append_media_marker`
     # обязан перечитывать её с populate_existing (A9-P2-1).
     request_row = await check_request_access(request_number, db, user)
+    # Сосед по квартире заявку видит и комментирует, но фото к чужой заявке не
+    # добавляет (решение владельца 2026-11-12: менять заявку — автор и менеджер).
+    if await request_access_reason_async(db, user, request_row) == "apartment_resident":
+        raise HTTPException(status_code=403, detail="Only the author can attach photos")
     # A9-P2-3: фотоотчёт исполнителя — только менеджер или назначенный
     # исполнитель; одного доступа к заявке (житель, сосед) для него мало.
     if category in _COMPLETION_CATEGORIES and not await can_upload_completion_async(db, user, request_row):

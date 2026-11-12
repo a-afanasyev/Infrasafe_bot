@@ -66,6 +66,7 @@ export default function RequestsPage() {
           description={req.description}
           executorName={req.executor_name}
           createdAt={req.created_at}
+          byPhone={req.source === 'call_center'}
           onClick={() => navigate(`/twa/app/requests/${req.request_number}`)}
         />
       ))}

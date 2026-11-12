@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.user import User
+from uk_management_bot.services.request_access import apartment_resident_ids_stmt
 from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.request_workflow import Action
 
@@ -407,6 +408,38 @@ def _wanted_user_ids(request: Request, roles: Iterable[str]) -> set[int]:
     return wanted
 
 
+def _with_residents(request: Request, wanted_ids: set[int], resident_ids: Iterable[int]) -> set[int]:
+    """Адресаты «заявителя» для заявки по квартире, поданной НЕ её жильцом.
+
+    Заявку по звонку оформляют на диспетчера или менеджера — жильцы квартиры о её
+    ходе не узнавали. Если автор сам живёт в квартире, остальных не беспокоим."""
+    residents = set(resident_ids)
+    if request.user_id in residents:
+        return wanted_ids
+    # Исполнитель, живущий в этой квартире, своё сообщение получает как исполнитель.
+    residents.discard(request.executor_id)
+    return wanted_ids | residents
+
+
+def _residents_apply(request: Request, wanted_ids: set[int]) -> bool:
+    """Нужно ли вообще смотреть жильцов: адресуемся заявителю, и у заявки есть квартира."""
+    return bool(request.apartment_id) and request.user_id in wanted_ids
+
+
+async def _wanted_with_residents_async(db: AsyncSession, request: Request, wanted_ids: set[int]) -> set[int]:
+    if not _residents_apply(request, wanted_ids):
+        return wanted_ids
+    rows = await db.execute(apartment_resident_ids_stmt(request.apartment_id))
+    return _with_residents(request, wanted_ids, rows.scalars().all())
+
+
+def _wanted_with_residents_sync(db: Session, request: Request, wanted_ids: set[int]) -> set[int]:
+    if not _residents_apply(request, wanted_ids):
+        return wanted_ids
+    rows = db.execute(apartment_resident_ids_stmt(request.apartment_id))
+    return _with_residents(request, wanted_ids, rows.scalars().all())
+
+
 async def _send_to_recipients(
     bot,
     request: Request,
@@ -496,6 +529,7 @@ async def _collect_async(
     jobs: list[tuple[Action, str, list[User]]] = []
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
+            wanted_ids = await _wanted_with_residents_async(db, request, wanted_ids)
             recipients = await _recipients_async(db, wanted_ids, audience)
         except Exception as e:
             logger.warning(
@@ -643,6 +677,7 @@ async def dispatch_notify_intents_sync(
     sent = 0
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
+            wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
             recipients = _recipients_sync(db, wanted_ids, audience)
             if not recipients:
                 continue
@@ -688,6 +723,7 @@ def collect_notify_messages_sync(
     messages: list[tuple[int, str]] = []
     for action, text_key, wanted_ids, audience in _resolve_targets(request, plan):
         try:
+            wanted_ids = _wanted_with_residents_sync(db, request, wanted_ids)
             for user in _recipients_sync(db, wanted_ids, audience):
                 language = user.language or "ru"
                 messages.append(NotifyMessage(

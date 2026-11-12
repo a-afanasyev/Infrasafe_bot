@@ -17,7 +17,8 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, get_current_user, require_action
-from uk_management_bot.authz import has_action_roles
+from uk_management_bot.authz import get_action, has_action_roles
+from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.api.dependencies_access import check_request_access, is_assigned_executor
 from uk_management_bot.services.request_address import (
     resolve_request_address_async,
@@ -163,12 +164,35 @@ def _make_request_card(req, exec_user=None, inbox_row=None, *, elevator=None,
     return attach_elevator(card, elevator, language)
 
 
+#: Строка примечаний с именем и телефоном звонящего (пишет колл-центр).
+CALLER_NOTE_PREFIX = "Звонок:"
+
+
+def _is_co_resident_view(req, user: User) -> bool:
+    """Смотрит сосед по квартире: не автор и не сотрудник, работающий с заявкой."""
+    if req.user_id == user.id:
+        return False
+    roles = get_user_roles(user)
+    return not (get_action("requests.read_all").allows(roles) or get_action("requests.execute").allows(roles))
+
+
+def _for_viewer(card: RequestCard, req, user: User) -> RequestCard:
+    """Карточка под того, кто смотрит. Соседу по квартире не показываем, кто и с
+    какого номера звонил диспетчеру: звонящий мог быть гостем или соседом, а
+    до расширения видимости эту строку видели только сотрудники."""
+    if not card.notes or not _is_co_resident_view(req, user):
+        return card
+    kept = [line for line in card.notes.splitlines() if not line.startswith(CALLER_NOTE_PREFIX)]
+    return card.model_copy(update={"notes": "\n".join(kept) or None})
+
+
 async def _cards(db: AsyncSession, rows, user: User) -> list[RequestCard]:
     """Карточки страницы `(Request, executor)` с лифтами одним запросом."""
     elevators = await load_elevators(db, [r for r, _ in rows])
     language = card_language(user)
     return [
-        _make_request_card(r, eu, elevator=elevators.get(r.elevator_id), language=language)
+        _for_viewer(
+            _make_request_card(r, eu, elevator=elevators.get(r.elevator_id), language=language), r, user)
         for r, eu in rows
     ]
 
@@ -313,10 +337,10 @@ async def get_request(
     # (list endpoints skip this to keep their cost identical to the baseline).
     inbox_row = await svc.latest_accepted_inbox(db, request_number)
     elevators = await load_elevators(db, [req])
-    return _make_request_card(
+    return _for_viewer(_make_request_card(
         req, exec_user, inbox_row=inbox_row,
         elevator=elevators.get(req.elevator_id), language=card_language(user),
-    )
+    ), req, user)
 
 
 @router.post("", response_model=RequestCard, status_code=201)

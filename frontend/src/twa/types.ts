@@ -9,6 +9,8 @@ export interface TwaRequest {
   description?: string
   requested_materials?: string
   executor_name?: string | null
+  /** Канал подачи: `call_center` — оформил диспетчер по звонку. */
+  source?: string | null
   return_reason?: string | null
   manager_return_reason?: string | null
   urgency?: string | null

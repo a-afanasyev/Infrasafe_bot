@@ -50,11 +50,8 @@ ACCESS_RULES = (
     "executor_direct",
     "executor_individual_assignment",
     "executor_group_assignment_on_shift",
-    "apartment_resident_on_accepted",
+    "apartment_resident",
 )
-
-#: Статус, на котором сосед по квартире получает доступ (флоу приёмки).
-RESIDENT_ACCESS_STATUS = "Исполнено"
 
 
 @dataclass(frozen=True)
@@ -121,12 +118,12 @@ def access_reason(facts: RequestAccessFacts) -> Optional[str]:
         ):
             return "executor_group_assignment_on_shift"
 
-    if (
-        facts.request_apartment_id is not None
-        and facts.request_status == RESIDENT_ACCESS_STATUS
-        and facts.is_approved_resident
-    ):
-        return "apartment_resident_on_accepted"
+    # Решение владельца 2026-11-12: одобренный жилец квартиры видит заявки по
+    # ней в любом статусе (раньше — только на приёмке). Заявка по звонку
+    # оформляется на диспетчера, и без этого жильцы её не видели вовсе.
+    # Заявки на двор и дом квартиры не несут — их видит только заявитель.
+    if facts.request_apartment_id is not None and facts.is_approved_resident:
+        return "apartment_resident"
 
     return None
 

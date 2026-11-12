@@ -254,7 +254,10 @@ class RequestHandlerService:
     # ── «Мои заявки» (applicant/other + executor) ────────────────────────────
 
     def _applicant_requests_query(self, user_id: int):
-        return self.db.query(Request).filter(Request.user_id == user_id)
+        # Свои + по своим квартирам (правило `apartment_resident` канона).
+        from uk_management_bot.services.request_access import resident_requests_clause
+
+        return self.db.query(Request).filter(resident_requests_clause(user_id))
 
     @staticmethod
     def _apply_status_filter(query, active_status: Optional[str], is_executor: bool):

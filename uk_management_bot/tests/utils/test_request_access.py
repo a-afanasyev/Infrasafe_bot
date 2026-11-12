@@ -13,7 +13,6 @@ import pytest
 from uk_management_bot.utils.request_access import (
     ACCESS_RULES,
     MONOTONE_BOOLEAN_FACTS,
-    RESIDENT_ACCESS_STATUS,
     RequestAccessFacts,
     access_reason,
     has_request_access,
@@ -179,7 +178,7 @@ class TestMonotonicity:
             {"roles": frozenset({"executor"}),
              "group_specializations": frozenset({"plumber"}),
              "user_specializations": frozenset({"plumber"})},
-            {"request_apartment_id": 10, "request_status": RESIDENT_ACCESS_STATUS},
+            {"request_apartment_id": 10, "request_status": "Исполнено"},
             {"request_apartment_id": 10, "request_status": "Новая"},
             {"user_id": OWNER_ID},
             {"roles": frozenset({"manager"})},
@@ -210,29 +209,22 @@ class TestMonotonicity:
 
 
 class TestApartmentResident:
-    """Ужесточение относительно бота: сосед только на «Исполнено»."""
+    """Решение владельца 2026-11-12: жилец видит заявки по своей квартире в
+    любом статусе; заявки без квартиры (двор, дом) — только заявитель."""
 
-    def test_resident_on_accepted_status(self):
-        f = facts(
-            request_apartment_id=10,
-            request_status=RESIDENT_ACCESS_STATUS,
-            is_approved_resident=True,
-        )
-        assert access_reason(f) == "apartment_resident_on_accepted"
-
-    @pytest.mark.parametrize("status", ["Новая", "В работе", "Выполнена", "Принято", "Отменена"])
-    def test_resident_denied_on_other_statuses(self, status):
+    @pytest.mark.parametrize("status", ["Новая", "В работе", "Выполнена", "Исполнено", "Принято", "Отменена"])
+    def test_resident_sees_apartment_request_in_any_status(self, status):
         f = facts(
             request_apartment_id=10,
             request_status=status,
             is_approved_resident=True,
         )
-        assert access_reason(f) is None
+        assert access_reason(f) == "apartment_resident"
 
-    def test_unapproved_resident_denied_even_on_accepted(self):
+    def test_unapproved_resident_denied(self):
         f = facts(
             request_apartment_id=10,
-            request_status=RESIDENT_ACCESS_STATUS,
+            request_status="Исполнено",
             is_approved_resident=False,
         )
         assert access_reason(f) is None
@@ -240,7 +232,7 @@ class TestApartmentResident:
     def test_request_without_apartment_denies_resident(self):
         f = facts(
             request_apartment_id=None,
-            request_status=RESIDENT_ACCESS_STATUS,
+            request_status="Исполнено",
             is_approved_resident=True,
         )
         assert access_reason(f) is None
