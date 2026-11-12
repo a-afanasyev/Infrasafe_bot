@@ -18,6 +18,12 @@
    ],
    "status": "approved"
   },
+  "dispatcher": {
+   "roles": [
+    "dispatcher"
+   ],
+   "status": "approved"
+  },
   "manager": {
    "roles": [
     "manager"

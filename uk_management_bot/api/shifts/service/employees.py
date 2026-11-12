@@ -33,9 +33,9 @@ from uk_management_bot.database.roles_type import roles_contain
 
 # Роли, считающиеся «сотрудником» (в отличие от жителя-applicant). Используются
 # в фиде pending-стаффа и guard'ах активации/отклонения.
-_STAFF_ROLES = frozenset({"manager", "executor", "inspector"})
+_STAFF_ROLES = frozenset({"manager", "executor", "inspector", "dispatcher"})
 # Приоритет при выборе active_role после активации (см. activate_employee).
-_STAFF_ROLE_PRIORITY = ("manager", "executor", "inspector")
+_STAFF_ROLE_PRIORITY = ("manager", "executor", "inspector", "dispatcher")
 
 
 def _is_staff(user: User) -> bool:
@@ -288,11 +288,7 @@ async def list_pending_staff(db: AsyncSession) -> list[User]:
             User.status == "pending",
             User.deleted_at.is_(None),
             User.verification_status != "rejected",
-            or_(
-                roles_contain(User.roles, "manager"),
-                roles_contain(User.roles, "executor"),
-                roles_contain(User.roles, "inspector"),
-            ),
+            or_(*(roles_contain(User.roles, role) for role in sorted(_STAFF_ROLES))),
         )
         .order_by(User.created_at)
     )

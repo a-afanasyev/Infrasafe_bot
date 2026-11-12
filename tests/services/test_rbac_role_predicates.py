@@ -60,8 +60,9 @@ def _user(profile):
 
 def test_profiles_cover_every_prod_role_combination():
     """Набор профилей — все сочетания ролей обоих продов на 2026-09-28
-    + инженер (executor+engineer, роль с 2026-10-27)."""
-    assert len(PROFILES) == 20
+    + инженер (executor+engineer, роль с 2026-10-27)
+    + диспетчер (dispatcher, роль с 2026-11-11)."""
+    assert len(PROFILES) == 21
     combos = {tuple(sorted(p.roles)) for p in PROFILES.values()}
     assert ("admin", "applicant", "executor", "inspector", "manager",
             "resource_meter_entry", "system_admin") in combos

@@ -35,7 +35,7 @@ export default function StaffCard({ employee, onAssign, onBlock, onDelete, onVer
   const name = fullName(employee, t('employees.noName'))
   // Бейдж роли для не-исполнителей (менеджер/обходчик) — список executor-центричен
   // по умолчанию, поэтому помечаем только тех, кто выделяется при фильтре по роли.
-  const staffRole = (['manager', 'inspector'] as const).find(r => employee.roles?.includes(r))
+  const staffRole = (['manager', 'inspector', 'dispatcher'] as const).find(r => employee.roles?.includes(r))
 
   return (
     <div

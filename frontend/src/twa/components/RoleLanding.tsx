@@ -14,6 +14,7 @@ const ROLE_ROUTE: Record<string, string> = {
   applicant: '/twa/app',
   executor: '/twa/exec',
   inspector: '/twa/inspector',
+  dispatcher: '/twa/dispatch',
 }
 
 /**
@@ -22,7 +23,7 @@ const ROLE_ROUTE: Record<string, string> = {
  * "TWA unavailable" screen rather than a redirect — redirecting would bounce
  * /twa → /twa/app → RoleGuard → /twa and loop forever.
  */
-const MANAGER_FALLBACK_PRIORITY = ['inspector', 'applicant', 'executor'] as const
+const MANAGER_FALLBACK_PRIORITY = ['inspector', 'applicant', 'executor', 'dispatcher'] as const
 
 /**
  * TWA entry point. Telegram opens the mini-app at the SPA root, which lands

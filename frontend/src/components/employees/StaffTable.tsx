@@ -77,7 +77,7 @@ export default function StaffTable({ employees, onAssign, onBlock, onDelete, isB
             const isVerified = emp.verification_status === 'verified'
             const isBlocked = emp.status === 'blocked'
             const name = fullName(emp, t('employees.noName'))
-            const staffRole = (['manager', 'inspector'] as const).find(r => emp.roles?.includes(r))
+            const staffRole = (['manager', 'inspector', 'dispatcher'] as const).find(r => emp.roles?.includes(r))
             const isLast = idx === employees.length - 1
             const isHovered = hoveredId === emp.id
 

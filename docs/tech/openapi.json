@@ -776,6 +776,25 @@
         "title": "ApartmentDetailOut",
         "type": "object"
       },
+      "ApartmentNumberOut": {
+        "description": "Квартира дома для выбора адреса диспетчером: номер без данных жильцов.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number"
+        ],
+        "title": "ApartmentNumberOut",
+        "type": "object"
+      },
       "ApartmentUpdate": {
         "properties": {
           "account_number": {
@@ -1856,6 +1875,7 @@
             "anyOf": [
               {
                 "maxLength": 32,
+                "pattern": "^\\+?\\d{5,20}$",
                 "type": "string"
               },
               {
@@ -1928,6 +1948,30 @@
           "description"
         ],
         "title": "CallCenterCreateRequest",
+        "type": "object"
+      },
+      "CallerApartmentOut": {
+        "description": "Квартира найденного жителя — адрес заявки в одно касание.",
+        "properties": {
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "building_id"
+        ],
+        "title": "CallerApartmentOut",
         "type": "object"
       },
       "CategoryChangeOut": {
@@ -2395,7 +2439,8 @@
           "role": {
             "enum": [
               "executor",
-              "manager"
+              "manager",
+              "dispatcher"
             ],
             "title": "Role",
             "type": "string"
@@ -9524,6 +9569,131 @@
         "title": "RequestCard",
         "type": "object"
       },
+      "RequestCheckBody": {
+        "additionalProperties": false,
+        "description": "Заявка по звонку на проверку перед отправкой — те же поля, что у создания.",
+        "properties": {
+          "apartment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apartment Id"
+          },
+          "building_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Id"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "urgency": {
+            "title": "Urgency",
+            "type": "string"
+          },
+          "yard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Id"
+          }
+        },
+        "required": [
+          "category",
+          "urgency",
+          "description"
+        ],
+        "title": "RequestCheckBody",
+        "type": "object"
+      },
+      "RequestCheckIssue": {
+        "description": "Замечание к полю: текст собирает клиент по ``code``.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "enum": [
+              "description",
+              "category",
+              "urgency",
+              "address"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "options": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AddressOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion"
+          }
+        },
+        "required": [
+          "field",
+          "code"
+        ],
+        "title": "RequestCheckIssue",
+        "type": "object"
+      },
+      "RequestCheckOut": {
+        "properties": {
+          "ai_used": {
+            "title": "Ai Used",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/RequestCheckIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ai_used",
+          "issues"
+        ],
+        "title": "RequestCheckOut",
+        "type": "object"
+      },
       "RequestMaterialsOut": {
         "properties": {
           "items": {
@@ -15530,6 +15700,58 @@
         ]
       }
     },
+    "/api/v2/callcenter/buildings/{building_id}/apartments": {
+      "get": {
+        "description": "Номера квартир дома для выбора адреса. Данных жильцов нет: полный\nсписок квартир (`/addresses/buildings/{id}/apartments`) — за `addresses.manage`.",
+        "operationId": "list_building_apartments_api_v2_callcenter_buildings__building_id__apartments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApartmentNumberOut"
+                  },
+                  "title": "Response List Building Apartments Api V2 Callcenter Buildings  Building Id  Apartments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Building Apartments",
+        "tags": [
+          "callcenter"
+        ]
+      }
+    },
     "/api/v2/callcenter/capabilities": {
       "get": {
         "description": "Что показывать в форме: свободный ввод адреса — только при включённом\nИИ на площадке (решение владельца 2026-11-07).",
@@ -15552,6 +15774,53 @@
           }
         ],
         "summary": "Call Center Capabilities",
+        "tags": [
+          "callcenter"
+        ]
+      }
+    },
+    "/api/v2/callcenter/check": {
+      "post": {
+        "description": "Проверка заявки перед отправкой: замечания к полям — совет, не запрет.\n\nПлатный вызов модели — только при включённом ИИ и под лимитом. Сбой модели\nдаёт пустой список: приём звонка от ИИ не зависит.",
+        "operationId": "check_call_center_request_api_v2_callcenter_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCheckBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Call Center Request",
         "tags": [
           "callcenter"
         ]
@@ -15604,8 +15873,61 @@
         ]
       }
     },
+    "/api/v2/callcenter/residents/{user_id}/apartments": {
+      "get": {
+        "description": "Квартиры найденного по телефону жителя — адрес заявки в одно касание.\n\nТолько одобренный житель: по произвольному id нельзя узнать, где живёт\nсотрудник или неодобренный аккаунт.",
+        "operationId": "list_resident_apartments_api_v2_callcenter_residents__user_id__apartments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CallerApartmentOut"
+                  },
+                  "title": "Response List Resident Apartments Api V2 Callcenter Residents  User Id  Apartments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Resident Apartments",
+        "tags": [
+          "callcenter"
+        ]
+      }
+    },
     "/api/v2/callcenter/search-resident": {
       "get": {
+        "description": "Поиск жителя для заявки по звонку.\n\nПо имени ищет только тот, кто и так ведёт жителей (`residents.manage`);\nостальным (диспетчер) — только по номеру телефона звонящего.",
         "operationId": "search_resident_api_v2_callcenter_search_resident_get",
         "parameters": [
           {

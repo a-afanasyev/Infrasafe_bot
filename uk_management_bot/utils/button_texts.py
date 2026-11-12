@@ -213,6 +213,10 @@ def _init_button_texts() -> dict:
         "base.handlers.btn_meter_entry",
         fallback_text="📊 Ввод показаний"
     )
+    button_texts['dispatch'] = get_button_texts_for_all_languages(
+        "base.handlers.btn_dispatch",
+        fallback_text="📞 Заявка по звонку"
+    )
 
     # Onboarding. «Указать телефон» удалена (спека 2026-09-03): телефон только
     # из Telegram-контакта, кнопка request_contact текстового фильтра не требует.
@@ -551,6 +555,11 @@ def get_register_webapp_texts() -> List[str]:
 def get_meter_entry_texts() -> List[str]:
     """Тексты кнопки «📊 Ввод показаний» для всех языков."""
     return BUTTON_TEXTS.get('meter_entry', ["📊 Ввод показаний"])
+
+
+def get_dispatch_texts() -> List[str]:
+    """Тексты кнопки «📞 Заявка по звонку» для всех языков."""
+    return BUTTON_TEXTS.get('dispatch', ["📞 Заявка по звонку"])
 
 
 def get_complete_without_docs_texts() -> List[str]:

@@ -36,8 +36,8 @@ describe('rbac labels', () => {
       const migration = readFileSync(join(__dirname, '../../../../alembic/versions', file), 'utf8')
       return [...migration.matchAll(/\("([a-z_]+)", "([^"]+)", "([^"]+)"\)/g)]
     }
-    const seed = [...seedOf('0023_rbac_admin.py'), ...seedOf('0027_engineer_role.py')]
-    expect(seed.length).toBe(9)
+    const seed = [...seedOf('0023_rbac_admin.py'), ...seedOf('0027_engineer_role.py'), ...seedOf('0032_dispatcher_role.py')]
+    expect(seed.length).toBe(10)
     expect(ru.rbac.roleTitles).toEqual(Object.fromEntries(seed.map(([, key, title]) => [key, title])))
     expect(ru.rbac.roleDescriptions).toEqual(Object.fromEntries(seed.map(([, key, , description]) => [key, description])))
   })

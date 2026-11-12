@@ -78,8 +78,15 @@
 
 | Метод | Путь | RBAC | Назначение |
 |-------|------|------|-----------|
-| GET | `/search-resident` | `require_roles(manager)` | Поиск жителя |
-| POST | `/requests` | `require_roles(manager)` | Создать заявку от лица жителя |
+| GET | `/search-resident` | `callcenter.use` | Поиск жителя |
+| POST | `/requests` | `callcenter.use` | Создать заявку от лица жителя или от себя |
+| GET | `/capabilities` | `callcenter.use` | Включён ли ИИ на площадке |
+| POST | `/address-suggest` | `callcenter.use` | Адрес со слов звонящего → варианты справочника |
+| GET | `/buildings/{id}/apartments` | `callcenter.use` | Номера квартир дома (без данных жильцов) |
+| GET | `/residents/{id}/apartments` | `callcenter.use` | Квартиры найденного жителя |
+| POST | `/check` | `callcenter.use` | Проверка заявки перед отправкой: замечания-советы (ИИ читает описание) |
+
+`callcenter.use` — менеджер и диспетчер (роль `dispatcher`, экран `/twa/dispatch`).
 
 ### 2.4. Profile — `/api/v2/profile` (`profile/router.py`)
 

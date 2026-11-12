@@ -1223,7 +1223,8 @@
     "inspector": "Nazoratchi",
     "system_admin": "Tizim administratori",
     "security_operator": "Xavfsizlik operatori",
-    "engineer": "Muhandis"
+    "engineer": "Muhandis",
+    "dispatcher": "Dispetcher"
   },
   "verificationStatus": {
     "verified": "Tasdiqlangan",
@@ -2593,6 +2594,75 @@
       "photoUploadFailed": "Ariza yaratildi, lekin №{{numbers}} rasm(lar) yuklanmadi",
       "submittedWithPhotos": "Ariza yaratildi (rasmlar: {{count}})"
     },
+    "dispatch": {
+      "back": "Orqaga",
+      "next": "Keyingi",
+      "phone": {
+        "title": "Qo'ng'iroq qiluvchining telefoni",
+        "hint": "Raqamni so'rang va kiriting",
+        "searching": "Qidirilmoqda…"
+      },
+      "resident": {
+        "isIt": "Qo'ng'iroq qilayotgan shu kishimi?",
+        "pick": "Kim qo'ng'iroq qilyapti?",
+        "no": "Yo'q, boshqa odam"
+      },
+      "name": {
+        "title": "Qo'ng'iroq qiluvchining ismi nima?",
+        "hint": "To'ldirmasa ham bo'ladi"
+      },
+      "address": {
+        "title": "Muammo qayerda?",
+        "residentApartments": "Yashovchining xonadoni: {{name}}",
+        "other": "Boshqa manzil",
+        "yard": "Hovlini tanlang",
+        "building": "Uyni tanlang",
+        "wholeYard": "Butun hovli (aniq uy emas)",
+        "otherYard": "Boshqa hovli",
+        "apartment": "Xonadon raqami",
+        "apartmentFilter": "Raqamni kiriting",
+        "apartmentN": "{{number}}-xonadon",
+        "wholeBuilding": "Butun uy (yo'lak, tom, yerto'la)",
+        "otherBuilding": "Boshqa uy"
+      },
+      "category": {
+        "title": "Nima bo'ldi?"
+      },
+      "description": {
+        "title": "Muammoni yozing",
+        "hint": "Nima buzildi va aynan qayerda. Masalan: oshxonada rakovina ostidagi quvur oqyapti"
+      },
+      "urgency": {
+        "title": "Qanchalik shoshilinch?"
+      },
+      "review": {
+        "title": "Arizani tekshiring",
+        "edit": "O'zgartirish",
+        "caller": "Qo'ng'iroq qiluvchi",
+        "address": "Manzil",
+        "category": "Nima bo'ldi",
+        "description": "Tavsif",
+        "urgency": "Shoshilinchlik",
+        "send": "Yuborish",
+        "sendAnyway": "Shundayligicha yuborish",
+        "checking": "Tekshirilmoqda…",
+        "sending": "Yuborilmoqda…"
+      },
+      "issue": {
+        "fix": "Tuzatish",
+        "keep": "Shunday qolsin",
+        "generic": "Arizani yana bir bor tekshiring.",
+        "description_unclear": "Tavsifdan nima bo'lgani tushunarsiz. Nima buzilganini va qayerdaligini yozing.",
+        "category_mismatch": "Tavsifga ko'ra bu ko'proq «{{value}}» ga o'xshaydi.",
+        "urgency_low": "Tavsifga ko'ra bu shoshilinchroq: «{{value}}».",
+        "address_mismatch": "Tavsifda boshqa manzil aytilgan. To'g'risini tanlang:",
+        "apartment_expected": "Muammo xonadon ichida ko'rinadi. Xonadon raqamini so'rang."
+      },
+      "done": {
+        "title": "{{number}} ariza qabul qilindi",
+        "next": "Yangi ariza"
+      }
+    },
     "inspector": {
       "selectYard": "Hovlini tanlang",
       "selectBuilding": "Uyni tanlang",
@@ -2765,7 +2835,8 @@
       "executorOnly": "Bo'lim faqat ijrochilar uchun",
       "applicantOnly": "Bo'lim faqat yashovchilar uchun",
       "managerOnly": "Bo'lim faqat menejerlar uchun",
-      "inspectorOnly": "Bo'lim faqat nazoratchilar uchun"
+      "inspectorOnly": "Bo'lim faqat nazoratchilar uchun",
+      "dispatcherOnly": "Bo'lim faqat dispetcherlar uchun"
     },
     "roleLanding": {
       "unavailable": "Bu bo'lim sizning rolingiz uchun mini-ilovada mavjud emas. Veb-dashboarddan foydalaning."
@@ -3651,7 +3722,8 @@
       "system_admin": "Kirish nazorati administratori",
       "security_operator": "Xavfsizlik operatori",
       "resource_meter_entry": "Ko'rsatkich nazoratchisi",
-      "engineer": "Muhandis"
+      "engineer": "Muhandis",
+      "dispatcher": "Dispetcher"
     },
     "roleDescriptions": {
       "applicant": "Ariza beradi, o'z avtomobillari va ruxsatnomalari",
@@ -3662,7 +3734,8 @@
       "system_admin": "Kirish nazorati moduli to'liq, ombor, resurs hisobi",
       "security_operator": "Qo'riqlash posti: hodisalar, ruxsatnomalar, fotosuratlar",
       "resource_meter_entry": "Mini App orqali hisoblagich ko'rsatkichlarini kiritish",
-      "engineer": "InfraSafe eskalatsiyalari, smenasiz ishlash, ustaga topshirish"
+      "engineer": "InfraSafe eskalatsiyalari, smenasiz ishlash, ustaga topshirish",
+      "dispatcher": "Mini App orqali telefon bo'yicha arizalarni qabul qilish"
     },
     "actionTitles": {
       "access.diagnostics": "Kirish nazorati: diagnostika",

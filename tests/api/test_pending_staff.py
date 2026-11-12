@@ -130,3 +130,25 @@ async def test_decline_endpoint_blocks(client, db_session):
     resp = await client.patch(f"{EP}/{u.id}/decline")
     assert resp.status_code == 200
     assert resp.json()["status"] == "blocked"
+
+
+# ═══════════════════ Диспетчер — тоже сотрудник ═══════════════════
+
+@pytest.mark.asyncio
+async def test_invited_dispatcher_is_staff_and_can_be_activated(client, db_session):
+    """Отдельный человек «только для звонков» приходит по инвайту: он должен
+    попасть в очередь одобрения, иначе зависнет в pending невидимым."""
+    from uk_management_bot.api.shifts.schemas import CreateInviteRequest
+    from uk_management_bot.services.invite_service import INVITE_ROLES
+
+    assert CreateInviteRequest(role="dispatcher").role == "dispatcher"
+    assert "dispatcher" in INVITE_ROLES
+
+    u = await _user(db_session, 2301, roles='["dispatcher"]', active_role="dispatcher")
+    assert service._is_staff(u) is True
+    assert {x.telegram_id for x in await service.list_pending_staff(db_session)} == {2301}
+
+    r = await client.patch(f"{EP}/{u.id}/activate")
+    assert r.status_code == 200, r.text
+    await db_session.refresh(u)
+    assert (u.status, u.active_role) == ("approved", "dispatcher")

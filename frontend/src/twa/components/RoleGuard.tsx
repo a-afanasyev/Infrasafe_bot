@@ -10,7 +10,7 @@ interface ProfileResponse {
   active_role?: string | null
 }
 
-type GuardRole = 'applicant' | 'executor' | 'manager' | 'inspector'
+type GuardRole = 'applicant' | 'executor' | 'manager' | 'inspector' | 'dispatcher'
 
 /** Role-aware "denied" copy, so an inspector-only route doesn't say "executors only". */
 const ROLE_DENIED_MESSAGE: Record<GuardRole, string> = {
@@ -18,6 +18,7 @@ const ROLE_DENIED_MESSAGE: Record<GuardRole, string> = {
   executor: 'twa.roleGuard.executorOnly',
   manager: 'twa.roleGuard.managerOnly',
   inspector: 'twa.roleGuard.inspectorOnly',
+  dispatcher: 'twa.roleGuard.dispatcherOnly',
 }
 
 interface Props {

@@ -89,6 +89,7 @@ class Settings:
         "executor",
         "manager",
         "inspector",
+        "dispatcher",
         "system_admin",
         "security_operator",
     ]
