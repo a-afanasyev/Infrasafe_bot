@@ -2557,7 +2557,8 @@
       "title": "Mening arizalarim",
       "active": "Faol",
       "archive": "Arxiv",
-      "empty": "Arizalar yo'q"
+      "empty": "Arizalar yo'q",
+      "byPhone": "📞 Qo'ng'iroq bo'yicha qabul qilingan"
     },
     "create": {
       "selectCategory": "Toifani tanlang",

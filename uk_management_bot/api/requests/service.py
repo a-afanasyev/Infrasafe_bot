@@ -31,6 +31,7 @@ from uk_management_bot.database.models.request_assignment import RequestAssignme
 from uk_management_bot.database.models.request_comment import RequestComment
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.services.request_access import resident_requests_clause
 from uk_management_bot.database.models.apartment import Apartment
 from uk_management_bot.utils.constants import ACCEPTANCE_MODE_RESIDENT, URGENCY_ORDER
 from uk_management_bot.database.models.webhook_inbox import WebhookInbox
@@ -262,7 +263,8 @@ async def list_requests_rows(
 
     `view` — режим просмотра, который выбирает КЛИЕНТ, и который может только
     СУЖАТЬ выборку (оба режима привязаны к `user.id`):
-      * `own`      — поданные этим пользователем, при любом наборе ролей;
+      * `own`      — поданные этим пользователем и заявки по квартирам, где он
+        одобренный жилец, при любом наборе ролей;
       * `assigned` — назначения этого исполнителя (см.
         `assigned_to_executor_clause`), при любом наборе ролей; без роли
         `executor` — пусто (паритет с каноном доступа: executor-причины
@@ -285,7 +287,8 @@ async def list_requests_rows(
     if mode is None and not get_action("requests.read_all").allows(user_roles):
         mode = "assigned" if get_action("requests.execute").allows(user_roles) else "own"
     if mode == "own":
-        query = query.filter(RequestModel.user_id == user.id)
+        # Свои + по своим квартирам (правило `apartment_resident` канона).
+        query = query.filter(resident_requests_clause(user.id))
     elif mode == "assigned":
         query = query.filter(
             await assigned_to_executor_clause(db, user)

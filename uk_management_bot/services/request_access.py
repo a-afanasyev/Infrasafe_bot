@@ -19,15 +19,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.request_assignment import RequestAssignment
 from uk_management_bot.database.models.shift import Shift
+from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
 from uk_management_bot.utils.request_access import (
-    RESIDENT_ACCESS_STATUS,
     RequestAccessFacts,
     access_reason,
 )
@@ -68,10 +69,37 @@ def _needs_group_lookup(facts: RequestAccessFacts) -> bool:
 
 
 def _needs_resident_lookup(facts: RequestAccessFacts) -> bool:
-    """Соседство — только для заявки с квартирой и только на статусе приёмки."""
+    """Соседство — только для заявки с квартирой (в любом статусе)."""
+    return facts.request_apartment_id is not None
+
+
+def resident_requests_clause(user_id: int):
+    """«Мои заявки» жителя: поданные им + заявки по квартирам, где он одобренный
+    жилец. Заявки на двор/дом квартиры не несут — остаются только у заявителя.
+
+    Тот же смысл, что у правила `apartment_resident` канона: список и карточка
+    обязаны показывать одно и то же."""
+    my_apartments = select(UserApartment.apartment_id).where(
+        UserApartment.user_id == user_id,
+        UserApartment.status == _APPROVED,
+    )
+    return or_(Request.user_id == user_id, Request.apartment_id.in_(my_apartments))
+
+
+def apartment_resident_ids_stmt(apartment_id: int):
+    """Одобренные жильцы квартиры — получатели уведомлений по заявке на неё.
+
+    Только действующие аккаунты: удалённому или заблокированному жильцу бот не
+    пишет (в API такой пользователь тоже не войдёт)."""
     return (
-        facts.request_apartment_id is not None
-        and facts.request_status == RESIDENT_ACCESS_STATUS
+        select(UserApartment.user_id)
+        .join(User, User.id == UserApartment.user_id)
+        .where(
+            UserApartment.apartment_id == apartment_id,
+            UserApartment.status == _APPROVED,
+            User.deleted_at.is_(None),
+            User.status == _APPROVED,
+        )
     )
 
 
