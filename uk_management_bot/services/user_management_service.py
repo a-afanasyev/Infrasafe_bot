@@ -579,6 +579,13 @@ class UserManagementService:
                 )
             )
 
+            # Удалённые из веба (мягко) живут в своём списке и не попадают в
+            # рабочие: раньше они всплывали среди исполнителей/менеджеров.
+            if list_type == 'deleted':
+                base_query = base_query.filter(User.deleted_at.isnot(None))
+            else:
+                base_query = base_query.filter(User.deleted_at.is_(None))
+
             # Применяем фильтры в зависимости от типа списка
             if list_type == 'pending':
                 query = base_query.filter(User.status == 'pending')

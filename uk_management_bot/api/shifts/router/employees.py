@@ -22,6 +22,7 @@ from uk_management_bot.api.shifts.schemas import (
     EmployeeBrief, EmployeeDetail,
     DeleteEmployeeRequest, ActiveRequestsCount,
     CreateInviteRequest, CreateInviteResponse,
+    DeletedEmployeeOut, SetSpecializationsRequest,
     EmployeeSortField,
     MeterEntryToggleRequest,
     SimpleModeToggleRequest,
@@ -115,6 +116,51 @@ async def list_employees(
         u.__dict__['active_shift_id'] = active_shifts.get(u.id)
         briefs.append(EmployeeBrief.model_validate(u))
     return briefs
+
+
+@router.get("/employees/deleted", response_model=list[DeletedEmployeeOut],
+            dependencies=[Depends(require_action("staff.manage"))])
+async def list_deleted_employees(db: AsyncSession = Depends(get_db)):
+    """Удалённые сотрудники — только просмотр: кто, когда и почему удалил.
+
+    Объявлен ДО `/employees/{user_id}`, иначе путь съел бы числовой параметр."""
+    return [
+        DeletedEmployeeOut(
+            id=user.id,
+            full_name=_person_name(user),
+            roles=get_user_roles(user),
+            deleted_at=user.deleted_at,
+            deletion_reason=user.deletion_reason,
+            deleted_by_name=_person_name(deleter) if deleter else None,
+        )
+        for user, deleter in await service.list_deleted_staff(db)
+    ]
+
+
+def _person_name(user: User) -> str:
+    return " ".join(filter(None, [user.first_name, user.last_name])) or f"#{user.id}"
+
+
+@router.put("/employees/{user_id}/specializations")
+async def set_employee_specializations(
+    user_id: int,
+    body: SetSpecializationsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_action("staff.manage")),
+):
+    """Задать специализации исполнителя из карточки сотрудника.
+
+    Раньше специализация задавалась только в инвайте и в боте: исполнитель,
+    получивший роль в блоке «Роли», оставался без неё и не попадал в подбор."""
+    user = await service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="User is deleted")
+    if "executor" not in get_user_roles(user):
+        raise HTTPException(status_code=422, detail="Specializations apply to executors only")
+    saved = await service.set_specializations(db, user, body.specializations, actor_id=current_user.id)
+    return {"id": user.id, "specialization": saved}
 
 
 @router.get("/employees/pending", response_model=list[EmployeeBrief])

@@ -334,6 +334,28 @@ class ActiveRequestsCount(BaseModel):
     count: int
 
 
+class SetSpecializationsRequest(BaseModel):
+    """Специализации исполнителя из карточки сотрудника (пустой список — снять все)."""
+
+    specializations: list[str] = Field(max_length=20)
+
+    @field_validator("specializations", mode="after")
+    @classmethod
+    def _check_specializations(cls, v):
+        return _validate_specializations(v)
+
+
+class DeletedEmployeeOut(BaseModel):
+    """Удалённый сотрудник: кто, когда и почему удалил. Только чтение."""
+
+    id: int
+    full_name: str
+    roles: list[str]
+    deleted_at: datetime
+    deletion_reason: Optional[str] = None
+    deleted_by_name: Optional[str] = None
+
+
 class CreateInviteRequest(BaseModel):
     role: Literal["executor", "manager", "dispatcher"]
     specializations: list[str] = []

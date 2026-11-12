@@ -379,6 +379,9 @@
     "approve": "Одобрить",
     "block": "Заблокировать",
     "blocked_employees": "Заблокированные",
+    "deleted_employees": "Удалённые",
+    "restore": "Восстановить",
+    "employee_restored": "♻️ Сотрудник восстановлен и ждёт одобрения",
     "change_role": "Изменить роль",
     "created_at": "Дата регистрации",
     "delete": "Удалить",
@@ -1676,6 +1679,7 @@
     "cancelled": "Отменена"
   },
   "user_statuses": {
+    "deleted": "🗑️ Удалён",
     "pending": "⏳ Ожидает одобрения",
     "approved": "✅ Одобрен",
     "blocked": "🚫 Заблокирован"

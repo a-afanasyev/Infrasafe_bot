@@ -2,13 +2,16 @@
 верификация/статусы/роли-капабилити, soft-delete (AUD5-ARCH-3 волна 5,
 block-move из api/shifts/service.py — код байт-в-байт)."""
 
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import case, select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from uk_management_bot.constants.categories import get_specialization_for_category
+from uk_management_bot.database.models.audit import AuditLog
 from uk_management_bot.database.models.rating import Rating
 from uk_management_bot.database.models.request import Request
 from uk_management_bot.database.models.shift import Shift
@@ -35,6 +38,8 @@ from uk_management_bot.database.roles_type import roles_contain
 # в фиде pending-стаффа и guard'ах активации/отклонения.
 _STAFF_ROLES = frozenset({"manager", "executor", "inspector", "dispatcher"})
 # Приоритет при выборе active_role после активации (см. activate_employee).
+# Сколько удалённых показывает дашборд: это журнал для справки, не рабочий список.
+DELETED_STAFF_LIMIT = 200
 _STAFF_ROLE_PRIORITY = ("manager", "executor", "inspector", "dispatcher")
 
 
@@ -217,6 +222,41 @@ async def list_employees(
 async def get_user(db: AsyncSession, user_id: int) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def set_specializations(db: AsyncSession, user: User, specializations: list[str],
+                              *, actor_id: int) -> list[str]:
+    """Записать специализации исполнителя (тот же формат и аудит, что у бота).
+
+    Пустой список снимает все. Возвращает сохранённый набор по алфавиту."""
+    old = sorted(parse_specializations(user))
+    new = sorted(set(specializations))
+    user.specialization = json.dumps(new, ensure_ascii=False) if new else None
+    db.add(AuditLog(
+        action="specializations_updated",
+        user_id=actor_id,
+        telegram_user_id=user.telegram_id,
+        details=json.dumps({"target_user_id": user.id, "old": old, "new": new, "source": "dashboard"},
+                           ensure_ascii=False),
+    ))
+    await db.commit()
+    return new
+
+
+async def list_deleted_staff(db: AsyncSession) -> list[tuple[User, Optional[User]]]:
+    """Мягко удалённые сотрудники (свежие первыми) с тем, кто удалил."""
+    deleter = aliased(User)
+    result = await db.execute(
+        select(User, deleter)
+        .outerjoin(deleter, deleter.id == User.deleted_by)
+        .where(
+            User.deleted_at.is_not(None),
+            or_(*(roles_contain(User.roles, role) for role in sorted(_STAFF_ROLES))),
+        )
+        .order_by(User.deleted_at.desc())
+        .limit(DELETED_STAFF_LIMIT)
+    )
+    return [(row[0], row[1]) for row in result.all()]
 
 
 async def set_user_verification(db: AsyncSession, user: User, value: str) -> PurgeResult:

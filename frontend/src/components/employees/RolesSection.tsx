@@ -9,6 +9,8 @@ const EXECUTOR = 'executor'
 
 interface Props {
   employeeId: number
+  /** Есть ли у сотрудника специализации — без них исполнитель не получает заявок. */
+  hasSpecializations?: boolean
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * менеджер видит набор без кнопок. Роль суперадмина здесь не выдаётся —
  * она задаётся в ADMIN_USER_IDS.
  */
-export default function RolesSection({ employeeId }: Props) {
+export default function RolesSection({ employeeId, hasSpecializations = true }: Props) {
   const { t } = useTranslation()
   const userRoles = useUserRoles(employeeId)
   const roles = useRbacRoles()
@@ -98,6 +100,9 @@ export default function RolesSection({ employeeId }: Props) {
       </div>
       {canEdit && executorLocked && (
         <div className="text-[11px] text-text-muted">{t('rbac.engineerNeedsExecutor')}</div>
+      )}
+      {chosen.has(EXECUTOR) && !hasSpecializations && (
+        <div className="text-[11px] text-amber">{t('rbac.executorNeedsSpecialization')}</div>
       )}
       {canEdit && dirty && !hasSystem && (
         <div className="text-[11px] text-amber">{t('rbac.needSystemRole')}</div>

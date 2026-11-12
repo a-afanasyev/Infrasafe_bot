@@ -134,6 +134,37 @@ def _delete_employee(db: Session, actor_tg_id: int, employee_id: int, comment: s
     return ("ok" if outcome.ok else "fail"), outcome.purge
 
 
+def _restore_employee(db: Session, actor_tg_id: int, employee_id: int) -> str:
+    """Вернуть мягко удалённого сотрудника в очередь одобрения.
+
+    "no_actor" | "ok" | "fail" (не найден или не удалён). Роли остаются как были,
+    статус — `pending`: доступ возвращает одобрение, а не само восстановление
+    (документы при удалении стёрты безвозвратно).
+    """
+    from uk_management_bot.database.models.audit import AuditLog
+
+    actor = db.query(User).filter(User.telegram_id == actor_tg_id).first()
+    if not actor:
+        return "no_actor"
+    user = db.query(User).filter(User.id == employee_id).with_for_update().first()
+    if not user or user.deleted_at is None:
+        return "fail"
+    details = {
+        "restored_user_id": user.id,
+        "deleted_at": user.deleted_at.isoformat(),
+        "deleted_by": user.deleted_by,
+        "deletion_reason": user.deletion_reason,
+    }
+    user.deleted_at = None
+    user.deleted_by = None
+    user.deletion_reason = None
+    user.status = "pending"
+    db.add(AuditLog(action="user_restored", user_id=actor.id, telegram_user_id=user.telegram_id,
+                    details=json.dumps(details, ensure_ascii=False)))
+    db.commit()
+    return "ok"
+
+
 def _search_employees(db: Session, raw_query: str) -> List[_EmployeeRow]:
     from uk_management_bot.utils.sql_search import (
         ci_contains_any, escape_like, is_postgres,

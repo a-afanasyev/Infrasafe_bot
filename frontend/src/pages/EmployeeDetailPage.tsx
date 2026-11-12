@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import SimpleModeBadge from '../components/employees/SimpleModeBadge'
 import SimpleModeSection from '../components/employees/SimpleModeSection'
 import RolesSection from '../components/employees/RolesSection'
+import SpecializationsSection from '../components/employees/SpecializationsSection'
 import { useCan } from '../hooks/useCan'
 
 export default function EmployeeDetailPage() {
@@ -23,6 +24,7 @@ export default function EmployeeDetailPage() {
   const rename = useRenameEmployee(id ? Number(id) : null)
   const [renameOpen, setRenameOpen] = useState(false)
   const canViewRoles = useCan('rbac.view')
+  const canManageStaff = useCan('staff.manage')
   const empName = emp ? fullName(emp, t('employees.noName')) : t('employees.noName')
   usePageTitle(empName)
 
@@ -175,7 +177,11 @@ export default function EmployeeDetailPage() {
         )
       })()}
 
-      {canViewRoles && <RolesSection employeeId={emp.id} />}
+      {canManageStaff && (emp.roles?.includes('executor') ?? false) && (
+        <SpecializationsSection employeeId={emp.id} current={emp.specialization} />
+      )}
+
+      {canViewRoles && <RolesSection employeeId={emp.id} hasSpecializations={emp.specialization.length > 0} />}
 
       {canConfigureSimpleMode && (
         <SimpleModeSection
