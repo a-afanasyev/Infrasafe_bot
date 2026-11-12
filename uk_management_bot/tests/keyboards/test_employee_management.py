@@ -46,14 +46,14 @@ class TestGetEmployeeManagementMainKeyboard:
             result = get_employee_management_main_keyboard(stats)
         assert isinstance(result, InlineKeyboardMarkup)
 
-    def test_has_nine_buttons(self):
+    def test_has_ten_buttons(self):
         stats = {"pending": 0, "active": 0, "blocked": 0,
                  "executors": 0, "managers": 0}
         with patch(GET_TEXT_PATH, side_effect=_echo):
             from uk_management_bot.keyboards.employee_management import get_employee_management_main_keyboard
             result = get_employee_management_main_keyboard(stats)
-        # stats + pending + active + blocked + executors + managers + search + specs + back = 9
-        assert len(_flat_texts(result)) == 9
+        # stats + pending + active + blocked + executors + managers + deleted + search + specs + back = 10
+        assert len(_flat_texts(result)) == 10
 
     def test_stats_counts_embedded(self):
         stats = {"pending": 3, "active": 0, "blocked": 0,

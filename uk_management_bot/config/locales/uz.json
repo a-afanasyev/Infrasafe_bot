@@ -379,6 +379,9 @@
     "approve": "Ma'qullamoq",
     "block": "To'smoq",
     "blocked_employees": "To'silgan",
+    "deleted_employees": "O'chirilganlar",
+    "restore": "Tiklash",
+    "employee_restored": "♻️ Xodim tiklandi va tasdiqlashni kutmoqda",
     "change_role": "Rolni o'zgartirish",
     "created_at": "Ro'yxatdan o'tish sanasi",
     "delete": "O'chirmoq",
@@ -1677,6 +1680,7 @@
     "cancelled": "Bekor qilindi"
   },
   "user_statuses": {
+    "deleted": "🗑️ O'chirilgan",
     "pending": "⏳ Tasdiqlanishi kutilmoqda",
     "approved": "✅ Tasdiqlangan",
     "blocked": "🚫 Bloklangan"

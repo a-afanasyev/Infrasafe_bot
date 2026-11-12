@@ -9,6 +9,9 @@
   "uk_management_bot/api/registration/service.py::_is_privileged": [
    "applicant"
   ],
+  "uk_management_bot/api/shifts/router/employees.py::set_employee_specializations": [
+   "executor"
+  ],
   "uk_management_bot/api/shifts/router/employees.py::toggle_simple_mode": [
    "executor"
   ],

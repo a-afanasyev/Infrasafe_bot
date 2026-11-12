@@ -1227,6 +1227,18 @@
     "manager@pending"
    ]
   },
+  "GET /api/v2/shifts/employees/deleted": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "GET /api/v2/shifts/employees/pending": {
    "auth": "roles",
    "allow": [
@@ -2891,6 +2903,18 @@
   "PUT /api/v2/shifts/employees/{user_id}/roles": {
    "auth": "roles",
    "allow": []
+  },
+  "PUT /api/v2/shifts/employees/{user_id}/specializations": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
   },
   "PUT /api/v2/work-reports/settings": {
    "auth": "roles",

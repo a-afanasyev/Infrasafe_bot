@@ -2839,6 +2839,61 @@
         "title": "DeleteEmployeeRequest",
         "type": "object"
       },
+      "DeletedEmployeeOut": {
+        "description": "Удалённый сотрудник: кто, когда и почему удалил. Только чтение.",
+        "properties": {
+          "deleted_at": {
+            "format": "date-time",
+            "title": "Deleted At",
+            "type": "string"
+          },
+          "deleted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted By Name"
+          },
+          "deletion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deletion Reason"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "roles",
+          "deleted_at"
+        ],
+        "title": "DeletedEmployeeOut",
+        "type": "object"
+      },
       "ElevatorArchiveIn": {
         "additionalProperties": false,
         "properties": {
@@ -11081,6 +11136,24 @@
           "confirm_password"
         ],
         "title": "SetPasswordRequest",
+        "type": "object"
+      },
+      "SetSpecializationsRequest": {
+        "description": "Специализации исполнителя из карточки сотрудника (пустой список — снять все).",
+        "properties": {
+          "specializations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Specializations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "specializations"
+        ],
+        "title": "SetSpecializationsRequest",
         "type": "object"
       },
       "ShiftBrief": {
@@ -24210,6 +24283,37 @@
         ]
       }
     },
+    "/api/v2/shifts/employees/deleted": {
+      "get": {
+        "description": "Удалённые сотрудники — только просмотр: кто, когда и почему удалил.\n\nОбъявлен ДО `/employees/{user_id}`, иначе путь съел бы числовой параметр.",
+        "operationId": "list_deleted_employees_api_v2_shifts_employees_deleted_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeletedEmployeeOut"
+                  },
+                  "title": "Response List Deleted Employees Api V2 Shifts Employees Deleted Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Deleted Employees",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
     "/api/v2/shifts/employees/invite": {
       "post": {
         "description": "Generate an invite token for a new employee to join via the Telegram bot.",
@@ -25288,6 +25392,62 @@
           }
         ],
         "summary": "Toggle Simple Mode",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/api/v2/shifts/employees/{user_id}/specializations": {
+      "put": {
+        "description": "Задать специализации исполнителя из карточки сотрудника.\n\nРаньше специализация задавалась только в инвайте и в боте: исполнитель,\nполучивший роль в блоке «Роли», оставался без неё и не попадал в подбор.",
+        "operationId": "set_employee_specializations_api_v2_shifts_employees__user_id__specializations_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSpecializationsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Employee Specializations",
         "tags": [
           "shifts"
         ]

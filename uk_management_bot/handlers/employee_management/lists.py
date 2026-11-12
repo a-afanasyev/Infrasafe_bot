@@ -70,7 +70,8 @@ async def show_employee_list(callback: CallbackQuery, roles: list = None, active
             'active': get_text('employee_management.active_employees', language=lang),
             'blocked': get_text('employee_management.blocked_employees', language=lang),
             'executors': get_text('employee_management.executors', language=lang),
-            'managers': get_text('employee_management.managers', language=lang)
+            'managers': get_text('employee_management.managers', language=lang),
+            'deleted': get_text('employee_management.deleted_employees', language=lang),
         }
         
         title = f"👥 {title_map.get(list_type, list_type)}"

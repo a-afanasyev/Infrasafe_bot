@@ -108,6 +108,42 @@ export function useRequestEmployeePhone() {
   })
 }
 
+/** Задать специализации исполнителя из карточки (пустой список — снять все). */
+export function useSetSpecializations(employeeId: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (specializations: string[]) =>
+      apiClient
+        .put(`/api/v2/shifts/employees/${employeeId}/specializations`, { specializations })
+        .then(r => r.data),
+    onSuccess: () => {
+      toast.success(i18n.t('toast.specializationsUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['employee', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(i18n.t('toast.specializationsFailed'), { description: safeErrorMessage(error, 'An error occurred') })
+    },
+  })
+}
+
+export interface DeletedEmployee {
+  id: number
+  full_name: string
+  roles: string[]
+  deleted_at: string
+  deletion_reason: string | null
+  deleted_by_name: string | null
+}
+
+/** Удалённые сотрудники — журнал для справки (кто, когда, почему). */
+export function useDeletedEmployees() {
+  return useQuery<DeletedEmployee[]>({
+    queryKey: ['employees', 'deleted'],
+    queryFn: () => apiClient.get('/api/v2/shifts/employees/deleted').then(r => r.data),
+  })
+}
+
 /** Выдать/снять роль контролёра показаний (resource_meter_entry) — капабилити
  *  для Mini App «Ввод показаний» в «Учёте ресурсов». */
 export function useToggleMeterEntry(employeeId: number | null) {

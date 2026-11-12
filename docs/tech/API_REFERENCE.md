@@ -112,6 +112,8 @@
 | PATCH | `/employees/{user_id}/activate` \| `/decline` | Активация/отклонение pending-стаффа (status → approved/blocked) |
 | PATCH | `/employees/{user_id}/name` | Правка ФИО (одной строкой) |
 | PATCH | `/employees/{user_id}/meter-entry` | Выдать/снять капабилити контролёра показаний (`resource_meter_entry`) |
+| PUT | `/employees/{user_id}/specializations` | Задать специализации исполнителя из карточки (пустой список — снять все); аудит `specializations_updated` |
+| GET | `/employees/deleted` | Удалённые сотрудники: кто, когда и почему удалил (только чтение; восстановление — в боте) |
 | GET | `/employees/{user_id}` | Карточка сотрудника |
 | GET | `/employees/{user_id}/active-requests-count` | Число активных заявок |
 | GET | `` | Список смен |

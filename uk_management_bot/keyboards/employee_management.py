@@ -54,6 +54,10 @@ def get_employee_management_main_keyboard(stats: Dict[str, int], language: str =
             text=f"👨‍💼 {get_text('employee_management.managers', language)} ({stats.get('managers', 0)})",
             callback_data="employee_mgmt_list_managers_1"
         )],
+        [InlineKeyboardButton(
+            text=f"🗑️ {get_text('employee_management.deleted_employees', language)}",
+            callback_data="employee_mgmt_list_deleted_1"
+        )],
         
         # Поиск и специализации
         [InlineKeyboardButton(
@@ -172,6 +176,19 @@ def get_employee_actions_keyboard(employee_id: int, status: str, language: str =
     buttons = []
     
     # Действия в зависимости от статуса
+    # Удалённый (мягко, из веба): единственное действие — вернуть в очередь одобрения.
+    if status == "deleted":
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"♻️ {get_text('employee_management.restore', language)}",
+                callback_data=f"restore_employee_{employee_id}"
+            )],
+            [InlineKeyboardButton(
+                text=get_text('buttons.back', language),
+                callback_data="employee_mgmt_main"
+            )],
+        ])
+
     if status == "pending":
         buttons.extend([
             [InlineKeyboardButton(

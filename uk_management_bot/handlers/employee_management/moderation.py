@@ -21,7 +21,7 @@ from uk_management_bot.database.models.user import User
 from ._router import router
 from uk_management_bot.services.document_purge import cleanup_purged_documents
 
-from ._units import _delete_employee, _moderate_employee, _return_to_employee_info
+from ._units import _delete_employee, _moderate_employee, _restore_employee, _return_to_employee_info
 
 logger = logging.getLogger(__name__)
 
@@ -323,3 +323,27 @@ async def delete_employee(callback: CallbackQuery, roles: list = None, active_ro
             get_text('errors.unknown_error', language=lang),
             show_alert=True
         )
+
+
+@router.callback_query(F.data.startswith("restore_employee_"))
+async def restore_employee(callback: CallbackQuery, roles: list = None, active_role: str = None, user: User = None, language: str = "ru", *, _db=None):
+    """Восстановить удалённого сотрудника: он возвращается в очередь одобрения."""
+    lang = language
+    if not has_admin_access(roles=roles, user=user):
+        await callback.answer(get_text('errors.permission_denied', language=lang), show_alert=True)
+        return
+    try:
+        employee_id = int(callback.data.split('_')[2])
+        outcome = await run_db(lambda s: _restore_employee(s, callback.from_user.id, employee_id), db=_db)
+        if outcome != "ok":
+            key = 'errors.user_not_found' if outcome == "no_actor" else 'errors.unknown_error'
+            await callback.answer(get_text(key, language=lang), show_alert=True)
+            return
+        await callback.answer(get_text('employee_management.employee_restored', language=lang), show_alert=True)
+        try:
+            await _return_to_employee_info(callback, employee_id, lang, _db=_db)
+        except Exception as render_err:
+            logger.error(f"Ошибка ре-рендера карточки после восстановления {employee_id}: {render_err}")
+    except Exception as e:
+        logger.error(f"Ошибка восстановления сотрудника: {e}")
+        await callback.answer(get_text('errors.unknown_error', language=lang), show_alert=True)

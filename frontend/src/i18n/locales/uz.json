@@ -1487,7 +1487,18 @@
     "blockConfirmDesc": "{{name}} xodimni bloklash?",
     "unblockConfirmDesc": "{{name}} xodimni blokdan chiqarish?",
     "noRequests": "Tayinlash uchun arizalar yo'q",
-    "phoneRequestedOn": "Raqam so'raldi · {{date}}"
+    "phoneRequestedOn": "Raqam so'raldi · {{date}}",
+    "deleted": {
+      "tab": "O'chirilganlar",
+      "hint": "Faqat ko'rish. Xodimni botda tiklash mumkin: «Xodimlarni boshqarish» → «O'chirilganlar».",
+      "empty": "O'chirilgan xodimlar yo'q",
+      "loadError": "O'chirilganlar ro'yxatini yuklab bo'lmadi",
+      "name": "Xodim",
+      "roles": "Rollar",
+      "when": "O'chirilgan",
+      "by": "Kim o'chirgan",
+      "reason": "Sabab"
+    }
   },
   "employeeDetail": {
     "noSpecialization": "Ixtisoslik yo'q",
@@ -1513,6 +1524,11 @@
         "uz": "O‘zbekcha (lotin)",
         "uz_cyrl": "Ўзбекча (kirill)"
       }
+    },
+    "specializations": {
+      "title": "Ixtisosliklar",
+      "hint": "Ular bo'yicha ijrochiga arizalar keladi.",
+      "empty": "Ixtisoslik yo'q — ijrochi ariza olmaydi. Kamida bittasini tanlang."
     }
   },
   "employeeModal": {
@@ -3089,7 +3105,9 @@
     "employeeLanguageUpdated": "Xodim tili o‘zgartirildi",
     "employeeLanguageFailed": "Tilni o‘zgartirib bo‘lmadi",
     "employeeLanguageStaffOnly": "Tilni faqat xodimga o‘zgartirish mumkin",
-    "staffSettingForbidden": "Bu sozlama menejer va administratorlar uchun mavjud emas"
+    "staffSettingForbidden": "Bu sozlama menejer va administratorlar uchun mavjud emas",
+    "specializationsUpdated": "Ixtisosliklar saqlandi",
+    "specializationsFailed": "Ixtisosliklarni saqlab bo'lmadi"
   },
   "feedback": {
     "title": "Qayta aloqa",
@@ -3795,7 +3813,8 @@
       "work_reports.moderate": "Ishlar hisobotlarini moderatsiya qilish",
       "requests.engineering": "Muhandislik tahlili: InfraSafe eskalatsiyalari, smenasiz ishlash, ustaga topshirish"
     },
-    "engineerNeedsExecutor": "«Muhandis» «Ijrochi» bilan birga beriladi: avval «Muhandis»ni olib tashlang."
+    "engineerNeedsExecutor": "«Muhandis» «Ijrochi» bilan birga beriladi: avval «Muhandis»ni olib tashlang.",
+    "executorNeedsSpecialization": "Ijrochida ixtisoslik yo'q — u ariza olmaydi. Ularni «Ixtisosliklar» blokida belgilang."
   },
   "home": {
     "pageTitle": "Uyingiz bugun",

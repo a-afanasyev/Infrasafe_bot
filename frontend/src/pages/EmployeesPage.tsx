@@ -14,6 +14,7 @@ import {
 import type { EmployeeBrief } from '../hooks/useEmployees'
 import StaffCard from '../components/employees/StaffCard'
 import StaffTable from '../components/employees/StaffTable'
+import DeletedEmployeesList from '../components/employees/DeletedEmployeesList'
 import DeleteEmployeeModal from '../components/employees/DeleteEmployeeModal'
 import AddEmployeeModal from '../components/employees/AddEmployeeModal'
 import PendingApprovalCard from '../components/employees/PendingApprovalCard'
@@ -258,6 +259,7 @@ export default function EmployeesPage() {
             { key: 'executor', label: t('role.executor') },
             { key: 'manager', label: t('role.manager') },
             { key: 'dispatcher', label: t('role.dispatcher') },
+            { key: 'deleted', label: t('employees.deleted.tab') },
           ].map(f => (
             <button
               key={f.key}
@@ -352,8 +354,10 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Staff -- tile or table */}
-      {viewMode === 'table' ? (
+      {/* Staff -- tile or table; «Удалённые» — отдельный журнал только для чтения */}
+      {roleFilter === 'deleted' ? (
+        <DeletedEmployeesList />
+      ) : viewMode === 'table' ? (
         <StaffTable
           employees={employees}
           onAssign={(e) => setAssignTarget(e)}
@@ -382,7 +386,9 @@ export default function EmployeesPage() {
 
       {/* Раньше список молча обрезался пятьюдесятью строками без всякого
           указателя: ни страниц, ни честного «показано N из M». */}
-      <AccessPagination total={total} limit={PAGE_SIZE} offset={offset} onOffsetChange={setOffset} />
+      {roleFilter !== 'deleted' && (
+        <AccessPagination total={total} limit={PAGE_SIZE} offset={offset} onOffsetChange={setOffset} />
+      )}
 
       <AddEmployeeModal open={addModalOpen} onClose={() => setAddModalOpen(false)} />
 
