@@ -80,6 +80,7 @@ const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 // VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
 const NewsWatchPage = lazy(() => import('./pages/NewsWatchPage'))
 const AiManagerPage = lazy(() => import('./pages/AiManagerPage'))
+const DispatcherPage = lazy(() => import('./pages/DispatcherPage'))
 const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
 
 
@@ -101,10 +102,15 @@ export function ProtectedRoute({ children, action }: ProtectedRouteProps) {
     return <Navigate to={`/login?next=${next}`} replace />
   }
   if (action && !hasAction(user?.actions, action)) {
-    return <Navigate to="/home" replace />
+    // Диспетчер без дашборда: его рабочее место — страница приёма заявок.
+    return <Navigate to={action !== 'callcenter.use' && isDispatcherOnly(user?.actions) ? '/dispatch' : '/home'} replace />
   }
   return <>{children}</>
 }
+
+/** Может принимать заявки по звонку, но в дашборд не входит. */
+const isDispatcherOnly = (actions: readonly string[] | undefined): boolean =>
+  hasAction(actions, 'callcenter.use') && !hasAction(actions, 'dashboard.use')
 
 // Раздел дашборда по своему действию: общий гейт /dashboard — только вход
 // (dashboard.use), а инженер, например, видит доску, но не персонал и смены.
@@ -259,6 +265,9 @@ export default function App() {
                   <Route path="*" element={<PageErrorBoundary><ResourceAccountingSection /></PageErrorBoundary>} />
                 </Route>
               )}
+
+              {/* Диспетчер: заявка по звонку на одном экране, вне дашборда. */}
+              <Route path="/dispatch" element={<ProtectedRoute action="callcenter.use"><PageErrorBoundary><DispatcherPage /></PageErrorBoundary></ProtectedRoute>} />
 
               {/* Страница жителей «Ваш дом сегодня» — публичная главная (сюда ведёт «/»). */}
               <Route path="/home" element={<PageErrorBoundary><ResidentHomePage /></PageErrorBoundary>} />
