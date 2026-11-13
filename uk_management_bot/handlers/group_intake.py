@@ -104,6 +104,7 @@ from uk_management_bot.services.request_address import (
 from uk_management_bot.utils.auth_helpers import get_user_roles
 from uk_management_bot.utils.constants import (
     ACCEPTANCE_MODE_MANAGER,
+    ROLE_DISPATCHER,
     ROLE_EXECUTOR,
     ROLE_INSPECTOR,
     ROLE_MANAGER,
@@ -130,7 +131,9 @@ CB_OTHER = "gint:other"
 CB_CAT = "gint:cat"
 
 # Роли-репортёры staff-групп (решение владельца из планирования v1).
-_STAFF_ROLES = frozenset({ROLE_EXECUTOR, ROLE_INSPECTOR, ROLE_MANAGER})
+# Диспетчер — с 2026-11-13: приём заявок его прямая работа, а сотрудник с одной
+# этой ролью получал в рабочей группе полную тишину.
+_STAFF_ROLES = frozenset({ROLE_EXECUTOR, ROLE_INSPECTOR, ROLE_MANAGER, ROLE_DISPATCHER})
 
 
 # Порядок «шага вниз» при отказе резолвера на уровне scope: от широкого к
@@ -282,7 +285,7 @@ def _author_gate_sync(db, telegram_id: int, scope: str, hint: Optional[str]) -> 
 def _staff_author_lang_sync(db, telegram_id: int) -> Optional[str]:
     """Гейт автора staff-группы — ДО dedup/rate/LLM: чужое сообщение в
     служебном чате не уходит в Anthropic и не получает приглашений (None =
-    тишина). Сотрудник = approved + любая из ролей executor|inspector|manager."""
+    тишина). Сотрудник = approved + любая из ролей _STAFF_ROLES."""
     user = db.query(User).filter(User.telegram_id == telegram_id).first()
     if user is None or user.status != "approved" or user.deleted_at is not None:
         return None
