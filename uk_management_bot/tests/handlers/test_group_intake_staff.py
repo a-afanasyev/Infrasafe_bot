@@ -163,7 +163,7 @@ async def test_pending_staff_user_is_silent(env, db):
     env.classify.assert_not_awaited()
 
 
-@pytest.mark.parametrize("roles", ['["executor"]', '["inspector"]', '["manager"]'])
+@pytest.mark.parametrize("roles", ['["executor"]', '["inspector"]', '["manager"]', '["dispatcher"]'])
 async def test_each_staff_role_passes_gate(env, db, roles):
     seed_staff_group(db)
     seed_staff_user(db, roles=roles)
