@@ -80,8 +80,8 @@ describe('WeekResourceGrid — читаемые плашки', () => {
     render(
       <WeekResourceGrid
         shifts={[
-          makeShift({ id: 1, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
-          makeShift({ id: 2, start_time: '2026-06-10T20:00:00+05:00', end_time: '2026-06-11T08:00:00+05:00' }),
+          makeShift({ status: 'planned', id: 1, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
+          makeShift({ status: 'planned', id: 2, start_time: '2026-06-10T20:00:00+05:00', end_time: '2026-06-11T08:00:00+05:00' }),
         ]}
         weekAnchor={weekAnchor}
         onShiftClick={onShiftClick}
@@ -101,18 +101,18 @@ describe('WeekResourceGrid — читаемые плашки', () => {
     expect(hint.style.width).toBe(`${(4 / 24) * 100}%`)
   })
 
-  it('открытая смена — время начала; суточная 13:00→13:00 — «13:00 →» и «→ 13:00»', () => {
+  it('открытая смена — «начало – идёт»; суточная 13:00→13:00 — «13:00 →» и «→ 13:00»', () => {
     render(
       <WeekResourceGrid
         shifts={[
-          makeShift({ id: 1, start_time: '2026-06-09T09:00:00+05:00', end_time: null }),
-          makeShift({ id: 2, start_time: '2026-06-10T13:00:00+05:00', end_time: '2026-06-11T13:00:00+05:00' }),
+          makeShift({ id: 1, status: 'active', start_time: '2026-06-09T09:00:00+05:00', end_time: null }),
+          makeShift({ status: 'planned', id: 2, start_time: '2026-06-10T13:00:00+05:00', end_time: '2026-06-11T13:00:00+05:00' }),
         ]}
         weekAnchor={weekAnchor}
         onShiftClick={vi.fn()}
       />,
     )
-    expect(screen.getByText('09:00')).toBeInTheDocument()
+    expect(screen.getByText('09:00 – идёт')).toBeInTheDocument()
     expect(screen.getByText('13:00 →')).toBeInTheDocument()
     expect(screen.getByText('→ 13:00')).toBeInTheDocument()
   })
@@ -121,8 +121,8 @@ describe('WeekResourceGrid — читаемые плашки', () => {
     render(
       <WeekResourceGrid
         shifts={[
-          makeShift({ id: 1, start_time: '2026-06-10T14:00:00+05:00', end_time: '2026-06-10T18:00:00+05:00' }),
-          makeShift({ id: 2, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
+          makeShift({ status: 'planned', id: 1, start_time: '2026-06-10T14:00:00+05:00', end_time: '2026-06-10T18:00:00+05:00' }),
+          makeShift({ status: 'planned', id: 2, start_time: '2026-06-10T09:00:00+05:00', end_time: '2026-06-10T13:00:00+05:00' }),
         ]}
         weekAnchor={weekAnchor}
         onShiftClick={vi.fn()}
@@ -130,5 +130,25 @@ describe('WeekResourceGrid — читаемые плашки', () => {
     )
     const labels = screen.getAllByRole('button').map(b => b.textContent)
     expect(labels).toEqual(['09:00 – 13:00', '14:00 – 18:00'])
+  })
+
+  it('состояние смены видно в ячейке: идёт — «– идёт» и план в подсказке, закрыта — фактическое время', () => {
+    render(
+      <WeekResourceGrid
+        shifts={[
+          // по расписанию, ещё идёт: end_time — плановый конец, а не закрытие
+          makeShift({ id: 1, user_id: 1, executor_name: 'А', status: 'active', start_time: '2026-06-10T08:00:00+05:00', end_time: '2026-06-10T17:00:00+05:00' }),
+          makeShift({ id: 2, user_id: 2, executor_name: 'Б', status: 'completed', start_time: '2026-06-10T08:00:00+05:00', end_time: '2026-06-10T16:02:00+05:00' }),
+          makeShift({ id: 3, user_id: 3, executor_name: 'В', status: 'planned', start_time: '2026-06-11T08:00:00+05:00', end_time: '2026-06-11T17:00:00+05:00' }),
+        ]}
+        weekAnchor={weekAnchor}
+        onShiftClick={vi.fn()}
+      />,
+    )
+    const active = screen.getByText('08:00 – идёт').closest('button')!
+    expect(active).toHaveAttribute('data-shift-state', 'active')
+    expect(active).toHaveAttribute('title', '08:00 – идёт · план до 17:00 · Активна')
+    expect(screen.getByText('08:00 – 16:02').closest('button')).toHaveAttribute('data-shift-state', 'completed')
+    expect(screen.getByText('08:00 – 17:00').closest('button')).toHaveAttribute('data-shift-state', 'planned')
   })
 })
