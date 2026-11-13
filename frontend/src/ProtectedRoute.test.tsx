@@ -19,6 +19,8 @@ function renderAt(path: string) {
   return render(
     <Routes>
       <Route path="/dashboard/ai-manager" element={<ProtectedRoute action="auto_manager.configure"><div>ai page</div></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute action="dashboard.use"><div>dashboard</div></ProtectedRoute>} />
+      <Route path="/dispatch" element={<ProtectedRoute action="callcenter.use"><div>dispatch page</div></ProtectedRoute>} />
       <Route path="/home" element={<div>home</div>} />
       <Route path="/login" element={<div>login</div>} />
     </Routes>,
@@ -40,6 +42,18 @@ describe('ProtectedRoute — /dashboard/ai-manager', () => {
     renderAt('/dashboard/ai-manager')
     expect(screen.getByText('home')).toBeInTheDocument()
     expect(screen.queryByText('ai page')).not.toBeInTheDocument()
+  })
+
+  it('dispatcher without the dashboard lands on /dispatch', () => {
+    login(['dispatcher'])
+    renderAt('/dashboard')
+    expect(screen.getByText('dispatch page')).toBeInTheDocument()
+  })
+
+  it('executor is not let into /dispatch', () => {
+    login(['executor'])
+    renderAt('/dispatch')
+    expect(screen.getByText('home')).toBeInTheDocument()
   })
 
   it('anonymous is sent to /login', () => {

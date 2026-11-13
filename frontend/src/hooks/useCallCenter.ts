@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../api/client'
 import { KANBAN_QUERY_PREFIX } from './useKanban'
+import type { ApartmentNumber, CheckResult, ResidentApartment } from '../twa/pages/dispatch/api'
+import type { CreateBody } from '../twa/pages/dispatch/model'
 
 export interface CallCenterResident {
   id: number
@@ -65,6 +67,32 @@ export function useCallCenterCapabilities(enabled: boolean) {
     enabled,
     staleTime: 5 * 60_000,
   })
+}
+
+// ── Страница диспетчера (/dispatch): те же эндпоинты, что у экрана в Telegram ──
+
+/** Одобренные квартиры жителя — адрес в одно нажатие. */
+export function callCenterResidentApartments(userId: number): Promise<ResidentApartment[]> {
+  return apiClient.get(`/api/v2/callcenter/residents/${userId}/apartments`).then(r => r.data)
+}
+
+/** Номера квартир дома — узкий список без данных жильцов. */
+export function useCallCenterApartments(buildingId: number | null) {
+  return useQuery<ApartmentNumber[]>({
+    queryKey: ['callcenter-apartments', buildingId],
+    queryFn: () => apiClient.get(`/api/v2/callcenter/buildings/${buildingId}/apartments`).then(r => r.data),
+    enabled: buildingId !== null,
+    staleTime: 30_000,
+  })
+}
+
+/** ИИ-проверка заявки перед отправкой: замечания — совет, а не запрет. */
+export function checkCallCenterRequest(body: CreateBody): Promise<CheckResult> {
+  return apiClient.post('/api/v2/callcenter/check', body).then(r => r.data)
+}
+
+export function createDispatchRequest(body: CreateBody): Promise<{ request_number: string }> {
+  return apiClient.post('/api/v2/callcenter/requests', body).then(r => r.data)
 }
 
 /** Адрес со слов звонящего → варианты двора/дома (ИИ + поиск по справочнику). */

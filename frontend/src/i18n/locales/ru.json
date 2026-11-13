@@ -1394,6 +1394,17 @@
     "wholeBuilding": "Весь дом",
     "required": "Выберите адрес из справочника: двор, дом или квартиру"
   },
+  "dispatchWeb": {
+    "title": "Заявка по звонку",
+    "residentFound": "Житель найден по номеру. Нажмите, если звонит он:",
+    "yard": "Двор",
+    "building": "Дом",
+    "apartment": "Квартира",
+    "wholeYard": "Весь двор",
+    "wholeBuilding": "Весь дом",
+    "addressMissing": "не выбран",
+    "elevatorNeedsBuilding": "Для заявки по лифту выберите дом."
+  },
   "callcenter": {
     "suggest": {
       "label": "Адрес со слов звонящего",

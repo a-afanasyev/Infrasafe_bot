@@ -1394,6 +1394,17 @@
     "wholeBuilding": "Butun uy",
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
   },
+  "dispatchWeb": {
+    "title": "Qo'ng'iroq bo'yicha ariza",
+    "residentFound": "Yashovchi raqam bo'yicha topildi. Qo'ng'iroq qilayotgan shu kishi bo'lsa, bosing:",
+    "yard": "Hovli",
+    "building": "Uy",
+    "apartment": "Xonadon",
+    "wholeYard": "Butun hovli",
+    "wholeBuilding": "Butun uy",
+    "addressMissing": "tanlanmagan",
+    "elevatorNeedsBuilding": "Lift bo'yicha ariza uchun uyni tanlang."
+  },
   "callcenter": {
     "suggest": {
       "label": "Qo‘ng‘iroq qiluvchi aytgan manzil",
