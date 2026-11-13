@@ -297,31 +297,47 @@ function DayCell({
         const hintFrom = Math.max(0, Math.min(24, seg.startHour))
         const hintTo = Math.max(hintFrom + 0.5, Math.min(24, seg.endHour))
         const segOffset = seg.shift.start_time && seg.shift.end_time ? dayOffset(seg.shift.start_time, seg.shift.end_time) : 0
-        const fullLabel =
+        // Плашка показывает СОСТОЯНИЕ смены, а не только время: у идущей смены
+        // по расписанию end_time — плановый конец, и «08:00 – 17:00» читалось
+        // как «закрыта в 17:00» (жалоба profk 2026-11-13). Идёт — «08:00 – идёт»
+        // (план — в подсказке), закрыта — фактическое время, серая.
+        const isActive = seg.shift.status === 'active'
+        const isDone = seg.shift.status === 'completed'
+        const startLabel = formatTime(seg.shift.start_time)
+        const range =
           seg.shift.start_time && seg.shift.end_time
-            ? `${formatTime(seg.shift.start_time)} – ${formatTime(seg.shift.end_time)}${segOffset > 0 ? ` ${t('shifts.dayOffset', { n: segOffset })}` : ''}`
-            : formatTime(seg.shift.start_time)
+            ? `${startLabel} – ${formatTime(seg.shift.end_time)}${segOffset > 0 ? ` ${t('shifts.dayOffset', { n: segOffset })}` : ''}`
+            : startLabel
+        const ongoing = `${startLabel} – ${t('shifts.ongoing')}`
+        const fullLabel = !isActive
+          ? range
+          : seg.shift.end_time
+            ? `${ongoing} · ${t('shifts.plannedUntil', { time: formatTime(seg.shift.end_time) })}`
+            : ongoing
         // Ночная/суточная смена в ячейке своего дня: начало — «20:00 →»,
         // хвост на следующий день — «→ 08:00». Полный диапазон — в title.
         const label =
           seg.part === 'start'
-            ? `${formatTime(seg.shift.start_time)} →`
+            ? `${startLabel} →`
             : seg.part === 'end' && seg.shift.end_time
               ? `→ ${formatTime(seg.shift.end_time)}`
-              : fullLabel
+              : isActive ? ongoing : range
+        const chipStyle = isActive
+          ? { background: 'rgba(var(--accent-rgb),0.16)', border: '1px solid rgba(var(--accent-rgb),0.55)', color: 'var(--accent)' }
+          : isDone
+            ? { background: 'rgba(128,128,128,0.12)', border: '1px solid rgba(128,128,128,0.35)', color: 'var(--text-muted)' }
+            : { background: `${color}22`, border: `1px solid ${color}66`, color }
         return (
           <button
             key={`${seg.shift.id}-${idx}-${seg.part}`}
             type="button"
             onClick={() => onShiftClick(seg.shift)}
             title={`${fullLabel} · ${t(`shiftStatus.${seg.shift.status}`, seg.shift.status)}`}
-            className="relative w-full min-w-0 h-[22px] rounded-[5px] flex items-center justify-center text-[11px] font-semibold px-1 pb-[3px] cursor-pointer overflow-hidden transition-colors duration-150 hover:brightness-125"
-            style={{
-              background: `${color}22`,
-              border: `1px solid ${color}66`,
-              color,
-            }}
+            data-shift-state={seg.shift.status}
+            className="relative w-full min-w-0 h-[22px] rounded-[5px] flex items-center justify-center gap-1 text-[11px] font-semibold px-1 pb-[3px] cursor-pointer overflow-hidden transition-colors duration-150 hover:brightness-125"
+            style={chipStyle}
           >
+            {isActive && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />}
             <span className="truncate font-[var(--font-mono)] tracking-tight">
               {label}
             </span>
@@ -332,7 +348,7 @@ function DayCell({
               style={{
                 left: `${(hintFrom / 24) * 100}%`,
                 width: `${((hintTo - hintFrom) / 24) * 100}%`,
-                background: color,
+                background: chipStyle.color,
               }}
             />
           </button>

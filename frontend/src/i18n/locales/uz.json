@@ -2205,6 +2205,8 @@
     "confirmEnd": "Tugatish",
     "specializationsLabel": "Ixtisosliklar",
     "dayOffset": "+{{n}} kun",
+    "ongoing": "ishda",
+    "plannedUntil": "reja: {{time}} gacha",
     "reassignShift": "Qayta tayinlash",
     "reassignPick": "Yangi ijrochi",
     "reassignSelectPlaceholder": "Ijrochini tanlang…",
