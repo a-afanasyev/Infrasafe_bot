@@ -286,6 +286,14 @@
       "superadmin_only": false,
       "title": "Склад материалов"
     },
+    "notices.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Новости и уведомления жителям"
+    },
     "payments.manage": {
       "roles": [
         "admin",

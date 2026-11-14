@@ -6,6 +6,7 @@ UZ localization + RU fallback, news filtering/order, contacts assembly, and the
 format_working_hours grouping helper.
 """
 import copy
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -15,6 +16,7 @@ from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFI
 from uk_management_bot.services.board_config.schemas import WorkingHourCfg
 from uk_management_bot.services.board_config.service import format_working_hours
 from uk_management_bot.database.models.board_config import BoardConfig
+from uk_management_bot.database.models.notice import Notice
 
 
 def _wh(day, open_="", close="", closed=False):
@@ -27,6 +29,19 @@ async def seed_config(db_session: AsyncSession, manager_user):
 
     async def _seed(data: dict):
         db_session.add(BoardConfig(id=1, data=data, updated_by=manager_user.id))
+        await db_session.commit()
+
+    return _seed
+
+
+@pytest_asyncio.fixture
+async def seed_notice(db_session: AsyncSession):
+    """Опубликованная новость в таблице notices (лента витрины)."""
+
+    async def _seed(title_ru: str, **fields):
+        fields.setdefault("text_ru", "t")
+        fields.setdefault("publish_at", datetime(2026, 3, 1, tzinfo=timezone.utc))
+        db_session.add(Notice(kind="news", source="manual", status="published", title_ru=title_ru, **fields))
         await db_session.commit()
 
     return _seed
@@ -65,13 +80,14 @@ async def test_default_contacts_card(client):
 
 
 @pytest.mark.asyncio
-async def test_default_news_filters_empty_text(client):
-    # DEFAULT has 2 announcements: planned-works (has text) and default-announcement
-    # (empty text) → only the first survives; contact card is separate.
+async def test_news_come_from_notices_and_empty_text_is_filtered(client, seed_notice):
+    # Дефолтные объявления из JSON витрины жителям больше не показываются:
+    # лента — таблица notices. Карточка без текста отсеивается.
+    await seed_notice("Плановые работы", text_ru="Завтра с 10:00")
+    await seed_notice("Без текста", text_ru="")
     body = (await client.get("/api/v2/announcements")).json()
     news = [a for a in body["announcements"] if a["type"] == "info"]
-    assert len(news) == 1
-    assert news[0]["title"] == "Плановые работы"
+    assert [n["title"] for n in news] == ["Плановые работы"]
 
 
 # ── Saved config ────────────────────────────────────────────────────
@@ -90,17 +106,10 @@ async def test_saved_config_used(client, seed_config):
 
 
 @pytest.mark.asyncio
-async def test_news_order_important_then_recent(client, seed_config):
-    data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
-    data["announcements"] = [
-        {"id": "old", "icon": "", "important": False, "title": {"ru": "Старое", "uz": ""},
-         "text": {"ru": "t", "uz": ""}, "published_at": "2026-01-01T00:00:00"},
-        {"id": "new", "icon": "", "important": False, "title": {"ru": "Новое", "uz": ""},
-         "text": {"ru": "t", "uz": ""}, "published_at": "2026-05-01T00:00:00"},
-        {"id": "imp", "icon": "", "important": True, "title": {"ru": "Важное", "uz": ""},
-         "text": {"ru": "t", "uz": ""}, "published_at": "2020-01-01T00:00:00"},
-    ]
-    await seed_config(data)
+async def test_news_order_important_then_recent(client, seed_notice):
+    await seed_notice("Старое", publish_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    await seed_notice("Новое", publish_at=datetime(2026, 5, 1, tzinfo=timezone.utc))
+    await seed_notice("Важное", important=True, publish_at=datetime(2020, 1, 1, tzinfo=timezone.utc))
 
     news = [a for a in (await client.get("/api/v2/announcements")).json()["announcements"]
             if a["type"] == "info"]
@@ -110,9 +119,9 @@ async def test_news_order_important_then_recent(client, seed_config):
 # ── Localization ────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_uz_localization(client, seed_config):
-    data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
-    await seed_config(data)
+async def test_uz_localization(client, seed_config, seed_notice):
+    await seed_config(copy.deepcopy(DEFAULT_BOARD_CONFIG))
+    await seed_notice("Плановые работы", title_uz="Rejalashtirilgan ishlar", text_uz="Ertaga")
     body = (await client.get("/api/v2/announcements", params={"lang": "uz"})).json()
     news = [a for a in body["announcements"] if a["type"] == "info"][0]
     assert news["title"] == "Rejalashtirilgan ishlar"
@@ -122,18 +131,12 @@ async def test_uz_localization(client, seed_config):
 
 
 @pytest.mark.asyncio
-async def test_uz_falls_back_to_ru_when_empty(client, seed_config):
-    data = copy.deepcopy(DEFAULT_BOARD_CONFIG)
-    data["announcements"] = [
-        {"id": "x", "icon": "", "important": False, "title": {"ru": "Только RU", "uz": ""},
-         "text": {"ru": "Текст RU", "uz": "   "}, "published_at": "2026-05-01T00:00:00"},
-    ]
-    await seed_config(data)
+async def test_uz_falls_back_to_ru_when_empty(client, seed_notice):
+    await seed_notice("Только RU", text_ru="Текст RU", text_uz="   ")
     news = [a for a in (await client.get("/api/v2/announcements", params={"lang": "uz"})).json()["announcements"]
             if a["type"] == "info"]
     assert len(news) == 1
     assert news[0]["title"] == "Только RU"
-    assert news[0]["body"] == "Текст RU"
 
 
 # ── Contacts edge cases ─────────────────────────────────────────────

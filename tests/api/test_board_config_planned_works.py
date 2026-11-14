@@ -1,5 +1,6 @@
 """Плановые работы витрины (`planned_works`) — блок «Ближайшие работы» на
-странице жителей. Список хранится в board_config, правится в редакторе витрины.
+странице жителей. Схема элемента прежняя; сам список теперь собирается из
+таблицы notices (раздел «Новости и уведомления»), редактор витрины его не хранит.
 """
 import copy
 
@@ -42,13 +43,15 @@ def test_default_has_no_planned_works():
 
 
 @pytest.mark.asyncio
-async def test_put_saves_and_get_returns_planned_works(client):
+async def test_put_no_longer_stores_planned_works(client):
+    # Плановые работы ведутся в разделе «Новости и уведомления» (notices):
+    # тело редактора витрины их не сохраняет (см. tests/api/test_notices.py).
     resp = await client.put("/api/v2/board-config", json=_body(planned_works=[WORK]))
     assert resp.status_code == 200
-    assert resp.json()["planned_works"] == [WORK]
+    assert resp.json()["planned_works"] == []
 
     public = await client.get("/api/v2/public/board-config")
-    assert public.json()["planned_works"] == [WORK]
+    assert public.json()["planned_works"] == []
 
 
 @pytest.mark.asyncio
@@ -64,13 +67,12 @@ async def test_old_row_without_field_reads_as_empty_list(client, seed_config):
 
 
 @pytest.mark.asyncio
-async def test_put_without_field_keeps_stored_works(client, seed_config):
-    await seed_config(_body(planned_works=[WORK]))
+async def test_put_without_field_is_accepted(client):
     old_client = _body()
     old_client.pop("planned_works")
     resp = await client.put("/api/v2/board-config", json=old_client)
     assert resp.status_code == 200
-    assert resp.json()["planned_works"] == [WORK]
+    assert resp.json()["planned_works"] == []
 
 
 @pytest.mark.asyncio

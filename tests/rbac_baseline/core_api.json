@@ -215,6 +215,18 @@
     "manager@pending"
    ]
   },
+  "DELETE /api/v2/board-config/notices/{notice_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "DELETE /api/v2/monitored-groups/{group_id}": {
    "auth": "roles",
    "allow": [
@@ -402,6 +414,18 @@
    "allow": [
     "manager",
     "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "GET /api/v2/board-config/notices": {
+   "auth": "roles",
+   "allow": [
+    "manager",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",
@@ -1456,6 +1480,18 @@
     "manager@pending"
    ]
   },
+  "PATCH /api/v2/board-config/notices/{notice_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "PATCH /api/v2/elevators/occurrences/{occurrence_id}": {
    "auth": "roles",
    "allow": [
@@ -1903,6 +1939,42 @@
    "allow": [
     "manager",
     "admin",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/{notice_id}/close": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/{notice_id}/publish": {
+   "auth": "roles",
+   "allow": [
+    "manager",
     "applicant+manager",
     "executor+inspector+manager",
     "applicant+executor+manager",

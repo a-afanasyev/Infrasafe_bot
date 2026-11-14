@@ -280,6 +280,7 @@ flowchart LR
 | `apartments.moderate` | `admin`, `manager` |  | Одобрить или отклонить заявку жителя на привязку квартиры |
 | `auto_manager.configure` | `admin`, `manager` |  | Настройка автоматического менеджера |
 | `board.configure` | `manager` |  | Настройка табло |
+| `notices.manage` | `manager` |  | Новости и уведомления жителям |
 | `callcenter.use` | `dispatcher`, `manager` |  | Колл-центр: заявки по звонку |
 | `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
 | `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |

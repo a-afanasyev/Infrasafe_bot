@@ -22,6 +22,7 @@ from uk_management_bot.services.board_config.service import (
     merge_and_save_board_config,
     to_public_response,
 )
+from uk_management_bot.services.notices.board import with_notices
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.user import User
@@ -42,7 +43,7 @@ async def get_board_config(
     Если строки ещё нет (миграция не накатана) — отдаём дефолт, страница
     не должна белеть.
     """
-    cfg = await load_board_config(db)
+    cfg = await with_notices(db, await load_board_config(db))
     return PublicBoardConfigResponse.model_validate(to_public_response(cfg).model_dump())
 
 
@@ -68,4 +69,4 @@ async def update_board_config(
     merged = await merge_and_save_board_config(db, updates, user.id, keep_private_work_reports=True)
 
     logger.info("board_config обновлён пользователем %s", user.id)
-    return to_public_response(merged)
+    return to_public_response(await with_notices(db, merged))

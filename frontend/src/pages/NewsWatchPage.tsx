@@ -91,9 +91,10 @@ function ItemCard({ item, onDecide, pending }: {
   )
 }
 
-export default function NewsWatchPage() {
+export default function NewsWatchPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
-  usePageTitle(t('newsWatch.title'))
+  // Внутри раздела «Новости и уведомления» заголовок и отступы даёт он.
+  usePageTitle(t('newsWatch.title'), !embedded)
   const [tab, setTab] = useState<NewsItemStatus>('pending')
   const [offset, setOffset] = useState(0)
   const items = useNewsItems(tab, offset)
@@ -103,8 +104,10 @@ export default function NewsWatchPage() {
   const decide = useNewsDecision()
 
   return (
-    <div className="p-6 flex flex-col gap-6">
-      <h1 className="font-[var(--font-display)] font-semibold text-lg text-text-primary">{t('newsWatch.title')}</h1>
+    <div className={cn('flex flex-col gap-6', !embedded && 'p-6')}>
+      {!embedded && (
+        <h1 className="font-[var(--font-display)] font-semibold text-lg text-text-primary">{t('newsWatch.title')}</h1>
+      )}
 
       <div className="flex gap-2">
         {TABS.map((s) => (

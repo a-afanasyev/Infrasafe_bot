@@ -17,21 +17,19 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Columns2, GripVertical, Plus, RectangleHorizontal, Trash2 } from 'lucide-react'
+import { Columns2, GripVertical, RectangleHorizontal } from 'lucide-react'
+import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useBoardConfig, useUpdateBoardConfig } from '../hooks/useBoardConfig'
 import { defaultBoardConfig, defaultHomeConfig, toEditableBoardConfig } from '../types/boardConfig'
-import { isoToDatetimeLocal } from '../utils/timezone'
 import type {
-  AnnouncementCfg,
   BoardConfigData,
   LayoutItem,
 } from '../types/boardConfig'
 import HomePageEditor from '../components/board/HomePageEditor'
 import LocalizedField from '../components/board/LocalizedField'
-import PlannedWorksEditor from '../components/board/PlannedWorksEditor'
 import ScaledPreview from '../components/board/ScaledPreview'
 import ResidentBoardPage from './ResidentBoardPage'
 import ResidentHomePage from './ResidentHomePage'
@@ -211,21 +209,6 @@ export default function BoardEditorPage() {
     })
   }
 
-  const addAnnouncement = () => {
-    const fresh: AnnouncementCfg = {
-      id: `ann-${Date.now()}`,
-      icon: '📢',
-      important: false,
-      title: { ru: '', uz: '' },
-      text: { ru: '', uz: '' },
-      // ARCH-138: дефолт «сейчас» — стенка display-зоны, не UTC (−5ч)
-      published_at: isoToDatetimeLocal(new Date().toISOString()),
-    }
-    patch((d) => {
-      d.announcements = [...d.announcements, fresh]
-    })
-  }
-
   // WR-09: re-seeding is driven by the serverConfig-reference check above; the
   // mutation's invalidate → refetch yields a fresh reference that re-syncs `draft`.
   const onSave = () => updateConfig.mutate(draft)
@@ -359,67 +342,13 @@ export default function BoardEditorPage() {
             />
           </Section>
 
-          {/* Announcements */}
+          {/* Новости и плановые работы ведутся в разделе «Новости и уведомления»
+              (таблица notices): отложенная публикация, срок показа, календарь. */}
           <Section title={t('boardEditor.announcements')} active={tab} usedOn={['board', 'home']}>
-            {draft.announcements.map((ann, idx) => (
-              <div key={ann.id} className="rounded-sm border border-border-default bg-bg-surface p-3">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Input
-                    className="w-14 text-center"
-                    value={ann.icon}
-                    placeholder="📢"
-                    onChange={(e) => patch((d) => { d.announcements[idx].icon = e.target.value })}
-                  />
-                  <label className="flex items-center gap-1.5 text-xs text-text-muted">
-                    <input
-                      type="checkbox"
-                      checked={ann.important}
-                      onChange={() => patch((d) => { d.announcements[idx].important = !d.announcements[idx].important })}
-                    />
-                    {t('boardEditor.important')}
-                  </label>
-                  <input
-                    type="datetime-local"
-                    className="min-w-0 rounded-sm border border-border-default bg-bg-surface px-2 py-1 text-xs text-text-primary"
-                    value={ann.published_at.slice(0, 16)}
-                    onChange={(e) => patch((d) => { d.announcements[idx].published_at = e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    aria-label="remove"
-                    className="ml-auto text-text-muted hover:text-red-500"
-                    onClick={() => patch((d) => { d.announcements.splice(idx, 1) })}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <LocalizedField
-                    label={t('boardEditor.annTitle')}
-                    value={ann.title}
-                    onChange={(v) => patch((d) => { d.announcements[idx].title = v })}
-                  />
-                  <LocalizedField
-                    label={t('boardEditor.annText')}
-                    value={ann.text}
-                    textarea
-                    onChange={(v) => patch((d) => { d.announcements[idx].text = v })}
-                  />
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={addAnnouncement}>
-              <Plus size={14} className="mr-1" />
-              {t('boardEditor.addAnnouncement')}
-            </Button>
-          </Section>
-
-          {/* Planned works — блок «Ближайшие работы» страницы жителей */}
-          <Section title={t('boardEditor.plannedWorks')} active={tab} usedOn={['home']}>
-            <PlannedWorksEditor
-              works={draft.planned_works ?? []}
-              onChange={(works) => patch((d) => { d.planned_works = works })}
-            />
+            <p className="text-sm text-text-muted">{t('notices.movedFromBoardEditor')}</p>
+            <Link to="/dashboard/notices" className="text-sm font-semibold text-accent underline-offset-4 hover:underline">
+              {t('notices.openSection')}
+            </Link>
           </Section>
 
           {/* Working hours */}

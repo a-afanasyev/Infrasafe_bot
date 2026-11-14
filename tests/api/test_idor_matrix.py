@@ -351,6 +351,8 @@ STAFF_WIDE_ACTIONS = frozenset({
     "work_reports.moderate", "materials.manage", "requests.stats", "elevators.manage",
     "payments.manage", "board.configure", "rbac.manage", "rbac.view", "feedback.manage",
     "group_intake.manage", "requests.manage", "requests.engineering",
+    # Лента новостей и уведомлений — общая на площадку, владельца у записи нет.
+    "notices.manage",
     # A10-INT-10 (WONTFIX, решение владельца): исполнитель/инженер видят реестр
     # лифтов и их заявки целиком; инспектор — любой активный дом (обход).
     "elevators.read", "addresses.read",

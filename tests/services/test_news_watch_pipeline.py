@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import select
 
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.models.board_config import BoardConfig
+from uk_management_bot.database.models.notice import Notice
 from uk_management_bot.database.models.news_item import (
     BROADCAST_DONE,
     BROADCAST_NONE,
@@ -202,11 +202,13 @@ async def test_auto_publish_appends_announcement_and_queues_broadcast(ctx, monke
     assert item.status == NEWS_STATUS_PUBLISHED and item.published_at is not None
     assert item.broadcast_status == BROADCAST_PENDING
     async with factory() as db:
-        board = (await db.execute(select(BoardConfig))).scalar_one()
-        ann = board.data["announcements"]
-        assert ann[0]["id"] == f"news-{item.id}" and ann[0]["important"] is True
-        assert "нет света" in ann[0]["text"]["ru"] and "chiroq" in ann[0]["text"]["uz"]
-        assert "электричества" in ann[0]["title"]["ru"].lower()
+        notice = (await db.execute(select(Notice))).scalar_one()
+        assert notice.news_item_id == item.id and notice.important is True
+        assert (notice.kind, notice.source, notice.status) == ("outage", "news_watch", "published")
+        assert "нет света" in notice.text_ru and "chiroq" in notice.text_uz
+        assert "электричества" in notice.title_ru.lower()
+        # без названного окна новость канала не висит на витрине бессрочно
+        assert notice.expires_at is not None
 
 
 @pytest.mark.asyncio
@@ -218,9 +220,8 @@ async def test_board_announcement_has_no_html_tags(ctx, monkeypatch):
         await save_config(db, {**DEFAULT_CONFIG, "auto_publish": True, "min_confidence": 0.8})
         item, _ = await pipeline.ingest(db, _inbound())
     async with factory() as db:
-        anns = (await db.execute(select(BoardConfig))).scalar_one().data["announcements"]
-    [ann] = [a for a in anns if a["id"] == f"news-{item.id}"]
-    assert ann["text"] == {"ru": "Нет света 5<10 тут", "uz": "chiroq yo'q"}
+        notice = (await db.execute(select(Notice).where(Notice.news_item_id == item.id))).scalar_one()
+    assert (notice.text_ru, notice.text_uz) == ("Нет света 5<10 тут", "chiroq yo'q")
 
 
 @pytest.mark.asyncio
@@ -252,8 +253,8 @@ async def test_manual_publish_reject_and_guards(ctx, monkeypatch):
         with pytest.raises(pipeline.NewsWatchError):
             await pipeline.publish(db, 999, user_id=3)
     async with factory() as db:
-        board = (await db.execute(select(BoardConfig))).scalar_one()
-        assert [a["id"] for a in board.data["announcements"]][0] == f"news-{item.id}"
+        notices = (await db.execute(select(Notice))).scalars().all()
+        assert [n.news_item_id for n in notices] == [item.id]
 
 
 @pytest.mark.asyncio

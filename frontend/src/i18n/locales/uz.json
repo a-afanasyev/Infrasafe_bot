@@ -142,6 +142,7 @@
     "elevators": "Liftlar",
     "residentHome": "Aholi sahifasi",
     "newsWatch": "O'chirishlar",
+    "notices": "Yangiliklar va xabarnomalar",
     "aiManager": "AI qoidalari",
     "groupSettings": "Sozlamalar"
   },
@@ -1052,10 +1053,10 @@
       "workreports": "Bajarilgan ishlar hisobotlari"
     },
     "blockSources": {
-      "announcements": "Ma'lumot: quyidagi «E'lonlar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
+      "announcements": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
       "contacts": "Ma'lumot: quyidagi «Aloqa», «Telegram-bot» va «Ish vaqti» bo'limlari. QR-kod bot username'idan yasaladi.",
       "requests": "Majmuaning barcha arizalari bo'yicha avtomatik hisoblanadi: «Yangi», «Jarayonda» (xarid va aniqlashtirish bilan), «Shu oy hal etilgan» (bajarilgan, tekshirilgan, qabul qilingan). Qo'lda to'ldirilmaydi.",
-      "works": "Ma'lumot: quyidagi «Rejali ishlar» bo'limi. O'tgan sanalar avtomatik yashiriladi.",
+      "works": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limidagi rejali o'chirishlar. O'tganlari avtomatik yashiriladi.",
       "elevators": "Ma'lumot: liftlar reyestri va ularning holati.",
       "workreports": "Ma'lumot: e'lon qilingan «oldin/keyin» hisobotlari."
     },
@@ -1393,6 +1394,98 @@
     "apartment": "Xonadon",
     "wholeBuilding": "Butun uy",
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
+  },
+  "notices": {
+    "truncated": "{{total}} ta yozuvdan oxirgi {{shown}} tasi ko'rsatilgan — oldingilarini taqvimdan qidiring.",
+    "title": "Yangiliklar va xabarnomalar",
+    "tab": {
+      "feed": "Tasma",
+      "calendar": "Taqvim",
+      "channels": "Kanallardan"
+    },
+    "addNews": "+ Yangilik",
+    "addOutage": "+ Rejali o'chirish",
+    "filter": {
+      "all": "Hammasi",
+      "news": "Yangiliklar",
+      "outage": "O'chirishlar",
+      "draft": "Qoralamalar"
+    },
+    "empty": "Hozircha yozuvlar yo'q. Yangilik yoki rejali o'chirish qo'shing.",
+    "kind": {
+      "news": "Yangilik",
+      "outage": "O'chirish"
+    },
+    "resource": {
+      "water": "Suv",
+      "heating": "Isitish",
+      "power": "Elektr",
+      "gas": "Gaz",
+      "internet": "Internet",
+      "other": "Boshqa"
+    },
+    "source": {
+      "news_watch": "Kanaldan",
+      "staff": "Xodimdan"
+    },
+    "state": {
+      "draft": "Qoralama",
+      "scheduled": "Rejalashtirilgan",
+      "active": "E'lon qilingan",
+      "expired": "Ko'rsatish muddati tugagan",
+      "closed": "Yopilgan"
+    },
+    "important": "Muhim",
+    "edit": "O'zgartirish",
+    "close": "Ko'rsatishdan olish",
+    "toast": {
+      "saved": "Saqlandi"
+    },
+    "form": {
+      "title": {
+        "news": "Yangilik",
+        "outage": "Rejali o'chirish"
+      },
+      "resource": "Nima o'chiriladi",
+      "heading": "Sarlavha",
+      "text": "Matn",
+      "place": "Qayerda (hovli, uylar)",
+      "startsAt": "Boshlanishi",
+      "endsAt": "Tugashi",
+      "allDay": "Butun kun (vaqt ko'rsatilmaydi)",
+      "publishAt": "E'lon qilish",
+      "expiresAt": "Shu vaqtgacha ko'rsatish",
+      "important": "Muhim — birinchi ko'rsatilsin",
+      "hint": {
+        "news": "«E'lon qilish» bo'sh bo'lsa — darhol. «Shu vaqtgacha ko'rsatish» bo'sh bo'lsa — o'zingiz olib tashlaguningizcha.",
+        "outage": "«E'lon qilish» bo'sh bo'lsa — darhol. «Shu vaqtgacha ko'rsatish» bo'lmasa, o'chirish tugagach yozuv vitrinadan ketadi."
+      },
+      "saveDraft": "Qoralamani saqlash",
+      "publish": "E'lon qilish",
+      "schedule": "Rejalashtirish",
+      "liveNote": "Yozuv yashovchilarga allaqachon ko'rinmoqda — tuzatishlar darhol chiqadi.",
+      "error": {
+        "title": "Sarlavhani rus tilida kiriting",
+        "window": "O'chirishning boshlanishi va tugashini ko'rsating",
+        "order": "Tugash vaqti boshlanishidan oldin"
+      }
+    },
+    "calendar": {
+      "prev": "Oldingi oy",
+      "next": "Keyingi oy",
+      "createOn": "{{day}} kuniga yozuv yaratish",
+      "more": "yana {{n}}",
+      "legend": {
+        "news": "Yangilik",
+        "outage": "Rejali o'chirish",
+        "staff": "Xodimdan o'chirish",
+        "channel": "Kanaldan",
+        "pending": "Qoralama / kechiktirilgan e'lon"
+      },
+      "hint": "Shu sanaga o'chirishni rejalashtirish uchun kunni bosing; ochish uchun yozuvni bosing."
+    },
+    "movedFromBoardEditor": "Yangiliklar va rejali ishlar endi «Yangiliklar va xabarnomalar» bo'limida yuritiladi.",
+    "openSection": "Bo'limni ochish"
   },
   "dispatchWeb": {
     "title": "Qo'ng'iroq bo'yicha ariza",
@@ -3788,6 +3881,7 @@
       "apartments.moderate": "Yashovchining xonadonni biriktirish arizasini tasdiqlash yoki rad etish",
       "auto_manager.configure": "Avtomatik menejerni sozlash",
       "board.configure": "Tabloni sozlash",
+      "notices.manage": "Yashovchilarga yangiliklar va xabarnomalar",
       "callcenter.use": "Call-markaz: qo'ng'iroq bo'yicha arizalar",
       "dashboard.live": "Boshqaruv paneli hodisalarining jonli oqimi (WebSocket)",
       "dashboard.use": "Asosiy veb-boshqaruv paneliga kirish",
