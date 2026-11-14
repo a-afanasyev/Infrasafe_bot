@@ -142,8 +142,13 @@ def upgrade() -> None:
             "starts_at": starts_at, "ends_at": ends_at, "all_day": all_day,
         })
     if rows:
-        # scope_ids без server_default в bulk_insert по части строк — задаём явно.
-        op.bulk_insert(notices, [{"scope_ids": [], **r} for r in rows])
+        # Пакетная вставка требует одинакового набора ключей у всех строк:
+        # у новости нет окна и места, у плановой работы — иконки и связи с каналом.
+        blank = {
+            "resource": None, "news_item_id": None, "text_ru": "", "text_uz": "", "place_ru": "", "place_uz": "",
+            "icon": "", "important": False, "starts_at": None, "ends_at": None, "all_day": False, "scope_ids": [],
+        }
+        op.bulk_insert(notices, [{**blank, **r} for r in rows])
 
     cleaned = {**data, "announcements": [], "planned_works": []}
     bind.execute(
