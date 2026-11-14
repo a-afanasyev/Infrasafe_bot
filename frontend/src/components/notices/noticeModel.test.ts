@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Notice } from '../../hooks/useNotices'
-import { bodyOf, draftError, emptyDraft, eventsByDay, isScheduled, monthGrid } from './noticeModel'
+import { bodyOf, draftError, draftOf, emptyDraft, eventsByDay, gridWindow, isScheduled, monthGrid } from './noticeModel'
 
 // Зона показа в тестах — Asia/Tashkent (UTC+5), см. utils/timezone.
 
@@ -27,8 +27,19 @@ describe('noticeModel — тело запроса', () => {
     const body = bodyOf(draft)
     expect(body.starts_at).toBe('2026-11-18T05:00:00.000Z') // 10:00 Ташкент
     expect(body.ends_at).toBe('2026-11-18T09:00:00.000Z')
-    expect(body.expires_at).toBe(body.ends_at)
+    // срок показа не дублирует конец окна: сервер сам показывает до конца отключения
+    expect(body.expires_at).toBeNull()
     expect(body.resource).toBe('power')
+  })
+
+  it('правка не стирает значок записи', () => {
+    const body = bodyOf(draftOf(notice({ icon: '🧹', title_ru: 'Уборка' })))
+    expect(body.icon).toBe('🧹')
+  })
+
+  it('сетка месяца → окно запроса календаря в зоне объекта', () => {
+    const range = gridWindow(monthGrid(2026, 10))
+    expect(range).toEqual({ from: '2026-10-25T19:00:00.000Z', to: '2026-12-06T18:59:00.000Z' })
   })
 
   it('проверка формы и «запланировано»', () => {

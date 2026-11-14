@@ -5,12 +5,11 @@ import { ru, uz } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { Notice } from '../../hooks/useNotices'
+import { useNotices, type Notice } from '../../hooks/useNotices'
 import { formatTime, todayInDisplayTz } from '../../utils/timezone'
-import { eventsByDay, monthGrid, type CalendarTone } from './noticeModel'
+import { eventsByDay, gridWindow, monthGrid, type CalendarTone } from './noticeModel'
 
 interface Props {
-  notices: Notice[]
   onOpen: (notice: Notice) => void
   /** Клик по дню: создать запись на эту дату (YYYY-MM-DD). */
   onPickDay: (day: string) => void
@@ -29,12 +28,16 @@ const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const MAX_PER_DAY = 3
 
 /** Календарь публикаций и отключений: месяц, клик по дню — создать, по записи — открыть. */
-export default function NoticeCalendar({ notices, onOpen, onPickDay }: Props) {
+export default function NoticeCalendar({ onOpen, onPickDay }: Props) {
   const { t, i18n } = useTranslation()
   const today = todayInDisplayTz()
   const [cursor, setCursor] = useState(() => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) - 1 }))
   const days = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor])
-  const events = useMemo(() => eventsByDay(notices), [notices])
+  // Свой запрос по видимой сетке: лента отдаёт только свежие записи, а в
+  // календаре нужны все события месяца, включая давно созданные.
+  const range = useMemo(() => gridWindow(days), [days])
+  const notices = useNotices(range)
+  const events = useMemo(() => eventsByDay(notices.data?.items ?? []), [notices.data])
   const shift = (delta: number) => setCursor(({ year, month }) => {
     const d = new Date(year, month + delta, 1)
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -66,7 +69,7 @@ export default function NoticeCalendar({ notices, onOpen, onPickDay }: Props) {
                 tabIndex={0}
                 aria-label={t('notices.calendar.createOn', { day })}
                 onClick={() => onPickDay(day)}
-                onKeyDown={(e) => { if (e.key === 'Enter') onPickDay(day) }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) onPickDay(day) }}
                 className={cn(
                   'min-h-[84px] cursor-pointer bg-bg-card p-1.5 text-left hover:bg-bg-card-hover',
                   !day.startsWith(monthPrefix) && 'opacity-45',
@@ -104,7 +107,9 @@ export default function NoticeCalendar({ notices, onOpen, onPickDay }: Props) {
           </span>
         ))}
       </div>
-      <p className="text-xs text-text-muted">{t('notices.calendar.hint')}</p>
+      <p className="text-xs text-text-muted">
+        {notices.isError ? t('common.error') : t('notices.calendar.hint')}
+      </p>
     </div>
   )
 }

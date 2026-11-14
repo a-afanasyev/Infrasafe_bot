@@ -13,6 +13,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.notice import (
+    NOTICE_KIND_OUTAGE,
     NOTICE_STATUS_CLOSED,
     NOTICE_STATUS_DRAFT,
     NOTICE_STATUS_PUBLISHED,
@@ -36,12 +37,22 @@ class NoticeNotFound(NoticeError):
     pass
 
 
+class NoticeInvalid(NoticeError):
+    """Запись после правки противоречива (роутер отвечает 422)."""
+
+
 def visible_clause(now: datetime):
-    """Запись видна жителям в момент ``now``."""
+    """Запись видна жителям в момент ``now``.
+
+    Срок показа — ``expires_at``, а если он не задан, конец окна отключения:
+    продлили отключение — показ продлился сам (хранить копию ``ends_at`` в
+    ``expires_at`` нельзя, она отставала бы при правке окна).
+    """
+    shown_until = func.coalesce(Notice.expires_at, Notice.ends_at)
     return and_(
         Notice.status == NOTICE_STATUS_PUBLISHED,
         or_(Notice.publish_at.is_(None), Notice.publish_at <= now),
-        or_(Notice.expires_at.is_(None), Notice.expires_at > now),
+        or_(shown_until.is_(None), shown_until > now),
     )
 
 
@@ -52,7 +63,8 @@ def state_of(notice: Notice, now: Optional[datetime] = None) -> str:
         return notice.status
     if notice.publish_at is not None and _aware(notice.publish_at) > now:
         return "scheduled"
-    if notice.expires_at is not None and _aware(notice.expires_at) <= now:
+    shown_until = notice.expires_at or notice.ends_at
+    if shown_until is not None and _aware(shown_until) <= now:
         return "expired"
     return "active"
 
@@ -102,12 +114,27 @@ async def list_notices(
     return list(rows.scalars().all()), int(total)
 
 
+def _check(notice: Notice) -> None:
+    """Правила целой записи. PATCH меняет поля по одному, поэтому проверяется
+    то, что получилось, а не тело запроса."""
+    if notice.kind == NOTICE_KIND_OUTAGE:
+        if not notice.resource:
+            raise NoticeInvalid("для отключения укажите, что отключают")
+        if notice.starts_at is None:
+            raise NoticeInvalid("для отключения укажите начало")
+    if notice.starts_at is not None and notice.ends_at is not None and _aware(notice.ends_at) < _aware(notice.starts_at):
+        raise NoticeInvalid("окончание раньше начала")
+    if notice.status == NOTICE_STATUS_PUBLISHED and not (notice.title_ru or "").strip():
+        raise NoticeInvalid("заголовок на русском обязателен для публикации")
+
+
 async def create_notice(db: AsyncSession, fields: dict, *, user_id: Optional[int], publish: bool) -> Notice:
     notice = Notice(**{k: v for k, v in fields.items() if k in EDITABLE_FIELDS}, created_by=user_id)
     notice.status = NOTICE_STATUS_DRAFT
-    db.add(notice)
     if publish:
         _publish(notice)
+    _check(notice)
+    db.add(notice)
     await db.commit()
     await db.refresh(notice)
     return notice
@@ -120,6 +147,11 @@ async def update_notice(db: AsyncSession, notice_id: int, fields: dict) -> Notic
     for key, value in fields.items():
         if key in EDITABLE_FIELDS:
             setattr(notice, key, value)
+    try:
+        _check(notice)
+    except NoticeInvalid:
+        await db.rollback()
+        raise
     await db.commit()
     await db.refresh(notice)
     return notice
@@ -127,7 +159,7 @@ async def update_notice(db: AsyncSession, notice_id: int, fields: dict) -> Notic
 
 def _publish(notice: Notice) -> None:
     if not (notice.title_ru or "").strip():
-        raise NoticeError("заголовок на русском обязателен для публикации")
+        raise NoticeInvalid("заголовок на русском обязателен для публикации")
     notice.status = NOTICE_STATUS_PUBLISHED
     if notice.publish_at is None:
         notice.publish_at = utc_now()

@@ -113,12 +113,12 @@ export default function NoticesPage() {
 
       {tab === 'channels' ? (
         <Suspense fallback={<LoadingSpinner />}><NewsWatchPage embedded /></Suspense>
+      ) : tab === 'calendar' ? (
+        <NoticeCalendar onOpen={open} onPickDay={(day) => create('outage', day)} />
       ) : notices.isLoading ? (
         <LoadingSpinner />
       ) : notices.isError ? (
         <p className="text-[13px] text-red-500">{t('common.error')}</p>
-      ) : tab === 'calendar' ? (
-        <NoticeCalendar notices={items} onOpen={open} onPickDay={(day) => create('outage', day)} />
       ) : shown.length === 0 ? (
         <p className="text-[13px] text-text-muted">{t('notices.empty')}</p>
       ) : (
@@ -160,6 +160,11 @@ export default function NoticesPage() {
               </div>
             </li>
           ))}
+          {(notices.data?.total ?? 0) > items.length && (
+            <li className="text-xs text-text-muted">
+              {t('notices.truncated', { shown: items.length, total: notices.data?.total })}
+            </li>
+          )}
         </ul>
       )}
 

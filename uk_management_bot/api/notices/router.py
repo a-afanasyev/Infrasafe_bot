@@ -39,11 +39,13 @@ def _out(notice: Notice) -> NoticeOut:
 
 
 async def _run(coro) -> Notice:
-    """Ошибки жизненного цикла → 404 / 409 с текстом для менеджера."""
+    """Ошибки жизненного цикла → 404 / 422 / 409 с текстом для менеджера."""
     try:
         return await coro
     except service.NoticeNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except service.NoticeInvalid as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except service.NoticeError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
 

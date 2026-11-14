@@ -1,6 +1,6 @@
 /** Модель формы и календаря раздела «Новости и уведомления». Без React и сети. */
 import type { Notice, NoticeBody, NoticeKind, NoticeResource } from '../../hooks/useNotices'
-import { datetimeLocalToIso, isoToDatetimeLocal, toDisplayTz } from '../../utils/timezone'
+import { datetimeLocalToIso, fromDisplayTz, isoToDatetimeLocal, toDisplayTz } from '../../utils/timezone'
 
 /** Поля формы: даты — строки `datetime-local` в зоне объекта. */
 export interface NoticeDraft {
@@ -10,6 +10,8 @@ export interface NoticeDraft {
   text: { ru: string; uz: string }
   place: { ru: string; uz: string }
   important: boolean
+  /** Значок записи: формой не правится, но при сохранении не теряется. */
+  icon: string
   publishAt: string
   startsAt: string
   endsAt: string
@@ -28,6 +30,7 @@ export function emptyDraft(kind: NoticeKind, day?: string): NoticeDraft {
     text: { ru: '', uz: '' },
     place: { ru: '', uz: '' },
     important: false,
+    icon: '',
     publishAt: kind === 'news' && day ? `${day}T09:00` : '',
     startsAt: kind === 'outage' && day ? `${day}T10:00` : '',
     endsAt: kind === 'outage' && day ? `${day}T14:00` : '',
@@ -44,6 +47,7 @@ export function draftOf(n: Notice): NoticeDraft {
     text: { ru: n.text_ru, uz: n.text_uz },
     place: { ru: n.place_ru, uz: n.place_uz },
     important: n.important,
+    icon: n.icon,
     publishAt: local(n.publish_at),
     startsAt: local(n.starts_at),
     endsAt: local(n.ends_at),
@@ -74,14 +78,14 @@ export function bodyOf(d: NoticeDraft): NoticeBody {
     text_uz: d.text.uz.trim(),
     place_ru: outage ? d.place.ru.trim() : '',
     place_uz: outage ? d.place.uz.trim() : '',
-    icon: '',
+    icon: d.icon,
     important: d.important,
     publish_at: datetimeLocalToIso(d.publishAt) ?? null,
     starts_at: outage ? datetimeLocalToIso(d.startsAt) ?? null : null,
     ends_at: endsAt,
     all_day: outage && d.allDay,
-    // Отключение без своего срока показа уходит с витрины, когда закончится.
-    expires_at: datetimeLocalToIso(d.expiresAt) ?? endsAt,
+    // Пусто = «до конца отключения» (считает сервер): продлили окно — продлился показ.
+    expires_at: datetimeLocalToIso(d.expiresAt) ?? null,
   }
 }
 
@@ -141,6 +145,11 @@ export function eventsByDay(notices: Notice[]): Map<string, CalendarEvent[]> {
     }
   }
   return out
+}
+
+/** Границы сетки для запроса: начало первого и конец последнего дня в зоне объекта. */
+export function gridWindow(days: string[]): { from: string; to: string } {
+  return { from: fromDisplayTz(`${days[0]}T00:00`), to: fromDisplayTz(`${days[days.length - 1]}T23:59`) }
 }
 
 /** Сетка месяца с понедельника: 5–6 недель по 7 дней (YYYY-MM-DD). */

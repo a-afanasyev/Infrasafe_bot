@@ -195,3 +195,82 @@ async def test_resident_cannot_manage_notices(client, resident_user):
     app.dependency_overrides[get_current_user] = lambda: resident_user
     assert (await client.get(BASE)).status_code == 403
     assert (await client.post(BASE, json=_news())).status_code == 403
+
+
+# ───────────── замечания ревью 2026-11-15 ─────────────
+
+
+def _outage(**over) -> dict:
+    start = NOW + timedelta(hours=-1)
+    return {"kind": "outage", "resource": "water", "title_ru": "Нет воды", "publish": True,
+            "starts_at": start.isoformat(), "ends_at": (start + timedelta(hours=2)).isoformat(), **over}
+
+
+@pytest.mark.asyncio
+async def test_extending_outage_extends_its_show_window(client, db_session):
+    """Без своего срока показа запись живёт до конца окна — и продлевается вместе с ним."""
+    db_session.add(Notice(kind="outage", resource="water", source="staff", title_ru="Нет воды", status="published",
+                          publish_at=NOW - timedelta(hours=3), starts_at=NOW - timedelta(hours=3),
+                          ends_at=NOW - timedelta(minutes=5)))
+    await db_session.commit()
+    notice = (await client.get(BASE)).json()["items"][0]
+    assert notice["state"] == "expired" and (await _board(client))["announcements"] == []
+
+    patched = await client.patch(f"{BASE}/{notice['id']}", json={"ends_at": _iso(timedelta(hours=2))})
+    assert patched.status_code == 200 and patched.json()["state"] == "active"
+    assert [a["title"]["ru"] for a in (await _board(client))["announcements"]] == ["Нет воды"]
+
+
+@pytest.mark.asyncio
+async def test_patch_is_validated_against_stored_values(client):
+    notice = (await client.post(BASE, json=_outage())).json()
+    nid = notice["id"]
+    # окончание раньше сохранённого начала
+    assert (await client.patch(f"{BASE}/{nid}", json={"ends_at": _iso(timedelta(days=-2))})).status_code == 422
+    # отключение без начала / без ресурса
+    assert (await client.patch(f"{BASE}/{nid}", json={"starts_at": None})).status_code == 422
+    assert (await client.patch(f"{BASE}/{nid}", json={"resource": None})).status_code == 422
+    # опубликованная запись без заголовка
+    assert (await client.patch(f"{BASE}/{nid}", json={"title_ru": "  "})).status_code == 422
+    # отклонённая правка ничего не изменила
+    assert (await client.get(BASE)).json()["items"][0] == notice
+
+    news = (await client.post(BASE, json=_news(publish=True))).json()
+    assert (await client.patch(f"{BASE}/{news['id']}", json={"kind": "outage"})).status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [
+    ("title_ru", "Собрание\x00"), ("title_ru", "Собрание\nв 19:00"), ("text_ru", "x\x07"),
+    ("icon", "‮"), ("place_ru", "двор​"),
+])
+async def test_control_and_invisible_characters_are_rejected(client, field, value):
+    assert (await client.post(BASE, json=_news(**{field: value}))).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_multiline_text_and_compound_emoji_are_accepted(client):
+    resp = await client.post(BASE, json=_news(text_ru="Первая строка\nВторая строка", icon="👨‍🔧"))
+    assert resp.status_code == 201, resp.text
+
+
+@pytest.mark.asyncio
+async def test_overnight_outage_is_clamped_to_the_shown_day(client, db_session):
+    """Началось вчера, закончится завтра — на сегодняшней строке весь день, а не одинокое время."""
+    db_session.add(Notice(kind="outage", resource="heating", source="manual", title_ru="Отопление", status="published",
+                          publish_at=NOW - timedelta(days=2), starts_at=NOW - timedelta(days=1),
+                          ends_at=NOW + timedelta(days=1)))
+    await db_session.commit()
+    [work] = (await _board(client))["planned_works"]
+    assert (work["time_from"], work["time_to"]) == ("00:00", "23:59")
+
+
+@pytest.mark.asyncio
+async def test_public_feed_is_capped(client, db_session):
+    for i in range(board.MAX_ANNOUNCEMENTS + 5):
+        db_session.add(Notice(kind="news", source="manual", title_ru=f"Новость {i}", text_ru="t", status="published",
+                              publish_at=NOW - timedelta(minutes=i)))
+    await db_session.commit()
+    announcements = (await _board(client))["announcements"]
+    assert len(announcements) == board.MAX_ANNOUNCEMENTS
+    assert announcements[0]["title"]["ru"] == "Новость 0"  # свежие остаются

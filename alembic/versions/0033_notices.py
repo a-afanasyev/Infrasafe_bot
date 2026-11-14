@@ -57,6 +57,8 @@ def _work_window(work: dict) -> tuple[Optional[datetime], Optional[datetime], bo
 
     start, has_start = at(work.get("time_from") or "", time.min)
     end, has_end = at(work.get("time_to") or "", time(23, 59))
+    if end < start:  # «с 14:00 до 10:00» из старого редактора — до конца дня
+        end = datetime.combine(day, time(23, 59), tzinfo=_TZ)
     return start, end, not (has_start or has_end)
 
 
@@ -116,20 +118,30 @@ def upgrade() -> None:
     now = datetime.now(timezone.utc)
     known_news = {r[0] for r in bind.execute(sa.text("SELECT id FROM news_items"))}
     rows: list[dict] = []
-    for ann in data.get("announcements") or []:
+
+    def items(key: str) -> list:
+        value = data.get(key)
+        return value if isinstance(value, list) else []
+
+    linked: set[int] = set()
+    for ann in items("announcements"):
         if not isinstance(ann, dict):
             continue
         legacy_id = str(ann.get("id") or "")
         news_id = int(legacy_id[5:]) if legacy_id.startswith("news-") and legacy_id[5:].isdigit() else None
-        news_id = news_id if news_id in known_news else None
+        # Связь с новостью канала уникальна: повтор и осиротевшая ссылка — без связи.
+        news_id = news_id if news_id in known_news and news_id not in linked else None
+        if news_id is not None:
+            linked.add(news_id)
         rows.append({
             "kind": "news", "source": "news_watch" if news_id else "manual", "news_item_id": news_id,
             "title_ru": _loc(ann.get("title"), "ru"), "title_uz": _loc(ann.get("title"), "uz"),
             "text_ru": _loc(ann.get("text"), "ru"), "text_uz": _loc(ann.get("text"), "uz"),
             "icon": str(ann.get("icon") or "")[:16], "important": bool(ann.get("important")),
-            "status": "published", "publish_at": _wall(ann.get("published_at")) or now,
+            # Дата в будущем раньше не скрывала объявление — не скрываем и теперь.
+            "status": "published", "publish_at": min(_wall(ann.get("published_at")) or now, now),
         })
-    for work in data.get("planned_works") or []:
+    for work in items("planned_works"):
         if not isinstance(work, dict):
             continue
         starts_at, ends_at, all_day = _work_window(work)

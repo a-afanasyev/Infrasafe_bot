@@ -1053,10 +1053,10 @@
       "workreports": "Bajarilgan ishlar hisobotlari"
     },
     "blockSources": {
-      "announcements": "Ma'lumot: quyidagi «E'lonlar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
+      "announcements": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
       "contacts": "Ma'lumot: quyidagi «Aloqa», «Telegram-bot» va «Ish vaqti» bo'limlari. QR-kod bot username'idan yasaladi.",
       "requests": "Majmuaning barcha arizalari bo'yicha avtomatik hisoblanadi: «Yangi», «Jarayonda» (xarid va aniqlashtirish bilan), «Shu oy hal etilgan» (bajarilgan, tekshirilgan, qabul qilingan). Qo'lda to'ldirilmaydi.",
-      "works": "Ma'lumot: quyidagi «Rejali ishlar» bo'limi. O'tgan sanalar avtomatik yashiriladi.",
+      "works": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limidagi rejali o'chirishlar. O'tganlari avtomatik yashiriladi.",
       "elevators": "Ma'lumot: liftlar reyestri va ularning holati.",
       "workreports": "Ma'lumot: e'lon qilingan «oldin/keyin» hisobotlari."
     },
@@ -1396,6 +1396,7 @@
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
   },
   "notices": {
+    "truncated": "{{total}} ta yozuvdan oxirgi {{shown}} tasi ko'rsatilgan — oldingilarini taqvimdan qidiring.",
     "title": "Yangiliklar va xabarnomalar",
     "tab": {
       "feed": "Tasma",

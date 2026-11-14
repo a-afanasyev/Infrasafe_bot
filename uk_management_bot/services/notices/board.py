@@ -47,10 +47,19 @@ def public_id(notice: Notice) -> str:
     return f"notice-{notice.id}"
 
 
-def _hhmm(moment: Optional[datetime], on_day) -> str:
-    """Время на стене объекта — только если момент приходится на показанный день."""
-    if moment is None or business_date_of(moment) != on_day:
+# Публичные эндпоинты без входа читают ленту на каждый запрос — выдача ограничена.
+MAX_ANNOUNCEMENTS = 50
+_VISIBLE_SCAN = 300
+
+
+def _hhmm(moment: Optional[datetime], on_day, edge: str) -> str:
+    """Время на стене объекта, обрезанное по показанному дню: отключение,
+    которое началось вчера или закончится завтра, на сегодняшней строке идёт
+    от ``00:00`` / до ``23:59`` — иначе одинокое время читалось бы как начало."""
+    if moment is None:
         return ""
+    if business_date_of(moment) != on_day:
+        return edge
     return to_business(moment).strftime("%H:%M")
 
 
@@ -80,8 +89,8 @@ def as_planned_work(notice: Notice, now: datetime) -> Optional[PlannedWorkCfg]:
     return PlannedWorkCfg(
         id=public_id(notice),
         date=day.isoformat(),
-        time_from="" if notice.all_day else _hhmm(notice.starts_at, day),
-        time_to="" if notice.all_day else _hhmm(notice.ends_at, day),
+        time_from="" if notice.all_day else _hhmm(notice.starts_at, day, "00:00"),
+        time_to="" if notice.all_day else _hhmm(notice.ends_at, day, "23:59"),
         title=LocalizedText(ru=notice.title_ru, uz=notice.title_uz),
         place=LocalizedText(ru=notice.place_ru, uz=notice.place_uz),
         text=LocalizedText(ru=notice.text_ru, uz=notice.text_uz),
@@ -94,6 +103,7 @@ async def board_lists(db: AsyncSession, now: Optional[datetime] = None) -> tuple
     rows = await db.execute(
         select(Notice).where(visible_clause(now))
         .order_by(func.coalesce(Notice.publish_at, Notice.created_at).desc(), Notice.id.desc())
+        .limit(_VISIBLE_SCAN)
     )
     announcements: list[AnnouncementCfg] = []
     works: list[PlannedWorkCfg] = []
@@ -105,7 +115,7 @@ async def board_lists(db: AsyncSession, now: Optional[datetime] = None) -> tuple
             if work is not None:
                 works.append(work)
     works.sort(key=lambda w: (w.date, w.time_from))
-    return announcements, works[:MAX_PLANNED_WORKS]
+    return announcements[:MAX_ANNOUNCEMENTS], works[:MAX_PLANNED_WORKS]
 
 
 async def with_notices(db: AsyncSession, cfg: StoredBoardConfigData) -> StoredBoardConfigData:
