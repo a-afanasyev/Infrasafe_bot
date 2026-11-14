@@ -5,11 +5,12 @@ import { apiClient } from '../api/client'
 import { safeErrorMessage } from '../utils/errorMessage'
 
 /**
- * «Новости и уведомления» (/api/v2/notices, действие notices.manage): лента
+ * «Новости и уведомления» (/api/v2/board-config/notices, действие notices.manage): лента
  * новостей и плановых отключений. Жители видят эти записи на табло, главной и
  * в TWA прежними списками витрины — сервер собирает их из той же таблицы.
  */
-export const NOTICES_BASE = '/api/v2/notices'
+// Под префиксом витрины — он уже пропускается edge обеих площадок.
+export const NOTICES_BASE = '/api/v2/board-config/notices'
 
 export type NoticeKind = 'news' | 'outage'
 export type NoticeState = 'draft' | 'scheduled' | 'active' | 'expired' | 'closed'

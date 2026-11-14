@@ -1,4 +1,4 @@
-"""Раздел «Новости и уведомления»: API ``/api/v2/notices`` и витрина из таблицы.
+"""Раздел «Новости и уведомления»: API ``/api/v2/board-config/notices`` и витрина из таблицы.
 
 Жители получают прежние списки ``announcements`` / ``planned_works``, но
 собранные из ``notices`` (services/notices/board.py), а не из JSON витрины.
@@ -17,7 +17,7 @@ from uk_management_bot.services.board_config.defaults import DEFAULT_BOARD_CONFI
 from uk_management_bot.services.notices import board
 from uk_management_bot.utils.business_time import BUSINESS_TZ
 
-BASE = "/api/v2/notices"
+BASE = "/api/v2/board-config/notices"
 NOW = datetime.now(timezone.utc)
 
 

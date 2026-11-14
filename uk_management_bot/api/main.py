@@ -233,7 +233,9 @@ app.include_router(work_reports_router, prefix="/api/v2/work-reports", tags=["wo
 app.include_router(elevators_router, prefix="/api/v2/elevators", tags=["elevators"])
 # ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist. Гейт — NEWS_WATCH_ENABLED.
 app.include_router(news_watch_router, prefix="/api/v2/news-watch", tags=["news-watch"])
-app.include_router(notices_router, prefix="/api/v2/notices", tags=["notices"])
+# Под префиксом витрины: edge обеих площадок пропускает /api/v2/board-config/*,
+# отдельный /api/v2/notices потребовал бы правки allowlist у владельца edge.
+app.include_router(notices_router, prefix="/api/v2/board-config/notices", tags=["notices"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
 app.include_router(health_router)

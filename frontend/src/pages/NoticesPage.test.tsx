@@ -25,14 +25,14 @@ function mockApi(items: unknown[] = [NEWS, DRAFT, OUTAGE]) {
   const calls: Array<{ method: string; path: string; body: Body | null }> = []
   const record = async (request: Request) => {
     const body = request.method === 'DELETE' ? null : ((await request.json().catch(() => null)) as Body | null)
-    calls.push({ method: request.method, path: new URL(request.url).pathname.replace(/^.*\/api\/v2/, ''), body })
+    calls.push({ method: request.method, path: new URL(request.url).pathname.replace(/^.*\/api\/v2\/board-config/, ''), body })
   }
   server.use(
-    http.get('*/api/v2/notices', () => HttpResponse.json({ items, total: items.length })),
-    http.post('*/api/v2/notices', async ({ request }) => { await record(request); return HttpResponse.json(NEWS, { status: 201 }) }),
-    http.patch('*/api/v2/notices/:id', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
-    http.post('*/api/v2/notices/:id/:action', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
-    http.delete('*/api/v2/notices/:id', async ({ request }) => { await record(request); return new HttpResponse(null, { status: 204 }) }),
+    http.get('*/api/v2/board-config/notices', () => HttpResponse.json({ items, total: items.length })),
+    http.post('*/api/v2/board-config/notices', async ({ request }) => { await record(request); return HttpResponse.json(NEWS, { status: 201 }) }),
+    http.patch('*/api/v2/board-config/notices/:id', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
+    http.post('*/api/v2/board-config/notices/:id/:action', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
+    http.delete('*/api/v2/board-config/notices/:id', async ({ request }) => { await record(request); return new HttpResponse(null, { status: 204 }) }),
   )
   return calls
 }

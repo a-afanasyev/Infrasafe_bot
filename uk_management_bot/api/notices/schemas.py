@@ -1,4 +1,4 @@
-"""Pydantic-схемы раздела «Новости и уведомления» (``/api/v2/notices``)."""
+"""Pydantic-схемы раздела «Новости и уведомления» (``/api/v2/board-config/notices``)."""
 import unicodedata
 from datetime import datetime, timezone
 from typing import Literal, Optional
