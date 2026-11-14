@@ -52,6 +52,7 @@ from .request_assignment import RequestAssignment
 # Group Intake: реестр мониторимых ТГ-групп
 from .monitored_group import MonitoredGroup
 from .news_item import NewsItem, NewsWatchConfig
+from .notice import Notice
 
 # Лифты: реестр, журнал статусов, график ТО/освидетельствований + singleton-конфиг
 from .elevator import Elevator, ElevatorStatusEvent, ElevatorMaintenanceOccurrence
@@ -93,6 +94,7 @@ __all__ = [
     'AutoManagerConfig',
     'NewsItem',
     'NewsWatchConfig',
+    'Notice',
     'Feedback',
     'RequestNumberCounter',
     'Material',

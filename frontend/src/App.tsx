@@ -78,10 +78,9 @@ const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
 // Мониторинг отключений (очередь новостей + настройки). DARK за
 // VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
-const NewsWatchPage = lazy(() => import('./pages/NewsWatchPage'))
 const AiManagerPage = lazy(() => import('./pages/AiManagerPage'))
+const NoticesPage = lazy(() => import('./pages/NoticesPage'))
 const DispatcherPage = lazy(() => import('./pages/DispatcherPage'))
-const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
 
 
 interface ProtectedRouteProps {
@@ -240,11 +239,13 @@ export default function App() {
                   <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
                 </Route>
               )}
-              {NEWS_WATCH_ENABLED && (
-                <Route path="/dashboard/news-watch" element={<ProtectedRoute action="board.configure"><DashboardLayout /></ProtectedRoute>}>
-                  <Route index element={<PageErrorBoundary><NewsWatchPage /></PageErrorBoundary>} />
-                </Route>
-              )}
+              {/* Новости и уведомления: лента, календарь, очередь из каналов.
+                  Отдельный group — действие notices.manage, не общий dashboard.use. */}
+              <Route path="/dashboard/notices" element={<ProtectedRoute action="notices.manage"><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><NoticesPage /></PageErrorBoundary>} />
+              </Route>
+              {/* Прежний адрес «Отключений» — теперь вкладка раздела. */}
+              <Route path="/dashboard/news-watch" element={<Navigate to="/dashboard/notices?tab=channels" replace />} />
               {/* Правила ИИ-менеджера: без build-флага — страница сама показывает
                   «недоступно», если на площадке нет AI_MANAGER_ENABLED. */}
               <Route path="/dashboard/ai-manager" element={<ProtectedRoute action="auto_manager.configure"><DashboardLayout /></ProtectedRoute>}>

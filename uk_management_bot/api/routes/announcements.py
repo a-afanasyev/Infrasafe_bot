@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Request
 
 from uk_management_bot.services.board_config.schemas import LocalizedText
 from uk_management_bot.services.board_config.service import format_working_hours, load_board_config
+from uk_management_bot.services.notices.board import with_notices
 from uk_management_bot.api.dependencies import get_db
 from uk_management_bot.api.rate_limit import limiter
 
@@ -30,7 +31,7 @@ async def get_announcements(request: Request, db=Depends(get_db), lang: str = "r
     def loc(t: LocalizedText) -> str:
         return (t.uz.strip() or t.ru.strip()) if lang == "uz" else t.ru.strip()
 
-    cfg = await load_board_config(db)
+    cfg = await with_notices(db, await load_board_config(db))
 
     announcements: list[dict] = []
 

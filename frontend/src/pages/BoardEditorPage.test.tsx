@@ -106,29 +106,12 @@ describe('BoardEditorPage', () => {
     expect(layout.find((l) => l.id === 'stats')).toEqual({ id: 'stats', visible: false, width: 'half' })
   })
 
-  it('объявления: добавить → заполнить → важное; удалить — исчезает из PUT', async () => {
+  it('новости и плановые работы не редактируются здесь — ссылка в раздел «Новости и уведомления»', async () => {
     await renderReady()
     const ann = section('Объявления')
-    const before = within(ann).getAllByRole('button', { name: 'remove' }).length
-    fireEvent.click(within(ann).getByRole('button', { name: 'Добавить объявление' }))
-    expect(within(ann).getAllByRole('button', { name: 'remove' })).toHaveLength(before + 1)
-
-    // Последний блок — новый: заполняем заголовок и ставим «Важное».
-    const blocks = within(ann).getAllByRole('button', { name: 'remove' }).map((b) => b.closest('.rounded-sm') as HTMLElement)
-    const fresh = blocks[blocks.length - 1]
-    const titleRu = within(fresh).getAllByPlaceholderText('RU')[0]
-    fireEvent.change(titleRu, { target: { value: 'Отключение воды' } })
-    fireEvent.click(within(fresh).getByLabelText('Важное'))
-
-    // Удаляем первое (дефолтное) объявление.
-    fireEvent.click(within(blocks[0]).getByRole('button', { name: 'remove' }))
-    expect(within(ann).getAllByRole('button', { name: 'remove' })).toHaveLength(before)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
-    await waitFor(() => expect(putBodies).toHaveLength(1))
-    const sent = putBodies[0].announcements as Array<{ id: string; important: boolean; title: { ru: string } }>
-    expect(sent.map((a) => a.id)).not.toContain('default-planned-works')
-    expect(sent[sent.length - 1]).toMatchObject({ important: true, title: { ru: 'Отключение воды' } })
+    expect(within(ann).queryByRole('button', { name: 'Добавить объявление' })).not.toBeInTheDocument()
+    expect(within(ann).getByRole('link', { name: 'Открыть раздел' })).toHaveAttribute('href', '/dashboard/notices')
+    expect(screen.queryByRole('heading', { level: 3, name: 'Плановые работы' })).not.toBeInTheDocument()
   })
 
   it('страница жителей: превью по умолчанию; название комплекса и скрытый блок уходят в PUT', async () => {
@@ -150,9 +133,8 @@ describe('BoardEditorPage', () => {
 
   it('вкладки: поля слева и превью справа — только выбранной страницы', async () => {
     await renderReady()
-    // Страница жителей: её раздел и плановые работы есть, блоков табло нет.
+    // Страница жителей: её раздел есть, блоков табло нет.
     expect(screen.getByRole('heading', { level: 3, name: 'Страница жителей' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: 'Плановые работы' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 3, name: 'Блоки табло' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Обращения по комплексу' })).toBeInTheDocument()
 
@@ -162,30 +144,9 @@ describe('BoardEditorPage', () => {
     openTab('Табло для экрана')
     expect(screen.getByRole('heading', { level: 3, name: 'Блоки табло' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 3, name: 'Страница жителей' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { level: 3, name: 'Плановые работы' })).not.toBeInTheDocument()
     // Общие данные — на обеих вкладках.
     expect(screen.getByRole('heading', { level: 3, name: 'Контакты' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Обращения по комплексу' })).not.toBeInTheDocument())
-  })
-
-  it('плановые работы: добавить → заполнить → уходят в PUT; видны в превью страницы жителей', async () => {
-    await renderReady()
-    const works = section('Плановые работы')
-    fireEvent.click(within(works).getByRole('button', { name: 'Добавить работу' }))
-    const block = within(works).getByTestId('planned-work')
-    const titleRu = within(within(block).getByText('Что делаем').parentElement as HTMLElement).getByPlaceholderText('RU')
-    fireEvent.change(titleRu, { target: { value: 'Покраска ограждений' } })
-
-    // Превью страницы жителей открыто по умолчанию.
-    expect(await screen.findByRole('heading', { name: 'Ближайшие работы' })).toBeInTheDocument()
-    expect(screen.getByText('Покраска ограждений', { selector: 'strong' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
-    await waitFor(() => expect(putBodies).toHaveLength(1))
-    const sent = putBodies[0].planned_works as Array<{ date: string; title: { ru: string } }>
-    expect(sent).toHaveLength(1)
-    expect(sent[0].title.ru).toBe('Покраска ограждений')
-    expect(sent[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('часы работы: «Выходной» блокирует время; username бота теряет ведущий @', async () => {

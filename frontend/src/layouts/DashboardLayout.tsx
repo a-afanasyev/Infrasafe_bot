@@ -48,7 +48,7 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
-  Radio,
+  Megaphone,
   UserCog,
   Bot,
   Settings,
@@ -128,10 +128,8 @@ const NAV_ENTRIES: NavEntry[] = [
       // Group Intake: реестр мониторимых ТГ-групп; пункт и API гейтятся одним
       // действием group_intake.manage.
       { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
-      // Мониторинг отключений: очередь новостей + настройки. DARK за VITE_NEWS_WATCH_ENABLED.
-      ...(import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
-        ? [{ to: '/dashboard/news-watch', labelKey: 'nav.newsWatch', Icon: Radio, action: 'board.configure' as const }]
-        : []),
+      // Новости и уведомления: лента, календарь, очередь новостей из каналов.
+      { to: '/dashboard/notices', labelKey: 'nav.notices', Icon: Megaphone, action: 'notices.manage' },
       // Правила ИИ-менеджера: режим, триаж, SLA-лестница, тексты уведомлений.
       { to: '/dashboard/ai-manager', labelKey: 'nav.aiManager', Icon: Bot, action: 'auto_manager.configure' },
     ],

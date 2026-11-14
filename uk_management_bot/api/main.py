@@ -50,6 +50,7 @@ from uk_management_bot.api.board_config.router import router as board_config_rou
 from uk_management_bot.api.work_reports.router import router as work_reports_router
 from uk_management_bot.api.elevators.router import router as elevators_router
 from uk_management_bot.api.news_watch.router import router as news_watch_router
+from uk_management_bot.api.notices.router import router as notices_router
 from uk_management_bot.api.work_reports.public_router import router as work_reports_public_router
 from uk_management_bot.api.elevators.public_router import router as elevators_public_router
 from uk_management_bot.api.auto_manager.router import router as auto_manager_router
@@ -232,6 +233,7 @@ app.include_router(work_reports_router, prefix="/api/v2/work-reports", tags=["wo
 app.include_router(elevators_router, prefix="/api/v2/elevators", tags=["elevators"])
 # ⚠️ Новый префикс: на проде InfraSafe edge требует добавления в allowlist. Гейт — NEWS_WATCH_ENABLED.
 app.include_router(news_watch_router, prefix="/api/v2/news-watch", tags=["news-watch"])
+app.include_router(notices_router, prefix="/api/v2/notices", tags=["notices"])
 app.include_router(resource_accounting_router, prefix="/api/v2/resource-accounting", tags=["resource-accounting"])
 # ARCH-012: extracted inline endpoints (absolute paths, no prefix).
 app.include_router(health_router)
