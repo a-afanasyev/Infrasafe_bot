@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 CATEGORY = "cleaning_photo"
 LEASE = timedelta(minutes=2)
-SLOT_RE = re.compile(r"floor:[1-9][0-9]{0,2}|point:[a-z_]{1,30}")
+SLOT_RE = re.compile(r"floor:[1-9][0-9]{0,2}|point:[a-z][a-z0-9_]{0,29}")  # цифры: point:entry1
 _OPEN = ("planned", "in_progress")                 # обычная операция
 _LATE_OK = _OPEN + ("missed", "expired")           # позднее доказательство
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)

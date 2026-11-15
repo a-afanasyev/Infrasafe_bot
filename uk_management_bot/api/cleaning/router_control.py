@@ -176,7 +176,7 @@ def _photo(photo: CleaningPhoto) -> CleaningPhotoOut:
 def _complaint(row: CleaningComplaint) -> CleaningComplaintOut:
     return CleaningComplaintOut(
         id=row.id, building_id=row.building_id, entrance=row.entrance, work_date=row.work_date,
-        author_id=row.author_id, task_id=row.task_id, request_number=row.request_number,
+        author_id=row.author_id, task_id=row.task_id, request_number=complaints.request_number_of(row),
         outcome=row.outcome, created_at=row.created_at)
 
 

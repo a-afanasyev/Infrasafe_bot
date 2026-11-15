@@ -27,7 +27,7 @@ from uk_management_bot.services.cleaning.planning import (
 from uk_management_bot.utils.business_time import business_today
 from uk_management_bot.utils.datetime_utils import utc_now
 
-_POINT_RE = re.compile(r"[a-z_]{1,30}")
+_POINT_RE = re.compile(r"[a-z][a-z0-9_]{0,29}")  # тот же формат имени, что в uploads.SLOT_RE
 MAX_EXTRA_POINTS = 10
 
 

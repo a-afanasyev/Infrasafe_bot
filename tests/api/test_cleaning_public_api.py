@@ -179,6 +179,15 @@ async def test_public_photo_follows_settings_status_and_slot(client, world, db_s
     await db_session.commit()
     assert (await client.get(f"{PUBLIC}/photos/{photos[0].id}")).status_code == 200
 
+    photos[1].is_current = False             # заменённый или «доказательство» — не текущий кадр
+    await db_session.commit()
+    assert (await client.get(f"{PUBLIC}/photos/{photos[1].id}")).status_code == 404
+    (await db_session.get(Building, 1)).is_active = False   # дом выведен из справочника
+    await db_session.commit()
+    assert (await client.get(f"{PUBLIC}/photos/{photos[0].id}")).status_code == 404
+    (await db_session.get(Building, 1)).is_active = True
+    await db_session.commit()
+
     tasks[(1, 1)].status = "review"          # жалоба / повторная проверка — фото снимается сразу
     await db_session.commit()
     assert (await client.get(f"{PUBLIC}/photos/{photos[0].id}")).status_code == 404
@@ -193,7 +202,7 @@ async def test_public_photo_follows_settings_status_and_slot(client, world, db_s
 async def test_resident_complaint_reviews_task_and_creates_request(world, act_as, db_session_factory, monkeypatch):
     created = []
 
-    async def make_request(db, user, building_id, entrance, work_date, executor_id=None):
+    async def make_request(db, user, building_id, entrance, work_date, executor_id=None, **kwargs):
         created.append((user.id, building_id, entrance, executor_id))
         return "261117-004"
 
@@ -201,6 +210,7 @@ async def test_resident_complaint_reviews_task_and_creates_request(world, act_as
     tasks, _ = world
     async with db_session_factory() as db:
         (await db.get(CleaningTask, tasks[(1, 1)].id)).responsible_id = CLEANER
+        (await db.get(User, CLEANER)).specialization = '["cleaning"]'
         await db.commit()
     client = await act_as(RESIDENT)
     resp = await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})
@@ -219,7 +229,7 @@ async def test_resident_complaint_reviews_task_and_creates_request(world, act_as
 async def test_complaint_survives_request_failure_and_is_retried(world, act_as, db_session_factory, monkeypatch):
     calls = {"n": 0}
 
-    async def flaky(db, user, building_id, entrance, work_date, executor_id=None):
+    async def flaky(db, user, building_id, entrance, work_date, executor_id=None, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("request service down")
@@ -258,3 +268,44 @@ async def test_disabled_module_is_quiet_for_kiosk_and_hides_home_block(client, w
     assert (await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})).status_code == 404
     blocks = [b["id"] for b in (await client.get("/api/v2/public/board-config")).json()["home"]["blocks"]]
     assert "cleaning" not in blocks
+
+
+@pytest.mark.asyncio
+async def test_complaint_request_skips_cleaner_who_is_no_longer_one(world, act_as, db_session_factory, monkeypatch):
+    """Ответственная без специализации (или заблокированная) заявку не получает — обычная диспетчеризация."""
+    created = []
+
+    async def make_request(db, user, building_id, entrance, work_date, executor_id=None, **kwargs):
+        created.append(executor_id)
+        return "261117-006"
+
+    monkeypatch.setattr(router_resident, "_create_request", make_request)
+    tasks, _ = world
+    async with db_session_factory() as db:
+        (await db.get(CleaningTask, tasks[(1, 1)].id)).responsible_id = CLEANER   # роль есть, специализации нет
+        await db.commit()
+    client = await act_as(RESIDENT)
+    assert (await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})).status_code == 201
+    assert created == [None]
+
+
+@pytest.mark.asyncio
+async def test_second_request_while_first_creates_the_ticket_makes_no_duplicate(
+        world, act_as, db_session_factory, monkeypatch):
+    """Двойное нажатие: пока первый запрос создаёт заявку, второй её не дублирует."""
+    created = []
+
+    async def slow_request(db, user, building_id, entrance, work_date, executor_id=None, **kwargs):
+        # второй запрос жителя приходит, пока заявка первого ещё создаётся
+        again = await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})
+        assert again.status_code == 201 and again.json()["request_number"] is None
+        created.append(1)
+        return "261117-007"
+
+    monkeypatch.setattr(router_resident, "_create_request", slow_request)
+    client = await act_as(RESIDENT)
+    first = await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})
+    assert first.json()["request_number"] == "261117-007" and created == [1]
+    async with db_session_factory() as db:
+        (row,) = (await db.execute(select(CleaningComplaint))).scalars().all()
+    assert row.request_number == "261117-007"

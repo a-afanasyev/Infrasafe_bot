@@ -185,3 +185,19 @@ async def test_all_floors_shot_within_seconds_is_too_fast(db, monkeypatch):
                 _photo(today, "floor:2", dhash="ffff0000ffff0000", at=NOON + timedelta(seconds=5))])
     await db.flush()
     assert await _reasons(db, today, monkeypatch) == ("too_fast",)
+
+
+async def test_three_points_of_the_first_floor_count_as_one_place(db, monkeypatch):
+    """Только первый этаж: три точки за полминуты — честная уборка, не «слишком быстро»."""
+    today = await _task(db)
+    db.add_all([
+        _photo(today, "point:entry1", dhash="00000000000000ff"),
+        _photo(today, "point:entry2", dhash="ffff0000ffff0000", at=NOON + timedelta(seconds=10)),
+        _photo(today, "point:lift_hall", dhash="0f0f0f0f0f0f0f0f", at=NOON + timedelta(seconds=20)),
+    ])
+    await db.flush()
+    assert await _reasons(db, today, monkeypatch) == ()
+    # а первый этаж и второй за те же секунды — по-прежнему подозрительно
+    db.add(_photo(today, "floor:2", dhash="f0f0f0f0f0f0f0f0", at=NOON + timedelta(seconds=12)))
+    await db.flush()
+    assert await _reasons(db, today, monkeypatch) == ("too_fast",)

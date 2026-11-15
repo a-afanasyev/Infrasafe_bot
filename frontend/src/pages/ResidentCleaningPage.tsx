@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useBoardConfig } from '../hooks/useBoardConfig'
@@ -53,7 +53,14 @@ function PhotoViewer({ shot, onClose }: { shot: Shot | null; onClose: () => void
             <HomeIcon name="close" />
           </button>
         </div>
-        <img src={publicCleaningPhotoUrl(shot.id, true)} alt={shot.label} />
+        {/* Оригинал не пришёл (медиа-сервис занят) — показываем уже загруженное превью. */}
+        <img
+          src={publicCleaningPhotoUrl(shot.id, true)} alt={shot.label}
+          onError={(e) => {
+            const preview = publicCleaningPhotoUrl(shot.id)
+            if (!e.currentTarget.src.endsWith(preview)) e.currentTarget.src = preview
+          }}
+        />
       </div>
     </div>
   )
@@ -96,7 +103,10 @@ function HouseCard({ house, onOpen }: { house: PublicCleaningHouse; onOpen: (sho
                   const label = t('home.cleaning.photoAlt', { address: house.address, n: entrance.entrance, i: index + 1 })
                   return (
                     <button key={id} type="button" className="rh-clean-thumb" aria-label={label} onClick={() => onOpen({ id, label })}>
-                      <img src={publicCleaningPhotoUrl(id)} alt="" loading="lazy" />
+                      <img
+                        src={publicCleaningPhotoUrl(id)} alt="" loading="lazy"
+                        onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
+                      />
                     </button>
                   )
                 })}
@@ -115,6 +125,7 @@ export default function ResidentCleaningPage() {
   const { data, isLoading, isError } = usePublicCleaningToday()
   const { data: config } = useBoardConfig()
   const [shot, setShot] = useState<Shot | null>(null)
+  const closeShot = useCallback(() => setShot(null), [])
   const bot = botHandle(config?.bot?.username ?? defaultBoardConfig.bot.username)
 
   const houses = data?.enabled ? data.buildings : []
@@ -168,7 +179,7 @@ export default function ResidentCleaningPage() {
           </main>
         </div>
       </div>
-      <PhotoViewer shot={shot} onClose={() => setShot(null)} />
+      <PhotoViewer shot={shot} onClose={closeShot} />
     </div>
   )
 }

@@ -23,6 +23,7 @@ from uk_management_bot.database.models.cleaning import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.cleaning.assignments import is_cleaner
+from uk_management_bot.services.cleaning.public import slot_order
 from uk_management_bot.services.cleaning.transitions import TransitionError, log_event, move
 from uk_management_bot.utils.business_time import business_today
 from uk_management_bot.utils.datetime_utils import as_utc, utc_now
@@ -98,9 +99,9 @@ async def card(db: AsyncSession, task_id: int) -> Card:
     if task is None:
         raise ControlError("not_found")
     building = await db.get(Building, task.building_id)
-    photos = (await db.execute(
+    photos = sorted((await db.execute(
         select(CleaningPhoto).where(CleaningPhoto.task_id == task_id, CleaningPhoto.state == "done")
-        .order_by(CleaningPhoto.slot, CleaningPhoto.id))).scalars().all()
+        .order_by(CleaningPhoto.id))).scalars().all(), key=lambda photo: slot_order(photo.slot))
     events = (await db.execute(
         select(CleaningTaskEvent).where(CleaningTaskEvent.task_id == task_id)
         .order_by(CleaningTaskEvent.id))).scalars().all()

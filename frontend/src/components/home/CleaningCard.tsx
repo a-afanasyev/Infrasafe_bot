@@ -34,14 +34,20 @@ export default function CleaningCard({ title }: CleaningCardProps) {
       ) : (
         <div className="rh-cleaning-body">
           <div className="rh-cleaning-main">
-            <span className="rh-metric-number rh-cleaning-number">
-              {done}<span> / {total}</span>
-            </span>
-            <span className="rh-metric-caption">{t('home.cleaning.done')}</span>
-            <div className="rh-clean-progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
-              <span style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
-            </div>
-            <span className="rh-metric-caption">{t('home.cleaning.rule')}</span>
+            {total === 0 ? (
+              <span className="rh-metric-caption">{t('home.cleaning.empty')}</span>
+            ) : (
+              <>
+                <span className="rh-metric-number rh-cleaning-number">
+                  {done}<span> / {total}</span>
+                </span>
+                <span className="rh-metric-caption">{t('home.cleaning.done')}</span>
+                <div className="rh-clean-progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+                  <span style={{ width: `${(done / total) * 100}%` }} />
+                </div>
+                <span className="rh-metric-caption">{t('home.cleaning.rule')}</span>
+              </>
+            )}
           </div>
           <ul className="rh-cleaning-list">
             {data.buildings.map((building) => (

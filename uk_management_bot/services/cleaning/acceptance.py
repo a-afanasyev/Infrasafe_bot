@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.cleaning import CleaningComplaint, CleaningPhoto, CleaningTask
+from uk_management_bot.services.cleaning.planning import FIRST_FLOOR_POINTS
 from uk_management_bot.services.cleaning.rules import Rules
 from uk_management_bot.utils.datetime_utils import as_utc
 
@@ -81,13 +82,27 @@ async def evaluate(db: AsyncSession, task: CleaningTask, rules: Rules) -> Verdic
     if await _similar_to_earlier(db, task, photos, rules):
         reasons.append("similar_photo")
 
-    if _too_fast([as_utc(p.received_at) for p in photos], int(rules["min_seconds_per_floor"])):
+    if _too_fast(_floor_times(photos), int(rules["min_seconds_per_floor"])):
         reasons.append("too_fast")
 
     if await on_probation(db, task.responsible_id, task.work_date, rules):
         reasons.append("probation")
 
     return Verdict(reasons=tuple(reasons), sampled=not reasons and pick_sampled(rules))
+
+
+def _floor_times(photos: list[CleaningPhoto]) -> list[datetime]:
+    """Момент съёмки каждого места: три точки первого этажа — одно место, а не три.
+
+    Иначе честная уборка одного первого этажа (три кадра за полминуты) выглядела бы
+    как «подъезд пройден слишком быстро».
+    """
+    firsts: dict[str, datetime] = {}
+    for photo in photos:
+        place = "floor:1" if photo.slot in FIRST_FLOOR_POINTS else photo.slot
+        at = as_utc(photo.received_at)
+        firsts[place] = min(firsts.get(place, at), at)
+    return list(firsts.values())
 
 
 def _too_fast(received: list[datetime], min_seconds: int) -> bool:

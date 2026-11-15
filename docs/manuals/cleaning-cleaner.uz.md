@@ -3,7 +3,7 @@
 > _Oxirgi tahrir: 2026-11-16._
 
 Tozalashni surat bilan belgilaysiz. **Qavatni yuvdingizmi — qavatni suratga oling.** Surat qavat
-tozalanganining belgisi hisoblanadi.
+tozalanganligining belgisi hisoblanadi.
 
 ## Asosiysi
 
@@ -11,7 +11,7 @@ tozalanganining belgisi hisoblanadi.
 - Suratni **ilovadagi kamera** bilan olish kerak. Galereyadagi suratlar qabul qilinmaydi.
 - Botga chatda yuborilgan suratlar **qabul qilinmaydi**.
 - Birinchi qavatda — uchta surat: **«1-kirish»**, **«2-kirish»** va **«Lift oldi maydoni»**.
-- Keyingi har bir qavatga — bitta surat. Topshiriqda lift bo'lsa — lift kabinasining surati ham kerak.
+- Keyingi har bir qavatda — bitta surat. Topshiriqda lift bo'lsa — lift kabinasining surati ham kerak.
 
 ## Tozalashni qanday ochish kerak
 
@@ -98,7 +98,7 @@ arizasini yuboradi. Tozalang va arizani odatdagi ariza kabi yoping.
 | qayta suratga oling | qavatni qaytadan suratga olish |
 | topshiriq yopilgan | bu yo'lak tozalashi allaqachon yuborilgan; menejerdan so'rang |
 | topshiriq boshqa xodimga berilgan | bugun yo'lakni boshqa xodim tozalaydi |
-| juda kech | bir sutkadan ko'p vaqt o'tgan; menejerga xabar bering |
+| juda kech | 24 soatdan ko'proq vaqt o'tgan; menejerga xabar bering |
 
 ## Nima qilish mumkin emas
 

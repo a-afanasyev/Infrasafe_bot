@@ -14,7 +14,7 @@ import logging
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from uk_management_bot.database.models.building import Building
 from uk_management_bot.database.models.cleaning import CleaningTask
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.cleaning import complaints, public
+from uk_management_bot.services.cleaning.assignments import is_cleaner
 from uk_management_bot.services.request_address import AddressResolutionError, resolve_request_address_async
 from uk_management_bot.utils.business_time import business_today, fmt_date
 
@@ -149,7 +150,7 @@ async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_M
 # ── жалоба ──────────────────────────────────────────────────────────────────
 
 async def _create_request(db: AsyncSession, user: User, building_id: int, entrance: int, work_date: date,
-                          executor_id: Optional[int] = None) -> str:
+                          executor_id: Optional[int] = None, schedule_notify=None) -> str:
     """Заявка категории «Уборка» на дом жителя; возвращает её номер.
 
     ``executor_id`` — уборщица этого подъезда: заявка сразу назначается ей, а не
@@ -162,14 +163,16 @@ async def _create_request(db: AsyncSession, user: User, building_id: int, entran
     persisted = await requests_service.persist_request(
         db, user_id=user.id, category="cleaning", urgency=URGENCY_DEFAULT,
         description=f"Жалоба на уборку: подъезд {entrance}, {fmt_date(work_date)}",
-        source="twa", resolved=resolved, webhook_tag="twa", preferred_executor_id=executor_id)
+        source="twa", resolved=resolved, webhook_tag="twa", preferred_executor_id=executor_id,
+        schedule_notify=schedule_notify)
     return persisted.request.request_number
 
 
 @router.post("/complaints", response_model=CleaningComplaintCreatedOut, status_code=201,
              dependencies=[Depends(_or_404)])
 @limiter.limit("10/minute")
-async def file_complaint(request: Request, body: CleaningComplaintIn, db: AsyncSession = Depends(get_db),
+async def file_complaint(request: Request, body: CleaningComplaintIn, background: BackgroundTasks,
+                         db: AsyncSession = Depends(get_db),
                          user: User = Depends(require_action("requests.create"))):
     """«Не убрано»: жалоба на подъезд своего дома за сегодня. Повтор безопасен."""
     try:
@@ -186,18 +189,25 @@ async def file_complaint(request: Request, body: CleaningComplaintIn, db: AsyncS
             db, author_id=user.id, building_id=body.building_id, entrance=body.entrance, work_date=day)
     except complaints.ComplaintLimit:
         raise HTTPException(status_code=429, detail="too_many_complaints") from None
-    complaint_id, number = complaint.id, complaint.request_number
+    complaint_id, number = complaint.id, complaints.request_number_of(complaint)
     task = await db.get(CleaningTask, complaint.task_id) if complaint.task_id is not None else None
-    cleaner_id = task.responsible_id if task is not None else None
-    await db.commit()  # жалоба и перевод на проверку зафиксированы до заявки
+    # Заявку ведёт уборщица подъезда — если она по-прежнему уборщица (не заблокирована, роль и
+    # специализация на месте); иначе заявка идёт обычным порядком категории.
+    responsible = await db.get(User, task.responsible_id) if task is not None and task.responsible_id else None
+    cleaner_id = responsible.id if is_cleaner(responsible) else None
+    claimed = await complaints.claim_request(db, complaint_id)
+    await db.commit()  # жалоба, перевод на проверку и отметка «заявка создаётся» — до самой заявки
 
-    if number is None:
+    if claimed:
         try:
-            number = await _create_request(db, user, body.building_id, body.entrance, day, cleaner_id)
+            number = await _create_request(db, user, body.building_id, body.entrance, day, cleaner_id,
+                                           schedule_notify=background.add_task)
             await complaints.attach_request(db, complaint_id, number)
             await db.commit()
         except Exception as exc:  # noqa: BLE001 — заявка вторична: жалоба уже записана
             await db.rollback()
+            await complaints.release_request(db, complaint_id)
+            await db.commit()
             number = None
             logger.error("cleaning: заявка по жалобе %s не создана: %s", complaint_id, type(exc).__name__)
     return CleaningComplaintCreatedOut(id=complaint_id, request_number=number)

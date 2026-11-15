@@ -360,3 +360,40 @@ async def test_media_failure_is_classified_by_code_not_status(monkeypatch, code,
     with pytest.raises(uploads.MediaFailure) as caught:
         await uploads._media_upload(1, 1, b"x", "floor:1")
     assert caught.value.code == expected
+
+
+async def test_first_floor_points_are_uploaded_and_complete_the_task(
+        el_async_factory, el_seed, monkeypatch, cleaning_first_floor_points):
+    """Боевые точки первого этажа проходят всю загрузку: формат имени, слот задания, завершение."""
+    from uk_management_bot.services.cleaning import planning
+
+    planning.FIRST_FLOOR_POINTS = cleaning_first_floor_points
+    _no_sampling_no_probation(monkeypatch)
+    async with el_async_factory() as db:
+        db.add_all([
+            el_seed.yard(), el_seed.building(1, entrance_count=1), el_seed.user(CLEANER),
+            CleaningPlanVersion(building_id=1, valid_from=date(2026, 11, 1), extra_points=[], floor_count=2,
+                                entrance_count=1, items=[{"work_kind": "wet", "weekdays": [1]}]),
+            CleaningAssignment(building_id=1, entrance=1, user_id=CLEANER, valid_from=date(2026, 11, 1)),
+        ])
+        await db.flush()
+        await days.ensure_tasks(db, TUE, now=NOON)
+        task = (await db.execute(select(CleaningTask))).scalar_one()
+        slots, task_id = list(task.slots_required), task.id
+        await db.commit()
+    assert slots == ["point:entry1", "point:entry2", "point:lift_hall", "floor:2"]
+
+    env = (el_async_factory, FakeMedia(), task_id)
+    await _open(env)
+    for step, slot in enumerate(slots):
+        result = await _send(env, slot=slot, shade=step * 60 + 1, now=NOON + timedelta(minutes=5 * step))
+        assert result.outcome == "activated", (slot, result.refusal_code)
+    assert (await _task(env)).status == "accepted"
+
+
+@pytest.mark.parametrize("slot,ok", [
+    ("point:entry1", True), ("point:lift_hall", True), ("floor:12", True),
+    ("point:1entry", False), ("point:", False), ("floor:0", False), ("point:Entry", False),
+])
+def test_slot_name_format(slot, ok):
+    assert (uploads.SLOT_RE.fullmatch(slot) is not None) is ok

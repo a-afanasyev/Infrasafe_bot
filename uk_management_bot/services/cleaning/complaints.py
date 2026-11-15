@@ -2,7 +2,7 @@
 
 Критичная часть — один шаг в одной транзакции под блокировкой задания: строка
 жалобы, перевод принятого задания на проверку и событие. Заявка категории
-``cleaning`` создаётся вторым шагом (API/тик) и только дописывает номер:
+``cleaning`` создаётся вторым шагом (тот же запрос жителя) и только дописывает номер:
 перевод на проверку не зависит от того, создалась ли заявка.
 
 Жалоба на ещё не завершённое задание статус не меняет — её увидит правило
@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,9 +81,41 @@ async def without_request(db: AsyncSession) -> list[CleaningComplaint]:
     )).scalars())
 
 
+def _claim_mark(complaint_id: int) -> str:
+    """Временная отметка в ``request_number``: заявку по жалобе сейчас создаёт один запрос."""
+    return f"~{complaint_id}"
+
+
+def request_number_of(complaint: CleaningComplaint) -> Optional[str]:
+    """Номер заявки наружу; отметка «создаётся» номером не считается."""
+    number = complaint.request_number
+    return None if number is None or number.startswith("~") else number
+
+
+async def claim_request(db: AsyncSession, complaint_id: int) -> bool:
+    """Занять жалобу под создание заявки. False — её уже создаёт или создал другой запрос.
+
+    Условное обновление атомарно: двойное нажатие и два устройства не создадут двух заявок.
+    """
+    claimed = await db.execute(
+        update(CleaningComplaint)
+        .where(CleaningComplaint.id == complaint_id, CleaningComplaint.request_number.is_(None))
+        .values(request_number=_claim_mark(complaint_id)))
+    return claimed.rowcount == 1
+
+
+async def release_request(db: AsyncSession, complaint_id: int) -> None:
+    """Заявка не создалась — снять отметку, чтобы повтор жителя попробовал снова."""
+    await db.execute(
+        update(CleaningComplaint)
+        .where(CleaningComplaint.id == complaint_id,
+               CleaningComplaint.request_number == _claim_mark(complaint_id))
+        .values(request_number=None))
+
+
 async def attach_request(db: AsyncSession, complaint_id: int, request_number: str) -> None:
-    complaint = await db.get(CleaningComplaint, complaint_id)
-    if complaint is not None and complaint.request_number is None:
+    complaint = await db.get(CleaningComplaint, complaint_id, populate_existing=True)
+    if complaint is not None and request_number_of(complaint) is None:
         complaint.request_number = request_number
         await db.flush()
 

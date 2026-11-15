@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.building import Building
@@ -73,7 +73,7 @@ async def _shown(db: AsyncSession) -> dict[int, tuple[Building, CleaningBuilding
     return {building.id: (building, cfg) for building, cfg in rows.all()}
 
 
-def _slot_order(slot: str) -> tuple[int, int, str]:
+def slot_order(slot: str) -> tuple[int, int, str]:
     """Точки первого этажа, этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
     if slot in FIRST_FLOOR_POINTS:
         return (0, FIRST_FLOOR_POINTS.index(slot), "")
@@ -96,7 +96,7 @@ async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = Fal
             shots.setdefault(task_id, []).append((slot, photo_id))
     photos = {}
     for task_id, rows in shots.items():
-        rows.sort(key=lambda row: _slot_order(row[0]))
+        rows.sort(key=lambda row: slot_order(row[0]))
         if brief:
             floors = [row for row in rows if row[0].startswith("floor:") or row[0] in FIRST_FLOOR_POINTS]
             rows = floors[:1] + [row for row in rows if row[0] in BRIEF_POINTS]
@@ -104,16 +104,30 @@ async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = Fal
     return photos
 
 
-def _entrances(building: Building, tasks: dict[int, CleaningTask],
-               photos: dict[int, list[int]]) -> list[EntranceToday]:
-    """Подъезды дома: «убрано» и фото — только у принятого задания."""
+async def _shot_times(db: AsyncSession, task_ids: list[int]) -> dict[int, datetime]:
+    """Когда снят последний текущий кадр задания — это и есть время уборки для жителя."""
+    if not task_ids:
+        return {}
+    return dict((await db.execute(
+        select(CleaningPhoto.task_id, func.max(CleaningPhoto.received_at))
+        .where(CleaningPhoto.task_id.in_(task_ids), CleaningPhoto.is_current.is_(True))
+        .group_by(CleaningPhoto.task_id))).all())
+
+
+def _entrances(building: Building, tasks: dict[int, CleaningTask], photos: dict[int, list[int]],
+               shot_at: dict[int, datetime]) -> list[EntranceToday]:
+    """Подъезды дома: «убрано» и фото — только у принятого задания.
+
+    Время «убрано» — последний кадр уборки, а не момент решения менеджера.
+    """
     entrances = []
     for number in range(1, building.entrance_count + 1):
         task = tasks.get(number)
         done = task is not None and task.status == "accepted"
         entrances.append(EntranceToday(
             entrance=number, state="none" if task is None else "done" if done else "pending",
-            done_at=task.updated_at if done else None, photo_ids=photos.get(task.id, []) if done else []))
+            done_at=shot_at.get(task.id, task.updated_at) if done else None,
+            photo_ids=photos.get(task.id, []) if done else []))
     return entrances
 
 
@@ -129,11 +143,13 @@ async def today(db: AsyncSession, day: date) -> list[BuildingToday]:
     photos = await _photo_ids(db, [
         task.id for bid, tasks in by_building.items() if shown[bid][1].show_photos
         for task in tasks.values() if task.status == "accepted"])
+    shot_at = await _shot_times(db, [
+        task.id for tasks in by_building.values() for task in tasks.values() if task.status == "accepted"])
     rows = []
     for bid, (building, _) in shown.items():
         tasks = by_building.get(bid, {})
         state = _state([task.status for task in tasks.values()])
-        entrances = _entrances(building, tasks, photos)
+        entrances = _entrances(building, tasks, photos, shot_at)
         rows.append(BuildingToday(
             building_id=bid, address=building.address, state=state, entrances=entrances,
             done_at=max((e.done_at for e in entrances if e.done_at), default=None) if state == "done" else None))
@@ -150,7 +166,8 @@ async def building_view(db: AsyncSession, building_id: int, day: date) -> Option
     accepted = [t.id for t in tasks.values() if t.status == "accepted"]
     photos = await _photo_ids(db, accepted if cfg.show_photos else [], brief=True)
     return BuildingView(building_id=building_id, address=building.address,
-                        entrance_count=building.entrance_count, entrances=_entrances(building, tasks, photos),
+                        entrance_count=building.entrance_count,
+                        entrances=_entrances(building, tasks, photos, await _shot_times(db, accepted)),
                         week=await _week(db, building_id, day))
 
 
@@ -188,5 +205,8 @@ async def public_photo(db: AsyncSession, photo_id: int) -> Optional[CleaningPhot
     cfg = await db.get(CleaningBuildingSettings, task.building_id, populate_existing=True) if task else None
     # Только сегодняшние: перебором id не достать архив фото подъездов за прошлые дни.
     if task is None or task.status != "accepted" or cfg is None or task.work_date != business_today():
+        return None
+    building = await db.get(Building, task.building_id, populate_existing=True)
+    if building is None or not building.is_active:
         return None
     return photo if cfg.show_to_residents and cfg.show_photos else None
