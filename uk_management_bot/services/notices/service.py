@@ -9,16 +9,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from uk_management_bot.database.models.news_item import BROADCAST_FAILED, BROADCAST_NONE, BROADCAST_PENDING
 from uk_management_bot.database.models.notice import (
     NOTICE_KIND_OUTAGE,
+    NOTICE_SCOPE_ALL,
+    NOTICE_SOURCE_STAFF,
     NOTICE_STATUS_CLOSED,
     NOTICE_STATUS_DRAFT,
     NOTICE_STATUS_PUBLISHED,
     Notice,
 )
+from uk_management_bot.services.notices.audience import unknown_scope_ids
 from uk_management_bot.utils.datetime_utils import utc_now
 
 # Поля, которые менеджер задаёт сам (остальное — служебное).
@@ -48,7 +52,10 @@ def visible_clause(now: datetime):
     продлили отключение — показ продлился сам (хранить копию ``ends_at`` в
     ``expires_at`` нельзя, она отставала бы при правке окна).
     """
-    shown_until = func.coalesce(Notice.expires_at, Notice.ends_at)
+    # Отключение от сантехника само с витрины не уходит: срок — его оценка, а воду
+    # могли не включить. Висит, пока не закроют («включили» или менеджер).
+    staff_outage = and_(Notice.source == NOTICE_SOURCE_STAFF, Notice.kind == NOTICE_KIND_OUTAGE)
+    shown_until = case((staff_outage, Notice.expires_at), else_=func.coalesce(Notice.expires_at, Notice.ends_at))
     return and_(
         Notice.status == NOTICE_STATUS_PUBLISHED,
         or_(Notice.publish_at.is_(None), Notice.publish_at <= now),
@@ -63,7 +70,8 @@ def state_of(notice: Notice, now: Optional[datetime] = None) -> str:
         return notice.status
     if notice.publish_at is not None and _aware(notice.publish_at) > now:
         return "scheduled"
-    shown_until = notice.expires_at or notice.ends_at
+    staff_outage = notice.source == NOTICE_SOURCE_STAFF and notice.kind == NOTICE_KIND_OUTAGE
+    shown_until = notice.expires_at or (None if staff_outage else notice.ends_at)
     if shown_until is not None and _aware(shown_until) <= now:
         return "expired"
     return "active"
@@ -126,21 +134,51 @@ def _check(notice: Notice) -> None:
         raise NoticeInvalid("окончание раньше начала")
     if notice.status == NOTICE_STATUS_PUBLISHED and not (notice.title_ru or "").strip():
         raise NoticeInvalid("заголовок на русском обязателен для публикации")
+    if (notice.scope or NOTICE_SCOPE_ALL) == NOTICE_SCOPE_ALL:
+        notice.scope_ids = []
+    elif not notice.scope_ids:
+        raise NoticeInvalid("выберите дворы или дома, которым адресована запись")
 
 
-async def create_notice(db: AsyncSession, fields: dict, *, user_id: Optional[int], publish: bool) -> Notice:
+async def _check_scope(db: AsyncSession, notice: Notice) -> None:
+    unknown = await unknown_scope_ids(db, notice.scope or NOTICE_SCOPE_ALL, list(notice.scope_ids or []))
+    if unknown:
+        raise NoticeInvalid(f"нет в справочнике адресов: {unknown}")
+
+
+def _apply_broadcast(notice: Notice, wanted: Optional[bool]) -> None:
+    """Включить или отменить рассылку в Telegram.
+
+    Очередь возьмёт запись, когда жители её увидят (см. api/notices/broadcast):
+    отложенная уходит в момент публикации. Уже начатую или завершённую рассылку
+    флаг не трогает — повтор только через ``retry_broadcast``.
+    """
+    if wanted is True and notice.broadcast_status == BROADCAST_NONE:
+        notice.broadcast_status = BROADCAST_PENDING
+        notice.broadcast_attempts, notice.broadcast_cursor = 0, 0
+        notice.broadcast_next_at, notice.broadcast_details = None, None
+    elif wanted is False and notice.broadcast_status == BROADCAST_PENDING:
+        notice.broadcast_status = BROADCAST_NONE
+
+
+async def create_notice(db: AsyncSession, fields: dict, *, user_id: Optional[int], publish: bool,
+                        broadcast: Optional[bool] = None) -> Notice:
     notice = Notice(**{k: v for k, v in fields.items() if k in EDITABLE_FIELDS}, created_by=user_id)
     notice.status = NOTICE_STATUS_DRAFT
+    notice.broadcast_status = BROADCAST_NONE
     if publish:
         _publish(notice)
     _check(notice)
+    await _check_scope(db, notice)
+    _apply_broadcast(notice, broadcast)
     db.add(notice)
     await db.commit()
     await db.refresh(notice)
     return notice
 
 
-async def update_notice(db: AsyncSession, notice_id: int, fields: dict) -> Notice:
+async def update_notice(db: AsyncSession, notice_id: int, fields: dict,
+                        broadcast: Optional[bool] = None) -> Notice:
     notice = await get_notice(db, notice_id)
     if notice.status == NOTICE_STATUS_CLOSED:
         raise NoticeError("закрытую запись изменить нельзя")
@@ -149,9 +187,11 @@ async def update_notice(db: AsyncSession, notice_id: int, fields: dict) -> Notic
             setattr(notice, key, value)
     try:
         _check(notice)
+        await _check_scope(db, notice)
     except NoticeInvalid:
         await db.rollback()
         raise
+    _apply_broadcast(notice, broadcast)
     await db.commit()
     await db.refresh(notice)
     return notice
@@ -178,6 +218,14 @@ async def publish_notice(db: AsyncSession, notice_id: int) -> Notice:
 async def close_notice(db: AsyncSession, notice_id: int, *, user_id: Optional[int]) -> Notice:
     """Снять с витрины: запись остаётся в ленте и календаре как закрытая."""
     notice = await get_notice(db, notice_id)
+    if (notice.status == NOTICE_STATUS_PUBLISHED and notice.source == NOTICE_SOURCE_STAFF
+            and notice.kind == NOTICE_KIND_OUTAGE and user_id is not None):
+        # Отключение от сантехника менеджер закрывает тем же путём, что «включили»:
+        # иначе жители, получившие «отключили», не узнали бы, что воду дали.
+        from uk_management_bot.database.models.user import User
+        from uk_management_bot.services.notices.outages import finish
+
+        return await finish(db, notice, await db.get(User, user_id))
     if notice.status != NOTICE_STATUS_CLOSED:
         notice.status = NOTICE_STATUS_CLOSED
         notice.closed_at = utc_now()
@@ -194,3 +242,18 @@ async def delete_notice(db: AsyncSession, notice_id: int) -> None:
         raise NoticeError("удалить можно только черновик; опубликованную запись закройте")
     await db.delete(notice)
     await db.commit()
+
+
+async def retry_broadcast(db: AsyncSession, notice_id: int) -> Notice:
+    """Повторить рассылку, исчерпавшую попытки: шлёт только недоставленным."""
+    notice = await get_notice(db, notice_id)
+    if notice.broadcast_status != BROADCAST_FAILED:
+        raise NoticeError("повторить можно только неудавшуюся рассылку")
+    if state_of(notice) not in ("active", "scheduled"):
+        # Очередь берёт только видимые записи: снятая осталась бы «в очереди» навсегда.
+        raise NoticeError("запись снята с показа — рассылать её уже некому")
+    notice.broadcast_status = BROADCAST_PENDING
+    notice.broadcast_attempts, notice.broadcast_next_at = 0, None
+    await db.commit()
+    await db.refresh(notice)
+    return notice

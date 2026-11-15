@@ -71,7 +71,7 @@ export function ResultScreen({ ok, title, subtitle, children }: ResultProps) {
   return (
     <div
       role={ok ? 'status' : 'alert'}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 p-6 text-center ${
+      className={`fixed inset-0 z-[60] flex flex-col items-center justify-center gap-5 p-6 text-center ${
         ok ? 'bg-emerald-600' : 'bg-red-600'
       } text-white`}
     >
@@ -93,11 +93,14 @@ interface ConfirmProps {
   busy?: boolean
 }
 
-/** Подтверждение «Да / Нет» — две кнопки по 72 px. */
+/**
+ * Подтверждение «Да / Нет» — две кнопки по 72 px. Слой z-[60] (как и у ResultScreen):
+ * в обычном режиме TWA внизу панель вкладок на z-50, она перекрывала кнопки.
+ */
 export function ConfirmSheet({ title, children, onYes, onNo, busy }: ConfirmProps) {
   const { t } = useTranslation()
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onNo}>
+    <div className="fixed inset-0 z-[60] bg-black/60 flex items-end" onClick={onNo}>
       <div
         role="dialog"
         aria-label={title}

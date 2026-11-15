@@ -900,6 +900,20 @@
         "title": "ApartmentUpdate",
         "type": "object"
       },
+      "AudienceOut": {
+        "description": "Сколько жителей получит рассылку с такими адресатами.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "AudienceOut",
+        "type": "object"
+      },
       "AutoManagerConfigData": {
         "description": "Тело PUT: только хранимые поля конфига.",
         "properties": {
@@ -7156,6 +7170,17 @@
             ],
             "title": "All Day"
           },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
+          },
           "ends_at": {
             "anyOf": [
               {
@@ -7283,6 +7308,8 @@
             "anyOf": [
               {
                 "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
                   "type": "integer"
                 },
                 "maxItems": 200,
@@ -7370,6 +7397,17 @@
               }
             ],
             "title": "All Day"
+          },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
           },
           "ends_at": {
             "anyOf": [
@@ -7500,6 +7538,8 @@
             "anyOf": [
               {
                 "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
                   "type": "integer"
                 },
                 "maxItems": 200,
@@ -7580,6 +7620,35 @@
           "all_day": {
             "title": "All Day",
             "type": "boolean"
+          },
+          "broadcast_attempts": {
+            "default": 0,
+            "title": "Broadcast Attempts",
+            "type": "integer"
+          },
+          "broadcast_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Details"
+          },
+          "broadcast_next_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Next At"
           },
           "broadcast_status": {
             "title": "Broadcast Status",
@@ -8106,6 +8175,219 @@
           "subtitle"
         ],
         "title": "OrgCfgIn",
+        "type": "object"
+      },
+      "OutageBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address"
+        ],
+        "title": "OutageBuildingOut",
+        "type": "object"
+      },
+      "OutageIn": {
+        "additionalProperties": false,
+        "description": "Отключение, которое объявляет сантехник на смене.",
+        "properties": {
+          "building_ids": {
+            "items": {
+              "maximum": 2147483647.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Building Ids",
+            "type": "array"
+          },
+          "duration": {
+            "enum": [
+              "1h",
+              "2h",
+              "4h",
+              "day",
+              "unknown"
+            ],
+            "title": "Duration",
+            "type": "string"
+          },
+          "resource": {
+            "enum": [
+              "water",
+              "heating"
+            ],
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "building_ids",
+          "duration"
+        ],
+        "title": "OutageIn",
+        "type": "object"
+      },
+      "OutageNoticeOut": {
+        "description": "Отключение глазами сантехника. Полный ``NoticeOut`` ему не отдаём: в\n``broadcast_details`` лежат id жителей и чатов домов — это данные менеджера.",
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title_ru": {
+            "title": "Title Ru",
+            "type": "string"
+          },
+          "title_uz": {
+            "title": "Title Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title_ru",
+          "title_uz",
+          "status",
+          "state"
+        ],
+        "title": "OutageNoticeOut",
+        "type": "object"
+      },
+      "OutageOptionsOut": {
+        "description": "Экран сантехника: можно ли объявить, справочник домов, идущие отключения.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "durations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Durations",
+            "type": "array"
+          },
+          "open": {
+            "items": {
+              "$ref": "#/components/schemas/OutageNoticeOut"
+            },
+            "title": "Open",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/OutageYardOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowed",
+          "resources",
+          "durations",
+          "yards",
+          "open"
+        ],
+        "title": "OutageOptionsOut",
+        "type": "object"
+      },
+      "OutageYardOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/OutageBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "buildings"
+        ],
+        "title": "OutageYardOut",
         "type": "object"
       },
       "OwnerCheckOut": {
@@ -16553,6 +16835,195 @@
         ]
       }
     },
+    "/api/v2/board-config/notices/audience": {
+      "get": {
+        "description": "Подсказка формы: сколько жителей получит рассылку.",
+        "operationId": "audience_api_v2_board_config_notices_audience_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "yards",
+                "buildings"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 200,
+              "title": "Ids",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudienceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Audience",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages": {
+      "post": {
+        "description": "Сантехник на смене объявляет отключение: жителям домов — сразу, менеджерам копия.",
+        "operationId": "announce_outage_api_v2_board_config_notices_outages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageNoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Announce Outage",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/options": {
+      "get": {
+        "description": "Экран «Отключил воду»: гейт (сантехник на смене), дома, идущие отключения.",
+        "operationId": "outage_options_api_v2_board_config_notices_outages_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outage Options",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/{notice_id}/close": {
+      "post": {
+        "description": "«Включили»: запись закрыта, жителям — второе сообщение.",
+        "operationId": "close_outage_api_v2_board_config_notices_outages__notice_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageNoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Close Outage",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
     "/api/v2/board-config/notices/{notice_id}": {
       "delete": {
         "operationId": "delete_notice_api_v2_board_config_notices__notice_id__delete",
@@ -16738,6 +17209,53 @@
           }
         ],
         "summary": "Publish Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}/retry-broadcast": {
+      "post": {
+        "operationId": "retry_broadcast_api_v2_board_config_notices__notice_id__retry_broadcast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Broadcast",
         "tags": [
           "notices"
         ]

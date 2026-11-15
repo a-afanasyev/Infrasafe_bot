@@ -16,16 +16,22 @@ A11-CODE-02: временная ошибка доставки (не blocked/no_c
 только если оба пусты, иначе ``failed`` с бэкоффом, и следующая попытка шлёт
 сначала им. ABORT_AFTER_ERRORS ошибок подряд (нет связи с Telegram) — проход
 прерывается, а не прожигает весь список.
+
+Механика одна на две очереди (``Outbox``): новости каналов (``news_items``,
+здесь) и записи раздела «Новости и уведомления» (``notices``,
+``api/notices/broadcast.py``). Различаются таблица, условие «можно брать»,
+текст и круг получателей (``Plan``); колонки ``broadcast_*`` у таблиц одинаковые.
 """
 from __future__ import annotations
 
 import asyncio
 import html
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api import telegram_send
@@ -63,6 +69,33 @@ class TelegramUnavailable(Exception):
     """ABORT_AFTER_ERRORS ошибок подряд — связи с Telegram нет."""
 
 
+@dataclass(frozen=True)
+class Plan:
+    """Что и кому слать по одной записи очереди."""
+
+    text: str
+    dm: bool = True
+    groups: bool = True
+    # Доп. условия на User сверх ``_eligible`` (адресаты по дому/двору).
+    audience: tuple = ()
+    # Кому слать копию сверх жителей (условия на User целиком, без ``_eligible``):
+    # менеджерам — об отключении, объявленном сотрудником.
+    also: tuple = ()
+
+
+@dataclass(frozen=True)
+class Outbox:
+    """Очередь рассылки: таблица с колонками ``broadcast_*`` и её правила."""
+
+    model: Any
+    label: str
+    # Условия «запись можно брать в рассылку» на момент ``now``.
+    claimable: Callable[[datetime], tuple]
+    plan: Callable[[AsyncSession, Any], Awaitable[Plan]]
+    # Что брать раньше при равных условиях (до порядка по id); пусто — по id.
+    priority: Callable[[], tuple] = tuple
+
+
 def _backoff(attempts: int) -> timedelta:
     return timedelta(minutes=2 ** max(1, attempts))
 
@@ -82,30 +115,32 @@ def _render(item: NewsItem) -> str:
     return "\n\n".join(parts)
 
 
-async def _requeue_stale(db: AsyncSession, now: datetime) -> int:
+async def _requeue_stale(db: AsyncSession, now: datetime, outbox: Outbox) -> int:
+    model = outbox.model
     rows = (await db.execute(
-        select(NewsItem).where(NewsItem.broadcast_status == BROADCAST_RUNNING,
-                               NewsItem.broadcast_started_at < now - STALE)
+        select(model).where(model.broadcast_status == BROADCAST_RUNNING,
+                            model.broadcast_started_at < now - STALE)
     )).scalars().all()
     for item in rows:
         item.broadcast_status = BROADCAST_FAILED
         item.broadcast_attempts = (item.broadcast_attempts or 0) + 1
         item.broadcast_next_at = now + _backoff(item.broadcast_attempts)
-        logger.warning("news_watch.broadcast: item %s stale running → failed (attempt %s)",
-                       item.id, item.broadcast_attempts)
+        logger.warning("%s.broadcast: item %s stale running → failed (attempt %s)",
+                       outbox.label, item.id, item.broadcast_attempts)
     if rows:
         await db.commit()
     return len(rows)
 
 
-async def _claim(db: AsyncSession, now: datetime) -> Optional[int]:
+async def _claim(db: AsyncSession, now: datetime, outbox: Outbox) -> Optional[int]:
+    model = outbox.model
     item = (await db.execute(
-        select(NewsItem)
-        .where(NewsItem.status == NEWS_STATUS_PUBLISHED,
-               NewsItem.broadcast_status.in_((BROADCAST_PENDING, BROADCAST_FAILED)),
-               NewsItem.broadcast_attempts < MAX_ATTEMPTS,
-               or_(NewsItem.broadcast_next_at.is_(None), NewsItem.broadcast_next_at <= now))
-        .order_by(NewsItem.id).limit(1)
+        select(model)
+        .where(*outbox.claimable(now),
+               model.broadcast_status.in_((BROADCAST_PENDING, BROADCAST_FAILED)),
+               model.broadcast_attempts < MAX_ATTEMPTS,
+               or_(model.broadcast_next_at.is_(None), model.broadcast_next_at <= now))
+        .order_by(*outbox.priority(), model.id).limit(1)
         # API — несколько uvicorn-воркеров, цикл в каждом: без SKIP LOCKED два
         # воркера берут один pending и шлют дважды (как у webhook_sender).
         # sqlite (тесты) FOR UPDATE игнорирует — гарантия только на PostgreSQL.
@@ -123,34 +158,39 @@ def _eligible():
             User.deleted_at.is_(None), User.bot_blocked_at.is_(None))
 
 
-async def _recipients(db: AsyncSession, after_id: int) -> list[tuple[int, int]]:
+def _who(plan: Plan):
+    residents = and_(*_eligible(), *plan.audience)
+    return or_(residents, and_(*plan.also)) if plan.also else residents
+
+
+async def _recipients(db: AsyncSession, after_id: int, plan: Plan) -> list[tuple[int, int]]:
     rows = await db.execute(
-        select(User.id, User.telegram_id).where(User.id > after_id, *_eligible())
+        select(User.id, User.telegram_id).where(User.id > after_id, _who(plan))
         .order_by(User.id).limit(BATCH)
     )
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
 
-async def _retry_recipients(db: AsyncSession, user_ids: list[int]) -> list[tuple[int, int]]:
+async def _retry_recipients(db: AsyncSession, user_ids: list[int], plan: Plan) -> list[tuple[int, int]]:
     """Жители из списка повтора, всё ещё подходящие (выбывшие — молча из списка)."""
     if not user_ids:
         return []
     rows = await db.execute(
-        select(User.id, User.telegram_id).where(User.id.in_(user_ids), *_eligible()).order_by(User.id)
+        select(User.id, User.telegram_id).where(User.id.in_(user_ids), _who(plan)).order_by(User.id)
     )
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
 
-async def _set(db: AsyncSession, item_id: int, **values) -> None:
-    await db.execute(update(NewsItem).where(NewsItem.id == item_id).values(**values))
+async def _set(db: AsyncSession, model: Any, item_id: int, **values) -> None:
+    await db.execute(update(model).where(model.id == item_id).values(**values))
     await db.commit()
 
 
-async def _progress(db: AsyncSession, item_id: int, **values) -> None:
+async def _progress(db: AsyncSession, model: Any, item_id: int, **values) -> None:
     """Сдвиг курсора/счётчиков + heartbeat: ``broadcast_started_at`` = последний
     прогресс, иначе рассылка длиннее STALE выглядит «протухшей» для второго
     воркера и уходит жителям второй раз."""
-    await _set(db, item_id, broadcast_started_at=utc_now(), **values)
+    await _set(db, model, item_id, broadcast_started_at=utc_now(), **values)
 
 
 async def _send_once(send: Sender, sleep, chat_id: int, text: str) -> telegram_send.TelegramResult:
@@ -161,11 +201,12 @@ async def _send_once(send: Sender, sleep, chat_id: int, text: str) -> telegram_s
     return result
 
 
-async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
+async def _deliver(factory, outbox: Outbox, item_id: int, send: Sender, sleep) -> dict:
+    model = outbox.model
     async with factory() as db:
-        item = await db.get(NewsItem, item_id)
-        cfg = await load_config(db)
-        text = _render(item)
+        item = await db.get(model, item_id)
+        plan = await outbox.plan(db, item)
+        text = plan.text
         cursor = item.broadcast_cursor or 0
         details = dict(item.broadcast_details or {})
     counters = {key: int(details.get(key, 0)) for key in ("sent", "blocked", "no_chat")}
@@ -181,7 +222,7 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
 
     async def save(**values) -> None:
         async with factory() as db:
-            await _progress(db, item_id, broadcast_details=snapshot(), **values)
+            await _progress(db, model, item_id, broadcast_details=snapshot(), **values)
 
     async def deliver_dm(uid: int, tg_id: int) -> None:
         nonlocal streak
@@ -204,11 +245,11 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
             return
         streak = 0
 
-    if not cfg["broadcast"]["dm"]:
+    if not plan.dm:
         retry.clear()  # личку выключили — повторять в неё больше некому
     else:
         async with factory() as db:
-            pending_retry = await _retry_recipients(db, retry)
+            pending_retry = await _retry_recipients(db, retry, plan)
         still = {uid for uid, _ in pending_retry}
         retry[:] = [u for u in retry if u in still]
         for uid, tg_id in pending_retry:
@@ -217,7 +258,7 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
             await sleep(PAUSE_SECONDS)
         while True:
             async with factory() as db:
-                batch = await _recipients(db, cursor)
+                batch = await _recipients(db, cursor, plan)
             if not batch:
                 break
             for uid, tg_id in batch:
@@ -226,7 +267,7 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
                 await save(broadcast_cursor=cursor)
                 await sleep(PAUSE_SECONDS)
 
-    if cfg["broadcast"]["residents_groups"]:
+    if plan.groups:
         async with factory() as db:
             chats = (await db.execute(
                 select(MonitoredGroup.chat_id).where(MonitoredGroup.kind == GROUP_KIND_RESIDENTS,
@@ -246,12 +287,10 @@ async def _deliver(factory, item_id: int, send: Sender, sleep) -> dict:
     return snapshot()
 
 
-async def run_broadcast_cycle(factory=None, *, send: Optional[Sender] = None,
-                              sleep=asyncio.sleep, now: Optional[datetime] = None) -> dict:
-    """Один цикл воркера. Не бросает. Возвращает счётчики для логов/тестов."""
+async def run_outbox_cycle(outbox: Outbox, factory=None, *, send: Optional[Sender] = None,
+                           sleep=asyncio.sleep, now: Optional[datetime] = None) -> dict:
+    """Один цикл воркера по одной очереди. Не бросает. Возвращает счётчики."""
     stats = {"processed": 0, "done": 0, "failed": 0, "requeued": 0}
-    if not settings.NEWS_WATCH_ENABLED:
-        return stats
     if factory is None:
         from uk_management_bot.database.session import AsyncSessionLocal
         factory = AsyncSessionLocal
@@ -259,40 +298,63 @@ async def run_broadcast_cycle(factory=None, *, send: Optional[Sender] = None,
             return stats
     send = send or telegram_send.send_message
     now = now or datetime.now(timezone.utc)
+    model, label = outbox.model, outbox.label
 
     async with factory() as db:
-        stats["requeued"] = await _requeue_stale(db, now)
-        item_id = await _claim(db, now)
+        stats["requeued"] = await _requeue_stale(db, now, outbox)
+        item_id = await _claim(db, now, outbox)
     if item_id is None:
         return stats
     stats["processed"] = 1
     try:
-        details = await _deliver(factory, item_id, send, sleep)
+        details = await _deliver(factory, outbox, item_id, send, sleep)
     except Exception as e:
-        logger.warning("news_watch.broadcast: item %s failed: %s", item_id, type(e).__name__)
+        logger.warning("%s.broadcast: item %s failed: %s", label, item_id, type(e).__name__)
         async with factory() as db:
-            item = await db.get(NewsItem, item_id)
+            item = await db.get(model, item_id)
             attempts = (item.broadcast_attempts or 0) + 1
-            await _set(db, item_id, broadcast_status=BROADCAST_FAILED, broadcast_attempts=attempts,
+            await _set(db, model, item_id, broadcast_status=BROADCAST_FAILED, broadcast_attempts=attempts,
                        broadcast_next_at=now + _backoff(attempts))
         stats["failed"] = 1
         return stats
     if details["retry"] or details["groups_failed"]:
         async with factory() as db:
-            item = await db.get(NewsItem, item_id)
+            item = await db.get(model, item_id)
             attempts = (item.broadcast_attempts or 0) + 1
-            await _set(db, item_id, broadcast_status=BROADCAST_FAILED, broadcast_details=details,
+            await _set(db, model, item_id, broadcast_status=BROADCAST_FAILED, broadcast_details=details,
                        broadcast_attempts=attempts, broadcast_next_at=now + _backoff(attempts))
-        logger.warning("news_watch.broadcast: item %s undelivered: %s residents, %s groups (attempt %s)",
-                       item_id, len(details["retry"]), len(details["groups_failed"]), attempts)
+        logger.warning("%s.broadcast: item %s undelivered: %s residents, %s groups (attempt %s)",
+                       label, item_id, len(details["retry"]), len(details["groups_failed"]), attempts)
         stats["failed"] = 1
         return stats
     async with factory() as db:
-        await _set(db, item_id, broadcast_status=BROADCAST_DONE, broadcast_details=details,
+        await _set(db, model, item_id, broadcast_status=BROADCAST_DONE, broadcast_details=details,
                    broadcast_next_at=None)
-    logger.info("news_watch.broadcast: item %s done: %s", item_id, details)
+    logger.info("%s.broadcast: item %s done: %s", label, item_id, details)
     stats["done"] = 1
     return stats
 
 
-__all__ = ["run_broadcast_cycle", "MAX_ATTEMPTS", "STALE", "PAUSE_SECONDS"]
+async def _news_plan(db: AsyncSession, item: NewsItem) -> Plan:
+    cfg = await load_config(db)
+    return Plan(text=_render(item), dm=bool(cfg["broadcast"]["dm"]),
+                groups=bool(cfg["broadcast"]["residents_groups"]))
+
+
+NEWS_OUTBOX = Outbox(
+    model=NewsItem,
+    label="news_watch",
+    claimable=lambda now: (NewsItem.status == NEWS_STATUS_PUBLISHED,),
+    plan=_news_plan,
+)
+
+
+async def run_broadcast_cycle(factory=None, *, send: Optional[Sender] = None,
+                              sleep=asyncio.sleep, now: Optional[datetime] = None) -> dict:
+    """Цикл рассылки новостей каналов; без ``NEWS_WATCH_ENABLED`` ничего не делает."""
+    if not settings.NEWS_WATCH_ENABLED:
+        return {"processed": 0, "done": 0, "failed": 0, "requeued": 0}
+    return await run_outbox_cycle(NEWS_OUTBOX, factory, send=send, sleep=sleep, now=now)
+
+
+__all__ = ["run_broadcast_cycle", "run_outbox_cycle", "Outbox", "Plan", "MAX_ATTEMPTS", "STALE", "PAUSE_SECONDS"]

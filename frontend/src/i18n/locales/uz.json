@@ -1396,6 +1396,30 @@
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
   },
   "notices": {
+    "audience": {
+      "label": "Kimga mo'ljallangan",
+      "scope": {
+        "all": "Barcha yashovchilar",
+        "yards": "Hovlilar",
+        "buildings": "Uylar"
+      },
+      "pick": "Kamida bitta hovli yoki uyni tanlang.",
+      "count_one": "Xabarnomani {{count}} yashovchi oladi.",
+      "count_other": "Xabarnomani {{count}} yashovchi oladi.",
+      "short": {
+        "yards_one": "{{count}} hovli",
+        "yards_other": "{{count}} hovli",
+        "buildings_one": "{{count}} uy",
+        "buildings_other": "{{count}} uy"
+      }
+    },
+    "broadcast": {
+      "pending": "Tarqatish navbatda",
+      "running": "Tarqatilmoqda: {{sent}}",
+      "done": "{{sent}} ta yuborildi, {{failed}} ta yetkazilmadi",
+      "failed": "Tarqatish tugallanmadi: {{sent}} ta yuborildi",
+      "retry": "Tarqatishni takrorlash"
+    },
     "truncated": "{{total}} ta yozuvdan oxirgi {{shown}} tasi ko'rsatilgan — oldingilarini taqvimdan qidiring.",
     "title": "Yangiliklar va xabarnomalar",
     "tab": {
@@ -1442,6 +1466,9 @@
       "saved": "Saqlandi"
     },
     "form": {
+      "broadcast": "Telegram orqali tarqatish",
+      "broadcastHint": "Yashovchilar xabarni yozuv ularga ko'ringan paytda oladi: darhol yoki kechiktirilgan e'lon vaqtida.",
+      "broadcastLocked": "Xabar allaqachon yuborilgan — matnni tuzatish ikkinchi xabarni yubormaydi.",
       "title": {
         "news": "Yangilik",
         "outage": "Rejali o'chirish"
@@ -1465,6 +1492,7 @@
       "schedule": "Rejalashtirish",
       "liveNote": "Yozuv yashovchilarga allaqachon ko'rinmoqda — tuzatishlar darhol chiqadi.",
       "error": {
+        "scope": "Yozuv mo'ljallangan hovli yoki uylarni tanlang",
         "title": "Sarlavhani rus tilida kiriting",
         "window": "O'chirishning boshlanishi va tugashini ko'rsating",
         "order": "Tugash vaqti boshlanishidan oldin"
@@ -3004,6 +3032,44 @@
     },
     "openViaBot": "Ilovani Telegram-bot orqali oching",
     "pullToRefresh": "↓ Yangilash uchun torting",
+    "outage": {
+      "entry": "Suvni o'chirdim",
+      "restored": {
+        "water": "Suv yoqildi",
+        "heating": "Isitish yoqildi"
+      },
+      "confirmClose": "Yoqildimi?",
+      "closeHint": "Aholi xabar oladi.",
+      "closed": "Aholiga xabar berildi",
+      "ask": {
+        "resource": "Nima o'chirildi?",
+        "buildings": "Qaysi uylarda?",
+        "duration": "Qancha vaqtga?"
+      },
+      "resource": {
+        "water": "Suv",
+        "heating": "Isitish"
+      },
+      "duration": {
+        "1h": "1 soat",
+        "2h": "2 soat",
+        "4h": "4 soat",
+        "day": "Kun oxirigacha",
+        "unknown": "Bilmayman"
+      },
+      "next": "Keyingi",
+      "confirm": "Aholiga xabar berilsinmi?",
+      "confirmHint": "Bu uylar aholisi darhol Telegramda xabar oladi.",
+      "error": {
+        "already_open": "Bu uy bo'yicha allaqachon e'lon qilingan",
+        "no_active_shift": "Avval smenani boshlang",
+        "not_plumber": "Faqat santexnik e'lon qiladi",
+        "not_yours": "Faqat muallif yoki smenadagi santexnik yopa oladi",
+        "not_open": "Allaqachon yopilgan",
+        "too_many": "Bir soatda juda ko'p e'lon",
+        "generic": "Bajarilmadi"
+      }
+    },
     "simple": {
       "tabs": {
         "mine": "Arizalarim",
@@ -3882,6 +3948,7 @@
       "auto_manager.configure": "Avtomatik menejerni sozlash",
       "board.configure": "Tabloni sozlash",
       "notices.manage": "Yashovchilarga yangiliklar va xabarnomalar",
+      "outages.announce": "O'chirishlar: smenadagi santexnik e'lon qiladi",
       "callcenter.use": "Call-markaz: qo'ng'iroq bo'yicha arizalar",
       "dashboard.live": "Boshqaruv paneli hodisalarining jonli oqimi (WebSocket)",
       "dashboard.use": "Asosiy veb-boshqaruv paneliga kirish",

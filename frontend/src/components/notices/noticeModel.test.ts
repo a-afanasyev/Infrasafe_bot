@@ -9,7 +9,8 @@ function notice(over: Partial<Notice>): Notice {
     id: 1, kind: 'news', resource: null, source: 'manual', title_ru: 'Новость', title_uz: '', text_ru: '', text_uz: '',
     place_ru: '', place_uz: '', icon: '', important: false, status: 'published', state: 'active',
     publish_at: '2026-11-13T05:00:00Z', starts_at: null, ends_at: null, all_day: false, expires_at: null,
-    created_at: '2026-11-13T05:00:00Z', ...over,
+    created_at: '2026-11-13T05:00:00Z', scope: 'all', scope_ids: [], broadcast_status: 'none', broadcast_attempts: 0,
+    broadcast_details: null, ...over,
   }
 }
 
@@ -40,6 +41,16 @@ describe('noticeModel — тело запроса', () => {
   it('сетка месяца → окно запроса календаря в зоне объекта', () => {
     const range = gridWindow(monthGrid(2026, 10))
     expect(range).toEqual({ from: '2026-10-25T19:00:00.000Z', to: '2026-12-06T18:59:00.000Z' })
+  })
+
+  it('адресаты и рассылка: «всем» — без списка; дома — нужен выбор; разосланная запись помнит галочку', () => {
+    const base = { ...emptyDraft('news'), title: { ru: 'x', uz: '' } }
+    expect(bodyOf({ ...base, scope: 'all', scopeIds: [5], broadcast: true })).toMatchObject({ scope: 'all', scope_ids: [], broadcast: true })
+    expect(bodyOf({ ...base, scope: 'buildings', scopeIds: [12, 14] })).toMatchObject({ scope: 'buildings', scope_ids: [12, 14], broadcast: false })
+    expect(draftError({ ...base, scope: 'buildings', scopeIds: [] })).toBe('scope')
+    expect(draftOf(notice({ scope: 'yards', scope_ids: [1], broadcast_status: 'done' }))).toMatchObject({
+      scope: 'yards', scopeIds: [1], broadcast: true,
+    })
   })
 
   it('проверка формы и «запланировано»', () => {

@@ -130,6 +130,7 @@ _ACTIONS: tuple[Action, ...] = (
     _action("group_intake.manage", {_M}, "Group Intake: группы и заявки из чатов"),
     _action("board.configure", {_M}, "Настройка табло"),
     _action("notices.manage", {_M}, "Новости и уведомления жителям"),
+    _action("outages.announce", {_E}, "Отключения: объявление сантехником на смене"),
     _action("auto_manager.configure", {_M, _A}, "Настройка автоматического менеджера"),
     _action("work_reports.moderate", {_M}, "Модерация отчётов о работах", approved_only=True),
     # ---------------------------------------------------------- персонал и смены

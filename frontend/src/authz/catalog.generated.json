@@ -294,6 +294,14 @@
       "superadmin_only": false,
       "title": "Новости и уведомления жителям"
     },
+    "outages.announce": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Отключения: объявление сантехником на смене"
+    },
     "payments.manage": {
       "roles": [
         "admin",

@@ -24,6 +24,9 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
+# Шаг тика напоминаний об отключениях = окно «срок вышел только что».
+OUTAGE_REMINDER_MINUTES = 10
+
 
 @dataclass(frozen=True)
 class _ShiftReminder:
@@ -73,6 +76,7 @@ class ShiftScheduler:
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
+            'outage_reminders': {'success': 0, 'failed': 0, 'last_run': None},
             'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
             'monthly_report': {'success': 0, 'failed': 0, 'last_run': None},
         }
@@ -330,6 +334,18 @@ class ShiftScheduler:
                 max_instances=1,
                 coalesce=True
             )
+
+        # 15. Отключения от сантехника: срок вышел или смена автора закончилась
+        #     (любым способом, в т.ч. по расписанию), а запись не закрыта — автору
+        #     личка «Уже включили?» с кнопкой. Сама запись не закрывается.
+        self.scheduler.add_job(
+            self._outage_reminders_tick,
+            IntervalTrigger(minutes=OUTAGE_REMINDER_MINUTES),
+            id='outage_reminders',
+            name='Отключения — напоминание автору о незакрытом',
+            max_instances=1,
+            coalesce=True
+        )
 
         logger.info("Задачи планировщика смен настроены успешно")
 
@@ -965,6 +981,38 @@ class ShiftScheduler:
             # бросает, так что текста httpx (URL с токеном) в трейсе нет.
             logger.exception("Ошибка напоминаний по лифтам")
 
+
+    def _outage_reminders_sync(self) -> tuple[list, list]:
+        """(срок вышел, смена автора закончилась) — второе без повторов первого."""
+        from uk_management_bot.services.notices.outages import overdue_sync, shift_ended_sync
+
+        db = SessionLocal()
+        try:
+            now, window = utc_now(), timedelta(minutes=OUTAGE_REMINDER_MINUTES)
+            overdue = overdue_sync(db, now, window)
+            seen = {item.notice_id for item in overdue}
+            return overdue, [item for item in shift_ended_sync(db, now, window) if item.notice_id not in seen]
+        finally:
+            db.close()
+
+    async def _outage_reminders_tick(self):
+        """Истёкшие незакрытые отключения: DB-фаза в потоке, затем личка автору."""
+        from uk_management_bot.services.notices.outage_reminders import send_reminders
+
+        task_name = 'outage_reminders'
+        try:
+            overdue, ended = await asyncio.to_thread(self._outage_reminders_sync)
+            if (overdue or ended) and self._bot is not None:
+                sent = await send_reminders(self._bot, overdue, "remind_overdue")  # не бросает
+                sent += await send_reminders(self._bot, ended, "remind_shift_end")
+                logger.info("Отключения: срок вышел %s, смена закончилась %s, напоминаний %s",
+                            len(overdue), len(ended), sent)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            logger.exception("Ошибка напоминаний об отключениях")
 
     def _executor_open_tasks_sync(self) -> list:
         """DB-фаза напоминания: плоские DTO получателей (не ORM)."""

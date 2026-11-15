@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import LocalizedField from '../board/LocalizedField'
+import AudiencePicker from './AudiencePicker'
 import { NOTICE_RESOURCES, type NoticeBody, type NoticeResource } from '../../hooks/useNotices'
 import { bodyOf, draftError, isScheduled, type NoticeDraft } from './noticeModel'
 
@@ -16,13 +17,15 @@ interface Props {
   editing: boolean
   /** Уже опубликованная запись: «Сохранить» без повторной публикации. */
   published: boolean
+  /** Рассылка уже началась или завершена — отменить или повторить её формой нельзя. */
+  broadcastLocked: boolean
   pending: boolean
   onSubmit: (body: NoticeBody, publish: boolean) => void
   onClose: () => void
 }
 
 /** Форма новости или планового отключения: текст RU/UZ, окно, срок публикации и показа. */
-export default function NoticeForm({ initial, editing, published, pending, onSubmit, onClose }: Props) {
+export default function NoticeForm({ initial, editing, published, broadcastLocked, pending, onSubmit, onClose }: Props) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<NoticeDraft>(initial)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +92,18 @@ export default function NoticeForm({ initial, editing, published, pending, onSub
           <input type="checkbox" checked={draft.important} onChange={() => patch({ important: !draft.important })} />
           {t('notices.form.important')}
         </label>
+
+        <AudiencePicker scope={draft.scope} ids={draft.scopeIds} onChange={(scope, scopeIds) => patch({ scope, scopeIds })} />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={draft.broadcast}
+            disabled={broadcastLocked}
+            onChange={() => patch({ broadcast: !draft.broadcast })}
+          />
+          {t('notices.form.broadcast')}
+        </label>
+        <p className="text-xs text-text-muted">{t(broadcastLocked ? 'notices.form.broadcastLocked' : 'notices.form.broadcastHint')}</p>
 
         {error && <p role="alert" className="text-sm text-red">{error}</p>}
 

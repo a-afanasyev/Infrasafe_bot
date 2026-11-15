@@ -6,6 +6,7 @@ import { twaClient } from '../../twaClient'
 import { useTelegramSDK } from '../../hooks/useTelegramSDK'
 import { notifyError } from '../../utils/errors'
 import { Play, Square, Clock, CalendarDays, ChevronRight } from 'lucide-react'
+import OutageEntry from '../../outage/OutageEntry'
 
 export default function ShiftPage() {
   const { t } = useTranslation()
@@ -101,6 +102,8 @@ export default function ShiftPage() {
           </>
         )}
       </div>
+
+      <div className="mt-3"><OutageEntry to="/twa/exec/outage" /></div>
 
       {/* Вход в «Мои смены» — список смен + инициация/приём передачи (PR-T2) */}
       <button

@@ -3016,5 +3016,14 @@
     "free_text_offer": "Siz oddiy xabar yozayotganga o'xshaysiz. Arizani «📝 Ariza yaratish» tugmasi orqali berish tezroq — buni bir daqiqada qanday qilishni ko'ring.",
     "btn_registration": "🎬 Qanday ro'yxatdan o'tish",
     "btn_request": "🎬 Ariza qanday beriladi"
+  },
+  "outages": {
+    "btn_close": "✅ Yoqildi: {title}",
+    "closed": "✅ Yopildi. Aholiga yoqilgani haqida xabar boradi.",
+    "err_not_open": "Bu o'chirish allaqachon yopilgan.",
+    "err_not_yours": "Faqat muallif yoki smenadagi santexnik yopa oladi.",
+    "err_generic": "Bajarilmadi. Qayta urinib ko'ring.",
+    "remind_overdue": "⏰ O'chirish muddati tugadi: {title}\nYoqildimi?",
+    "remind_shift_end": "Smena tugadi, lekin o'chirish yopilmagan: {title}\nYoqildimi?"
   }
 }
