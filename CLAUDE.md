@@ -34,6 +34,7 @@
 - **Модуль «Лифты»** (`/api/v2/elevators`, миграции 017/018): DARK за `ELEVATORS_ENABLED` (бот+API, одинаково для обоих сервисов) и `VITE_ELEVATORS_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/ELEVATORS_MODULE.md`.
 - **ИИ-менеджер** (`mode="ai"` автоменеджера): DARK за `AI_MANAGER_ENABLED` (бот+API), общий `ANTHROPIC_API_KEY`; LLM только триаж текста, исполнитель — rule-engine; общий LLM-клиент `services/llm/`. Детали → `docs/tech/AI_MANAGER.md`.
 - **Мониторинг отключений** (`/api/v2/news-watch`, миграция 028, контейнер `uk-news-watcher` = Telethon-юзербот за профилем `news-watch`): DARK за `NEWS_WATCH_ENABLED` (api) и `VITE_NEWS_WATCH_ENABLED` (фронт, build-arg); префикс НЕ заявлен в edge-allowlist — заявить на обеих площадках ДО включения. Детали → `docs/tech/NEWS_WATCH.md`.
+- **Модуль «Уборка»** (`/api/v2/cleaning`, миграция 034): DARK за `CLEANING_ENABLED` (бот+API) и `VITE_CLEANING_ENABLED` (фронт, build-arg); медиа-сервис с категорией `cleaning_photo` выкатывать ДО API; префикс заявить в edge-allowlist обеих площадок ДО включения. Детали → `docs/CLEANING_MODULE.md`.
 - **Не коммитить** без явной просьбы.
 - **Не пушить** без явной просьбы.
 - **Секреты** (`.env`, ключи, Doppler-токены) — никогда не коммитить, не выводить.

@@ -11,6 +11,7 @@ import { ConfirmSheet, ErrorBlock, Loading } from '../components/Ui'
 import { FlashScreen, useFlash } from '../components/Flash'
 import { useCompletionQueue } from '../queue/CompletionQueue'
 import OutageEntry from '../../outage/OutageEntry'
+import CleaningEntry from '../../cleaning/CleaningEntry'
 
 /** Смена: круглая кнопка 200 px «Начать» / «Закончить» и таймер. */
 export default function ShiftPage() {
@@ -83,6 +84,7 @@ export default function ShiftPage() {
         {active ? t('twa.simple.shift.end') : t('twa.simple.shift.start')}
       </button>
       <OutageEntry to="/twa/s/outage" />
+      <CleaningEntry to="/twa/s/cleaning" />
 
       {confirmEnd && shift && (
         <ConfirmSheet

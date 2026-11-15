@@ -44,6 +44,7 @@ async def seed_config(db_session: AsyncSession, manager_user):
 def modules_on(monkeypatch):
     monkeypatch.setattr(settings, "ELEVATORS_ENABLED", True)
     monkeypatch.setattr(settings, "WORK_REPORTS_ENABLED", True)
+    monkeypatch.setattr(settings, "CLEANING_ENABLED", True)
 
 
 def test_strict_block_id_type_matches_canonical_list():

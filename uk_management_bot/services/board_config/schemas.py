@@ -31,7 +31,7 @@ MAX_PLANNED_WORKS = 20
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 # Строгий тип id блока на входе; список значений = defaults.HOME_BLOCK_IDS
 # (сверяется тестом test_board_config_home).
-HomeBlockId = Literal["announcements", "contacts", "requests", "works", "elevators", "workreports"]
+HomeBlockId = Literal["announcements", "contacts", "requests", "works", "elevators", "workreports", "cleaning"]
 
 
 class LocalizedText(BaseModel):

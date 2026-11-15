@@ -19,6 +19,8 @@ UK_PROXY_CATEGORIES = (
     # Фото «до работ»: UK шлёт его через /media/upload-report (report_type),
     # он валидируется тем же enum.
     FileCategories.BEFORE_PHOTO,
+    # Фото уборки: тоже /media/upload-report, но только с сервера UK.
+    FileCategories.CLEANING_PHOTO,
 )
 
 

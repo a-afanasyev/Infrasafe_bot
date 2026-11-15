@@ -48,6 +48,7 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
+  Sparkles,
   Megaphone,
   UserCog,
   Bot,
@@ -156,6 +157,10 @@ const NAV_ENTRIES: NavEntry[] = [
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
     ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, action: 'elevators.read' as const }]
+    : []),
+  // Уборка: план домов, привязка уборщиц, нагрузка. DARK за VITE_CLEANING_ENABLED.
+  ...(import.meta.env.VITE_CLEANING_ENABLED === 'true'
+    ? [{ to: '/dashboard/cleaning', labelKey: 'nav.cleaning', Icon: Sparkles, action: 'cleaning.read' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.

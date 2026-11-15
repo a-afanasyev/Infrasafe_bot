@@ -9,6 +9,11 @@ export function isElevatorsEnabled(): boolean {
   return import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 }
 
+/** Модуль «Уборка» (согласованно с backend CLEANING_ENABLED). */
+export function isCleaningEnabled(): boolean {
+  return import.meta.env.VITE_CLEANING_ENABLED === 'true'
+}
+
 /** Витрина «до/после» (согласованно с backend WORK_REPORTS_ENABLED). */
 export function isWorkReportsEnabled(): boolean {
   return import.meta.env.VITE_WORK_REPORTS_ENABLED === 'true'

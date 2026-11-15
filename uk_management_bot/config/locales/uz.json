@@ -1,4 +1,13 @@
 {
+  "cleaning": {
+    "bot": {
+      "open": "🧹 Tozalashni ochish",
+      "photo_in_chat": "Tozalash suratlari chatda qabul qilinmaydi: bu yerda surat qachon olinganini tekshirib bo'lmaydi. Qavatlarni ilovada suratga oling.",
+      "morning": "Xayrli tong! Bugun jadval bo'yicha yo'laklar soni: {count}.",
+      "before_end": "Tugatilishi kerak bo'lgan yo'laklar: {count}. Suratlar bugun soat {time} gacha qabul qilinadi.",
+      "summary": "{date} kungi tozalash\nJadval bo'yicha: {total}\nQabul qilindi: {accepted}\nTekshiruvda: {review}\nTugatilmagan: {unfinished}\nRad etildi: {rejected}"
+    }
+  },
   "months": {
     "january": "Yanvar",
     "february": "Fevral",

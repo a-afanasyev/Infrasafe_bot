@@ -283,6 +283,9 @@ flowchart LR
 | `notices.manage` | `manager` |  | Новости и уведомления жителям |
 | `outages.announce` | `executor` |  | Отключения: объявление сантехником на смене |
 | `callcenter.use` | `dispatcher`, `manager` |  | Колл-центр: заявки по звонку |
+| `cleaning.manage` | `manager` | да | Уборка: правка планов, привязок и настроек |
+| `cleaning.read` | `manager` | да | Уборка: план домов, привязка, нагрузка, контроль |
+| `cleaning.work` | `executor` | да | Уборка: задания уборщицы и фото этажей |
 | `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
 | `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |
 | `elevators.lookup` | `applicant`, `dispatcher`, `engineer`, `executor`, `inspector`, `manager` | да | Лифты дома при подаче заявки |

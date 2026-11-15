@@ -32,6 +32,9 @@ ENV VITE_WORK_REPORTS_ENABLED=$VITE_WORK_REPORTS_ENABLED
 # --build-arg VITE_ELEVATORS_ENABLED=true (согласованно с backend ELEVATORS_ENABLED).
 ARG VITE_ELEVATORS_ENABLED=
 ENV VITE_ELEVATORS_ENABLED=$VITE_ELEVATORS_ENABLED
+# Модуль «Уборка» (согласованно с backend CLEANING_ENABLED).
+ARG VITE_CLEANING_ENABLED=
+ENV VITE_CLEANING_ENABLED=$VITE_CLEANING_ENABLED
 
 # DARK-гейт раздела «Отключения» (мониторинг новостей): пусто = OFF.
 # Включение: --build-arg VITE_NEWS_WATCH_ENABLED=true (согласованно с backend NEWS_WATCH_ENABLED).

@@ -20,6 +20,7 @@ from uk_management_bot.services.board_config.defaults import (
     ALL_MODULE_IDS,
     DEFAULT_BOARD_CONFIG,
     enabled_module_ids,
+    home_block_enabled,
 )
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.board_config.schemas import (
@@ -204,7 +205,7 @@ def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
     # Блоки страницы жителей «Лифты»/«Отчёты» — те же модули, тот же флаг.
     data["home"]["blocks"] = [
         block for block in data["home"]["blocks"]
-        if block["id"] not in ALL_MODULE_IDS or block["id"] in enabled
+        if (block["id"] not in ALL_MODULE_IDS or block["id"] in enabled) and home_block_enabled(block["id"])
     ]
     # ARCH-137 B5: зона показа — свойство ответа, не хранимого конфига.
     data["display_tz"] = settings.DISPLAY_TZ

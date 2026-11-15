@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { twaClient } from '../../twaClient'
 import { Bell, Phone, Clock } from 'lucide-react'
 import PullToRefresh from '../../components/PullToRefresh'
+import { isCleaningEnabled } from '../../../utils/featureFlags'
+import ResidentCleaningEntry from './ResidentCleaningEntry'
 
 export default function HomePage() {
   const { t, i18n } = useTranslation()
@@ -18,6 +20,8 @@ export default function HomePage() {
     <PullToRefresh queryKeys={[['twa', 'announcements', lang]]}>
     <div className="p-4 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950">
       <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">{t('twa.home.title')}</h1>
+
+      {isCleaningEnabled() && <ResidentCleaningEntry />}
 
       {data?.announcements?.map((a: TwaAnnouncement) => (
         <div key={a.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 border border-gray-100 dark:border-gray-700">

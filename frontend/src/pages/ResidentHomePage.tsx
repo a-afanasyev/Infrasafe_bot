@@ -10,6 +10,7 @@ import { brand } from '../brand/brand'
 import { getDisplayTz, nowInDisplayTz, todayInDisplayTz } from '../utils/timezone'
 import ContactCard from '../components/home/ContactCard'
 import DetailDialog, { type DetailContent } from '../components/home/DetailDialog'
+import CleaningCard from '../components/home/CleaningCard'
 import ElevatorsCard from '../components/home/ElevatorsCard'
 import HomeIcon from '../components/home/HomeIcon'
 import NoticeCarousel from '../components/home/NoticeCarousel'
@@ -101,6 +102,7 @@ export default function ResidentHomePage({ configOverride }: ResidentHomePagePro
     ),
     elevators: () => <ElevatorsCard title={blocks.elevators.title} lang={lang} />,
     workreports: () => <WorkReportsCard title={blocks.workreports.title} />,
+    cleaning: () => <CleaningCard title={blocks.cleaning.title} />,
   }
 
   // Ряд хранит свой номер в сетке (высота ряда зависит от него, а не от того,

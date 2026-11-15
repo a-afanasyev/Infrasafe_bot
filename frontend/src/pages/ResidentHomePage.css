@@ -490,3 +490,16 @@
 @media (prefers-reduced-motion: reduce) {
   .rh *, .rh *::before, .rh *::after { transition: none !important; animation: none !important; }
 }
+
+/* Блок «Уборка»: счёт по домам + строка на дом. Статус различим не только цветом — есть подпись. */
+.rh-cleaning { padding: 23px 26px 20px; display: flex; flex-direction: column; gap: 14px; }
+.rh-cleaning-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 18px; align-items: start; }
+.rh-cleaning-main { display: flex; flex-direction: column; align-items: flex-start; }
+.rh-cleaning-main .rh-metric-number { color: #4d8238; margin-top: 0; }
+.rh-cleaning-number span { font-size: .45em; color: var(--rh-muted); letter-spacing: -.5px; }
+.rh-cleaning-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rh-cleaning-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rh-line); font-size: 15px; }
+.rh-cleaning-row:last-child { border-bottom: 0; }
+.rh-cleaning-row span { font-weight: 600; color: var(--rh-soft); white-space: nowrap; }
+.rh-cleaning-row--done span { color: #287333; }
+@container rh (max-width: 720px) { .rh-cleaning-body { grid-template-columns: minmax(0, 1fr); } }

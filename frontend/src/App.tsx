@@ -76,6 +76,14 @@ const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfig
 const ResidentElevatorsPage = lazy(() => import('./pages/ResidentElevatorsPage'))
 const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
+// Модуль «Уборка»: план дома, привязка уборщиц, нагрузка. DARK за
+// VITE_CLEANING_ENABLED (согласованно с backend CLEANING_ENABLED → 404).
+const CleaningPlanPage = lazy(() => import('./pages/cleaning/CleaningPlanPage'))
+const CleaningStaffPage = lazy(() => import('./pages/cleaning/CleaningStaffPage'))
+const CleaningControlPage = lazy(() => import('./pages/cleaning/CleaningControlPage'))
+const CleaningTaskPage = lazy(() => import('./pages/cleaning/CleaningTaskPage'))
+const CLEANING_ENABLED = import.meta.env.VITE_CLEANING_ENABLED === 'true'
+
 // Мониторинг отключений (очередь новостей + настройки). DARK за
 // VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
 const AiManagerPage = lazy(() => import('./pages/AiManagerPage'))
@@ -232,6 +240,14 @@ export default function App() {
                   <Route path="calendar" element={<PageErrorBoundary><ElevatorsCalendarPage /></PageErrorBoundary>} />
                   <Route path=":id" element={<PageErrorBoundary><ElevatorDetailPage /></PageErrorBoundary>} />
                   <Route path=":id/edit" element={<PageErrorBoundary><ElevatorFormPage /></PageErrorBoundary>} />
+                </Route>
+              )}
+              {CLEANING_ENABLED && (
+                <Route path="/dashboard/cleaning" element={<ProtectedRoute action="cleaning.read"><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><CleaningPlanPage /></PageErrorBoundary>} />
+                  <Route path="staff" element={<PageErrorBoundary><CleaningStaffPage /></PageErrorBoundary>} />
+                  <Route path="control" element={<PageErrorBoundary><CleaningControlPage /></PageErrorBoundary>} />
+                  <Route path="tasks/:id" element={<PageErrorBoundary><CleaningTaskPage /></PageErrorBoundary>} />
                 </Route>
               )}
               {ELEVATORS_ENABLED && (

@@ -1,4 +1,248 @@
 {
+  "cleaning": {
+    "plan": {
+      "title": "Uylar bo'yicha tozalash rejasi",
+      "subtitle": "Har bir uyning o'z rejasi bor: qaysi ishlar, qaysi kunlari va qaysi qavatlarda.",
+      "building": "Uy",
+      "noPlan": "reja yo'q",
+      "works": "Ishlar",
+      "meta": "yo'laklar: {{entrances}}, qavatlar: {{floors}}",
+      "col": {
+        "work": "Ish turi",
+        "days": "Hafta kunlari",
+        "entrances": "Yo'laklar",
+        "floors": "Qavatlar"
+      },
+      "aria": {
+        "work": "Ish turi, {{row}}-qator",
+        "day": "{{day}}, {{row}}-qator",
+        "entrances": "Yo'laklar, {{row}}-qator",
+        "floors": "Qavatlar, {{row}}-qator",
+        "from": "Qavatdan, {{row}}-qator",
+        "to": "Qavatgacha, {{row}}-qator"
+      },
+      "entrancesAll": "hammasi",
+      "addWork": "Ish turini qo'shish",
+      "remove": "Olib tashlash",
+      "split": "Ikki kunga teng bo'lish",
+      "coverage": "Tekshiruv: har bir qavat haftada necha marta yuviladi",
+      "coverageOk": "barcha qavatlar qamrab olingan",
+      "coverageGap": "yuvilmaydigan qavatlar: {{floors}}",
+      "week": "Hafta davomida nima bo'ladi",
+      "dayOff": "dam olish kuni",
+      "floorsPerEntrance": "yo'lakdagi qavatlar: {{n}}",
+      "extraPoints": "Qo'shimcha surat nuqtalari",
+      "extraPointsHint": "lotin harflarida, vergul bilan: entrance, trash",
+      "photoRule": "Belgilangan har bir qavatning surati doim majburiy; lift kabinasi — lift yuviladigan kunlari.",
+      "showResidents": "Uy tozalanishini aholiga ko'rsatish",
+      "showPhotos": "Aholiga tozalash suratlarini ko'rsatish",
+      "save": "Rejani saqlash",
+      "effective": "O'zgarishlar ertadan kuchga kiradi: bugungi topshiriqlar allaqachon berilgan.",
+      "upcoming": "Rejaning yangi versiyasi {{date}} dan kuchga kiradi.",
+      "mismatch": "Uyning qavatlari yoki yo'laklari soni o'zgargan — rejani qayta saqlang.",
+      "problem": {
+        "empty": "Kamida bitta ish qo'shing.",
+        "weekdays": "Har bir ishda kamida bitta kun bo'lishi kerak.",
+        "floors": "Qavatlar oralig'ini tekshiring: u uy doirasida bo'lishi kerak.",
+        "entrances": "Yo'laklar — vergul bilan raqamlar, uy doirasida."
+      },
+      "staffLink": "Farroshlar va yuklama"
+    },
+    "work": {
+      "wet": "Nam tozalash",
+      "dry": "Quruq tozalash",
+      "elevator": "Liftni yuvish"
+    },
+    "day": {
+      "0": "Du",
+      "1": "Se",
+      "2": "Chor",
+      "3": "Pay",
+      "4": "Ju",
+      "5": "Sha",
+      "6": "Yak"
+    },
+    "floors": {
+      "all": "Barcha qavatlar",
+      "first": "Faqat 1-qavat",
+      "range": "… dan … gacha",
+      "na": "tanlanmaydi"
+    },
+    "staff": {
+      "title": "Farroshlar, uylar va yuklama",
+      "subtitle": "Yuklama qavatlarda hisoblanadi: reja bo'yicha har kuni nechta qavat to'g'ri keladi.",
+      "norm": "Farrosh uchun me'yor, kuniga qavat",
+      "saveNorm": "Me'yorni saqlash",
+      "assignments": "Biriktirish va yuklama",
+      "col": {
+        "cleaner": "Farrosh",
+        "buildings": "Uylar",
+        "week": "Haftada qavatlar",
+        "peak": "Eng og'ir kun",
+        "percent": "Me'yorga nisbatan"
+      },
+      "addBuilding": "+ Uy",
+      "addBuildingFor": "Uy biriktirish: {{name}}",
+      "unassign": "Olib tashlash: {{address}}",
+      "none": "uylar yo'q",
+      "entrance": "{{n}}-yo'lak",
+      "overload": "Ortiqcha yuklama: {{name}} — me'yor {{norm}} bo'lganda kuniga {{peak}} qavat.",
+      "unassigned": "Farroshsiz: {{list}}.",
+      "over": "ortiqcha yuklama",
+      "ok": "me'yorda",
+      "byDay": "Hafta kunlari bo'yicha qavatlar",
+      "empty": "«Tozalash» ixtisosligiga ega xodimlar yo'q.",
+      "effective": "Yo'lakda bitta mas'ul bo'ladi. Biriktirish ertadan kuchga kiradi; o'tgan kunlar tozalagan xodimda qoladi.",
+      "planLink": "Tozalash rejasi",
+      "pickEntrances": "{{name}} uchun {{address}} uyi yo‘laklari — vergul bilan, bo‘sh = butun uy",
+      "takeOver": "Yo‘laklarning bir qismi boshqa farroshda — ertadan ular {{name}}ga o‘tadi. Davom etilsinmi?",
+      "badEntrances": "Yo‘lak raqamlari: 1 dan {{max}} gacha, vergul bilan.",
+      "entrancesPlaceholder": "yo‘laklar: hammasi",
+      "assign": "Biriktirish"
+    },
+    "control": {
+      "title": "Tozalash nazorati",
+      "week": "Hafta {{from}} – {{to}}",
+      "prevWeek": "Oldingi hafta",
+      "nextWeek": "Keyingi hafta",
+      "today": "Bugun",
+      "summary": {
+        "total": "Bugun jadval bo'yicha",
+        "accepted": "Tozalandi va qabul qilindi",
+        "review": "Savollar bor — tekshiruvga",
+        "unfinished": "Tugatilmagan"
+      },
+      "matrix": "Yo'laklar bo'yicha reja va fakt",
+      "entrance": "Yo'lak",
+      "noTasks": "Bu haftada topshiriqlar yo'q.",
+      "queue": "Tekshiruv navbati",
+      "queueEmpty": "Savollar yo'q: qolganlari avtomatik qabul qilingan.",
+      "sampled": "tanlab nazorat",
+      "complaints": "Aholi shikoyatlari",
+      "complaintsEmpty": "60 kun ichida shikoyat yo‘q.",
+      "noRequest": "ariza hali yaratilmagan",
+      "noTask": "reja bo'yicha tozalash bo'lmagan",
+      "openTask": "Topshiriqni ochish",
+      "timesheet": "Tabel",
+      "export": "CSV yuklab olish"
+    },
+    "status": {
+      "planned": "Jadval bo'yicha",
+      "in_progress": "Jarayonda",
+      "accepted": "Tozalandi",
+      "review": "Tekshirish",
+      "rejected": "Rad etildi",
+      "missed": "Tozalanmagan",
+      "expired": "Tugatilmagan"
+    },
+    "timesheet": {
+      "cleaner": "Farrosh",
+      "planned": "Jadval bo'yicha",
+      "accepted": "Hisobga olindi",
+      "rejected": "Rad etildi",
+      "expired": "Tugatilmagan",
+      "missed": "Tozalanmagan",
+      "complaints": "Shikoyatlar: jami / tasdiqlangan",
+      "percent": "Bajarilishi"
+    },
+    "complaint": {
+      "confirm": "Tasdiqlandi",
+      "dismiss": "Tasdiqlanmadi",
+      "pending": "ko'rib chiqilmoqda",
+      "confirmed": "tasdiqlandi",
+      "unfounded": "tasdiqlanmadi"
+    },
+    "rules": {
+      "title": "Sozlamalar",
+      "dayEnd": "Tozalash kunining oxiri",
+      "sample": "Tanlab nazorat: qabul qilingan N tadan 1 tasi",
+      "ttl": "Topshiriq ochilgandan keyingi ishonch oynasi, daq",
+      "deferred": "Oynadan keyin yuborilgan suratlarni avtomatik qabul qilish",
+      "save": "Sozlamalarni saqlash",
+      "effective": "Sozlamalar ertadan kuchga kiradi: bugungi kun avvalgilari bo'yicha o'tadi."
+    },
+    "task": {
+      "title": "Tozalash topshirig'i",
+      "floor": "{{n}}-qavat",
+      "noFile": "fayl yo'q",
+      "shot": "{{total}} tadan {{done}} tasi olindi",
+      "why": "Nega tekshiruvda",
+      "photos": "Nuqtalar suratlari",
+      "missing": "Olinmagan: {{list}}",
+      "evidence": "Kech kelgan va hisobga olinmagan suratlar",
+      "evidenceNote": "Kun tugagandan yoki mas'ul almashgandan keyin kelgan. Hisobga kirmaydi — qarorni siz qabul qilasiz.",
+      "decision": "Qaror",
+      "comment": "Izoh (rad etishda va qo'lda hisobga olishda majburiy)",
+      "accept": "Tozalashni hisobga olish",
+      "reject": "Rad etish",
+      "returnForRetake": "Qayta suratga olishga qaytarish",
+      "reopen": "Qayta ochish",
+      "acceptManually": "Qo'lda hisobga olish",
+      "reassign": "Bugungi mas'ulni almashtirish",
+      "chooseCleaner": "Farroshni tanlang",
+      "decisionNote": "Qaror va muallif jurnalga yoziladi. Topshiriq o'zgargan bo'lsa, tizim sahifani yangilashni so'raydi.",
+      "journal": "Jurnal",
+      "otherPhotos": "Almashtirilgan va rad etilgan kadrlar: {{count}}"
+    },
+    "trust": {
+      "live": "seans oynasida",
+      "deferred": "oynadan keyin",
+      "offline": "seanssiz",
+      "late": "kun tugagandan keyin"
+    },
+    "reason": {
+      "not_live": "Seans oynasidan tashqari suratlar bor",
+      "duplicate_photo": "Avval yuklangan kadr takrorlangan",
+      "similar_photo": "Kadr shu qavatning oldingi surati bilan deyarli bir xil",
+      "too_fast": "Qavatlar juda tez suratga olingan",
+      "complaint": "Aholi shikoyati",
+      "probation": "Yangi farrosh: dastlabki kunlarda hammasi tekshiriladi",
+      "sampled": "Tanlab nazorat"
+    },
+    "event": {
+      "first_photo": "Birinchi surat",
+      "completed": "Barcha nuqtalar olindi",
+      "decision": "Menejer qarori",
+      "complaint": "Aholi shikoyati",
+      "complaint_recorded": "Aholi shikoyati",
+      "day_closed": "Kun yopildi",
+      "late_evidence": "Kech kelgan surat",
+      "evidence": "Hisobdan tashqari surat",
+      "reassigned": "Mas'ul almashtirildi"
+    },
+    "point": {
+      "elevator": "Lift",
+      "entrance": "Kirish"
+    },
+    "toast": {
+      "decided": "Qaror saqlandi",
+      "reassigned": "Mas'ul almashtirildi",
+      "complaintDecided": "Shikoyat natijasi saqlandi",
+      "planSaved": "Reja saqlandi, ertadan kuchga kiradi",
+      "settingsSaved": "Uy sozlamalari saqlandi",
+      "assigned": "Biriktirish o'zgartirildi, ertadan kuchga kiradi",
+      "rulesSaved": "Sozlamalar saqlandi"
+    },
+    "errors": {
+      "stale": "Siz ko‘rayotganingizda topshiriq o‘zgardi (yangi surat, shikoyat yoki qaror). Ma’lumotlar yangilandi — tekshirib, qayta urinib ko‘ring.",
+      "comment_required": "Izoh kerak.",
+      "day_over": "Qo‘shimcha suratga faqat tozalash kunida qaytarish mumkin.",
+      "bad_transition": "Joriy holatda bu amal mavjud emas.",
+      "not_a_cleaner": "Xodim farrosh emas: «Tozalash» ixtisosligi kerak.",
+      "bad_floors": "Rejadagi qavatlarni tekshiring.",
+      "bad_entrances": "Rejadagi yo‘laklarni tekshiring.",
+      "bad_extra_points": "Qo‘shimcha suratga olish nuqtalarini tekshiring.",
+      "bad_items": "Reja qatorlarini tekshiring.",
+      "bad_weekdays": "Hafta kunlarini ko‘rsating.",
+      "bad_work_kind": "Noma’lum ish turi.",
+      "empty_plan": "Rejada birorta ham ish yo‘q.",
+      "bad_rule": "Sozlama qiymatini tekshiring.",
+      "bad_range": "Davr juda uzun.",
+      "building_not_found": "Uy topilmadi.",
+      "not_found": "Topilmadi.",
+      "media_unavailable": "Suratlar ombori vaqtincha ishlamayapti, keyinroq urinib ko‘ring."
+    }
+  },
   "paymentControl": {
     "title": "To‘lovlar nazorati",
     "account": "Shaxsiy hisob raqami",
@@ -116,6 +360,7 @@
     "menuItem": "F.I.Sh. bosh harflar bilan"
   },
   "nav": {
+    "cleaning": "Tozalash",
     "roles": "Rollar va huquqlar",
     "analytics": "Analitika",
     "requests": "Arizalar",
@@ -1050,7 +1295,8 @@
       "requests": "Majmua bo'yicha murojaatlar",
       "works": "Yaqin kunlardagi ishlar",
       "elevators": "Liftlar",
-      "workreports": "Bajarilgan ishlar hisobotlari"
+      "workreports": "Bajarilgan ishlar hisobotlari",
+      "cleaning": "Tozalash"
     },
     "blockSources": {
       "announcements": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limi. Karusel ko'rinishida, bosilganda — to'liq matn.",
@@ -1058,12 +1304,14 @@
       "requests": "Majmuaning barcha arizalari bo'yicha avtomatik hisoblanadi: «Yangi», «Jarayonda» (xarid va aniqlashtirish bilan), «Shu oy hal etilgan» (bajarilgan, tekshirilgan, qabul qilingan). Qo'lda to'ldirilmaydi.",
       "works": "Ma'lumot: «Yangiliklar va xabarnomalar» bo'limidagi rejali o'chirishlar. O'tganlari avtomatik yashiriladi.",
       "elevators": "Ma'lumot: liftlar reyestri va ularning holati.",
-      "workreports": "Ma'lumot: e'lon qilingan «oldin/keyin» hisobotlari."
+      "workreports": "Ma'lumot: e'lon qilingan «oldin/keyin» hisobotlari.",
+      "cleaning": "Ma'lumot: «Tozalash» moduli. Hisob uylar bo'yicha; uy kunning barcha topshiriqlari qabul qilingach tozalangan hisoblanadi."
     },
     "manageIn": {
       "requests": "Arizalar",
       "elevators": "Liftlar",
-      "workreports": "Ish hisobotlari"
+      "workreports": "Ish hisobotlari",
+      "cleaning": "Tozalash"
     },
     "previewPhone": "Telefon",
     "tabHome": "Aholi sahifasi",
@@ -2584,6 +2832,94 @@
     }
   },
   "twa": {
+    "residentCleaning": {
+      "title": "Uyimdagi tozalash",
+      "back": "Bosh sahifa",
+      "building": "Uy",
+      "today": "Bugungi tozalash",
+      "summary": "tozalangan yo'laklar: {{total}} tadan {{done}} ta",
+      "noneToday": "bugun jadval bo'yicha tozalash yo'q",
+      "hidden": "Uyingizdagi tozalash haqidagi ma'lumot hozircha e'lon qilinmaydi.",
+      "entrance": "{{n}}-yo'lak",
+      "doneAt": "Soat {{time}} da tozalandi",
+      "state": {
+        "pending": "Hali tozalanmagan",
+        "none": "Bugun tozalash yo'q"
+      },
+      "photoAlt": "Tozalash surati, {{n}}-yo'lak",
+      "complain": "Xabar berish: tozalanmagan",
+      "sent": "Xabar qabul qilindi, menejer tekshiradi",
+      "sentWithNumber": "Qabul qilindi. Ariza {{number}}",
+      "complainError": "Yuborib bo'lmadi. Qayta urinib ko'ring.",
+      "schedule": "Uy jadvali",
+      "dayOff": "dam olish kuni",
+      "day": {
+        "0": "Dushanba",
+        "1": "Seshanba",
+        "2": "Chorshanba",
+        "3": "Payshanba",
+        "4": "Juma",
+        "5": "Shanba",
+        "6": "Yakshanba"
+      }
+    },
+    "cleaning": {
+      "entry": "Tozalash",
+      "entryLeft": "qolgan yo'laklar: {{total}} tadan {{left}} ta",
+      "title": "Bugungi tozalash",
+      "back": "Orqaga",
+      "loading": "Yuklanmoqda…",
+      "unavailable": "Tozalash bo'limi mavjud emas",
+      "empty": "Bugun tozalash yo'q",
+      "entrance": "{{n}}-yo'lak",
+      "floor": "{{n}}-qavat",
+      "point": {
+        "elevator": "Lift",
+        "entrance": "Kirish"
+      },
+      "work": {
+        "wet": "Nam tozalash",
+        "dry": "Quruq tozalash",
+        "elevator": "Liftni yuvish"
+      },
+      "shootEach": "Qavatni yuvdingizmi — suratga oling. Surat belgi hisoblanadi.",
+      "progress": "{{total}} tadan {{done}} tasi olindi",
+      "deadline": "Suratlar bugun soat {{time}} gacha qabul qilinadi",
+      "waiting": "Aloqani kutayotgan suratlar: {{count}}",
+      "sendNow": "Hozir yuborish",
+      "slotState": {
+        "todo": "suratga olish",
+        "queued": "aloqani kutmoqda",
+        "done": "olindi",
+        "failed": "qabul qilinmadi"
+      },
+      "status": {
+        "planned": "Boshlanmagan",
+        "in_progress": "Tozalanmoqda",
+        "accepted": "Qabul qilindi",
+        "review": "Menejer tekshiruvida",
+        "rejected": "Hisobga olinmadi",
+        "expired": "Tugatilmagan — hisobga olinmadi",
+        "missed": "Tozalanmagan"
+      },
+      "refused": {
+        "not_yours": "topshiriq boshqa xodimga berilgan",
+        "frozen": "topshiriq yopilgan",
+        "too_late": "juda kech",
+        "bad_photo": "qayta suratga oling",
+        "bad_slot": "bu nuqta topshiriqda yo'q",
+        "key_reused": "qayta suratga oling",
+        "other": "qabul qilinmadi"
+      },
+      "camera": {
+        "close": "Kamerani yopish",
+        "shoot": "Suratga olish",
+        "starting": "Kamera yoqilmoqda…",
+        "note": "Surat faqat kameradan olinadi. Galereya yopiq.",
+        "systemHint": "Ilovadagi kamera ishlamayapti. Telefon kamerasini oching — bunday suratni menejer tekshiradi.",
+        "openSystem": "Kamerani ochish"
+      }
+    },
     "reopenBadge": "Takroriy murojaat №{{n}}",
     "relatedRequest": "bog'liq",
     "tabs": {
@@ -3974,6 +4310,9 @@
       "board.configure": "Tabloni sozlash",
       "notices.manage": "Yashovchilarga yangiliklar va xabarnomalar",
       "outages.announce": "O'chirishlar: smenadagi santexnik e'lon qiladi",
+      "cleaning.work": "Tozalash: farrosh topshiriqlari va qavat suratlari",
+      "cleaning.read": "Tozalash: uylar rejasi, biriktirish, yuklama, nazorat",
+      "cleaning.manage": "Tozalash: rejalar, biriktirishlar va sozlamalarni tahrirlash",
       "callcenter.use": "Call-markaz: qo'ng'iroq bo'yicha arizalar",
       "dashboard.live": "Boshqaruv paneli hodisalarining jonli oqimi (WebSocket)",
       "dashboard.use": "Asosiy veb-boshqaruv paneliga kirish",
@@ -4017,6 +4356,18 @@
     "executorNeedsSpecialization": "Ijrochida ixtisoslik yo'q — u ariza olmaydi. Ularni «Ixtisosliklar» blokida belgilang."
   },
   "home": {
+    "cleaning": {
+      "title": "Uylarni tozalash",
+      "sub": "Belgi tozalash kuni olingan suratlardan keyin paydo bo'ladi",
+      "done": "uy bugun tozalandi",
+      "empty": "Bugun jadval bo'yicha tozalash yo'q",
+      "state": {
+        "done": "Tozalandi",
+        "in_progress": "Tozalanmoqda",
+        "planned": "Bugun jadval bo'yicha",
+        "none": "Bugun tozalash yo'q"
+      }
+    },
     "pageTitle": "Uyingiz bugun",
     "eyebrow": "Aholi uchun ma'lumot",
     "skip": "Uy haqidagi ma'lumotlarga o'tish",
