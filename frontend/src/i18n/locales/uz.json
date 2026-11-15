@@ -1396,6 +1396,30 @@
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
   },
   "notices": {
+    "outages": {
+      "now_one": "Hozir o'chirilgan: {{count}}",
+      "now_other": "Hozir o'chirilgan: {{count}}",
+      "none": "Hozir hech narsa o'chirilmagan.",
+      "since": "{{time}} dan",
+      "byStaff": "{{name}} e'lon qildi",
+      "staff": "xodim",
+      "by": {
+        "manual": "rejali, menejerdan",
+        "news_watch": "kanaldan"
+      },
+      "until": "{{time}} gacha yoqish va'da qilingan",
+      "overdue": "Muddat {{time}} da tugadi — yopilmagan",
+      "noTerm": "Muddat aytilmagan",
+      "restore": {
+        "water": "Suv yoqildi",
+        "heating": "Isitish yoqildi"
+      },
+      "confirmStaff": "O'chirish yopiladi, bu uylar aholisi yoqilgani haqida xabar oladi.",
+      "confirmOther": "Yozuv tablodan olinadi. Aholiga xabar yuborilmaydi.",
+      "confirm": "Tasdiqlash",
+      "restoredToday": "Oxirgi sutkada yoqilgan",
+      "restoredAt": "{{time}} da yoqildi"
+    },
     "audience": {
       "label": "Kimga mo'ljallangan",
       "scope": {
@@ -1424,6 +1448,7 @@
     "title": "Yangiliklar va xabarnomalar",
     "tab": {
       "feed": "Tasma",
+      "outages": "O'chirishlar",
       "calendar": "Taqvim",
       "channels": "Kanallardan"
     },

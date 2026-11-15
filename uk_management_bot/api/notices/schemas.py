@@ -128,8 +128,13 @@ class NoticeOut(BaseModel):
     broadcast_next_at: Optional[datetime] = None
     broadcast_details: Optional[dict] = None
     created_by: Optional[int] = None
+    closed_by: Optional[int] = None
     closed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    # Кто объявил и кто закрыл — «Имя Фамилия» как в профиле; заполняется в ленте
+    # (вкладка «Отключения» показывает, чьё это отключение и кто дал воду).
+    created_by_name: Optional[str] = None
+    closed_by_name: Optional[str] = None
 
 
 class NoticesOut(BaseModel):
