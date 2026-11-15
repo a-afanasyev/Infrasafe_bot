@@ -29,6 +29,8 @@ REVIEW_DIGEST_HOUR = 9
 
 # Шаг тика напоминаний об отключениях = окно «срок вышел только что».
 OUTAGE_REMINDER_MINUTES = 10
+# Уборка: шаг тика = наибольшее опоздание закрытия дня после его конца.
+CLEANING_TICK_MINUTES = 10
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,7 @@ class ShiftScheduler:
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
             'outage_reminders': {'success': 0, 'failed': 0, 'last_run': None},
+            'cleaning_tick': {'success': 0, 'failed': 0, 'last_run': None},
             'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
             'monthly_report': {'success': 0, 'failed': 0, 'last_run': None},
         }
@@ -359,6 +362,20 @@ class ShiftScheduler:
             max_instances=1,
             coalesce=True
         )
+
+        # 16. Уборка: догенерация заданий дня, закрытие истёкших дней, чистка
+        #     операций загрузки. Всё идемпотентно (cleaning_days), поэтому
+        #     пропущенный тик догоняется следующим. Выключенный модуль = джобы
+        #     нет вовсе (флаг читается один раз, как у лифтов).
+        if settings.CLEANING_ENABLED:
+            self.scheduler.add_job(
+                self._cleaning_tick,
+                IntervalTrigger(minutes=CLEANING_TICK_MINUTES),
+                id='cleaning_tick',
+                name='Уборка — задания дня, закрытие дня, чистка',
+                max_instances=1,
+                coalesce=True
+            )
 
         logger.info("Задачи планировщика смен настроены успешно")
 
@@ -1015,6 +1032,32 @@ class ShiftScheduler:
             return overdue, [item for item in shift_ended_sync(db, now, window) if item.notice_id not in seen]
         finally:
             db.close()
+
+    async def _cleaning_tick(self):
+        """Уборка: задания последних дней и сегодня, закрытие истёкших дней, чистка."""
+        from uk_management_bot.database.session import AsyncSessionLocal
+        if AsyncSessionLocal is None:  # SQLite dev-режим — async-движка нет
+            return
+        from uk_management_bot.services.cleaning import cleanup, days, notify
+
+        task_name = 'cleaning_tick'
+        try:
+            async with AsyncSessionLocal() as db:
+                await days.tick(db)
+                await db.commit()  # дни фиксируются до рассылки: её сбой не откатывает генерацию и закрытие
+            async with AsyncSessionLocal() as db:
+                messages = await notify.collect(db)
+                await db.commit()
+            if messages and self._bot is not None:
+                await notify.send(self._bot, messages)  # не бросает
+            stats = await cleanup.run(AsyncSessionLocal)
+            if any(stats.values()):
+                logger.info("Уборка: чистка %s", stats)
+            self.task_stats[task_name]['success'] += 1
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            logger.exception("Ошибка тика уборки")
+        self.task_stats[task_name]['last_run'] = utc_now()
 
     async def _outage_reminders_tick(self):
         """Истёкшие незакрытые отключения: DB-фаза в потоке, затем личка автору."""

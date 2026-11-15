@@ -131,6 +131,9 @@ _ACTIONS: tuple[Action, ...] = (
     _action("board.configure", {_M}, "Настройка табло"),
     _action("notices.manage", {_M}, "Новости и уведомления жителям"),
     _action("outages.announce", {_E}, "Отключения: объявление сантехником на смене"),
+    _action("cleaning.work", {_E}, "Уборка: задания уборщицы и фото этажей", approved_only=True),
+    _action("cleaning.read", {_M}, "Уборка: план домов, привязка, нагрузка, контроль", approved_only=True),
+    _action("cleaning.manage", {_M}, "Уборка: правка планов, привязок и настроек", approved_only=True),
     _action("auto_manager.configure", {_M, _A}, "Настройка автоматического менеджера"),
     _action("work_reports.moderate", {_M}, "Модерация отчётов о работах", approved_only=True),
     # ---------------------------------------------------------- персонал и смены

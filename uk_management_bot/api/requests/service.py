@@ -423,7 +423,7 @@ async def persist_request(
     elevator_operational: Optional[bool] = None,
     allow_under_works: bool = False,
     language: str = "ru",
-    schedule_notify: Optional[Callable[..., Any]] = None,
+    schedule_notify: Optional[Callable[..., Any]] = None, preferred_executor_id: Optional[int] = None,
 ) -> PersistedRequest:
     """Общий create-хелпер: номер + структурный адрес + outbox + savepoint-retry.
 
@@ -504,7 +504,7 @@ async def persist_request(
     # refresh — чтобы карточка ответа отразила актуальный статус (В работе).
     from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
     await auto_dispatch_new_request_async(
-        req.request_number, category, schedule_notify=schedule_notify)
+        req.request_number, category, schedule_notify=schedule_notify, preferred_executor_id=preferred_executor_id)
     await db.refresh(req)
     await db.commit()  # отдать соединение в пул до сериализации ответа
     return PersistedRequest(request=req, elevator=binding.elevator)

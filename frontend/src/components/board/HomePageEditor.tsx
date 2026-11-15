@@ -16,6 +16,7 @@ const MANAGE_LINKS: Partial<Record<HomeBlockId, string>> = {
   requests: '/dashboard',
   elevators: '/dashboard/elevators',
   workreports: '/dashboard/work-reports',
+  cleaning: '/dashboard/cleaning',
 }
 
 const EMPTY: LocalizedText = { ru: '', uz: '' }

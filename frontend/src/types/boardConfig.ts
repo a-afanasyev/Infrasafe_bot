@@ -103,7 +103,7 @@ export interface PlannedWorkCfg {
 // Страница жителей (/home): блоки в каноническом порядке — сетка свёрстана,
 // менеджер включает/выключает блоки и меняет заголовки, но не переставляет.
 // Зеркало HOME_BLOCK_IDS бэкенда (services/board_config/defaults.py).
-export const HOME_BLOCK_IDS = ['announcements', 'contacts', 'requests', 'works', 'elevators', 'workreports'] as const
+export const HOME_BLOCK_IDS = ['announcements', 'contacts', 'requests', 'works', 'elevators', 'workreports', 'cleaning'] as const
 export type HomeBlockId = (typeof HOME_BLOCK_IDS)[number]
 
 export interface HomeBlockCfg {

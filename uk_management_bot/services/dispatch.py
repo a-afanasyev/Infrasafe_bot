@@ -321,8 +321,13 @@ async def auto_dispatch_new_request_async(request_number: str,
                                           *, _db=None,
                                           session_factory=None,
                                           schedule_notify: Optional[Callable[..., Any]] = None,
+                                          preferred_executor_id: Optional[int] = None,
                                           ) -> DispatchResult:
     """API/TWA/обходчик: то же, что sync-путь, плюс realtime для канбана.
+
+    ``preferred_executor_id`` — заявку ведёт заранее известный человек (жалоба на
+    уборку → уборщица этого подъезда): назначается он, без подбора дежурного, без
+    триажа ИИ и независимо от того, включено ли автоназначение.
 
     ``schedule_notify`` (A9-P2-7) — отложить уведомление о назначении: HTTP-
     ручка передаёт ``BackgroundTasks.add_task``, и Telegram уходит ПОСЛЕ ответа
@@ -334,7 +339,9 @@ async def auto_dispatch_new_request_async(request_number: str,
     if not spec:
         return DispatchResult("no_spec")
     engineering = is_engineering_category(category)
-    if not engineering and not await _auto_assign_enabled_async(_db, session_factory=session_factory):
+    preferred = preferred_executor_id is not None
+    if not engineering and not preferred and not await _auto_assign_enabled_async(
+            _db, session_factory=session_factory):
         logger.info("[DISPATCH] автоназначение выключено — %s остаётся «Новая»",
                     request_number)
         return DispatchResult("disabled", spec)
@@ -348,7 +355,7 @@ async def auto_dispatch_new_request_async(request_number: str,
 
     # ИИ-режим: триаж (sync-код, своя SessionLocal внутри) в потоке — ДО
     # подбора, категория может измениться; «Уточнение» — назначение отложено.
-    ai_cfg = None if engineering else await asyncio.to_thread(_ai_config_sync, None)
+    ai_cfg = None if engineering or preferred else await asyncio.to_thread(_ai_config_sync, None)
     if ai_cfg is not None:
         triaged = await asyncio.to_thread(_ai_triage, request_number, ai_cfg, None)
         if triaged.clarified:
@@ -362,7 +369,8 @@ async def auto_dispatch_new_request_async(request_number: str,
     # Подбор дежурного — sync-код (`select_executor` ходит через Session), и
     # здесь мы в event loop'е. Отдельный поток, а не прямой вызов: блокировать
     # loop синхронными запросами к БД в этом проекте уже было дефектом (BUG-157).
-    executor_id = await asyncio.to_thread(pick_assignee_id, category, None)
+    executor_id = (preferred_executor_id if preferred
+                   else await asyncio.to_thread(pick_assignee_id, category, None))
     if engineering and executor_id is None:
         return _no_engineer(request_number, spec)
     if executor_id is not None:

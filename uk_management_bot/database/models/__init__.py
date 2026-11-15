@@ -58,6 +58,19 @@ from .notice import Notice
 from .elevator import Elevator, ElevatorStatusEvent, ElevatorMaintenanceOccurrence
 from .elevators_config import ElevatorsConfig
 
+# Уборка: версии плана дома, назначения, задания на день, фото, журнал, жалобы
+from .cleaning import (
+    CleaningAssignment,
+    CleaningBuildingSettings,
+    CleaningComplaint,
+    CleaningDay,
+    CleaningPhoto,
+    CleaningPlanVersion,
+    CleaningRules,
+    CleaningTask,
+    CleaningTaskEvent,
+)
+
 # Админка ролей: роли, их права и версия для сброса кэша прав
 from .rbac import RbacRole, RbacRolePermission, RbacState
 
@@ -113,4 +126,13 @@ __all__ = [
     'RbacRolePermission',
     'RbacState',
     'AccountOwner',
+    'CleaningAssignment',
+    'CleaningBuildingSettings',
+    'CleaningComplaint',
+    'CleaningDay',
+    'CleaningPhoto',
+    'CleaningPlanVersion',
+    'CleaningRules',
+    'CleaningTask',
+    'CleaningTaskEvent',
 ]

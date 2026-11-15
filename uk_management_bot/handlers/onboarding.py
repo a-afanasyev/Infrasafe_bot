@@ -282,10 +282,23 @@ async def document_before_type(message: Message, state: FSMContext, language: st
 
 
 @router.message(StateFilter(None), F.chat.type == "private", F.photo | F.document)
-async def catch_stray_document(message: Message, language: str = "ru", **_kwargs):
+async def catch_stray_document(message: Message, language: str = "ru", user: Optional[User] = None,
+                               **_kwargs):
     """Фото/файл вне какого-либо сценария (BUG-188). Все штатные приёмники
     медиа привязаны к FSM-состояниям, поэтому здесь — только подсказка с
-    кнопкой входа в загрузку документов, вместо тишины."""
+    кнопкой входа в загрузку документов, вместо тишины.
+
+    Уборщице (модуль «Уборка») — своя подсказка: фото уборки в чате не
+    принимаются, их снимают в приложении. Без флага ветка не срабатывает."""
+    from uk_management_bot.config.settings import settings
+
+    if settings.CLEANING_ENABLED:
+        from uk_management_bot.services.cleaning import notify
+        from uk_management_bot.services.cleaning.assignments import is_cleaner
+
+        if is_cleaner(user):
+            await message.answer(notify.photo_in_chat_text(language), reply_markup=notify.open_markup(language))
+            return
     await message.answer(
         get_text("onboarding.documents.send_after_button", language=language),
         reply_markup=get_upload_documents_inline(language),

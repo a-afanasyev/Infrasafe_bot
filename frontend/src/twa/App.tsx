@@ -21,6 +21,7 @@ import FeedbackPage from './pages/FeedbackPage'
 
 // Applicant pages
 import HomePage from './pages/applicant/HomePage'
+import ResidentCleaningPage from './pages/applicant/CleaningPage'
 import RequestsPage from './pages/applicant/RequestsPage'
 import CreatePage from './pages/applicant/CreatePage'
 import AcceptancePage from './pages/applicant/AcceptancePage'
@@ -56,6 +57,7 @@ import SimpleDonePage from './simple/pages/DonePage'
 import SimpleProblemPage from './simple/pages/ProblemPage'
 import SimpleShiftPage from './simple/pages/ShiftPage'
 import OutagePage from './outage/OutagePage'
+import CleaningPage from './cleaning/CleaningPage'
 
 // У простого режима своя полоса «нет связи» (со счётчиком неотправленных фото).
 const SIMPLE_PATH = /^\/twa\/s(\/|$)/
@@ -120,6 +122,7 @@ function TWAContent() {
         <Route path="/app/create" element={<RoleGuard required="applicant" fallback="/twa"><CreatePage /><ApplicantTabs /></RoleGuard>} />
         <Route path="/app/acceptance" element={<RoleGuard required="applicant" fallback="/twa"><AcceptancePage /><ApplicantTabs /></RoleGuard>} />
         <Route path="/app/profile" element={<RoleGuard required="applicant" fallback="/twa"><ProfilePage /><ApplicantTabs /></RoleGuard>} />
+        <Route path="/app/cleaning" element={<RoleGuard required="applicant" fallback="/twa"><ResidentCleaningPage /><ApplicantTabs /></RoleGuard>} />
         <Route path="/app/requests/:number" element={<RoleGuard required="applicant" fallback="/twa"><RequestDetailPage /></RoleGuard>} />
 
         {/* Контроль доступа жителя (ANPR/шлагбаум): авто, пропуска, проезды.
@@ -145,6 +148,7 @@ function TWAContent() {
         {/* Ссылка бота на заявку: simple → /twa/s/task/:n, ?action=done → «Готово»/отчёт. */}
         <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><ExecTaskEntry /></RoleGuard>} />
         <Route path="/exec/outage" element={<RoleGuard required="executor"><OutagePage backTo="/twa/exec/shift" /></RoleGuard>} />
+        <Route path="/exec/cleaning" element={<RoleGuard required="executor"><CleaningPage backTo="/twa/exec/shift" /></RoleGuard>} />
         <Route path="/exec/shifts" element={<RoleGuard required="executor"><MyShiftsPage /></RoleGuard>} />
         <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
 
@@ -159,6 +163,7 @@ function TWAContent() {
           <Route path="task/:number/problem" element={<SimpleProblemPage />} />
           <Route path="shift" element={<SimpleShiftPage />} />
           <Route path="outage" element={<OutagePage backTo="/twa/s/shift" />} />
+          <Route path="cleaning" element={<CleaningPage backTo="/twa/s/shift" />} />
         </Route>
 
         {/* Обратная связь — общий маршрут для обеих ролей, без таб-бара */}

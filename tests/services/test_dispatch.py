@@ -375,3 +375,38 @@ async def test_ai_mode_async_category_change_repicks(monkeypatch):
     assert picks == ["electricity"]
     assert result.kind == "assigned" and result.specialization == "electrician"
     assert commands == [(Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 5})]
+
+
+@pytest.mark.asyncio
+async def test_preferred_executor_is_assigned_without_pick_gate_or_triage(monkeypatch):
+    """Жалоба на уборку: заявка сразу на уборщицу подъезда — и при выключенном автоназначении."""
+    import uk_management_bot.services.dispatch as dispatch_mod
+    from uk_management_bot.services.dispatch import auto_dispatch_new_request_async
+
+    async def disabled(*a, **k):
+        return False
+
+    def forbidden(*a, **k):
+        raise AssertionError("подбор и триаж не должны вызываться")
+
+    monkeypatch.setattr(dispatch_mod, "_auto_assign_enabled_async", disabled)
+    monkeypatch.setattr(dispatch_mod, "_ai_config_sync", forbidden)
+    monkeypatch.setattr(dispatch_mod, "pick_assignee_id", forbidden)
+    commands = []
+
+    async def fake_run(_sf, num, principal, command, *a, **k):
+        commands.append((command.action, dict(command.payload)))
+        return type("O", (), {"post_commit_intents": [], "old_state": None})()
+
+    async def noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(wr, "run_command_async", fake_run)
+    monkeypatch.setattr(dispatch_mod, "_publish_status_changed", noop)
+    from uk_management_bot.services import workflow_notifications
+    monkeypatch.setattr(workflow_notifications, "dispatch_notify_intents_detached", noop)
+
+    result = await auto_dispatch_new_request_async(
+        "261116-001", "cleaning", session_factory=_NoDb, preferred_executor_id=42)
+    assert result.kind == "assigned" and result.executor_id == 42
+    assert commands == [(Action.SYSTEM_DISPATCH_ASSIGN, {"executor_id": 42})]

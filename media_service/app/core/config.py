@@ -72,7 +72,9 @@ class Settings(BaseSettings):
     # Лимит в ЗАЯВКАХ, а не в файлах: кэш разложен по каталогу на заявку, и
     # вытесняется целая заявка (все её превью) — так лимит совпадает с тем, как
     # на витрину смотрят: последние N выполненных работ.
-    preview_cache_max_requests: int = 100
+    # Уборка кладёт каталог на подъезд-день (`cl-<id задания>`): при сотне каталогов
+    # прогретые утром превью вытеснялись бы к вечеру вместе с превью витрины.
+    preview_cache_max_requests: int = 500
     preview_max_px: int = 480
     preview_jpeg_quality: int = 72
     # A10-SAT-01: потолок пикселей ИСХОДНИКА для превью. Лимит 50 МБ входа
@@ -188,6 +190,9 @@ class FileCategories:
     COMPLETION_VIDEO = "completion_video"
     # Фото исполнителя «до работ» — тот же канал отчётов, что «после»
     BEFORE_PHOTO = "before_photo"
+    # Фото уборки подъезда — канал отчётов; в белый список UK-прокси НЕ входит:
+    # грузит только сервер UK своим протоколом (services/cleaning/uploads.py)
+    CLEANING_PHOTO = "cleaning_photo"
 
     # Обратная связь (жалобы/пожелания)
     FEEDBACK_PHOTO = "feedback_photo"
@@ -215,6 +220,7 @@ class FileCategories:
         COMPLETION_PHOTO: TelegramChannels.REPORTS,
         COMPLETION_VIDEO: TelegramChannels.REPORTS,
         BEFORE_PHOTO: TelegramChannels.REPORTS,
+        CLEANING_PHOTO: TelegramChannels.REPORTS,
         FEEDBACK_PHOTO: TelegramChannels.REQUESTS,
         ACCESS_PLATE: TelegramChannels.ACCESS,
         ACCESS_OVERVIEW: TelegramChannels.ACCESS,

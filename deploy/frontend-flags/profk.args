@@ -15,5 +15,8 @@ VITE_RESOURCES_ENABLED=true
 VITE_WORK_REPORTS_ENABLED=true
 VITE_ELEVATORS_ENABLED=true
 VITE_PAYMENTS_ENABLED=true
+# Уборка: включена на площадке 2026-11-16 вместе с CLEANING_ENABLED у app/api; префикс
+# /api/v2/cleaning заявлен в edge-allowlist обеих площадок. Пусто = OFF.
+VITE_CLEANING_ENABLED=true
 # Мониторинг отключений (news-watch): пусто = OFF; true только вместе с NEWS_WATCH_ENABLED у api и edge-allowlist.
 VITE_NEWS_WATCH_ENABLED=true

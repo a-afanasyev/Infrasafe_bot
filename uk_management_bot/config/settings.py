@@ -314,6 +314,12 @@ class Settings:
         # единым 404 пока флаг выключен (паттерн WORK_REPORTS_ENABLED).
         self.ELEVATORS_ENABLED = os.getenv("ELEVATORS_ENABLED", "False").lower() == "true"
 
+        # ── Cleaning (модуль «Уборка») ─────────────────────────────────
+        # DARK-гейт: без флага роутеры /api/v2/cleaning и /api/v2/public/cleaning
+        # отвечают 404, задания планировщика не регистрируются, ветка «фото от
+        # уборщицы» в боте не срабатывает. Одинаково для бота и API.
+        self.CLEANING_ENABLED = os.getenv("CLEANING_ENABLED", "False").lower() == "true"
+
         # ── Group Intake (выделенный бот, план rev.3) ──────────────────
         # Классификация «заявка/нет» — Anthropic API (structured outputs),
         # модель — pinned snapshot. Ключ и токен — ТОЛЬКО из Doppler.

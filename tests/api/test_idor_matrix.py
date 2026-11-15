@@ -344,6 +344,18 @@ IDOR_COVERAGE: dict[tuple[str, str], str] = {
         "tests/api/test_work_reports_public.py::test_feed_only_published_visible",
     ("GET", "/api/v2/public/work-reports/{report_id}/media/{media_id}"):
         "tests/api/test_work_reports_public.py::test_media_404_cross_report_media_id_idor",
+    # Уборка: задание ведёт только его ответственный (чужое фото — сохранённый отказ not_yours).
+    ("POST", "/api/v2/cleaning/tasks/{task_id}/session"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    ("POST", "/api/v2/cleaning/tasks/{task_id}/photos"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    ("GET", "/api/v2/cleaning/tasks/{task_id}/photos/{photo_id}/file"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    # Уборка, открытые маршруты: дом и фото отдаются только при включённом показе жителям.
+    ("GET", "/api/v2/public/cleaning/buildings/{building_id}"):
+        "tests/api/test_cleaning_public_api.py::test_building_view_shows_entrances_schedule_and_public_photos_only",
+    ("GET", "/api/v2/public/cleaning/photos/{photo_id}"):
+        "tests/api/test_cleaning_public_api.py::test_public_photo_follows_settings_status_and_slot",
 }
 
 #: Действия, которые дают только персонал с доступом ко всем объектам раздела
@@ -361,6 +373,10 @@ STAFF_WIDE_ACTIONS = frozenset({
     # Колл-центр (менеджер, диспетчер): звонок принимают по любому адресу и от
     # любого жителя — номера квартир дома и квартиры найденного звонящего.
     "callcenter.use",
+    # Уборка, раздел менеджера: планы, привязки и настройки общие на площадку.
+    # `cleaning.work` (уборщица, свои задания) сюда НЕ входит — её маршруты
+    # идут в IDOR_COVERAGE с парой «чужое/своё задание».
+    "cleaning.read", "cleaning.manage",
 })
 
 
