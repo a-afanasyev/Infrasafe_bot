@@ -25,7 +25,8 @@ export default function OutagePage({ backTo }: { backTo: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { notify } = useTelegramSDK()
-  const { data, isLoading, isError, refetch } = useOutageOptions()
+  // isPending, не isLoading: пока ждём текущую смену, запрос ещё не начат — это тоже «загрузка».
+  const { data, isPending: isLoading, isError, refetch } = useOutageOptions()
   const [step, setStep] = useState<Step>('resource')
   const [resource, setResource] = useState<OutageResource>('water')
   const [buildings, setBuildings] = useState<number[]>([])

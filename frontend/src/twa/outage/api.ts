@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { twaClient } from '../twaClient'
+import { useCurrentShift } from '../simple/api'
 
 // Отключения от сантехника на смене — один серверный путь для бота, TWA и
 // простого режима (uk_management_bot/services/notices/outages.py).
@@ -35,9 +36,14 @@ export interface OutageOptions {
 export const OUTAGES_KEY = ['twa', 'outages'] as const
 
 export function useOutageOptions() {
+  // Ответ зависит от смены («сантехник на смене»): id смены — часть ключа, поэтому
+  // «Начать» / «Закончить» перезапрашивают его сами. Без этого кнопка оставалась
+  // неактивной после старта смены — экран показывал ответ, полученный до него.
+  const shift = useCurrentShift()
   return useQuery<OutageOptions>({
-    queryKey: OUTAGES_KEY,
+    queryKey: [...OUTAGES_KEY, shift.data?.id ?? null],
     queryFn: () => twaClient.get(`${BASE}/options`).then((r) => r.data),
+    enabled: !shift.isLoading,
     staleTime: 15_000,
   })
 }
