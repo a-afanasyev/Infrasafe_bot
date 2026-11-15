@@ -9,13 +9,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.news_item import BROADCAST_FAILED, BROADCAST_NONE, BROADCAST_PENDING
 from uk_management_bot.database.models.notice import (
     NOTICE_KIND_OUTAGE,
     NOTICE_SCOPE_ALL,
+    NOTICE_SOURCE_STAFF,
     NOTICE_STATUS_CLOSED,
     NOTICE_STATUS_DRAFT,
     NOTICE_STATUS_PUBLISHED,
@@ -51,7 +52,10 @@ def visible_clause(now: datetime):
     продлили отключение — показ продлился сам (хранить копию ``ends_at`` в
     ``expires_at`` нельзя, она отставала бы при правке окна).
     """
-    shown_until = func.coalesce(Notice.expires_at, Notice.ends_at)
+    # Отключение от сантехника само с витрины не уходит: срок — его оценка, а воду
+    # могли не включить. Висит, пока не закроют («включили» или менеджер).
+    staff_outage = and_(Notice.source == NOTICE_SOURCE_STAFF, Notice.kind == NOTICE_KIND_OUTAGE)
+    shown_until = case((staff_outage, Notice.expires_at), else_=func.coalesce(Notice.expires_at, Notice.ends_at))
     return and_(
         Notice.status == NOTICE_STATUS_PUBLISHED,
         or_(Notice.publish_at.is_(None), Notice.publish_at <= now),
@@ -66,7 +70,8 @@ def state_of(notice: Notice, now: Optional[datetime] = None) -> str:
         return notice.status
     if notice.publish_at is not None and _aware(notice.publish_at) > now:
         return "scheduled"
-    shown_until = notice.expires_at or notice.ends_at
+    staff_outage = notice.source == NOTICE_SOURCE_STAFF and notice.kind == NOTICE_KIND_OUTAGE
+    shown_until = notice.expires_at or (None if staff_outage else notice.ends_at)
     if shown_until is not None and _aware(shown_until) <= now:
         return "expired"
     return "active"
@@ -213,6 +218,14 @@ async def publish_notice(db: AsyncSession, notice_id: int) -> Notice:
 async def close_notice(db: AsyncSession, notice_id: int, *, user_id: Optional[int]) -> Notice:
     """Снять с витрины: запись остаётся в ленте и календаре как закрытая."""
     notice = await get_notice(db, notice_id)
+    if (notice.status == NOTICE_STATUS_PUBLISHED and notice.source == NOTICE_SOURCE_STAFF
+            and notice.kind == NOTICE_KIND_OUTAGE and user_id is not None):
+        # Отключение от сантехника менеджер закрывает тем же путём, что «включили»:
+        # иначе жители, получившие «отключили», не узнали бы, что воду дали.
+        from uk_management_bot.database.models.user import User
+        from uk_management_bot.services.notices.outages import finish
+
+        return await finish(db, notice, await db.get(User, user_id))
     if notice.status != NOTICE_STATUS_CLOSED:
         notice.status = NOTICE_STATUS_CLOSED
         notice.closed_at = utc_now()
@@ -236,6 +249,9 @@ async def retry_broadcast(db: AsyncSession, notice_id: int) -> Notice:
     notice = await get_notice(db, notice_id)
     if notice.broadcast_status != BROADCAST_FAILED:
         raise NoticeError("повторить можно только неудавшуюся рассылку")
+    if state_of(notice) not in ("active", "scheduled"):
+        # Очередь берёт только видимые записи: снятая осталась бы «в очереди» навсегда.
+        raise NoticeError("запись снята с показа — рассылать её уже некому")
     notice.broadcast_status = BROADCAST_PENDING
     notice.broadcast_attempts, notice.broadcast_next_at = 0, None
     await db.commit()

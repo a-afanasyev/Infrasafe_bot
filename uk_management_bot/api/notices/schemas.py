@@ -1,7 +1,7 @@
 """Pydantic-схемы раздела «Новости и уведомления» (``/api/v2/board-config/notices``)."""
 import unicodedata
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -10,6 +10,9 @@ from uk_management_bot.utils.constants import MAX_DESCRIPTION_LENGTH
 
 TITLE_MAX = 200
 SCOPE_IDS_MAX = 200
+# id справочника — int4: значение вне диапазона Postgres отклонял бы ошибкой (500), а не 422.
+DB_ID_MAX = 2_147_483_647
+DbId = Annotated[int, Field(ge=1, le=DB_ID_MAX)]
 
 NoticeKind = Literal["news", "outage"]
 NoticeScope = Literal["all", "yards", "buildings"]
@@ -36,7 +39,7 @@ class NoticeIn(BaseModel):
     all_day: Optional[bool] = None
     expires_at: Optional[datetime] = None
     scope: Optional[NoticeScope] = None
-    scope_ids: Optional[list[int]] = Field(default=None, max_length=SCOPE_IDS_MAX)
+    scope_ids: Optional[list[DbId]] = Field(default=None, max_length=SCOPE_IDS_MAX)
     # true — разослать жителям в Telegram (когда запись станет видна); false — отменить ещё не начатую.
     broadcast: Optional[bool] = None
 
@@ -146,8 +149,22 @@ class OutageIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     resource: Literal["water", "heating"]
-    building_ids: list[int] = Field(min_length=1, max_length=30)
+    building_ids: list[DbId] = Field(min_length=1, max_length=30)
     duration: Literal["1h", "2h", "4h", "day", "unknown"]
+
+
+class OutageNoticeOut(BaseModel):
+    """Отключение глазами сантехника. Полный ``NoticeOut`` ему не отдаём: в
+    ``broadcast_details`` лежат id жителей и чатов домов — это данные менеджера."""
+
+    id: int
+    resource: Optional[str] = None
+    title_ru: str
+    title_uz: str
+    status: str
+    state: str
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
 
 
 class OutageBuildingOut(BaseModel):
@@ -170,4 +187,4 @@ class OutageOptionsOut(BaseModel):
     resources: list[str]
     durations: list[str]
     yards: list[OutageYardOut]
-    open: list[NoticeOut]
+    open: list[OutageNoticeOut]

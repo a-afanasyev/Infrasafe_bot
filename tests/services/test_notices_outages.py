@@ -54,10 +54,10 @@ async def ctx(el_async_factory, monkeypatch):
     return el_async_factory
 
 
-async def _announce(factory, uid=PLUMBER, **over) -> Notice:
+async def _announce(factory, uid=PLUMBER, now=NOW, **over) -> Notice:
     args = {"resource": "water", "building_ids": [12], "duration": "2h", **over}
     async with factory() as db:
-        return await outages.announce(db, await db.get(User, uid), now=NOW, **args)
+        return await outages.announce(db, await db.get(User, uid), now=now, **args)
 
 
 async def _close(factory, notice_id, uid=PLUMBER, now=NOW) -> Notice:
@@ -126,7 +126,7 @@ async def test_durations_and_double_tap(ctx):
     assert e.value.code == "already_open"
     # другой ресурс по тому же дому — отдельное отключение, до конца дня по Ташкенту
     day = await _announce(ctx, COLLEAGUE, resource="heating", duration="day")
-    assert day.ends_at.replace(tzinfo=timezone.utc) == datetime(2026, 11, 18, 19, 0, tzinfo=timezone.utc)
+    assert day.ends_at.replace(tzinfo=timezone.utc) == datetime(2026, 11, 18, 18, 59, tzinfo=timezone.utc)  # 23:59 Ташкент
 
 
 @pytest.mark.asyncio
@@ -162,8 +162,35 @@ async def test_author_closes_after_shift_and_unsent_announcement_is_dropped(ctx)
         await db.commit()
     closed = await _close(ctx, notice.id)
     assert closed.status == "closed" and closed.broadcast_status == "none"
-    sent = await _sent(ctx, NOW + timedelta(seconds=1))
-    assert [text.split("\n")[0] for _, text in sent] == ["📢 <b>Воду включили — Садовая, 14</b>"] * 2
+    # «отключили» не уходило — и «включили» жителям не шлём (на витрине новость есть)
+    assert await _sent(ctx, NOW + timedelta(seconds=1)) == []
+    async with ctx() as db:
+        [restored] = (await db.execute(select(Notice).where(Notice.kind == "news"))).scalars().all()
+        assert restored.title_ru == "Воду включили — Садовая, 14" and restored.broadcast_status == "none"
+
+
+@pytest.mark.asyncio
+async def test_blocked_author_cannot_close_and_series_is_capped(ctx):
+    notice = await _announce(ctx)
+    async with ctx() as db:
+        (await db.get(User, PLUMBER)).status = "blocked"
+        await db.commit()
+    with pytest.raises(outages.OutageRefused) as e:
+        await _close(ctx, notice.id)
+    assert e.value.code == "not_yours"
+    async with ctx() as db:
+        (await db.get(User, PLUMBER)).status = "approved"
+        await db.commit()
+
+    # «объявил — закрыл — объявил»: каждое объявление — рассылка, сверх лимита за час — отказ
+    await _close(ctx, notice.id)
+    for _ in range(outages.MAX_PER_HOUR - 1):
+        await _close(ctx, (await _announce(ctx)).id)
+    with pytest.raises(outages.OutageRefused) as e:
+        await _announce(ctx)
+    assert e.value.code == "too_many"
+    later = await _announce(ctx, now=NOW + timedelta(hours=1, minutes=1))  # через час снова можно
+    assert later.status == "published"
 
 
 @pytest.mark.asyncio
@@ -195,5 +222,30 @@ def test_reminders_to_author(el_db):
     el_db.commit()
     [due] = outages.overdue_sync(el_db, NOW, timedelta(minutes=10))
     assert (due.notice_id, due.telegram_id, due.title()) == (1, 1000 + PLUMBER, "срок вышел")
-    # при завершении смены спрашиваем про все незакрытые свои
-    assert [o.notice_id for o in outages.open_by_author_sync(el_db, PLUMBER)] == [1, 2, 3]
+    # смена автора закончилась за последние 10 минут (как угодно: кнопкой, по расписанию,
+    # менеджером) — спрашиваем про все его незакрытые
+    assert outages.shift_ended_sync(el_db, NOW, timedelta(minutes=10)) == []
+    el_db.add(Shift(user_id=PLUMBER, status="completed", start_time=NOW - timedelta(hours=8), end_time=NOW - timedelta(minutes=3)))
+    el_db.commit()
+    assert [o.notice_id for o in outages.shift_ended_sync(el_db, NOW, timedelta(minutes=10))] == [1, 2, 3]
+    assert outages.shift_ended_sync(el_db, NOW + timedelta(minutes=10), timedelta(minutes=10)) == []  # один раз
+
+
+@pytest.mark.asyncio
+async def test_staff_outage_jumps_the_queue_and_stays_on_board_past_its_term(ctx):
+    async with ctx() as db:  # менеджерская новость встала в очередь раньше
+        db.add(Notice(kind="news", source="manual", title_ru="Собрание", status="published",
+                      publish_at=NOW - timedelta(minutes=5), broadcast_status="pending", scope="all", scope_ids=[]))
+        await db.commit()
+    notice = await _announce(ctx, duration="1h")
+    first = await _sent(ctx, NOW + timedelta(seconds=1))  # один проход — одна запись
+    assert first and all("Отключена вода" in text for _, text in first)
+
+    # срок вышел, а «включили» не нажали: запись остаётся видимой жителям и открытой
+    from uk_management_bot.services.notices import service
+    late = NOW + timedelta(hours=3)
+    async with ctx() as db:
+        row = await db.get(Notice, notice.id)
+        assert service.state_of(row, late) == "active"
+        visible = (await db.execute(select(Notice.id).where(service.visible_clause(late)))).scalars().all()
+        assert notice.id in visible

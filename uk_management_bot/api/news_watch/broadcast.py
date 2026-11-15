@@ -92,6 +92,8 @@ class Outbox:
     # Условия «запись можно брать в рассылку» на момент ``now``.
     claimable: Callable[[datetime], tuple]
     plan: Callable[[AsyncSession, Any], Awaitable[Plan]]
+    # Что брать раньше при равных условиях (до порядка по id); пусто — по id.
+    priority: Callable[[], tuple] = tuple
 
 
 def _backoff(attempts: int) -> timedelta:
@@ -138,7 +140,7 @@ async def _claim(db: AsyncSession, now: datetime, outbox: Outbox) -> Optional[in
                model.broadcast_status.in_((BROADCAST_PENDING, BROADCAST_FAILED)),
                model.broadcast_attempts < MAX_ATTEMPTS,
                or_(model.broadcast_next_at.is_(None), model.broadcast_next_at <= now))
-        .order_by(model.id).limit(1)
+        .order_by(*outbox.priority(), model.id).limit(1)
         # API — несколько uvicorn-воркеров, цикл в каждом: без SKIP LOCKED два
         # воркера берут один pending и шлют дважды (как у webhook_sender).
         # sqlite (тесты) FOR UPDATE игнорирует — гарантия только на PostgreSQL.

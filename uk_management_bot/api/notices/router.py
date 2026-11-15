@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.notices.schemas import (
-    AudienceOut, NoticeCreateIn, NoticeIn, NoticeOut, NoticesOut, NoticeScope, OutageIn, OutageOptionsOut,
+    DB_ID_MAX, AudienceOut, NoticeCreateIn, NoticeIn, NoticeOut, NoticesOut, NoticeScope, OutageIn,
+    OutageNoticeOut, OutageOptionsOut,
 )
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.notice import NOTICE_KINDS, NOTICE_STATUSES, Notice
@@ -90,9 +91,15 @@ async def audience(
     user: User = Depends(_manager),
 ) -> AudienceOut:
     """Подсказка формы: сколько жителей получит рассылку."""
-    if await unknown_scope_ids(db, scope, ids):
+    if any(not 0 < i <= DB_ID_MAX for i in ids) or await unknown_scope_ids(db, scope, ids):
         raise HTTPException(status_code=422, detail="unknown yard or building id")
     return AudienceOut(count=await count_recipients(db, scope, ids))
+
+
+def _outage_out(notice: Notice) -> OutageNoticeOut:
+    return OutageNoticeOut(
+        id=notice.id, resource=notice.resource, title_ru=notice.title_ru, title_uz=notice.title_uz,
+        status=notice.status, state=service.state_of(notice), starts_at=notice.starts_at, ends_at=notice.ends_at)
 
 
 async def _outage(coro) -> Notice:
@@ -111,36 +118,36 @@ async def outage_options(
 ) -> OutageOptionsOut:
     """Экран «Отключил воду»: гейт (сантехник на смене), дома, идущие отключения."""
     data = await outages.options(db, user)
-    return OutageOptionsOut(**{**data, "open": [_out(n) for n in data["open"]]})
+    return OutageOptionsOut(**{**data, "open": [_outage_out(n) for n in data["open"]]})
 
 
-@router.post("/outages", response_model=NoticeOut, status_code=201)
+@router.post("/outages", response_model=OutageNoticeOut, status_code=201)
 @limiter.limit("10/minute")
 async def announce_outage(
     request: Request,
     payload: OutageIn,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_staff),
-) -> NoticeOut:
+) -> OutageNoticeOut:
     """Сантехник на смене объявляет отключение: жителям домов — сразу, менеджерам копия."""
     notice = await _outage(outages.announce(
         db, user, resource=payload.resource, building_ids=payload.building_ids, duration=payload.duration))
     logger.info("outage %s объявлено пользователем %s", notice.id, user.id)
-    return _out(notice)
+    return _outage_out(notice)
 
 
-@router.post("/outages/{notice_id}/close", response_model=NoticeOut)
+@router.post("/outages/{notice_id}/close", response_model=OutageNoticeOut)
 @limiter.limit("10/minute")
 async def close_outage(
     request: Request,
     notice_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_staff),
-) -> NoticeOut:
+) -> OutageNoticeOut:
     """«Включили»: запись закрыта, жителям — второе сообщение."""
     notice = await _outage(outages.close(db, user, notice_id))
     logger.info("outage %s закрыто пользователем %s", notice.id, user.id)
-    return _out(notice)
+    return _outage_out(notice)
 
 
 @router.post("", response_model=NoticeOut, status_code=201)

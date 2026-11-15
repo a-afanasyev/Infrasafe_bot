@@ -209,7 +209,7 @@ def _outage(**over) -> dict:
 @pytest.mark.asyncio
 async def test_extending_outage_extends_its_show_window(client, db_session):
     """Без своего срока показа запись живёт до конца окна — и продлевается вместе с ним."""
-    db_session.add(Notice(kind="outage", resource="water", source="staff", title_ru="Нет воды", status="published",
+    db_session.add(Notice(kind="outage", resource="water", source="news_watch", title_ru="Нет воды", status="published",
                           publish_at=NOW - timedelta(hours=3), starts_at=NOW - timedelta(hours=3),
                           ends_at=NOW - timedelta(minutes=5)))
     await db_session.commit()

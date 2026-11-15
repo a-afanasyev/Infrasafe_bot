@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ from uk_management_bot.database.models.notice import (
     NOTICE_STATUS_PUBLISHED,
     Notice,
 )
+from uk_management_bot.database.models.shift import Shift
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.utils.business_time import business_day_window, business_today
@@ -46,6 +47,9 @@ PLUMBER_SPECIALIZATIONS = frozenset({"plumber"})
 # «На сколько»: часы, до конца дня или «не знаю» (запись висит, пока не закроют).
 DURATIONS = {"1h": 1, "2h": 2, "4h": 4, "day": None, "unknown": None}
 MAX_BUILDINGS = 30
+# Защита жителей от серии «объявил — закрыл — объявил» (ошибка или чужой доступ к
+# аккаунту): каждое объявление — рассылка по домам. Сверх лимита — отказ на час.
+MAX_PER_HOUR = 6
 TITLE_MAX = 200
 # Сколько новость «включили» остаётся на витрине.
 RESTORED_SHOWN = timedelta(hours=6)
@@ -57,7 +61,7 @@ _UNKNOWN_END = ("Время включения сообщим дополните
 # Код отказа → HTTP-статус (роутер).
 REFUSAL_STATUS = {
     "not_plumber": 403, "no_active_shift": 403, "not_yours": 403,
-    "not_found": 404, "not_open": 409, "already_open": 409,
+    "not_found": 404, "not_open": 409, "already_open": 409, "too_many": 429,
     "bad_resource": 422, "bad_duration": 422, "bad_buildings": 422,
 }
 
@@ -97,7 +101,8 @@ def _ends_at(duration: str, now: datetime) -> Optional[datetime]:
     if duration not in DURATIONS:
         raise OutageRefused("bad_duration")
     if duration == "day":
-        return business_day_window(business_today(now))[1]
+        # 23:59, а не полночь: иначе жители видят «16.11 00:00», а календарь — два дня.
+        return business_day_window(business_today(now))[1] - timedelta(minutes=1)
     hours = DURATIONS[duration]
     return now + timedelta(hours=hours) if hours else None
 
@@ -120,6 +125,13 @@ async def announce(db: AsyncSession, user: User, *, resource: str, building_ids:
         raise OutageRefused("bad_buildings")
     ends_at = _ends_at(duration, now)
     place = await _place(db, ids)
+    recent = (await db.execute(
+        select(func.count()).select_from(Notice).where(
+            Notice.source == NOTICE_SOURCE_STAFF, Notice.kind == NOTICE_KIND_OUTAGE,
+            Notice.created_by == user.id, Notice.publish_at > now - timedelta(hours=1))
+    )).scalar_one()
+    if recent >= MAX_PER_HOUR:
+        raise OutageRefused("too_many")
     # Двойное нажатие и «объявил коллега»: то же отключение по тому же дому уже идёт.
     for other in (await db.execute(select(Notice).where(*_open_clause(), Notice.resource == resource))).scalars():
         if set(other.scope_ids or []) & set(ids):
@@ -148,19 +160,31 @@ async def close(db: AsyncSession, user: User, notice_id: int, now: Optional[date
         raise OutageRefused("not_found")
     if notice.status != NOTICE_STATUS_PUBLISHED:
         raise OutageRefused("not_open")
-    if notice.created_by != user.id and await refusal(db, user, now):
+    # Автору смена не нужна (бот спрашивает «включили?» после неё), но аккаунт
+    # обязан быть действующим: заблокированный сотрудник записи не закрывает.
+    if user.status != "approved" or (notice.created_by != user.id and await refusal(db, user, now)):
         raise OutageRefused("not_yours")
+    return await finish(db, notice, user, now)
+
+
+async def finish(db: AsyncSession, notice: Notice, user: User, now: Optional[datetime] = None) -> Notice:
+    """Закрыть отключение и сообщить жителям «включили». Право закрыть проверяет
+    вызывающий: сантехник — ``close``, менеджер — «Снять с показа» в дашборде."""
+    now = now or utc_now()
     notice.status, notice.closed_at, notice.closed_by = NOTICE_STATUS_CLOSED, now, user.id
-    if notice.broadcast_status == BROADCAST_PENDING:
+    unsent = notice.broadcast_status == BROADCAST_PENDING
+    if unsent:
         notice.broadcast_status = BROADCAST_NONE  # закрыли раньше, чем ушло «отключили»
     ru, uz = _ON.get(notice.resource or "", _ON["water"])
     place_ru = notice.title_ru.partition(" — ")[2]
+    # «Включили» шлём только тем, кому ушло «отключили»: иначе жители получили бы
+    # сообщение о включении воды, которую им не отключали.
     db.add(Notice(
         kind=NOTICE_KIND_NEWS, source=NOTICE_SOURCE_STAFF,
         title_ru=_title(ru, place_ru), title_uz=_title(uz, place_ru),
         status=NOTICE_STATUS_PUBLISHED, publish_at=now, expires_at=now + RESTORED_SHOWN,
         scope=notice.scope, scope_ids=list(notice.scope_ids or []),
-        broadcast_status=BROADCAST_PENDING, created_by=user.id,
+        broadcast_status=BROADCAST_NONE if unsent else BROADCAST_PENDING, created_by=user.id,
     ))
     _audit(db, user, "outage_closed", notice)
     await db.commit()
@@ -226,8 +250,15 @@ def _open_sync(db: Session, *conditions) -> list[OpenOutage]:
     return [OpenOutage(int(i), int(tg), lang or "ru", ru, uz) for i, tg, lang, ru, uz in rows]
 
 
-def open_by_author_sync(db: Session, user_id: int) -> list[OpenOutage]:
-    return _open_sync(db, Notice.created_by == user_id)
+def shift_ended_sync(db: Session, now: datetime, window: timedelta) -> list[OpenOutage]:
+    """Смена автора закончилась за последний ``window``, а отключение не закрыто.
+
+    По ``end_time``, а не по событию «нажал Закончить»: смену завершают ещё
+    планировщик (по расписанию), менеджер и удаление сотрудника — там хуков нет.
+    """
+    ended = exists(select(Shift.id).where(
+        Shift.user_id == Notice.created_by, Shift.end_time > now - window, Shift.end_time <= now))
+    return _open_sync(db, ended)
 
 
 def overdue_sync(db: Session, now: datetime, window: timedelta) -> list[OpenOutage]:

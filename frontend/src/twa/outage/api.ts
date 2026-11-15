@@ -60,6 +60,6 @@ export const closeOutage = (id: number) => twaClient.post(`${BASE}/${id}/close`)
 /** Код отказа сервера (detail) → ключ фразы; незнакомый — общая ошибка. */
 export function outageErrorKey(err: unknown): string {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  const known = ['already_open', 'no_active_shift', 'not_plumber', 'not_yours', 'not_open']
+  const known = ['already_open', 'no_active_shift', 'not_plumber', 'not_yours', 'not_open', 'too_many']
   return `twa.outage.error.${typeof detail === 'string' && known.includes(detail) ? detail : 'generic'}`
 }

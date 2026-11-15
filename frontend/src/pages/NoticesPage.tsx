@@ -168,7 +168,7 @@ export default function NoticesPage() {
                       <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ type: 'delete', id: n.id })}>{t('common.delete')}</Button>
                     </>
                   )}
-                  {n.broadcast_status === 'failed' && n.broadcast_attempts >= MAX_BROADCAST_ATTEMPTS && (
+                  {n.broadcast_status === 'failed' && n.broadcast_attempts >= MAX_BROADCAST_ATTEMPTS && (n.state === 'active' || n.state === 'scheduled') && (
                     <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ type: 'retry-broadcast', id: n.id })}>
                       {t('notices.broadcast.retry')}
                     </Button>

@@ -192,14 +192,13 @@ async def test_text_is_escaped_and_carries_window_and_place(ctx):
 
 
 @pytest.mark.asyncio
-async def test_all_day_and_multi_day_windows(ctx):
+async def test_all_day_and_multi_day_windows():
     day = datetime(2026, 11, 20, 19, 0, tzinfo=timezone.utc)  # 21.11 00:00 Ташкент
-    async with ctx() as db:
-        all_day = Notice(kind="outage", title_ru="x", starts_at=day, ends_at=day + timedelta(hours=23, minutes=59), all_day=True)
-        long = Notice(kind="outage", title_ru="x", starts_at=NOW, ends_at=NOW + timedelta(days=2, hours=4))
-        assert broadcast._window(all_day) == "21.11"
-        assert broadcast._window(long) == "18.11 10:00 – 20.11 14:00"
-        assert broadcast._window(Notice(kind="news", title_ru="x")) == ""
+    all_day = Notice(kind="outage", title_ru="x", starts_at=day, ends_at=day + timedelta(hours=23, minutes=59), all_day=True)
+    long = Notice(kind="outage", title_ru="x", starts_at=NOW, ends_at=NOW + timedelta(days=2, hours=4))
+    assert broadcast._window(all_day) == "21.11"
+    assert broadcast._window(long) == "18.11 10:00 – 20.11 14:00"
+    assert broadcast._window(Notice(kind="news", title_ru="x")) == ""
 
 
 # ───────────── включение рассылки из сервиса ─────────────

@@ -20,6 +20,7 @@ import html
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.news_watch.broadcast import Outbox, Plan, Sender, run_outbox_cycle
@@ -96,6 +97,8 @@ NOTICES_OUTBOX = Outbox(
     label="notices",
     claimable=lambda now: (visible_clause(now), Notice.source != NOTICE_SOURCE_NEWS_WATCH),
     plan=_plan,
+    # Отключение от сантехника срочное: не ждёт очереди за плановыми новостями.
+    priority=lambda: (case((Notice.source == NOTICE_SOURCE_STAFF, 0), else_=1),),
 )
 
 

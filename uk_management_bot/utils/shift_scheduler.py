@@ -335,8 +335,9 @@ class ShiftScheduler:
                 coalesce=True
             )
 
-        # 15. Отключения от сантехника: срок вышел, а запись не закрыта —
-        #     автору личка «Уже включили?» с кнопкой. Сама запись не закрывается.
+        # 15. Отключения от сантехника: срок вышел или смена автора закончилась
+        #     (любым способом, в т.ч. по расписанию), а запись не закрыта — автору
+        #     личка «Уже включили?» с кнопкой. Сама запись не закрывается.
         self.scheduler.add_job(
             self._outage_reminders_tick,
             IntervalTrigger(minutes=OUTAGE_REMINDER_MINUTES),
@@ -981,12 +982,16 @@ class ShiftScheduler:
             logger.exception("Ошибка напоминаний по лифтам")
 
 
-    def _outage_reminders_sync(self) -> list:
-        from uk_management_bot.services.notices.outages import overdue_sync
+    def _outage_reminders_sync(self) -> tuple[list, list]:
+        """(срок вышел, смена автора закончилась) — второе без повторов первого."""
+        from uk_management_bot.services.notices.outages import overdue_sync, shift_ended_sync
 
         db = SessionLocal()
         try:
-            return overdue_sync(db, utc_now(), timedelta(minutes=OUTAGE_REMINDER_MINUTES))
+            now, window = utc_now(), timedelta(minutes=OUTAGE_REMINDER_MINUTES)
+            overdue = overdue_sync(db, now, window)
+            seen = {item.notice_id for item in overdue}
+            return overdue, [item for item in shift_ended_sync(db, now, window) if item.notice_id not in seen]
         finally:
             db.close()
 
@@ -996,10 +1001,12 @@ class ShiftScheduler:
 
         task_name = 'outage_reminders'
         try:
-            items = await asyncio.to_thread(self._outage_reminders_sync)
-            if items and self._bot is not None:
-                sent = await send_reminders(self._bot, items, "remind_overdue")  # не бросает
-                logger.info("Отключения: незакрытых с истёкшим сроком %s, напоминаний %s", len(items), sent)
+            overdue, ended = await asyncio.to_thread(self._outage_reminders_sync)
+            if (overdue or ended) and self._bot is not None:
+                sent = await send_reminders(self._bot, overdue, "remind_overdue")  # не бросает
+                sent += await send_reminders(self._bot, ended, "remind_shift_end")
+                logger.info("Отключения: срок вышел %s, смена закончилась %s, напоминаний %s",
+                            len(overdue), len(ended), sent)
             self.task_stats[task_name]['success'] += 1
             self.task_stats[task_name]['last_run'] = utc_now()
         except Exception:

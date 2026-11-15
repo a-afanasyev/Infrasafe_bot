@@ -7308,6 +7308,8 @@
             "anyOf": [
               {
                 "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
                   "type": "integer"
                 },
                 "maxItems": 200,
@@ -7536,6 +7538,8 @@
             "anyOf": [
               {
                 "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
                   "type": "integer"
                 },
                 "maxItems": 200,
@@ -8197,6 +8201,8 @@
         "properties": {
           "building_ids": {
             "items": {
+              "maximum": 2147483647.0,
+              "minimum": 1.0,
               "type": "integer"
             },
             "maxItems": 30,
@@ -8232,6 +8238,75 @@
         "title": "OutageIn",
         "type": "object"
       },
+      "OutageNoticeOut": {
+        "description": "Отключение глазами сантехника. Полный ``NoticeOut`` ему не отдаём: в\n``broadcast_details`` лежат id жителей и чатов домов — это данные менеджера.",
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title_ru": {
+            "title": "Title Ru",
+            "type": "string"
+          },
+          "title_uz": {
+            "title": "Title Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title_ru",
+          "title_uz",
+          "status",
+          "state"
+        ],
+        "title": "OutageNoticeOut",
+        "type": "object"
+      },
       "OutageOptionsOut": {
         "description": "Экран сантехника: можно ли объявить, справочник домов, идущие отключения.",
         "properties": {
@@ -8248,7 +8323,7 @@
           },
           "open": {
             "items": {
-              "$ref": "#/components/schemas/NoticeOut"
+              "$ref": "#/components/schemas/OutageNoticeOut"
             },
             "title": "Open",
             "type": "array"
@@ -16846,7 +16921,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoticeOut"
+                  "$ref": "#/components/schemas/OutageNoticeOut"
                 }
               }
             },
@@ -16921,7 +16996,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoticeOut"
+                  "$ref": "#/components/schemas/OutageNoticeOut"
                 }
               }
             },
