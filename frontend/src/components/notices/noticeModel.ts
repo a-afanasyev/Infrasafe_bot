@@ -1,5 +1,5 @@
 /** Модель формы и календаря раздела «Новости и уведомления». Без React и сети. */
-import type { Notice, NoticeBody, NoticeKind, NoticeResource } from '../../hooks/useNotices'
+import type { Notice, NoticeBody, NoticeKind, NoticeResource, NoticeScope } from '../../hooks/useNotices'
 import { datetimeLocalToIso, fromDisplayTz, isoToDatetimeLocal, toDisplayTz } from '../../utils/timezone'
 
 /** Поля формы: даты — строки `datetime-local` в зоне объекта. */
@@ -17,6 +17,10 @@ export interface NoticeDraft {
   endsAt: string
   allDay: boolean
   expiresAt: string
+  scope: NoticeScope
+  scopeIds: number[]
+  /** Разослать в Telegram. У уже разосланной записи галочка только показывает факт. */
+  broadcast: boolean
 }
 
 const local = (iso: string | null): string => (iso ? isoToDatetimeLocal(iso) : '')
@@ -36,6 +40,9 @@ export function emptyDraft(kind: NoticeKind, day?: string): NoticeDraft {
     endsAt: kind === 'outage' && day ? `${day}T14:00` : '',
     allDay: false,
     expiresAt: '',
+    scope: 'all',
+    scopeIds: [],
+    broadcast: false,
   }
 }
 
@@ -53,12 +60,16 @@ export function draftOf(n: Notice): NoticeDraft {
     endsAt: local(n.ends_at),
     allDay: n.all_day,
     expiresAt: local(n.expires_at),
+    scope: n.scope,
+    scopeIds: [...n.scope_ids],
+    broadcast: n.broadcast_status !== 'none',
   }
 }
 
 /** Чего не хватает для сохранения: ключ перевода `notices.form.error.*` или null. */
-export function draftError(d: NoticeDraft): 'title' | 'window' | 'order' | null {
+export function draftError(d: NoticeDraft): 'title' | 'window' | 'order' | 'scope' | null {
   if (!d.title.ru.trim()) return 'title'
+  if (d.scope !== 'all' && d.scopeIds.length === 0) return 'scope'
   if (d.kind === 'outage') {
     if (!d.startsAt || !d.endsAt) return 'window'
     if (d.endsAt < d.startsAt) return 'order'
@@ -86,6 +97,9 @@ export function bodyOf(d: NoticeDraft): NoticeBody {
     all_day: outage && d.allDay,
     // Пусто = «до конца отключения» (считает сервер): продлили окно — продлился показ.
     expires_at: datetimeLocalToIso(d.expiresAt) ?? null,
+    scope: d.scope,
+    scope_ids: d.scope === 'all' ? [] : d.scopeIds,
+    broadcast: d.broadcast,
   }
 }
 

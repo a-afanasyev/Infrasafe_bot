@@ -1396,6 +1396,30 @@
     "required": "Ma'lumotnomadan manzilni tanlang: hovli, uy yoki xonadon"
   },
   "notices": {
+    "audience": {
+      "label": "Kimga mo'ljallangan",
+      "scope": {
+        "all": "Barcha yashovchilar",
+        "yards": "Hovlilar",
+        "buildings": "Uylar"
+      },
+      "pick": "Kamida bitta hovli yoki uyni tanlang.",
+      "count_one": "Xabarnomani {{count}} yashovchi oladi.",
+      "count_other": "Xabarnomani {{count}} yashovchi oladi.",
+      "short": {
+        "yards_one": "{{count}} hovli",
+        "yards_other": "{{count}} hovli",
+        "buildings_one": "{{count}} uy",
+        "buildings_other": "{{count}} uy"
+      }
+    },
+    "broadcast": {
+      "pending": "Tarqatish navbatda",
+      "running": "Tarqatilmoqda: {{sent}}",
+      "done": "{{sent}} ta yuborildi, {{failed}} ta yetkazilmadi",
+      "failed": "Tarqatish tugallanmadi: {{sent}} ta yuborildi",
+      "retry": "Tarqatishni takrorlash"
+    },
     "truncated": "{{total}} ta yozuvdan oxirgi {{shown}} tasi ko'rsatilgan — oldingilarini taqvimdan qidiring.",
     "title": "Yangiliklar va xabarnomalar",
     "tab": {
@@ -1442,6 +1466,9 @@
       "saved": "Saqlandi"
     },
     "form": {
+      "broadcast": "Telegram orqali tarqatish",
+      "broadcastHint": "Yashovchilar xabarni yozuv ularga ko'ringan paytda oladi: darhol yoki kechiktirilgan e'lon vaqtida.",
+      "broadcastLocked": "Xabar allaqachon yuborilgan — matnni tuzatish ikkinchi xabarni yubormaydi.",
       "title": {
         "news": "Yangilik",
         "outage": "Rejali o'chirish"
@@ -1465,6 +1492,7 @@
       "schedule": "Rejalashtirish",
       "liveNote": "Yozuv yashovchilarga allaqachon ko'rinmoqda — tuzatishlar darhol chiqadi.",
       "error": {
+        "scope": "Yozuv mo'ljallangan hovli yoki uylarni tanlang",
         "title": "Sarlavhani rus tilida kiriting",
         "window": "O'chirishning boshlanishi va tugashini ko'rsating",
         "order": "Tugash vaqti boshlanishidan oldin"

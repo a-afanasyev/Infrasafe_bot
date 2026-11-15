@@ -900,6 +900,20 @@
         "title": "ApartmentUpdate",
         "type": "object"
       },
+      "AudienceOut": {
+        "description": "Сколько жителей получит рассылку с такими адресатами.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "AudienceOut",
+        "type": "object"
+      },
       "AutoManagerConfigData": {
         "description": "Тело PUT: только хранимые поля конфига.",
         "properties": {
@@ -7156,6 +7170,17 @@
             ],
             "title": "All Day"
           },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
+          },
           "ends_at": {
             "anyOf": [
               {
@@ -7371,6 +7396,17 @@
             ],
             "title": "All Day"
           },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
+          },
           "ends_at": {
             "anyOf": [
               {
@@ -7580,6 +7616,35 @@
           "all_day": {
             "title": "All Day",
             "type": "boolean"
+          },
+          "broadcast_attempts": {
+            "default": 0,
+            "title": "Broadcast Attempts",
+            "type": "integer"
+          },
+          "broadcast_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Details"
+          },
+          "broadcast_next_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Next At"
           },
           "broadcast_status": {
             "title": "Broadcast Status",
@@ -16553,6 +16618,73 @@
         ]
       }
     },
+    "/api/v2/board-config/notices/audience": {
+      "get": {
+        "description": "Подсказка формы: сколько жителей получит рассылку.",
+        "operationId": "audience_api_v2_board_config_notices_audience_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "yards",
+                "buildings"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 200,
+              "title": "Ids",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudienceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Audience",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
     "/api/v2/board-config/notices/{notice_id}": {
       "delete": {
         "operationId": "delete_notice_api_v2_board_config_notices__notice_id__delete",
@@ -16738,6 +16870,53 @@
           }
         ],
         "summary": "Publish Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}/retry-broadcast": {
+      "post": {
+        "operationId": "retry_broadcast_api_v2_board_config_notices__notice_id__retry_broadcast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Broadcast",
         "tags": [
           "notices"
         ]

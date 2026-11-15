@@ -274,3 +274,35 @@ async def test_public_feed_is_capped(client, db_session):
     announcements = (await _board(client))["announcements"]
     assert len(announcements) == board.MAX_ANNOUNCEMENTS
     assert announcements[0]["title"]["ru"] == "Новость 0"  # свежие остаются
+
+
+# ───────────── этап 2: рассылка и адресаты ─────────────
+
+
+@pytest.mark.asyncio
+async def test_broadcast_flag_and_audience_endpoints(client, db_session):
+    from uk_management_bot.database.models.building import Building
+    from uk_management_bot.database.models.yard import Yard
+
+    db_session.add(Yard(id=1, name="Северный"))
+    db_session.add(Building(id=12, address="Садовая, 14", yard_id=1))
+    await db_session.commit()
+
+    created = await client.post(BASE, json=_news(publish=True, broadcast=True, scope="buildings", scope_ids=[12]))
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert (body["broadcast_status"], body["scope"], body["scope_ids"]) == ("pending", "buildings", [12])
+
+    # отмена ещё не начатой рассылки; повторять нечего
+    off = await client.patch(f"{BASE}/{body['id']}", json={"broadcast": False})
+    assert off.json()["broadcast_status"] == "none"
+    assert (await client.post(f"{BASE}/{body['id']}/retry-broadcast")).status_code == 409
+
+    # адресаты: неизвестный дом и пустой выбор отклоняются
+    assert (await client.post(BASE, json=_news(scope="buildings", scope_ids=[999]))).status_code == 422
+    assert (await client.post(BASE, json=_news(scope="yards"))).status_code == 422
+
+    count = await client.get(f"{BASE}/audience", params={"scope": "buildings", "ids": [12]})
+    assert count.status_code == 200 and count.json() == {"count": 0}
+    assert (await client.get(f"{BASE}/audience", params={"scope": "buildings", "ids": [999]})).status_code == 422
+    assert (await client.get(f"{BASE}/audience")).json() == {"count": 0}

@@ -11,7 +11,8 @@ const NEWS = {
   id: 1, kind: 'news', resource: null, source: 'manual', title_ru: 'Собрание жильцов', title_uz: '', text_ru: 'В 19:00',
   text_uz: '', place_ru: '', place_uz: '', icon: '', important: true, status: 'published', state: 'active',
   publish_at: '2026-11-13T05:00:00Z', starts_at: null, ends_at: null, all_day: false, expires_at: null,
-  created_at: '2026-11-13T05:00:00Z',
+  created_at: '2026-11-13T05:00:00Z', scope: 'all', scope_ids: [], broadcast_status: 'none', broadcast_attempts: 0,
+  broadcast_details: null,
 }
 const DRAFT = { ...NEWS, id: 2, title_ru: 'График уборки', important: false, status: 'draft', state: 'draft', publish_at: null }
 const OUTAGE = {
@@ -29,6 +30,15 @@ function mockApi(items: unknown[] = [NEWS, DRAFT, OUTAGE]) {
   }
   server.use(
     http.get('*/api/v2/board-config/notices', () => HttpResponse.json({ items, total: items.length })),
+    http.get('*/api/v2/board-config/notices/audience', ({ request }) => {
+      const ids = new URL(request.url).searchParams.getAll('ids')
+      return HttpResponse.json({ count: ids.length ? ids.length * 109 : 1204 })
+    }),
+    http.get('*/api/v2/addresses/yards', () => HttpResponse.json([{ id: 1, name: 'Двор Северный' }])),
+    http.get('*/api/v2/addresses/buildings', () => HttpResponse.json([
+      { id: 12, address: 'Садовая, 12', yard_id: 1, yard_name: 'Двор Северный' },
+      { id: 14, address: 'Садовая, 14', yard_id: 1, yard_name: 'Двор Северный' },
+    ])),
     http.post('*/api/v2/board-config/notices', async ({ request }) => { await record(request); return HttpResponse.json(NEWS, { status: 201 }) }),
     http.patch('*/api/v2/board-config/notices/:id', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
     http.post('*/api/v2/board-config/notices/:id/:action', async ({ request }) => { await record(request); return HttpResponse.json(NEWS) }),
@@ -125,5 +135,53 @@ describe('NoticesPage', () => {
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'PATCH', path: '/notices/1' })
     expect(calls[0].body).toMatchObject({ title_ru: 'Перенос собрания', important: true })
+  })
+
+  it('рассылка: выбор домов, подсказка о числе получателей, тело запроса', async () => {
+    const calls = mockApi([])
+    const user = userEvent.setup()
+    render(<NoticesPage />)
+
+    await user.click(await screen.findByRole('button', { name: '+ Новость' }))
+    const dialog = screen.getByRole('dialog')
+    await user.type(within(dialog).getAllByPlaceholderText('RU')[0], 'Мойка окон')
+    expect(await within(dialog).findByText('Рассылку получат 1204 жителя.')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Дома' }))
+    expect(within(dialog).getByText('Выберите хотя бы один двор или дом.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Опубликовать' }))
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Выберите дворы или дома')
+    expect(calls).toHaveLength(0)
+
+    await user.click(await within(dialog).findByRole('button', { name: 'Садовая, 14' }))
+    expect(await within(dialog).findByText('Рассылку получат 109 жителей.')).toBeInTheDocument()
+    await user.click(within(dialog).getByLabelText('Разослать в Telegram'))
+    await user.click(within(dialog).getByRole('button', { name: 'Опубликовать' }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].body).toMatchObject({ scope: 'buildings', scope_ids: [14], broadcast: true, publish: true })
+  })
+
+  it('лента показывает адресатов и доставку; исчерпавшую попытки рассылку можно повторить', async () => {
+    const sent = { ...NEWS, id: 7, scope: 'buildings', scope_ids: [12, 14], broadcast_status: 'done',
+                   broadcast_details: { sent: 212, blocked: 4, no_chat: 2, errors: 0 } }
+    const failed = { ...NEWS, id: 8, title_ru: 'Сбой', broadcast_status: 'failed', broadcast_attempts: 5,
+                     broadcast_details: { sent: 3, errors: 40 } }
+    const calls = mockApi([sent, failed])
+    const user = userEvent.setup()
+    render(<NoticesPage />)
+
+    const rows = await screen.findAllByTestId('notice-row')
+    expect(within(rows[0]).getByText('2 дома')).toBeInTheDocument()
+    expect(within(rows[0]).getByTestId('broadcast-state')).toHaveTextContent('Разослано 212, не доставлено 6')
+    expect(within(rows[0]).queryByRole('button', { name: 'Повторить рассылку' })).not.toBeInTheDocument()
+
+    await user.click(within(rows[1]).getByRole('button', { name: 'Повторить рассылку' }))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/notices/8/retry-broadcast' })
+
+    // у разосланной записи галочку рассылки изменить нельзя
+    await user.click(within(screen.getAllByTestId('notice-row')[0]).getByRole('button', { name: 'Изменить' }))
+    expect(within(screen.getByRole('dialog')).getByLabelText('Разослать в Telegram')).toBeDisabled()
   })
 })

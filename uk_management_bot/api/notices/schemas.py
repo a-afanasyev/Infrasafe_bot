@@ -37,6 +37,8 @@ class NoticeIn(BaseModel):
     expires_at: Optional[datetime] = None
     scope: Optional[NoticeScope] = None
     scope_ids: Optional[list[int]] = Field(default=None, max_length=SCOPE_IDS_MAX)
+    # true — разослать жителям в Telegram (когда запись станет видна); false — отменить ещё не начатую.
+    broadcast: Optional[bool] = None
 
     @field_validator("title_ru", "title_uz", "text_ru", "text_uz", "place_ru", "place_uz", "icon")
     @classmethod
@@ -119,6 +121,9 @@ class NoticeOut(BaseModel):
     scope: str
     scope_ids: list[int]
     broadcast_status: str
+    broadcast_attempts: int = 0
+    broadcast_next_at: Optional[datetime] = None
+    broadcast_details: Optional[dict] = None
     created_by: Optional[int] = None
     closed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -127,3 +132,9 @@ class NoticeOut(BaseModel):
 class NoticesOut(BaseModel):
     items: list[NoticeOut]
     total: int
+
+
+class AudienceOut(BaseModel):
+    """Сколько жителей получит рассылку с такими адресатами."""
+
+    count: int

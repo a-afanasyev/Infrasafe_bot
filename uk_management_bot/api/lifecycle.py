@@ -49,16 +49,19 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(10)
 
     async def _news_broadcast_loop():
-        # Мониторинг отключений: outbox-рассылка опубликованных новостей
-        # (services/news_watch/broadcast). Цикл сам выходит без NEWS_WATCH_ENABLED.
+        # Outbox-рассылки жителям: новости каналов (сам выходит без
+        # NEWS_WATCH_ENABLED) и записи раздела «Новости и уведомления» (всегда).
         from uk_management_bot.api.news_watch.broadcast import run_broadcast_cycle
+        from uk_management_bot.api.notices.broadcast import run_notices_broadcast_cycle
+        cycles = (("news_watch", run_broadcast_cycle), ("notices", run_notices_broadcast_cycle))
         while True:
-            try:
-                stats = await run_broadcast_cycle()
-                if stats.get("processed"):
-                    _logger.info("news_watch broadcast cycle: %s", stats)
-            except Exception:
-                _logger.exception("news_watch broadcast error")
+            for name, cycle in cycles:
+                try:
+                    stats = await cycle()
+                    if stats.get("processed"):
+                        _logger.info("%s broadcast cycle: %s", name, stats)
+                except Exception:
+                    _logger.exception("%s broadcast error", name)
             await asyncio.sleep(30)
 
     async def _reconciliation_loop():
@@ -135,9 +138,9 @@ async def lifespan(app: FastAPI):
     reconcile_task = None
     retention_task = None
     news_task = None
-    if settings.NEWS_WATCH_ENABLED:
-        news_task = asyncio.create_task(_news_broadcast_loop())
-        _logger.info("News-watch broadcast loop started (30s interval)")
+    # Рассылка записей раздела «Новости и уведомления» не зависит от news-watch.
+    news_task = asyncio.create_task(_news_broadcast_loop())
+    _logger.info("Broadcast loop started (30s interval; news-watch=%s)", settings.NEWS_WATCH_ENABLED)
     if settings.INFRASAFE_WEBHOOK_ENABLED:
         task = asyncio.create_task(_outbox_loop())
         _logger.info("Webhook outbox processor started (10s interval)")

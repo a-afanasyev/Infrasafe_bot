@@ -14,6 +14,8 @@ export const NOTICES_BASE = '/api/v2/board-config/notices'
 
 export type NoticeKind = 'news' | 'outage'
 export type NoticeState = 'draft' | 'scheduled' | 'active' | 'expired' | 'closed'
+export type NoticeScope = 'all' | 'yards' | 'buildings'
+export type BroadcastStatus = 'none' | 'pending' | 'running' | 'done' | 'failed'
 export const NOTICE_RESOURCES = ['water', 'heating', 'power', 'gas', 'internet', 'other'] as const
 export type NoticeResource = (typeof NOTICE_RESOURCES)[number]
 
@@ -38,6 +40,12 @@ export interface Notice {
   all_day: boolean
   expires_at: string | null
   created_at: string | null
+  /** Адресаты рассылки: все жители, дворы или дома (id справочника). */
+  scope: NoticeScope
+  scope_ids: number[]
+  broadcast_status: BroadcastStatus
+  broadcast_attempts: number
+  broadcast_details: { sent?: number; blocked?: number; no_chat?: number; errors?: number } | null
 }
 
 /** Тело создания/правки: служебные поля сервер не принимает. */
@@ -57,6 +65,10 @@ export interface NoticeBody {
   ends_at: string | null
   all_day: boolean
   expires_at: string | null
+  scope: NoticeScope
+  scope_ids: number[]
+  /** true — разослать в Telegram, когда запись станет видна жителям. */
+  broadcast: boolean
 }
 
 interface NoticesPage { items: Notice[]; total: number }
@@ -74,7 +86,7 @@ export function useNotices(params: { kind?: NoticeKind; status?: string; from?: 
 type Action =
   | { type: 'create'; body: NoticeBody; publish: boolean }
   | { type: 'update'; id: number; body: NoticeBody; publish: boolean }
-  | { type: 'publish' | 'close' | 'delete'; id: number }
+  | { type: 'publish' | 'close' | 'delete' | 'retry-broadcast'; id: number }
 
 async function run(action: Action): Promise<void> {
   if (action.type === 'create') {
@@ -103,5 +115,20 @@ export function useNoticeAction() {
       toast.success(t('notices.toast.saved'))
     },
     onError: (err) => toast.error(safeErrorMessage(err, t('common.error'))),
+  })
+}
+
+/** Сколько жителей получит рассылку с такими адресатами (подсказка формы). */
+export function useAudience(scope: NoticeScope, ids: number[], enabled: boolean) {
+  return useQuery<{ count: number }>({
+    queryKey: [KEY, 'audience', scope, [...ids].sort((a, b) => a - b)],
+    // axios сериализует массив как ids[]=…; серверу нужен повтор ключа ids=…
+    queryFn: () => {
+      const query = new URLSearchParams({ scope })
+      ids.forEach((id) => query.append('ids', String(id)))
+      return apiClient.get(`${NOTICES_BASE}/audience?${query.toString()}`).then((r) => r.data)
+    },
+    enabled,
+    staleTime: 60_000,
   })
 }

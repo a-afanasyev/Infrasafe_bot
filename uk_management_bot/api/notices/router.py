@@ -19,11 +19,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
-from uk_management_bot.api.notices.schemas import NoticeCreateIn, NoticeIn, NoticeOut, NoticesOut
+from uk_management_bot.api.notices.schemas import AudienceOut, NoticeCreateIn, NoticeIn, NoticeOut, NoticesOut, NoticeScope
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.database.models.notice import NOTICE_KINDS, NOTICE_STATUSES, Notice
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.notices import service
+from uk_management_bot.services.notices.audience import count_recipients, unknown_scope_ids
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,21 @@ async def list_notices(
     return NoticesOut(items=[_out(n) for n in items], total=total)
 
 
+@router.get("/audience", response_model=AudienceOut)
+@limiter.limit("120/minute")
+async def audience(
+    request: Request,
+    scope: NoticeScope = Query(default="all"),
+    ids: list[int] = Query(default_factory=list, max_length=200),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager),
+) -> AudienceOut:
+    """Подсказка формы: сколько жителей получит рассылку."""
+    if await unknown_scope_ids(db, scope, ids):
+        raise HTTPException(status_code=422, detail="unknown yard or building id")
+    return AudienceOut(count=await count_recipients(db, scope, ids))
+
+
 @router.post("", response_model=NoticeOut, status_code=201)
 @limiter.limit("30/minute")
 async def create_notice(
@@ -84,8 +100,9 @@ async def create_notice(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(_manager),
 ) -> NoticeOut:
-    fields = payload.model_dump(exclude={"publish"}, exclude_none=True)
-    notice = await _run(service.create_notice(db, fields, user_id=user.id, publish=payload.publish))
+    fields = payload.model_dump(exclude={"publish", "broadcast"}, exclude_none=True)
+    notice = await _run(service.create_notice(
+        db, fields, user_id=user.id, publish=payload.publish, broadcast=payload.broadcast))
     logger.info("notice %s создана пользователем %s (publish=%s)", notice.id, user.id, payload.publish)
     return _out(notice)
 
@@ -100,12 +117,12 @@ async def update_notice(
     user: User = Depends(_manager),
 ) -> NoticeOut:
     """Правка. Поле, присланное как null, очищается (например, срок показа)."""
-    fields = payload.model_dump(include=payload.model_fields_set)
+    fields = payload.model_dump(include=payload.model_fields_set - {"broadcast"})
     for required in ("kind", "title_ru", "title_uz", "text_ru", "text_uz", "place_ru", "place_uz",
                      "icon", "important", "all_day", "scope", "scope_ids"):
         if required in fields and fields[required] is None:
             raise HTTPException(status_code=422, detail=f"{required} must not be null")
-    return _out(await _run(service.update_notice(db, notice_id, fields)))
+    return _out(await _run(service.update_notice(db, notice_id, fields, broadcast=payload.broadcast)))
 
 
 @router.post("/{notice_id}/publish", response_model=NoticeOut)
@@ -132,6 +149,17 @@ async def close_notice(
     notice = await _run(service.close_notice(db, notice_id, user_id=user.id))
     logger.info("notice %s закрыта пользователем %s", notice.id, user.id)
     return _out(notice)
+
+
+@router.post("/{notice_id}/retry-broadcast", response_model=NoticeOut)
+@limiter.limit("30/minute")
+async def retry_broadcast(
+    request: Request,
+    notice_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(_manager),
+) -> NoticeOut:
+    return _out(await _run(service.retry_broadcast(db, notice_id)))
 
 
 @router.delete("/{notice_id}", status_code=204)

@@ -18,6 +18,8 @@ const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
 type Tab = 'feed' | 'calendar' | 'channels'
 type Filter = 'all' | NoticeKind | 'draft'
 const FILTERS: Filter[] = ['all', 'news', 'outage', 'draft']
+// = MAX_ATTEMPTS воркера: после стольких попыток он сам не повторяет.
+const MAX_BROADCAST_ATTEMPTS = 5
 const RESOURCE_ICON: Record<string, string> = { power: '⚡', water: '💧', gas: '🔥', heating: '🌡', internet: '🌐', other: '📢' }
 const STATE_TONE: Record<NoticeState, string> = {
   draft: 'text-text-muted',
@@ -139,6 +141,19 @@ export default function NoticesPage() {
                     <span className="rounded-[5px] bg-bg-surface px-1.5 py-px text-text-muted">{t(`notices.source.${n.source}`)}</span>
                   )}
                   {n.important && <span className="rounded-[5px] bg-red/15 px-1.5 py-px text-red">{t('notices.important')}</span>}
+                  {n.scope !== 'all' && (
+                    <span className="rounded-[5px] bg-bg-surface px-1.5 py-px text-text-muted">
+                      {t(`notices.audience.short.${n.scope}`, { count: n.scope_ids.length })}
+                    </span>
+                  )}
+                  {n.broadcast_status !== 'none' && (
+                    <span data-testid="broadcast-state" className="rounded-[5px] bg-bg-surface px-1.5 py-px text-text-muted">
+                      {t(`notices.broadcast.${n.broadcast_status}`, {
+                        sent: n.broadcast_details?.sent ?? 0,
+                        failed: (n.broadcast_details?.blocked ?? 0) + (n.broadcast_details?.no_chat ?? 0) + (n.broadcast_details?.errors ?? 0),
+                      })}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
@@ -152,6 +167,11 @@ export default function NoticesPage() {
                       <Button size="sm" disabled={action.isPending} onClick={() => action.mutate({ type: 'publish', id: n.id })}>{t('notices.form.publish')}</Button>
                       <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ type: 'delete', id: n.id })}>{t('common.delete')}</Button>
                     </>
+                  )}
+                  {n.broadcast_status === 'failed' && n.broadcast_attempts >= MAX_BROADCAST_ATTEMPTS && (
+                    <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ type: 'retry-broadcast', id: n.id })}>
+                      {t('notices.broadcast.retry')}
+                    </Button>
                   )}
                   {(n.state === 'active' || n.state === 'scheduled' || n.state === 'expired') && (
                     <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ type: 'close', id: n.id })}>{t('notices.close')}</Button>
@@ -174,6 +194,7 @@ export default function NoticesPage() {
           initial={editing.draft}
           editing={editing.notice !== null}
           published={editing.notice !== null && editing.notice.status === 'published'}
+          broadcastLocked={editing.notice !== null && !['none', 'pending'].includes(editing.notice.broadcast_status)}
           pending={action.isPending}
           onSubmit={submit}
           onClose={() => setEditing(null)}
