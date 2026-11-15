@@ -21,7 +21,7 @@ from uk_management_bot.database.models.cleaning import (
     CleaningPlanVersion,
     CleaningTask,
 )
-from uk_management_bot.services.cleaning.planning import WEEKDAYS, PlanError, parse_items
+from uk_management_bot.services.cleaning.planning import FIRST_FLOOR_POINTS, WEEKDAYS, PlanError, parse_items
 from uk_management_bot.utils.business_time import business_today
 
 # Жителю в приложении — коротко: одно фото подъезда и лифт, если его мыли.
@@ -74,15 +74,18 @@ async def _shown(db: AsyncSession) -> dict[int, tuple[Building, CleaningBuilding
 
 
 def _slot_order(slot: str) -> tuple[int, int, str]:
-    """Этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
+    """Точки первого этажа, этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
+    if slot in FIRST_FLOOR_POINTS:
+        return (0, FIRST_FLOOR_POINTS.index(slot), "")
     kind, _, name = slot.partition(":")
-    return (0, int(name), "") if kind == "floor" and name.isdigit() else (1, 0, name)
+    return (1, int(name), "") if kind == "floor" and name.isdigit() else (2, 0, name)
 
 
 async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = False) -> dict[int, list[int]]:
     """Текущие фото заданий: задание → id фото по порядку точек.
 
-    ``brief`` — выжимка для жителя: одно фото подъезда (нижний снятый этаж) и лифт.
+    ``brief`` — выжимка для жителя: одно фото подъезда (первая точка первого этажа
+    либо нижний снятый этаж) и лифт.
     """
     shots: dict[int, list[tuple[str, int]]] = {}
     if task_ids:
@@ -95,7 +98,7 @@ async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = Fal
     for task_id, rows in shots.items():
         rows.sort(key=lambda row: _slot_order(row[0]))
         if brief:
-            floors = [row for row in rows if row[0].startswith("floor:")]
+            floors = [row for row in rows if row[0].startswith("floor:") or row[0] in FIRST_FLOOR_POINTS]
             rows = floors[:1] + [row for row in rows if row[0] in BRIEF_POINTS]
         photos[task_id] = [photo_id for _, photo_id in rows]
     return photos

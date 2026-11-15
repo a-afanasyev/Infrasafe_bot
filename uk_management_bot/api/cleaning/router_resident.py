@@ -14,7 +14,7 @@ import logging
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,8 +126,13 @@ async def cleaning_building(request: Request, building_id: int = Path(ge=1, le=D
 
 @public_router.get("/cleaning/photos/{photo_id}")
 @limiter.limit("120/minute")
-async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_MAX), db: AsyncSession = Depends(get_db)):
-    """Текущее фото принятого сегодняшнего задания. Проверки — на каждый запрос, без кэша."""
+async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_MAX),
+                         original: bool = Query(False, description="true — оригинал, иначе превью"),
+                         db: AsyncSession = Depends(get_db)):
+    """Текущее фото принятого сегодняшнего задания: превью для миниатюр, оригинал по нажатию.
+
+    Проверки — на каждый запрос, без кэша.
+    """
     from uk_management_bot.api.cleaning.router_exec import _download
 
     _or_404()
@@ -135,7 +140,7 @@ async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_M
     if photo is None:
         raise HTTPException(status_code=404, detail="Not Found")
     await db.close()
-    file = await _download(photo.media_id)
+    file = await _download(photo.media_id, not original)
     if file is None:
         raise HTTPException(status_code=503, detail="media_unavailable")
     return Response(content=file[0], media_type=file[1], headers={"Cache-Control": "no-store"})

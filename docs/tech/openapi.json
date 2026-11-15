@@ -19550,7 +19550,7 @@
     },
     "/api/v2/cleaning/control/photos/{photo_id}/file": {
       "get": {
-        "description": "Файл любого фото уборки для проверки. Без кэша.",
+        "description": "Файл любого фото уборки для проверки: превью в сетке, оригинал по нажатию. Без кэша.",
         "operationId": "photo_file_api_v2_cleaning_control_photos__photo_id__file_get",
         "parameters": [
           {
@@ -19562,6 +19562,18 @@
               "minimum": 1,
               "title": "Photo Id",
               "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
             }
           }
         ],
@@ -20131,6 +20143,18 @@
               "minimum": 1,
               "title": "Photo Id",
               "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
             }
           }
         ],
@@ -24482,7 +24506,7 @@
     },
     "/api/v2/public/cleaning/photos/{photo_id}": {
       "get": {
-        "description": "Текущее фото принятого сегодняшнего задания. Проверки — на каждый запрос, без кэша.",
+        "description": "Текущее фото принятого сегодняшнего задания: превью для миниатюр, оригинал по нажатию.\n\nПроверки — на каждый запрос, без кэша.",
         "operationId": "cleaning_photo_api_v2_public_cleaning_photos__photo_id__get",
         "parameters": [
           {
@@ -24494,6 +24518,18 @@
               "minimum": 1,
               "title": "Photo Id",
               "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
             }
           }
         ],

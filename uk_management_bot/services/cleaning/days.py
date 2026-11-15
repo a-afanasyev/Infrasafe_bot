@@ -24,6 +24,7 @@ from uk_management_bot.database.models.cleaning import (
     CleaningPlanVersion,
     CleaningTask,
 )
+from uk_management_bot.services.cleaning import planning
 from uk_management_bot.services.cleaning.planning import PlanError, parse_items, task_for
 from uk_management_bot.services.cleaning.rules import day_end_at, rules_for
 from uk_management_bot.services.cleaning.transitions import move
@@ -86,7 +87,8 @@ async def ensure_tasks(db: AsyncSession, day: date, *, now: Optional[datetime] =
                 continue
             db.add(CleaningTask(
                 building_id=version.building_id, entrance=entrance, work_date=day,
-                plan_version_id=version.id, works=list(task.works), slots_required=list(task.slots),
+                plan_version_id=version.id, works=list(task.works),
+                slots_required=list(planning.shooting_slots(task.slots, planning.FIRST_FLOOR_POINTS)),
                 responsible_id=assigned.get((version.building_id, entrance)),
             ))
     await db.flush()

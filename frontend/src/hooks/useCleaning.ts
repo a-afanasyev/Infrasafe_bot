@@ -191,11 +191,14 @@ export function useDecideCleaningComplaint() {
 }
 
 /** Файл фото уборки как data: URL (CSP дашборда не пускает blob: в img-src). */
-export function useCleaningPhotoUrl(photoId: number, enabled: boolean) {
+export function useCleaningPhotoUrl(photoId: number, enabled: boolean, original = false) {
   return useQuery<string>({
-    queryKey: ['cleaning', 'photo', photoId],
+    queryKey: ['cleaning', 'photo', photoId, original],
     queryFn: async () => {
-      const { data } = await apiClient.get(`${CONTROL_BASE}/photos/${photoId}/file`, { responseType: 'blob' })
+      // Сетка — лёгкие превью; оригинал качается, только когда фото открыли.
+      const { data } = await apiClient.get(`${CONTROL_BASE}/photos/${photoId}/file`, {
+        responseType: 'blob', params: original ? { original: true } : undefined,
+      })
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(String(reader.result))

@@ -33,7 +33,7 @@
       "floorsPerEntrance": "yo'lakdagi qavatlar: {{n}}",
       "extraPoints": "Qo'shimcha surat nuqtalari",
       "extraPointsHint": "lotin harflarida, vergul bilan: entrance, trash",
-      "photoRule": "Belgilangan har bir qavatning surati doim majburiy; lift kabinasi — lift yuviladigan kunlari.",
+      "photoRule": "Birinchi qavat — uchta surat: 1-kirish, 2-kirish va lift oldi maydoni. Qolgan qavatlar — bittadan surat; lift kabinasi — lift yuviladigan kunlarda.",
       "showResidents": "Uy tozalanishini aholiga ko'rsatish",
       "showPhotos": "Aholiga tozalash suratlarini ko'rsatish",
       "save": "Rejani saqlash",
@@ -182,7 +182,8 @@
       "chooseCleaner": "Farroshni tanlang",
       "decisionNote": "Qaror va muallif jurnalga yoziladi. Topshiriq o'zgargan bo'lsa, tizim sahifani yangilashni so'raydi.",
       "journal": "Jurnal",
-      "otherPhotos": "Almashtirilgan va rad etilgan kadrlar: {{count}}"
+      "otherPhotos": "Almashtirilgan va rad etilgan kadrlar: {{count}}",
+      "openPhoto": "Suratni ochish: {{label}}"
     },
     "trust": {
       "live": "seans oynasida",
@@ -212,7 +213,10 @@
     },
     "point": {
       "elevator": "Lift",
-      "entrance": "Kirish"
+      "entrance": "Kirish",
+      "entry1": "1-kirish",
+      "entry2": "2-kirish",
+      "lift_hall": "Lift oldi maydoni"
     },
     "toast": {
       "decided": "Qaror saqlandi",
@@ -2875,7 +2879,10 @@
       "floor": "{{n}}-qavat",
       "point": {
         "elevator": "Lift",
-        "entrance": "Kirish"
+        "entrance": "Kirish",
+        "entry1": "1-kirish",
+        "entry2": "2-kirish",
+        "lift_hall": "Lift oldi maydoni"
       },
       "work": {
         "wet": "Nam tozalash",
@@ -4381,7 +4388,9 @@
       "noHouses": "Uylarni tozalash haqidagi ma'lumotlar hozircha e'lon qilinmaydi.",
       "loadError": "Tozalash ma'lumotlarini yuklab bo'lmadi. Sahifani yangilang.",
       "complainQuestion": "Yo'lak iflos, lekin «tozalandi» deb belgilanganmi?",
-      "complainBot": "Botda xabar berish"
+      "complainBot": "Botda xabar berish",
+      "more": "Batafsil · {{count}} ta surat",
+      "less": "Yig'ish"
     },
     "pageTitle": "Uyingiz bugun",
     "eyebrow": "Aholi uchun ma'lumot",

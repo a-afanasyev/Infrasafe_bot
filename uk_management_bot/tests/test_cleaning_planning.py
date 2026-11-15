@@ -95,3 +95,16 @@ def test_effective_picks_the_version_valid_on_that_date():
     assert effective([old, new], date(2026, 11, 17)).id == 1
     assert effective([old, new], date(2026, 11, 18)).id == 2
     assert effective([old, new], date(2026, 10, 31)) is None
+
+
+def test_first_floor_is_shot_as_three_points(cleaning_first_floor_points):
+    from uk_management_bot.services.cleaning.planning import shooting_slots
+
+    assert cleaning_first_floor_points == ("point:entry1", "point:entry2", "point:lift_hall")
+    slots = ("floor:1", "floor:2", "floor:3", "point:elevator")
+    assert shooting_slots(slots, cleaning_first_floor_points) == (
+        "point:entry1", "point:entry2", "point:lift_hall", "floor:2", "floor:3", "point:elevator")
+    # первый этаж сегодня не моется — точек первого этажа нет
+    assert shooting_slots(("floor:2", "floor:3"), cleaning_first_floor_points) == ("floor:2", "floor:3")
+    # правило выключено — прежний один кадр
+    assert shooting_slots(slots, ()) == slots

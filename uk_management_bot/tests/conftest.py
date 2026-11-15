@@ -69,3 +69,19 @@ async def address_async_db(address_async_engine) -> AsyncSession:
         await session.close()
         await outer.rollback()
         await conn.close()
+
+
+# Уборка: тесты протокола загрузки, приёмки и контроля пишутся в точках «этаж N».
+# Замена первого этажа тремя точками (planning.FIRST_FLOOR_POINTS) — отдельное
+# правило генерации; здесь оно выключено, а проверяют его свои тесты, которые
+# берут боевое значение из этой фикстуры.
+@pytest.fixture(autouse=True)
+def cleaning_first_floor_points():
+    from uk_management_bot.services.cleaning import planning
+
+    production = planning.FIRST_FLOOR_POINTS
+    planning.FIRST_FLOOR_POINTS = ()
+    try:
+        yield production
+    finally:
+        planning.FIRST_FLOOR_POINTS = production

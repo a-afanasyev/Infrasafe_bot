@@ -32,12 +32,26 @@ function slotName(slot: string, t: (key: string, options?: Record<string, unknow
 
 function Photo({ photo }: { photo: CleaningPhotoInfo }) {
   const { t } = useTranslation()
+  const [zoom, setZoom] = useState(false)
   const { data: url } = useCleaningPhotoUrl(photo.id, photo.has_file)
+  const { data: full } = useCleaningPhotoUrl(photo.id, photo.has_file && zoom, true)
   const label = slotName(photo.slot, t)
   return (
     <figure className="flex flex-col gap-1 text-[12px] text-text-primary">
+      {zoom && (
+        <button
+          type="button" aria-label={t('common.close')} onClick={() => setZoom(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+        >
+          <img src={full ?? url} alt={label} className="max-h-full max-w-full rounded-default object-contain" />
+        </button>
+      )}
       {url
-        ? <img src={url} alt={label} className="h-40 w-full rounded-default object-cover" />
+        ? (
+          <button type="button" onClick={() => setZoom(true)} aria-label={t('cleaning.task.openPhoto', { label })}>
+            <img src={url} alt={label} className="h-40 w-full rounded-default object-cover" />
+          </button>
+        )
         : <div className="flex h-40 items-center justify-center rounded-default border border-border-default text-text-muted">{t('cleaning.task.noFile')}</div>}
       <figcaption>
         <span className="font-semibold">{label}</span> · {time(photo.received_at)}

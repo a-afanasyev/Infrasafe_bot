@@ -247,16 +247,17 @@ async def set_responsible(body: CleaningResponsibleIn, task_id: int = TaskId,
 
 
 @router.get("/photos/{photo_id}/file")
-async def photo_file(photo_id: int = Path(ge=1, le=DB_ID_MAX), db: AsyncSession = Depends(get_db),
-                     user: User = Depends(_read)):
-    """Файл любого фото уборки для проверки. Без кэша."""
+async def photo_file(photo_id: int = Path(ge=1, le=DB_ID_MAX),
+                     original: bool = Query(False, description="true — оригинал, иначе превью"),
+                     db: AsyncSession = Depends(get_db), user: User = Depends(_read)):
+    """Файл любого фото уборки для проверки: превью в сетке, оригинал по нажатию. Без кэша."""
     from uk_management_bot.api.cleaning.router_exec import _download
 
     photo = await db.get(CleaningPhoto, photo_id)
     if photo is None or photo.media_id is None:
         raise HTTPException(status_code=404, detail="not_found")
     await db.close()
-    file = await _download(photo.media_id)
+    file = await _download(photo.media_id, not original)
     if file is None:
         raise HTTPException(status_code=503, detail="media_unavailable")
     return Response(content=file[0], media_type=file[1], headers={"Cache-Control": "no-store"})

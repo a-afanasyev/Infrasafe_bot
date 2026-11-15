@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, Response, UploadFile
+from fastapi import (
+    APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Path, Query, Request, Response, UploadFile,
+)
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,11 +76,21 @@ class CleaningUploadOut(BaseModel):
     task_status: str
 
 
-async def _download(media_id: int) -> Optional[tuple[bytes, str]]:
+async def _download(media_id: int, preview: bool = False) -> Optional[tuple[bytes, str]]:
+    """Файл фото: превью (миниатюры, быстро из кэша) или оригинал (просмотр по нажатию)."""
     from uk_management_bot.integrations import get_media_client
 
     client = get_media_client()
-    return await client.download_media_file(media_id) if client is not None else None
+    return await client.download_media_file(media_id, preview=preview) if client is not None else None
+
+
+async def _warm_preview(media_id: int) -> None:
+    """Построить превью сразу после загрузки: первый зритель не ждёт Telegram. Не бросает."""
+    from uk_management_bot.integrations import get_media_client
+
+    client = get_media_client()
+    if client is not None:
+        await client.warm_previews([media_id])
 
 
 async def _own_task(db: AsyncSession, task_id: int, user: User) -> CleaningTask:
@@ -136,6 +148,7 @@ async def open_session(task_id: int = TaskId, db: AsyncSession = Depends(get_db)
 @limiter.limit(PHOTO_RATE_LIMIT)
 async def upload_photo(
     request: Request,
+    background: BackgroundTasks,
     task_id: int = TaskId,
     photo: UploadFile = File(..., description="Кадр точки: JPEG/PNG, до 8 МиБ"),
     slot: str = Form(..., max_length=40, description="floor:N или point:name из задания"),
@@ -161,6 +174,8 @@ async def upload_photo(
             system_camera=source != "live")
     except UploadRefused as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.code) from None
+    if result.media_id is not None and not result.replay:
+        background.add_task(_warm_preview, result.media_id)
     async with AsyncSessionLocal() as fresh:
         task = await fresh.get(CleaningTask, task_id)
     return CleaningUploadOut(photo_id=result.photo_id, outcome=result.outcome, refusal_code=result.refusal_code,
@@ -169,6 +184,7 @@ async def upload_photo(
 
 @router.get("/tasks/{task_id}/photos/{photo_id}/file")
 async def my_photo_file(task_id: int = TaskId, photo_id: int = Path(ge=1, le=DB_ID_MAX),
+                        original: bool = Query(False, description="true — оригинал, иначе превью"),
                         db: AsyncSession = Depends(get_db), user: User = Depends(_cleaner)):
     """Своё фото точки (предпросмотр снятого). Без кэша: пересъёмка видна сразу."""
     await _own_task(db, task_id, user)
@@ -176,7 +192,7 @@ async def my_photo_file(task_id: int = TaskId, photo_id: int = Path(ge=1, le=DB_
     if photo is None or photo.task_id != task_id or photo.media_id is None:
         raise HTTPException(status_code=404, detail="not_found")
     await db.close()
-    file = await _download(photo.media_id)
+    file = await _download(photo.media_id, not original)
     if file is None:
         raise HTTPException(status_code=503, detail="media_unavailable")
     body, content_type = file

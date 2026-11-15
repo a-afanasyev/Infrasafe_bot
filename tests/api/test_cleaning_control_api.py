@@ -31,7 +31,7 @@ async def task(db_session, monkeypatch):
     """Сегодняшнее задание (этажи 1–2) на проверке, одно текущее фото с файлом."""
     monkeypatch.setattr(settings, "CLEANING_ENABLED", True)
 
-    async def download(media_id):
+    async def download(media_id, preview=False):
         return (b"\xff\xd8jpeg", "image/jpeg") if media_id == 9 else None
 
     monkeypatch.setattr(router_exec, "_download", download)

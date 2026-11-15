@@ -10,7 +10,8 @@ tozalanganining belgisi hisoblanadi.
 - Suratni **tozalash kunida**, ekranda yozilgan vaqtgacha olish kerak.
 - Suratni **ilovadagi kamera** bilan olish kerak. Galereyadagi suratlar qabul qilinmaydi.
 - Botga chatda yuborilgan suratlar **qabul qilinmaydi**.
-- Har bir qavatga — bitta surat. Topshiriqda lift bo'lsa — lift kabinasining surati ham kerak.
+- Birinchi qavatda — uchta surat: **«1-kirish»**, **«2-kirish»** va **«Lift oldi maydoni»**.
+- Keyingi har bir qavatga — bitta surat. Topshiriqda lift bo'lsa — lift kabinasining surati ham kerak.
 
 ## Tozalashni qanday ochish kerak
 
@@ -24,8 +25,9 @@ tozalanganining belgisi hisoblanadi.
 ## Qanday tozalash va suratga olish kerak
 
 1. **«Bugungi tozalash»** ekranida yo'laklaringiz ro'yxati bor. Har birida nechta qavat suratga
-   olingani yozilgan: «9 tadan 0 tasi olindi».
-2. Yo'lakni bosing. Qavat tugmalari ochiladi: «1-qavat», «2-qavat» va hokazo.
+   olingani yozilgan: «11 tadan 0 tasi olindi».
+2. Yo'lakni bosing. Tugmalar ochiladi: «1-kirish», «2-kirish», «Lift oldi maydoni», so'ng «2-qavat»,
+   «3-qavat» va hokazo.
 3. Qavatni yuving.
 4. Shu qavat tugmasini bosing. Kamera ochiladi.
 5. Kamerani tozalangan qavatga qarating va **«Suratga olish»** tugmasini bosing.

@@ -37,7 +37,7 @@ async def world(db_session, monkeypatch):
     """Дом 1 (2 подъезда) показывается жителям, дом 2 — нет. Сегодня уборка в обоих."""
     monkeypatch.setattr(settings, "CLEANING_ENABLED", True)
 
-    async def download(media_id):
+    async def download(media_id, preview=False):
         return (b"\xff\xd8jpeg", "image/jpeg")
 
     monkeypatch.setattr(router_exec, "_download", download)

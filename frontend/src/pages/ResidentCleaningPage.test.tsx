@@ -35,7 +35,12 @@ describe('ResidentCleaningPage', () => {
     const first = (await screen.findByRole('heading', { name: 'д. 12' })).closest('article') as HTMLElement
     expect(within(first).getByText('Убрано · 11:05')).toBeInTheDocument()        // время — в зоне площадки
     expect(within(first).getByText('Убрано в 09:40')).toBeInTheDocument()
-    expect(within(first).getAllByRole('button')).toHaveLength(2)                  // две миниатюры подъезда 1
+    // подъезд — одна строка; фото появляются только после «Подробнее»
+    expect(within(first).getAllByRole('button')).toHaveLength(1)
+    expect(within(first).queryByRole('img', { hidden: true })).toBeNull()
+    await user.click(within(first).getByRole('button', { name: 'Подробнее · 2 фото' }))
+    expect(within(first).getAllByRole('button', { name: /Фото уборки/ })).toHaveLength(2)
+    expect(within(first).getByRole('button', { name: 'Свернуть' })).toHaveAttribute('aria-expanded', 'true')
 
     const second = screen.getByRole('heading', { name: 'д. 14' }).closest('article') as HTMLElement
     expect(within(second).getByText('Идёт уборка')).toBeInTheDocument()
@@ -46,7 +51,8 @@ describe('ResidentCleaningPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Фото уборки: д. 12, подъезд 1, кадр 2' }))
     const viewer = screen.getByRole('dialog')
-    expect(within(viewer).getByRole('img')).toHaveAttribute('src', expect.stringContaining('/api/v2/public/cleaning/photos/32'))
+    // миниатюра — превью, в просмотре — оригинал
+    expect(within(viewer).getByRole('img')).toHaveAttribute('src', expect.stringContaining('/api/v2/public/cleaning/photos/32?original=true'))
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).toBeNull()
   })

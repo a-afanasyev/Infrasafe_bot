@@ -173,3 +173,22 @@ async def test_transition_table_rejects_unknown_moves_and_bumps_version(db):
         await move(db, task, "accepted", kind="manual")  # planned → accepted запрещён
     await move(db, task, "in_progress", kind="first_photo")
     assert (task.status, task.version) == ("in_progress", 2)
+
+
+
+async def test_generated_task_asks_three_points_for_first_floor(el_async_factory, el_seed, cleaning_first_floor_points):
+    """Боевое правило: в задании вместо «этаж 1» — два входа и лифтовая зона; остальные этажи по одному."""
+    from uk_management_bot.services.cleaning import planning
+
+    planning.FIRST_FLOOR_POINTS = cleaning_first_floor_points
+    day = date(2026, 11, 17)
+    async with el_async_factory() as db:
+        db.add_all([
+            el_seed.yard(), el_seed.building(1, entrance_count=1),
+            CleaningPlanVersion(building_id=1, valid_from=date(2026, 11, 1), extra_points=[], floor_count=3,
+                                entrance_count=1, items=[{"work_kind": "wet", "weekdays": [1]}]),
+        ])
+        await db.flush()
+        await days.ensure_tasks(db, day, now=business_wall_clock(day, 12))
+        task = (await db.execute(select(CleaningTask))).scalar_one()
+    assert task.slots_required == ["point:entry1", "point:entry2", "point:lift_hall", "floor:2", "floor:3"]

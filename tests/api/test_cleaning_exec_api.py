@@ -47,7 +47,7 @@ async def world(db_session, db_session_factory, monkeypatch):
         stored[len(stored) + 1] = jpeg
         return len(stored)
 
-    async def media_download(media_id):
+    async def media_download(media_id, preview=False):
         return (stored[media_id], "image/jpeg") if media_id in stored else None
 
     monkeypatch.setattr(uploads, "_media_upload", media_upload)

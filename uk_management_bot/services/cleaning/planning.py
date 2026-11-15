@@ -14,6 +14,9 @@ from typing import Iterable, Optional, Protocol, Sequence, TypeVar
 FLOOR_WORKS = ("wet", "dry")
 POINT_WORKS = {"elevator": "point:elevator"}
 WORK_KINDS = FLOOR_WORKS + tuple(POINT_WORKS)
+# Первый этаж снимается тремя точками вместо одного кадра: два входа и лифтовая
+# зона (решение владельца 2026-11-16). Пустой кортеж — прежний один кадр «этаж 1».
+FIRST_FLOOR_POINTS: tuple[str, ...] = ("point:entry1", "point:entry2", "point:lift_hall")
 WEEKDAYS = range(7)  # 0 = понедельник, как date.weekday()
 
 
@@ -104,6 +107,18 @@ def task_for(items: Sequence[PlanItem], extra_points: Iterable[str], *,
         + [f"point:{p}" for p in extra_points]
     )
     return DayTask(works=works, slots=tuple(f"floor:{f}" for f in floors) + tuple(points))
+
+
+def shooting_slots(slots: Sequence[str], first_floor: Sequence[str]) -> tuple[str, ...]:
+    """Точки съёмки задания: кадр «этаж 1» заменяется точками первого этажа.
+
+    План, покрытие и нагрузка по-прежнему считают первый этаж одним этажом — меняется
+    только то, что снимает уборщица.
+    """
+    out: list[str] = []
+    for slot in slots:
+        out.extend(first_floor if slot == "floor:1" and first_floor else (slot,))
+    return tuple(dict.fromkeys(out))
 
 
 def floor_coverage(items: Sequence[PlanItem], work_kind: str, *, floor_count: int,

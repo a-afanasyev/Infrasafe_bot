@@ -53,7 +53,7 @@ function PhotoViewer({ shot, onClose }: { shot: Shot | null; onClose: () => void
             <HomeIcon name="close" />
           </button>
         </div>
-        <img src={publicCleaningPhotoUrl(shot.id)} alt={shot.label} />
+        <img src={publicCleaningPhotoUrl(shot.id, true)} alt={shot.label} />
       </div>
     </div>
   )
@@ -61,6 +61,8 @@ function PhotoViewer({ shot, onClose }: { shot: Shot | null; onClose: () => void
 
 function HouseCard({ house, onOpen }: { house: PublicCleaningHouse; onOpen: (shot: Shot) => void }) {
   const { t } = useTranslation()
+  // Подъезд — одна строка; фото грузятся, только когда его раскрыли.
+  const [open, setOpen] = useState<number | null>(null)
   return (
     <article className={`rh-card rh-clean-house rh-clean-house--${house.state}`}>
       <header>
@@ -79,8 +81,16 @@ function HouseCard({ house, onOpen }: { house: PublicCleaningHouse; onOpen: (sho
                   ? t('home.cleaning.doneAt', { time: formatTime(entrance.done_at) })
                   : t(`home.cleaning.entranceState.${entrance.state}`)}
               </span>
+              {entrance.photo_ids.length > 0 && (
+                <button
+                  type="button" className="rh-small-action" aria-expanded={open === entrance.entrance}
+                  onClick={() => setOpen(open === entrance.entrance ? null : entrance.entrance)}
+                >
+                  {t(open === entrance.entrance ? 'home.cleaning.less' : 'home.cleaning.more', { count: entrance.photo_ids.length })}
+                </button>
+              )}
             </div>
-            {entrance.photo_ids.length > 0 && (
+            {open === entrance.entrance && entrance.photo_ids.length > 0 && (
               <div className="rh-clean-thumbs">
                 {entrance.photo_ids.map((id, index) => {
                   const label = t('home.cleaning.photoAlt', { address: house.address, n: entrance.entrance, i: index + 1 })

@@ -65,7 +65,8 @@ export function usePublicCleaningBuilding(buildingId: number | null) {
   })
 }
 
-/** Адрес открытого фото уборки (отдаётся без кэша; скрытое фото — 404). */
-export function publicCleaningPhotoUrl(photoId: number): string {
-  return `${publicClient.defaults.baseURL ?? ''}/api/v2/public/cleaning/photos/${photoId}`
+/** Адрес открытого фото уборки (без кэша; скрытое фото — 404). По умолчанию — лёгкое превью
+ *  для миниатюр, `original` — полный кадр для просмотра. */
+export function publicCleaningPhotoUrl(photoId: number, original = false): string {
+  return `${publicClient.defaults.baseURL ?? ''}/api/v2/public/cleaning/photos/${photoId}${original ? '?original=true' : ''}`
 }
