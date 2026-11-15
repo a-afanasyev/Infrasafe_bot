@@ -44,6 +44,7 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_NEW,
 )
 from uk_management_bot.utils.datetime_utils import utc_now
+from uk_management_bot.utils.helpers import get_text
 from uk_management_bot.utils.request_workflow import Action, ActionCommand
 from uk_management_bot.utils.workflow_predicates import (
     awaiting_applicant_clause,
@@ -56,7 +57,6 @@ logger = logging.getLogger(__name__)
 AUDIT_STEP = "ai_sla_step"
 TRACK_EXECUTOR = "executor"
 TRACK_CLARIFICATION = "clarification"
-TRACK_EXECUTED = "executed"
 TRACK_COMPLETED = "completed"
 TRACK_CRITICAL = "critical_unassigned"
 LADDER = ("remind_executor", "staff_group", "manager", "reassign")
@@ -172,7 +172,6 @@ class AiSlaWatchdog:
             due = [
                 *self._executor_candidates(db, now, sla),
                 *self._clarification_candidates(db, now, sla),
-                *self._executed_candidates(db, now, sla),
                 *self._completed_candidates(db, now, sla),
                 *self._critical_candidates(db, now, sla),
             ]
@@ -229,19 +228,48 @@ class AiSlaWatchdog:
                         manager_enabled=bool(sla["ladder_enabled"].get(_STEP_MANAGER, True)))))
         return out
 
-    def _executed_candidates(self, db, now, sla) -> list["_Due"]:
-        limit = int(sla["executed_unconfirmed_max"])
-        if limit <= 0:
+    # ------------------------------------------------------------------ #
+    # «Исполнено, ждёт проверки» — не ступень лестницы, а утренняя сводка.
+    # Раньше напоминание уходило ровно через N часов после отметки исполнителя:
+    # закрыл пачку заявок в полночь — менеджеры получали пачку сообщений в полночь
+    # через сутки (решение владельца 2026-11-16: одна сводка к началу рабочего дня).
+    # ------------------------------------------------------------------ #
+    async def send_review_digest(self, now: Optional[datetime] = None) -> int:
+        """Одно сообщение каждому менеджеру: что исполнено и ждёт проверки дольше
+        порога. Заявка попадает в сводку каждое утро, пока её не проверят."""
+        now = now or utc_now()
+        messages = await asyncio.to_thread(self._review_digest_phase, now)
+        bot = self._get_bot()
+        for message in messages:
+            await channels.deliver(bot, message)
+        return len(messages)
+
+    def _review_digest_phase(self, now: datetime) -> list[Outgoing]:
+        if not settings.AI_MANAGER_ENABLED:
             return []
-        out = []
-        for req in db.execute(select(Request).where(awaiting_manager_clause())).scalars():
-            anchor = _aware(req.executed_at or req.updated_at or req.created_at)
-            if now < anchor + timedelta(hours=limit):
-                continue
-            phase = _Phase(req.request_number, TRACK_EXECUTED, req.status_version or 0, anchor.isoformat())
-            out.append(_Due(phase, _STEP_MANAGER, 0, _SimpleManagerStep(
-                req.request_number, "ai_manager.sla.executed_unconfirmed", hours=_hours(anchor, now))))
-        return out
+        db: Session = self._factory()()
+        try:
+            cfg = load_config_sync(db)
+            limit = int(cfg["sla"]["executed_unconfirmed_max"])
+            if not cfg["enabled"] or cfg.get("mode") != "ai" or limit <= 0:
+                return []
+            waiting = sorted(
+                (anchor, req.request_number)
+                for req in db.execute(select(Request).where(awaiting_manager_clause())).scalars()
+                if now >= (anchor := _aware(req.executed_at or req.updated_at or req.created_at)) + timedelta(hours=limit)
+            )
+            if not waiting:
+                return []
+            plan = _Plan()
+            with templates.overrides(cfg["ai"].get("templates")):
+                for anchor, number in waiting:  # давно ждущие — первыми
+                    _managers(db, plan, "ai_manager.sla.executed_unconfirmed",
+                              **_request_ctx(db, number), hours=_hours(anchor, now))
+            plan.manager_lines.insert(0, get_text("ai_manager.sla.review_digest_title", language="ru", count=len(waiting)))
+            _flush_manager_digest(plan)
+            return plan.messages
+        finally:
+            db.close()
 
     def _completed_candidates(self, db, now, sla) -> list["_Due"]:
         days = int(sla["completed_unaccepted_days"])

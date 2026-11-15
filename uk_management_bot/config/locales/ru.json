@@ -2975,6 +2975,7 @@
       "clarification_reminder": "❓ По заявке №{request_number} мы ждём вашего ответа на уточнение. Пожалуйста, ответьте в боте, чтобы мастер мог выехать.",
       "clarification_manager": "❓ Заявка №{request_number} в «Уточнении» без ответа жителя {age}.",
       "executed_unconfirmed": "✅ Заявка №{request_number} исполнена и ждёт вашей проверки уже {age}.",
+      "review_digest_title": "✅ <b>Исполнены и ждут вашей проверки: {count}</b>",
       "auto_accepted": "✅ Заявка №{request_number} принята автоматически: подтверждения не было {days} дн. Если работа не выполнена — создайте новую заявку.",
       "critical_unassigned": "🚨 <b>Критическая заявка №{request_number} без исполнителя</b> уже {age}.\n{category}, {address}"
     },

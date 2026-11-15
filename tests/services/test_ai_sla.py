@@ -234,10 +234,35 @@ def test_completed_days_zero_never_accepts(SF):
 # ───────────── менеджер ─────────────
 
 
-def test_executed_unconfirmed_pings_manager_once(SF):
-    _seed(SF, status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=7))
-    assert [c for c, _ in _tick(SF, FakeBot(), NOW)] == [30]
-    assert _tick(SF, FakeBot(), NOW) == []
+def _digest(SF, now=NOW) -> list[tuple[int, str]]:
+    bot = FakeBot()
+    asyncio.run(AiSlaWatchdog(bot=bot, session_factory=SF).send_review_digest(now=now))
+    return bot.sent
+
+
+def test_executed_unconfirmed_goes_to_morning_digest_not_to_the_tick(SF):
+    """Пинг по каждой заявке ровно через N часов (ночью, пачкой) заменён одной сводкой утром."""
+    _seed(SF, "261028-101", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=30))
+    _seed(SF, "261028-102", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=40))
+    _seed(SF, "261028-103", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=2))   # ещё не просрочена
+    assert _tick(SF, FakeBot(), NOW) == []  # 10-минутный тик о них молчит
+
+    sent = _digest(SF)
+    assert [c for c, _ in sent] == [30]  # одно сообщение менеджеру
+    text = sent[0][1]
+    assert "ждут вашей проверки: 2" in text
+    assert text.index("261028-102") < text.index("261028-101")  # давно ждущая — первой
+    assert "40 ч" in text and "30 ч" in text and "261028-103" not in text
+
+    # сводка — про то, что ждёт сейчас: непроверенная заявка в ней и завтра
+    assert "261028-101" in _digest(SF, NOW + timedelta(days=1))[0][1]
+
+
+def test_review_digest_is_silent_when_nothing_waits_or_rule_is_off(SF):
+    assert _digest(SF) == []
+    _seed(SF, status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=30))
+    _patch_cfg(SF, sla={**SLA, "executed_unconfirmed_max": 0})  # порог 0 — правило выключено
+    assert _digest(SF) == []
 
 
 def test_critical_unassigned_pings_manager_once(SF):
@@ -261,16 +286,14 @@ def test_bot_failure_does_not_raise_and_step_is_recorded(SF):
 
 
 def test_manager_steps_are_digested_into_one_message_per_tick(SF):
-    """Залп при первом включении: две просроченные заявки → менеджеру ОДНО сообщение с обеими."""
-    _seed(SF, "261028-101", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=30),
-          updated_at=NOW - timedelta(hours=30))
-    _seed(SF, "261028-102", status=C.REQUEST_STATUS_EXECUTED, executed_at=NOW - timedelta(hours=40),
-          updated_at=NOW - timedelta(hours=40))
+    """Залп при первом включении: две критические без исполнителя → менеджеру ОДНО сообщение с обеими."""
+    for number in ("261028-101", "261028-102"):
+        _seed(SF, number, status=C.REQUEST_STATUS_NEW, executor_id=None,
+              created_at=NOW - timedelta(minutes=45))
     sent = _tick(SF, FakeBot(), NOW)
     to_manager = [t for c, t in sent if c == 30]
     assert len(to_manager) == 1, sent
     assert "261028-101" in to_manager[0] and "261028-102" in to_manager[0]
-    assert "30 ч" in to_manager[0] and "40 ч" in to_manager[0]
 
 
 def test_age_formatting():

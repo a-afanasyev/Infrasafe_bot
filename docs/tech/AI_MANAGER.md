@@ -68,7 +68,7 @@ Job `ai_sla_tick` каждые 10 мин — регистрируется тол
 |---|---|---|---|
 | `executor` | «В работе» с исполнителем дольше `sla.in_progress_max[urgency]` ч | `assigned_at` | DM исполнителю → staff-группа (`monitored_groups.kind=staff`) → менеджеры → `SYSTEM_REASSIGN` дежурному (кроме текущего; нет кандидата → менеджер) — смещения `sla.ladder` в часах от момента просрочки |
 | `clarification` | «Уточнение» дольше `clarification_max` ч | `updated_at` | напоминание жителю (его язык) → менеджеры (ещё через столько же) |
-| `executed` | «Исполнено» без проверки дольше `executed_unconfirmed_max` ч | `executed_at` | менеджеры |
+| `executed` | «Исполнено» без проверки дольше `executed_unconfirmed_max` ч — **не ступень тика, а утренняя сводка**: одно сообщение менеджерам в 9:00 по времени объекта (`send_review_digest`, джоба `ai_review_digest`); заявка в сводке каждое утро, пока её не проверят | `executed_at` | менеджеры |
 | `completed` | «Выполнена» без принятия дольше `completed_unaccepted_days` дн | `completed_at` | `MANAGER_FORCE_ACCEPT` + DM жителю |
 | `critical_unassigned` | критическая «Новая» без исполнителя дольше `critical_unassigned_minutes` | `created_at` | менеджеры |
 

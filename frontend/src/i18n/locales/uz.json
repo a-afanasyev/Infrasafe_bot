@@ -2655,7 +2655,7 @@
         "reassign": "Qayta tayinlash"
       },
       "clarification_max": "«Aniqlashtirish» javobsiz",
-      "executed_unconfirmed_max": "«Bajarildi» tekshiruvsiz",
+      "executed_unconfirmed_max": "«Bajarildi» tekshiruvsiz (soat 9:00 da jamlanma)",
       "completed_unaccepted_days": "«Yakunlandi» qabulsiz",
       "critical_unassigned_minutes": "Kritik ariza ijrochisiz",
       "h": "soat",

@@ -2674,7 +2674,7 @@
         "reassign": "Переназначить"
       },
       "clarification_max": "«Уточнение» без ответа",
-      "executed_unconfirmed_max": "«Исполнено» без проверки",
+      "executed_unconfirmed_max": "«Исполнено» без проверки (сводка в 9:00)",
       "completed_unaccepted_days": "«Выполнена» без принятия",
       "critical_unassigned_minutes": "Критическая без исполнителя",
       "h": "ч",

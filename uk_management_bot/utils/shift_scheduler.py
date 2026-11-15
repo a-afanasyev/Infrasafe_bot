@@ -24,6 +24,9 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
+# Начало рабочего дня по времени объекта: час утренней сводки менеджерам.
+REVIEW_DIGEST_HOUR = 9
+
 # Шаг тика напоминаний об отключениях = окно «срок вышел только что».
 OUTAGE_REMINDER_MINUTES = 10
 # Уборка: шаг тика = наибольшее опоздание закрытия дня после его конца.
@@ -248,6 +251,16 @@ class ShiftScheduler:
                 IntervalTrigger(minutes=10),
                 id='ai_sla_tick',
                 name='ИИ-менеджер — SLA-лестница',
+                max_instances=1,
+                coalesce=True
+            )
+            # Сводка «исполнено, ждёт проверки» — к началу рабочего дня по времени
+            # объекта, одним сообщением (вместо пинга по каждой заявке ночью).
+            self.scheduler.add_job(
+                self._ai_review_digest_tick,
+                self._cron(hour=REVIEW_DIGEST_HOUR, minute=0),
+                id='ai_review_digest',
+                name='ИИ-менеджер — утренняя сводка «ждут проверки»',
                 max_instances=1,
                 coalesce=True
             )
@@ -830,6 +843,14 @@ class ShiftScheduler:
             await self._ai_sla.run_once()
         except Exception as e:
             logger.error(f"Ошибка тика SLA ИИ-менеджера: {e}")
+
+    async def _ai_review_digest_tick(self):
+        """Утренняя сводка менеджерам: исполнено и ждёт проверки (services/ai_manager/sla)."""
+        try:
+            sent = await self._ai_sla.send_review_digest()
+            logger.info("ИИ-менеджер: утренняя сводка «ждут проверки», сообщений %s", sent)
+        except Exception as e:
+            logger.error("Ошибка утренней сводки ИИ-менеджера: %s", type(e).__name__)
 
     async def _engineering_reconcile_tick(self):
         """Сверка «Инженерного разбора» (services/engineering_reconcile)."""
