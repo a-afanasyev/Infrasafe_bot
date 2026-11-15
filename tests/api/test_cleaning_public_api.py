@@ -115,7 +115,8 @@ async def test_today_lists_entrances_with_public_photos_for_overview(client, wor
     tasks, photos = world
     house = (await client.get(f"{PUBLIC}/today")).json()["buildings"][0]
     first, second = house["entrances"]
-    assert (first["entrance"], first["state"], first["photo_ids"]) == (1, "done", [photos[0].id])
+    assert (first["entrance"], first["state"]) == (1, "done")
+    assert first["photo_ids"] == [photos[0].id, photos[1].id]             # обзор — все фото подъезда по этажам
     assert first["done_at"] is not None
     assert (second["state"], second["done_at"], second["photo_ids"]) == ("pending", None, [])
 
@@ -140,7 +141,7 @@ async def test_building_view_shows_entrances_schedule_and_public_photos_only(cli
     _, photos = world
     body = (await client.get(f"{PUBLIC}/buildings/1")).json()
     first, second = body["entrances"]
-    assert (first["entrance"], first["state"], first["photo_ids"]) == (1, "done", [photos[0].id])  # только 1-й этаж
+    assert (first["entrance"], first["state"], first["photo_ids"]) == (1, "done", [photos[0].id])  # одно фото подъезда
     assert (second["state"], second["photo_ids"]) == ("pending", [])       # не принято — фото не показываем
     assert len(body["week"]) == 7 and body["week"][0] == [{"work_kind": "wet", "floor_from": 1, "floor_to": 2}]
     assert (await client.get(f"{PUBLIC}/buildings/2")).status_code == 404   # дом не показывается жителям
@@ -148,11 +149,25 @@ async def test_building_view_shows_entrances_schedule_and_public_photos_only(cli
 
 
 @pytest.mark.asyncio
+async def test_resident_gets_one_photo_and_elevator_overview_gets_all(client, world, db_session):
+    tasks, photos = world
+    lift = CleaningPhoto(task_id=tasks[(1, 1)].id, slot="point:elevator", op_key=str(uuid.uuid4()),
+                         uploaded_by=CLEANER, upload_sha256="0" * 64, state="done", outcome="activated",
+                         is_current=True, trust_level="live", received_at=utc_now(), media_id=1)
+    db_session.add(lift)
+    await db_session.commit()
+    brief = (await client.get(f"{PUBLIC}/buildings/1")).json()["entrances"][0]["photo_ids"]
+    full = (await client.get(f"{PUBLIC}/today")).json()["buildings"][0]["entrances"][0]["photo_ids"]
+    assert brief == [photos[0].id, lift.id]                    # житель: подъезд + лифт
+    assert full == [photos[0].id, photos[1].id, lift.id]       # обзор: все этажи, затем лифт
+
+
+@pytest.mark.asyncio
 async def test_public_photo_follows_settings_status_and_slot(client, world, db_session):
     tasks, photos = world
     ok = await client.get(f"{PUBLIC}/photos/{photos[0].id}")
     assert ok.status_code == 200 and ok.headers["cache-control"] == "no-store"
-    assert (await client.get(f"{PUBLIC}/photos/{photos[1].id}")).status_code == 404  # не публичная точка
+    assert (await client.get(f"{PUBLIC}/photos/{photos[1].id}")).status_code == 200  # любой этаж принятого задания
     assert (await client.get(f"{PUBLIC}/photos/{photos[2].id}")).status_code == 404  # задание не принято
     assert (await client.get(f"{PUBLIC}/photos/{photos[3].id}")).status_code == 404  # дом скрыт
 
@@ -178,16 +193,20 @@ async def test_public_photo_follows_settings_status_and_slot(client, world, db_s
 async def test_resident_complaint_reviews_task_and_creates_request(world, act_as, db_session_factory, monkeypatch):
     created = []
 
-    async def make_request(db, user, building_id, entrance, work_date):
-        created.append((user.id, building_id, entrance))
+    async def make_request(db, user, building_id, entrance, work_date, executor_id=None):
+        created.append((user.id, building_id, entrance, executor_id))
         return "261117-004"
 
     monkeypatch.setattr(router_resident, "_create_request", make_request)
     tasks, _ = world
+    async with db_session_factory() as db:
+        (await db.get(CleaningTask, tasks[(1, 1)].id)).responsible_id = CLEANER
+        await db.commit()
     client = await act_as(RESIDENT)
     resp = await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})
     assert resp.status_code == 201, resp.text
     assert resp.json()["request_number"] == "261117-004"
+    assert created == [(RESIDENT, 1, 1, CLEANER)]   # заявка — на ту же уборщицу, что убирала подъезд
     again = await client.post("/api/v2/cleaning/complaints", json={"building_id": 1, "entrance": 1})
     assert again.status_code == 201 and again.json()["id"] == resp.json()["id"] and len(created) == 1
     async with db_session_factory() as db:
@@ -200,7 +219,7 @@ async def test_resident_complaint_reviews_task_and_creates_request(world, act_as
 async def test_complaint_survives_request_failure_and_is_retried(world, act_as, db_session_factory, monkeypatch):
     calls = {"n": 0}
 
-    async def flaky(db, user, building_id, entrance, work_date):
+    async def flaky(db, user, building_id, entrance, work_date, executor_id=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("request service down")

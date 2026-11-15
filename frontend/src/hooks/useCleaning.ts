@@ -120,10 +120,14 @@ export function useSaveCleaningRules() {
 // ── контроль ────────────────────────────────────────────────────────────────
 
 export const CONTROL_BASE = `${CLEANING_BASE}/control`
+// Уборщица снимает, пока менеджер смотрит: без опроса карточка показывала бы прошлый статус.
+const LIVE_MS = 15_000
 
 export function useCleaningTasks(dateFrom: string, dateTo: string, status?: string) {
   return useQuery<CleaningTasks>({
     queryKey: ['cleaning', 'tasks', dateFrom, dateTo, status ?? ''],
+    refetchInterval: LIVE_MS,
+    refetchOnWindowFocus: true,
     queryFn: () => apiClient
       .get(`${CONTROL_BASE}/tasks`, { params: { date_from: dateFrom, date_to: dateTo, ...(status ? { status } : {}) } })
       .then((r) => r.data),
@@ -134,6 +138,8 @@ export function useCleaningTasks(dateFrom: string, dateTo: string, status?: stri
 export function useCleaningTaskCard(taskId: number) {
   return useQuery<CleaningTaskCard>({
     queryKey: ['cleaning', 'task', taskId],
+    refetchInterval: LIVE_MS,
+    refetchOnWindowFocus: true,
     queryFn: () => apiClient.get(`${CONTROL_BASE}/tasks/${taskId}`).then((r) => r.data),
     staleTime: STALE_MS,
   })
@@ -142,6 +148,8 @@ export function useCleaningTaskCard(taskId: number) {
 export function useCleaningComplaints(dateFrom: string, dateTo: string) {
   return useQuery<CleaningComplaint[]>({
     queryKey: ['cleaning', 'complaints', dateFrom, dateTo],
+    refetchInterval: LIVE_MS,
+    refetchOnWindowFocus: true,
     queryFn: () => apiClient
       .get(`${CONTROL_BASE}/complaints`, { params: { date_from: dateFrom, date_to: dateTo } })
       .then((r) => r.data.complaints),

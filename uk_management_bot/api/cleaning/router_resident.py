@@ -22,6 +22,7 @@ from uk_management_bot.api.dependencies import get_db, require_action
 from uk_management_bot.api.rate_limit import limiter
 from uk_management_bot.config.settings import settings
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.cleaning import CleaningTask
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.cleaning import complaints, public
 from uk_management_bot.services.request_address import AddressResolutionError, resolve_request_address_async
@@ -126,7 +127,7 @@ async def cleaning_building(request: Request, building_id: int = Path(ge=1, le=D
 @public_router.get("/cleaning/photos/{photo_id}")
 @limiter.limit("120/minute")
 async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_MAX), db: AsyncSession = Depends(get_db)):
-    """Фото публичной точки принятого задания. Проверки — на каждый запрос, без кэша."""
+    """Текущее фото принятого сегодняшнего задания. Проверки — на каждый запрос, без кэша."""
     from uk_management_bot.api.cleaning.router_exec import _download
 
     _or_404()
@@ -142,8 +143,13 @@ async def cleaning_photo(request: Request, photo_id: int = Path(ge=1, le=DB_ID_M
 
 # ── жалоба ──────────────────────────────────────────────────────────────────
 
-async def _create_request(db: AsyncSession, user: User, building_id: int, entrance: int, work_date: date) -> str:
-    """Заявка категории «Уборка» на дом жителя; возвращает её номер."""
+async def _create_request(db: AsyncSession, user: User, building_id: int, entrance: int, work_date: date,
+                          executor_id: Optional[int] = None) -> str:
+    """Заявка категории «Уборка» на дом жителя; возвращает её номер.
+
+    ``executor_id`` — уборщица этого подъезда: заявка сразу назначается ей, а не
+    дежурному и не группе (кто убирал, тот и переделывает).
+    """
     from uk_management_bot.api.requests import service as requests_service
     from uk_management_bot.utils.constants import URGENCY_DEFAULT
 
@@ -151,7 +157,7 @@ async def _create_request(db: AsyncSession, user: User, building_id: int, entran
     persisted = await requests_service.persist_request(
         db, user_id=user.id, category="cleaning", urgency=URGENCY_DEFAULT,
         description=f"Жалоба на уборку: подъезд {entrance}, {fmt_date(work_date)}",
-        source="twa", resolved=resolved, webhook_tag="twa")
+        source="twa", resolved=resolved, webhook_tag="twa", preferred_executor_id=executor_id)
     return persisted.request.request_number
 
 
@@ -176,11 +182,13 @@ async def file_complaint(request: Request, body: CleaningComplaintIn, db: AsyncS
     except complaints.ComplaintLimit:
         raise HTTPException(status_code=429, detail="too_many_complaints") from None
     complaint_id, number = complaint.id, complaint.request_number
+    task = await db.get(CleaningTask, complaint.task_id) if complaint.task_id is not None else None
+    cleaner_id = task.responsible_id if task is not None else None
     await db.commit()  # жалоба и перевод на проверку зафиксированы до заявки
 
     if number is None:
         try:
-            number = await _create_request(db, user, body.building_id, body.entrance, day)
+            number = await _create_request(db, user, body.building_id, body.entrance, day, cleaner_id)
             await complaints.attach_request(db, complaint_id, number)
             await db.commit()
         except Exception as exc:  # noqa: BLE001 — заявка вторична: жалоба уже записана

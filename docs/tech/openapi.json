@@ -24482,7 +24482,7 @@
     },
     "/api/v2/public/cleaning/photos/{photo_id}": {
       "get": {
-        "description": "Фото публичной точки принятого задания. Проверки — на каждый запрос, без кэша.",
+        "description": "Текущее фото принятого сегодняшнего задания. Проверки — на каждый запрос, без кэша.",
         "operationId": "cleaning_photo_api_v2_public_cleaning_photos__photo_id__get",
         "parameters": [
           {

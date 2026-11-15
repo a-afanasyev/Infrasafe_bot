@@ -24,8 +24,9 @@ from uk_management_bot.database.models.cleaning import (
 from uk_management_bot.services.cleaning.planning import WEEKDAYS, PlanError, parse_items
 from uk_management_bot.utils.business_time import business_today
 
-# Точки, которые можно показать жителям: вход и первый этаж — общие зоны у двери.
-PUBLIC_SLOTS = ("floor:1", "point:entrance")
+# Жителю в приложении — коротко: одно фото подъезда и лифт, если его мыли.
+# Все фото принятого задания — на странице-обзоре (решение владельца 2026-11-16).
+BRIEF_POINTS = ("point:elevator",)
 _STARTED = ("in_progress", "review", "accepted", "rejected", "expired")
 
 
@@ -72,16 +73,31 @@ async def _shown(db: AsyncSession) -> dict[int, tuple[Building, CleaningBuilding
     return {building.id: (building, cfg) for building, cfg in rows.all()}
 
 
-async def _photo_ids(db: AsyncSession, task_ids: list[int]) -> dict[int, list[int]]:
-    """Текущие фото публичных точек по заданиям: задание → id фото."""
-    photos: dict[int, list[int]] = {}
+def _slot_order(slot: str) -> tuple[int, int, str]:
+    """Этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
+    kind, _, name = slot.partition(":")
+    return (0, int(name), "") if kind == "floor" and name.isdigit() else (1, 0, name)
+
+
+async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = False) -> dict[int, list[int]]:
+    """Текущие фото заданий: задание → id фото по порядку точек.
+
+    ``brief`` — выжимка для жителя: одно фото подъезда (нижний снятый этаж) и лифт.
+    """
+    shots: dict[int, list[tuple[str, int]]] = {}
     if task_ids:
-        for task_id, photo_id in (await db.execute(
-                select(CleaningPhoto.task_id, CleaningPhoto.id)
+        for task_id, slot, photo_id in (await db.execute(
+                select(CleaningPhoto.task_id, CleaningPhoto.slot, CleaningPhoto.id)
                 .where(CleaningPhoto.task_id.in_(task_ids), CleaningPhoto.is_current.is_(True),
-                       CleaningPhoto.slot.in_(PUBLIC_SLOTS), CleaningPhoto.media_id.is_not(None))
-                .order_by(CleaningPhoto.slot))).all():
-            photos.setdefault(task_id, []).append(photo_id)
+                       CleaningPhoto.media_id.is_not(None)))).all():
+            shots.setdefault(task_id, []).append((slot, photo_id))
+    photos = {}
+    for task_id, rows in shots.items():
+        rows.sort(key=lambda row: _slot_order(row[0]))
+        if brief:
+            floors = [row for row in rows if row[0].startswith("floor:")]
+            rows = floors[:1] + [row for row in rows if row[0] in BRIEF_POINTS]
+        photos[task_id] = [photo_id for _, photo_id in rows]
     return photos
 
 
@@ -129,7 +145,7 @@ async def building_view(db: AsyncSession, building_id: int, day: date) -> Option
     tasks = {t.entrance: t for t in (await db.execute(
         select(CleaningTask).where(CleaningTask.building_id == building_id, CleaningTask.work_date == day))).scalars()}
     accepted = [t.id for t in tasks.values() if t.status == "accepted"]
-    photos = await _photo_ids(db, accepted if cfg.show_photos else [])
+    photos = await _photo_ids(db, accepted if cfg.show_photos else [], brief=True)
     return BuildingView(building_id=building_id, address=building.address,
                         entrance_count=building.entrance_count, entrances=_entrances(building, tasks, photos),
                         week=await _week(db, building_id, day))
@@ -163,8 +179,7 @@ async def _week(db: AsyncSession, building_id: int, day: date) -> list[list[dict
 async def public_photo(db: AsyncSession, photo_id: int) -> Optional[CleaningPhoto]:
     """Фото, которое сейчас можно отдать жителям; иначе None."""
     photo = await db.get(CleaningPhoto, photo_id)
-    if (photo is None or not photo.is_current or photo.media_id is None
-            or photo.slot not in PUBLIC_SLOTS):
+    if photo is None or not photo.is_current or photo.media_id is None:
         return None
     task = await db.get(CleaningTask, photo.task_id, populate_existing=True)
     cfg = await db.get(CleaningBuildingSettings, task.building_id, populate_existing=True) if task else None
