@@ -2967,6 +2967,7 @@
       "clarification_reminder": "❓ №{request_number} ariza bo'yicha aniqlashtirishga javobingizni kutyapmiz. Usta chiqa olishi uchun botda javob bering.",
       "clarification_manager": "❓ №{request_number} ariza «Aniqlashtirish»da, yashovchi {age} javob bermadi.",
       "executed_unconfirmed": "✅ №{request_number} ariza bajarildi va {age}dan beri tekshiruvingizni kutmoqda.",
+      "review_digest_title": "✅ <b>Bajarilgan va tekshiruvingizni kutmoqda: {count}</b>",
       "auto_accepted": "✅ №{request_number} ariza avtomatik qabul qilindi: {days} kun tasdiq bo'lmadi. Ish bajarilmagan bo'lsa — yangi ariza yarating.",
       "critical_unassigned": "🚨 <b>№{request_number} kritik ariza ijrochisiz</b> {age}dan beri.\n{category}, {address}"
     },
