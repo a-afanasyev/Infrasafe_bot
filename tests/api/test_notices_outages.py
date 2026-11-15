@@ -20,7 +20,7 @@ async def staff(db_session):
     db_session.add(Yard(id=1, name="Северный"))
     db_session.add(Building(id=12, address="Садовая, 14", yard_id=1))
     users = {name: User(telegram_id=tg, roles='["executor"]', active_role="executor", status="approved",
-                        specialization=spec)
+                        specialization=spec, first_name="Пётр", last_name="Водин")
              for name, tg, spec in (("plumber", 7001, "plumber"), ("off", 7002, "plumber"),
                                     ("electrician", 7003, "electrician"))}
     db_session.add_all(users.values())
@@ -116,3 +116,9 @@ async def test_manager_closing_staff_outage_also_tells_residents(client, staff, 
     assert closed.status_code == 200 and closed.json()["state"] == "closed"
     restored = (await db_session.execute(select(Notice).where(Notice.kind == "news"))).scalars().all()
     assert [(n.title_ru, n.broadcast_status) for n in restored] == [("Воду включили — Садовая, 14", "pending")]
+
+    # лента менеджера: чьё отключение и кто дал воду (вкладка «Отключения»)
+    feed = (await client.get("/api/v2/board-config/notices", params={"kind": "outage"})).json()["items"]
+    [row] = [n for n in feed if n["id"] == notice["id"]]
+    assert (row["created_by_name"], row["closed_by_name"]) == ("Пётр Водин", "Test Manager")
+    assert row["closed_by"] == manager_user.id and row["closed_at"]

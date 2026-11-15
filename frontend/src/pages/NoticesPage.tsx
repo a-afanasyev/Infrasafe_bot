@@ -4,18 +4,19 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useNoticeAction, useNotices, type Notice, type NoticeBody, type NoticeKind, type NoticeState } from '../hooks/useNotices'
+import { useNoticeAction, useNotices, useNow, type Notice, type NoticeBody, type NoticeKind, type NoticeState } from '../hooks/useNotices'
 import LoadingSpinner from '../components/shared/LoadingSpinner'
 import NoticeCalendar from '../components/notices/NoticeCalendar'
 import NoticeForm from '../components/notices/NoticeForm'
-import { draftOf, emptyDraft, type NoticeDraft } from '../components/notices/noticeModel'
+import OutageStatus from '../components/notices/OutageStatus'
+import { draftOf, emptyDraft, ongoingOutages, type NoticeDraft } from '../components/notices/noticeModel'
 import { formatDateTime } from '../utils/timezone'
 
 // Очередь новостей из каналов и её настройки — прежняя страница «Отключения».
 const NewsWatchPage = lazy(() => import('./NewsWatchPage'))
 const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
 
-type Tab = 'feed' | 'calendar' | 'channels'
+type Tab = 'feed' | 'outages' | 'calendar' | 'channels'
 type Filter = 'all' | NoticeKind | 'draft'
 const FILTERS: Filter[] = ['all', 'news', 'outage', 'draft']
 // = MAX_ATTEMPTS воркера: после стольких попыток он сам не повторяет.
@@ -42,14 +43,17 @@ export default function NoticesPage() {
   usePageTitle(t('notices.title'))
   const [params, setParams] = useSearchParams()
   const requested = params.get('tab')
-  const tab: Tab = requested === 'calendar' || (requested === 'channels' && NEWS_WATCH_ENABLED) ? requested : 'feed'
+  const tab: Tab =
+    requested === 'calendar' || requested === 'outages' || (requested === 'channels' && NEWS_WATCH_ENABLED) ? requested : 'feed'
   const [filter, setFilter] = useState<Filter>('all')
   const [editing, setEditing] = useState<Editing | null>(null)
   const notices = useNotices()
   const action = useNoticeAction()
   const items = notices.data?.items ?? []
   const shown = items.filter((n) => (filter === 'all' ? true : filter === 'draft' ? n.state === 'draft' : n.kind === filter))
-  const tabs: Tab[] = NEWS_WATCH_ENABLED ? ['feed', 'calendar', 'channels'] : ['feed', 'calendar']
+  const tabs: Tab[] = NEWS_WATCH_ENABLED ? ['feed', 'outages', 'calendar', 'channels'] : ['feed', 'outages', 'calendar']
+  // Счётчик на вкладке: менеджер видит, что вода где-то отключена, не открывая её.
+  const ongoing = ongoingOutages(items, useNow()).length
 
   const create = (kind: NoticeKind, day?: string) => setEditing({ notice: null, draft: emptyDraft(kind, day) })
   const open = (notice: Notice) => setEditing({ notice, draft: draftOf(notice) })
@@ -84,11 +88,14 @@ export default function NoticesPage() {
             )}
           >
             {t(`notices.tab.${id}`)}
+            {id === 'outages' && ongoing > 0 && (
+              <span data-testid="outages-count" className="ml-1.5 rounded-full bg-red/15 px-1.5 py-px text-[11px] text-red">{ongoing}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {tab !== 'channels' && (
+      {tab !== 'channels' && tab !== 'outages' && (
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => create('news')}>{t('notices.addNews')}</Button>
           <Button variant="outline" onClick={() => create('outage')}>{t('notices.addOutage')}</Button>
@@ -121,6 +128,8 @@ export default function NoticesPage() {
         <LoadingSpinner />
       ) : notices.isError ? (
         <p className="text-[13px] text-red-500">{t('common.error')}</p>
+      ) : tab === 'outages' ? (
+        <OutageStatus items={items} busy={action.isPending} onRestore={(id) => action.mutate({ type: 'close', id })} />
       ) : shown.length === 0 ? (
         <p className="text-[13px] text-text-muted">{t('notices.empty')}</p>
       ) : (

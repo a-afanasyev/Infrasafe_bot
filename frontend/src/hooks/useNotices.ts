@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -40,6 +41,10 @@ export interface Notice {
   all_day: boolean
   expires_at: string | null
   created_at: string | null
+  closed_at?: string | null
+  /** Кто объявил и кто закрыл — имена из профиля (вкладка «Отключения»). */
+  created_by_name?: string | null
+  closed_by_name?: string | null
   /** Адресаты рассылки: все жители, дворы или дома (id справочника). */
   scope: NoticeScope
   scope_ids: number[]
@@ -131,4 +136,14 @@ export function useAudience(scope: NoticeScope, ids: number[], enabled: boolean)
     enabled,
     staleTime: 60_000,
   })
+}
+
+/** Текущее время для «идёт сейчас» / «срок вышел»: обновляется раз в полминуты. */
+export function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
+    return () => window.clearInterval(id)
+  }, [intervalMs])
+  return now
 }

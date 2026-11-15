@@ -233,7 +233,8 @@ async def test_patch_is_validated_against_stored_values(client):
     # опубликованная запись без заголовка
     assert (await client.patch(f"{BASE}/{nid}", json={"title_ru": "  "})).status_code == 422
     # отклонённая правка ничего не изменила
-    assert (await client.get(BASE)).json()["items"][0] == notice
+    # лента дополнительно подписывает автора именем — остальное не изменилось
+    assert (await client.get(BASE)).json()["items"][0] == {**notice, "created_by_name": "Test Manager"}
 
     news = (await client.post(BASE, json=_news(publish=True))).json()
     assert (await client.patch(f"{BASE}/{news['id']}", json={"kind": "outage"})).status_code == 422

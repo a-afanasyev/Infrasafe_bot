@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api.dependencies import get_db, require_action
@@ -36,12 +37,24 @@ _manager = require_action("notices.manage")
 _staff = require_action("outages.announce")
 
 
-def _out(notice: Notice) -> NoticeOut:
+def _out(notice: Notice, names: Optional[dict[int, str]] = None) -> NoticeOut:
+    names = names or {}
     return NoticeOut.model_validate({
         **{c.name: getattr(notice, c.name) for c in Notice.__table__.columns},
         "scope_ids": list(notice.scope_ids or []),
         "state": service.state_of(notice),
+        "created_by_name": names.get(notice.created_by),
+        "closed_by_name": names.get(notice.closed_by),
     })
+
+
+async def _names(db: AsyncSession, notices: list[Notice]) -> dict[int, str]:
+    """Имена авторов и закрывших — одним запросом на всю ленту."""
+    ids = {uid for n in notices for uid in (n.created_by, n.closed_by) if uid}
+    if not ids:
+        return {}
+    rows = await db.execute(select(User.id, User.first_name, User.last_name).where(User.id.in_(ids)))
+    return {uid: " ".join(part for part in (first, last) if part) for uid, first, last in rows.all()}
 
 
 async def _run(coro) -> Notice:
@@ -78,7 +91,8 @@ async def list_notices(
         db, kind=kind, status=status, period_from=period_from, period_to=period_to,
         limit=limit, offset=offset,
     )
-    return NoticesOut(items=[_out(n) for n in items], total=total)
+    names = await _names(db, items)
+    return NoticesOut(items=[_out(n, names) for n in items], total=total)
 
 
 @router.get("/audience", response_model=AudienceOut)

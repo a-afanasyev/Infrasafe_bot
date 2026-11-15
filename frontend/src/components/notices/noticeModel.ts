@@ -179,3 +179,8 @@ export function monthGrid(year: number, month: number): string[] {
   }
   return days
 }
+
+/** Отключение идёт сейчас: опубликовано, началось и не закрыто (срок мог уже выйти). */
+export function ongoingOutages(items: Notice[], now: number): Notice[] {
+  return items.filter((n) => n.kind === 'outage' && n.state === 'active' && (!n.starts_at || Date.parse(n.starts_at) <= now))
+}

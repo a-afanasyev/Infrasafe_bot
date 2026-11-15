@@ -184,4 +184,47 @@ describe('NoticesPage', () => {
     await user.click(within(screen.getAllByTestId('notice-row')[0]).getByRole('button', { name: 'Изменить' }))
     expect(within(screen.getByRole('dialog')).getByLabelText('Разослать в Telegram')).toBeDisabled()
   })
+
+  it('вкладка «Отключения»: что отключено сейчас, чьё, срок; «Воду включили» с подтверждением', async () => {
+    const hour = 3_600_000
+    const iso = (ms: number) => new Date(Date.now() + ms).toISOString()
+    const base = { ...NEWS, kind: 'outage', resource: 'water', source: 'staff', important: true, scope: 'buildings', scope_ids: [14] }
+    const overdue = { ...base, id: 11, title_ru: 'Отключена вода — Садовая, 14', starts_at: iso(-3 * hour), ends_at: iso(-hour),
+                      created_by_name: 'Пётр Водин' }
+    const unknown = { ...base, id: 12, resource: 'heating', title_ru: 'Отключено отопление — Лесная, 3', starts_at: iso(-hour), ends_at: null,
+                      created_by_name: null }
+    const planned = { ...base, id: 13, source: 'manual', title_ru: 'Плановое завтра', state: 'active', starts_at: iso(24 * hour), ends_at: iso(26 * hour) }
+    const restored = { ...base, id: 14, title_ru: 'Отключена вода — Садовая, 12', status: 'closed', state: 'closed',
+                       starts_at: iso(-5 * hour), closed_at: iso(-2 * hour), closed_by_name: 'Анна Менеджер' }
+    const old = { ...restored, id: 15, title_ru: 'Давно', closed_at: iso(-30 * hour) }
+    const calls = mockApi([NEWS, overdue, unknown, planned, restored, old])
+    const user = userEvent.setup()
+    render(<NoticesPage />, { routerEntries: ['/dashboard/notices'] })
+
+    // счётчик идущих отключений виден с любой вкладки
+    expect(await screen.findByTestId('outages-count')).toHaveTextContent('2')
+    await user.click(screen.getByRole('tab', { name: /Отключения/ }))
+
+    const rows = await screen.findAllByTestId('outage-row')
+    expect(rows).toHaveLength(2) // будущее плановое и закрытые сюда не попадают
+    expect(rows[0]).toHaveTextContent('Отключена вода — Садовая, 14')
+    expect(rows[0]).toHaveTextContent('объявил Пётр Водин')
+    expect(within(rows[0]).getByTestId('outage-term')).toHaveTextContent(/Срок вышел в .* — не закрыто/)
+    expect(within(rows[1]).getByTestId('outage-term')).toHaveTextContent('Срок не назван')
+    expect(rows[1]).toHaveTextContent('объявил сотрудник')
+    expect(within(rows[1]).getByRole('button', { name: 'Отопление включили' })).toBeInTheDocument()
+
+    const done = screen.getAllByTestId('restored-row')
+    expect(done).toHaveLength(1) // закрытое больше суток назад не показываем
+    expect(done[0]).toHaveTextContent('Садовая, 12')
+    expect(done[0]).toHaveTextContent('Анна Менеджер')
+
+    // одно нажатие ничего не шлёт: сначала подтверждение с предупреждением о сообщении жителям
+    await user.click(within(rows[0]).getByRole('button', { name: 'Воду включили' }))
+    expect(calls).toHaveLength(0)
+    expect(rows[0]).toHaveTextContent('жители этих домов получат сообщение о включении')
+    await user.click(within(rows[0]).getByRole('button', { name: 'Подтвердить' }))
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/notices/11/close' })
+  })
 })
