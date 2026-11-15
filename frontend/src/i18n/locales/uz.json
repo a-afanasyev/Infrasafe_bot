@@ -4366,7 +4366,22 @@
         "in_progress": "Tozalanmoqda",
         "planned": "Bugun jadval bo'yicha",
         "none": "Bugun tozalash yo'q"
-      }
+      },
+      "all": "Barcha uylar va suratlar",
+      "rule": "Uyning bugungi reja bo'yicha barcha yo'laklari tozalanganda uy tozalangan hisoblanadi",
+      "back": "Uyingiz bugun",
+      "entrance": "{{n}}-yo'lak",
+      "doneAt": "{{time}} da tozalandi",
+      "entranceState": {
+        "done": "Tozalandi",
+        "pending": "Hali tozalanmagan",
+        "none": "Bugun tozalash yo'q"
+      },
+      "photoAlt": "Tozalash surati: {{address}}, {{n}}-yo'lak, {{i}}-kadr",
+      "noHouses": "Uylarni tozalash haqidagi ma'lumotlar hozircha e'lon qilinmaydi.",
+      "loadError": "Tozalash ma'lumotlarini yuklab bo'lmadi. Sahifani yangilang.",
+      "complainQuestion": "Yo'lak iflos, lekin «tozalandi» deb belgilanganmi?",
+      "complainBot": "Botda xabar berish"
     },
     "pageTitle": "Uyingiz bugun",
     "eyebrow": "Aholi uchun ma'lumot",

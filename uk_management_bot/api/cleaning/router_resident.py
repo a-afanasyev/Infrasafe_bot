@@ -43,10 +43,19 @@ def _or_404() -> None:
         raise HTTPException(status_code=404, detail="Not Found")
 
 
+class CleaningPublicEntranceOut(BaseModel):
+    entrance: int
+    state: str
+    done_at: Optional[datetime]
+    photo_ids: list[int]
+
+
 class CleaningPublicBuildingOut(BaseModel):
     building_id: int
     address: str
     state: str
+    done_at: Optional[datetime]
+    entrances: list[CleaningPublicEntranceOut]
 
 
 class CleaningPublicTodayOut(BaseModel):
@@ -55,13 +64,6 @@ class CleaningPublicTodayOut(BaseModel):
     buildings_total: int
     buildings_done: int
     buildings: list[CleaningPublicBuildingOut]
-
-
-class CleaningPublicEntranceOut(BaseModel):
-    entrance: int
-    state: str
-    done_at: Optional[datetime]
-    photo_ids: list[int]
 
 
 class CleaningPublicBuildingViewOut(BaseModel):
@@ -85,6 +87,10 @@ class CleaningComplaintCreatedOut(BaseModel):
 
 # ── открытые маршруты ───────────────────────────────────────────────────────
 
+def _entrance_out(e: public.EntranceToday) -> CleaningPublicEntranceOut:
+    return CleaningPublicEntranceOut(entrance=e.entrance, state=e.state, done_at=e.done_at, photo_ids=e.photo_ids)
+
+
 @public_router.get("/cleaning/today", response_model=CleaningPublicTodayOut)
 @limiter.limit("300/minute")
 async def cleaning_today(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
@@ -98,8 +104,9 @@ async def cleaning_today(request: Request, response: Response, db: AsyncSession 
     return CleaningPublicTodayOut(
         enabled=True, work_date=day, buildings_total=len(scheduled),
         buildings_done=sum(r.state == "done" for r in scheduled),
-        buildings=[CleaningPublicBuildingOut(building_id=r.building_id, address=r.address, state=r.state)
-                   for r in rows])
+        buildings=[CleaningPublicBuildingOut(
+            building_id=r.building_id, address=r.address, state=r.state, done_at=r.done_at,
+            entrances=[_entrance_out(e) for e in r.entrances]) for r in rows])
 
 
 @public_router.get("/cleaning/buildings/{building_id}", response_model=CleaningPublicBuildingViewOut)
@@ -112,8 +119,7 @@ async def cleaning_building(request: Request, building_id: int = Path(ge=1, le=D
         raise HTTPException(status_code=404, detail="Not Found")
     return CleaningPublicBuildingViewOut(
         building_id=view.building_id, address=view.address, entrance_count=view.entrance_count, work_date=day,
-        entrances=[CleaningPublicEntranceOut(entrance=e.entrance, state=e.state, done_at=e.done_at,
-                                             photo_ids=e.photo_ids) for e in view.entrances],
+        entrances=[_entrance_out(e) for e in view.entrances],
         week=view.week)
 
 

@@ -82,6 +82,7 @@ const CleaningPlanPage = lazy(() => import('./pages/cleaning/CleaningPlanPage'))
 const CleaningStaffPage = lazy(() => import('./pages/cleaning/CleaningStaffPage'))
 const CleaningControlPage = lazy(() => import('./pages/cleaning/CleaningControlPage'))
 const CleaningTaskPage = lazy(() => import('./pages/cleaning/CleaningTaskPage'))
+const ResidentCleaningPage = lazy(() => import('./pages/ResidentCleaningPage'))
 const CLEANING_ENABLED = import.meta.env.VITE_CLEANING_ENABLED === 'true'
 
 // Мониторинг отключений (очередь новостей + настройки). DARK за
@@ -288,6 +289,11 @@ export default function App() {
 
               {/* Страница жителей «Ваш дом сегодня» — публичная главная (сюда ведёт «/»). */}
               <Route path="/home" element={<PageErrorBoundary><ResidentHomePage /></PageErrorBoundary>} />
+
+              {/* Открытый обзор уборки по всем домам: статусы подъездов и фото. */}
+              {CLEANING_ENABLED && (
+                <Route path="/cleaning" element={<PageErrorBoundary><ResidentCleaningPage /></PageErrorBoundary>} />
+              )}
 
               {/* Resident board — табло для экрана в холле (публичное, standalone) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />

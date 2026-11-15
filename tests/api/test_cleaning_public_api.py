@@ -105,7 +105,24 @@ async def test_today_counts_buildings_and_hides_unpublished(client, world):
     assert (body["buildings_total"], body["buildings_done"]) == (1, 0)  # дом 14 жителям не показывается
     (house,) = body["buildings"]
     assert (house["building_id"], house["address"], house["state"]) == (1, "д. 12", "in_progress")
-    assert "entrances" not in house and "responsible" not in str(body).lower()
+    assert house["done_at"] is None                      # дом ещё не убран целиком
+    assert "responsible" not in str(body).lower()
+
+
+@pytest.mark.asyncio
+async def test_today_lists_entrances_with_public_photos_for_overview(client, world, db_session):
+    """Обзор по всем домам строится одним ответом: подъезды, время и фото публичных точек."""
+    tasks, photos = world
+    house = (await client.get(f"{PUBLIC}/today")).json()["buildings"][0]
+    first, second = house["entrances"]
+    assert (first["entrance"], first["state"], first["photo_ids"]) == (1, "done", [photos[0].id])
+    assert first["done_at"] is not None
+    assert (second["state"], second["done_at"], second["photo_ids"]) == ("pending", None, [])
+
+    (await db_session.get(CleaningBuildingSettings, 1)).show_photos = False   # фото скрыты — статусы остаются
+    await db_session.commit()
+    first = (await client.get(f"{PUBLIC}/today")).json()["buildings"][0]["entrances"][0]
+    assert (first["state"], first["photo_ids"]) == ("done", [])
 
 
 @pytest.mark.asyncio
@@ -115,6 +132,7 @@ async def test_building_becomes_done_when_all_entrances_accepted(client, world, 
     await db_session.commit()
     body = (await client.get(f"{PUBLIC}/today")).json()
     assert (body["buildings_done"], body["buildings"][0]["state"]) == (1, "done")
+    assert body["buildings"][0]["done_at"] is not None
 
 
 @pytest.mark.asyncio

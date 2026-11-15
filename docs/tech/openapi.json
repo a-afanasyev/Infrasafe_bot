@@ -3004,6 +3004,25 @@
             "title": "Building Id",
             "type": "integer"
           },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPublicEntranceOut"
+            },
+            "title": "Entrances",
+            "type": "array"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -3012,7 +3031,9 @@
         "required": [
           "building_id",
           "address",
-          "state"
+          "state",
+          "done_at",
+          "entrances"
         ],
         "title": "CleaningPublicBuildingOut",
         "type": "object"

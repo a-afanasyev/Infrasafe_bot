@@ -7,12 +7,27 @@ import { publicClient } from '../api/publicClient'
 
 export type PublicCleaningState = 'done' | 'in_progress' | 'planned' | 'none'
 
+export interface PublicCleaningEntrance {
+  entrance: number
+  state: 'done' | 'pending' | 'none'
+  done_at: string | null
+  photo_ids: number[]
+}
+
+export interface PublicCleaningHouse {
+  building_id: number
+  address: string
+  state: PublicCleaningState
+  done_at: string | null
+  entrances: PublicCleaningEntrance[]
+}
+
 export interface PublicCleaningToday {
   enabled: boolean
   work_date: string
   buildings_total: number
   buildings_done: number
-  buildings: { building_id: number; address: string; state: PublicCleaningState }[]
+  buildings: PublicCleaningHouse[]
 }
 
 export interface PublicCleaningWork {
@@ -26,7 +41,7 @@ export interface PublicCleaningBuilding {
   address: string
   entrance_count: number
   work_date: string
-  entrances: { entrance: number; state: 'done' | 'pending' | 'none'; done_at: string | null; photo_ids: number[] }[]
+  entrances: PublicCleaningEntrance[]
   week: PublicCleaningWork[][]
 }
 

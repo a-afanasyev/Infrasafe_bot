@@ -30,18 +30,20 @@ _STARTED = ("in_progress", "review", "accepted", "rejected", "expired")
 
 
 @dataclass(frozen=True)
-class BuildingToday:
-    building_id: int
-    address: str
-    state: str  # done / in_progress / planned / none
-
-
-@dataclass(frozen=True)
 class EntranceToday:
     entrance: int
     state: str  # done / pending / none
     done_at: Optional[datetime]
     photo_ids: list[int]
+
+
+@dataclass(frozen=True)
+class BuildingToday:
+    building_id: int
+    address: str
+    state: str  # done / in_progress / planned / none
+    done_at: Optional[datetime]  # когда принят последний подъезд; только у убранного дома
+    entrances: list[EntranceToday]
 
 
 @dataclass(frozen=True)
@@ -70,17 +72,53 @@ async def _shown(db: AsyncSession) -> dict[int, tuple[Building, CleaningBuilding
     return {building.id: (building, cfg) for building, cfg in rows.all()}
 
 
+async def _photo_ids(db: AsyncSession, task_ids: list[int]) -> dict[int, list[int]]:
+    """Текущие фото публичных точек по заданиям: задание → id фото."""
+    photos: dict[int, list[int]] = {}
+    if task_ids:
+        for task_id, photo_id in (await db.execute(
+                select(CleaningPhoto.task_id, CleaningPhoto.id)
+                .where(CleaningPhoto.task_id.in_(task_ids), CleaningPhoto.is_current.is_(True),
+                       CleaningPhoto.slot.in_(PUBLIC_SLOTS), CleaningPhoto.media_id.is_not(None))
+                .order_by(CleaningPhoto.slot))).all():
+            photos.setdefault(task_id, []).append(photo_id)
+    return photos
+
+
+def _entrances(building: Building, tasks: dict[int, CleaningTask],
+               photos: dict[int, list[int]]) -> list[EntranceToday]:
+    """Подъезды дома: «убрано» и фото — только у принятого задания."""
+    entrances = []
+    for number in range(1, building.entrance_count + 1):
+        task = tasks.get(number)
+        done = task is not None and task.status == "accepted"
+        entrances.append(EntranceToday(
+            entrance=number, state="none" if task is None else "done" if done else "pending",
+            done_at=task.updated_at if done else None, photo_ids=photos.get(task.id, []) if done else []))
+    return entrances
+
+
 async def today(db: AsyncSession, day: date) -> list[BuildingToday]:
+    """Все дома, показанные жителям: состояние дня, подъезды и фото (где показ фото включён)."""
     shown = await _shown(db)
     if not shown:
         return []
-    by_building: dict[int, list[str]] = {}
-    for building_id, status in (await db.execute(
-            select(CleaningTask.building_id, CleaningTask.status)
-            .where(CleaningTask.work_date == day, CleaningTask.building_id.in_(shown)))).all():
-        by_building.setdefault(building_id, []).append(status)
-    return [BuildingToday(building_id=bid, address=building.address, state=_state(by_building.get(bid, [])))
-            for bid, (building, _) in shown.items()]
+    by_building: dict[int, dict[int, CleaningTask]] = {}
+    for task in (await db.execute(
+            select(CleaningTask).where(CleaningTask.work_date == day, CleaningTask.building_id.in_(shown)))).scalars():
+        by_building.setdefault(task.building_id, {})[task.entrance] = task
+    photos = await _photo_ids(db, [
+        task.id for bid, tasks in by_building.items() if shown[bid][1].show_photos
+        for task in tasks.values() if task.status == "accepted"])
+    rows = []
+    for bid, (building, _) in shown.items():
+        tasks = by_building.get(bid, {})
+        state = _state([task.status for task in tasks.values()])
+        entrances = _entrances(building, tasks, photos)
+        rows.append(BuildingToday(
+            building_id=bid, address=building.address, state=state, entrances=entrances,
+            done_at=max((e.done_at for e in entrances if e.done_at), default=None) if state == "done" else None))
+    return rows
 
 
 async def building_view(db: AsyncSession, building_id: int, day: date) -> Optional[BuildingView]:
@@ -90,24 +128,10 @@ async def building_view(db: AsyncSession, building_id: int, day: date) -> Option
     building, cfg = found
     tasks = {t.entrance: t for t in (await db.execute(
         select(CleaningTask).where(CleaningTask.building_id == building_id, CleaningTask.work_date == day))).scalars()}
-    photos: dict[int, list[int]] = {}
     accepted = [t.id for t in tasks.values() if t.status == "accepted"]
-    if cfg.show_photos and accepted:
-        for task_id, photo_id in (await db.execute(
-                select(CleaningPhoto.task_id, CleaningPhoto.id)
-                .where(CleaningPhoto.task_id.in_(accepted), CleaningPhoto.is_current.is_(True),
-                       CleaningPhoto.slot.in_(PUBLIC_SLOTS), CleaningPhoto.media_id.is_not(None))
-                .order_by(CleaningPhoto.slot))).all():
-            photos.setdefault(task_id, []).append(photo_id)
-    entrances = []
-    for number in range(1, building.entrance_count + 1):
-        task = tasks.get(number)
-        done = task is not None and task.status == "accepted"
-        entrances.append(EntranceToday(
-            entrance=number, state="none" if task is None else "done" if done else "pending",
-            done_at=task.updated_at if done else None, photo_ids=photos.get(task.id, []) if done else []))
+    photos = await _photo_ids(db, accepted if cfg.show_photos else [])
     return BuildingView(building_id=building_id, address=building.address,
-                        entrance_count=building.entrance_count, entrances=entrances,
+                        entrance_count=building.entrance_count, entrances=_entrances(building, tasks, photos),
                         week=await _week(db, building_id, day))
 
 
