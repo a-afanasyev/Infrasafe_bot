@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.api import telegram_send
@@ -78,6 +78,9 @@ class Plan:
     groups: bool = True
     # Доп. условия на User сверх ``_eligible`` (адресаты по дому/двору).
     audience: tuple = ()
+    # Кому слать копию сверх жителей (условия на User целиком, без ``_eligible``):
+    # менеджерам — об отключении, объявленном сотрудником.
+    also: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -153,20 +156,25 @@ def _eligible():
             User.deleted_at.is_(None), User.bot_blocked_at.is_(None))
 
 
-async def _recipients(db: AsyncSession, after_id: int, audience: tuple = ()) -> list[tuple[int, int]]:
+def _who(plan: Plan):
+    residents = and_(*_eligible(), *plan.audience)
+    return or_(residents, and_(*plan.also)) if plan.also else residents
+
+
+async def _recipients(db: AsyncSession, after_id: int, plan: Plan) -> list[tuple[int, int]]:
     rows = await db.execute(
-        select(User.id, User.telegram_id).where(User.id > after_id, *_eligible(), *audience)
+        select(User.id, User.telegram_id).where(User.id > after_id, _who(plan))
         .order_by(User.id).limit(BATCH)
     )
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
 
-async def _retry_recipients(db: AsyncSession, user_ids: list[int], audience: tuple = ()) -> list[tuple[int, int]]:
+async def _retry_recipients(db: AsyncSession, user_ids: list[int], plan: Plan) -> list[tuple[int, int]]:
     """Жители из списка повтора, всё ещё подходящие (выбывшие — молча из списка)."""
     if not user_ids:
         return []
     rows = await db.execute(
-        select(User.id, User.telegram_id).where(User.id.in_(user_ids), *_eligible(), *audience).order_by(User.id)
+        select(User.id, User.telegram_id).where(User.id.in_(user_ids), _who(plan)).order_by(User.id)
     )
     return [(int(uid), int(tg)) for uid, tg in rows.all() if tg]
 
@@ -239,7 +247,7 @@ async def _deliver(factory, outbox: Outbox, item_id: int, send: Sender, sleep) -
         retry.clear()  # личку выключили — повторять в неё больше некому
     else:
         async with factory() as db:
-            pending_retry = await _retry_recipients(db, retry, plan.audience)
+            pending_retry = await _retry_recipients(db, retry, plan)
         still = {uid for uid, _ in pending_retry}
         retry[:] = [u for u in retry if u in still]
         for uid, tg_id in pending_retry:
@@ -248,7 +256,7 @@ async def _deliver(factory, outbox: Outbox, item_id: int, send: Sender, sleep) -
             await sleep(PAUSE_SECONDS)
         while True:
             async with factory() as db:
-                batch = await _recipients(db, cursor, plan.audience)
+                batch = await _recipients(db, cursor, plan)
             if not batch:
                 break
             for uid, tg_id in batch:

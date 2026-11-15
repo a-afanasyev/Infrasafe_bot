@@ -239,6 +239,7 @@ BOT_IDOR_COVERAGE: dict[tuple[str, str], str] = {
     ("request_acceptance.py", "save_rating"): "CANON: APPLICANT_ACCEPT (owner|сосед)",
     ("request_acceptance.py", "return_request"): "ENTRY: финал — process_return_request → APPLICANT_RETURN (только owner)",
     ("my_shifts/viewing.py", "handle_shift_details"): "OWNER: execution.work + Shift.user_id; test_aud337_my_shifts_offload",
+    ("outages.py", "handle_close"): "OWNER: outages.close — автор или сантехник на смене (not_yours); test_outages_bot::test_close_button_closes_only_for_author_or_plumber_on_shift",
     ("elevators/menu.py", "handle_yard"): "BY-DESIGN A10-INT-10 (elevators.technician: реестр целиком)",
     ("elevators/menu.py", "handle_building"): "BY-DESIGN A10-INT-10",
     ("elevators/card.py", "handle_card"): "BY-DESIGN A10-INT-10",

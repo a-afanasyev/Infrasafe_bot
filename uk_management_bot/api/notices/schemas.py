@@ -138,3 +138,36 @@ class AudienceOut(BaseModel):
     """Сколько жителей получит рассылку с такими адресатами."""
 
     count: int
+
+
+class OutageIn(BaseModel):
+    """Отключение, которое объявляет сантехник на смене."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    resource: Literal["water", "heating"]
+    building_ids: list[int] = Field(min_length=1, max_length=30)
+    duration: Literal["1h", "2h", "4h", "day", "unknown"]
+
+
+class OutageBuildingOut(BaseModel):
+    id: int
+    address: str
+
+
+class OutageYardOut(BaseModel):
+    id: int
+    name: str
+    buildings: list[OutageBuildingOut]
+
+
+class OutageOptionsOut(BaseModel):
+    """Экран сантехника: можно ли объявить, справочник домов, идущие отключения."""
+
+    allowed: bool
+    # not_plumber | no_active_shift — почему нельзя; null — можно.
+    reason: Optional[str] = None
+    resources: list[str]
+    durations: list[str]
+    yards: list[OutageYardOut]
+    open: list[NoticeOut]

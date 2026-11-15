@@ -8173,6 +8173,148 @@
         "title": "OrgCfgIn",
         "type": "object"
       },
+      "OutageBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address"
+        ],
+        "title": "OutageBuildingOut",
+        "type": "object"
+      },
+      "OutageIn": {
+        "additionalProperties": false,
+        "description": "Отключение, которое объявляет сантехник на смене.",
+        "properties": {
+          "building_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Building Ids",
+            "type": "array"
+          },
+          "duration": {
+            "enum": [
+              "1h",
+              "2h",
+              "4h",
+              "day",
+              "unknown"
+            ],
+            "title": "Duration",
+            "type": "string"
+          },
+          "resource": {
+            "enum": [
+              "water",
+              "heating"
+            ],
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "building_ids",
+          "duration"
+        ],
+        "title": "OutageIn",
+        "type": "object"
+      },
+      "OutageOptionsOut": {
+        "description": "Экран сантехника: можно ли объявить, справочник домов, идущие отключения.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "durations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Durations",
+            "type": "array"
+          },
+          "open": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeOut"
+            },
+            "title": "Open",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/OutageYardOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowed",
+          "resources",
+          "durations",
+          "yards",
+          "open"
+        ],
+        "title": "OutageOptionsOut",
+        "type": "object"
+      },
+      "OutageYardOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/OutageBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "buildings"
+        ],
+        "title": "OutageYardOut",
+        "type": "object"
+      },
       "OwnerCheckOut": {
         "description": "Владелец лицевого счёта квартиры по Mening Uyim — информация менеджеру.",
         "properties": {
@@ -16680,6 +16822,128 @@
           }
         ],
         "summary": "Audience",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages": {
+      "post": {
+        "description": "Сантехник на смене объявляет отключение: жителям домов — сразу, менеджерам копия.",
+        "operationId": "announce_outage_api_v2_board_config_notices_outages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Announce Outage",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/options": {
+      "get": {
+        "description": "Экран «Отключил воду»: гейт (сантехник на смене), дома, идущие отключения.",
+        "operationId": "outage_options_api_v2_board_config_notices_outages_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outage Options",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/{notice_id}/close": {
+      "post": {
+        "description": "«Включили»: запись закрыта, жителям — второе сообщение.",
+        "operationId": "close_outage_api_v2_board_config_notices_outages__notice_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Close Outage",
         "tags": [
           "notices"
         ]

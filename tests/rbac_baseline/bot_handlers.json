@@ -462,6 +462,19 @@
     "executor@pending"
    ]
   },
+  "uk_management_bot/handlers/outages.py::<router.callback_query.filter>": {
+   "root_filter": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
   "uk_management_bot/handlers/shift_management/_router.py::<router.callback_query.filter>": {
    "root_filter": [
     "manager",

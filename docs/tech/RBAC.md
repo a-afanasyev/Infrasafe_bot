@@ -281,6 +281,7 @@ flowchart LR
 | `auto_manager.configure` | `admin`, `manager` |  | Настройка автоматического менеджера |
 | `board.configure` | `manager` |  | Настройка табло |
 | `notices.manage` | `manager` |  | Новости и уведомления жителям |
+| `outages.announce` | `executor` |  | Отключения: объявление сантехником на смене |
 | `callcenter.use` | `dispatcher`, `manager` |  | Колл-центр: заявки по звонку |
 | `dashboard.live` | `engineer`, `manager` |  | Живой поток событий дашборда (WebSocket) |
 | `dashboard.use` | `admin`, `engineer`, `manager` |  | Вход в основной веб-дашборд управления |

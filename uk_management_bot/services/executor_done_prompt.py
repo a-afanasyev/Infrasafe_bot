@@ -318,3 +318,7 @@ async def remind_after_shift_end(bot, user_id: Optional[int], *, _db=None) -> No
     except Exception as exc:  # noqa: BLE001
         logger.warning("executor_done: напоминание после смены не отправлено user=%s: %s",
                        user_id, type(exc).__name__)
+    # Незакрытое отключение сантехника — тем же хуком (бот, TWA, простой режим).
+    from uk_management_bot.services.notices.outage_reminders import remind_after_shift_end as remind_outages
+
+    await remind_outages(bot, user_id, _db=_db)

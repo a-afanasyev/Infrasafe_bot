@@ -55,6 +55,7 @@ import SimpleTaskPage from './simple/pages/TaskPage'
 import SimpleDonePage from './simple/pages/DonePage'
 import SimpleProblemPage from './simple/pages/ProblemPage'
 import SimpleShiftPage from './simple/pages/ShiftPage'
+import OutagePage from './outage/OutagePage'
 
 // У простого режима своя полоса «нет связи» (со счётчиком неотправленных фото).
 const SIMPLE_PATH = /^\/twa\/s(\/|$)/
@@ -143,6 +144,7 @@ function TWAContent() {
         <Route path="/exec/profile" element={<RoleGuard required="executor"><ExecutorProfilePage /><ExecutorTabs /></RoleGuard>} />
         {/* Ссылка бота на заявку: simple → /twa/s/task/:n, ?action=done → «Готово»/отчёт. */}
         <Route path="/exec/tasks/:number" element={<RoleGuard required="executor"><ExecTaskEntry /></RoleGuard>} />
+        <Route path="/exec/outage" element={<RoleGuard required="executor"><OutagePage backTo="/twa/exec/shift" /></RoleGuard>} />
         <Route path="/exec/shifts" element={<RoleGuard required="executor"><MyShiftsPage /></RoleGuard>} />
         <Route path="/exec/report/:number" element={<RoleGuard required="executor"><CompletionReport /></RoleGuard>} />
 
@@ -156,6 +158,7 @@ function TWAContent() {
           <Route path="task/:number/before" element={<SimpleDonePage kind="before" />} />
           <Route path="task/:number/problem" element={<SimpleProblemPage />} />
           <Route path="shift" element={<SimpleShiftPage />} />
+          <Route path="outage" element={<OutagePage backTo="/twa/s/shift" />} />
         </Route>
 
         {/* Обратная связь — общий маршрут для обеих ролей, без таб-бара */}

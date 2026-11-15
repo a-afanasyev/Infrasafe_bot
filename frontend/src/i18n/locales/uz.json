@@ -3032,6 +3032,43 @@
     },
     "openViaBot": "Ilovani Telegram-bot orqali oching",
     "pullToRefresh": "↓ Yangilash uchun torting",
+    "outage": {
+      "entry": "Suvni o'chirdim",
+      "restored": {
+        "water": "Suv yoqildi",
+        "heating": "Isitish yoqildi"
+      },
+      "confirmClose": "Yoqildimi?",
+      "closeHint": "Aholi xabar oladi.",
+      "closed": "Aholiga xabar berildi",
+      "ask": {
+        "resource": "Nima o'chirildi?",
+        "buildings": "Qaysi uylarda?",
+        "duration": "Qancha vaqtga?"
+      },
+      "resource": {
+        "water": "Suv",
+        "heating": "Isitish"
+      },
+      "duration": {
+        "1h": "1 soat",
+        "2h": "2 soat",
+        "4h": "4 soat",
+        "day": "Kun oxirigacha",
+        "unknown": "Bilmayman"
+      },
+      "next": "Keyingi",
+      "confirm": "Aholiga xabar berilsinmi?",
+      "confirmHint": "Bu uylar aholisi darhol Telegramda xabar oladi.",
+      "error": {
+        "already_open": "Bu uy bo'yicha allaqachon e'lon qilingan",
+        "no_active_shift": "Avval smenani boshlang",
+        "not_plumber": "Faqat santexnik e'lon qiladi",
+        "not_yours": "Faqat muallif yoki smenadagi santexnik yopa oladi",
+        "not_open": "Allaqachon yopilgan",
+        "generic": "Bajarilmadi"
+      }
+    },
     "simple": {
       "tabs": {
         "mine": "Arizalarim",
@@ -3910,6 +3947,7 @@
       "auto_manager.configure": "Avtomatik menejerni sozlash",
       "board.configure": "Tabloni sozlash",
       "notices.manage": "Yashovchilarga yangiliklar va xabarnomalar",
+      "outages.announce": "O'chirishlar: smenadagi santexnik e'lon qiladi",
       "callcenter.use": "Call-markaz: qo'ng'iroq bo'yicha arizalar",
       "dashboard.live": "Boshqaruv paneli hodisalarining jonli oqimi (WebSocket)",
       "dashboard.use": "Asosiy veb-boshqaruv paneliga kirish",

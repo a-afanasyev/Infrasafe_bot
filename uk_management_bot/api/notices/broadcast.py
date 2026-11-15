@@ -27,8 +27,11 @@ from uk_management_bot.database.models.notice import (
     NOTICE_KIND_OUTAGE,
     NOTICE_SCOPE_ALL,
     NOTICE_SOURCE_NEWS_WATCH,
+    NOTICE_SOURCE_STAFF,
     Notice,
 )
+from uk_management_bot.database.models.user import User
+from uk_management_bot.database.roles_type import roles_contain
 from uk_management_bot.services.notices.audience import audience_clause
 from uk_management_bot.services.notices.board import RESOURCE_ICONS
 from uk_management_bot.services.notices.service import visible_clause
@@ -72,6 +75,10 @@ def render(notice: Notice) -> str:
     return "\n\n".join(blocks)
 
 
+_MANAGERS = (roles_contain(User.roles, "manager"), User.status == "approved",
+             User.deleted_at.is_(None), User.bot_blocked_at.is_(None))
+
+
 async def _plan(db: AsyncSession, notice: Notice) -> Plan:
     scope = notice.scope or NOTICE_SCOPE_ALL
     return Plan(
@@ -79,6 +86,8 @@ async def _plan(db: AsyncSession, notice: Notice) -> Plan:
         dm=True,
         groups=scope == NOTICE_SCOPE_ALL,
         audience=audience_clause(scope, [int(i) for i in (notice.scope_ids or [])]),
+        # Отключение объявил сотрудник — менеджеры получают то же сообщение копией.
+        also=_MANAGERS if notice.source == NOTICE_SOURCE_STAFF else (),
     )
 
 

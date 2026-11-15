@@ -335,6 +335,8 @@ IDOR_COVERAGE: dict[tuple[str, str], str] = {
     ("POST", "/api/v2/executor/shifts/transfers/{transfer_id}/respond"):
         "test_executor_transfer_respond + test_foreign_transfer_status_is_not_disclosed",
     ("GET", "/api/v2/elevators/for-building/{building_id}"): "test_elevators_for_building",
+    ("POST", "/api/v2/board-config/notices/outages/{notice_id}/close"):
+        "tests/api/test_notices_outages.py::test_foreign_outage_close_is_403",
     ("GET", "/api/v2/registration/yards/{yard_id}/buildings"): "test_registration_cascade_requires_ticket",
     ("GET", "/api/v2/registration/buildings/{building_id}/apartments"):
         "test_registration_cascade_requires_ticket",
