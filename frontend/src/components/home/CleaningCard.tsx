@@ -12,6 +12,8 @@ interface CleaningCardProps {
 export default function CleaningCard({ title }: CleaningCardProps) {
   const { t } = useTranslation()
   const { data } = usePublicCleaningToday()
+  // Пока менеджер не включил показ ни одного дома, жителям блок не виден вовсе.
+  if (data && (!data.enabled || data.buildings.length === 0)) return null
 
   return (
     <section className="rh-card rh-cleaning" aria-labelledby="rh-cleaning-heading">

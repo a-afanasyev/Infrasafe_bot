@@ -81,11 +81,14 @@ describe('CleaningCard', () => {
     expect(screen.getByText('Сегодня уборки нет')).toBeInTheDocument()
   })
 
-  it('при выключенном модуле не показывает цифр', async () => {
-    server.use(http.get('*/api/v2/public/cleaning/today', () => HttpResponse.json({
-      enabled: false, work_date: '2026-11-17', buildings_total: 0, buildings_done: 0, buildings: [] })))
-    render(<CleaningCard title="Чистота" />)
-    expect(await screen.findByText('Сегодня уборки по графику нет')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Чистота' })).toBeInTheDocument()
+  it.each([false, true])('без единого дома для жителей блок не виден (модуль включён: %s)', async (enabled) => {
+    let asked = false
+    server.use(http.get('*/api/v2/public/cleaning/today', () => {
+      asked = true
+      return HttpResponse.json({ enabled, work_date: '2026-11-17', buildings_total: 0, buildings_done: 0, buildings: [] })
+    }))
+    const { container } = render(<CleaningCard title="Чистота" />)
+    await waitFor(() => expect(asked).toBe(true))
+    await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 })
