@@ -105,7 +105,7 @@ export default function ResidentCleaningPage() {
                   <span className={works.length ? 'text-right font-semibold' : 'text-gray-500 dark:text-gray-400'}>
                     {works.length === 0
                       ? t('twa.residentCleaning.dayOff')
-                      : works.map((w) => t(`twa.cleaning.work.${w.work_kind}`) + (w.floor_from ? ` ${w.floor_from === w.floor_to ? w.floor_from : `${w.floor_from}–${w.floor_to}`}` : '')).join(', ')}
+                      : works.map((w) => t(`twa.cleaning.work.${w.work_kind}`) + (w.floor_from ? ` ${w.floor_from === w.floor_to ? w.floor_from : `${w.floor_from}–${w.floor_to}`}` : '') + (w.entrances ? ` (${t('cleaning.staff.entrancesList', { list: w.entrances.join(', ') })})` : '')).join(', ')}
                   </span>
                 </li>
               ))}

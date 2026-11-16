@@ -51,7 +51,9 @@
     "work": {
       "wet": "Nam tozalash",
       "dry": "Quruq tozalash",
-      "elevator": "Liftni yuvish"
+      "elevator": "Liftni yuvish",
+      "basement": "−1-qavatni tozalash",
+      "parking": "Avtoturargohga chiqishni tozalash"
     },
     "day": {
       "0": "Du",
@@ -86,6 +88,7 @@
       "unassign": "Olib tashlash: {{address}}",
       "none": "uylar yo'q",
       "entrance": "{{n}}-yo'lak",
+      "entrancesList": "{{list}}-yo'lak",
       "overload": "Ortiqcha yuklama: {{name}} — me'yor {{norm}} bo'lganda kuniga {{peak}} qavat.",
       "unassigned": "Farroshsiz: {{list}}.",
       "over": "ortiqcha yuklama",
@@ -213,6 +216,8 @@
     },
     "point": {
       "elevator": "Lift",
+      "basement": "−1-qavat",
+      "parking": "Avtoturargohga chiqish",
       "entrance": "Kirish",
       "entry1": "1-kirish",
       "entry2": "2-kirish",
@@ -2882,6 +2887,8 @@
       "floor": "{{n}}-qavat",
       "point": {
         "elevator": "Lift",
+        "basement": "−1-qavat",
+        "parking": "Avtoturargohga chiqish",
         "entrance": "Kirish",
         "entry1": "1-kirish",
         "entry2": "2-kirish",
@@ -2890,7 +2897,9 @@
       "work": {
         "wet": "Nam tozalash",
         "dry": "Quruq tozalash",
-        "elevator": "Liftni yuvish"
+        "elevator": "Liftni yuvish",
+        "basement": "−1-qavatni tozalash",
+        "parking": "Avtoturargohga chiqishni tozalash"
       },
       "shootEach": "Qavatni yuvdingizmi — suratga oling. Surat belgi hisoblanadi.",
       "progress": "{{total}} tadan {{done}} tasi olindi",

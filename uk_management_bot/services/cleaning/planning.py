@@ -12,7 +12,9 @@ from typing import Iterable, Optional, Protocol, Sequence, TypeVar
 
 # Работы по этажам и работы «в одной точке» (этажи не выбираются).
 FLOOR_WORKS = ("wet", "dry")
-POINT_WORKS = {"elevator": "point:elevator"}
+# «−1 этаж» и «выход на парковку» есть не у всех домов и убираются в свои дни —
+# поэтому это отдельные работы плана со своими днями недели, а не этаж отрезка.
+POINT_WORKS = {"elevator": "point:elevator", "basement": "point:basement", "parking": "point:parking"}
 WORK_KINDS = FLOOR_WORKS + tuple(POINT_WORKS)
 # Первый этаж снимается тремя точками вместо одного кадра: два входа и лифтовая
 # зона (решение владельца 2026-11-16). Пустой кортеж — прежний один кадр «этаж 1».

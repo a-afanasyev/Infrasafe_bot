@@ -99,7 +99,9 @@ async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = Fal
         rows.sort(key=lambda row: slot_order(row[0]))
         if brief:
             floors = [row for row in rows if row[0].startswith("floor:") or row[0] in FIRST_FLOOR_POINTS]
-            rows = floors[:1] + [row for row in rows if row[0] in BRIEF_POINTS]
+            # День без этажей (только −1 этаж / парковка) — первая снятая точка.
+            head = floors[:1] or rows[:1]
+            rows = head + [row for row in rows if row[0] in BRIEF_POINTS and row not in head]
         photos[task_id] = [photo_id for _, photo_id in rows]
     return photos
 
@@ -191,6 +193,8 @@ async def _week(db: AsyncSession, building_id: int, day: date) -> list[list[dict
                 work = {"work_kind": item.work_kind}
                 if item.floors:
                     work.update(floor_from=item.floors[0], floor_to=item.floors[-1])
+                if item.entrances is not None:  # работа не для всего дома — жителю видно, чьи подъезды
+                    work["entrances"] = sorted(item.entrances)
                 works.append(work)
         week.append(works)
     return week
