@@ -393,7 +393,8 @@ async def test_first_floor_points_are_uploaded_and_complete_the_task(
 
 @pytest.mark.parametrize("slot,ok", [
     ("point:entry1", True), ("point:lift_hall", True), ("floor:12", True),
-    ("point:1entry", False), ("point:", False), ("floor:0", False), ("point:Entry", False),
+    ("floor:-1", True),  # −1 этаж — этаж плана
+    ("point:1entry", False), ("point:", False), ("floor:0", False), ("floor:-2", False), ("point:Entry", False),
 ])
 def test_slot_name_format(slot, ok):
     assert (uploads.SLOT_RE.fullmatch(slot) is not None) is ok

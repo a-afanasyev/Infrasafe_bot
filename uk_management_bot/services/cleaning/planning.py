@@ -12,9 +12,13 @@ from typing import Iterable, Optional, Protocol, Sequence, TypeVar
 
 # Работы по этажам и работы «в одной точке» (этажи не выбираются).
 FLOOR_WORKS = ("wet", "dry")
-# «−1 этаж» и «выход на парковку» есть не у всех домов и убираются в свои дни —
-# поэтому это отдельные работы плана со своими днями недели, а не этаж отрезка.
-POINT_WORKS = {"elevator": "point:elevator", "basement": "point:basement", "parking": "point:parking"}
+# «Выход на парковку» есть не у всех домов и убирается в свои дни — отдельная
+# работа плана со своими днями недели и подъездами.
+POINT_WORKS = {"elevator": "point:elevator", "parking": "point:parking"}
+# «−1 этаж» — этаж плана (решение владельца 2026-11-16): отрезок этажей может
+# начинаться с −1, слот ``floor:-1``. Нулевого этажа нет. Есть он не у каждого
+# дома, поэтому «все этажи» — только надземные, а в норму покрытия −1 не входит.
+BASEMENT_FLOOR = -1
 WORK_KINDS = FLOOR_WORKS + tuple(POINT_WORKS)
 # Первый этаж снимается тремя точками вместо одного кадра: два входа и лифтовая
 # зона (решение владельца 2026-11-16). Пустой кортеж — прежний один кадр «этаж 1».
@@ -58,9 +62,10 @@ def _floors(raw: dict, kind: str, floor_count: int) -> tuple[int, ...]:
         return ()
     if lo is None and hi is None:
         return tuple(range(1, floor_count + 1))
-    if type(lo) is not int or type(hi) is not int or not 1 <= lo <= hi <= floor_count:
+    if (type(lo) is not int or type(hi) is not int or 0 in (lo, hi)
+            or not BASEMENT_FLOOR <= lo <= hi <= floor_count):
         raise PlanError("bad_floors")
-    return tuple(range(lo, hi + 1))
+    return tuple(floor for floor in range(lo, hi + 1) if floor != 0)
 
 
 def _parse_item(raw: object, floor_count: int, entrance_count: int) -> PlanItem:
@@ -135,7 +140,8 @@ def floor_coverage(items: Sequence[PlanItem], work_kind: str, *, floor_count: in
         for item in items:
             if item.work_kind == work_kind and (item.entrances is None or entrance in item.entrances):
                 for floor in item.floors:
-                    counts[floor] += len(item.weekdays)
+                    if floor in counts:  # −1 этаж в норму не входит
+                        counts[floor] += len(item.weekdays)
         per_entrance.append(counts)
     return {floor: min(c[floor] for c in per_entrance) for floor in range(1, floor_count + 1)}
 

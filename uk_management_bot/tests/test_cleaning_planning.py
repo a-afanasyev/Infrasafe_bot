@@ -34,16 +34,40 @@ def test_task_lists_floor_range_of_the_day_and_elevator_point():
     assert task.slots == ("floor:6", "floor:7", "floor:8", "floor:9", "point:elevator")
 
 
-def test_basement_and_parking_are_point_works_with_own_days():
+def test_basement_is_a_floor_of_the_range_not_a_work():
+    """«−1 этаж» выбирается среди этажей (решение владельца 2026-11-16): слот ``floor:-1``, нулевого этажа нет."""
+    items = parse_items([
+        {"work_kind": "wet", "weekdays": [MON], "floor_from": -1, "floor_to": 2},
+        {"work_kind": "wet", "weekdays": [THU], "floor_from": -1, "floor_to": -1},
+    ], floor_count=2, entrance_count=1)
+    assert task_for(items, (), entrance=1, weekday=MON).slots == ("floor:-1", "floor:1", "floor:2")
+    assert task_for(items, (), entrance=1, weekday=THU).slots == ("floor:-1",)
+    # «Все этажи» — надземные: −1 есть не у каждого дома, его указывают явно.
+    whole = parse_items([{"work_kind": "wet", "weekdays": [MON]}], floor_count=2, entrance_count=1)
+    assert task_for(whole, (), entrance=1, weekday=MON).slots == ("floor:1", "floor:2")
+    # В норму покрытия −1 не входит и расчёт не ломает.
+    assert floor_coverage(items, "wet", floor_count=2) == {1: 1, 2: 1}
+
+
+@pytest.mark.parametrize("item", [
+    {"work_kind": "basement", "weekdays": [MON]},                                # вида работ больше нет
+    {"work_kind": "wet", "weekdays": [MON], "floor_from": 0, "floor_to": 2},     # нулевого этажа нет
+    {"work_kind": "wet", "weekdays": [MON], "floor_from": -2, "floor_to": 1},
+    {"work_kind": "wet", "weekdays": [MON], "floor_from": -1, "floor_to": 0},
+])
+def test_bad_basement_plans_are_rejected(item):
+    with pytest.raises(PlanError):
+        parse_items([item], floor_count=2, entrance_count=1)
+
+
+def test_parking_exit_stays_a_point_work_with_own_days():
     items = parse_items([
         {"work_kind": "wet", "weekdays": [MON]},
-        {"work_kind": "basement", "weekdays": [MON, THU]},
         {"work_kind": "parking", "weekdays": [THU], "entrances": [2]},
     ], floor_count=2, entrance_count=2)
-    assert task_for(items, (), entrance=1, weekday=MON).slots == ("floor:1", "floor:2", "point:basement")
-    assert task_for(items, (), entrance=1, weekday=THU).slots == ("point:basement",)
-    both = task_for(items, (), entrance=2, weekday=THU)
-    assert (both.works, both.slots) == (("basement", "parking"), ("point:basement", "point:parking"))
+    assert task_for(items, (), entrance=1, weekday=THU) is None
+    task = task_for(items, (), entrance=2, weekday=THU)
+    assert (task.works, task.slots) == (("parking",), ("point:parking",))
 
 
 def test_entrance_without_elevator_work_gets_only_floors():

@@ -88,4 +88,21 @@ describe('planModel', () => {
     expect(days[1]).toEqual({ works: [{ kind: 'elevator' }], floors: 0 })
     expect(days[6]).toEqual({ works: [], floors: 0 })
   })
+
+  it('«−1 этаж» — вариант этажей: уходит в API как -1…-1 и читается обратно', () => {
+    const basement = item({ floors: 'basement', weekdays: [3] })
+    expect(toPayload([basement])).toEqual([{ work_kind: 'wet', weekdays: [3], floor_from: -1, floor_to: -1 }])
+    expect(draftFrom([{ work_kind: 'wet', weekdays: [3], floor_from: -1, floor_to: -1 }])[0].floors).toBe('basement')
+    expect(validate([basement], 9, 2)).toBeNull()
+  })
+
+  it('диапазон можно начать с −1; нулевого этажа нет', () => {
+    const fromBasement = item({ weekdays: [0], floors: 'range', floor_from: '-1', floor_to: '3' })
+    expect(validate([fromBasement], 9, 1)).toBeNull()
+    expect(validate([item({ floors: 'range', floor_from: '0', floor_to: '3' })], 9, 1)).toBe('floors')
+    expect(validate([item({ floors: 'range', floor_from: '-2', floor_to: '3' })], 9, 1)).toBe('floors')
+    // −1, 1, 2, 3 — четыре этажа к съёмке; в норму покрытия −1 не входит.
+    expect(weekPreview([fromBasement], 9)[0].floors).toBe(4)
+    expect(coverage([fromBasement], 'wet', 9).slice(0, 4)).toEqual([1, 1, 1, 0])
+  })
 })

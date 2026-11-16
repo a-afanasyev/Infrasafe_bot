@@ -52,7 +52,6 @@
       "wet": "Nam tozalash",
       "dry": "Quruq tozalash",
       "elevator": "Liftni yuvish",
-      "basement": "−1-qavatni tozalash",
       "parking": "Avtoturargohga chiqishni tozalash"
     },
     "day": {
@@ -67,6 +66,7 @@
     "floors": {
       "all": "Barcha qavatlar",
       "first": "Faqat 1-qavat",
+      "basement": "Faqat −1-qavat",
       "range": "… dan … gacha",
       "na": "tanlanmaydi"
     },
@@ -216,7 +216,6 @@
     },
     "point": {
       "elevator": "Lift",
-      "basement": "−1-qavat",
       "parking": "Avtoturargohga chiqish",
       "entrance": "Kirish",
       "entry1": "1-kirish",
@@ -2887,7 +2886,6 @@
       "floor": "{{n}}-qavat",
       "point": {
         "elevator": "Lift",
-        "basement": "−1-qavat",
         "parking": "Avtoturargohga chiqish",
         "entrance": "Kirish",
         "entry1": "1-kirish",
@@ -2898,7 +2896,6 @@
         "wet": "Nam tozalash",
         "dry": "Quruq tozalash",
         "elevator": "Liftni yuvish",
-        "basement": "−1-qavatni tozalash",
         "parking": "Avtoturargohga chiqishni tozalash"
       },
       "shootEach": "Qavatni yuvdingizmi — suratga oling. Surat belgi hisoblanadi.",

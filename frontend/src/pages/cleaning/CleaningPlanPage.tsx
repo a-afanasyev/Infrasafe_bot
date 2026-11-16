@@ -15,6 +15,7 @@ import {
 import LoadingSpinner from '../../components/shared/LoadingSpinner'
 import {
   type DraftItem,
+  BASEMENT_FLOOR,
   type FloorsMode,
   FLOOR_WORKS,
   WEEKDAYS,
@@ -139,12 +140,13 @@ function PlanEditor({ building, view }: EditorProps) {
                           >
                             <option value="all">{t('cleaning.floors.all')}</option>
                             <option value="first">{t('cleaning.floors.first')}</option>
+                            <option value="basement">{t('cleaning.floors.basement')}</option>
                             <option value="range">{t('cleaning.floors.range')}</option>
                           </select>
                           {item.floors === 'range' && (
                             <>
                               <Input
-                                aria-label={t('cleaning.plan.aria.from', { row })} type="number" min={1} max={floors}
+                                aria-label={t('cleaning.plan.aria.from', { row })} type="number" min={BASEMENT_FLOOR} max={floors}
                                 className="ml-2 inline-block w-16" value={item.floor_from}
                                 onChange={(e) => patch(index, { floor_from: e.target.value })}
                               />
