@@ -26,6 +26,7 @@ from uk_management_bot.services.request_address import (
 )
 from uk_management_bot.api.elevators.errors import http_error as elevator_http_error
 from uk_management_bot.api.requests import service as svc
+from uk_management_bot.api.requests.author_kind import author_kind, load_owner_roles
 from uk_management_bot.api.requests.elevator_fields import (
     attach_elevator,
     card_language,
@@ -107,7 +108,7 @@ _format_executor_name = full_name
 
 
 def _make_request_card(req, exec_user=None, inbox_row=None, *, elevator=None,
-                       language: str = "ru") -> RequestCard:
+                       language: str = "ru", owner_roles=None) -> RequestCard:
     """Build RequestCard from ORM Request, optionally with executor user.
 
     When `inbox_row` (a WebhookInbox row associated with this request) is
@@ -129,6 +130,7 @@ def _make_request_card(req, exec_user=None, inbox_row=None, *, elevator=None,
     # сворачивает legacy-кодировку в канон; для канон-строк — identity.
     card.status = normalize_status(req)
     card.executor_name = _format_executor_name(exec_user)
+    card.author_kind = author_kind(req, owner_roles or {})
     if inbox_row is not None:
         alert = (inbox_row.payload or {}).get("alert", {}) or {}
         seq = alert.get("reopen_sequence")
@@ -189,10 +191,12 @@ def _for_viewer(card: RequestCard, req, user: User) -> RequestCard:
 async def _cards(db: AsyncSession, rows, user: User) -> list[RequestCard]:
     """Карточки страницы `(Request, executor)` с лифтами одним запросом."""
     elevators = await load_elevators(db, [r for r, _ in rows])
+    owner_roles = await load_owner_roles(db, [r for r, _ in rows])
     language = card_language(user)
     return [
         _for_viewer(
-            _make_request_card(r, eu, elevator=elevators.get(r.elevator_id), language=language), r, user)
+            _make_request_card(r, eu, elevator=elevators.get(r.elevator_id), language=language,
+                               owner_roles=owner_roles), r, user)
         for r, eu in rows
     ]
 
@@ -340,6 +344,7 @@ async def get_request(
     return _for_viewer(_make_request_card(
         req, exec_user, inbox_row=inbox_row,
         elevator=elevators.get(req.elevator_id), language=card_language(user),
+        owner_roles=await load_owner_roles(db, [req]),
     ), req, user)
 
 

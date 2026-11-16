@@ -1559,6 +1559,11 @@
     "updateTemplate": "Shablonni saqlashda xatolik"
   },
   "kanban": {
+    "authorKind": {
+      "resident": "Yashovchidan",
+      "staff": "Xodimdan",
+      "system": "Tizim"
+    },
     "addressNotBound": "Manzil ma'lumotnomadan emas — arizani ishga berib bo‘lmaydi. Hovli, uy yoki xonadonni biriktiring.",
     "bindAddress": "Manzilni biriktirish",
     "bindAddressDone": "Manzil biriktirildi",

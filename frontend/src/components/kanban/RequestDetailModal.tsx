@@ -204,6 +204,11 @@ export default function RequestDetailModal({ requestNumber, onClose, onOpenRelat
                   {request.request_number}
                 </span>
                 <span className="text-[13px]">{SOURCE_ICON[request.source ?? ''] ?? ''}</span>
+                {request.author_kind && (
+                  <span className={cn('text-[12px] font-medium', request.author_kind === 'staff' ? 'text-accent' : 'text-text-muted')}>
+                    {t(`kanban.authorKind.${request.author_kind}`)}
+                  </span>
+                )}
               </div>
               <DialogTitle className="font-[family-name:var(--font-display)] text-lg">
                 {isManager && !FROZEN_STATUSES.has(request.status) ? (
