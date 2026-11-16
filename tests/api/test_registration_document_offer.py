@@ -54,7 +54,7 @@ async def _register(client, tid: int, apt_id: int):
     ticket = await issue_registration_ticket(tid)
     return await client.post("/api/v2/registration/applicant",
                              headers={"Authorization": f"Bearer {ticket}"},
-                             json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+                             json={"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True})
 
 
 def _upload_button_calls(send_mock):

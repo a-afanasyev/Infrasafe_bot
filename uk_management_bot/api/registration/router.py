@@ -198,6 +198,9 @@ async def register_applicant(
             detail="Аккаунт уже имеет роль в системе — обратитесь к менеджеру",
         )
 
+    # Флажок согласия обязателен схемой; фиксируем в той же транзакции, что и заявку.
+    service.record_pd_consent(db, user)
+
     existing_ua = await service.apartment_link_of(
         db, user_id=user.id, apartment_id=body.apartment_id
     )

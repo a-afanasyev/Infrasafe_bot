@@ -40,7 +40,7 @@ def mock_notify(monkeypatch):
 @pytest.mark.asyncio
 async def test_applicant_no_ticket_401(api_client, mock_notify):
     r = await api_client.post("/api/v2/registration/applicant",
-        json={"full_name": "Иван Иванов", "apartment_id": 1})
+        json={"full_name": "Иван Иванов", "apartment_id": 1, "pd_consent": True})
     assert r.status_code == 401
 
 
@@ -55,7 +55,7 @@ async def test_applicant_creates_pending(api_client, async_db, seed_user, seed_a
     apt_id = (await seed_apartment()).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99100),
-        json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+        json={"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 200 and r.json()["status"] == "pending"
     user = (await async_db.execute(select(User).where(User.telegram_id == 99100))).scalar_one()
     assert user.status == "pending"
@@ -74,7 +74,7 @@ async def test_applicant_double_submit_idempotent(api_client, async_db, seed_use
     from uk_management_bot.database.models.user_apartment import UserApartment
     await seed_user(telegram_id=99200, phone="+998901112233")
     apt_id = (await seed_apartment()).id
-    payload = {"full_name": "Иван Иванов", "apartment_id": apt_id}
+    payload = {"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True}
     r1 = await api_client.post("/api/v2/registration/applicant", headers=await _restarted(99200), json=payload)
     r2 = await api_client.post("/api/v2/registration/applicant", headers=await _restarted(99200), json=payload)
     assert r1.status_code == 200
@@ -92,7 +92,7 @@ async def test_applicant_inactive_building_400(api_client, async_db, seed_user, 
     apt_id = (await seed_apartment(building_active=False)).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99400),
-        json={"full_name": "Иван", "apartment_id": apt_id})
+        json={"full_name": "Иван", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 400
     from sqlalchemy import func
     from uk_management_bot.database.models.user_apartment import UserApartment
@@ -107,7 +107,7 @@ async def test_applicant_unknown_apartment_400(api_client, async_db, seed_user, 
     u = await seed_user(telegram_id=99300, phone="+998901112233")
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99300),
-        json={"full_name": "Иван", "apartment_id": 999999})
+        json={"full_name": "Иван", "apartment_id": 999999, "pd_consent": True})
     assert r.status_code == 400
     from sqlalchemy import func
     from uk_management_bot.database.models.user_apartment import UserApartment
@@ -126,7 +126,7 @@ async def test_applicant_without_phone_409(api_client, async_db, seed_user, seed
     apt_id = (await seed_apartment()).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99101),
-        json={"full_name": "Иван", "phone": "+998901112233", "apartment_id": apt_id})
+        json={"full_name": "Иван", "phone": "+998901112233", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 409
     assert "контакт" in r.json()["detail"].lower()
     assert (await async_db.execute(select(User).where(User.telegram_id == 99101))).scalar_one_or_none() is None
@@ -134,7 +134,7 @@ async def test_applicant_without_phone_409(api_client, async_db, seed_user, seed
     await seed_user(telegram_id=99102, phone=None)
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99102),
-        json={"full_name": "Иван", "apartment_id": apt_id})
+        json={"full_name": "Иван", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 409
 
 
@@ -144,7 +144,7 @@ async def test_applicant_blocked_user_403(api_client, seed_user, seed_apartment,
     apt_id = (await seed_apartment()).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99500),
-        json={"full_name": "Иван", "apartment_id": apt_id})
+        json={"full_name": "Иван", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 403
 
 
@@ -169,7 +169,7 @@ async def test_applicant_privileged_pending_rejected_403(api_client, async_db, s
     apt_id = (await seed_apartment()).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99600),
-        json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+        json={"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 403
     user = (await async_db.execute(select(User).where(User.telegram_id == 99600))).scalar_one()
     assert user.first_name == "Пётр"
@@ -185,5 +185,5 @@ async def test_applicant_plain_pending_still_allowed(api_client, async_db, seed_
     apt_id = (await seed_apartment()).id
     r = await api_client.post("/api/v2/registration/applicant",
         headers=_bearer(99700),
-        json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+        json={"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True})
     assert r.status_code == 200 and r.json()["status"] == "pending"

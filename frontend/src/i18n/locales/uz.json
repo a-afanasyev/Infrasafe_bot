@@ -1394,7 +1394,10 @@
     "phone_required": "Avval Telegramda kontaktni ulashing.",
     "apartment_label": "kv. {{number}}",
     "welcome": "👋 Tizimga xush kelibsiz!\nTizim{{complex}} turar-joy majmuasi aholisi uchun mo'ljallangan.\nRo'yxatdan o'tishda telefon raqamingizni va mulk huquqini tasdiqlovchi hujjatni yoki ijara shartnomasini taqdim etish majburiy.\nHurmat bilan, {{company}}",
-    "company_default": "Boshqaruv kompaniyasi"
+    "company_default": "Boshqaruv kompaniyasi",
+    "consent_label": "Shaxsiy ma'lumotlarimni qayta ishlashga roziman",
+    "consent_details": "Qanday ma'lumotlar va nima uchun",
+    "consent_text": "Operator: {{company}}.\n\nMa'lumotlar: F.I.Sh., telefon raqami, Telegram ID, manzil va xonadon raqami, xonadon hujjati, shaxsiy hisob raqami, arizalar matni va fotosuratlari, avtomobil raqami (ruxsatnoma rasmiylashtirsangiz).\n\nMaqsadlar: ro'yxatdan o'tkazish va yashashni tasdiqlash, arizalarni qabul qilish va bajarish, xabarnomalar, xizmatlar uchun hisob-kitoblar, kirish-chiqish tartibi.\n\nMa'lumotlar boshqaruv kompaniyasi xodimlari va ariza ijrochilariga ish uchun zarur hajmda ochiq. Xabarlar Telegram orqali yetkaziladi. Ariza matni O'zbekistondan tashqaridagi avtomatik tasniflash xizmati tomonidan qayta ishlanishi mumkin; matndagi telefon raqamlari bundan oldin yashiriladi. Ariza matnida ortiqcha shaxsiy ma'lumotlarni ko'rsatmang. Ma'lumotlar xizmatdan foydalanayotgan vaqtingiz davomida O'zbekistondagi serverlarda saqlanadi; xonadon hujjati shifrlangan holda saqlanadi va tekshiruvdan so'ng yo'q qilinadi.\n\nSiz haqingizda qanday ma'lumotlar saqlanishini bilish, ularni tuzatish, rozilikni qaytarib olish va o'chirishni talab qilish uchun boshqaruv kompaniyasiga murojaat qiling."
   },
   "status": {
     "new": "Yangi",
