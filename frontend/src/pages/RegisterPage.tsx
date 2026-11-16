@@ -137,7 +137,8 @@ export default function RegisterPage() {
     }
     setSubmitting(true)
     try {
-      await submit(ticket, { full_name: fullName.trim(), apartment_id: selected.apartment.id })
+      // Кнопка отправки активна только с отмеченным согласием (ConfirmStep).
+      await submit(ticket, { full_name: fullName.trim(), apartment_id: selected.apartment.id, pd_consent: true })
       setPhase('pending')
     } catch (err: unknown) {
       const status = apiErrorStatus(err)
@@ -224,6 +225,7 @@ export default function RegisterPage() {
               onFullNameChange={setFullName}
               phone={phone}
               addressLabel={addressLabel(selected)}
+              company={site.company || t('register.company_default')}
               onChangeAddress={() => setPhase('address')}
               onSubmit={handleSubmit}
               submitting={submitting}

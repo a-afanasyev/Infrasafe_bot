@@ -48,6 +48,13 @@ class User(Base):
     # «Видео отправлено · дата», повтор не чаще раза в сутки.
     registration_video_sent_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Согласие на обработку персональных данных (services/pd_consent.py):
+    # когда и с какой редакцией текста согласился; notified — когда бот показал
+    # уведомление уже зарегистрированному (следующее действие = согласие).
+    pd_consent_at = Column(DateTime(timezone=True), nullable=True)
+    pd_consent_version = Column(String(20), nullable=True)
+    pd_consent_notified_at = Column(DateTime(timezone=True), nullable=True)
+
     # Простой режим исполнителя (TWA): включает менеджер конкретному человеку,
     # старая панель живёт параллельно. Сам исполнитель флаг не меняет.
     simple_mode = Column(Boolean, nullable=False, server_default=text("false"), default=False)

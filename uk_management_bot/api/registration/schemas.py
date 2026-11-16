@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 # SEC-109: name char-class — Unicode letters/numbers, whitespace, and the
@@ -59,6 +59,9 @@ class RegisterApplicantIn(BaseModel):
     # Телефон в теле НЕ принимается (спека §4.4): берётся из users.phone,
     # куда его кладёт бот из Telegram-контакта.
     apartment_id: int
+    # Согласие на обработку ПДн — только явное `true`: без флажка заявка не
+    # принимается. Время и версию текста сервер ставит сам (services/pd_consent.py).
+    pd_consent: Literal[True]
 
     @field_validator("full_name")
     @classmethod

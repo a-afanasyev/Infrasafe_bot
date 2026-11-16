@@ -38,6 +38,8 @@ export interface RegistrationStart {
 export interface RegistrationSubmitPayload {
   full_name: string
   apartment_id: number
+  /** Согласие на обработку ПДн: сервер принимает только `true`. */
+  pd_consent: true
 }
 
 export interface RegistrationContactStatus {

@@ -11445,11 +11445,17 @@
             "pattern": "^[\\p{L}\\p{N}\\s\\-'\\.]+$",
             "title": "Full Name",
             "type": "string"
+          },
+          "pd_consent": {
+            "const": true,
+            "title": "Pd Consent",
+            "type": "boolean"
           }
         },
         "required": [
           "full_name",
-          "apartment_id"
+          "apartment_id",
+          "pd_consent"
         ],
         "title": "RegisterApplicantIn",
         "type": "object"

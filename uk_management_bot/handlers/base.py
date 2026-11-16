@@ -741,6 +741,13 @@ async def cmd_help(message: Message, language: str = "ru"):
 
     await message.answer(help_text, reply_markup=await get_user_contextual_keyboard(message.from_user.id))
 
+@router.message(Command("privacy"))
+async def cmd_privacy(message: Message, language: str = "ru"):
+    """Текст об обработке персональных данных (на него ссылается уведомление о согласии)."""
+    company = settings.MANAGEMENT_COMPANY_NAME or get_text("pd_consent.company_default", language=language)
+    await message.answer(get_text("pd_consent.policy", language=language, company=html.escape(company)), parse_mode="HTML")
+
+
 @router.message(F.text.in_(CANCEL_TEXTS))
 async def cancel_action(message: Message, state: FSMContext, roles: list[str] = None, active_role: str = None, language: str = "ru"):
     """Отмена текущего действия"""

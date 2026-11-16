@@ -74,7 +74,7 @@ async def _link(db, user_id: int, apartment_id: int, status: str) -> None:
 
 def _apply(client, tid: int, apt_id: int):
     return client.post("/api/v2/registration/applicant", headers=_bearer(tid),
-                       json={"full_name": "Иван Иванов", "apartment_id": apt_id})
+                       json={"full_name": "Иван Иванов", "apartment_id": apt_id, "pd_consent": True})
 
 
 @pytest.mark.asyncio

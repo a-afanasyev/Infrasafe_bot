@@ -49,7 +49,7 @@ describe('useRegistration cascade + contact client', () => {
       }),
     )
     const reg = hook()
-    await reg.submit('t1', { full_name: 'Иван Иванов', apartment_id: 9 })
-    expect(body).toEqual({ full_name: 'Иван Иванов', apartment_id: 9 })
+    await reg.submit('t1', { full_name: 'Иван Иванов', apartment_id: 9, pd_consent: true })
+    expect(body).toEqual({ full_name: 'Иван Иванов', apartment_id: 9, pd_consent: true })
   })
 })

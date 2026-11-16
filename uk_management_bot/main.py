@@ -272,6 +272,13 @@ def setup_middlewares(dp: Dispatcher) -> None:
         result = await role_mode_middleware(handler, event, data)
         return result
 
+    # Согласие на обработку ПДн для уже зарегистрированных (после auth: читает data["user"])
+    from uk_management_bot.middlewares.pd_consent import pd_consent_middleware
+
+    @dp.update.middleware()
+    async def _pd_consent_middleware(handler, event, data):
+        return await pd_consent_middleware(handler, event, data)
+
     # Localization middleware: injects `language` into handler data
     from uk_management_bot.middlewares.localization import localization_middleware
 
