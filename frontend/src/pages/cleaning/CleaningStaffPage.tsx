@@ -134,8 +134,7 @@ export default function CleaningStaffPage() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       {[...byBuilding(member)].map(([buildingId, entrances]) => {
                         const building = address.get(buildingId)
-                        const whole = building !== undefined && entrances.length === building.entrance_count
-                        const label = `${building?.address ?? `#${buildingId}`}${whole ? '' : ` (${entrances.join(', ')})`}`
+                        const label = `${building?.address ?? `#${buildingId}`} (${t('cleaning.staff.entrancesList', { list: entrances.join(', ') })})`
                         return (
                           <span key={buildingId} className="inline-flex items-center gap-1 rounded-default border border-border-default px-2 py-1">
                             {label}

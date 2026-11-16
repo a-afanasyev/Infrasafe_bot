@@ -86,7 +86,7 @@ describe('CleaningStaffPage', () => {
     expect(await screen.findByText(/Перегруз: Дилноза К — 27 этажей в день при норме 20/)).toBeInTheDocument()
     expect(screen.getByText('Без уборщицы: д. 12, подъезд 3.')).toBeInTheDocument()
     // привязаны не все подъезды дома — в подписи видно какие
-    expect(screen.getByText('д. 12 (1, 2)')).toBeInTheDocument()
+    expect(screen.getByText('д. 12 (под. 1, 2)')).toBeInTheDocument()
     const row = screen.getByText('135% — перегруз').closest('tr') as HTMLElement
     expect(within(row).getByText('54')).toBeInTheDocument()
 

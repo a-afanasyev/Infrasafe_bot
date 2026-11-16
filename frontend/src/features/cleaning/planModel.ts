@@ -8,9 +8,9 @@
 import type { CleaningPlanItem, CleaningWorkKind } from '../../types/cleaning'
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const
-/** Работы по этажам; у «лифта» этажи не выбираются. */
+/** Работы по этажам; у остальных (лифт, −1 этаж, выход на парковку) этажи не выбираются. */
 export const FLOOR_WORKS: readonly CleaningWorkKind[] = ['wet', 'dry']
-export const WORK_KINDS: readonly CleaningWorkKind[] = ['wet', 'dry', 'elevator']
+export const WORK_KINDS: readonly CleaningWorkKind[] = ['wet', 'dry', 'elevator', 'basement', 'parking']
 
 export type FloorsMode = 'all' | 'first' | 'range'
 

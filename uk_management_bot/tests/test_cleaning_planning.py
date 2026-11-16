@@ -34,6 +34,18 @@ def test_task_lists_floor_range_of_the_day_and_elevator_point():
     assert task.slots == ("floor:6", "floor:7", "floor:8", "floor:9", "point:elevator")
 
 
+def test_basement_and_parking_are_point_works_with_own_days():
+    items = parse_items([
+        {"work_kind": "wet", "weekdays": [MON]},
+        {"work_kind": "basement", "weekdays": [MON, THU]},
+        {"work_kind": "parking", "weekdays": [THU], "entrances": [2]},
+    ], floor_count=2, entrance_count=2)
+    assert task_for(items, (), entrance=1, weekday=MON).slots == ("floor:1", "floor:2", "point:basement")
+    assert task_for(items, (), entrance=1, weekday=THU).slots == ("point:basement",)
+    both = task_for(items, (), entrance=2, weekday=THU)
+    assert (both.works, both.slots) == (("basement", "parking"), ("point:basement", "point:parking"))
+
+
 def test_entrance_without_elevator_work_gets_only_floors():
     task = task_for(_items(), (), entrance=2, weekday=MON)
     assert task.works == ("wet",)
