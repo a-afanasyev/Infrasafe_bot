@@ -14,7 +14,7 @@ const BUILDING: PublicCleaningBuilding = {
     { entrance: 1, state: 'done', done_at: '2026-11-17T06:05:00Z', photo_ids: [31] },
     { entrance: 2, state: 'pending', done_at: null, photo_ids: [] },
   ],
-  week: [[{ work_kind: 'wet', floor_from: 1, floor_to: 5 }], [{ work_kind: 'elevator' }], [], [], [], [], []],
+  week: [[{ work_kind: 'wet', floor_from: 1, floor_to: 5 }], [{ work_kind: 'elevator' }], [{ work_kind: 'parking', entrances: [2] }], [], [], [], []],
 }
 
 beforeEach(() => {
@@ -39,7 +39,8 @@ describe('ResidentCleaningPage', () => {
     expect(screen.getByText('Ещё не убрано')).toBeInTheDocument()
     expect(screen.getByAltText('Фото уборки, подъезд 1')).toHaveAttribute('src', expect.stringContaining('/api/v2/public/cleaning/photos/31'))
     expect(screen.getByText('Влажная уборка 1–5')).toBeInTheDocument()
-    expect(screen.getAllByText('выходной')).toHaveLength(5)
+    expect(screen.getByText('Уборка выхода на парковку (под. 2)')).toBeInTheDocument()
+    expect(screen.getAllByText('выходной')).toHaveLength(4)
 
     await user.click(screen.getAllByRole('button', { name: 'Сообщить: не убрано' })[1])
     await waitFor(() => expect(body).toEqual({ building_id: 1, entrance: 2 }))

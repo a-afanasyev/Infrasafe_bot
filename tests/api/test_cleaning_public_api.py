@@ -163,6 +163,33 @@ async def test_resident_gets_one_photo_and_elevator_overview_gets_all(client, wo
 
 
 @pytest.mark.asyncio
+async def test_resident_sees_point_photo_when_day_has_no_floors(client, world, db_session):
+    """День только с парковкой/−1 этажом: «убрано» не остаётся без фото."""
+    tasks, photos = world
+    photos[2].is_current = False                       # у подъезда 2 этажных кадров нет
+    tasks[(1, 2)].status = "accepted"
+    parking = CleaningPhoto(task_id=tasks[(1, 2)].id, slot="point:parking", op_key=str(uuid.uuid4()),
+                            uploaded_by=CLEANER, upload_sha256="0" * 64, state="done", outcome="activated",
+                            is_current=True, trust_level="live", received_at=utc_now(), media_id=1)
+    db_session.add(parking)
+    await db_session.commit()
+    second = (await client.get(f"{PUBLIC}/buildings/1")).json()["entrances"][1]
+    assert (second["state"], second["photo_ids"]) == ("done", [parking.id])
+
+
+@pytest.mark.asyncio
+async def test_week_names_entrances_of_partial_work(client, world, db_session):
+    """Работа не для всех подъездов (выход на парковку) показывается жителю с подъездами."""
+    version = (await db_session.execute(
+        select(CleaningPlanVersion).where(CleaningPlanVersion.building_id == 1))).scalar_one()
+    version.items = ALL_WEEK + [{"work_kind": "parking", "weekdays": [0], "entrances": [2]}]
+    await db_session.commit()
+    monday = (await client.get(f"{PUBLIC}/buildings/1")).json()["week"][0]
+    assert monday == [{"work_kind": "wet", "floor_from": 1, "floor_to": 2},
+                      {"work_kind": "parking", "entrances": [2]}]
+
+
+@pytest.mark.asyncio
 async def test_public_photo_follows_settings_status_and_slot(client, world, db_session):
     tasks, photos = world
     ok = await client.get(f"{PUBLIC}/photos/{photos[0].id}")
