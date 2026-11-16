@@ -29,6 +29,9 @@ def _mock_notify(monkeypatch):
         "uk_management_bot.api.registration.router.notify_managers_new_registration", AsyncMock())
     monkeypatch.setattr(
         "uk_management_bot.api.registration.router.offer_document_upload", AsyncMock())
+    # Успешная регистрация отзывает тикет (AUTH-03); тест повторной подачи шлёт второй запрос.
+    monkeypatch.setattr(
+        "uk_management_bot.api.registration.router.revoke_registration_tickets", AsyncMock())
 
 
 async def _seed(db, telegram_id: int) -> int:
