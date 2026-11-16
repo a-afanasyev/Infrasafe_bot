@@ -8,11 +8,16 @@
 import type { CleaningPlanItem, CleaningWorkKind } from '../../types/cleaning'
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const
-/** Работы по этажам; у остальных (лифт, −1 этаж, выход на парковку) этажи не выбираются. */
+/** Работы по этажам; у остальных (лифт, выход на парковку) этажи не выбираются. */
 export const FLOOR_WORKS: readonly CleaningWorkKind[] = ['wet', 'dry']
-export const WORK_KINDS: readonly CleaningWorkKind[] = ['wet', 'dry', 'elevator', 'basement', 'parking']
+export const WORK_KINDS: readonly CleaningWorkKind[] = ['wet', 'dry', 'elevator', 'parking']
 
-export type FloorsMode = 'all' | 'first' | 'range'
+/** «−1 этаж» — этаж плана: отдельный вариант и допустимое начало диапазона. Нулевого этажа нет. */
+export const BASEMENT_FLOOR = -1
+
+export type FloorsMode = 'all' | 'first' | 'basement' | 'range'
+
+const FIXED_FLOOR: Partial<Record<FloorsMode, number>> = { first: 1, basement: BASEMENT_FLOOR }
 
 export interface DraftItem {
   work_kind: CleaningWorkKind
@@ -43,7 +48,8 @@ export function parseEntrances(raw: string): number[] | null | 'invalid' {
 function floorRange(item: DraftItem, floorCount: number): [number, number] | null {
   if (!FLOOR_WORKS.includes(item.work_kind)) return null
   if (item.floors === 'all') return [1, floorCount]
-  if (item.floors === 'first') return [1, 1]
+  const fixed = FIXED_FLOOR[item.floors]
+  if (fixed !== undefined) return [fixed, fixed]
   return [Number(item.floor_from), Number(item.floor_to)]
 }
 
@@ -51,8 +57,8 @@ export function toPayload(items: DraftItem[]): CleaningPlanItem[] {
   return items.map((item) => {
     const out: CleaningPlanItem = { work_kind: item.work_kind, weekdays: item.weekdays }
     if (FLOOR_WORKS.includes(item.work_kind) && item.floors !== 'all') {
-      out.floor_from = item.floors === 'first' ? 1 : Number(item.floor_from)
-      out.floor_to = item.floors === 'first' ? 1 : Number(item.floor_to)
+      out.floor_from = FIXED_FLOOR[item.floors] ?? Number(item.floor_from)
+      out.floor_to = FIXED_FLOOR[item.floors] ?? Number(item.floor_to)
     }
     const entrances = parseEntrances(item.entrances)
     if (Array.isArray(entrances)) out.entrances = entrances
@@ -63,14 +69,15 @@ export function toPayload(items: DraftItem[]): CleaningPlanItem[] {
 export function draftFrom(items: CleaningPlanItem[]): DraftItem[] {
   return items.map((item) => {
     const ranged = item.floor_from != null && item.floor_to != null
-    const first = ranged && item.floor_from === 1 && item.floor_to === 1
+    const single = ranged && item.floor_from === item.floor_to
+    const fixed: FloorsMode | null = !single ? null : item.floor_from === 1 ? 'first' : item.floor_from === BASEMENT_FLOOR ? 'basement' : null
     return {
       work_kind: item.work_kind,
       weekdays: [...item.weekdays],
       entrances: (item.entrances ?? []).join(', '),
-      floors: !ranged ? 'all' : first ? 'first' : 'range',
-      floor_from: ranged && !first ? String(item.floor_from) : '',
-      floor_to: ranged && !first ? String(item.floor_to) : '',
+      floors: !ranged ? 'all' : fixed ?? 'range',
+      floor_from: ranged && !fixed ? String(item.floor_from) : '',
+      floor_to: ranged && !fixed ? String(item.floor_to) : '',
     }
   })
 }
@@ -84,7 +91,8 @@ export function validate(items: DraftItem[], floorCount: number, entranceCount: 
     const range = floorRange(item, floorCount)
     if (range) {
       const [from, to] = range
-      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to > floorCount || from > to) return 'floors'
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from === 0 || to === 0
+        || from < BASEMENT_FLOOR || to > floorCount || from > to) return 'floors'
     }
     const entrances = parseEntrances(item.entrances)
     if (entrances === 'invalid' || (entrances && entrances.some((e) => e > entranceCount))) return 'entrances'
@@ -141,7 +149,7 @@ export function weekPreview(items: DraftItem[], floorCount: number): PreviewDay[
     const works = todays.map((item): PreviewWork => {
       const range = floorRange(item, floorCount)
       if (!range) return { kind: item.work_kind }
-      for (let floor = range[0]; floor <= range[1]; floor += 1) floors.add(floor)
+      for (let floor = range[0]; floor <= range[1]; floor += 1) if (floor !== 0) floors.add(floor)
       return { kind: item.work_kind, from: range[0], to: range[1] }
     })
     return { works, floors: floors.size }

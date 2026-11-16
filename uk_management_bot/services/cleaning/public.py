@@ -74,11 +74,14 @@ async def _shown(db: AsyncSession) -> dict[int, tuple[Building, CleaningBuilding
 
 
 def slot_order(slot: str) -> tuple[int, int, str]:
-    """Точки первого этажа, этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
+    """−1 этаж, точки первого этажа, этажи по номеру (10-й после 9-го), затем прочие точки по имени."""
     if slot in FIRST_FLOOR_POINTS:
         return (0, FIRST_FLOOR_POINTS.index(slot), "")
     kind, _, name = slot.partition(":")
-    return (1, int(name), "") if kind == "floor" and name.isdigit() else (2, 0, name)
+    if kind == "floor" and name.lstrip("-").isdigit():
+        floor = int(name)
+        return (1, floor, "") if floor > 0 else (-1, floor, "")
+    return (2, 0, name)
 
 
 async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = False) -> dict[int, list[int]]:
@@ -98,7 +101,9 @@ async def _photo_ids(db: AsyncSession, task_ids: list[int], *, brief: bool = Fal
     for task_id, rows in shots.items():
         rows.sort(key=lambda row: slot_order(row[0]))
         if brief:
-            floors = [row for row in rows if row[0].startswith("floor:") or row[0] in FIRST_FLOOR_POINTS]
+            # Жителю кратко показываем надземный этаж; −1 — только если других кадров нет.
+            floors = [row for row in rows
+                      if slot_order(row[0])[0] in (0, 1)]
             # День без этажей (только −1 этаж / парковка) — первая снятая точка.
             head = floors[:1] or rows[:1]
             rows = head + [row for row in rows if row[0] in BRIEF_POINTS and row not in head]

@@ -1,6 +1,6 @@
 /** Типы API модуля «Уборка» (/api/v2/cleaning, см. docs/tech/openapi.json). */
 
-export type CleaningWorkKind = 'wet' | 'dry' | 'elevator' | 'basement' | 'parking'
+export type CleaningWorkKind = 'wet' | 'dry' | 'elevator' | 'parking'
 
 export interface CleaningPlanItem {
   work_kind: CleaningWorkKind

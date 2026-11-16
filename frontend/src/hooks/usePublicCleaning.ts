@@ -31,7 +31,7 @@ export interface PublicCleaningToday {
 }
 
 export interface PublicCleaningWork {
-  work_kind: 'wet' | 'dry' | 'elevator' | 'basement' | 'parking'
+  work_kind: 'wet' | 'dry' | 'elevator' | 'parking'
   floor_from?: number
   floor_to?: number
   /** Только у работ не для всего дома (например, выход на парковку). */
