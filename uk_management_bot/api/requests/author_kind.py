@@ -18,13 +18,16 @@ from uk_management_bot.utils.constants import ACCEPTANCE_MODE_MANAGER, ROLE_APPL
 
 RESIDENT, STAFF, SYSTEM = "resident", "staff", "system"
 _CALL_CENTER = "call_center"
+# Каналы заявки (Request.source), а не роли: «inspector» — заявка, поданная обходом.
+_SYSTEM_SOURCES = frozenset({"infrasafe"})
+_STAFF_SOURCES = frozenset({"inspector"})
 
 
 def author_kind(req, owner_roles: Mapping[int, list[str]]) -> str:
     """``owner_roles`` — роли владельцев заявок колл-центра (см. ``load_owner_roles``)."""
-    if req.source == "infrasafe":
+    if req.source in _SYSTEM_SOURCES:
         return SYSTEM
-    if (req.source == "inspector" or req.reported_by_user_id is not None
+    if (req.source in _STAFF_SOURCES or req.reported_by_user_id is not None
             or req.acceptance_mode == ACCEPTANCE_MODE_MANAGER):
         return STAFF
     if req.source == _CALL_CENTER:
