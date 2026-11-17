@@ -246,7 +246,9 @@ async def test_applicant_client_address_ignored(make_client, applicant, addr_tre
 async def test_inspector_create_building_201(make_client, inspector, addr_tree):
     async with make_client(inspector) as ac:
         r = await ac.post("/api/v2/requests/inspector", json=_body("building", addr_tree["building"].id))
+        card = await ac.get(f"/api/v2/requests/{r.json()['request_number']}")
     assert r.status_code == 201, r.text
+    assert card.json()["author_kind"] == "staff"   # заявка обходчика — от сотрудника
     data = r.json()
     assert data["address_type"] == "building"
     assert data["building_id"] == addr_tree["building"].id

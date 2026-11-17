@@ -28,6 +28,8 @@ class RequestCard(BaseModel):
     category: str
     urgency: Optional[str] = None
     source: Optional[str] = None
+    # От кого заявка: resident / staff / system (api/requests/author_kind.py).
+    author_kind: Optional[str] = None
     description: Optional[str] = None
     address: Optional[str] = None
     apartment_id: Optional[int] = None

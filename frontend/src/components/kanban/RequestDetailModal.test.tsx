@@ -58,6 +58,14 @@ beforeEach(() => {
   mockHasAnyRole.mockReturnValue(false)
 })
 
+describe('RequestDetailModal — от кого заявка', () => {
+  it('в шапке видно, что заявка от сотрудника', async () => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({ source: 'inspector', author_kind: 'staff' }))
+    expect(screen.getByText('От сотрудника')).toBeInTheDocument()
+  })
+})
+
 describe('RequestDetailModal — manager urgency editor gating (TASK 17)', () => {
   it('manager + active status → urgency is an editable dropdown trigger', async () => {
     mockHasRole.mockReturnValue(true) // manager

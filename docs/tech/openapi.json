@@ -11796,6 +11796,17 @@
             ],
             "title": "Apartment Id"
           },
+          "author_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Kind"
+          },
           "building_id": {
             "anyOf": [
               {
