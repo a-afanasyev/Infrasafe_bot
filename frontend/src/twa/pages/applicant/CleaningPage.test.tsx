@@ -79,7 +79,7 @@ describe('CleaningCard', () => {
     expect(await screen.findByText('домов убрано сегодня')).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('убирают')).toBeInTheDocument()
-    expect(screen.getByText('нет уборки')).toBeInTheDocument()
+    expect(screen.getByText('нет расписания')).toBeInTheDocument()
   })
 
   it('группирует дома по дворам, выносит общий адрес в заголовок и сортирует 10G после 9G', async () => {
