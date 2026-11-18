@@ -4395,7 +4395,7 @@
         "done": "tozalandi",
         "in_progress": "tozalanmoqda",
         "planned": "jadvalda",
-        "none": "tozalash yo'q"
+        "none": "jadval yo'q"
       },
       "rule": "Uyning bugungi reja bo'yicha barcha yo'laklari tozalanganda uy tozalangan hisoblanadi",
       "back": "Uyingiz bugun",
