@@ -20,6 +20,9 @@ export interface PublicCleaningHouse {
   state: PublicCleaningState
   done_at: string | null
   entrances: PublicCleaningEntrance[]
+  /** Двор (фаза комплекса): по нему группируются плитки на главной. */
+  yard_id?: number | null
+  yard_name?: string | null
 }
 
 export interface PublicCleaningToday {

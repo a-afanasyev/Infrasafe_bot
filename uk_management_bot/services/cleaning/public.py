@@ -15,6 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from uk_management_bot.database.models.building import Building
+from uk_management_bot.database.models.yard import Yard
 from uk_management_bot.database.models.cleaning import (
     CleaningBuildingSettings,
     CleaningPhoto,
@@ -45,6 +46,8 @@ class BuildingToday:
     state: str  # done / in_progress / planned / none
     done_at: Optional[datetime]  # когда принят последний подъезд; только у убранного дома
     entrances: list[EntranceToday]
+    yard_id: Optional[int] = None    # двор (фаза комплекса) — группировка плиток на главной
+    yard_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +155,8 @@ async def today(db: AsyncSession, day: date) -> list[BuildingToday]:
         for task in tasks.values() if task.status == "accepted"])
     shot_at = await _shot_times(db, [
         task.id for tasks in by_building.values() for task in tasks.values() if task.status == "accepted"])
+    yards = dict((await db.execute(
+        select(Yard.id, Yard.name).where(Yard.id.in_({b.yard_id for b, _ in shown.values()})))).all())
     rows = []
     for bid, (building, _) in shown.items():
         tasks = by_building.get(bid, {})
@@ -159,6 +164,7 @@ async def today(db: AsyncSession, day: date) -> list[BuildingToday]:
         entrances = _entrances(building, tasks, photos, shot_at)
         rows.append(BuildingToday(
             building_id=bid, address=building.address, state=state, entrances=entrances,
+            yard_id=building.yard_id, yard_name=yards.get(building.yard_id),
             done_at=max((e.done_at for e in entrances if e.done_at), default=None) if state == "done" else None))
     return rows
 

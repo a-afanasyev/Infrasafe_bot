@@ -105,6 +105,7 @@ async def test_today_counts_buildings_and_hides_unpublished(client, world):
     assert (body["buildings_total"], body["buildings_done"]) == (1, 0)  # дом 14 жителям не показывается
     (house,) = body["buildings"]
     assert (house["building_id"], house["address"], house["state"]) == (1, "д. 12", "in_progress")
+    assert (house["yard_id"], house["yard_name"]) == (1, "Двор")   # двор — для группировки плиток
     assert house["done_at"] is None                      # дом ещё не убран целиком
     assert "responsible" not in str(body).lower()
 

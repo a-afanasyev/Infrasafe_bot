@@ -58,6 +58,8 @@ class CleaningPublicBuildingOut(BaseModel):
     state: str
     done_at: Optional[datetime]
     entrances: list[CleaningPublicEntranceOut]
+    yard_id: Optional[int] = None
+    yard_name: Optional[str] = None
 
 
 class CleaningPublicTodayOut(BaseModel):
@@ -108,7 +110,8 @@ async def cleaning_today(request: Request, response: Response, db: AsyncSession 
         buildings_done=sum(r.state == "done" for r in scheduled),
         buildings=[CleaningPublicBuildingOut(
             building_id=r.building_id, address=r.address, state=r.state, done_at=r.done_at,
-            entrances=[_entrance_out(e) for e in r.entrances]) for r in rows])
+            entrances=[_entrance_out(e) for e in r.entrances],
+            yard_id=r.yard_id, yard_name=r.yard_name) for r in rows])
 
 
 @public_router.get("/cleaning/buildings/{building_id}", response_model=CleaningPublicBuildingViewOut)
