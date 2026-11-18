@@ -4389,6 +4389,14 @@
         "none": "Bugun tozalash yo'q"
       },
       "all": "Barcha uylar va suratlar",
+      "groupAll": "hammasi tozalandi: {{count}}",
+      "groupCount": "{{total}} tadan {{done}}",
+      "tile": {
+        "done": "tozalandi",
+        "in_progress": "tozalanmoqda",
+        "planned": "jadvalda",
+        "none": "tozalash yo'q"
+      },
       "rule": "Uyning bugungi reja bo'yicha barcha yo'laklari tozalanganda uy tozalangan hisoblanadi",
       "back": "Uyingiz bugun",
       "entrance": "{{n}}-yo'lak",

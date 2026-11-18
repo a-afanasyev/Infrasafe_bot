@@ -213,7 +213,9 @@ async def test_broadcast_flag_lifecycle(ctx):
         # отменить можно, пока не началась
         assert (await service.update_notice(db, notice.id, {}, broadcast=False)).broadcast_status == "none"
         assert (await service.update_notice(db, notice.id, {}, broadcast=True)).broadcast_status == "pending"
-    await _run(ctx)
+    # Новость создана по настоящим часам, поэтому и цикл идёт от них, а не от NOW:
+    # с 18.11.2026 зашитое NOW оказалось в прошлом, и новость «ещё не опубликована».
+    await _run(ctx, now=datetime.now(timezone.utc) + timedelta(minutes=1))
     async with ctx() as db:
         # уже разосланную флаг не трогает: правка текста не шлёт жителям второе сообщение
         again = await service.update_notice(db, notice.id, {"text_ru": "исправлено"}, broadcast=True)

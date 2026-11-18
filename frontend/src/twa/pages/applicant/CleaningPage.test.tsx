@@ -78,8 +78,25 @@ describe('CleaningCard', () => {
     render(<CleaningCard title="" />)
     expect(await screen.findByText('домов убрано сегодня')).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
-    expect(screen.getByText('Идёт уборка')).toBeInTheDocument()
-    expect(screen.getByText('Сегодня уборки нет')).toBeInTheDocument()
+    expect(screen.getByText('убирают')).toBeInTheDocument()
+    expect(screen.getByText('нет уборки')).toBeInTheDocument()
+  })
+
+  it('группирует дома по дворам, выносит общий адрес в заголовок и сортирует 10G после 9G', async () => {
+    const house = (id: number, n: string, yard: number, state: string, done_at: string | null = null) => ({
+      building_id: id, address: `Yangi Olmazor, ${n}`, state, done_at, yard_id: yard, yard_name: `Olmazor City Phase ${yard}` })
+    server.use(http.get('*/api/v2/public/cleaning/today', () => HttpResponse.json({
+      enabled: true, work_date: '2026-11-17', buildings_total: 4, buildings_done: 3,
+      buildings: [
+        house(3, '10G', 3, 'done', '2026-11-17T06:05:00Z'), house(4, '9G', 3, 'planned'),
+        house(1, '14V', 1, 'done', '2026-11-17T05:40:00Z'), house(2, '15V', 1, 'done', '2026-11-17T08:00:00Z'),
+      ],
+    })))
+    const { container } = render(<CleaningCard title="" />)
+    expect(await screen.findByRole('heading', { name: 'Уборка домов · Yangi Olmazor' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Olmazor City Phase 1/ })).toHaveTextContent('убраны все: 2')
+    expect(screen.getByRole('heading', { name: /Olmazor City Phase 3/ })).toHaveTextContent('1 из 2')
+    expect([...container.querySelectorAll('.rh-cleaning-tile strong')].map((el) => el.textContent)).toEqual(['14V', '15V', '9G', '10G'])
   })
 
   it.each([false, true])('без единого дома для жителей блок не виден (модуль включён: %s)', async (enabled) => {

@@ -3026,6 +3026,28 @@
           "state": {
             "title": "State",
             "type": "string"
+          },
+          "yard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Id"
+          },
+          "yard_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Name"
           }
         },
         "required": [

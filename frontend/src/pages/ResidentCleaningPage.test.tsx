@@ -68,7 +68,8 @@ describe('CleaningCard: сводка на главной', () => {
   it('показывает время «убрано», полосу хода и ссылку на обзор', async () => {
     serve(TODAY)
     render(<CleaningCard title="" />)
-    expect(await screen.findByText('Убрано · 11:05')).toBeInTheDocument()
+    expect(await screen.findByText('✓ 11:05')).toBeInTheDocument()            // плитка дома: время вместо «Убрано · …»
+    expect(screen.getByTitle('д. 12 — Убрано · 11:05')).toBeInTheDocument()   // полная подпись — в подсказке
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '2')
     expect(screen.getByRole('link', { name: /Все дома и фото/ })).toHaveAttribute('href', expect.stringContaining('/cleaning'))
   })
