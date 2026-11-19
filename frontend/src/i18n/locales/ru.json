@@ -1640,6 +1640,7 @@
     "noOtherExecutors": "Других подходящих исполнителей нет — текущий в список не входит",
     "noExecutorsAvailable": "Нет доступных исполнителей",
     "reassignConfirm": "Переназначить",
+    "assignLeavesClarification": "Заявка выйдет из уточнения и перейдёт в работу.",
     "assignConfirm": "Назначить",
     "changeCategory": "Изменить категорию",
     "categoryUnchanged": "Категория не изменилась",

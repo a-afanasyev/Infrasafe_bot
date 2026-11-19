@@ -15,6 +15,7 @@ from uk_management_bot.utils.constants import (
     AUDIT_ACTION_REQUEST_CATEGORY_CHANGED,
     COMMENT_TYPE_CATEGORY_CHANGE,
     REQUEST_STATUS_APPROVED,
+    REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_COMPLETED,
     REQUEST_STATUS_EXECUTED,
     REQUEST_STATUS_IN_PROGRESS,
@@ -578,6 +579,17 @@ def resolve_command(snap: WorkflowSnapshot, actor: ActorContext,
     # (rating не нужен). Приёмка с оценкой (TWA/бот) шлёт rating и сюда не падает.
     if not intent.payload.get("rating"):
         candidates = [a for a in candidates if a != Action.APPLICANT_ACCEPT]
+    # «В работе» из «Уточнения» — два действия: MANAGER_ASSIGN (исполнитель
+    # обязателен) и CLARIFY_RESOLVED (исполнителя не принимает). Различает их
+    # только payload: прислали исполнителя — назначение, нет — возобновление.
+    # Из «Новой» MANAGER_ASSIGN — единственный кандидат и остаётся им: отказ
+    # «нет executor_id» там понятнее, чем «перехода нет».
+    canon = normalize_status(snap.request)
+    if Action.MANAGER_ASSIGN in candidates and canon == REQUEST_STATUS_CLARIFICATION:
+        if intent.payload.get("executor_id") is not None:
+            candidates = [Action.MANAGER_ASSIGN]
+        else:
+            candidates = [a for a in candidates if a != Action.MANAGER_ASSIGN]
     if not candidates:
         canon = normalize_status(snap.request)
         if _blocked_only_by_shift(snap, actor, canon, target):

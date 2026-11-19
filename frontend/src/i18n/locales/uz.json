@@ -1640,6 +1640,7 @@
     "noOtherExecutors": "Boshqa mos ijrochilar yo‘q — joriy ijrochi ro‘yxatga kirmaydi",
     "noExecutorsAvailable": "Mavjud ijrochilar yo‘q",
     "reassignConfirm": "Qayta tayinlash",
+    "assignLeavesClarification": "Ariza aniqlashtirishdan chiqadi va ishga o'tadi.",
     "assignConfirm": "Tayinlash",
     "changeCategory": "Kategoriyani o‘zgartirish",
     "categoryUnchanged": "Kategoriya o‘zgarmadi",

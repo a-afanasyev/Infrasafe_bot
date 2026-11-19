@@ -78,6 +78,24 @@ async def handle_assign_duty_executor_admin(callback: CallbackQuery, db: Session
             await callback.answer(get_text("admin.handlers.request_not_found", language=lang), show_alert=True)
             return
 
+        # «Уточнение»: групповое назначение статус не двигает, а взять заявку
+        # из «Уточнения» дежурный не может (EXECUTOR_CLAIM — только из «Новой»/
+        # «В работе») — менеджер видел «✅ назначена», заявка оставалась в
+        # тупике. Отсюда назначаем КОНКРЕТНОГО дежурного каноном (→ «В работе»),
+        # тем же путём, что «Переназначить → Дежурному».
+        from uk_management_bot.utils.constants import REQUEST_STATUS_CLARIFICATION
+        from uk_management_bot.utils.request_workflow import normalize_status
+        if normalize_status(request) == REQUEST_STATUS_CLARIFICATION:
+            from . import reassignment
+            if not await reassignment._guard(callback, roles, user, lang):
+                return
+            pre = reassignment._resolve_duty(db, request_number, lang)
+            if pre.verdict != "ok":
+                await reassignment._answer_verdict(callback, pre, lang)
+                return
+            await reassignment._commit_reassign(callback, user, lang, pre)
+            return
+
         # Используем существующую логику auto_assign. Исход РАЗЛИЧИМ: раньше
         # функция на всех ветках возвращала None, и «✅ назначена» печаталось
         # даже когда она не сделала ничего — заявка уже назначена, у категории

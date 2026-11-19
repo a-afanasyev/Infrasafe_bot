@@ -330,7 +330,18 @@ describe('смена исполнителя из карточки', () => {
     expect(screen.queryByRole('button', { name: 'Сменить' })).not.toBeInTheDocument()
   })
 
-  it.each(['Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Отменена'])(
+  // ИИ-менеджер уводит заявку в «Уточнение» из «Новой» без исполнителя — без
+  // «Назначить» оттуда заявка была в тупике (канон теперь пускает MANAGER_ASSIGN).
+  it('в «Уточнении» без исполнителя предлагает «Назначить»', async () => {
+    mockHasRole.mockReturnValue(true)
+    await renderModal(makeRequest({
+      status: 'Уточнение', executor_id: null, executor_name: null,
+    }))
+
+    expect(screen.getByRole('button', { name: 'Назначить' })).toBeInTheDocument()
+  })
+
+  it.each(['Закуп', 'Выполнена', 'Исполнено', 'Отменена'])(
     'в статусе %s контрола нет — канон оттуда не пускает',
     async (status) => {
       mockHasRole.mockReturnValue(true)

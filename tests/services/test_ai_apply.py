@@ -330,6 +330,24 @@ def test_resume_ignores_human_clarification(SF, monkeypatch, quiet):
     assert _req(SF).status == C.REQUEST_STATUS_CLARIFICATION
 
 
+def test_resume_leaves_request_a_human_already_assigned(SF, monkeypatch, quiet):
+    """Менеджер назначил исполнителя из «Уточнения» ИИ, позже сам задал вопрос.
+
+    Маркер ИИ (`clarified`) остался от первого круга. Без проверки исполнителя
+    ответ жителя увёл бы заявку в «Новую» — у неё уже есть исполнитель, и
+    возвращать её в очередь ИИ не вправе.
+    """
+    _seed(SF, status=C.REQUEST_STATUS_CLARIFICATION)
+    _ai_asked(SF)
+    s = SF()
+    s.execute(Request.__table__.update().values(executor_id=7))
+    s.commit()
+    s.close()
+    _llm(monkeypatch, _payload())
+    assert apply.resume_after_answer_sync(NUM, "ответ", AI_CFG, SF) is None
+    assert _req(SF).status == C.REQUEST_STATUS_CLARIFICATION
+
+
 def test_question_for_uz_cyrl_is_transliterated():
     q = {"ru": "Что не работает?", "uz": "Nima ishlamayapti?"}
     assert apply._question_for(q, "uz") == "Nima ishlamayapti?"
