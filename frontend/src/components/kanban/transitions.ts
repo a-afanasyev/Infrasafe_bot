@@ -52,9 +52,13 @@ export function isTransitionAllowed(sourceStatus: string | undefined, targetStat
  * CLARIFY_RESOLVED / MANAGER_RETURN_TO_WORK), которые executor_id НЕ принимают
  * (иначе backend → 422 «unexpected field 'executor_id'»). Из этих источников
  * переход коммитим напрямую, без модалки выбора исполнителя.
+ *
+ * Исключение — «Уточнение» БЕЗ исполнителя: ИИ-менеджер уводит туда заявку
+ * прямо из «Новой», и resume отказал бы («В работе» без исполнителя). Канон
+ * пускает оттуда MANAGER_ASSIGN, поэтому исполнителя спрашиваем.
  */
 export function inProgressNeedsExecutorModal(sourceStatus: string | undefined, hasExecutor: boolean): boolean {
-  return sourceStatus === 'Новая' && !hasExecutor
+  return (sourceStatus === 'Новая' || sourceStatus === 'Уточнение') && !hasExecutor
 }
 
 /** Источники, возврат из которых — это MANAGER_RETURN_TO_WORK. */
@@ -81,5 +85,5 @@ export { FROZEN_STATUSES }
  * исполнителя. Держится здесь, а не в компоненте: то же правило нужно и
  * карточке заявки, и модалке, и второй копией они разъехались бы молча.
  */
-export const REASSIGNABLE_STATUSES: ReadonlySet<string> = new Set(['Новая', 'В работе'])
+export const REASSIGNABLE_STATUSES: ReadonlySet<string> = new Set(['Новая', 'В работе', 'Уточнение'])
 

@@ -900,6 +900,20 @@
         "title": "ApartmentUpdate",
         "type": "object"
       },
+      "AudienceOut": {
+        "description": "Сколько жителей получит рассылку с такими адресатами.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "AudienceOut",
+        "type": "object"
+      },
       "AutoManagerConfigData": {
         "description": "Тело PUT: только хранимые поля конфига.",
         "properties": {
@@ -1414,6 +1428,54 @@
           "request_number"
         ],
         "title": "Body_proxy_media_upload_api_v2_media_upload_post",
+        "type": "object"
+      },
+      "Body_upload_photo_api_v2_cleaning_tasks__task_id__photos_post": {
+        "properties": {
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Время съёмки на телефоне (для порядка пересъёмок)",
+            "title": "Captured At"
+          },
+          "op_key": {
+            "description": "UUID операции; повтор с ним же возвращает сохранённый исход",
+            "title": "Op Key",
+            "type": "string"
+          },
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Кадр точки: JPEG/PNG, до 8 МиБ",
+            "title": "Photo",
+            "type": "string"
+          },
+          "slot": {
+            "description": "floor:N или point:name из задания",
+            "maxLength": 40,
+            "title": "Slot",
+            "type": "string"
+          },
+          "source": {
+            "default": "live",
+            "description": "live — камера приложения, system — системная камера",
+            "maxLength": 10,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo",
+          "slot",
+          "op_key"
+        ],
+        "title": "Body_upload_photo_api_v2_cleaning_tasks__task_id__photos_post",
         "type": "object"
       },
       "BotCfg": {
@@ -2174,6 +2236,1500 @@
           "series"
         ],
         "title": "ChannelsOut",
+        "type": "object"
+      },
+      "CleaningAssignmentIn": {
+        "properties": {
+          "building_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrances": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entrances"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "building_id"
+        ],
+        "title": "CleaningAssignmentIn",
+        "type": "object"
+      },
+      "CleaningBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "entrance_count": {
+            "title": "Entrance Count",
+            "type": "integer"
+          },
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningEntranceOut"
+            },
+            "title": "Entrances",
+            "type": "array"
+          },
+          "floor_count": {
+            "title": "Floor Count",
+            "type": "integer"
+          },
+          "has_plan": {
+            "title": "Has Plan",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "show_photos": {
+            "title": "Show Photos",
+            "type": "boolean"
+          },
+          "show_to_residents": {
+            "title": "Show To Residents",
+            "type": "boolean"
+          },
+          "yard_id": {
+            "title": "Yard Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address",
+          "yard_id",
+          "floor_count",
+          "entrance_count",
+          "has_plan",
+          "show_to_residents",
+          "show_photos",
+          "entrances"
+        ],
+        "title": "CleaningBuildingOut",
+        "type": "object"
+      },
+      "CleaningBuildingsOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "buildings"
+        ],
+        "title": "CleaningBuildingsOut",
+        "type": "object"
+      },
+      "CleaningComplaintCreatedOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          }
+        },
+        "required": [
+          "id",
+          "request_number"
+        ],
+        "title": "CleaningComplaintCreatedOut",
+        "type": "object"
+      },
+      "CleaningComplaintDecisionIn": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "confirmed",
+              "unfounded"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "CleaningComplaintDecisionIn",
+        "type": "object"
+      },
+      "CleaningComplaintIn": {
+        "properties": {
+          "building_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance": {
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Entrance",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "building_id",
+          "entrance"
+        ],
+        "title": "CleaningComplaintIn",
+        "type": "object"
+      },
+      "CleaningComplaintOut": {
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "integer"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "request_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Number"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "building_id",
+          "entrance",
+          "work_date",
+          "author_id",
+          "task_id",
+          "request_number",
+          "outcome",
+          "created_at"
+        ],
+        "title": "CleaningComplaintOut",
+        "type": "object"
+      },
+      "CleaningComplaintsOut": {
+        "properties": {
+          "complaints": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningComplaintOut"
+            },
+            "title": "Complaints",
+            "type": "array"
+          }
+        },
+        "required": [
+          "complaints"
+        ],
+        "title": "CleaningComplaintsOut",
+        "type": "object"
+      },
+      "CleaningDecisionIn": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "to": {
+            "enum": [
+              "accepted",
+              "rejected",
+              "in_progress",
+              "review"
+            ],
+            "title": "To",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "to",
+          "version"
+        ],
+        "title": "CleaningDecisionIn",
+        "type": "object"
+      },
+      "CleaningEntranceOut": {
+        "properties": {
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "entrance",
+          "user_id"
+        ],
+        "title": "CleaningEntranceOut",
+        "type": "object"
+      },
+      "CleaningEntranceRef": {
+        "properties": {
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "building_id",
+          "entrance"
+        ],
+        "title": "CleaningEntranceRef",
+        "type": "object"
+      },
+      "CleaningEventOut": {
+        "properties": {
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Status"
+          }
+        },
+        "required": [
+          "kind",
+          "actor_id",
+          "from_status",
+          "to_status",
+          "reason",
+          "payload",
+          "created_at"
+        ],
+        "title": "CleaningEventOut",
+        "type": "object"
+      },
+      "CleaningMyTaskOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "session_open": {
+            "title": "Session Open",
+            "type": "boolean"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningSlotOut"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "works": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Works",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "building_id",
+          "address",
+          "entrance",
+          "works",
+          "status",
+          "version",
+          "session_open",
+          "slots"
+        ],
+        "title": "CleaningMyTaskOut",
+        "type": "object"
+      },
+      "CleaningMyTasksOut": {
+        "properties": {
+          "day_end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day End At"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningMyTaskOut"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_date",
+          "day_end_at",
+          "tasks"
+        ],
+        "title": "CleaningMyTasksOut",
+        "type": "object"
+      },
+      "CleaningPhotoOut": {
+        "properties": {
+          "client_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Captured At"
+          },
+          "has_file": {
+            "title": "Has File",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "refusal_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal Code"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "trust_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Level"
+          }
+        },
+        "required": [
+          "id",
+          "slot",
+          "outcome",
+          "refusal_code",
+          "trust_level",
+          "received_at",
+          "client_captured_at",
+          "has_file"
+        ],
+        "title": "CleaningPhotoOut",
+        "type": "object"
+      },
+      "CleaningPlanIn": {
+        "properties": {
+          "extra_points": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Extra Points",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CleaningPlanIn",
+        "type": "object"
+      },
+      "CleaningPlanOut": {
+        "properties": {
+          "entrance_count": {
+            "title": "Entrance Count",
+            "type": "integer"
+          },
+          "extra_points": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Points",
+            "type": "array"
+          },
+          "floor_count": {
+            "title": "Floor Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "valid_from": {
+            "format": "date",
+            "title": "Valid From",
+            "type": "string"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          }
+        },
+        "required": [
+          "id",
+          "valid_from",
+          "valid_to",
+          "items",
+          "extra_points",
+          "floor_count",
+          "entrance_count"
+        ],
+        "title": "CleaningPlanOut",
+        "type": "object"
+      },
+      "CleaningPlanViewOut": {
+        "properties": {
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleaningPlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entrance_count": {
+            "title": "Entrance Count",
+            "type": "integer"
+          },
+          "floor_count": {
+            "title": "Floor Count",
+            "type": "integer"
+          },
+          "snapshot_mismatch": {
+            "title": "Snapshot Mismatch",
+            "type": "boolean"
+          },
+          "uncovered": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Uncovered",
+            "type": "object"
+          },
+          "upcoming": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleaningPlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "building_id",
+          "floor_count",
+          "entrance_count",
+          "current",
+          "upcoming",
+          "uncovered",
+          "snapshot_mismatch"
+        ],
+        "title": "CleaningPlanViewOut",
+        "type": "object"
+      },
+      "CleaningPublicBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPublicEntranceOut"
+            },
+            "title": "Entrances",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "yard_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Id"
+          },
+          "yard_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yard Name"
+          }
+        },
+        "required": [
+          "building_id",
+          "address",
+          "state",
+          "done_at",
+          "entrances"
+        ],
+        "title": "CleaningPublicBuildingOut",
+        "type": "object"
+      },
+      "CleaningPublicBuildingViewOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance_count": {
+            "title": "Entrance Count",
+            "type": "integer"
+          },
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPublicEntranceOut"
+            },
+            "title": "Entrances",
+            "type": "array"
+          },
+          "week": {
+            "items": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Week",
+            "type": "array"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "building_id",
+          "address",
+          "entrance_count",
+          "work_date",
+          "entrances",
+          "week"
+        ],
+        "title": "CleaningPublicBuildingViewOut",
+        "type": "object"
+      },
+      "CleaningPublicEntranceOut": {
+        "properties": {
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          },
+          "photo_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Photo Ids",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entrance",
+          "state",
+          "done_at",
+          "photo_ids"
+        ],
+        "title": "CleaningPublicEntranceOut",
+        "type": "object"
+      },
+      "CleaningPublicTodayOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPublicBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "buildings_done": {
+            "title": "Buildings Done",
+            "type": "integer"
+          },
+          "buildings_total": {
+            "title": "Buildings Total",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "work_date",
+          "buildings_total",
+          "buildings_done",
+          "buildings"
+        ],
+        "title": "CleaningPublicTodayOut",
+        "type": "object"
+      },
+      "CleaningResponsibleIn": {
+        "properties": {
+          "user_id": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "CleaningResponsibleIn",
+        "type": "object"
+      },
+      "CleaningRulesOut": {
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "version",
+          "data"
+        ],
+        "title": "CleaningRulesOut",
+        "type": "object"
+      },
+      "CleaningSettingsIn": {
+        "properties": {
+          "show_photos": {
+            "title": "Show Photos",
+            "type": "boolean"
+          },
+          "show_to_residents": {
+            "title": "Show To Residents",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "show_to_residents",
+          "show_photos"
+        ],
+        "title": "CleaningSettingsIn",
+        "type": "object"
+      },
+      "CleaningSlotOut": {
+        "properties": {
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "photo_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Id"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot",
+          "done",
+          "photo_id",
+          "captured_at"
+        ],
+        "title": "CleaningSlotOut",
+        "type": "object"
+      },
+      "CleaningStaffMemberOut": {
+        "properties": {
+          "buildings": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Buildings",
+            "type": "object"
+          },
+          "by_weekday": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "By Weekday",
+            "type": "array"
+          },
+          "entrances": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningEntranceRef"
+            },
+            "title": "Entrances",
+            "type": "array"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "overloaded": {
+            "title": "Overloaded",
+            "type": "boolean"
+          },
+          "peak": {
+            "title": "Peak",
+            "type": "integer"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "week": {
+            "title": "Week",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "first_name",
+          "last_name",
+          "entrances",
+          "by_weekday",
+          "buildings",
+          "week",
+          "peak",
+          "percent",
+          "overloaded"
+        ],
+        "title": "CleaningStaffMemberOut",
+        "type": "object"
+      },
+      "CleaningStaffOut": {
+        "properties": {
+          "cleaners": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningStaffMemberOut"
+            },
+            "title": "Cleaners",
+            "type": "array"
+          },
+          "norm": {
+            "title": "Norm",
+            "type": "integer"
+          },
+          "unassigned": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningEntranceRef"
+            },
+            "title": "Unassigned",
+            "type": "array"
+          }
+        },
+        "required": [
+          "norm",
+          "cleaners",
+          "unassigned"
+        ],
+        "title": "CleaningStaffOut",
+        "type": "object"
+      },
+      "CleaningTaskCardOut": {
+        "properties": {
+          "complaints": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningComplaintOut"
+            },
+            "title": "Complaints",
+            "type": "array"
+          },
+          "current": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPhotoOut"
+            },
+            "title": "Current",
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningEventOut"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPhotoOut"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "other": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningPhotoOut"
+            },
+            "title": "Other",
+            "type": "array"
+          },
+          "session_opened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Opened At"
+          },
+          "slots_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Slots Required",
+            "type": "array"
+          },
+          "task": {
+            "$ref": "#/components/schemas/CleaningTaskRowOut"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "works": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Works",
+            "type": "array"
+          }
+        },
+        "required": [
+          "task",
+          "version",
+          "works",
+          "slots_required",
+          "session_opened_at",
+          "current",
+          "evidence",
+          "other",
+          "events",
+          "complaints"
+        ],
+        "title": "CleaningTaskCardOut",
+        "type": "object"
+      },
+      "CleaningTaskRowOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "building_id": {
+            "title": "Building Id",
+            "type": "integer"
+          },
+          "entrance": {
+            "title": "Entrance",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "responsible_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Id"
+          },
+          "sampled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampled"
+          },
+          "slots_done": {
+            "title": "Slots Done",
+            "type": "integer"
+          },
+          "slots_total": {
+            "title": "Slots Total",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "work_date": {
+            "format": "date",
+            "title": "Work Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "building_id",
+          "address",
+          "entrance",
+          "work_date",
+          "status",
+          "responsible_id",
+          "slots_total",
+          "slots_done",
+          "sampled"
+        ],
+        "title": "CleaningTaskRowOut",
+        "type": "object"
+      },
+      "CleaningTasksOut": {
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningTaskRowOut"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to",
+          "tasks"
+        ],
+        "title": "CleaningTasksOut",
+        "type": "object"
+      },
+      "CleaningTimesheetOut": {
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CleaningTimesheetRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to",
+          "rows"
+        ],
+        "title": "CleaningTimesheetOut",
+        "type": "object"
+      },
+      "CleaningTimesheetRowOut": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "complaints": {
+            "title": "Complaints",
+            "type": "integer"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "integer"
+          },
+          "expired": {
+            "title": "Expired",
+            "type": "integer"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "missed": {
+            "title": "Missed",
+            "type": "integer"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "planned": {
+            "title": "Planned",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "first_name",
+          "last_name",
+          "planned",
+          "accepted",
+          "rejected",
+          "expired",
+          "missed",
+          "complaints",
+          "confirmed",
+          "percent"
+        ],
+        "title": "CleaningTimesheetRowOut",
+        "type": "object"
+      },
+      "CleaningUploadOut": {
+        "properties": {
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "photo_id": {
+            "title": "Photo Id",
+            "type": "integer"
+          },
+          "refusal_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal Code"
+          },
+          "replay": {
+            "title": "Replay",
+            "type": "boolean"
+          },
+          "task_status": {
+            "title": "Task Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo_id",
+          "outcome",
+          "refusal_code",
+          "replay",
+          "task_status"
+        ],
+        "title": "CleaningUploadOut",
         "type": "object"
       },
       "CommentBody": {
@@ -5828,7 +7384,8 @@
               "requests",
               "works",
               "elevators",
-              "workreports"
+              "workreports",
+              "cleaning"
             ],
             "title": "Id",
             "type": "string"
@@ -5881,7 +7438,7 @@
             "items": {
               "$ref": "#/components/schemas/HomeBlockCfgIn"
             },
-            "maxItems": 12,
+            "maxItems": 14,
             "title": "Blocks",
             "type": "array"
           },
@@ -7142,6 +8699,749 @@
         "title": "NewsWatchConfigData",
         "type": "object"
       },
+      "NoticeCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "all_day": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "All Day"
+          },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "important": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Important"
+          },
+          "kind": {
+            "enum": [
+              "news",
+              "outage"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "place_ru": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Ru"
+          },
+          "place_uz": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Uz"
+          },
+          "publish": {
+            "default": false,
+            "title": "Publish",
+            "type": "boolean"
+          },
+          "publish_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish At"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "yards",
+                  "buildings"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "scope_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Ids"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "text_ru": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Ru"
+          },
+          "text_uz": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Uz"
+          },
+          "title_ru": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title Ru",
+            "type": "string"
+          },
+          "title_uz": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Uz"
+          }
+        },
+        "required": [
+          "kind",
+          "title_ru"
+        ],
+        "title": "NoticeCreateIn",
+        "type": "object"
+      },
+      "NoticeIn": {
+        "additionalProperties": false,
+        "description": "Создание и правка записи. Запрос без поля оставляет его прежним (PATCH).",
+        "properties": {
+          "all_day": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "All Day"
+          },
+          "broadcast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          },
+          "important": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Important"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "news",
+                  "outage"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "place_ru": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Ru"
+          },
+          "place_uz": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Uz"
+          },
+          "publish_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish At"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "yards",
+                  "buildings"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "scope_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "maximum": 2147483647.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Ids"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "text_ru": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Ru"
+          },
+          "text_uz": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Uz"
+          },
+          "title_ru": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Ru"
+          },
+          "title_uz": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Uz"
+          }
+        },
+        "title": "NoticeIn",
+        "type": "object"
+      },
+      "NoticeOut": {
+        "properties": {
+          "all_day": {
+            "title": "All Day",
+            "type": "boolean"
+          },
+          "broadcast_attempts": {
+            "default": 0,
+            "title": "Broadcast Attempts",
+            "type": "integer"
+          },
+          "broadcast_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Details"
+          },
+          "broadcast_next_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Next At"
+          },
+          "broadcast_status": {
+            "title": "Broadcast Status",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          },
+          "closed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By Name"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "icon": {
+            "title": "Icon",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "important": {
+            "title": "Important",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "news_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "News Item Id"
+          },
+          "place_ru": {
+            "title": "Place Ru",
+            "type": "string"
+          },
+          "place_uz": {
+            "title": "Place Uz",
+            "type": "string"
+          },
+          "publish_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publish At"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "scope_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Scope Ids",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "text_ru": {
+            "title": "Text Ru",
+            "type": "string"
+          },
+          "text_uz": {
+            "title": "Text Uz",
+            "type": "string"
+          },
+          "title_ru": {
+            "title": "Title Ru",
+            "type": "string"
+          },
+          "title_uz": {
+            "title": "Title Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source",
+          "title_ru",
+          "title_uz",
+          "text_ru",
+          "text_uz",
+          "place_ru",
+          "place_uz",
+          "icon",
+          "important",
+          "status",
+          "state",
+          "all_day",
+          "scope",
+          "scope_ids",
+          "broadcast_status"
+        ],
+        "title": "NoticeOut",
+        "type": "object"
+      },
+      "NoticesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "NoticesOut",
+        "type": "object"
+      },
       "OfficialReportIn": {
         "additionalProperties": false,
         "properties": {
@@ -7451,6 +9751,219 @@
           "subtitle"
         ],
         "title": "OrgCfgIn",
+        "type": "object"
+      },
+      "OutageBuildingOut": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "address"
+        ],
+        "title": "OutageBuildingOut",
+        "type": "object"
+      },
+      "OutageIn": {
+        "additionalProperties": false,
+        "description": "Отключение, которое объявляет сантехник на смене.",
+        "properties": {
+          "building_ids": {
+            "items": {
+              "maximum": 2147483647.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 30,
+            "minItems": 1,
+            "title": "Building Ids",
+            "type": "array"
+          },
+          "duration": {
+            "enum": [
+              "1h",
+              "2h",
+              "4h",
+              "day",
+              "unknown"
+            ],
+            "title": "Duration",
+            "type": "string"
+          },
+          "resource": {
+            "enum": [
+              "water",
+              "heating"
+            ],
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "building_ids",
+          "duration"
+        ],
+        "title": "OutageIn",
+        "type": "object"
+      },
+      "OutageNoticeOut": {
+        "description": "Отключение глазами сантехника. Полный ``NoticeOut`` ему не отдаём: в\n``broadcast_details`` лежат id жителей и чатов домов — это данные менеджера.",
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title_ru": {
+            "title": "Title Ru",
+            "type": "string"
+          },
+          "title_uz": {
+            "title": "Title Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title_ru",
+          "title_uz",
+          "status",
+          "state"
+        ],
+        "title": "OutageNoticeOut",
+        "type": "object"
+      },
+      "OutageOptionsOut": {
+        "description": "Экран сантехника: можно ли объявить, справочник домов, идущие отключения.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "durations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Durations",
+            "type": "array"
+          },
+          "open": {
+            "items": {
+              "$ref": "#/components/schemas/OutageNoticeOut"
+            },
+            "title": "Open",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "yards": {
+            "items": {
+              "$ref": "#/components/schemas/OutageYardOut"
+            },
+            "title": "Yards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "allowed",
+          "resources",
+          "durations",
+          "yards",
+          "open"
+        ],
+        "title": "OutageOptionsOut",
+        "type": "object"
+      },
+      "OutageYardOut": {
+        "properties": {
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/OutageBuildingOut"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "buildings"
+        ],
+        "title": "OutageYardOut",
         "type": "object"
       },
       "OwnerCheckOut": {
@@ -8954,11 +11467,17 @@
             "pattern": "^[\\p{L}\\p{N}\\s\\-'\\.]+$",
             "title": "Full Name",
             "type": "string"
+          },
+          "pd_consent": {
+            "const": true,
+            "title": "Pd Consent",
+            "type": "boolean"
           }
         },
         "required": [
           "full_name",
-          "apartment_id"
+          "apartment_id",
+          "pd_consent"
         ],
         "title": "RegisterApplicantIn",
         "type": "object"
@@ -9298,6 +11817,17 @@
               }
             ],
             "title": "Apartment Id"
+          },
+          "author_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Kind"
           },
           "building_id": {
             "anyOf": [
@@ -15726,6 +18256,604 @@
         ]
       }
     },
+    "/api/v2/board-config/notices": {
+      "get": {
+        "description": "Лента; с ``from``/``to`` — записи окна календаря.",
+        "operationId": "list_notices_api_v2_board_config_notices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Notices",
+        "tags": [
+          "notices"
+        ]
+      },
+      "post": {
+        "operationId": "create_notice_api_v2_board_config_notices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/audience": {
+      "get": {
+        "description": "Подсказка формы: сколько жителей получит рассылку.",
+        "operationId": "audience_api_v2_board_config_notices_audience_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "yards",
+                "buildings"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "integer"
+              },
+              "maxItems": 200,
+              "title": "Ids",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudienceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Audience",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages": {
+      "post": {
+        "description": "Сантехник на смене объявляет отключение: жителям домов — сразу, менеджерам копия.",
+        "operationId": "announce_outage_api_v2_board_config_notices_outages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageNoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Announce Outage",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/options": {
+      "get": {
+        "description": "Экран «Отключил воду»: гейт (сантехник на смене), дома, идущие отключения.",
+        "operationId": "outage_options_api_v2_board_config_notices_outages_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Outage Options",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/outages/{notice_id}/close": {
+      "post": {
+        "description": "«Включили»: запись закрыта, жителям — второе сообщение.",
+        "operationId": "close_outage_api_v2_board_config_notices_outages__notice_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutageNoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Close Outage",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}": {
+      "delete": {
+        "operationId": "delete_notice_api_v2_board_config_notices__notice_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Notice",
+        "tags": [
+          "notices"
+        ]
+      },
+      "patch": {
+        "description": "Правка. Поле, присланное как null, очищается (например, срок показа).",
+        "operationId": "update_notice_api_v2_board_config_notices__notice_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}/close": {
+      "post": {
+        "operationId": "close_notice_api_v2_board_config_notices__notice_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Close Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}/publish": {
+      "post": {
+        "operationId": "publish_notice_api_v2_board_config_notices__notice_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Notice",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
+    "/api/v2/board-config/notices/{notice_id}/retry-broadcast": {
+      "post": {
+        "operationId": "retry_broadcast_api_v2_board_config_notices__notice_id__retry_broadcast_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "title": "Notice Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Broadcast",
+        "tags": [
+          "notices"
+        ]
+      }
+    },
     "/api/v2/callcenter/address-suggest": {
       "post": {
         "description": "Адрес со слов звонящего → варианты двора/дома из справочника.\n\nПлатный вызов модели — поэтому только при включённом ИИ и под лимитом.\nВарианты лишь подсказка: адрес заявки выбирает и подтверждает менеджер.",
@@ -16048,6 +19176,1098 @@
         "summary": "Search Resident",
         "tags": [
           "callcenter"
+        ]
+      }
+    },
+    "/api/v2/cleaning/assignments": {
+      "put": {
+        "operationId": "put_assignment_api_v2_cleaning_assignments_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningAssignmentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Assignment",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/buildings": {
+      "get": {
+        "operationId": "list_buildings_api_v2_cleaning_buildings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningBuildingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Buildings",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/buildings/{building_id}/plan": {
+      "get": {
+        "operationId": "get_plan_api_v2_cleaning_buildings__building_id__plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningPlanViewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Plan",
+        "tags": [
+          "cleaning"
+        ]
+      },
+      "put": {
+        "operationId": "save_plan_api_v2_cleaning_buildings__building_id__plan_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningPlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningPlanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Plan",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/buildings/{building_id}/settings": {
+      "put": {
+        "operationId": "save_settings_api_v2_cleaning_buildings__building_id__settings_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningSettingsIn"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Settings",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/complaints": {
+      "post": {
+        "description": "«Не убрано»: жалоба на подъезд своего дома за сегодня. Повтор безопасен.",
+        "operationId": "file_complaint_api_v2_cleaning_complaints_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningComplaintIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningComplaintCreatedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "File Complaint",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/complaints": {
+      "get": {
+        "operationId": "list_complaints_api_v2_cleaning_control_complaints_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningComplaintsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Complaints",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/complaints/{complaint_id}/decision": {
+      "post": {
+        "operationId": "decide_complaint_api_v2_cleaning_control_complaints__complaint_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Complaint Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningComplaintDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningComplaintOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decide Complaint",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/photos/{photo_id}/file": {
+      "get": {
+        "description": "Файл любого фото уборки для проверки: превью в сетке, оригинал по нажатию. Без кэша.",
+        "operationId": "photo_file_api_v2_cleaning_control_photos__photo_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Photo File",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/tasks": {
+      "get": {
+        "description": "Задания за период (матрица план/факт); ``status=review`` — очередь менеджера.",
+        "operationId": "list_tasks_api_v2_cleaning_control_tasks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningTasksOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tasks",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/tasks/{task_id}": {
+      "get": {
+        "operationId": "task_card_api_v2_cleaning_control_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningTaskCardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Task Card",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/tasks/{task_id}/decision": {
+      "post": {
+        "description": "Принять / отклонить / вернуть на досъёмку / открыть повторно. 409 ``stale`` — задание изменилось.",
+        "operationId": "decide_api_v2_cleaning_control_tasks__task_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningTaskRowOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decide",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/tasks/{task_id}/responsible": {
+      "put": {
+        "description": "Срочная замена ответственного у одного задания (болезнь в день уборки).",
+        "operationId": "set_responsible_api_v2_cleaning_control_tasks__task_id__responsible_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleaningResponsibleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Responsible",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/control/timesheet": {
+      "get": {
+        "operationId": "timesheet_api_v2_cleaning_control_timesheet_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningTimesheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Timesheet",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/my/tasks": {
+      "get": {
+        "description": "Мои задания на сегодня. Задания дня создаются здесь, если тик ещё не успел.",
+        "operationId": "my_tasks_api_v2_cleaning_my_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningMyTasksOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Tasks",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/rules": {
+      "get": {
+        "operationId": "get_rules_api_v2_cleaning_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningRulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Rules",
+        "tags": [
+          "cleaning"
+        ]
+      },
+      "put": {
+        "description": "Частичная правка настроек; новая версия действует с завтрашней бизнес-даты.",
+        "operationId": "put_rules_api_v2_cleaning_rules_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Patch",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningRulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Rules",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/staff": {
+      "get": {
+        "operationId": "staff_api_v2_cleaning_staff_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningStaffOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Staff",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/tasks/{task_id}/photos": {
+      "post": {
+        "description": "Фото точки задания.\n\n200 — исход операции: ``activated`` / ``superseded`` / ``evidence`` / ``refused``\n(с ``refusal_code``: ``not_yours``, ``bad_slot``, ``frozen``, ``too_late``, ``bad_photo``).\n404 — задания нет; 409 ``key_reused`` / ``in_progress`` (повторить); 413/415/422 — файл,\nключ, формат точки; 503 ``media_unavailable`` (повторить).",
+        "operationId": "upload_photo_api_v2_cleaning_tasks__task_id__photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_photo_api_v2_cleaning_tasks__task_id__photos_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningUploadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Photo",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/tasks/{task_id}/photos/{photo_id}/file": {
+      "get": {
+        "description": "Своё фото точки (предпросмотр снятого). Без кэша: пересъёмка видна сразу.",
+        "operationId": "my_photo_file_api_v2_cleaning_tasks__task_id__photos__photo_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Photo File",
+        "tags": [
+          "cleaning"
+        ]
+      }
+    },
+    "/api/v2/cleaning/tasks/{task_id}/session": {
+      "post": {
+        "description": "Первое онлайн-открытие задания: от него считается окно доверия ``live``.",
+        "operationId": "open_session_api_v2_cleaning_tasks__task_id__session_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Task Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Open Session",
+        "tags": [
+          "cleaning"
         ]
       }
     },
@@ -20276,6 +24496,127 @@
         "summary": "Get Board Config",
         "tags": [
           "board-config"
+        ]
+      }
+    },
+    "/api/v2/public/cleaning/buildings/{building_id}": {
+      "get": {
+        "operationId": "cleaning_building_api_v2_public_cleaning_buildings__building_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "building_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Building Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningPublicBuildingViewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cleaning Building",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/v2/public/cleaning/photos/{photo_id}": {
+      "get": {
+        "description": "Текущее фото принятого сегодняшнего задания: превью для миниатюр, оригинал по нажатию.\n\nПроверки — на каждый запрос, без кэша.",
+        "operationId": "cleaning_photo_api_v2_public_cleaning_photos__photo_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "true — оригинал, иначе превью",
+            "in": "query",
+            "name": "original",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true — оригинал, иначе превью",
+              "title": "Original",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cleaning Photo",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/v2/public/cleaning/today": {
+      "get": {
+        "description": "«Уборка сегодня»: счёт по домам. Дом убран, когда приняты все его задания дня.",
+        "operationId": "cleaning_today_api_v2_public_cleaning_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleaningPublicTodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Cleaning Today",
+        "tags": [
+          "public"
         ]
       }
     },

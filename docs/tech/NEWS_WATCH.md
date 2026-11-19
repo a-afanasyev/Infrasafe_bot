@@ -4,7 +4,7 @@
 
 ## Что делает
 
-Юзербот читает публичные Telegram-каналы и группы коммунальных служб/хокимията, API решает LLM-ом, касается ли новость **нашего** комплекса (по свободному описанию в настройках), менеджер одобряет — объявление появляется на табло жителей (`board_config.announcements`) и уходит рассылкой в личку жителям и чаты домов. `auto_publish` при высокой уверенности публикует без одобрения (по умолчанию выключен).
+Юзербот читает публичные Telegram-каналы и группы коммунальных служб/хокимията, API решает LLM-ом, касается ли новость **нашего** комплекса (по свободному описанию в настройках), менеджер одобряет — объявление появляется на табло жителей (запись `notices`, см. `NOTICES.md`) и уходит рассылкой в личку жителям и чаты домов. `auto_publish` при высокой уверенности публикует без одобрения (по умолчанию выключен).
 
 Фильтр «правила vs LLM»: список источников, ключевые слова префильтра, каналы рассылки — конфиг; LLM — только релевантность и краткое RU/UZ резюме.
 
@@ -15,9 +15,9 @@
 | Юзербот `uk-news-watcher` | `news_watcher/` (Telethon, свой образ `news_watcher/Dockerfile`), compose-сервис `news-watcher` за профилем `news-watch`, том `news_watcher_data:/data` | Bot API чужие каналы не читает — нужен отдельный Telegram-аккаунт (StringSession). Только чтение; подписки обновляет раз в 5 мин из `GET /sources`; offsets по источникам в томе; POST с бэкоффом (4xx не повторяет). Риск: лимиты Telegram на юзерботов — не писать, не спамить join/leave |
 | API `/api/v2/news-watch` | `api/news_watch/` | DARK: `NEWS_WATCH_ENABLED=false` → 404. Менеджер (`board.configure`): `GET/PUT /config`, `GET /items?status=`, `POST /items/{id}/publish|reject|retry-broadcast`. Юзербот (`X-Service-Token`): `POST /inbox`, `GET /sources`. **Префикс заявить в edge-allowlist на обеих площадках ДО включения** |
 | Конвейер | `services/news_watch/pipeline.py` | дедуп по (chat, message) → префильтр `keywords` → LLM (`NEWS_WATCH_MODEL`, плоская схема, валидация в Python) → `pending` / `ignored`; отказ LLM → `pending` без вердикта (менеджер увидит сырой текст); менеджерам — уведомление через httpx-sender |
-| Публикация | `pipeline.publish` + `board_config.service.append_announcement` | объявление первым в `announcements` под тем же FOR UPDATE и в той же транзакции; `broadcast_status=pending` |
+| Публикация | `pipeline.publish` → `notice_from` | запись `notices` (`source=news_watch`, одна на новость) в той же транзакции; показывается до конца окна, без окна — 3 суток; `broadcast_status=pending` |
 | Рассылка | `services/news_watch/broadcast.py`, цикл в `api/lifecycle.py` (30 с, при флаге) | outbox: один элемент за цикл, курсор по `users.id` после каждой отправки (рестарт без дублей), 429 → `retry_after`, 5 попыток → `failed` (менеджер может «повторить»), `running` старше 10 мин → бэкофф; получатели — applicant/approved/не удалён/бот не заблокирован; группы `monitored_groups.kind=residents` |
-| Дашборд | `frontend/src/pages/NewsWatchPage.tsx`, пункт «Отключения» | за build-arg `VITE_NEWS_WATCH_ENABLED` (как лифты): очередь по статусам + настройки |
+| Дашборд | `frontend/src/pages/NewsWatchPage.tsx` — вкладка «Из каналов» раздела «Новости и уведомления» | за build-arg `VITE_NEWS_WATCH_ENABLED` (как лифты): очередь по статусам + настройки |
 | БД | миграция `028_news_watch`: `news_items`, `news_watch_config` | читает только `api`; грантов `access_app_rw` не нужно |
 
 ## Конфиг (`news_watch_config`, singleton)

@@ -22,10 +22,17 @@ describe('inProgressNeedsExecutorModal (assign-executor only from «Новая»
   })
 
   it('never opens the executor modal for resume/return sources (would 422)', () => {
-    for (const src of ['Закуп', 'Уточнение', 'Выполнена', 'Исполнено', 'Возвращена']) {
+    for (const src of ['Закуп', 'Выполнена', 'Исполнено', 'Возвращена']) {
       expect(inProgressNeedsExecutorModal(src, false)).toBe(false)
       expect(inProgressNeedsExecutorModal(src, true)).toBe(false)
     }
+  })
+
+  // ИИ-менеджер уводит заявку в «Уточнение» из «Новой» без исполнителя: resume
+  // отказал бы, поэтому спрашиваем исполнителя (канон MANAGER_ASSIGN).
+  it('opens the executor modal for «Уточнение» only when nobody is assigned', () => {
+    expect(inProgressNeedsExecutorModal('Уточнение', false)).toBe(true)
+    expect(inProgressNeedsExecutorModal('Уточнение', true)).toBe(false)
   })
 })
 

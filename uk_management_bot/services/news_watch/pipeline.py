@@ -18,7 +18,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Optional, Sequence
 
@@ -38,6 +38,12 @@ from uk_management_bot.database.models.news_item import (
     NEWS_STATUS_REJECTED,
     NewsItem,
 )
+from uk_management_bot.database.models.notice import (
+    NOTICE_KIND_OUTAGE,
+    NOTICE_SOURCE_NEWS_WATCH,
+    NOTICE_STATUS_PUBLISHED,
+    Notice,
+)
 from uk_management_bot.services.llm.client import llm_json_async
 from uk_management_bot.services.news_watch.config import load_config, normalize_word
 from uk_management_bot.services.news_watch.limiter import news_watch_llm_allowed
@@ -46,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 _TEXT_LIMIT = 3000
 _SUMMARY_LIMIT = 500
+# Сколько суток показывать новость канала, если окно отключения не названо.
+_SHOW_DAYS = 3
 _MAX_TOKENS = 500
 _ICONS = {"power": "⚡", "water": "💧", "gas": "🔥", "heating": "🌡", "internet": "🌐", "other": "📢"}
 
@@ -252,30 +260,45 @@ def kind_title(kind: Optional[str], lang: str) -> str:
     return get_text(f"news_watch.kind.{kind if kind in NEWS_KINDS else 'other'}", language=lang)
 
 
-def announcement_from(item: NewsItem) -> dict:
-    """Элемент board_config.announcements (services/board_config/schemas.py)."""
+def notice_from(item: NewsItem, *, user_id: Optional[int]) -> Notice:
+    """Запись ленты «Новости и уведомления» из одобренной новости канала.
+
+    Показывается, пока идёт отключение; без названного окна — ``_SHOW_DAYS``
+    суток с публикации (раньше такие объявления висели на табло бессрочно).
+    """
     published = item.published_at or datetime.now(timezone.utc)
-    return {
-        "id": f"news-{item.id}",
-        "icon": _ICONS.get(item.kind or "other", "📢"),
-        "important": True,
-        "title": {"ru": kind_title(item.kind, "ru"), "uz": kind_title(item.kind, "uz")},
-        "text": {"ru": strip_tags(item.summary_ru or item.raw_text[:_SUMMARY_LIMIT]),
-                 "uz": strip_tags(item.summary_uz or item.raw_text[:_SUMMARY_LIMIT])},
-        "published_at": published.replace(tzinfo=None).isoformat(timespec="seconds"),
-    }
+    return Notice(
+        kind=NOTICE_KIND_OUTAGE,
+        resource=item.kind if item.kind in NEWS_KINDS else "other",
+        source=NOTICE_SOURCE_NEWS_WATCH,
+        news_item_id=item.id,
+        title_ru=kind_title(item.kind, "ru"),
+        title_uz=kind_title(item.kind, "uz"),
+        text_ru=strip_tags(item.summary_ru or item.raw_text[:_SUMMARY_LIMIT]),
+        text_uz=strip_tags(item.summary_uz or item.raw_text[:_SUMMARY_LIMIT]),
+        icon=_ICONS.get(item.kind or "other", "📢"),
+        important=True,
+        status=NOTICE_STATUS_PUBLISHED,
+        publish_at=published,
+        starts_at=item.starts_at,
+        ends_at=item.ends_at,
+        expires_at=item.ends_at or published + timedelta(days=_SHOW_DAYS),
+        created_by=user_id,
+    )
 
 
 async def _publish_item(db: AsyncSession, item: NewsItem, *, user_id: Optional[int], cfg: dict) -> None:
-    from uk_management_bot.services.board_config.service import append_announcement
-
     item.status = NEWS_STATUS_PUBLISHED
     item.published_at = datetime.now(timezone.utc)
     item.decided_by = user_id
     wants_broadcast = cfg["broadcast"]["dm"] or cfg["broadcast"]["residents_groups"]
     item.broadcast_status = BROADCAST_PENDING if wants_broadcast else BROADCAST_DONE
     item.broadcast_attempts, item.broadcast_cursor = 0, 0
-    await append_announcement(db, announcement_from(item), user_id)
+    # Повторная публикация той же новости не дублирует запись (uq news_item_id).
+    existing = await db.execute(select(Notice.id).where(Notice.news_item_id == item.id))
+    if existing.scalar_one_or_none() is None:
+        db.add(notice_from(item, user_id=user_id))
+        await db.flush()
 
 
 async def _get_item(db: AsyncSession, item_id: int) -> NewsItem:

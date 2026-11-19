@@ -75,6 +75,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup()
     render(<RegisterPage />)
     await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('checkbox', { name: /согласен/i }))
     await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
     const body = await screen.findByText(/загрузите документ на квартиру/)
     expect(body).toHaveTextContent('/start')
@@ -90,15 +91,27 @@ describe('RegisterPage', () => {
     expect(await screen.findByText('stub-address')).toBeInTheDocument()
   })
 
+  it('без согласия на обработку данных заявку не отправить', async () => {
+    mockReg.start.mockResolvedValue(START)
+    const user = userEvent.setup()
+    render(<RegisterPage />)
+    await user.click(await screen.findByText('stub-address'))
+    const submit = await screen.findByRole('button', { name: 'Отправить заявку' })
+    expect(submit).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /согласен/i }))
+    expect(submit).toBeEnabled()
+  })
+
   it('submit шлёт full_name и apartment_id, затем pending', async () => {
     mockReg.start.mockResolvedValue(START)
     mockReg.submit.mockResolvedValue({ status: 'pending' })
     const user = userEvent.setup()
     render(<RegisterPage />)
     await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('checkbox', { name: /согласен/i }))
     await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
     expect(await screen.findByText('Заявка отправлена')).toBeInTheDocument()
-    expect(mockReg.submit).toHaveBeenCalledWith('ticket-1', { full_name: 'Иван П', apartment_id: 7 })
+    expect(mockReg.submit).toHaveBeenCalledWith('ticket-1', { full_name: 'Иван П', apartment_id: 7, pd_consent: true })
   })
 
   it('409 «уже зарегистрирован» на start → экран already_registered', async () => {
@@ -119,6 +132,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup()
     render(<RegisterPage />)
     await user.click(await screen.findByText('stub-address'))
+    await user.click(await screen.findByRole('checkbox', { name: /согласен/i }))
     await user.click(await screen.findByRole('button', { name: 'Отправить заявку' }))
   }
 

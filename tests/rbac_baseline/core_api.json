@@ -215,6 +215,18 @@
     "manager@pending"
    ]
   },
+  "DELETE /api/v2/board-config/notices/{notice_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "DELETE /api/v2/monitored-groups/{group_id}": {
    "auth": "roles",
    "allow": [
@@ -410,6 +422,44 @@
     "manager@pending"
    ]
   },
+  "GET /api/v2/board-config/notices": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "GET /api/v2/board-config/notices/audience": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "GET /api/v2/board-config/notices/outages/options": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
   "GET /api/v2/callcenter/buildings/{building_id}/apartments": {
    "auth": "roles",
    "allow": [
@@ -460,6 +510,164 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ]
+  },
+  "GET /api/v2/cleaning/buildings": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/buildings/{building_id}/plan": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/control/complaints": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/control/photos/{photo_id}/file": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/control/tasks": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/control/tasks/{task_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/control/timesheet": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/my/tasks": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/rules": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/staff": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "GET /api/v2/cleaning/tasks/{task_id}/photos/{photo_id}/file": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "GET /api/v2/elevators": {
@@ -899,6 +1107,15 @@
    "auth": "public"
   },
   "GET /api/v2/public/board-config": {
+   "auth": "public"
+  },
+  "GET /api/v2/public/cleaning/buildings/{building_id}": {
+   "auth": "public"
+  },
+  "GET /api/v2/public/cleaning/photos/{photo_id}": {
+   "auth": "public"
+  },
+  "GET /api/v2/public/cleaning/today": {
    "auth": "public"
   },
   "GET /api/v2/public/elevators": {
@@ -1456,6 +1673,18 @@
     "manager@pending"
    ]
   },
+  "PATCH /api/v2/board-config/notices/{notice_id}": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "PATCH /api/v2/elevators/occurrences/{occurrence_id}": {
    "auth": "roles",
    "allow": [
@@ -1911,6 +2140,82 @@
     "manager@pending"
    ]
   },
+  "POST /api/v2/board-config/notices": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/outages": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/outages/{notice_id}/close": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "executor@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/{notice_id}/close": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/{notice_id}/publish": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
+  "POST /api/v2/board-config/notices/{notice_id}/retry-broadcast": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "manager@pending"
+   ]
+  },
   "POST /api/v2/callcenter/address-suggest": {
    "auth": "roles",
    "allow": [
@@ -1948,6 +2253,80 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ]
+  },
+  "POST /api/v2/cleaning/complaints": {
+   "auth": "roles",
+   "allow": [
+    "applicant",
+    "applicant+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7",
+    "empty_roles"
+   ],
+   "deps": [
+    "_or_404"
+   ]
+  },
+  "POST /api/v2/cleaning/control/complaints/{complaint_id}/decision": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/cleaning/control/tasks/{task_id}/decision": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/cleaning/tasks/{task_id}/photos": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "POST /api/v2/cleaning/tasks/{task_id}/session": {
+   "auth": "roles",
+   "allow": [
+    "executor",
+    "executor+inspector",
+    "executor+resource_meter_entry",
+    "executor+engineer",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "POST /api/v2/elevators": {
@@ -2846,6 +3225,76 @@
     "applicant+executor+manager+system_admin",
     "superuser7",
     "manager@pending"
+   ]
+  },
+  "PUT /api/v2/cleaning/assignments": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "PUT /api/v2/cleaning/buildings/{building_id}/plan": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "PUT /api/v2/cleaning/buildings/{building_id}/settings": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "PUT /api/v2/cleaning/control/tasks/{task_id}/responsible": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
+   ]
+  },
+  "PUT /api/v2/cleaning/rules": {
+   "auth": "roles",
+   "allow": [
+    "manager",
+    "applicant+manager",
+    "executor+inspector+manager",
+    "applicant+executor+manager",
+    "applicant+executor+manager+system_admin",
+    "superuser7"
+   ],
+   "deps": [
+    "_require_enabled"
    ]
   },
   "PUT /api/v2/elevators/config": {

@@ -335,6 +335,8 @@ IDOR_COVERAGE: dict[tuple[str, str], str] = {
     ("POST", "/api/v2/executor/shifts/transfers/{transfer_id}/respond"):
         "test_executor_transfer_respond + test_foreign_transfer_status_is_not_disclosed",
     ("GET", "/api/v2/elevators/for-building/{building_id}"): "test_elevators_for_building",
+    ("POST", "/api/v2/board-config/notices/outages/{notice_id}/close"):
+        "tests/api/test_notices_outages.py::test_foreign_outage_close_is_403",
     ("GET", "/api/v2/registration/yards/{yard_id}/buildings"): "test_registration_cascade_requires_ticket",
     ("GET", "/api/v2/registration/buildings/{building_id}/apartments"):
         "test_registration_cascade_requires_ticket",
@@ -342,6 +344,18 @@ IDOR_COVERAGE: dict[tuple[str, str], str] = {
         "tests/api/test_work_reports_public.py::test_feed_only_published_visible",
     ("GET", "/api/v2/public/work-reports/{report_id}/media/{media_id}"):
         "tests/api/test_work_reports_public.py::test_media_404_cross_report_media_id_idor",
+    # Уборка: задание ведёт только его ответственный (чужое фото — сохранённый отказ not_yours).
+    ("POST", "/api/v2/cleaning/tasks/{task_id}/session"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    ("POST", "/api/v2/cleaning/tasks/{task_id}/photos"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    ("GET", "/api/v2/cleaning/tasks/{task_id}/photos/{photo_id}/file"):
+        "tests/api/test_cleaning_exec_api.py::test_foreign_cleaner_cannot_use_someone_elses_task",
+    # Уборка, открытые маршруты: дом и фото отдаются только при включённом показе жителям.
+    ("GET", "/api/v2/public/cleaning/buildings/{building_id}"):
+        "tests/api/test_cleaning_public_api.py::test_building_view_shows_entrances_schedule_and_public_photos_only",
+    ("GET", "/api/v2/public/cleaning/photos/{photo_id}"):
+        "tests/api/test_cleaning_public_api.py::test_public_photo_follows_settings_status_and_slot",
 }
 
 #: Действия, которые дают только персонал с доступом ко всем объектам раздела
@@ -351,12 +365,18 @@ STAFF_WIDE_ACTIONS = frozenset({
     "work_reports.moderate", "materials.manage", "requests.stats", "elevators.manage",
     "payments.manage", "board.configure", "rbac.manage", "rbac.view", "feedback.manage",
     "group_intake.manage", "requests.manage", "requests.engineering",
+    # Лента новостей и уведомлений — общая на площадку, владельца у записи нет.
+    "notices.manage",
     # A10-INT-10 (WONTFIX, решение владельца): исполнитель/инженер видят реестр
     # лифтов и их заявки целиком; инспектор — любой активный дом (обход).
     "elevators.read", "addresses.read",
     # Колл-центр (менеджер, диспетчер): звонок принимают по любому адресу и от
     # любого жителя — номера квартир дома и квартиры найденного звонящего.
     "callcenter.use",
+    # Уборка, раздел менеджера: планы, привязки и настройки общие на площадку.
+    # `cleaning.work` (уборщица, свои задания) сюда НЕ входит — её маршруты
+    # идут в IDOR_COVERAGE с парой «чужое/своё задание».
+    "cleaning.read", "cleaning.manage",
 })
 
 

@@ -21,6 +21,8 @@ interface Props {
   /** Текущий исполнитель — исключается из списка и определяет заголовок. */
   currentExecutorId: number | null
   currentExecutorName: string | null
+  /** Заявка в «Уточнении»: назначение выведет её в работу — предупреждаем. */
+  leavesClarification?: boolean
   onClose: () => void
   /** Успешная смена исполнителя — в отличие от onClose, не зовётся при отмене. */
   onReassigned?: () => void
@@ -35,7 +37,7 @@ interface Props {
  * кнопку получил, дашборд — нет; здесь паритет.
  *
  * Пишет тем же каноном, что и бот: PATCH `{executor_id}` без `status`
- * транслируется роутером в `MANAGER_ASSIGN` (Новая/В работе → В работе) с
+ * транслируется роутером в `MANAGER_ASSIGN` (Новая/В работе/Уточнение → В работе) с
  * отменой прошлого назначения, audit/outbox и уведомлениями. Вариант
  * «дежурному» идёт как `{status: "В работе", assign_to_duty: true}` — спец
  * резолвит сервер по категории.
@@ -45,6 +47,7 @@ export default function ReassignExecutorModal({
   category,
   currentExecutorId,
   currentExecutorName,
+  leavesClarification = false,
   onClose,
   onReassigned,
 }: Props) {
@@ -82,6 +85,11 @@ export default function ReassignExecutorModal({
           {isReassign && currentExecutorName && (
             <p className="text-[13px] text-text-muted mt-0.5">
               {t('kanban.currentExecutor', { name: personName(currentExecutorName) })}
+            </p>
+          )}
+          {leavesClarification && (
+            <p className="text-[13px] text-text-muted mt-0.5">
+              {t('kanban.assignLeavesClarification')}
             </p>
           )}
         </DialogHeader>

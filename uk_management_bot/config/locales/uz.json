@@ -1,4 +1,13 @@
 {
+  "cleaning": {
+    "bot": {
+      "open": "🧹 Tozalashni ochish",
+      "photo_in_chat": "Tozalash suratlari chatda qabul qilinmaydi: bu yerda surat qachon olinganini tekshirib bo'lmaydi. Qavatlarni ilovada suratga oling.",
+      "morning": "Xayrli tong! Bugun jadval bo'yicha yo'laklar soni: {count}.",
+      "before_end": "Tugatilishi kerak bo'lgan yo'laklar: {count}. Suratlar bugun soat {time} gacha qabul qilinadi.",
+      "summary": "{date} kungi tozalash\nJadval bo'yicha: {total}\nQabul qilindi: {accepted}\nTekshiruvda: {review}\nTugatilmagan: {unfinished}\nRad etildi: {rejected}"
+    }
+  },
   "months": {
     "january": "Yanvar",
     "february": "Fevral",
@@ -242,7 +251,7 @@
       "reassign_same_executor": "Bu ariza allaqachon tanlangan ijrochiga tayinlangan",
       "reassign_no_duty": "«{spec}» mutaxassisligi bo‘yicha navbatchi yo‘q",
       "reassign_duty_lookup_failed": "Navbatchini tanlab bo'lmadi, qaytadan urinib ko'ring",
-      "reassign_bad_status": "Qayta tayinlash faqat «Yangi» yoki «Ishda» holatidagi arizalar uchun mumkin",
+      "reassign_bad_status": "Qayta tayinlash faqat «Yangi», «Ishda» yoki «Aniqlashtirish» holatidagi arizalar uchun mumkin",
       "address_not_bound": "Ariza manzili ma'lumotnomadan emas — tayinlab bo‘lmaydi. Dashboarddagi ariza kartasida hovli, uy yoki xonadonni biriktiring.",
       "reassign_rejected": "Qayta tayinlash rad etildi: ariza o‘zgardi, kartani qaytadan oching",
       "reassign_from_unassigned": "tayinlanmagan edi",
@@ -638,6 +647,11 @@
     "cooldown": "Arizani qayta topshirish sutkada bir martadan ko'p mumkin emas.",
     "denied": "Qayta topshirish mumkin emas. Boshqaruv kompaniyasiga murojaat qiling.",
     "not_found": "Foydalanuvchi topilmadi. /start ni bosing."
+  },
+  "pd_consent": {
+    "company_default": "Boshqaruv kompaniyasi",
+    "notice": "ℹ️ <b>Shaxsiy ma'lumotlarni qayta ishlash</b>\n\n{company} arizalarni qabul qilish va bajarish uchun sizning ma'lumotlaringizni (F.I.Sh., telefon, manzil, arizalar) qayta ishlaydi. Batafsil — /privacy buyrug'i.\n\nBotdan foydalanishni davom ettirsangiz, shaxsiy ma'lumotlaringizni qayta ishlashga rozilik bildirgan hisoblanasiz. Agar rozi bo'lmasangiz — botdan foydalanmang va ma'lumotlaringizni o'chirish uchun boshqaruv kompaniyasiga murojaat qiling.",
+    "policy": "<b>Shaxsiy ma'lumotlarni qayta ishlash</b>\n\n<b>Operator:</b> {company}.\n\n<b>Qanday ma'lumotlar:</b> F.I.Sh., telefon raqami, Telegram ID va foydalanuvchi nomi, manzil va xonadon raqami, xonadonga bo'lgan huquqni tasdiqlovchi hujjat, shaxsiy hisob raqami, arizalar matni va fotosuratlari, avtomobil raqami (ruxsatnoma rasmiylashtirsangiz).\n\n<b>Nima uchun:</b> ro'yxatdan o'tkazish va yashashni tasdiqlash, arizalarni qabul qilish va bajarish, ishlar va uzilishlar haqida xabardor qilish, xizmatlar uchun hisob-kitoblar, kirish-chiqish tartibi.\n\n<b>Kimga beriladi:</b> boshqaruv kompaniyasi xodimlari va ariza ijrochilariga — ish uchun zarur hajmda. Xabarlar Telegram orqali yetkaziladi. Ariza matni O'zbekistondan tashqaridagi avtomatik tasniflash xizmati tomonidan qayta ishlanishi mumkin; matndagi telefon raqamlari bundan oldin yashiriladi. Ariza matnida ortiqcha shaxsiy ma'lumotlarni ko'rsatmang. Ma'lumotlar O'zbekistondagi serverlarda saqlanadi.\n\n<b>Qancha saqlanadi:</b> xizmatdan foydalanayotgan vaqtingiz davomida. Xonadon hujjati shifrlangan holda saqlanadi va tekshiruvdan so'ng yo'q qilinadi.\n\n<b>Sizning huquqlaringiz:</b> siz haqingizda qanday ma'lumotlar saqlanishini bilish, ularni tuzatish, rozilikni qaytarib olish va o'chirishni talab qilish — boshqaruv kompaniyasiga murojaat qiling."
   },
   "onboarding": {
     "completed": "🎉 Ro'yxatdan o'tish tugallandi! Sizning ma'lumotlaringiz:",
@@ -2967,6 +2981,7 @@
       "clarification_reminder": "❓ №{request_number} ariza bo'yicha aniqlashtirishga javobingizni kutyapmiz. Usta chiqa olishi uchun botda javob bering.",
       "clarification_manager": "❓ №{request_number} ariza «Aniqlashtirish»da, yashovchi {age} javob bermadi.",
       "executed_unconfirmed": "✅ №{request_number} ariza bajarildi va {age}dan beri tekshiruvingizni kutmoqda.",
+      "review_digest_title": "✅ <b>Bajarilgan va tekshiruvingizni kutmoqda: {count}</b>",
       "auto_accepted": "✅ №{request_number} ariza avtomatik qabul qilindi: {days} kun tasdiq bo'lmadi. Ish bajarilmagan bo'lsa — yangi ariza yarating.",
       "critical_unassigned": "🚨 <b>№{request_number} kritik ariza ijrochisiz</b> {age}dan beri.\n{category}, {address}"
     },
@@ -3016,5 +3031,14 @@
     "free_text_offer": "Siz oddiy xabar yozayotganga o'xshaysiz. Arizani «📝 Ariza yaratish» tugmasi orqali berish tezroq — buni bir daqiqada qanday qilishni ko'ring.",
     "btn_registration": "🎬 Qanday ro'yxatdan o'tish",
     "btn_request": "🎬 Ariza qanday beriladi"
+  },
+  "outages": {
+    "btn_close": "✅ Yoqildi: {title}",
+    "closed": "✅ Yopildi. Aholiga yoqilgani haqida xabar boradi.",
+    "err_not_open": "Bu o'chirish allaqachon yopilgan.",
+    "err_not_yours": "Faqat muallif yoki smenadagi santexnik yopa oladi.",
+    "err_generic": "Bajarilmadi. Qayta urinib ko'ring.",
+    "remind_overdue": "⏰ O'chirish muddati tugadi: {title}\nYoqildimi?",
+    "remind_shift_end": "Smena tugadi, lekin o'chirish yopilmagan: {title}\nYoqildimi?"
   }
 }

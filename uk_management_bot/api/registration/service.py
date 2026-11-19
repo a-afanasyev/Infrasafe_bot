@@ -7,6 +7,7 @@ rollback перед 4xx) решает роутер. get_db дополнител�
 исключении.
 """
 import json
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -18,6 +19,7 @@ from uk_management_bot.api.users.queries import (
 )
 from uk_management_bot.database.models.user import User
 from uk_management_bot.database.models.user_apartment import UserApartment
+from uk_management_bot.services import pd_consent
 from uk_management_bot.utils.auth_helpers import parse_roles_safe
 
 # Типизированные исходы upsert'а — роутер маппит их на HTTP-коды.
@@ -89,6 +91,13 @@ async def upsert_pending_applicant(
         _apply_applicant_fields(user, first_name=first_name, last_name=last_name, phone=phone)
         await db.flush()
     return UPSERT_OK, user
+
+
+def record_pd_consent(db: AsyncSession, user: User) -> None:
+    """Согласие на обработку ПДн из формы регистрации — в транзакции заявки, БЕЗ commit."""
+    log = pd_consent.grant(user, pd_consent.SOURCE_REGISTRATION, datetime.now(timezone.utc))
+    if log is not None:
+        db.add(log)
 
 
 async def apartment_link_of(

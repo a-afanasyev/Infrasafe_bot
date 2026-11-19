@@ -9,6 +9,8 @@ export interface RequestCard {
   category: string
   urgency: string | null
   source: string | null
+  /** От кого заявка: житель, сотрудник или система (мониторинг). */
+  author_kind?: 'resident' | 'staff' | 'system' | null
   description: string | null
   address: string | null
   executor_id: number | null

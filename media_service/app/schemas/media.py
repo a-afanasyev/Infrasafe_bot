@@ -31,6 +31,8 @@ class MediaCategoryEnum(str, Enum):
     COMPLETION_VIDEO = "completion_video"
     # Фото исполнителя «до работ» (UK: /requests/{n}/before-photo → upload-report)
     BEFORE_PHOTO = "before_photo"
+    # Фото уборки подъезда (UK: модуль «Уборка» → upload-report, номер `cl-{task_id}`)
+    CLEANING_PHOTO = "cleaning_photo"
     DAMAGE_PHOTO = "damage_photo"
     MATERIALS_PHOTO = "materials_photo"
     PROCESS_VIDEO = "process_video"

@@ -76,12 +76,20 @@ const ElevatorsConfigPage = lazy(() => import('./pages/elevators/ElevatorsConfig
 const ResidentElevatorsPage = lazy(() => import('./pages/ResidentElevatorsPage'))
 const ELEVATORS_ENABLED = import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
 
+// Модуль «Уборка»: план дома, привязка уборщиц, нагрузка. DARK за
+// VITE_CLEANING_ENABLED (согласованно с backend CLEANING_ENABLED → 404).
+const CleaningPlanPage = lazy(() => import('./pages/cleaning/CleaningPlanPage'))
+const CleaningStaffPage = lazy(() => import('./pages/cleaning/CleaningStaffPage'))
+const CleaningControlPage = lazy(() => import('./pages/cleaning/CleaningControlPage'))
+const CleaningTaskPage = lazy(() => import('./pages/cleaning/CleaningTaskPage'))
+const ResidentCleaningPage = lazy(() => import('./pages/ResidentCleaningPage'))
+const CLEANING_ENABLED = import.meta.env.VITE_CLEANING_ENABLED === 'true'
+
 // Мониторинг отключений (очередь новостей + настройки). DARK за
 // VITE_NEWS_WATCH_ENABLED (согласованно с backend NEWS_WATCH_ENABLED → 404).
-const NewsWatchPage = lazy(() => import('./pages/NewsWatchPage'))
 const AiManagerPage = lazy(() => import('./pages/AiManagerPage'))
+const NoticesPage = lazy(() => import('./pages/NoticesPage'))
 const DispatcherPage = lazy(() => import('./pages/DispatcherPage'))
-const NEWS_WATCH_ENABLED = import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
 
 
 interface ProtectedRouteProps {
@@ -235,16 +243,26 @@ export default function App() {
                   <Route path=":id/edit" element={<PageErrorBoundary><ElevatorFormPage /></PageErrorBoundary>} />
                 </Route>
               )}
+              {CLEANING_ENABLED && (
+                <Route path="/dashboard/cleaning" element={<ProtectedRoute action="cleaning.read"><DashboardLayout /></ProtectedRoute>}>
+                  <Route index element={<PageErrorBoundary><CleaningPlanPage /></PageErrorBoundary>} />
+                  <Route path="staff" element={<PageErrorBoundary><CleaningStaffPage /></PageErrorBoundary>} />
+                  <Route path="control" element={<PageErrorBoundary><CleaningControlPage /></PageErrorBoundary>} />
+                  <Route path="tasks/:id" element={<PageErrorBoundary><CleaningTaskPage /></PageErrorBoundary>} />
+                </Route>
+              )}
               {ELEVATORS_ENABLED && (
                 <Route path="/dashboard/elevators/config" element={<ProtectedRoute action="elevators.manage"><DashboardLayout /></ProtectedRoute>}>
                   <Route index element={<PageErrorBoundary><ElevatorsConfigPage /></PageErrorBoundary>} />
                 </Route>
               )}
-              {NEWS_WATCH_ENABLED && (
-                <Route path="/dashboard/news-watch" element={<ProtectedRoute action="board.configure"><DashboardLayout /></ProtectedRoute>}>
-                  <Route index element={<PageErrorBoundary><NewsWatchPage /></PageErrorBoundary>} />
-                </Route>
-              )}
+              {/* Новости и уведомления: лента, календарь, очередь из каналов.
+                  Отдельный group — действие notices.manage, не общий dashboard.use. */}
+              <Route path="/dashboard/notices" element={<ProtectedRoute action="notices.manage"><DashboardLayout /></ProtectedRoute>}>
+                <Route index element={<PageErrorBoundary><NoticesPage /></PageErrorBoundary>} />
+              </Route>
+              {/* Прежний адрес «Отключений» — теперь вкладка раздела. */}
+              <Route path="/dashboard/news-watch" element={<Navigate to="/dashboard/notices?tab=channels" replace />} />
               {/* Правила ИИ-менеджера: без build-флага — страница сама показывает
                   «недоступно», если на площадке нет AI_MANAGER_ENABLED. */}
               <Route path="/dashboard/ai-manager" element={<ProtectedRoute action="auto_manager.configure"><DashboardLayout /></ProtectedRoute>}>
@@ -271,6 +289,11 @@ export default function App() {
 
               {/* Страница жителей «Ваш дом сегодня» — публичная главная (сюда ведёт «/»). */}
               <Route path="/home" element={<PageErrorBoundary><ResidentHomePage /></PageErrorBoundary>} />
+
+              {/* Открытый обзор уборки по всем домам: статусы подъездов и фото. */}
+              {CLEANING_ENABLED && (
+                <Route path="/cleaning" element={<PageErrorBoundary><ResidentCleaningPage /></PageErrorBoundary>} />
+              )}
 
               {/* Resident board — табло для экрана в холле (публичное, standalone) */}
               <Route path="/resident-board" element={<PageErrorBoundary><ResidentBoardPage /></PageErrorBoundary>} />

@@ -17,6 +17,7 @@ describe('resolveHomeBlocks', () => {
   it('без home (старый бэкенд) — видны все блоки включённых модулей', () => {
     vi.stubEnv('VITE_ELEVATORS_ENABLED', 'true')
     vi.stubEnv('VITE_WORK_REPORTS_ENABLED', 'true')
+    vi.stubEnv('VITE_CLEANING_ENABLED', 'true')
     const blocks = resolveHomeBlocks(config(undefined), 'ru')
     expect(Object.values(blocks).every((b) => b.visible)).toBe(true)
   })

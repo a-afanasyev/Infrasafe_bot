@@ -173,6 +173,30 @@
       "superadmin_only": false,
       "title": "Колл-центр: заявки по звонку"
     },
+    "cleaning.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Уборка: правка планов, привязок и настроек"
+    },
+    "cleaning.read": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Уборка: план домов, привязка, нагрузка, контроль"
+    },
+    "cleaning.work": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": true,
+      "superadmin_only": false,
+      "title": "Уборка: задания уборщицы и фото этажей"
+    },
     "dashboard.live": {
       "roles": [
         "engineer",
@@ -285,6 +309,22 @@
       "approved_only": true,
       "superadmin_only": false,
       "title": "Склад материалов"
+    },
+    "notices.manage": {
+      "roles": [
+        "manager"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Новости и уведомления жителям"
+    },
+    "outages.announce": {
+      "roles": [
+        "executor"
+      ],
+      "approved_only": false,
+      "superadmin_only": false,
+      "title": "Отключения: объявление сантехником на смене"
     },
     "payments.manage": {
       "roles": [

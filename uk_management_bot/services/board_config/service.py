@@ -20,6 +20,7 @@ from uk_management_bot.services.board_config.defaults import (
     ALL_MODULE_IDS,
     DEFAULT_BOARD_CONFIG,
     enabled_module_ids,
+    home_block_enabled,
 )
 from uk_management_bot.config.settings import settings
 from uk_management_bot.services.board_config.schemas import (
@@ -33,6 +34,9 @@ from uk_management_bot.database.models.board_config import BoardConfig
 logger = logging.getLogger(__name__)
 
 CONFIG_ROW_ID = 1
+
+# Списки, которые витрина получает из notices, а не из хранимого JSON.
+NOTICE_BACKED_FIELDS = ("announcements", "planned_works")
 
 # Порядок дней недели (схема валидирует состав 7 дней, но не порядок).
 _DAY_ORDER = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -109,7 +113,10 @@ async def merge_and_save_board_config(
     # nested dicts — the autopost_since stamping below mutates in place.
     merged = copy.deepcopy(stored)
     for key, value in updates.items():
-        if key == "layout":
+        # Новости и плановые работы живут в таблице notices (services/notices):
+        # редактор витрины их не ведёт, а тело старого клиента не должно
+        # вернуть их в JSON.
+        if key in ("layout", *NOTICE_BACKED_FIELDS):
             continue
         merged[key] = value
 
@@ -168,27 +175,6 @@ async def merge_and_save_board_config(
     return normalized
 
 
-async def append_announcement(db: AsyncSession, item: dict, updated_by: int | None) -> StoredBoardConfigData:
-    """Добавить объявление ПЕРВЫМ — read-modify-write под тем же FOR UPDATE,
-    что и `merge_and_save_board_config` (он перезаписывает `announcements`
-    целиком и для append не годится). Повторный `id` не дублируется.
-    Вызывающий (news-watch) коммитит свою транзакцию вместе с этой записью."""
-    result = await db.execute(
-        select(BoardConfig).where(BoardConfig.id == CONFIG_ROW_ID).with_for_update()
-    )
-    row = result.scalar_one_or_none()
-    stored: dict = copy.deepcopy(row.data) if row is not None and row.data else copy.deepcopy(DEFAULT_BOARD_CONFIG)
-    existing = [a for a in stored.get("announcements", []) if a.get("id") != item.get("id")]
-    normalized = StoredBoardConfigData.model_validate({**stored, "announcements": [item, *existing]})
-    if row is None:
-        db.add(BoardConfig(id=CONFIG_ROW_ID, data=normalized.model_dump(mode="json"), updated_by=updated_by))
-    else:
-        row.data = normalized.model_dump(mode="json")
-        row.updated_by = updated_by
-    await db.flush()
-    return normalized
-
-
 async def load_dispatch_phone(db: AsyncSession) -> str | None:
     """Телефон диспетчерской из СОХРАНЁННОЙ строки board_config — канон бота
     ``RequestHandlerService.get_dispatch_phone``: нет строки / битые данные /
@@ -219,7 +205,7 @@ def to_public_response(cfg: StoredBoardConfigData) -> BoardConfigResponse:
     # Блоки страницы жителей «Лифты»/«Отчёты» — те же модули, тот же флаг.
     data["home"]["blocks"] = [
         block for block in data["home"]["blocks"]
-        if block["id"] not in ALL_MODULE_IDS or block["id"] in enabled
+        if (block["id"] not in ALL_MODULE_IDS or block["id"] in enabled) and home_block_enabled(block["id"])
     ]
     # ARCH-137 B5: зона показа — свойство ответа, не хранимого конфига.
     data["display_tz"] = settings.DISPLAY_TZ

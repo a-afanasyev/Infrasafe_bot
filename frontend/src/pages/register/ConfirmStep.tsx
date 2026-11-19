@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -9,17 +9,20 @@ interface Props {
   onFullNameChange: (v: string) => void
   phone: string
   addressLabel: string
+  /** Название оператора для текста согласия. */
+  company: string
   onChangeAddress: () => void
   onSubmit: () => Promise<void> | void
   submitting: boolean
   error: string
 }
 
-/** Итог: ФИО (редактируемое), телефон и адрес (только чтение), отправка. */
+/** Итог: ФИО (редактируемое), телефон и адрес (только чтение), согласие на обработку ПДн, отправка. */
 export function ConfirmStep({
-  fullName, onFullNameChange, phone, addressLabel, onChangeAddress, onSubmit, submitting, error,
+  fullName, onFullNameChange, phone, addressLabel, company, onChangeAddress, onSubmit, submitting, error,
 }: Props) {
   const { t } = useTranslation()
+  const [consent, setConsent] = useState(false)
   const muted = 'text-sm text-text-secondary font-[family-name:var(--font-body)]'
 
   function handleSubmit(e: FormEvent) {
@@ -51,8 +54,22 @@ export function ConfirmStep({
           {t('register.change_address')}
         </Button>
       </div>
+      <label className={`${muted} flex items-start gap-2 cursor-pointer`}>
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          checked={consent}
+          onChange={(e) => setConsent(e.target.checked)}
+          required
+        />
+        <span>{t('register.consent_label')}</span>
+      </label>
+      <details className={muted}>
+        <summary className="cursor-pointer">{t('register.consent_details')}</summary>
+        <div className="mt-2 whitespace-pre-line">{t('register.consent_text', { company })}</div>
+      </details>
       {error && <div className="text-[13px] text-red font-[family-name:var(--font-body)]">{error}</div>}
-      <Button type="submit" disabled={submitting} className="w-full">
+      <Button type="submit" disabled={submitting || !consent} className="w-full">
         {submitting ? t('common.sending') : t('register.submit')}
       </Button>
     </form>

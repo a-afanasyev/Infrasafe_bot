@@ -37,6 +37,7 @@ from uk_management_bot.handlers.health import router as health_router
 # Новые обработчики системы смен
 from uk_management_bot.handlers.shift_management import router as shift_management_router_new
 from uk_management_bot.handlers.my_shifts import router as my_shifts_router
+from uk_management_bot.handlers.outages import router as outages_router  # «✅ Включили» под напоминанием об отключении
 from uk_management_bot.handlers.elevators import router as elevators_router  # Лифтёр: меню «Лифты» (Ф5)
 from uk_management_bot.handlers.auto_manager import router as auto_manager_router  # Бот-UI автоменеджера
 
@@ -271,6 +272,13 @@ def setup_middlewares(dp: Dispatcher) -> None:
         result = await role_mode_middleware(handler, event, data)
         return result
 
+    # Согласие на обработку ПДн для уже зарегистрированных (после auth: читает data["user"])
+    from uk_management_bot.middlewares.pd_consent import pd_consent_middleware
+
+    @dp.update.middleware()
+    async def _pd_consent_middleware(handler, event, data):
+        return await pd_consent_middleware(handler, event, data)
+
     # Localization middleware: injects `language` into handler data
     from uk_management_bot.middlewares.localization import localization_middleware
 
@@ -336,6 +344,7 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(auto_manager_router)  # Бот-UI автоменеджера (вкл/выкл, окно) для менеджеров
     dp.include_router(my_shifts_router)  # Интерфейс смен для исполнителей
     dp.include_router(elevators_router)  # Лифтёр: меню «Лифты» (RoleGate executor; elvm:*)
+    dp.include_router(outages_router)  # Отключения: кнопка «включили» (ActionGate outages.announce; outg:close:*)
     dp.include_router(shift_transfer_router)  # Передача смен между исполнителями
     dp.include_router(shifts_router)  # старый роутер смен
 

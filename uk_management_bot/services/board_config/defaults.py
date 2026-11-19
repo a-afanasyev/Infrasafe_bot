@@ -21,7 +21,18 @@ _MODULE_FLAGS = {
 # сетка (объявления+контакты, обращения+работы, лифты+отчёты), поэтому менеджер
 # включает/выключает блоки и меняет заголовки, но не переставляет. «elevators» и
 # «workreports» гейтуются теми же флагами, что и одноимённые модули табло.
-HOME_BLOCK_IDS = ("announcements", "contacts", "requests", "works", "elevators", "workreports")
+HOME_BLOCK_IDS = ("announcements", "contacts", "requests", "works", "elevators", "workreports", "cleaning")
+
+# Блоки страницы жителей, у которых нет одноимённого модуля табло: блок → флаг.
+_HOME_BLOCK_FLAGS = {
+    "cleaning": "CLEANING_ENABLED",
+}
+
+
+def home_block_enabled(block_id: str) -> bool:
+    """Виден ли блок страницы жителей при текущих флагах (модули табло — см. enabled_module_ids)."""
+    flag = _HOME_BLOCK_FLAGS.get(block_id)
+    return flag is None or bool(getattr(settings, flag))
 
 
 def enabled_module_ids() -> tuple[str, ...]:

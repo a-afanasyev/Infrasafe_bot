@@ -15,7 +15,7 @@ from uk_management_bot.api.dependencies import get_current_user, get_db
 from uk_management_bot.api.main import app
 from uk_management_bot.api.telegram_send import STATUS_ERROR, STATUS_OK, TelegramResult
 from uk_management_bot.config.settings import settings
-from uk_management_bot.database.models.board_config import BoardConfig
+from uk_management_bot.database.models.notice import Notice
 from uk_management_bot.database.models.news_item import NewsItem
 from uk_management_bot.database.models.user import User
 from uk_management_bot.services.news_watch import pipeline
@@ -188,8 +188,8 @@ async def test_inbox_to_pending_then_publish(client, db_session_factory, monkeyp
     assert (await client(manager).post(f"{BASE}/items/{item['id']}/retry-broadcast")).status_code == 409
 
     async with db_session_factory() as s:
-        board = (await s.execute(select(BoardConfig))).scalar_one()
-        assert board.data["announcements"][0]["id"] == f"news-{item['id']}"
+        notice = (await s.execute(select(Notice))).scalar_one()
+        assert notice.news_item_id == item["id"] and notice.status == "published"
         row = (await s.execute(select(NewsItem))).scalar_one()
         assert row.status == "published"
 

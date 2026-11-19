@@ -129,4 +129,6 @@ def test_core_api_has_no_unexplained_public_routes():
     # Число зафиксировано снимком; рост — повод проверить, что публичность задумана.
     # 33: +2 маршрута news-watch для юзербота (POST /inbox, GET /sources) — без
     # user-auth, гейт — X-Service-Token (NEWS_WATCH_SERVICE_TOKEN, fail-closed).
-    assert len(public) == 33, public
+    # 36: +3 открытых маршрута уборки для жителей (/public/cleaning/today, дом, фото) —
+    # статусы и расписание без имён; дом и фото отдаются только при включённом показе.
+    assert len(public) == 36, public

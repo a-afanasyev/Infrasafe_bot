@@ -1,6 +1,6 @@
 import type { BoardConfigData, HomeBlockCfg, HomeBlockId, LocalizedText } from '../../types/boardConfig'
 import { HOME_BLOCK_IDS } from '../../types/boardConfig'
-import { isElevatorsEnabled, isWorkReportsEnabled } from '../../utils/featureFlags'
+import { isCleaningEnabled, isElevatorsEnabled, isWorkReportsEnabled } from '../../utils/featureFlags'
 import type { Lang } from './homeFormat'
 
 // Эффективные настройки страницы жителей из конфига витрины. Чистые функции:
@@ -18,6 +18,7 @@ export type HomeBlocks = Record<HomeBlockId, HomeBlockState>
 export function blockModuleEnabled(id: HomeBlockId): boolean {
   if (id === 'elevators') return isElevatorsEnabled()
   if (id === 'workreports') return isWorkReportsEnabled()
+  if (id === 'cleaning') return isCleaningEnabled()
   return true
 }
 
@@ -45,9 +46,10 @@ export function resolveHomeBlocks(config: BoardConfigData, lang: Lang): HomeBloc
   ) as HomeBlocks
 }
 
-/** Ряды страницы: пары блоков; ряд без видимых блоков пропускается. */
-export const HOME_ROWS: readonly (readonly [HomeBlockId, HomeBlockId])[] = [
+/** Ряды страницы: пары блоков (уборка — отдельным рядом); ряд без видимых блоков пропускается. */
+export const HOME_ROWS: readonly (readonly HomeBlockId[])[] = [
   ['announcements', 'contacts'],
   ['requests', 'works'],
   ['elevators', 'workreports'],
+  ['cleaning'],
 ] as const

@@ -37,6 +37,15 @@ PUBLIC_BY_DESIGN = {
         "T8: публичное табло работ; гейт — status=='published' (404 иначе)",
     ("work_reports/public_router.py", "get_public_work_report_media"):
         "T8: media только из опубликованной пары (report_id, media_id)",
+    # Уборка для жителей: статусы и расписание без имён; гейт — показ дома жителям.
+    # IDOR-инварианты: tests/api/test_cleaning_public_api.py::
+    #   test_building_view_shows_entrances_schedule_and_public_photos_only (скрытый дом → 404),
+    #   test_public_photo_follows_settings_status_and_slot (не принято / прошлый день /
+    #   показ выключен → 404).
+    ("cleaning/router_resident.py", "cleaning_building"):
+        "уборка дома жителям; гейт — cleaning_building_settings.show_to_residents (404 иначе)",
+    ("cleaning/router_resident.py", "cleaning_photo"):
+        "текущее фото принятого сегодняшнего задания при show_photos (404 иначе)",
 }
 
 

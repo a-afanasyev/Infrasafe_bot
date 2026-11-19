@@ -24,6 +24,14 @@ from uk_management_bot.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
+# Начало рабочего дня по времени объекта: час утренней сводки менеджерам.
+REVIEW_DIGEST_HOUR = 9
+
+# Шаг тика напоминаний об отключениях = окно «срок вышел только что».
+OUTAGE_REMINDER_MINUTES = 10
+# Уборка: шаг тика = наибольшее опоздание закрытия дня после его конца.
+CLEANING_TICK_MINUTES = 10
+
 
 @dataclass(frozen=True)
 class _ShiftReminder:
@@ -73,6 +81,8 @@ class ShiftScheduler:
             'notify_upcoming': {'success': 0, 'failed': 0, 'last_run': None},
             'work_reports_sync': {'success': 0, 'failed': 0, 'last_run': None},
             'elevator_reminders': {'success': 0, 'failed': 0, 'last_run': None},
+            'outage_reminders': {'success': 0, 'failed': 0, 'last_run': None},
+            'cleaning_tick': {'success': 0, 'failed': 0, 'last_run': None},
             'executor_open_tasks': {'success': 0, 'failed': 0, 'last_run': None},
             'monthly_report': {'success': 0, 'failed': 0, 'last_run': None},
         }
@@ -244,6 +254,16 @@ class ShiftScheduler:
                 max_instances=1,
                 coalesce=True
             )
+            # Сводка «исполнено, ждёт проверки» — к началу рабочего дня по времени
+            # объекта, одним сообщением (вместо пинга по каждой заявке ночью).
+            self.scheduler.add_job(
+                self._ai_review_digest_tick,
+                self._cron(hour=REVIEW_DIGEST_HOUR, minute=0),
+                id='ai_review_digest',
+                name='ИИ-менеджер — утренняя сводка «ждут проверки»',
+                max_instances=1,
+                coalesce=True
+            )
 
         # 10а. «Инженерный разбор» — у инженера всегда (каждые 2 минуты, не
         #      зависит от настроек авто-менеджера): страховка вебхука и
@@ -327,6 +347,32 @@ class ShiftScheduler:
                 IntervalTrigger(hours=1),
                 id='elevator_reminders',
                 name='Лифты — напоминания персоналу',
+                max_instances=1,
+                coalesce=True
+            )
+
+        # 15. Отключения от сантехника: срок вышел или смена автора закончилась
+        #     (любым способом, в т.ч. по расписанию), а запись не закрыта — автору
+        #     личка «Уже включили?» с кнопкой. Сама запись не закрывается.
+        self.scheduler.add_job(
+            self._outage_reminders_tick,
+            IntervalTrigger(minutes=OUTAGE_REMINDER_MINUTES),
+            id='outage_reminders',
+            name='Отключения — напоминание автору о незакрытом',
+            max_instances=1,
+            coalesce=True
+        )
+
+        # 16. Уборка: догенерация заданий дня, закрытие истёкших дней, чистка
+        #     операций загрузки. Всё идемпотентно (cleaning_days), поэтому
+        #     пропущенный тик догоняется следующим. Выключенный модуль = джобы
+        #     нет вовсе (флаг читается один раз, как у лифтов).
+        if settings.CLEANING_ENABLED:
+            self.scheduler.add_job(
+                self._cleaning_tick,
+                IntervalTrigger(minutes=CLEANING_TICK_MINUTES),
+                id='cleaning_tick',
+                name='Уборка — задания дня, закрытие дня, чистка',
                 max_instances=1,
                 coalesce=True
             )
@@ -798,6 +844,14 @@ class ShiftScheduler:
         except Exception as e:
             logger.error(f"Ошибка тика SLA ИИ-менеджера: {e}")
 
+    async def _ai_review_digest_tick(self):
+        """Утренняя сводка менеджерам: исполнено и ждёт проверки (services/ai_manager/sla)."""
+        try:
+            sent = await self._ai_sla.send_review_digest()
+            logger.info("ИИ-менеджер: утренняя сводка «ждут проверки», сообщений %s", sent)
+        except Exception as e:
+            logger.error("Ошибка утренней сводки ИИ-менеджера: %s", type(e).__name__)
+
     async def _engineering_reconcile_tick(self):
         """Сверка «Инженерного разбора» (services/engineering_reconcile)."""
         from uk_management_bot.services.engineering_reconcile import reconcile_once
@@ -965,6 +1019,64 @@ class ShiftScheduler:
             # бросает, так что текста httpx (URL с токеном) в трейсе нет.
             logger.exception("Ошибка напоминаний по лифтам")
 
+
+    def _outage_reminders_sync(self) -> tuple[list, list]:
+        """(срок вышел, смена автора закончилась) — второе без повторов первого."""
+        from uk_management_bot.services.notices.outages import overdue_sync, shift_ended_sync
+
+        db = SessionLocal()
+        try:
+            now, window = utc_now(), timedelta(minutes=OUTAGE_REMINDER_MINUTES)
+            overdue = overdue_sync(db, now, window)
+            seen = {item.notice_id for item in overdue}
+            return overdue, [item for item in shift_ended_sync(db, now, window) if item.notice_id not in seen]
+        finally:
+            db.close()
+
+    async def _cleaning_tick(self):
+        """Уборка: задания последних дней и сегодня, закрытие истёкших дней, чистка."""
+        from uk_management_bot.database.session import AsyncSessionLocal
+        if AsyncSessionLocal is None:  # SQLite dev-режим — async-движка нет
+            return
+        from uk_management_bot.services.cleaning import cleanup, days, notify
+
+        task_name = 'cleaning_tick'
+        try:
+            async with AsyncSessionLocal() as db:
+                await days.tick(db)
+                await db.commit()  # дни фиксируются до рассылки: её сбой не откатывает генерацию и закрытие
+            async with AsyncSessionLocal() as db:
+                messages = await notify.collect(db)
+                await db.commit()
+            if messages and self._bot is not None:
+                await notify.send(self._bot, messages)  # не бросает
+            stats = await cleanup.run(AsyncSessionLocal)
+            if any(stats.values()):
+                logger.info("Уборка: чистка %s", stats)
+            self.task_stats[task_name]['success'] += 1
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            logger.exception("Ошибка тика уборки")
+        self.task_stats[task_name]['last_run'] = utc_now()
+
+    async def _outage_reminders_tick(self):
+        """Истёкшие незакрытые отключения: DB-фаза в потоке, затем личка автору."""
+        from uk_management_bot.services.notices.outage_reminders import send_reminders
+
+        task_name = 'outage_reminders'
+        try:
+            overdue, ended = await asyncio.to_thread(self._outage_reminders_sync)
+            if (overdue or ended) and self._bot is not None:
+                sent = await send_reminders(self._bot, overdue, "remind_overdue")  # не бросает
+                sent += await send_reminders(self._bot, ended, "remind_shift_end")
+                logger.info("Отключения: срок вышел %s, смена закончилась %s, напоминаний %s",
+                            len(overdue), len(ended), sent)
+            self.task_stats[task_name]['success'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+        except Exception:
+            self.task_stats[task_name]['failed'] += 1
+            self.task_stats[task_name]['last_run'] = utc_now()
+            logger.exception("Ошибка напоминаний об отключениях")
 
     def _executor_open_tasks_sync(self) -> list:
         """DB-фаза напоминания: плоские DTO получателей (не ORM)."""

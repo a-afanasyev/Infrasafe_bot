@@ -293,8 +293,12 @@ class MediaServiceClient:
             logger.error(f"Failed to get media for request {request_number}: {e}")
             raise
 
-    async def download_media_file(self, media_id: int) -> Optional[tuple[bytes, str]]:
+    async def download_media_file(self, media_id: int, *, preview: bool = False) -> Optional[tuple[bytes, str]]:
         """Байты файла и его content-type, либо None при любой HTTP-ошибке.
+
+        ``preview`` — уменьшенный JPEG из дискового кэша медиа-сервиса вместо
+        оригинала: десяток миниатюр разом не должен качать десять оригиналов из
+        Telegram (так сетка фото уборки ловила 504 на edge).
 
         Нужен боту для показа файлов, загруженных мимо него (дашборд/TWA):
         `telegram_file_id` медиа-сервиса выдан под другим бот-токеном и
@@ -304,7 +308,8 @@ class MediaServiceClient:
         """
         try:
             response = await get_with_retries(
-                self.client, f"/media/{media_id}/file", retry_statuses=FILE_RETRY_STATUSES
+                self.client, f"/media/{media_id}/{'preview' if preview else 'file'}",
+                retry_statuses=FILE_RETRY_STATUSES
             )
             response.raise_for_status()
         except (httpx.HTTPError, RuntimeError) as e:

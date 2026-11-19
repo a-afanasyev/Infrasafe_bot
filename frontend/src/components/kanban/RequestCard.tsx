@@ -107,7 +107,12 @@ function CardContent({ card, urgency, unread }: { card: TCard; urgency: UrgencyS
             {card.request_number}
           </span>
         </span>
-        <span className="text-[11px] opacity-80">
+        <span className="flex items-center gap-1 text-[11px] opacity-80">
+          {card.author_kind && (
+            <span className={cn('font-medium', card.author_kind === 'staff' ? 'text-accent' : 'text-text-muted')}>
+              {t(`kanban.authorKind.${card.author_kind}`)}
+            </span>
+          )}
           {SOURCE_ICON[card.source ?? ''] ?? ''}
         </span>
       </div>

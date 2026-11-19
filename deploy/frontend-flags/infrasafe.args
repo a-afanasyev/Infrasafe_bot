@@ -15,5 +15,8 @@ VITE_WORK_REPORTS_ENABLED=
 # Лифты на 105 DARK (включены только на profk, 2026-09-06); платежи на 105 не подняты.
 VITE_ELEVATORS_ENABLED=
 VITE_PAYMENTS_ENABLED=
+# Уборка: включена на площадке 2026-11-16 вместе с CLEANING_ENABLED у app/api; префикс
+# /api/v2/cleaning заявлен в edge-allowlist обеих площадок. Пусто = OFF.
+VITE_CLEANING_ENABLED=true
 # Мониторинг отключений (news-watch): пусто = OFF; true только вместе с NEWS_WATCH_ENABLED у api и edge-allowlist.
 VITE_NEWS_WATCH_ENABLED=true

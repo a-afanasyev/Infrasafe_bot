@@ -48,7 +48,8 @@ import {
   CaseUpper,
   Check,
   ArrowUpDown,
-  Radio,
+  Sparkles,
+  Megaphone,
   UserCog,
   Bot,
   Settings,
@@ -128,10 +129,8 @@ const NAV_ENTRIES: NavEntry[] = [
       // Group Intake: реестр мониторимых ТГ-групп; пункт и API гейтятся одним
       // действием group_intake.manage.
       { to: '/dashboard/groups', labelKey: 'nav.groups', Icon: MessagesSquare, action: 'group_intake.manage' },
-      // Мониторинг отключений: очередь новостей + настройки. DARK за VITE_NEWS_WATCH_ENABLED.
-      ...(import.meta.env.VITE_NEWS_WATCH_ENABLED === 'true'
-        ? [{ to: '/dashboard/news-watch', labelKey: 'nav.newsWatch', Icon: Radio, action: 'board.configure' as const }]
-        : []),
+      // Новости и уведомления: лента, календарь, очередь новостей из каналов.
+      { to: '/dashboard/notices', labelKey: 'nav.notices', Icon: Megaphone, action: 'notices.manage' },
       // Правила ИИ-менеджера: режим, триаж, SLA-лестница, тексты уведомлений.
       { to: '/dashboard/ai-manager', labelKey: 'nav.aiManager', Icon: Bot, action: 'auto_manager.configure' },
     ],
@@ -158,6 +157,10 @@ const NAV_ENTRIES: NavEntry[] = [
   // читают manager и executor (API), правки — только manager (кнопки по роли).
   ...(import.meta.env.VITE_ELEVATORS_ENABLED === 'true'
     ? [{ to: '/dashboard/elevators', labelKey: 'nav.elevators', Icon: ArrowUpDown, action: 'elevators.read' as const }]
+    : []),
+  // Уборка: план домов, привязка уборщиц, нагрузка. DARK за VITE_CLEANING_ENABLED.
+  ...(import.meta.env.VITE_CLEANING_ENABLED === 'true'
+    ? [{ to: '/dashboard/cleaning', labelKey: 'nav.cleaning', Icon: Sparkles, action: 'cleaning.read' as const }]
     : []),
   // Учёт ресурсов УК — нативный раздел. DARK за build-флагом VITE_RESOURCES_ENABLED:
   // пункт появляется только когда партнёрский edge проксирует resource-api.

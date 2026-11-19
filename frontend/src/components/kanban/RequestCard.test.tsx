@@ -36,6 +36,17 @@ const WITH_ELEVATOR: TCard = {
   elevator_status: 'not_working',
 }
 
+describe('RequestCard — от кого заявка', () => {
+  it('показывает подпись «От сотрудника» / «От жителя», без признака — ничего', () => {
+    const { rerender } = render(<RequestCard card={{ ...CARD, author_kind: 'staff' }} onClick={() => {}} />)
+    expect(screen.getByText('От сотрудника')).toBeInTheDocument()
+    rerender(<RequestCard card={{ ...CARD, author_kind: 'resident' }} onClick={() => {}} />)
+    expect(screen.getByText('От жителя')).toBeInTheDocument()
+    rerender(<RequestCard card={CARD} onClick={() => {}} />)
+    expect(screen.queryByText('От жителя')).not.toBeInTheDocument()
+  })
+})
+
 describe('RequestCard — бейдж лифта (Ф4a-3)', () => {
   afterEach(() => vi.unstubAllEnvs())
 
