@@ -27,9 +27,16 @@ def _buttons(**kwargs) -> dict:
     found = {}
     for row in markup.inline_keyboard:
         for btn in row:
+            if btn.callback_data is None:  # серая (disabled) кнопка — не нажимается
+                continue
             prefix = next(p for p in PREFIXES if btn.callback_data.startswith(p))
             found[prefix] = btn
     return found
+
+
+def _disabled_texts(**kwargs) -> list[str]:
+    markup = get_manager_request_actions_keyboard(NUM, **kwargs)
+    return [b.text for row in markup.inline_keyboard for b in row if b.disabled is not None]
 
 
 @pytest.mark.parametrize("status,assigned,expected", [
@@ -70,3 +77,37 @@ def test_card_actions_follow_workflow_canon():
         for status in ACTION_TABLE[action].from_statuses:
             shown = _buttons(status=status, assigned=False)
             assert prefix in shown, f"{prefix} must be offered in {status!r}"
+
+
+# --- этап 3: недоступное действие видно, но серое (Bot API 10.3) ------------------
+
+def test_unavailable_actions_are_shown_disabled_not_hidden():
+    """У новой заявки «Завершить» нельзя — кнопка остаётся на месте, но серая:
+    менеджер видит, что действие существует и почему его нет."""
+    disabled = _disabled_texts(status=REQUEST_STATUS_NEW)
+    assert len(disabled) == 1 and "Завершить" in disabled[0]
+    # в «Уточнении» с исполнителем серые «Уточнить» и «В закуп»
+    assert len(_disabled_texts(status=REQUEST_STATUS_CLARIFICATION, assigned=True)) == 2
+
+
+def test_disabled_button_carries_no_action():
+    markup = get_manager_request_actions_keyboard(NUM, status=REQUEST_STATUS_NEW)
+    greyed = [b for row in markup.inline_keyboard for b in row if b.disabled is not None]
+    assert greyed and all(b.callback_data is None and b.url is None for b in greyed)
+    # Telegram получает именно поле `disabled`, без callback_data
+    dumped = greyed[0].model_dump(exclude_none=True)
+    assert "disabled" in dumped and "callback_data" not in dumped
+
+
+def test_card_with_nothing_to_do_has_no_grey_wall():
+    """Архивная заявка: все действия недоступны — ряд из пяти серых кнопок
+    бесполезен, не показываем ничего."""
+    markup = get_manager_request_actions_keyboard(NUM, status="Принято")
+    assert markup.inline_keyboard == []
+
+
+def test_to_work_is_hidden_not_greyed_when_assigned():
+    """Назначенную заявку ведёт «Переназначить»: серая «В работу» рядом с ней
+    только запутала бы."""
+    texts = _disabled_texts(status=REQUEST_STATUS_NEW, assigned=True)
+    assert not any("В работу" in t for t in texts)

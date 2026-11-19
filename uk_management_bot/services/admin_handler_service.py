@@ -177,6 +177,7 @@ class AdminHandlerService:
             "review": (awaiting_manager_clause(), (Request.is_returned.desc(), *recent)),
             "returned": (returned_for_review_clause(),
                          (Request.returned_at.desc().nullslast(), *recent)),
+            "archive": (Request.status.in_(ARCHIVE_STATUSES), recent),
             "unaccepted": (awaiting_applicant_clause(),
                            (Request.completed_at.desc().nullslast(), *recent)),
         }
@@ -191,17 +192,6 @@ class AdminHandlerService:
 
     def page_manager_list(self, kind: str, offset: int, limit: int) -> List[Request]:
         return self._manager_list_query(kind).offset(offset).limit(limit).all()
-
-    def list_archive_requests(self, limit: int = 10) -> List[Request]:
-        return (
-            self.db.query(Request)
-            .filter(Request.status.in_(ARCHIVE_STATUSES))
-            .order_by(
-                Request.updated_at.desc().nullslast(), Request.created_at.desc()
-            )
-            .limit(limit)
-            .all()
-        )
 
     def list_purchase_requests(self, limit: int = 10) -> List[Request]:
         return (

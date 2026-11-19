@@ -85,6 +85,8 @@
       "back_nav": "🔙 Orqaga",
       "test_middleware": "🧪 Middleware test",
       "reassign_request": "🔄 Qayta tayinlash",
+      "copy_number": "📋 Raqamni nusxalash",
+      "copy_phone": "📞 Telefonni nusxalash",
       "change_category": "🏷 Kategoriya",
       "assign_executor_to_request": "👤 Ijrochi tayinlash",
       "back_to_request": "← Arizaga qaytish"
@@ -156,6 +158,7 @@
       "address_not_specified": "Manzil ko'rsatilmagan",
       "unaccepted_requests_title": "⏳ <b>Qabul qilinmagan arizalar</b> ({count}):\n\n<i>Vaqt ariza qabul qilishni qancha kutayotganini ko'rsatadi</i>",
       "archive_empty": "Arxiv bo'sh",
+      "archive_requests_title": "📦 Arizalar arxivi ({count}):",
       "archive_address": "Manzil: {address}",
       "archive_created": "Yaratilgan: {created_at}",
       "archive_cancel_reason": "💬 Rad etish sababi: {reason}",

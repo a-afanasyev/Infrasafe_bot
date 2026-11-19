@@ -85,6 +85,8 @@
       "back_nav": "🔙 Назад",
       "test_middleware": "🧪 Тест middleware",
       "reassign_request": "🔄 Переназначить",
+      "copy_number": "📋 Скопировать №",
+      "copy_phone": "📞 Скопировать телефон",
       "assign_executor_to_request": "👤 Назначить исполнителя",
       "change_category": "🏷 Категория",
       "back_to_request": "← К заявке"
@@ -156,6 +158,7 @@
       "address_not_specified": "Адрес не указан",
       "unaccepted_requests_title": "⏳ <b>Непринятые заявки</b> ({count}):\n\n<i>Время указывает сколько заявка ожидает принятия</i>",
       "archive_empty": "Архив пуст",
+      "archive_requests_title": "📦 Архив заявок ({count}):",
       "archive_address": "Адрес: {address}",
       "archive_created": "Создана: {created_at}",
       "archive_cancel_reason": "💬 Причина отказа: {reason}",

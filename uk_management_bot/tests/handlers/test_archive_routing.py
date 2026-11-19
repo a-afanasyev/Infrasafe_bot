@@ -160,6 +160,7 @@ class TestAdminArchiveHandler:
         query.order_by.return_value = query
         query.limit.return_value = query
         query.all.return_value = []
+        query.count.return_value = 0  # архив — листаемый список: сначала count
         db = MagicMock()
         db.query.return_value = query
 

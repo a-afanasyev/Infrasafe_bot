@@ -17,7 +17,6 @@ from uk_management_bot.utils.constants import (
     REQUEST_STATUS_PURCHASE,
     REQUEST_STATUS_CLARIFICATION,
     REQUEST_STATUS_EXECUTED,
-    REQUEST_STATUS_CANCELLED,
 )
 
 import html
@@ -61,6 +60,7 @@ _MANAGER_LISTS = {
     "review": ("admin.handlers.all_completed_requests_title", "admin.handlers.no_completed_requests"),
     "returned": ("admin.handlers.returned_requests_title", "admin.handlers.no_returned_requests"),
     "unaccepted": ("admin.handlers.unaccepted_requests_title", "admin.handlers.no_unaccepted_requests"),
+    "archive": ("admin.handlers.archive_requests_title", "admin.handlers.archive_empty"),
 }
 _STATUS_TO_LIST = {
     REQUEST_STATUS_NEW: "new",
@@ -401,28 +401,11 @@ async def list_archive_requests(message: Message, db: Session, roles: list = Non
         )
         return
     
-    # Архив: только завершенные статусы (Выполнена, Исполнено, Принято, Отменена)
-    requests = AdminHandlerService(db).list_archive_requests(limit=10)
-    if not requests:
-        await message.answer(get_text("admin.handlers.archive_empty", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
-        return
-    # Каждую заявку отправляем отдельным сообщением
-    for r in requests:
-        # A9-P2-2: адрес/категория/примечания — пользовательский текст в
-        # HTML-сообщении; экранируем после обрезки (в БД — сырой текст).
-        addr = html.escape(r.address[:60]) + ("…" if len(r.address) > 60 else "")
-        text = (
-            f"{get_status_with_emoji(r.status, language=lang)} #{r.request_number} • {html.escape(r.category or '')}\n"
-            + get_text("admin.handlers.archive_address", language=lang).format(address=addr) + "\n"
-            + get_text("admin.handlers.archive_created", language=lang).format(created_at=r.created_at.strftime('%d.%m.%Y %H:%M'))
-        )
-        if r.notes and r.notes.strip():
-            if r.status == REQUEST_STATUS_CANCELLED:
-                text += "\n" + get_text("admin.handlers.archive_cancel_reason", language=lang).format(reason=html.escape(r.notes.strip()))
-            else:
-                text += "\n" + get_text("admin.handlers.archive_notes", language=lang).format(notes=html.escape(r.notes.strip()))
-        await message.answer(text)
-    await message.answer(get_text("admin.handlers.archive_end", language=lang), reply_markup=get_manager_main_keyboard(language=lang))
+    # Архив — тот же листаемый список, что и остальные: раньше сюда сыпались
+    # десять заявок отдельными сообщениями, а одиннадцатая была недоступна.
+    # Заявка открывается карточкой; действий у архивной нет — только просмотр.
+    await _send_manager_list(message, db, "archive", lang, get_manager_main_keyboard(language=lang))
+
 
 @router.message(F.text.in_(ADMIN_PURCHASE_TEXTS))
 async def list_procurement_requests(message: Message, db: Session, roles: list = None, active_role: str = None, user: User = None, language: str = "ru"):

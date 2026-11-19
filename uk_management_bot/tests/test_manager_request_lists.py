@@ -56,7 +56,8 @@ def _texts(markup) -> list[str]:
 
 
 def _callbacks(markup) -> list[str]:
-    return [b.callback_data for row in markup.inline_keyboard for b in row]
+    # кнопки копирования и серые кнопки callback_data не несут
+    return [b.callback_data for row in markup.inline_keyboard for b in row if b.callback_data]
 
 
 def test_service_pages_cover_whole_list_without_overlap(db):
@@ -246,3 +247,52 @@ async def test_back_from_unaccepted_card_uses_the_paginated_list(db):
 def test_delete_admin_ids_tolerates_garbage(monkeypatch):
     monkeypatch.setenv("ADMIN_USER_IDS", "12, x, ,34")
     assert shared.delete_admin_ids() == frozenset({12, 34})
+
+
+# --- этап 3: копирование номера и телефона --------------------------------------
+
+def _copy_buttons(request, **kwargs) -> dict:
+    params = dict(active_assignment=None, has_media=False, roles=["manager"],
+                  viewer_id=1, lang="ru", back=None)
+    params.update(kwargs)
+    markup = views.build_manager_card_keyboard(request, **params)
+    return {b.copy_text.text: b.text for row in markup.inline_keyboard for b in row
+            if b.copy_text is not None}
+
+
+def test_card_offers_copy_of_number_and_applicant_phone():
+    copies = _copy_buttons(_req("Новая"), applicant_phone="+998901112233")
+    assert set(copies) == {"261101-001", "+998901112233"}
+
+
+def test_no_phone_copy_button_without_a_phone():
+    assert set(_copy_buttons(_req("Новая"))) == {"261101-001"}
+    # и в карточках других состояний номер копируется так же
+    assert "261101-001" in _copy_buttons(_req("Выполнена"))
+    assert "261101-001" in _copy_buttons(_req("Исполнено"))
+
+
+# --- этап 3: архив листается, а не обрывается на десятой заявке -----------------
+
+@pytest.mark.asyncio
+async def test_archive_is_a_paginated_list_not_ten_separate_messages(db):
+    _add(db, 14, "Принято")
+    _add(db, 3, "Отменена", start=100)
+    message = MagicMock()
+    message.from_user.id = 1
+    message.answer = AsyncMock()
+
+    await lists.list_archive_requests(
+        message, db, roles=["manager"], active_role="manager", user=None, language="ru")
+
+    message.answer.assert_awaited_once()          # одно сообщение, не 10 + «конец архива»
+    assert "17" in message.answer.await_args.args[0]
+    markup = message.answer.await_args.kwargs["reply_markup"]
+    assert "1/2" in _texts(markup) and "mreq_page_archive_2" in _callbacks(markup)
+
+
+def test_archived_request_card_is_read_only():
+    callbacks = _card_callbacks(_req("Принято"), back=("archive", 2))
+    assert not any(c.startswith(("accept_", "mgr_deny_", "clarify_", "purchase_", "mgr_complete_"))
+                   for c in callbacks)
+    assert "mreq_page_archive_2" in callbacks

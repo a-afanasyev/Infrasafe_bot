@@ -1,6 +1,12 @@
 from typing import Optional
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    DisabledButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from uk_management_bot.utils.request_helpers import RequestCallbackHelper
@@ -194,16 +200,27 @@ def get_manager_request_actions_keyboard(
     from uk_management_bot.utils.request_workflow.specs import ACTION_TABLE
 
     builder = InlineKeyboardBuilder()
+    buttons, available = [], 0
     for prefix, action, text_key, style in MANAGER_CARD_ACTIONS:
-        if status is not None and status not in ACTION_TABLE[action].from_statuses:
-            continue
         if prefix == "accept_" and assigned:
+            # Скрыта, а не серая: назначенную заявку ведёт «Переназначить».
             continue
-        builder.add(_styled_button(
-            get_text(text_key, language=language),
-            RequestCallbackHelper.create_callback_data_with_request_number(prefix, request_number),
-            style,
-        ))
+        label = get_text(text_key, language=language)
+        if status is None or status in ACTION_TABLE[action].from_statuses:
+            available += 1
+            buttons.append(_styled_button(
+                label,
+                RequestCallbackHelper.create_callback_data_with_request_number(prefix, request_number),
+                style,
+            ))
+        else:
+            # Недоступное из этого статуса действие остаётся на месте серым
+            # (Bot API 10.3): менеджер видит, что оно есть, но нажать нельзя —
+            # и не получает окно-отказ. У `disabled` нет callback_data.
+            buttons.append(InlineKeyboardButton(text=label, disabled=DisabledButton()))
+    if available:
+        builder.add(*buttons)
+    # Иначе (архивная заявка) — ничего: ряд из одних серых кнопок бесполезен.
     if can_delete:
         builder.add(_styled_button(
             get_text("admin.keyboards.delete", language=language),

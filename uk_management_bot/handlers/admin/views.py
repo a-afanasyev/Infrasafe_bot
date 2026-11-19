@@ -3,7 +3,13 @@ import html
 
 from aiogram import F
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
+from aiogram.types import (
+    CallbackQuery,
+    CopyTextButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -78,8 +84,25 @@ def _back_row(request_number: str, back, lang: str) -> list:
         text=get_text("admin.handlers.btn_back_to_list", language=lang), callback_data=target)]
 
 
+def _copy_row(request_number: str, applicant_phone, lang: str) -> list:
+    """Кнопки копирования: номер заявки и телефон заявителя (если он есть).
+
+    Нажатие кладёт текст в буфер на телефоне менеджера — выделять номер
+    пальцем в сообщении больше не нужно. Запроса к боту при этом нет.
+    """
+    row = [InlineKeyboardButton(
+        text=get_text("admin.keyboards.copy_number", language=lang),
+        copy_text=CopyTextButton(text=request_number))]
+    if applicant_phone:
+        row.append(InlineKeyboardButton(
+            text=get_text("admin.keyboards.copy_phone", language=lang),
+            copy_text=CopyTextButton(text=str(applicant_phone))))
+    return row
+
+
 def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, roles,
-                                viewer_id: int, lang: str, back=None) -> InlineKeyboardMarkup:
+                                viewer_id: int, lang: str, back=None,
+                                applicant_phone=None) -> InlineKeyboardMarkup:
     """Клавиатура карточки заявки менеджера по состоянию заявки.
 
     Ветки: ждёт заявителя → напомнить/принять за него; ждёт проверки менеджером
@@ -109,6 +132,7 @@ def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, 
         if has_media:
             rows.append(media_row)
         rows.extend(discussion)
+        rows.append(_copy_row(number, applicant_phone, lang))
         rows.append(_back_row(number, back, lang) if back else own_back)
         return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -122,6 +146,7 @@ def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, 
         if has_media:
             rows.append(media_row)
         rows.extend(discussion)
+        rows.append(_copy_row(number, applicant_phone, lang))
         rows.append(_back_row(number, back, lang))
         return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -144,6 +169,7 @@ def build_manager_card_keyboard(request, *, active_assignment, has_media: bool, 
         get_change_category_button_row(number, status=request.status, roles=roles, language=lang),
     ) if row)
     rows.extend(discussion)
+    rows.append(_copy_row(number, applicant_phone, lang))
     rows.append(_back_row(number, back, lang))
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -262,7 +288,8 @@ async def handle_manager_view_request(callback: CallbackQuery, db: Session, role
 
         keyboard = build_manager_card_keyboard(
             request, active_assignment=active_assignment, has_media=has_media,
-            roles=roles, viewer_id=callback.from_user.id, lang=lang, back=back)
+            roles=roles, viewer_id=callback.from_user.id, lang=lang, back=back,
+            applicant_phone=request_user.phone if request_user else None)
 
         await callback.message.edit_text(message_text, reply_markup=keyboard)
         
