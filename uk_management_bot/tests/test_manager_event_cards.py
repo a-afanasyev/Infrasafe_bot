@@ -366,3 +366,35 @@ def test_engineer_manager_still_gets_the_repeated_return_notice(db):
 
     assert len(got[MANAGER_TG]) == 2
     assert sum(m.reply_markup is not None for m in got[MANAGER_TG]) == 1  # карточка решения
+
+
+@pytest.mark.asyncio
+async def test_repeated_confirm_is_already_handled_without_side_effects(monkeypatch):
+    """Найдено живой проверкой: второй менеджер жмёт «Подтвердить» на своей копии
+    карточки. Канон отвечает no_op (заявка уже «Исполнено»), а не ошибкой —
+    обработчик принимал это за успех и повторно писал жителю «заявка выполнена»."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from uk_management_bot.handlers.admin import views
+    from uk_management_bot.services import workflow_runner
+
+    stale = AsyncMock()
+    notify = AsyncMock()
+    monkeypatch.setattr(workflow_runner, "run_command_sync",
+                        lambda *a, **kw: SimpleNamespace(no_op=True, post_commit_intents=()))
+    monkeypatch.setattr(views, "_answer_already_handled", stale)
+    monkeypatch.setattr(views, "dispatch_notify_intents_sync", notify)
+    callback = MagicMock()
+    callback.data = f"confirm_completed_{NUM}"
+    callback.from_user.id = MANAGER_TG
+    callback.answer = AsyncMock()
+    callback.message.edit_text = AsyncMock()
+    callback.bot.send_message = AsyncMock()
+
+    await views.handle_manager_confirm_completed(
+        callback, MagicMock(), roles=["manager"], user=SimpleNamespace(id=1), language="ru")
+
+    stale.assert_awaited_once()
+    callback.bot.send_message.assert_not_awaited()   # жителю второй раз не пишем
+    notify.assert_not_awaited()
+    callback.message.edit_text.assert_not_awaited()  # и «подтверждена» не рисуем

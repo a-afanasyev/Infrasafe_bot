@@ -410,6 +410,14 @@ async def handle_manager_confirm_completed(callback: CallbackQuery, db: Session,
             logger.info(f"MANAGER_CONFIRM отклонён для {request_number}: {e}")
             await _answer_already_handled(callback, request_number, lang)
             return
+        if getattr(outcome, "no_op", False):
+            # MANAGER_CONFIRM — no_op_if_same: заявка уже «Исполнено», канон
+            # ничего не менял и ошибкой это не считает. Карточку получают все
+            # менеджеры, второе нажатие — обычное дело; без этой ветки оно
+            # выглядело успехом и повторно писало жителю «заявка выполнена».
+            logger.info(f"MANAGER_CONFIRM для {request_number}: уже подтверждена (no_op)")
+            await _answer_already_handled(callback, request_number, lang)
+            return
 
         # Best-effort post-commit (потеря допустима, PR0 Р7): уведомления + правка.
         # run_command работал в своей сессии → перечитываем заявку свежей.

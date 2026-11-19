@@ -58,10 +58,12 @@ def manager_card_markup(request, language: str) -> InlineKeyboardMarkup:
     number = request.request_number
     canon = normalize_status(request)
     if is_awaiting_manager(request):
-        rows = [[
-            _button("admin.keyboards.confirm_completion", language, f"confirm_completed_{number}", "success"),
-            _button("admin.keyboards.return_to_work", language, f"return_to_work_{number}"),
-        ]]
+        # По кнопке в ряд: «Подтвердить выполнение» рядом с «Вернуть в работу»
+        # на телефоне обрезалась до «Подтвердить вып…» (живая проверка 2026-11-19).
+        rows = [
+            [_button("admin.keyboards.confirm_completion", language, f"confirm_completed_{number}", "success")],
+            [_button("admin.keyboards.return_to_work", language, f"return_to_work_{number}")],
+        ]
     elif canon == STATUS_RETURNED:
         rows = [
             [_button("admin.keyboards.reconfirm", language, f"reconfirm_completed_{number}", "success")],
